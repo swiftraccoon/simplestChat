@@ -1,0 +1,1068 @@
+import './style.css';
+import { SignalingClient } from './signaling';
+import { RoomClient, type Participant, type ConnectionQuality } from './room';
+import * as icons from './icons';
+
+// --- DOM refs ---
+const connectionStatus = document.getElementById('connection-status')!;
+const joinScreen = document.getElementById('join-screen')!;
+const roomScreen = document.getElementById('room-screen')!;
+const roomLabel = document.getElementById('room-label')!;
+const nameInput = document.getElementById('name-input') as HTMLInputElement;
+const roomInput = document.getElementById('room-input') as HTMLInputElement;
+const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
+const videoGrid = document.getElementById('video-grid')!;
+const participantList = document.getElementById('participant-list')!;
+const chatMessages = document.getElementById('chat-messages')!;
+const chatInput = document.getElementById('chat-input') as HTMLInputElement;
+const chatSendBtn = document.getElementById('chat-send-btn')!;
+const micBtn = document.getElementById('mic-btn')!;
+const camBtn = document.getElementById('cam-btn')!;
+const settingsBtn = document.getElementById('settings-btn')!;
+const leaveBtn = document.getElementById('leave-btn')!;
+const qualityIndicator = document.getElementById('quality-indicator')!;
+const scrollBottomBtn = document.getElementById('scroll-bottom-btn')!;
+const unreadBadge = document.getElementById('unread-badge')!;
+
+// Sidebar tabs
+const sidebarTabs = document.querySelectorAll<HTMLButtonElement>('#sidebar-tabs .tab');
+const tabContents = document.querySelectorAll<HTMLDivElement>('#sidebar-content .tab-content');
+
+// Settings modal
+const settingsModal = document.getElementById('settings-modal')!;
+const settingsClose = document.getElementById('settings-close')!;
+const layoutSelect = document.getElementById('layout-select') as HTMLSelectElement;
+const micModeSelect = document.getElementById('mic-mode-select') as HTMLSelectElement;
+const cameraSelect = document.getElementById('camera-select') as HTMLSelectElement;
+const micSelect = document.getElementById('mic-select') as HTMLSelectElement;
+
+// --- State ---
+let room: RoomClient | null = null;
+const remoteTiles = new Map<string, HTMLDivElement>();
+let unreadCount = 0;
+let isAtBottom = true;
+
+// Push-to-Talk state
+type MicMode = 'open' | 'ptt';
+let micMode: MicMode = (localStorage.getItem('micMode') as MicMode) || 'open';
+let pttHeld = false;
+
+// Speaking detection state — shared AudioContext to avoid browser limit (~6 per page)
+let sharedAudioCtx: AudioContext | null = null;
+const speakingAnalysers = new Map<string, { analyser: AnalyserNode; source: MediaStreamAudioSourceNode }>();
+let speakingTimerId: ReturnType<typeof setTimeout> | null = null;
+const speakingState = new Map<string, boolean>();
+
+function getSharedAudioContext(): AudioContext {
+  if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+    sharedAudioCtx = new AudioContext();
+  }
+  return sharedAudioCtx;
+}
+
+// Restore display name from localStorage
+const savedName = localStorage.getItem('displayName');
+if (savedName) nameInput.value = savedName;
+
+// Check for room in URL hash
+const hashRoom = window.location.hash.slice(1);
+if (hashRoom) roomInput.value = hashRoom;
+
+// --- Utility ---
+function clearChildren(el: HTMLElement): void {
+  while (el.firstChild) el.removeChild(el.firstChild);
+}
+
+/** Deterministic HSL color from a string (for sender names, avatars) */
+function nameColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 65%, 55%)`;
+}
+
+/**
+ * Auto-link URLs in text.
+ * HTML-escapes all user content first to prevent XSS, then wraps URLs in anchor tags.
+ * The only HTML produced is the <a> tags with escaped href values.
+ */
+function linkify(text: string): string {
+  // First: escape ALL user content to prevent XSS
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+  // Then: wrap URLs (which are now safe escaped text) in anchor tags
+  return escaped.replace(
+    /(https?:\/\/[^\s<&]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
+  );
+}
+
+/** Format time as HH:MM */
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// --- Layout Management ---
+function getLayout(): 'modern' | 'classic' {
+  return (localStorage.getItem('layout') as 'modern' | 'classic') || 'modern';
+}
+
+function setLayout(layout: 'modern' | 'classic'): void {
+  localStorage.setItem('layout', layout);
+  roomScreen.className = `layout-${layout}`;
+  layoutSelect.value = layout;
+
+  // In classic mode, hide the Users tab from the sidebar (users are in the left panel)
+  // and force the Chat tab active
+  if (usersTab) usersTab.hidden = layout === 'classic';
+  if (layout === 'classic') {
+    sidebarTabs.forEach((t) => t.classList.toggle('active', t.dataset['tab'] === 'chat'));
+    tabContents.forEach((c) => c.classList.toggle('active', c.id === 'chat-panel'));
+  }
+
+  // Re-render participants for classic mode
+  if (room) renderParticipants(room.getParticipants());
+}
+
+// Initialize layout
+layoutSelect.value = getLayout();
+
+// --- Sidebar Tabs ---
+sidebarTabs.forEach((tab) => {
+  tab.addEventListener('click', () => {
+    const target = tab.dataset['tab'];
+    sidebarTabs.forEach((t) => t.classList.toggle('active', t === tab));
+    tabContents.forEach((c) => c.classList.toggle('active', c.id === `${target}-panel`));
+  });
+});
+
+// Set tab content with icons (these are static SVG literals from our icons module)
+const chatTab = document.querySelector<HTMLButtonElement>('.tab[data-tab="chat"]');
+const usersTab = document.querySelector<HTMLButtonElement>('.tab[data-tab="users"]');
+if (chatTab) {
+  chatTab.textContent = '';
+  chatTab.insertAdjacentHTML('afterbegin', icons.chatIcon());
+  chatTab.append(' Chat');
+}
+if (usersTab) {
+  usersTab.textContent = '';
+  usersTab.insertAdjacentHTML('afterbegin', icons.userIcon());
+  usersTab.append(' Users');
+}
+
+// --- Set button icons (static SVG from our icons module, no user content) ---
+function setButtonContent(btn: HTMLElement, iconHtml: string, tooltip?: string): void {
+  btn.textContent = '';
+  btn.insertAdjacentHTML('afterbegin', iconHtml);
+  if (tooltip) {
+    const span = document.createElement('span');
+    span.className = 'btn-tooltip';
+    span.textContent = tooltip;
+    btn.appendChild(span);
+  }
+}
+
+setButtonContent(chatSendBtn, icons.send());
+setButtonContent(micBtn, icons.micOn(), 'Mic (M)');
+setButtonContent(camBtn, icons.camOn(), 'Cam (V)');
+setButtonContent(settingsBtn, icons.settings(), 'Settings');
+setButtonContent(leaveBtn, icons.leave(), 'Leave');
+
+// --- Scroll-to-bottom for chat ---
+scrollBottomBtn.textContent = '';
+scrollBottomBtn.insertAdjacentHTML('afterbegin', icons.scrollDown());
+
+chatMessages.addEventListener('scroll', () => {
+  const threshold = 40;
+  isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < threshold;
+  if (isAtBottom) {
+    unreadCount = 0;
+    scrollBottomBtn.hidden = true;
+    unreadBadge.hidden = true;
+  } else {
+    scrollBottomBtn.hidden = false;
+  }
+});
+
+scrollBottomBtn.addEventListener('click', () => {
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  unreadCount = 0;
+  scrollBottomBtn.hidden = true;
+  unreadBadge.hidden = true;
+});
+
+// --- Signaling setup ---
+const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
+const signaling = new SignalingClient(wsUrl);
+
+signaling.setOnStatusChange((status) => {
+  connectionStatus.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+  connectionStatus.className = `status ${status}`;
+  joinBtn.disabled = status !== 'connected' || !nameInput.value.trim() || !roomInput.value.trim();
+});
+
+signaling.connect();
+
+// --- Join form ---
+function updateJoinBtn(): void {
+  joinBtn.disabled = !signaling.connected || !nameInput.value.trim() || !roomInput.value.trim();
+}
+
+nameInput.addEventListener('input', updateJoinBtn);
+roomInput.addEventListener('input', updateJoinBtn);
+
+nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
+roomInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
+
+joinBtn.addEventListener('click', async () => {
+  const name = nameInput.value.trim();
+  const roomId = roomInput.value.trim();
+  if (!name || !roomId) return;
+
+  localStorage.setItem('displayName', name);
+  window.location.hash = roomId;
+
+  joinBtn.disabled = true;
+  joinBtn.textContent = 'Joining...';
+
+  try {
+    room = new RoomClient(signaling, {
+      onParticipantsChanged: renderParticipants,
+      onLocalStream: renderLocalVideo,
+      onRemoteTrack: renderRemoteTrack,
+      onRemoteTrackRemoved: removeRemoteTrack,
+      onParticipantLeft: handleParticipantLeft,
+      onChatMessage: appendChatMessage,
+      onConnectionQuality: renderConnectionQuality,
+      onParticipantJoined: handleParticipantJoined,
+    });
+
+    await room.join(roomId, name);
+
+    joinScreen.hidden = true;
+    roomScreen.hidden = false;
+    setLayout(getLayout());
+
+    // Show room label in header
+    roomLabel.textContent = roomId;
+    roomLabel.hidden = false;
+
+    // Update control buttons
+    if (room.hasMedia) {
+      // If PTT mode, mute mic immediately on join
+      if (micMode === 'ptt') {
+        room.muteAudio();
+        updateMicButton(false);
+      } else {
+        updateMicButton(room.audioEnabled);
+      }
+      updateCamButton(room.videoEnabled);
+    } else {
+      // Media unavailable — show disabled state
+      console.warn('[ui] media not available, buttons will be non-functional');
+      setButtonContent(micBtn, icons.micOff(), 'No mic access');
+      micBtn.classList.add('muted');
+      micBtn.style.opacity = '0.4';
+      setButtonContent(camBtn, icons.camOff(), 'No cam access');
+      camBtn.classList.add('muted');
+      camBtn.style.opacity = '0.4';
+    }
+
+    qualityIndicator.hidden = false;
+
+    // Start speaking detection loop
+    startSpeakingDetection();
+  } catch (e) {
+    console.error('Failed to join:', e);
+    alert(`Failed to join: ${e instanceof Error ? e.message : String(e)}`);
+    room = null;
+    joinBtn.disabled = false;
+    joinBtn.textContent = 'Join Room';
+  }
+});
+
+// --- Leave ---
+leaveBtn.addEventListener('click', async () => {
+  await room?.leave();
+  room = null;
+
+  stopSpeakingDetection();
+  // Close shared AudioContext when leaving room
+  if (sharedAudioCtx) {
+    sharedAudioCtx.close().catch(() => {});
+    sharedAudioCtx = null;
+  }
+  clearChildren(videoGrid);
+  clearChildren(participantList);
+  clearChildren(chatMessages);
+  remoteTiles.clear();
+  speakingAnalysers.clear();
+  speakingState.clear();
+
+  // Remove classic users panel if present
+  document.getElementById('classic-users-panel')?.remove();
+
+  // Reset PTT state
+  pttHeld = false;
+
+  // Reset mic/cam button states (clear inline opacity from no-media mode)
+  micBtn.style.opacity = '';
+  camBtn.style.opacity = '';
+  micBtn.classList.remove('active', 'muted', 'ptt-active');
+  camBtn.classList.remove('active', 'muted');
+  setButtonContent(micBtn, icons.micOn(), 'Mic (M)');
+  setButtonContent(camBtn, icons.camOn(), 'Cam (V)');
+  // Remove PTT label if present
+  micBtn.querySelector('.ptt-label')?.remove();
+
+  roomScreen.hidden = true;
+  joinScreen.hidden = false;
+  roomLabel.hidden = true;
+  joinBtn.textContent = 'Join Room';
+  qualityIndicator.hidden = true;
+  qualityIndicator.className = 'quality-dot';
+  updateJoinBtn();
+});
+
+// --- Control buttons ---
+function updateMicButton(enabled: boolean): void {
+  let tooltip: string;
+  if (micMode === 'ptt') {
+    tooltip = enabled ? 'Release to mute' : 'Hold Space/T to talk';
+  } else {
+    tooltip = enabled ? 'Mute (M)' : 'Unmute (M)';
+  }
+  setButtonContent(micBtn, enabled ? icons.micOn() : icons.micOff(), tooltip);
+  micBtn.classList.toggle('active', enabled);
+  micBtn.classList.toggle('muted', !enabled);
+  micBtn.classList.toggle('ptt-active', micMode === 'ptt' && enabled);
+
+  // PTT mode label under mic button
+  let pttLabel = micBtn.querySelector('.ptt-label');
+  if (micMode === 'ptt') {
+    if (!pttLabel) {
+      pttLabel = document.createElement('span');
+      pttLabel.className = 'ptt-label';
+      micBtn.appendChild(pttLabel);
+    }
+    pttLabel.textContent = 'PTT';
+  } else {
+    pttLabel?.remove();
+  }
+}
+
+function updateCamButton(enabled: boolean): void {
+  setButtonContent(camBtn, enabled ? icons.camOn() : icons.camOff(), enabled ? 'Cam Off (V)' : 'Cam On (V)');
+  camBtn.classList.toggle('active', enabled);
+  camBtn.classList.toggle('muted', !enabled);
+}
+
+/** Show/hide/update the local video tile based on current mic+cam state */
+function updateLocalTile(): void {
+  if (!room) return;
+  const camOn = room.videoEnabled;
+  const micOn = room.audioEnabled;
+  const tile = document.getElementById('local-tile');
+  const localName = nameInput.value.trim();
+
+  if (!camOn && !micOn) {
+    // Both off — remove tile entirely
+    tile?.remove();
+    updateVideoGridCount();
+    return;
+  }
+
+  if (!tile) {
+    // Need to re-create the tile (was removed when both were off)
+    const newTile = document.createElement('div');
+    newTile.className = 'video-tile local';
+    newTile.id = 'local-tile';
+
+    const nameTag = document.createElement('div');
+    nameTag.className = 'name-tag';
+    nameTag.textContent = `${localName} (You)`;
+    newTile.appendChild(nameTag);
+
+    videoGrid.prepend(newTile);
+    updateVideoGridCount();
+
+    if (camOn) {
+      // Re-attach video from local stream
+      const stream = room.getLocalStream();
+      if (stream) {
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.srcObject = stream;
+        newTile.insertBefore(video, newTile.firstChild);
+      }
+    } else {
+      // Mic on, cam off — show avatar
+      addLocalAvatar(newTile, localName);
+    }
+    return;
+  }
+
+  // Tile exists — update it
+  if (camOn) {
+    // Show video, hide avatar
+    const avatar = tile.querySelector('.no-video-avatar') as HTMLElement | null;
+    if (avatar) avatar.remove();
+    if (!tile.querySelector('video')) {
+      const stream = room.getLocalStream();
+      if (stream) {
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.srcObject = stream;
+        tile.insertBefore(video, tile.firstChild);
+      }
+    }
+  } else {
+    // Cam off — remove video, show avatar
+    const video = tile.querySelector('video');
+    if (video) {
+      video.srcObject = null;
+      video.remove();
+    }
+    if (!tile.querySelector('.no-video-avatar')) {
+      addLocalAvatar(tile, localName);
+    }
+  }
+}
+
+function addLocalAvatar(tile: HTMLElement, name: string): void {
+  const noVideoAvatar = document.createElement('div');
+  noVideoAvatar.className = 'no-video-avatar';
+  const initial = document.createElement('div');
+  initial.className = 'avatar-initial';
+  initial.style.background = nameColor(name);
+  initial.textContent = name.charAt(0).toUpperCase();
+  noVideoAvatar.appendChild(initial);
+  tile.insertBefore(noVideoAvatar, tile.firstChild);
+}
+
+function pttActivate(): void {
+  if (!room || !room.hasMedia || pttHeld) return;
+  pttHeld = true;
+  room.unmuteAudio();
+  updateMicButton(true);
+  updateLocalTile();
+}
+
+function pttDeactivate(): void {
+  if (!room || !pttHeld) return;
+  pttHeld = false;
+  room.muteAudio();
+  updateMicButton(false);
+  updateLocalTile();
+}
+
+micBtn.addEventListener('mousedown', (e) => {
+  if (!room || !room.hasMedia) return;
+  if (micMode === 'ptt') {
+    e.preventDefault(); // prevent focus loss
+    pttActivate();
+  }
+});
+
+micBtn.addEventListener('mouseup', () => {
+  if (micMode === 'ptt') pttDeactivate();
+});
+
+micBtn.addEventListener('mouseleave', () => {
+  if (micMode === 'ptt') pttDeactivate();
+});
+
+micBtn.addEventListener('click', () => {
+  if (!room || !room.hasMedia) return;
+  if (micMode === 'open') {
+    const enabled = room.toggleAudio();
+    updateMicButton(enabled);
+    updateLocalTile();
+  }
+  // In PTT mode, click is handled by mousedown/mouseup above
+});
+
+camBtn.addEventListener('click', () => {
+  if (!room) return;
+  if (!room.hasMedia) return;
+  const enabled = room.toggleVideo();
+  updateCamButton(enabled);
+  updateLocalTile();
+});
+
+// --- Settings Modal ---
+settingsBtn.addEventListener('click', () => {
+  settingsModal.hidden = false;
+  populateDeviceSelectors();
+});
+
+settingsClose.addEventListener('click', () => {
+  settingsModal.hidden = true;
+});
+
+// Close on backdrop click
+settingsModal.addEventListener('click', (e) => {
+  if (e.target === settingsModal) settingsModal.hidden = true;
+});
+
+layoutSelect.addEventListener('change', () => {
+  setLayout(layoutSelect.value as 'modern' | 'classic');
+});
+
+// Mic mode setting
+micModeSelect.value = micMode;
+
+function setMicMode(mode: MicMode): void {
+  micMode = mode;
+  localStorage.setItem('micMode', mode);
+  micModeSelect.value = mode;
+
+  if (room && room.hasMedia) {
+    if (mode === 'ptt') {
+      // Entering PTT mode — mute immediately
+      pttHeld = false;
+      room.muteAudio();
+      updateMicButton(false);
+      updateLocalTile();
+    } else {
+      // Entering open mic mode — reset PTT state, leave mic as-is (muted)
+      pttHeld = false;
+      updateMicButton(room.audioEnabled);
+    }
+  }
+}
+
+micModeSelect.addEventListener('change', () => {
+  setMicMode(micModeSelect.value as MicMode);
+});
+
+cameraSelect.addEventListener('change', async () => {
+  const deviceId = cameraSelect.value;
+  if (deviceId && room) {
+    try {
+      await room.switchCamera(deviceId);
+    } catch (e) {
+      console.error('Failed to switch camera:', e);
+    }
+  }
+});
+
+micSelect.addEventListener('change', async () => {
+  const deviceId = micSelect.value;
+  if (deviceId && room) {
+    try {
+      await room.switchMic(deviceId);
+    } catch (e) {
+      console.error('Failed to switch mic:', e);
+    }
+  }
+});
+
+async function populateDeviceSelectors(): Promise<void> {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+
+    // Camera
+    while (cameraSelect.firstChild) cameraSelect.removeChild(cameraSelect.firstChild);
+    const cameras = devices.filter((d) => d.kind === 'videoinput');
+    cameras.forEach((d, i) => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Camera ${i + 1}`;
+      cameraSelect.appendChild(opt);
+    });
+
+    // Mic
+    while (micSelect.firstChild) micSelect.removeChild(micSelect.firstChild);
+    const mics = devices.filter((d) => d.kind === 'audioinput');
+    mics.forEach((d, i) => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Microphone ${i + 1}`;
+      micSelect.appendChild(opt);
+    });
+  } catch (e) {
+    console.warn('Could not enumerate devices:', e);
+  }
+}
+
+// --- Chat ---
+function sendChatMessage(): void {
+  const content = chatInput.value.trim();
+  if (!content || !room) return;
+  room.sendChat(content);
+  const name = nameInput.value.trim();
+  appendChatMessage(room.localParticipantId ?? '', name, content);
+  chatInput.value = '';
+}
+
+chatSendBtn.addEventListener('click', sendChatMessage);
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendChatMessage();
+});
+
+// --- Speaking Detection (Web Audio API) ---
+function setupSpeakingAnalyser(participantId: string, audioTrack: MediaStreamTrack): void {
+  teardownSpeakingAnalyser(participantId);
+
+  try {
+    const ctx = getSharedAudioContext();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.5;
+    const source = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
+    source.connect(analyser);
+    speakingAnalysers.set(participantId, { analyser, source });
+  } catch (e) {
+    console.warn('Could not setup speaking analyser:', e);
+  }
+}
+
+function teardownSpeakingAnalyser(participantId: string): void {
+  const entry = speakingAnalysers.get(participantId);
+  if (entry) {
+    entry.source.disconnect();
+    speakingAnalysers.delete(participantId);
+  }
+}
+
+function startSpeakingDetection(): void {
+  if (speakingTimerId !== null) return;
+
+  const data = new Uint8Array(128);
+  const THRESHOLD = 25;
+
+  function poll(): void {
+    for (const [pid, entry] of speakingAnalysers) {
+      entry.analyser.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i]!;
+      const avg = sum / data.length;
+      const isSpeaking = avg > THRESHOLD;
+      const wasSpeaking = speakingState.get(pid) ?? false;
+
+      if (isSpeaking !== wasSpeaking) {
+        speakingState.set(pid, isSpeaking);
+        // Update video tile
+        const tile = remoteTiles.get(pid);
+        if (tile) tile.classList.toggle('speaking', isSpeaking);
+        // Update participant list items
+        const participantEls = document.querySelectorAll(`[data-participant-id="${CSS.escape(pid)}"]`);
+        participantEls.forEach((el) => {
+          el.classList.toggle('speaking', isSpeaking);
+        });
+      }
+    }
+    speakingTimerId = setTimeout(poll, 66); // ~15fps
+  }
+
+  poll();
+}
+
+function stopSpeakingDetection(): void {
+  if (speakingTimerId !== null) {
+    clearTimeout(speakingTimerId);
+    speakingTimerId = null;
+  }
+  for (const pid of [...speakingAnalysers.keys()]) {
+    teardownSpeakingAnalyser(pid);
+  }
+  speakingState.clear();
+}
+
+// --- Update video grid count for adaptive sizing ---
+function updateVideoGridCount(): void {
+  const count = videoGrid.children.length;
+  if (count <= 1) videoGrid.dataset['count'] = '1';
+  else if (count === 2) videoGrid.dataset['count'] = '2';
+  else if (count <= 4) videoGrid.dataset['count'] = '4';
+  else if (count <= 6) videoGrid.dataset['count'] = '6';
+  else videoGrid.dataset['count'] = 'many';
+}
+
+// --- Rendering ---
+function renderParticipants(participants: Map<string, Participant>): void {
+  clearChildren(participantList);
+
+  // Build a full list including the local user (server only sends remote participants)
+  const allParticipants: Participant[] = [];
+  if (room?.localParticipantId) {
+    // Build local producers map from actual media state
+    const localProducers = new Map<string, 'audio' | 'video'>();
+    if (room.audioEnabled) localProducers.set('local-audio', 'audio');
+    if (room.videoEnabled) localProducers.set('local-video', 'video');
+    allParticipants.push({
+      id: room.localParticipantId,
+      name: nameInput.value.trim(),
+      producers: localProducers,
+    });
+  }
+  for (const p of participants.values()) {
+    allParticipants.push(p);
+  }
+
+  for (const p of allParticipants) {
+    const li = document.createElement('li');
+    li.dataset['participantId'] = p.id;
+
+    // Avatar
+    const avatar = document.createElement('div');
+    avatar.className = 'participant-avatar';
+    avatar.style.background = nameColor(p.name);
+    avatar.textContent = p.name.charAt(0).toUpperCase();
+
+    // Info
+    const info = document.createElement('div');
+    info.className = 'participant-info';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'participant-name';
+    nameSpan.textContent = p.name;
+    if (p.id === room?.localParticipantId) {
+      const youTag = document.createElement('span');
+      youTag.className = 'you-tag';
+      youTag.textContent = '(you)';
+      nameSpan.appendChild(youTag);
+    }
+    info.appendChild(nameSpan);
+
+    // Media icons — built with DOM API using safe SVG from our icons module
+    const mediaIcons = document.createElement('div');
+    mediaIcons.className = 'participant-media-icons';
+
+    const hasAudio = [...p.producers.values()].includes('audio');
+    const hasVideo = [...p.producers.values()].includes('video');
+
+    const micIcon = document.createElement('span');
+    micIcon.className = `media-icon ${hasAudio ? 'active' : 'muted'}`;
+    // These are static SVG strings from our own module, not user content
+    micIcon.insertAdjacentHTML('afterbegin',
+      `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">${hasAudio
+        ? '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>'
+        : '<line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>'
+      }</svg>`);
+    mediaIcons.appendChild(micIcon);
+
+    const camIcon = document.createElement('span');
+    camIcon.className = `media-icon ${hasVideo ? 'active' : 'muted'}`;
+    camIcon.insertAdjacentHTML('afterbegin',
+      `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">${hasVideo
+        ? '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>'
+        : '<path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><line x1="1" y1="1" x2="23" y2="23"/>'
+      }</svg>`);
+    mediaIcons.appendChild(camIcon);
+
+    // Apply speaking state
+    if (speakingState.get(p.id)) li.classList.add('speaking');
+
+    li.appendChild(avatar);
+    li.appendChild(info);
+    li.appendChild(mediaIcons);
+    participantList.appendChild(li);
+  }
+
+  // Update classic users panel if in classic mode
+  renderClassicUsersPanel(participants);
+}
+
+function renderClassicUsersPanel(participants: Map<string, Participant>): void {
+  const layout = getLayout();
+  let panel = document.getElementById('classic-users-panel');
+
+  if (layout !== 'classic') {
+    panel?.remove();
+    return;
+  }
+
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'classic-users-panel';
+
+    const title = document.createElement('div');
+    title.className = 'panel-title';
+    title.textContent = 'Users';
+    panel.appendChild(title);
+
+    const list = document.createElement('ul');
+    list.className = 'classic-user-list';
+    panel.appendChild(list);
+
+    roomScreen.insertBefore(panel, roomScreen.firstChild);
+  }
+
+  const list = panel.querySelector('.classic-user-list') as HTMLElement;
+  clearChildren(list);
+
+  // Include local user with actual media state
+  const allParticipants: Participant[] = [];
+  if (room?.localParticipantId) {
+    const localProducers = new Map<string, 'audio' | 'video'>();
+    if (room.audioEnabled) localProducers.set('local-audio', 'audio');
+    if (room.videoEnabled) localProducers.set('local-video', 'video');
+    allParticipants.push({
+      id: room.localParticipantId,
+      name: nameInput.value.trim(),
+      producers: localProducers,
+    });
+  }
+  for (const p of participants.values()) {
+    allParticipants.push(p);
+  }
+
+  for (const p of allParticipants) {
+    const li = document.createElement('li');
+    li.dataset['participantId'] = p.id;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'participant-avatar';
+    avatar.style.background = nameColor(p.name);
+    avatar.style.width = '24px';
+    avatar.style.height = '24px';
+    avatar.style.fontSize = '0.65rem';
+    avatar.textContent = p.name.charAt(0).toUpperCase();
+
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = p.name;
+    if (p.id === room?.localParticipantId) nameSpan.textContent += ' (you)';
+
+    if (speakingState.get(p.id)) li.classList.add('speaking');
+
+    li.appendChild(avatar);
+    li.appendChild(nameSpan);
+    list.appendChild(li);
+  }
+}
+
+function renderLocalVideo(stream: MediaStream): void {
+  document.getElementById('local-tile')?.remove();
+
+  const tile = document.createElement('div');
+  tile.className = 'video-tile local';
+  tile.id = 'local-tile';
+
+  const video = document.createElement('video');
+  video.autoplay = true;
+  video.muted = true;
+  video.playsInline = true;
+  video.srcObject = stream;
+
+  const nameTag = document.createElement('div');
+  nameTag.className = 'name-tag';
+  nameTag.textContent = `${nameInput.value.trim()} (You)`;
+
+  tile.appendChild(video);
+  tile.appendChild(nameTag);
+  videoGrid.prepend(tile);
+  updateVideoGridCount();
+}
+
+function renderRemoteTrack(participantId: string, participantName: string, track: MediaStreamTrack, _kind: 'audio' | 'video'): void {
+  let tile = remoteTiles.get(participantId);
+
+  if (!tile) {
+    tile = document.createElement('div');
+    tile.className = 'video-tile';
+    tile.dataset['participantId'] = participantId;
+
+    // No-video avatar
+    const noVideoAvatar = document.createElement('div');
+    noVideoAvatar.className = 'no-video-avatar';
+    const initial = document.createElement('div');
+    initial.className = 'avatar-initial';
+    initial.style.background = nameColor(participantName);
+    initial.textContent = participantName.charAt(0).toUpperCase();
+    noVideoAvatar.appendChild(initial);
+    tile.appendChild(noVideoAvatar);
+
+    const nameTag = document.createElement('div');
+    nameTag.className = 'name-tag';
+    nameTag.textContent = participantName;
+    tile.appendChild(nameTag);
+
+    remoteTiles.set(participantId, tile);
+    videoGrid.appendChild(tile);
+    updateVideoGridCount();
+  }
+
+  if (track.kind === 'video') {
+    let video = tile.querySelector('video');
+    if (!video) {
+      video = document.createElement('video');
+      video.autoplay = true;
+      video.playsInline = true;
+      tile.insertBefore(video, tile.firstChild);
+    }
+    video.srcObject = new MediaStream([track]);
+    const avatar = tile.querySelector('.no-video-avatar') as HTMLElement | null;
+    if (avatar) avatar.style.display = 'none';
+  } else {
+    let audio = tile.querySelector('audio');
+    if (!audio) {
+      audio = document.createElement('audio');
+      audio.autoplay = true;
+      tile.appendChild(audio);
+    }
+    audio.srcObject = new MediaStream([track]);
+    setupSpeakingAnalyser(participantId, track);
+  }
+}
+
+function removeRemoteTrack(participantId: string, _producerId: string, kind: 'audio' | 'video'): void {
+  const tile = remoteTiles.get(participantId);
+  if (!tile) return;
+
+  if (kind === 'video') {
+    const video = tile.querySelector('video');
+    if (video) {
+      video.srcObject = null;
+      video.remove();
+    }
+    const avatar = tile.querySelector('.no-video-avatar') as HTMLElement | null;
+    if (avatar) avatar.style.display = '';
+  } else {
+    const audio = tile.querySelector('audio');
+    if (audio) {
+      audio.srcObject = null;
+      audio.remove();
+    }
+    teardownSpeakingAnalyser(participantId);
+  }
+}
+
+function handleParticipantLeft(participantId: string): void {
+  const tile = remoteTiles.get(participantId);
+  const name = tile?.querySelector('.name-tag')?.textContent;
+  if (tile) {
+    tile.remove();
+    remoteTiles.delete(participantId);
+    updateVideoGridCount();
+  }
+  teardownSpeakingAnalyser(participantId);
+  speakingState.delete(participantId);
+  if (name) appendSystemMessage(`${name} left`);
+}
+
+function handleParticipantJoined(participantId: string, participantName: string): void {
+  void participantId; // unused but part of callback signature
+  appendSystemMessage(`${participantName} joined`);
+}
+
+function appendChatMessage(participantId: string, participantName: string, content: string): void {
+  const div = document.createElement('div');
+  div.className = 'chat-msg';
+
+  const isLocal = participantId === room?.localParticipantId;
+
+  const sender = document.createElement('span');
+  sender.className = 'sender';
+  sender.textContent = isLocal ? 'You' : participantName;
+  sender.style.color = isLocal ? 'var(--accent)' : nameColor(participantName);
+
+  const msgText = document.createElement('div');
+  msgText.className = 'msg-text';
+  // linkify() escapes all HTML entities before wrapping URLs in anchor tags
+  msgText.insertAdjacentHTML('afterbegin', linkify(content));
+
+  const msgTime = document.createElement('div');
+  msgTime.className = 'msg-time';
+  msgTime.textContent = formatTime(new Date());
+
+  div.appendChild(sender);
+  div.appendChild(msgText);
+  div.appendChild(msgTime);
+  chatMessages.appendChild(div);
+
+  if (isAtBottom) {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  } else {
+    unreadCount++;
+    unreadBadge.textContent = String(unreadCount);
+    unreadBadge.hidden = false;
+    scrollBottomBtn.hidden = false;
+  }
+}
+
+function appendSystemMessage(text: string): void {
+  const div = document.createElement('div');
+  div.className = 'chat-msg system';
+
+  const msgText = document.createElement('div');
+  msgText.className = 'msg-text';
+  msgText.textContent = text;
+
+  div.appendChild(msgText);
+  chatMessages.appendChild(div);
+
+  if (isAtBottom) {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+}
+
+function renderConnectionQuality(quality: ConnectionQuality): void {
+  qualityIndicator.className = `quality-dot quality-${quality}`;
+  const labels: Record<ConnectionQuality, string> = {
+    good: 'Good connection',
+    fair: 'Fair connection',
+    poor: 'Poor connection',
+    unknown: 'Checking connection...',
+  };
+  qualityIndicator.title = labels[quality];
+}
+
+// --- Keyboard Shortcuts ---
+document.addEventListener('keydown', (e) => {
+  // Don't trigger shortcuts when typing in inputs
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+  const key = e.key.toLowerCase();
+
+  // PTT keys: Space and T (only in PTT mode)
+  if (micMode === 'ptt' && (key === ' ' || key === 't') && !e.repeat) {
+    e.preventDefault();
+    pttActivate();
+    return;
+  }
+
+  switch (key) {
+    case 'm':
+      if (micMode === 'open' && room && room.hasMedia) {
+        const enabled = room.toggleAudio();
+        updateMicButton(enabled);
+        updateLocalTile();
+      }
+      break;
+    case 'v':
+      if (room && room.hasMedia) {
+        const enabled = room.toggleVideo();
+        updateCamButton(enabled);
+        updateLocalTile();
+      }
+      break;
+    case 'escape':
+      settingsModal.hidden = true;
+      break;
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  const key = e.key.toLowerCase();
+  if (micMode === 'ptt' && (key === ' ' || key === 't')) {
+    pttDeactivate();
+  }
+});
+
+// Release PTT if window loses focus while key is held
+window.addEventListener('blur', () => {
+  if (pttHeld) pttDeactivate();
+});

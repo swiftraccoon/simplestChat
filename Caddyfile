@@ -1,0 +1,21 @@
+# SimplestChat reverse proxy
+# Caddy auto-provisions Let's Encrypt TLS certificates.
+#
+# Usage:
+#   1. Set your domain below (replace simplestchat.example.com)
+#   2. Point DNS A record to this server's public IP
+#   3. sudo caddy start
+#
+# Caddy handles: HTTPS termination, auto-renew, HTTP→HTTPS redirect
+
+simplestchat.example.com {
+	# WebSocket endpoint
+	handle /ws {
+		reverse_proxy localhost:3000
+	}
+
+	# All other paths (static files, API)
+	handle {
+		reverse_proxy localhost:3000
+	}
+}

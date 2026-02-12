@@ -1,0 +1,12 @@
+/target
+/reference/
+/results
+/build.log
+web/node_modules
+web/dist
+
+# Local config
+/scripts/
+/CLAUDE.md
+/.cargo/
+/.claude/

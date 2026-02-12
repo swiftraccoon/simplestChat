@@ -1,0 +1,7 @@
+target/
+.git/
+.claude/
+*.md
+!Cargo.toml
+!Cargo.lock
+!rust-toolchain.toml
