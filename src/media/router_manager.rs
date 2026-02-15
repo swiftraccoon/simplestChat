@@ -79,10 +79,19 @@ impl RouterManager {
     /// Gets a router for a room
     pub async fn get_router(&self, room_id: &str) -> MediaResult<Router> {
         let routers = self.routers.read().await;
-        
+
         routers
             .get(room_id)
             .map(|info| info.router.clone())
+            .ok_or_else(|| MediaError::RouterError(format!("Router not found for room: {room_id}")))
+    }
+
+    /// Gets the worker ID for a room's router
+    pub async fn get_worker_id(&self, room_id: &str) -> MediaResult<WorkerId> {
+        let routers = self.routers.read().await;
+        routers
+            .get(room_id)
+            .map(|info| info.worker_id)
             .ok_or_else(|| MediaError::RouterError(format!("Router not found for room: {room_id}")))
     }
     

@@ -17,6 +17,7 @@ pub use types::{MediaError, MediaResult, TransportInfo, ProducerInfo, ConsumerIn
 
 use std::sync::Arc;
 use anyhow::Result;
+use mediasoup::webrtc_server::WebRtcServer;
 use tracing::{info, debug};
 
 /// Main MediaServer struct that coordinates all mediasoup operations
@@ -79,6 +80,14 @@ impl MediaServer {
     /// Gets the configuration
     pub fn config(&self) -> Arc<MediaConfig> {
         self.config.clone()
+    }
+
+    /// Gets the WebRtcServer for the worker that hosts a room's router
+    pub async fn get_webrtc_server_for_room(&self, room_id: &str) -> Result<WebRtcServer> {
+        let worker_id = self.router_manager.get_worker_id(room_id).await
+            .map_err(|e| anyhow::anyhow!(e))?;
+        self.worker_manager.get_webrtc_server(worker_id).await
+            .map_err(|e| anyhow::anyhow!(e))
     }
 
     /// Gracefully shuts down all workers and cleans up resources

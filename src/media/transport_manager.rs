@@ -3,7 +3,6 @@
 // Transport management for WebRTC connections
 
 use crate::media::types::{MediaError, MediaResult, TransportInfo, ParticipantMedia};
-use crate::media::config::WebRtcTransportConfig;
 use crate::signaling::protocol::ServerMessage;
 use mediasoup::prelude::*;
 use std::collections::HashMap;
@@ -63,12 +62,12 @@ impl TransportManager {
         &self,
         participant_id: String,
         router: &Router,
-        config: &WebRtcTransportConfig,
+        webrtc_server: WebRtcServer,
     ) -> MediaResult<TransportInfo> {
         debug!("Creating send transport for participant: {}", participant_id);
 
-        // Create transport WITHOUT any lock held
-        let transport_options = config.to_transport_options();
+        // Create transport WITHOUT any lock held — uses shared WebRtcServer port
+        let transport_options = WebRtcTransportOptions::new_with_server(webrtc_server);
         let transport = router
             .create_webrtc_transport(transport_options)
             .await
@@ -91,12 +90,12 @@ impl TransportManager {
         &self,
         participant_id: String,
         router: &Router,
-        config: &WebRtcTransportConfig,
+        webrtc_server: WebRtcServer,
     ) -> MediaResult<TransportInfo> {
         debug!("Creating receive transport for participant: {}", participant_id);
 
-        // Create transport WITHOUT any lock held
-        let transport_options = config.to_transport_options();
+        // Create transport WITHOUT any lock held — uses shared WebRtcServer port
+        let transport_options = WebRtcTransportOptions::new_with_server(webrtc_server);
         let transport = router
             .create_webrtc_transport(transport_options)
             .await
@@ -768,7 +767,7 @@ mod tests {
     async fn test_transport_creation() {
         let config = Arc::new(MediaConfig::default());
         let worker_manager = Arc::new(WorkerManager::new(config.clone()).await.unwrap());
-        let router_manager = RouterManager::new(worker_manager);
+        let router_manager = RouterManager::new(worker_manager.clone());
         let transport_manager = TransportManager::new();
 
         // Create router first
@@ -776,16 +775,20 @@ mod tests {
         router_manager.create_router(room_id.clone(), RouterConfig::default()).await.unwrap();
         let router = router_manager.get_router(&room_id).await.unwrap();
 
-        // Create transports
+        // Look up the WebRtcServer for this room's worker
+        let worker_id = router_manager.get_worker_id(&room_id).await.unwrap();
+        let webrtc_server = worker_manager.get_webrtc_server(worker_id).await.unwrap();
+
+        // Create transports via WebRtcServer (shared port)
         let participant_id = "test-participant".to_string();
         let send_transport = transport_manager
-            .create_send_transport(participant_id.clone(), &router, &config.webrtc_transport_config)
+            .create_send_transport(participant_id.clone(), &router, webrtc_server.clone())
             .await;
 
         assert!(send_transport.is_ok());
 
         let recv_transport = transport_manager
-            .create_recv_transport(participant_id.clone(), &router, &config.webrtc_transport_config)
+            .create_recv_transport(participant_id.clone(), &router, webrtc_server)
             .await;
 
         assert!(recv_transport.is_ok());

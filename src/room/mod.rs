@@ -278,12 +278,13 @@ impl RoomManager {
     ) -> Result<TransportInfo> {
         // No room lock needed — router lookup goes through router_manager
         let router = self.get_router(room_id).await?;
+        let webrtc_server = self.media_server.get_webrtc_server_for_room(room_id).await?;
         self.media_server
             .transport_manager()
             .create_send_transport(
                 participant_id.to_string(),
                 &router,
-                &self.media_server.config().webrtc_transport_config,
+                webrtc_server,
             )
             .await
             .map_err(|e| anyhow::anyhow!(e))
@@ -300,12 +301,13 @@ impl RoomManager {
     ) -> Result<TransportInfo> {
         // No room lock needed — router lookup goes through router_manager
         let router = self.get_router(room_id).await?;
+        let webrtc_server = self.media_server.get_webrtc_server_for_room(room_id).await?;
         self.media_server
             .transport_manager()
             .create_recv_transport(
                 participant_id.to_string(),
                 &router,
-                &self.media_server.config().webrtc_transport_config,
+                webrtc_server,
             )
             .await
             .map_err(|e| anyhow::anyhow!(e))
