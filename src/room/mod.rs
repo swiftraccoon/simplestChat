@@ -114,6 +114,11 @@ impl RoomManager {
         })
     }
 
+    /// Gets the media server for direct access (e.g., find_producer_paused)
+    pub fn media_server(&self) -> &MediaServer {
+        &self.media_server
+    }
+
     /// Gets a room lock by ID (brief outer read lock, no await)
     fn get_room(&self, room_id: &str) -> Result<Arc<TokioRwLock<Room>>> {
         let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
@@ -383,6 +388,7 @@ impl RoomManager {
         producer_id: ProducerId,
         rtp_capabilities: RtpCapabilities,
         sender: Option<mpsc::Sender<Arc<String>>>,
+        paused: bool,
     ) -> MediaResult<crate::media::types::ConsumerInfo> {
         // No room lock needed — purely transport_manager operation
         let consumer = self.media_server
@@ -393,10 +399,11 @@ impl RoomManager {
                 rtp_capabilities,
                 AppData::default(),
                 sender,
+                paused,
             )
             .await?;
 
-        let consumer_info = crate::media::types::ConsumerInfo::from_consumer(&consumer, false);
+        let consumer_info = crate::media::types::ConsumerInfo::from_consumer(&consumer, paused);
 
         debug!("Created consumer {} for participant {} in room {}",
                consumer_info.id, participant_id, room_id);
@@ -466,6 +473,72 @@ impl RoomManager {
         });
 
         info!("Closed producer {} for participant {} in room {}", producer_id, participant_id, room_id);
+        Ok(())
+    }
+
+    /// Pauses a producer and cascades pause to all consumers of that producer
+    pub async fn pause_producer(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+        producer_id: &str,
+    ) -> Result<()> {
+        // Pause the producer itself
+        self.media_server
+            .transport_manager()
+            .pause_producer(participant_id, producer_id)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        // Cascade: pause all consumers of this producer
+        let count = self.media_server
+            .transport_manager()
+            .pause_consumers_of_producer(producer_id)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        // Broadcast ProducerPaused to other participants in the room
+        let room_lock = self.get_room(room_id)?;
+        let room = room_lock.read().await;
+        room.broadcast_except(participant_id, &ServerMessage::ProducerPaused {
+            producer_id: producer_id.to_string(),
+        });
+
+        info!("Paused producer {} for participant {} in room {} (cascaded to {} consumers)",
+              producer_id, participant_id, room_id, count);
+        Ok(())
+    }
+
+    /// Resumes a producer and cascades resume to all consumers of that producer
+    pub async fn resume_producer(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+        producer_id: &str,
+    ) -> Result<()> {
+        // Resume the producer itself
+        self.media_server
+            .transport_manager()
+            .resume_producer(participant_id, producer_id)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        // Cascade: resume all consumers of this producer
+        let count = self.media_server
+            .transport_manager()
+            .resume_consumers_of_producer(producer_id)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        // Broadcast ProducerResumed to other participants in the room
+        let room_lock = self.get_room(room_id)?;
+        let room = room_lock.read().await;
+        room.broadcast_except(participant_id, &ServerMessage::ProducerResumed {
+            producer_id: producer_id.to_string(),
+        });
+
+        info!("Resumed producer {} for participant {} in room {} (cascaded to {} consumers)",
+              producer_id, participant_id, room_id, count);
         Ok(())
     }
 

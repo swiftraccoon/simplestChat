@@ -229,6 +229,7 @@ impl TransportManager {
         rtp_capabilities: RtpCapabilities,
         app_data: AppData,
         sender: Option<mpsc::Sender<Arc<String>>>,
+        paused: bool,
     ) -> MediaResult<Consumer> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let mut participant = participant_lock.lock().await;
@@ -240,6 +241,7 @@ impl TransportManager {
 
         let mut consumer_options = ConsumerOptions::new(producer_id, rtp_capabilities);
         consumer_options.app_data = app_data;
+        consumer_options.paused = paused;
 
         let consumer = transport
             .consume(consumer_options)
@@ -299,6 +301,131 @@ impl TransportManager {
 
         info!("Paused consumer {} for participant {}", consumer_id, participant_id);
         Ok(())
+    }
+
+    /// Pauses a producer for a participant
+    pub async fn pause_producer(
+        &self,
+        participant_id: &str,
+        producer_id: &str,
+    ) -> MediaResult<()> {
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let participant = participant_lock.lock().await;
+
+        let producer = participant
+            .producers
+            .get(producer_id)
+            .ok_or_else(|| MediaError::ProducerError(format!("Producer not found: {producer_id}")))?;
+
+        producer
+            .pause()
+            .await
+            .map_err(|e| MediaError::ProducerError(format!("Failed to pause producer: {e}")))?;
+
+        info!("Paused producer {} for participant {}", producer_id, participant_id);
+        Ok(())
+    }
+
+    /// Resumes a producer for a participant
+    pub async fn resume_producer(
+        &self,
+        participant_id: &str,
+        producer_id: &str,
+    ) -> MediaResult<()> {
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let participant = participant_lock.lock().await;
+
+        let producer = participant
+            .producers
+            .get(producer_id)
+            .ok_or_else(|| MediaError::ProducerError(format!("Producer not found: {producer_id}")))?;
+
+        producer
+            .resume()
+            .await
+            .map_err(|e| MediaError::ProducerError(format!("Failed to resume producer: {e}")))?;
+
+        info!("Resumed producer {} for participant {}", producer_id, participant_id);
+        Ok(())
+    }
+
+    /// Searches across all participants to find if a producer is paused.
+    /// Returns `Some(paused)` if found, `None` if the producer doesn't exist.
+    pub async fn find_producer_paused(&self, producer_id: &str) -> Option<bool> {
+        let target_id: ProducerId = producer_id.parse().ok()?;
+
+        let all_locks: Vec<Arc<TokioMutex<ParticipantMedia>>> = {
+            let participants = self.participants.read().unwrap_or_else(|e| e.into_inner());
+            participants.values().cloned().collect()
+        };
+
+        for lock in all_locks {
+            let participant = lock.lock().await;
+            for (pid, producer) in &participant.producers {
+                if producer.id() == target_id {
+                    debug!("Found producer {} (paused={}) in participant {}", pid, producer.paused(), participant.id);
+                    return Some(producer.paused());
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Pauses all consumers whose producer matches the given producer_id.
+    /// Returns the count of consumers that were actually paused.
+    pub async fn pause_consumers_of_producer(&self, producer_id: &str) -> MediaResult<usize> {
+        let target_id: ProducerId = producer_id.parse()
+            .map_err(|_| MediaError::ProducerError(format!("Invalid producer ID: {producer_id}")))?;
+
+        let all_locks: Vec<Arc<TokioMutex<ParticipantMedia>>> = {
+            let participants = self.participants.read().unwrap_or_else(|e| e.into_inner());
+            participants.values().cloned().collect()
+        };
+
+        let mut count = 0usize;
+        for lock in all_locks {
+            let participant = lock.lock().await;
+            for (cid, consumer) in &participant.consumers {
+                if consumer.producer_id() == target_id && !consumer.paused() {
+                    if let Err(e) = consumer.pause().await {
+                        warn!("Failed to pause consumer {} of producer {}: {}", cid, producer_id, e);
+                    } else {
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        Ok(count)
+    }
+
+    /// Resumes all consumers whose producer matches the given producer_id.
+    /// Returns the count of consumers that were actually resumed.
+    pub async fn resume_consumers_of_producer(&self, producer_id: &str) -> MediaResult<usize> {
+        let target_id: ProducerId = producer_id.parse()
+            .map_err(|_| MediaError::ProducerError(format!("Invalid producer ID: {producer_id}")))?;
+
+        let all_locks: Vec<Arc<TokioMutex<ParticipantMedia>>> = {
+            let participants = self.participants.read().unwrap_or_else(|e| e.into_inner());
+            participants.values().cloned().collect()
+        };
+
+        let mut count = 0usize;
+        for lock in all_locks {
+            let participant = lock.lock().await;
+            for (cid, consumer) in &participant.consumers {
+                if consumer.producer_id() == target_id && consumer.paused() {
+                    if let Err(e) = consumer.resume().await {
+                        warn!("Failed to resume consumer {} of producer {}: {}", cid, producer_id, e);
+                    } else {
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        Ok(count)
     }
 
     /// Sets preferred simulcast layers for a consumer

@@ -652,8 +652,15 @@ async fn handle_client_message(
 
         ClientMessage::Consume { producer_id, rtp_capabilities } => {
             if let Some(room_id) = current_room_id.as_ref() {
+                let producer_paused = room_manager
+                    .media_server()
+                    .transport_manager()
+                    .find_producer_paused(producer_id)
+                    .await
+                    .unwrap_or(false);
+
                 let consumer_info = room_manager
-                    .create_consumer(room_id, participant_id, producer_id.parse()?, rtp_capabilities.clone(), Some(sender.clone()))
+                    .create_consumer(room_id, participant_id, producer_id.parse()?, rtp_capabilities.clone(), Some(sender.clone()), producer_paused)
                     .await?;
 
                 metrics.inc_consumers_created();
@@ -697,6 +704,24 @@ async fn handle_client_message(
                 room_manager
                     .close_producer(room_id, participant_id, producer_id)
                     .await?;
+            } else {
+                anyhow::bail!("Not in a room");
+            }
+        }
+
+        ClientMessage::PauseProducer { producer_id } => {
+            if let Some(room_id) = current_room_id.as_ref() {
+                room_manager.pause_producer(room_id, participant_id, producer_id).await?;
+                send_json(sender, &ServerMessage::ProducerPaused { producer_id: producer_id.clone() })?;
+            } else {
+                anyhow::bail!("Not in a room");
+            }
+        }
+
+        ClientMessage::ResumeProducer { producer_id } => {
+            if let Some(room_id) = current_room_id.as_ref() {
+                room_manager.resume_producer(room_id, participant_id, producer_id).await?;
+                send_json(sender, &ServerMessage::ProducerResumed { producer_id: producer_id.clone() })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
