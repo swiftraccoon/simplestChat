@@ -10,6 +10,7 @@ use mediasoup::worker::WorkerId;
 use mediasoup::router::RouterDump;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use tokio::sync::RwLock;
 use tracing::{info, debug, warn};
 use anyhow::Result;
@@ -94,7 +95,16 @@ impl RouterManager {
             .map(|info| info.worker_id)
             .ok_or_else(|| MediaError::RouterError(format!("Router not found for room: {room_id}")))
     }
-    
+
+    /// Gets the consumer counter for the worker hosting a room's router
+    pub async fn get_consumer_counter_for_room(&self, room_id: &str) -> MediaResult<Option<Arc<AtomicUsize>>> {
+        let routers = self.routers.read().await;
+        match routers.get(room_id) {
+            Some(info) => Ok(self.worker_manager.get_consumer_counter(info.worker_id)),
+            None => Err(MediaError::RouterError(format!("Router not found for room: {room_id}"))),
+        }
+    }
+
     /// Removes a router for a room
     pub async fn remove_router(&self, room_id: &str) -> MediaResult<()> {
         let mut routers = self.routers.write().await;

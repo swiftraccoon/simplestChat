@@ -82,6 +82,12 @@ impl MediaServer {
         self.config.clone()
     }
 
+    /// Gets the consumer counter for the worker hosting a room's router
+    pub async fn get_consumer_counter_for_room(&self, room_id: &str) -> Result<Option<Arc<std::sync::atomic::AtomicUsize>>> {
+        self.router_manager.get_consumer_counter_for_room(room_id).await
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
     /// Gets the WebRtcServer for the worker that hosts a room's router
     pub async fn get_webrtc_server_for_room(&self, room_id: &str) -> Result<WebRtcServer> {
         let worker_id = self.router_manager.get_worker_id(room_id).await

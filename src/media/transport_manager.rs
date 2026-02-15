@@ -8,6 +8,7 @@ use mediasoup::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::mpsc;
 use tracing::{info, debug, warn};
@@ -229,6 +230,7 @@ impl TransportManager {
         app_data: AppData,
         sender: Option<mpsc::Sender<Arc<String>>>,
         paused: bool,
+        consumer_counter: Option<Arc<AtomicUsize>>,
     ) -> MediaResult<Consumer> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let mut participant = participant_lock.lock().await;
@@ -248,7 +250,13 @@ impl TransportManager {
             .map_err(|e| MediaError::ConsumerError(format!("Failed to create consumer: {e}")))?;
 
         let consumer_id = consumer.id().to_string();
-        self.setup_consumer_handlers(&consumer, participant_id, sender);
+
+        // Increment the worker's consumer count
+        if let Some(ref counter) = consumer_counter {
+            counter.fetch_add(1, Ordering::Relaxed);
+        }
+
+        self.setup_consumer_handlers(&consumer, participant_id, sender, consumer_counter);
         participant.consumers.insert(consumer_id.clone(), consumer.clone());
 
         info!("Created consumer {} for producer {} and participant {}",
@@ -659,6 +667,7 @@ impl TransportManager {
         consumer: &Consumer,
         participant_id: &str,
         sender: Option<mpsc::Sender<Arc<String>>>,
+        consumer_counter: Option<Arc<AtomicUsize>>,
     ) {
         let participant_id = participant_id.to_string();
         let consumer_id = consumer.id().to_string();
@@ -666,7 +675,11 @@ impl TransportManager {
         consumer.on_close({
             let participant_id = participant_id.clone();
             let consumer_id = consumer_id.clone();
+            let counter = consumer_counter;
             move || {
+                if let Some(ref c) = counter {
+                    c.fetch_sub(1, Ordering::Relaxed);
+                }
                 warn!("Consumer {} closed for participant {}", consumer_id, participant_id);
             }
         }).detach();

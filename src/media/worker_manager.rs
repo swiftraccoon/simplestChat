@@ -9,6 +9,7 @@ use mediasoup::worker::{WorkerId, WorkerDump};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
+use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::RwLock;
 use tracing::{info, warn, error, debug};
@@ -19,6 +20,7 @@ pub struct WorkerManager {
     workers: Arc<RwLock<Vec<Worker>>>,
     worker_load: Arc<RwLock<HashMap<WorkerId, usize>>>,
     webrtc_servers: Arc<RwLock<HashMap<WorkerId, WebRtcServer>>>,
+    worker_consumer_counts: Arc<StdRwLock<HashMap<WorkerId, Arc<AtomicUsize>>>>,
     config: Arc<MediaConfig>,
     next_worker_idx: AtomicUsize,
     mediasoup_worker_manager: Arc<mediasoup::worker_manager::WorkerManager>,
@@ -37,6 +39,7 @@ impl WorkerManager {
         let mut workers = Vec::with_capacity(num_workers);
         let mut worker_load = HashMap::new();
         let mut webrtc_servers = HashMap::new();
+        let mut worker_consumer_counts = HashMap::new();
 
         // Derive announced_address from transport config (if set)
         let announced_address = config
@@ -81,6 +84,7 @@ impl WorkerManager {
             webrtc_servers.insert(worker_id, webrtc_server);
 
             worker_load.insert(worker_id, 0);
+            worker_consumer_counts.insert(worker_id, Arc::new(AtomicUsize::new(0)));
             workers.push(worker);
         }
 
@@ -88,6 +92,7 @@ impl WorkerManager {
             workers: Arc::new(RwLock::new(workers)),
             worker_load: Arc::new(RwLock::new(worker_load)),
             webrtc_servers: Arc::new(RwLock::new(webrtc_servers)),
+            worker_consumer_counts: Arc::new(StdRwLock::new(worker_consumer_counts)),
             config,
             next_worker_idx: AtomicUsize::new(0),
             mediasoup_worker_manager,
@@ -135,7 +140,7 @@ impl WorkerManager {
         });
     }
     
-    /// Gets the least loaded worker using round-robin with load balancing.
+    /// Gets the least loaded worker based on real-time consumer counts.
     /// Returns both the Worker and its WorkerId (needed to look up the WebRtcServer).
     ///
     /// # Errors
@@ -147,19 +152,30 @@ impl WorkerManager {
             return Err(MediaError::WorkerError("No workers available".to_string()));
         }
 
-        // Simple round-robin for now, but could be enhanced with actual load metrics
-        // Using Relaxed ordering is safe here - occasional duplicates in load balancing are acceptable
-        let idx = self.next_worker_idx.fetch_add(1, Ordering::Relaxed) % workers.len();
-        let worker = workers[idx].clone();
+        // Select worker with the lowest consumer count
+        let consumer_counts = self.worker_consumer_counts.read().unwrap_or_else(|e| e.into_inner());
+        let mut best_idx = 0;
+        let mut best_count = usize::MAX;
+        for (idx, worker) in workers.iter().enumerate() {
+            let count = consumer_counts.get(&worker.id())
+                .map(|c| c.load(Ordering::Relaxed))
+                .unwrap_or(0);
+            if count < best_count {
+                best_count = count;
+                best_idx = idx;
+            }
+        }
+
+        let worker = workers[best_idx].clone();
         let worker_id = worker.id();
 
-        // Increment load counter for this worker
+        // Increment router load counter for this worker
         let mut load = self.worker_load.write().await;
         if let Some(count) = load.get_mut(&worker_id) {
             *count += 1;
         }
 
-        debug!("Selected worker {} (index {})", worker_id, idx);
+        debug!("Selected worker {} (index {}, {} consumers)", worker_id, best_idx, best_count);
         Ok((worker, worker_id))
     }
     
@@ -175,6 +191,12 @@ impl WorkerManager {
             .ok_or_else(|| MediaError::WorkerError(
                 format!("No WebRtcServer found for worker: {worker_id}")
             ))
+    }
+
+    /// Gets the consumer counter for a specific worker (for real-time tracking)
+    pub fn get_consumer_counter(&self, worker_id: WorkerId) -> Option<Arc<AtomicUsize>> {
+        let counts = self.worker_consumer_counts.read().unwrap_or_else(|e| e.into_inner());
+        counts.get(&worker_id).cloned()
     }
 
     /// Decrements the load counter for a worker (called when a router is closed)
@@ -296,6 +318,7 @@ impl WorkerManager {
         workers.clear();
 
         self.worker_load.write().await.clear();
+        self.worker_consumer_counts.write().unwrap_or_else(|e| e.into_inner()).clear();
 
         info!("All workers shut down successfully");
         Ok(())

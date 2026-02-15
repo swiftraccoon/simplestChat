@@ -392,6 +392,12 @@ impl RoomManager {
         sender: Option<mpsc::Sender<Arc<String>>>,
         paused: bool,
     ) -> MediaResult<crate::media::types::ConsumerInfo> {
+        // Look up the consumer counter for this room's worker (for load-aware tracking)
+        let consumer_counter = self.media_server
+            .get_consumer_counter_for_room(room_id).await
+            .ok()
+            .flatten();
+
         // No room lock needed — purely transport_manager operation
         let consumer = self.media_server
             .transport_manager()
@@ -402,6 +408,7 @@ impl RoomManager {
                 AppData::default(),
                 sender,
                 paused,
+                consumer_counter,
             )
             .await?;
 
