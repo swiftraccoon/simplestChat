@@ -129,6 +129,7 @@ pub async fn handle_connection(
     // Handle incoming messages
     let mut current_room_id: Option<String> = None;
     let mut stats_task: Option<tokio::task::JoinHandle<()>> = None;
+    let mut bwe_sender: Option<mpsc::Sender<u32>> = None;
 
     // Token bucket rate limiter state
     let mut tokens_us: u64 = MAX_TOKENS_US;
@@ -200,10 +201,19 @@ pub async fn handle_connection(
                                 if let Some(task) = stats_task.take() {
                                     task.abort();
                                 }
+
+                                let (bwe_tx, bwe_rx) = mpsc::channel::<u32>(32);
+                                // Try to subscribe immediately (recv transport may exist from previous session)
+                                if let Err(e) = room_manager.subscribe_bwe_events(&participant_id, bwe_tx.clone()).await {
+                                    debug!("BWE subscription deferred for reconnecting {}: {}", participant_id, e);
+                                }
+                                bwe_sender = Some(bwe_tx);
+
                                 stats_task = Some(spawn_stats_task(
                                     room_manager.clone(),
                                     participant_id.clone(),
                                     tx.clone(),
+                                    bwe_rx,
                                 ));
                             }
 
@@ -229,6 +239,7 @@ pub async fn handle_connection(
                             &turn_config,
                             &metrics,
                             &reconnect_token,
+                            &bwe_sender,
                         ).await;
                         metrics.observe_message_handling(start.elapsed());
 
@@ -252,10 +263,16 @@ pub async fn handle_connection(
                             if let Some(task) = stats_task.take() {
                                 task.abort();
                             }
+
+                            // Create BWE event channel (subscription happens later in CreateRecvTransport)
+                            let (bwe_tx, bwe_rx) = mpsc::channel::<u32>(32);
+                            bwe_sender = Some(bwe_tx);
+
                             stats_task = Some(spawn_stats_task(
                                 room_manager.clone(),
                                 participant_id.clone(),
                                 tx.clone(),
+                                bwe_rx,
                             ));
                         }
 
@@ -264,6 +281,7 @@ pub async fn handle_connection(
                             if let Some(task) = stats_task.take() {
                                 task.abort();
                             }
+                            bwe_sender = None;
                         }
                     }
                     Err(e) => {
@@ -418,109 +436,94 @@ async fn handle_reconnect(
 /// - 2s when consumers are active and bandwidth is changing
 /// - 5s when consumers are active but bandwidth tier is stable (3+ consecutive same-tier polls)
 /// - 10s when no consumers exist (publish-only, no layer adaptation needed)
+/// Spawns a background task that performs bandwidth adaptation and sends connection stats.
+///
+/// Uses event-driven BWE (bandwidth estimation) events for layer adaptation:
+/// - BWE events arrive via channel when mediasoup detects bandwidth changes
+/// - Layer preferences update immediately on tier change (debounced at 500ms)
+/// - ConnectionStats sent to client every ~10s using last-known bitrate (no IPC)
 fn spawn_stats_task(
     room_manager: Arc<RoomManager>,
     participant_id: String,
     sender: mpsc::Sender<Arc<String>>,
+    mut bwe_rx: mpsc::Receiver<u32>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        // Track per-consumer preferred spatial layer to avoid redundant updates
         let mut current_layers: HashMap<String, u8> = HashMap::new();
-        let mut tick = 0u64;
-
-        // Adaptive polling state
-        let mut consecutive_stable_polls: u8 = 0;
+        let mut last_bitrate: u32 = 0;
         let mut last_tier: Option<u8> = None;
-        let mut had_consumers = false;
+
+        // Minimum interval between layer updates (debounce rapid BWE fluctuations)
+        let mut last_layer_update = Instant::now();
+        let debounce = Duration::from_millis(500);
+
+        // ConnectionStats interval — no IPC call, just uses last-known bitrate
+        let mut stats_interval = tokio::time::interval(Duration::from_secs(10));
+        stats_interval.tick().await; // Skip first immediate tick
 
         loop {
-            // Determine sleep interval based on client state
-            let sleep_secs: u64 = if !had_consumers {
-                10 // No consumers — publish-only, no layer adaptation needed
-            } else if consecutive_stable_polls >= 3 {
-                5 // Stable bandwidth tier — poll less frequently
-            } else {
-                2 // Active bandwidth changes — need responsive adaptation
-            };
+            tokio::select! {
+                // BWE event: bandwidth estimation changed
+                bwe = bwe_rx.recv() => {
+                    match bwe {
+                        Some(bitrate) => {
+                            last_bitrate = bitrate;
 
-            // ConnectionStats send interval: target ~10s regardless of sleep
-            let stats_modulus: u64 = match sleep_secs {
-                2 => 5,  // 5 * 2s = 10s
-                5 => 2,  // 2 * 5s = 10s
-                _ => 1,  // 1 * 10s = 10s
-            };
-
-            tokio::time::sleep(tokio::time::Duration::from_secs(sleep_secs)).await;
-            tick += 1;
-
-            // Bandwidth adaptation: poll recv transport stats and adjust consumer layers
-            match room_manager.get_recv_transport_stats(&participant_id).await {
-                Ok(Some((bitrate, consumer_ids))) if !consumer_ids.is_empty() => {
-                    had_consumers = true;
-
-                    let target_layer = if bitrate < 200_000 {
-                        0u8 // Low quality
-                    } else if bitrate < 600_000 {
-                        1u8 // Medium quality
-                    } else {
-                        2u8 // High quality
-                    };
-
-                    // Update adaptive polling: track tier stability
-                    if last_tier == Some(target_layer) {
-                        consecutive_stable_polls = consecutive_stable_polls.saturating_add(1);
-                    } else {
-                        consecutive_stable_polls = 0;
-                    }
-                    last_tier = Some(target_layer);
-
-                    for consumer_id in &consumer_ids {
-                        let prev = current_layers.get(consumer_id).copied();
-                        if prev != Some(target_layer) {
-                            if let Err(e) = room_manager.set_preferred_layers(
-                                &participant_id,
-                                consumer_id,
-                                target_layer,
-                                None,
-                            ).await {
-                                debug!("Failed to set preferred layers for consumer {}: {}", consumer_id, e);
+                            let target_layer = if bitrate < 200_000 {
+                                0u8
+                            } else if bitrate < 600_000 {
+                                1u8
                             } else {
-                                current_layers.insert(consumer_id.clone(), target_layer);
+                                2u8
+                            };
+
+                            // Only update layers on tier change, with debounce
+                            if last_tier != Some(target_layer) && last_layer_update.elapsed() >= debounce {
+                                last_tier = Some(target_layer);
+                                last_layer_update = Instant::now();
+
+                                // Get current consumer IDs (still needs participant lock, but no IPC)
+                                match room_manager.get_recv_transport_stats(&participant_id).await {
+                                    Ok(Some((_bitrate, consumer_ids))) => {
+                                        for consumer_id in &consumer_ids {
+                                            let prev = current_layers.get(consumer_id).copied();
+                                            if prev != Some(target_layer) {
+                                                if let Err(e) = room_manager.set_preferred_layers(
+                                                    &participant_id,
+                                                    consumer_id,
+                                                    target_layer,
+                                                    None,
+                                                ).await {
+                                                    debug!("Failed to set layers for consumer {}: {}", consumer_id, e);
+                                                } else {
+                                                    current_layers.insert(consumer_id.clone(), target_layer);
+                                                }
+                                            }
+                                        }
+                                        current_layers.retain(|id, _| consumer_ids.contains(id));
+                                    }
+                                    Ok(None) => {
+                                        current_layers.clear();
+                                    }
+                                    Err(e) => {
+                                        debug!("Failed to get consumer IDs for {}: {}", participant_id, e);
+                                    }
+                                }
                             }
                         }
-                    }
-
-                    // Clean stale entries
-                    current_layers.retain(|id, _| consumer_ids.contains(id));
-                }
-                Ok(_) => {
-                    // No consumers (or no transport) — reset adaptive state
-                    if had_consumers {
-                        had_consumers = false;
-                        consecutive_stable_polls = 0;
-                        last_tier = None;
-                        current_layers.clear();
+                        None => break, // Channel closed — participant disconnected
                     }
                 }
-                Err(e) => {
-                    debug!("Failed to get recv transport stats for {}: {}", participant_id, e);
-                }
-            }
 
-            // Connection quality stats: send at ~10s intervals regardless of sleep duration
-            if tick % stats_modulus == 0 {
-                match room_manager.get_send_transport_stats(&participant_id).await {
-                    Ok(Some(bitrate)) => {
+                // Timer: send ConnectionStats every ~10s using last-known bitrate (zero IPC)
+                _ = stats_interval.tick() => {
+                    if last_bitrate > 0 {
                         if let Ok(json) = serde_json::to_string(&ServerMessage::ConnectionStats {
-                            available_bitrate: bitrate,
+                            available_bitrate: Some(last_bitrate),
                             rtt: None,
                         }) {
                             let _ = sender.try_send(Arc::new(json));
                         }
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        debug!("Failed to get send transport stats for {}: {}", participant_id, e);
                     }
                 }
             }
@@ -550,6 +553,7 @@ async fn handle_client_message(
     turn_config: &Option<Arc<TurnConfig>>,
     metrics: &ServerMetrics,
     reconnect_token: &str,
+    bwe_sender: &Option<mpsc::Sender<u32>>,
 ) -> anyhow::Result<()> {
     match message {
         ClientMessage::JoinRoom { room_id, participant_name } => {
@@ -620,6 +624,13 @@ async fn handle_client_message(
                 let transport_info = room_manager
                     .create_recv_transport(room_id, participant_id)
                     .await?;
+
+                // Subscribe to BWE events now that recv transport exists
+                if let Some(ref bwe_tx) = bwe_sender {
+                    if let Err(e) = room_manager.subscribe_bwe_events(participant_id, bwe_tx.clone()).await {
+                        debug!("Failed to subscribe BWE events for {}: {}", participant_id, e);
+                    }
+                }
 
                 send_json(sender, &ServerMessage::TransportCreated {
                     transport_id: transport_info.id,
