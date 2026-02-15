@@ -18,9 +18,9 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Bounded channel capacity per client.
-/// Peak burst during join is ~20 messages; steady-state in a 60-person room ~60 msgs/event.
-/// 256 gives 4x headroom while capping memory at ~256KB per client.
-const CHANNEL_CAPACITY: usize = 256;
+/// At 100 msg/s rate limit, 64 slots = 640ms of burst buffer.
+/// Messages queued beyond this are stale — drop them early.
+const CHANNEL_CAPACITY: usize = 64;
 
 /// Idle timeout — close connection if no message received within this duration.
 /// Prevents Slowloris-style attacks that hold semaphore permits indefinitely.
