@@ -5,6 +5,7 @@
 use crate::media::types::{MediaError, MediaResult, TransportInfo, ParticipantMedia};
 use crate::signaling::protocol::ServerMessage;
 use mediasoup::prelude::*;
+use mediasoup::transport::{TransportTraceEventData, TransportTraceEventType};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;

@@ -153,18 +153,21 @@ impl WorkerManager {
         }
 
         // Select worker with the lowest consumer count
-        let consumer_counts = self.worker_consumer_counts.read().unwrap_or_else(|e| e.into_inner());
-        let mut best_idx = 0;
-        let mut best_count = usize::MAX;
-        for (idx, worker) in workers.iter().enumerate() {
-            let count = consumer_counts.get(&worker.id())
-                .map(|c| c.load(Ordering::Relaxed))
-                .unwrap_or(0);
-            if count < best_count {
-                best_count = count;
-                best_idx = idx;
+        let (best_idx, best_count) = {
+            let consumer_counts = self.worker_consumer_counts.read().unwrap_or_else(|e| e.into_inner());
+            let mut best_idx = 0;
+            let mut best_count = usize::MAX;
+            for (idx, worker) in workers.iter().enumerate() {
+                let count = consumer_counts.get(&worker.id())
+                    .map(|c| c.load(Ordering::Relaxed))
+                    .unwrap_or(0);
+                if count < best_count {
+                    best_count = count;
+                    best_idx = idx;
+                }
             }
-        }
+            (best_idx, best_count)
+        }; // consumer_counts guard dropped here
 
         let worker = workers[best_idx].clone();
         let worker_id = worker.id();

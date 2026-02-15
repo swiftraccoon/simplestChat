@@ -623,7 +623,7 @@ async fn handle_client_message(
                     .await?;
 
                 // Subscribe to BWE events now that recv transport exists
-                if let Some(ref bwe_tx) = bwe_sender {
+                if let Some(bwe_tx) = bwe_sender {
                     if let Err(e) = room_manager.subscribe_bwe_events(participant_id, bwe_tx.clone()).await {
                         debug!("Failed to subscribe BWE events for {}: {}", participant_id, e);
                     }
