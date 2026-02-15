@@ -20,7 +20,7 @@ use anyhow::Result;
 pub struct Participant {
     pub id: String,
     pub name: String,
-    pub sender: mpsc::Sender<ServerMessage>,
+    pub sender: mpsc::Sender<Arc<String>>,
     pub producers: HashMap<String, MediaKind>,
 }
 
@@ -41,10 +41,17 @@ impl Room {
     }
 
     /// Broadcast a message to all participants except the sender
-    fn broadcast_except(&self, sender_id: &str, message: ServerMessage) {
+    fn broadcast_except(&self, sender_id: &str, message: &ServerMessage) {
+        let json = match serde_json::to_string(message) {
+            Ok(j) => Arc::new(j),
+            Err(e) => {
+                warn!("Failed to serialize broadcast message: {}", e);
+                return;
+            }
+        };
         for (id, participant) in &self.participants {
             if id != sender_id {
-                match participant.sender.try_send(message.clone()) {
+                match participant.sender.try_send(json.clone()) {
                     Ok(()) => {}
                     Err(mpsc::error::TrySendError::Full(_)) => {
                         warn!("Channel full for participant {} in room {}, dropping message", id, self.id);
@@ -58,9 +65,16 @@ impl Room {
     }
 
     /// Broadcast a message to all participants
-    fn broadcast_all(&self, message: ServerMessage) {
+    fn broadcast_all(&self, message: &ServerMessage) {
+        let json = match serde_json::to_string(message) {
+            Ok(j) => Arc::new(j),
+            Err(e) => {
+                warn!("Failed to serialize broadcast message: {}", e);
+                return;
+            }
+        };
         for (id, participant) in &self.participants {
-            match participant.sender.try_send(message.clone()) {
+            match participant.sender.try_send(json.clone()) {
                 Ok(()) => {}
                 Err(mpsc::error::TrySendError::Full(_)) => {
                     warn!("Channel full for participant {} in room {}, dropping message", id, self.id);
@@ -140,7 +154,7 @@ impl RoomManager {
         room_id: &str,
         participant_id: String,
         participant_name: String,
-        sender: mpsc::Sender<ServerMessage>,
+        sender: mpsc::Sender<Arc<String>>,
     ) -> Result<Vec<ParticipantInfo>> {
         let room_lock = self.get_or_create_room(room_id).await?;
         let mut room = room_lock.write().await;
@@ -157,7 +171,7 @@ impl RoomManager {
         info!("Participant {} ({}) joined room {}", participant_id, participant_name, room_id);
 
         // Notify other participants
-        room.broadcast_except(&participant_id, ServerMessage::ParticipantJoined {
+        room.broadcast_except(&participant_id, &ServerMessage::ParticipantJoined {
             participant_id: participant_id.clone(),
             participant_name,
         });
@@ -204,7 +218,7 @@ impl RoomManager {
                 removed = true;
                 info!("Participant {} left room {}", participant_id, room_id);
 
-                room.broadcast_all(ServerMessage::ParticipantLeft {
+                room.broadcast_all(&ServerMessage::ParticipantLeft {
                     participant_id: participant_id.to_string(),
                 });
 
@@ -346,7 +360,7 @@ impl RoomManager {
             participant.producers.insert(producer_id.clone(), kind);
         }
 
-        room.broadcast_except(participant_id, ServerMessage::NewProducer {
+        room.broadcast_except(participant_id, &ServerMessage::NewProducer {
             participant_id: participant_id.to_string(),
             producer_id: producer_id.clone(),
             kind,
@@ -368,7 +382,7 @@ impl RoomManager {
         participant_id: &str,
         producer_id: ProducerId,
         rtp_capabilities: RtpCapabilities,
-        sender: Option<mpsc::Sender<ServerMessage>>,
+        sender: Option<mpsc::Sender<Arc<String>>>,
     ) -> MediaResult<crate::media::types::ConsumerInfo> {
         // No room lock needed — purely transport_manager operation
         let consumer = self.media_server
@@ -447,7 +461,7 @@ impl RoomManager {
             participant.producers.remove(producer_id);
         }
 
-        room.broadcast_except(participant_id, ServerMessage::ProducerClosed {
+        room.broadcast_except(participant_id, &ServerMessage::ProducerClosed {
             producer_id: producer_id.to_string(),
         });
 
@@ -515,7 +529,7 @@ impl RoomManager {
         &self,
         room_id: &str,
         participant_id: &str,
-        new_sender: mpsc::Sender<ServerMessage>,
+        new_sender: mpsc::Sender<Arc<String>>,
     ) -> Result<bool> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
@@ -536,7 +550,7 @@ impl RoomManager {
             .map(|p| p.name.clone())
             .unwrap_or_else(|| "Unknown".to_string());
 
-        room.broadcast_except(sender_id, ServerMessage::ChatReceived {
+        room.broadcast_except(sender_id, &ServerMessage::ChatReceived {
             participant_id: sender_id.to_string(),
             participant_name: sender_name,
             content,

@@ -70,6 +70,16 @@ impl GracePeriodMap {
     }
 }
 
+/// Serialize a ServerMessage and send it through the channel as pre-serialized JSON.
+fn send_json(
+    sender: &mpsc::Sender<Arc<String>>,
+    msg: &ServerMessage,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let json = Arc::new(serde_json::to_string(msg)?);
+    sender.try_send(json)?;
+    Ok(())
+}
+
 /// Handles a single WebSocket connection
 pub async fn handle_connection(
     socket: WebSocket,
@@ -91,7 +101,7 @@ pub async fn handle_connection(
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
     // Bounded channel for sending messages to this client
-    let (tx, mut rx) = mpsc::channel::<ServerMessage>(CHANNEL_CAPACITY);
+    let (tx, mut rx) = mpsc::channel::<Arc<String>>(CHANNEL_CAPACITY);
 
     // Clone for the send task
     let participant_id_clone = participant_id.clone();
@@ -99,12 +109,10 @@ pub async fn handle_connection(
 
     // Spawn task to send messages to client
     let send_task = tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            if let Ok(json) = serde_json::to_string(&msg) {
-                send_metrics.inc_messages_sent();
-                if ws_sender.send(Message::Text(json.into())).await.is_err() {
-                    break;
-                }
+        while let Some(json) = rx.recv().await {
+            send_metrics.inc_messages_sent();
+            if ws_sender.send(Message::Text((*json).clone().into())).await.is_err() {
+                break;
             }
         }
         debug!("Send task finished for participant: {}", participant_id_clone);
@@ -149,7 +157,7 @@ pub async fn handle_connection(
                     if !rate_limit_warned {
                         rate_limit_warned = true;
                         warn!("Rate limit exceeded for participant {}", participant_id);
-                        let _ = tx.try_send(ServerMessage::Error {
+                        let _ = send_json(&tx, &ServerMessage::Error {
                             message: format!("Rate limit exceeded: max {} messages/second", RATE_LIMIT_REFILL_RATE),
                         });
                     }
@@ -191,7 +199,7 @@ pub async fn handle_connection(
                                 ));
                             }
 
-                            let _ = tx.try_send(ServerMessage::ReconnectResult {
+                            let _ = send_json(&tx, &ServerMessage::ReconnectResult {
                                 success,
                                 participant_id: if success { participant_id.clone() } else { reconnect_id.clone() },
                             });
@@ -223,7 +231,7 @@ pub async fn handle_connection(
                             if tx.is_closed() {
                                 break;
                             }
-                            let _ = tx.try_send(ServerMessage::Error {
+                            let _ = send_json(&tx, &ServerMessage::Error {
                                 message: format!("Error: {e}"),
                             });
                         }
@@ -253,7 +261,7 @@ pub async fn handle_connection(
                     Err(e) => {
                         warn!("Invalid message format: {}", e);
                         metrics.inc_errors();
-                        let _ = tx.try_send(ServerMessage::Error {
+                        let _ = send_json(&tx, &ServerMessage::Error {
                             message: format!("Invalid message format: {e}"),
                         });
                     }
@@ -319,7 +327,7 @@ async fn handle_reconnect(
     client_token: &str,
     grace_periods: &GracePeriodMap,
     room_manager: &Arc<RoomManager>,
-    new_sender: &mpsc::Sender<ServerMessage>,
+    new_sender: &mpsc::Sender<Arc<String>>,
 ) -> bool {
     // Check if participant is in grace period
     if let Some(entry) = grace_periods.remove(participant_id) {
@@ -400,7 +408,7 @@ async fn handle_reconnect(
 fn spawn_stats_task(
     room_manager: Arc<RoomManager>,
     participant_id: String,
-    sender: mpsc::Sender<ServerMessage>,
+    sender: mpsc::Sender<Arc<String>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         // Track per-consumer preferred spatial layer to avoid redundant updates
@@ -451,10 +459,12 @@ fn spawn_stats_task(
             if tick % 5 == 0 {
                 match room_manager.get_send_transport_stats(&participant_id).await {
                     Ok(Some(bitrate)) => {
-                        let _ = sender.try_send(ServerMessage::ConnectionStats {
+                        if let Ok(json) = serde_json::to_string(&ServerMessage::ConnectionStats {
                             available_bitrate: bitrate,
                             rtt: None,
-                        });
+                        }) {
+                            let _ = sender.try_send(Arc::new(json));
+                        }
                     }
                     Ok(None) => {}
                     Err(e) => {
@@ -483,7 +493,7 @@ async fn handle_client_message(
     message: &ClientMessage,
     participant_id: &str,
     current_room_id: &mut Option<String>,
-    sender: &mpsc::Sender<ServerMessage>,
+    sender: &mpsc::Sender<Arc<String>>,
     room_manager: &Arc<RoomManager>,
     turn_config: &Option<Arc<TurnConfig>>,
     metrics: &ServerMetrics,
@@ -510,7 +520,7 @@ async fn handle_client_message(
             *current_room_id = Some(room_id.clone());
             metrics.inc_joins();
 
-            sender.try_send(ServerMessage::RoomJoined {
+            send_json(sender, &ServerMessage::RoomJoined {
                 participant_id: participant_id.to_string(),
                 participants,
                 reconnect_token: reconnect_token.to_string(),
@@ -527,7 +537,7 @@ async fn handle_client_message(
         ClientMessage::GetRouterRtpCapabilities => {
             if let Some(room_id) = current_room_id.as_ref() {
                 let capabilities = room_manager.get_router_rtp_capabilities(room_id).await?;
-                sender.try_send(ServerMessage::RouterRtpCapabilities {
+                send_json(sender, &ServerMessage::RouterRtpCapabilities {
                     rtp_capabilities: capabilities,
                 })?;
             } else {
@@ -541,7 +551,7 @@ async fn handle_client_message(
                     .create_send_transport(room_id, participant_id)
                     .await?;
 
-                sender.try_send(ServerMessage::TransportCreated {
+                send_json(sender, &ServerMessage::TransportCreated {
                     transport_id: transport_info.id,
                     ice_parameters: transport_info.ice_parameters,
                     ice_candidates: transport_info.ice_candidates,
@@ -559,7 +569,7 @@ async fn handle_client_message(
                     .create_recv_transport(room_id, participant_id)
                     .await?;
 
-                sender.try_send(ServerMessage::TransportCreated {
+                send_json(sender, &ServerMessage::TransportCreated {
                     transport_id: transport_info.id,
                     ice_parameters: transport_info.ice_parameters,
                     ice_candidates: transport_info.ice_candidates,
@@ -577,7 +587,7 @@ async fn handle_client_message(
                     .connect_transport(room_id, participant_id, transport_id, dtls_parameters.clone())
                     .await?;
 
-                sender.try_send(ServerMessage::TransportConnected { transport_id: transport_id.clone() })?;
+                send_json(sender, &ServerMessage::TransportConnected { transport_id: transport_id.clone() })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -590,7 +600,7 @@ async fn handle_client_message(
                     .await?;
 
                 metrics.inc_producers_created();
-                sender.try_send(ServerMessage::ProducerCreated { producer_id })?;
+                send_json(sender, &ServerMessage::ProducerCreated { producer_id })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -603,7 +613,7 @@ async fn handle_client_message(
                     .await?;
 
                 metrics.inc_consumers_created();
-                sender.try_send(ServerMessage::ConsumerCreated {
+                send_json(sender, &ServerMessage::ConsumerCreated {
                     consumer_id: consumer_info.id,
                     producer_id: consumer_info.producer_id,
                     kind: consumer_info.kind,
@@ -620,7 +630,7 @@ async fn handle_client_message(
                     .resume_consumer(room_id, participant_id, consumer_id)
                     .await?;
 
-                sender.try_send(ServerMessage::ConsumerResumed { consumer_id: consumer_id.clone() })?;
+                send_json(sender, &ServerMessage::ConsumerResumed { consumer_id: consumer_id.clone() })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -632,7 +642,7 @@ async fn handle_client_message(
                     .pause_consumer(room_id, participant_id, consumer_id)
                     .await?;
 
-                sender.try_send(ServerMessage::ConsumerPaused { consumer_id: consumer_id.clone() })?;
+                send_json(sender, &ServerMessage::ConsumerPaused { consumer_id: consumer_id.clone() })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -659,7 +669,7 @@ async fn handle_client_message(
                     .restart_ice(participant_id, transport_id)
                     .await?;
 
-                sender.try_send(ServerMessage::IceRestarted {
+                send_json(sender, &ServerMessage::IceRestarted {
                     transport_id: transport_id.clone(),
                     ice_parameters,
                 })?;

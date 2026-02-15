@@ -228,7 +228,7 @@ impl TransportManager {
         producer_id: ProducerId,
         rtp_capabilities: RtpCapabilities,
         app_data: AppData,
-        sender: Option<mpsc::Sender<ServerMessage>>,
+        sender: Option<mpsc::Sender<Arc<String>>>,
     ) -> MediaResult<Consumer> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let mut participant = participant_lock.lock().await;
@@ -525,7 +525,7 @@ impl TransportManager {
         &self,
         consumer: &Consumer,
         participant_id: &str,
-        sender: Option<mpsc::Sender<ServerMessage>>,
+        sender: Option<mpsc::Sender<Arc<String>>>,
     ) {
         let participant_id = participant_id.to_string();
         let consumer_id = consumer.id().to_string();
@@ -580,11 +580,14 @@ impl TransportManager {
                 move |layers| {
                     debug!("Consumer {} layers changed to {:?} for participant {}",
                            consumer_id, layers, participant_id);
-                    let _ = sender.try_send(ServerMessage::ConsumerLayersChanged {
+                    let msg = ServerMessage::ConsumerLayersChanged {
                         consumer_id: consumer_id.clone(),
                         spatial_layer: layers.as_ref().map(|l| l.spatial_layer),
                         temporal_layer: layers.as_ref().and_then(|l| l.temporal_layer),
-                    });
+                    };
+                    if let Ok(json) = serde_json::to_string(&msg) {
+                        let _ = sender.try_send(Arc::new(json));
+                    }
                 }
             }).detach();
         }
