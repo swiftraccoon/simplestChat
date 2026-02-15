@@ -138,25 +138,35 @@ impl ParticipantMedia {
         }
     }
     
-    /// Closes all media resources for this participant
+    /// Closes all media resources for this participant.
+    /// Consumers and producers are closed in parallel for faster cleanup at scale.
     pub async fn close_all(&mut self) {
-        // Close all consumers
-        for (_, _consumer) in self.consumers.drain() {
-            // Consumers are automatically closed when dropped
-        }
+        // Close all consumers in parallel (they depend on transports, so close first)
+        let consumers: Vec<_> = self.consumers.drain().collect();
+        let consumer_futures: Vec<_> = consumers.into_iter().map(|(id, consumer)| {
+            tokio::spawn(async move {
+                drop(consumer);
+                tracing::debug!("Closed consumer {}", id);
+            })
+        }).collect();
+        futures_util::future::join_all(consumer_futures).await;
 
-        // Close all producers
-        for (_, _producer) in self.producers.drain() {
-            // Producers are automatically closed when dropped
-        }
+        // Close all producers in parallel
+        let producers: Vec<_> = self.producers.drain().collect();
+        let producer_futures: Vec<_> = producers.into_iter().map(|(id, producer)| {
+            tokio::spawn(async move {
+                drop(producer);
+                tracing::debug!("Closed producer {}", id);
+            })
+        }).collect();
+        futures_util::future::join_all(producer_futures).await;
 
-        // Close transports
-        if let Some(_transport) = self.send_transport.take() {
-            // Transports are automatically closed when dropped
+        // Close transports last (after consumers/producers are gone)
+        if let Some(transport) = self.send_transport.take() {
+            drop(transport);
         }
-
-        if let Some(_transport) = self.recv_transport.take() {
-            // Transports are automatically closed when dropped
+        if let Some(transport) = self.recv_transport.take() {
+            drop(transport);
         }
     }
 }
