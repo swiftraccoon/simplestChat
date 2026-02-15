@@ -110,7 +110,7 @@ pub enum ServerMessage {
         ice_parameters: IceParameters,
         ice_candidates: Vec<IceCandidate>,
         dtls_parameters: DtlsParameters,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         ice_servers: Vec<IceServer>,
     },
     /// Transport connected
