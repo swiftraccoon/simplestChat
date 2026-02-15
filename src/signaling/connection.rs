@@ -482,9 +482,9 @@ fn spawn_stats_task(
                                 last_tier = Some(target_layer);
                                 last_layer_update = Instant::now();
 
-                                // Get current consumer IDs (still needs participant lock, but no IPC)
-                                match room_manager.get_recv_transport_stats(&participant_id).await {
-                                    Ok(Some((_bitrate, consumer_ids))) => {
+                                // Get current consumer IDs (in-memory only — zero IPC)
+                                match room_manager.get_consumer_ids(&participant_id).await {
+                                    Ok(consumer_ids) => {
                                         for consumer_id in &consumer_ids {
                                             let prev = current_layers.get(consumer_id).copied();
                                             if prev != Some(target_layer) {
@@ -501,9 +501,6 @@ fn spawn_stats_task(
                                             }
                                         }
                                         current_layers.retain(|id, _| consumer_ids.contains(id));
-                                    }
-                                    Ok(None) => {
-                                        current_layers.clear();
                                     }
                                     Err(e) => {
                                         debug!("Failed to get consumer IDs for {}: {}", participant_id, e);

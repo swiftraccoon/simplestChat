@@ -527,6 +527,13 @@ impl TransportManager {
         Ok(())
     }
 
+    /// Gets the consumer IDs for a participant (no IPC — reads in-memory HashMap only)
+    pub async fn get_consumer_ids(&self, participant_id: &str) -> MediaResult<Vec<String>> {
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let participant = participant_lock.lock().await;
+        Ok(participant.consumers.keys().cloned().collect())
+    }
+
     /// Gets recv transport stats for bandwidth estimation
     pub async fn get_recv_transport_stats(
         &self,

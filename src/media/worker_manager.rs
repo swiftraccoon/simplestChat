@@ -261,13 +261,55 @@ impl WorkerManager {
             // Set up handlers
             Self::setup_worker_handlers(&new_worker, pos);
 
+            // Create WebRtcServer for replacement worker (reuse same port)
+            let announced_address = self.config
+                .webrtc_transport_config
+                .listen_ips
+                .first()
+                .and_then(|li| li.announced_address.clone());
+            let port = self.config.webrtc_server_port_base + pos as u16;
+            let listen_info = ListenInfo {
+                protocol: Protocol::Udp,
+                ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                announced_address,
+                port: Some(port),
+                port_range: None,
+                flags: None,
+                send_buffer_size: None,
+                recv_buffer_size: None,
+                expose_internal_ip: false,
+            };
+            let server_options = WebRtcServerOptions::new(
+                WebRtcServerListenInfos::new(listen_info),
+            );
+            let webrtc_server = new_worker
+                .create_webrtc_server(server_options)
+                .await
+                .map_err(|e| MediaError::WorkerError(
+                    format!("Failed to create WebRtcServer for replacement worker {new_worker_id}: {e}")
+                ))?;
+
+            // Update WebRtcServer map
+            let mut servers = self.webrtc_servers.write().await;
+            servers.remove(&dead_worker_id);
+            servers.insert(new_worker_id, webrtc_server);
+
             // Update load tracking
             let mut load = self.worker_load.write().await;
             load.remove(&dead_worker_id);
             load.insert(new_worker_id, 0);
 
+            // Update consumer counter
+            {
+                let mut counts = self.worker_consumer_counts.write().unwrap_or_else(|e| e.into_inner());
+                counts.remove(&dead_worker_id);
+                counts.insert(new_worker_id, Arc::new(AtomicUsize::new(0)));
+            }
+
             // Add the new worker
             workers.insert(pos, new_worker);
+
+            info!("Replacement worker {} fully initialized with WebRtcServer on port {}", new_worker_id, port);
         }
 
         Ok(())
@@ -280,10 +322,18 @@ impl WorkerManager {
     pub async fn update_settings(&self, new_config: crate::media::config::WorkerConfig) -> MediaResult<()> {
         info!("Updating worker settings");
 
+        let announced_address = self.config
+            .webrtc_transport_config
+            .listen_ips
+            .first()
+            .and_then(|li| li.announced_address.clone());
+
         // This is a simplified version - in production you'd want graceful migration
         let mut workers = self.workers.write().await;
         let mut new_workers = Vec::new();
         let mut new_load = HashMap::new();
+        let mut new_servers = HashMap::new();
+        let mut new_consumer_counts = HashMap::new();
 
         // Close old workers - they close automatically when dropped
 
@@ -294,12 +344,46 @@ impl WorkerManager {
 
             let worker_id = worker.id();
             Self::setup_worker_handlers(&worker, i);
+
+            // Create WebRtcServer for each new worker
+            let port = self.config.webrtc_server_port_base + i as u16;
+            let listen_info = ListenInfo {
+                protocol: Protocol::Udp,
+                ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                announced_address: announced_address.clone(),
+                port: Some(port),
+                port_range: None,
+                flags: None,
+                send_buffer_size: None,
+                recv_buffer_size: None,
+                expose_internal_ip: false,
+            };
+            let server_options = WebRtcServerOptions::new(
+                WebRtcServerListenInfos::new(listen_info),
+            );
+            let webrtc_server = worker
+                .create_webrtc_server(server_options)
+                .await
+                .map_err(|e| MediaError::WorkerError(
+                    format!("Failed to create WebRtcServer on port {port} for worker {worker_id}: {e}")
+                ))?;
+
             new_load.insert(worker_id, 0);
+            new_servers.insert(worker_id, webrtc_server);
+            new_consumer_counts.insert(worker_id, Arc::new(AtomicUsize::new(0)));
             new_workers.push(worker);
         }
 
+        // Clear old servers before dropping old workers
+        self.webrtc_servers.write().await.clear();
+
         *workers = new_workers;
         *self.worker_load.write().await = new_load;
+        *self.webrtc_servers.write().await = new_servers;
+        {
+            let mut counts = self.worker_consumer_counts.write().unwrap_or_else(|e| e.into_inner());
+            *counts = new_consumer_counts;
+        }
 
         info!("Worker settings updated successfully");
         Ok(())

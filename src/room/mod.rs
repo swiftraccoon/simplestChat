@@ -582,6 +582,15 @@ impl RoomManager {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
+    /// Gets consumer IDs for a participant (no IPC — in-memory only)
+    pub async fn get_consumer_ids(&self, participant_id: &str) -> Result<Vec<String>> {
+        self.media_server
+            .transport_manager()
+            .get_consumer_ids(participant_id)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
     /// Restarts ICE on a transport, returning new ICE parameters
     pub async fn restart_ice(
         &self,
