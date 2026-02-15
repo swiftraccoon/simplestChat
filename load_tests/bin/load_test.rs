@@ -479,7 +479,7 @@ async fn run_client_inner(
 
     // Wait for room joined response
     let _participant_id = match receive_response(&mut read, &mut buffered_events).await? {
-        ServerMessage::RoomJoined { participant_id, participants } => {
+        ServerMessage::RoomJoined { participant_id, participants, .. } => {
             metrics.record_signaling_latency("join_room", t.elapsed().as_millis() as u64);
             tracing::info!("{}: Joined room as {}, {} other participants",
                 client_id, participant_id, participants.len());
@@ -1255,6 +1255,12 @@ async fn handle_server_message(
         ServerMessage::ProducerClosed { producer_id } => {
             tracing::debug!("{}: Producer closed: {}", client_id, producer_id);
         }
+        ServerMessage::ProducerPaused { producer_id } => {
+            tracing::debug!("{}: Producer paused: {}", client_id, producer_id);
+        }
+        ServerMessage::ProducerResumed { producer_id } => {
+            tracing::debug!("{}: Producer resumed: {}", client_id, producer_id);
+        }
         ServerMessage::ConsumerResumed { consumer_id } => {
             tracing::debug!("{}: Consumer resumed: {}", client_id, consumer_id);
         }
@@ -1329,6 +1335,8 @@ async fn receive_response(
             ServerMessage::ReconnectResult { .. } => {}
             ServerMessage::ConsumerResumed { .. } => {}
             ServerMessage::ConsumerPaused { .. } => {}
+            ServerMessage::ProducerPaused { .. } => {}
+            ServerMessage::ProducerResumed { .. } => {}
             ServerMessage::ChatReceived { .. } => {}
             msg => return Ok(msg),
         }
