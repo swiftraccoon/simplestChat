@@ -74,9 +74,9 @@ impl GracePeriodMap {
 fn send_json(
     sender: &mpsc::Sender<Arc<String>>,
     msg: &ServerMessage,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> anyhow::Result<()> {
     let json = Arc::new(serde_json::to_string(msg)?);
-    sender.try_send(json)?;
+    sender.try_send(json).map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())
 }
 
