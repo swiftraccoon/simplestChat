@@ -256,6 +256,13 @@ impl TransportManager {
         Ok(consumer)
     }
 
+    /// Gets the number of consumers for a participant
+    pub async fn consumer_count(&self, participant_id: &str) -> MediaResult<usize> {
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let participant = participant_lock.lock().await;
+        Ok(participant.consumers.len())
+    }
+
     /// Resumes a consumer for a participant
     pub async fn resume_consumer(
         &self,

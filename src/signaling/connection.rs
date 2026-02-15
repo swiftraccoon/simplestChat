@@ -26,6 +26,14 @@ const CHANNEL_CAPACITY: usize = 64;
 /// Prevents Slowloris-style attacks that hold semaphore permits indefinitely.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(300); // 5 minutes
 
+/// Maximum consumers per participant. Prevents DoS via unlimited consume requests.
+fn max_consumers_per_participant() -> usize {
+    std::env::var("MAX_CONSUMERS_PER_PARTICIPANT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(16)
+}
+
 /// Token bucket rate limiter: max tokens (burst capacity).
 const RATE_LIMIT_MAX_TOKENS: u64 = 100;
 /// Token bucket: refill rate in tokens per second.
@@ -652,6 +660,15 @@ async fn handle_client_message(
 
         ClientMessage::Consume { producer_id, rtp_capabilities } => {
             if let Some(room_id) = current_room_id.as_ref() {
+                // Server-side consumer cap
+                let cap = max_consumers_per_participant();
+                match room_manager.media_server().transport_manager().consumer_count(participant_id).await {
+                    Ok(count) if count >= cap => {
+                        anyhow::bail!("Consumer limit reached ({cap}). Cannot create more consumers.");
+                    }
+                    _ => {} // Under cap or not tracked yet, proceed
+                }
+
                 let producer_paused = room_manager
                     .media_server()
                     .transport_manager()
