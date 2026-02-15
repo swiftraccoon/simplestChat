@@ -44,24 +44,28 @@ Client (WebSocket) ──► Axum Signaling Server
 
 ## Performance
 
-Validated with progressive stress testing (AMD Ryzen 9 8945HS, 8C/16T, 90GB RAM):
+Validated with progressive stress testing (AMD Ryzen 9 8945HS, 8C/16T, 90GB RAM).
+Per-room + per-participant locking, 4 audio + 4 video consumer caps per client:
 
-| Clients | Connected | Errors | CPU% | RSS (MB) | FDs |
-|---------|-----------|--------|------|-----------|-----|
-| 100 | 100 | 0 | 60.2 | 305 | 556 |
-| 300 | 300 | 0 | 67.9 | 591 | 1538 |
-| 750 | 750 | 1 | 69.4 | 812 | 2374 |
-| 1000 | 1000 | 0 | 70.1 | 890 | 3124 |
+| Clients | Rooms | Per-room | P99 Latency | Errors | Consumers |
+|---------|-------|----------|-------------|--------|-----------|
+| 1000 | 16 | 62 | 3ms | 0 | 8K |
+| 3000 | 16 | 188 | 140ms | 0 | 24K |
+| 5000 | 16 | 312 | 238ms | 0 | 40K |
+| 7000 | 16 | 437 | 444ms | 0 | 56K |
+| 10000 | 16 | 625 | 1516ms | 0 | 80K |
 
-- ~1 MB per client, CPU plateaus at ~70% (distributed across 16 mediasoup workers)
-- Consumer scaling: N*(N-1)*2 in a full-mesh room (1000 clients = ~150K consumers)
+- **Comfortable limit**: 5000 clients/server (P99 < 250ms)
+- **Hard limit**: 10000 clients (0 errors, P99 ~1.5s)
+- ~1 MB per client, CPU distributed across 16 mediasoup workers
+- Bottleneck: mediasoup worker throughput (~3500 consumers/worker)
 - Requires `ulimit -n 65536` for large tests
 
 ## Quick Start
 
 ### Prerequisites
 
-- Rust 1.90+ with nightly toolchain
+- Rust 1.90+ (stable)
 - Linux x86_64 (macOS cannot build mediasoup-sys)
 - `libstdc++-static`, `glibc-static`, `cmake`, `python3-pip`, `meson`, `ninja-build`
 
@@ -110,9 +114,10 @@ See `load_tests/README.md` for full documentation.
 ```
 src/
 ├── main.rs                    # Server entry point
+├── metrics.rs                 # Prometheus metrics (AtomicU64, histogram)
 ├── turn.rs                    # TURN credential generation
 ├── signaling/
-│   ├── mod.rs                 # HTTP routes, /health, WS upgrade
+│   ├── mod.rs                 # HTTP routes, /health, /metrics, WS upgrade
 │   ├── connection.rs          # WebSocket message handler
 │   └── protocol.rs            # Client/Server message types
 ├── media/
@@ -127,7 +132,6 @@ load_tests/
 ├── bin/load_test.rs           # Load test binary
 └── clients/
     ├── webrtc_client.rs       # Real WebRTC client (webrtc-rs)
-    ├── synthetic_client.rs    # Signaling client
     ├── media_generator.rs     # RTP packet generation
     └── metrics.rs             # Atomic metrics collection
 
@@ -138,14 +142,18 @@ scripts/                       # Deployment, server management, testing
 
 | Env Var | Default | Purpose |
 |---------|---------|---------|
-| `ANNOUNCE_IP` | `127.0.0.1` | Server's public IP for ICE candidates |
+| `ANNOUNCE_IP` | auto-detect (fallback `127.0.0.1`) | Server's public IP for ICE candidates |
 | `PORT` | `3000` | HTTP/WebSocket listen port |
-| `RUST_LOG` | `info` | Log level filter |
+| `MAX_CONNECTIONS` | `10000` | Max concurrent WebSocket connections |
+| `METRICS_TOKEN` | (none) | Bearer token for `/metrics` endpoint |
+| `RUST_LOG` | `simplestChat=info,mediasoup=warn` | Tracing filter |
 | `TURN_URLS` | (none) | Comma-separated TURN server URLs |
 | `TURN_SECRET` | (none) | TURN shared secret for credentials |
 | `TURN_TTL` | `86400` | TURN credential TTL in seconds |
-| RTC ports | 10000-59999 | mediasoup UDP port range |
-| Workers | num_cpus | mediasoup C++ worker count |
+
+Hardcoded in `src/media/config.rs`:
+- **RTC ports**: 10000-59999 (mediasoup UDP range)
+- **Workers**: `num_cpus::get()` (1 per core)
 
 ## Server Hardening
 
@@ -156,6 +164,23 @@ scripts/                       # Deployment, server management, testing
 - **Health endpoint**: `GET /health` returns `{"status":"ok","rooms":N,"participants":N}`
 - **Graceful shutdown**: Ctrl+C drains all rooms, closes transports/FDs, removes routers
 - **Panic-free startup**: Invalid `ANNOUNCE_IP` returns an error instead of panicking
+
+## Efficiency & Protection
+
+- **Bounded channels**: 256-message capacity per client prevents OOM from slow consumers
+- **Connection cap**: Semaphore-based limit (default 10K), returns HTTP 503 when exhausted
+- **Rate limiting**: Token-bucket per connection (100 msg/s burst), prevents message flooding
+- **Idle timeout**: 5-minute WS idle timeout prevents Slowloris-style resource exhaustion
+- **Reconnect tokens**: Session hijacking prevention via per-session UUIDv4 tokens
+
+## Observability
+
+- **`GET /metrics`**: Prometheus text exposition format, scrapable by Prometheus/Grafana
+  - Counters: connections, messages sent/received, errors, rooms created, joins, leaves, producers, consumers
+  - Gauges: active connections, active rooms, active participants
+  - Histogram: message handling latency with 10 buckets (1ms to 5s)
+- **Bearer auth**: Set `METRICS_TOKEN` env var to require `Authorization: Bearer <token>`
+- **Zero dependencies**: Uses `std::sync::atomic::AtomicU64` — no prometheus/opentelemetry crates
 
 ## Known Issues
 

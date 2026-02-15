@@ -7,7 +7,6 @@ Real WebRTC client using webrtc-rs 0.17 that establishes genuine ICE/DTLS/RTP co
 | File | Purpose |
 |------|---------|
 | `webrtc_client.rs` | `WebRtcTransport` + `WebRtcSession` - PeerConnection management |
-| `synthetic_client.rs` | WebSocket signaling protocol client |
 | `media_generator.rs` | RTP packet generation (Opus audio, VP8 video) |
 | `metrics.rs` | Thread-safe atomic metrics collection |
 | `mod.rs` | Module exports |

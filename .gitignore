@@ -1,6 +1,7 @@
 /target
 /reference/
 /results
+/docs/
 /build.log
 web/node_modules
 web/dist

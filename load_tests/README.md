@@ -11,11 +11,6 @@ Real WebRTC load testing for the SimplestChat mediasoup server. Each synthetic c
 - Receives media from all other participants via consumers
 - See `clients/README.md` for implementation details
 
-### Synthetic Client (`clients/synthetic_client.rs`)
-- WebSocket signaling protocol implementation
-- Room join, transport creation, producer/consumer lifecycle
-- Message handling (NewProducer, ParticipantJoined, ConsumerCreated, etc.)
-
 ### Media Generator (`clients/media_generator.rs`)
 - Generates synthetic RTP packets with valid VP8/Opus payloads
 - Audio: Opus, 48kHz stereo, 20ms packets (50 pkt/s)
