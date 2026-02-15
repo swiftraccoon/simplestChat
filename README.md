@@ -35,30 +35,28 @@ Client (WebSocket) ──► Axum Signaling Server
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| Signaling | `src/signaling/connection.rs` | WebSocket message handling |
+| Signaling | `src/signaling/connection.rs` | WebSocket message handling, event-driven BWE stats |
 | Rooms | `src/room/mod.rs` | Room lifecycle, participant management |
 | Media | `src/media/mod.rs` | MediaServer orchestrator |
-| Workers | `src/media/worker_manager.rs` | mediasoup C++ worker pool |
+| Workers | `src/media/worker_manager.rs` | Worker pool, WebRtcServer per worker, load-aware selection |
 | Routers | `src/media/router_manager.rs` | Per-room media routing |
-| Transports | `src/media/transport_manager.rs` | WebRTC transport + producer/consumer management |
+| Transports | `src/media/transport_manager.rs` | WebRTC transport, producers, consumers, BWE subscription |
 
 ## Performance
 
 Validated with progressive stress testing (AMD Ryzen 9 8945HS, 8C/16T, 90GB RAM).
-Per-room + per-participant locking, 4 audio + 4 video consumer caps per client:
+WebRtcServer shared ports, event-driven BWE, load-aware worker selection, 4+4 consumer caps:
 
-| Clients | Rooms | Per-room | P99 Latency | Errors | Consumers |
-|---------|-------|----------|-------------|--------|-----------|
-| 1000 | 16 | 62 | 3ms | 0 | 8K |
-| 3000 | 16 | 188 | 140ms | 0 | 24K |
-| 5000 | 16 | 312 | 238ms | 0 | 40K |
-| 7000 | 16 | 437 | 444ms | 0 | 56K |
-| 10000 | 16 | 625 | 1516ms | 0 | 80K |
+| Clients | Rooms | P99 Latency | Errors | Consumers | FDs |
+|---------|-------|-------------|--------|-----------|-----|
+| 100 | 1 | 2ms | 0 | 800 | — |
+| 1000 | 16 | 4ms | 0 | 8K | 1143 |
+| 5000 | 16 | 84ms | 0 | 40K | 5143 |
+| 10000 | 16 | 274ms | 0 | 80K | ~10K |
 
-- **Comfortable limit**: 5000 clients/server (P99 < 250ms)
-- **Hard limit**: 10000 clients (0 errors, P99 ~1.5s)
+- **Comfortable limit**: 10000 clients/server (P99 < 300ms)
 - ~1 MB per client, CPU distributed across 16 mediasoup workers
-- Bottleneck: mediasoup worker throughput (~3500 consumers/worker)
+- WebRtcServer 5-tuple DEMUX eliminates per-transport file descriptors
 - Requires `ulimit -n 65536` for large tests
 
 ## Quick Start
@@ -145,6 +143,7 @@ scripts/                       # Deployment, server management, testing
 | `ANNOUNCE_IP` | auto-detect (fallback `127.0.0.1`) | Server's public IP for ICE candidates |
 | `PORT` | `3000` | HTTP/WebSocket listen port |
 | `MAX_CONNECTIONS` | `10000` | Max concurrent WebSocket connections |
+| `MAX_CONSUMERS_PER_PARTICIPANT` | `16` | Server-side consumer cap per participant |
 | `METRICS_TOKEN` | (none) | Bearer token for `/metrics` endpoint |
 | `RUST_LOG` | `simplestChat=info,mediasoup=warn` | Tracing filter |
 | `TURN_URLS` | (none) | Comma-separated TURN server URLs |
