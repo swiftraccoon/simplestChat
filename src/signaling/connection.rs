@@ -405,6 +405,11 @@ async fn handle_reconnect(
 
 /// Spawns a background task that performs bandwidth adaptation and sends connection stats.
 /// Returns a JoinHandle that can be aborted on disconnect.
+///
+/// Uses adaptive polling intervals to reduce CPU at scale:
+/// - 2s when consumers are active and bandwidth is changing
+/// - 5s when consumers are active but bandwidth tier is stable (3+ consecutive same-tier polls)
+/// - 10s when no consumers exist (publish-only, no layer adaptation needed)
 fn spawn_stats_task(
     room_manager: Arc<RoomManager>,
     participant_id: String,
@@ -415,13 +420,36 @@ fn spawn_stats_task(
         let mut current_layers: HashMap<String, u8> = HashMap::new();
         let mut tick = 0u64;
 
+        // Adaptive polling state
+        let mut consecutive_stable_polls: u8 = 0;
+        let mut last_tier: Option<u8> = None;
+        let mut had_consumers = false;
+
         loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            // Determine sleep interval based on client state
+            let sleep_secs: u64 = if !had_consumers {
+                10 // No consumers — publish-only, no layer adaptation needed
+            } else if consecutive_stable_polls >= 3 {
+                5 // Stable bandwidth tier — poll less frequently
+            } else {
+                2 // Active bandwidth changes — need responsive adaptation
+            };
+
+            // ConnectionStats send interval: target ~10s regardless of sleep
+            let stats_modulus: u64 = match sleep_secs {
+                2 => 5,  // 5 * 2s = 10s
+                5 => 2,  // 2 * 5s = 10s
+                _ => 1,  // 1 * 10s = 10s
+            };
+
+            tokio::time::sleep(tokio::time::Duration::from_secs(sleep_secs)).await;
             tick += 1;
 
             // Bandwidth adaptation: poll recv transport stats and adjust consumer layers
             match room_manager.get_recv_transport_stats(&participant_id).await {
                 Ok(Some((bitrate, consumer_ids))) if !consumer_ids.is_empty() => {
+                    had_consumers = true;
+
                     let target_layer = if bitrate < 200_000 {
                         0u8 // Low quality
                     } else if bitrate < 600_000 {
@@ -429,6 +457,14 @@ fn spawn_stats_task(
                     } else {
                         2u8 // High quality
                     };
+
+                    // Update adaptive polling: track tier stability
+                    if last_tier == Some(target_layer) {
+                        consecutive_stable_polls = consecutive_stable_polls.saturating_add(1);
+                    } else {
+                        consecutive_stable_polls = 0;
+                    }
+                    last_tier = Some(target_layer);
 
                     for consumer_id in &consumer_ids {
                         let prev = current_layers.get(consumer_id).copied();
@@ -449,14 +485,22 @@ fn spawn_stats_task(
                     // Clean stale entries
                     current_layers.retain(|id, _| consumer_ids.contains(id));
                 }
-                Ok(_) => {}
+                Ok(_) => {
+                    // No consumers (or no transport) — reset adaptive state
+                    if had_consumers {
+                        had_consumers = false;
+                        consecutive_stable_polls = 0;
+                        last_tier = None;
+                        current_layers.clear();
+                    }
+                }
                 Err(e) => {
                     debug!("Failed to get recv transport stats for {}: {}", participant_id, e);
                 }
             }
 
-            // Connection quality stats: send every ~5th tick (10 seconds)
-            if tick % 5 == 0 {
+            // Connection quality stats: send at ~10s intervals regardless of sleep duration
+            if tick % stats_modulus == 0 {
                 match room_manager.get_send_transport_stats(&participant_id).await {
                     Ok(Some(bitrate)) => {
                         if let Ok(json) = serde_json::to_string(&ServerMessage::ConnectionStats {
