@@ -125,8 +125,6 @@ pub struct ParticipantMedia {
     pub recv_transport: Option<WebRtcTransport>,
     pub producers: HashMap<String, Producer>,
     pub consumers: HashMap<String, Consumer>,
-    pub data_producers: HashMap<String, DataProducer>,
-    pub data_consumers: HashMap<String, DataConsumer>,
 }
 
 impl ParticipantMedia {
@@ -137,8 +135,6 @@ impl ParticipantMedia {
             recv_transport: None,
             producers: HashMap::new(),
             consumers: HashMap::new(),
-            data_producers: HashMap::new(),
-            data_consumers: HashMap::new(),
         }
     }
     
@@ -152,16 +148,6 @@ impl ParticipantMedia {
         // Close all producers
         for (_, _producer) in self.producers.drain() {
             // Producers are automatically closed when dropped
-        }
-
-        // Close all data consumers
-        for (_, _data_consumer) in self.data_consumers.drain() {
-            // Data consumers are automatically closed when dropped
-        }
-
-        // Close all data producers
-        for (_, _data_producer) in self.data_producers.drain() {
-            // Data producers are automatically closed when dropped
         }
 
         // Close transports
