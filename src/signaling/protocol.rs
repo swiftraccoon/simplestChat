@@ -58,6 +58,16 @@ pub enum ClientMessage {
     CloseProducer {
         producer_id: String,
     },
+    /// Pause a producer (mute)
+    #[serde(rename_all = "camelCase")]
+    PauseProducer {
+        producer_id: String,
+    },
+    /// Resume a producer (unmute)
+    #[serde(rename_all = "camelCase")]
+    ResumeProducer {
+        producer_id: String,
+    },
     /// Reconnect to an existing session after WS disconnect
     #[serde(rename_all = "camelCase")]
     Reconnect {
@@ -152,6 +162,16 @@ pub enum ServerMessage {
     /// Producer closed by another participant
     #[serde(rename_all = "camelCase")]
     ProducerClosed {
+        producer_id: String,
+    },
+    /// Producer paused (muted) by its owner
+    #[serde(rename_all = "camelCase")]
+    ProducerPaused {
+        producer_id: String,
+    },
+    /// Producer resumed (unmuted) by its owner
+    #[serde(rename_all = "camelCase")]
+    ProducerResumed {
         producer_id: String,
     },
     /// Consumer resumed
