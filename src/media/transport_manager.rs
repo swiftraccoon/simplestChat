@@ -495,6 +495,38 @@ impl TransportManager {
         Ok(ice_parameters)
     }
 
+    /// Subscribes to BWE (bandwidth estimation) trace events on a participant's recv transport.
+    /// Events are sent through the provided channel for the stats task to process.
+    pub async fn subscribe_bwe_events(
+        &self,
+        participant_id: &str,
+        bwe_sender: mpsc::Sender<u32>,
+    ) -> MediaResult<()> {
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let participant = participant_lock.lock().await;
+
+        let transport = participant.recv_transport.as_ref()
+            .ok_or_else(|| MediaError::TransportError("Recv transport not found".to_string()))?;
+
+        // Enable BWE trace events on the recv transport
+        transport.enable_trace_event(vec![TransportTraceEventType::Bwe])
+            .await
+            .map_err(|e| MediaError::TransportError(format!("Failed to enable trace events: {e}")))?;
+
+        // Register callback to forward BWE events through the channel
+        let pid = participant_id.to_string();
+        transport.on_trace(Arc::new(move |event: &TransportTraceEventData| {
+            if let TransportTraceEventData::Bwe { info, .. } = event {
+                let bitrate = info.available_bitrate;
+                let _ = bwe_sender.try_send(bitrate);
+                debug!("BWE event for {}: available_bitrate={}", pid, bitrate);
+            }
+        })).detach();
+
+        info!("Subscribed to BWE events for participant {}", participant_id);
+        Ok(())
+    }
+
     /// Gets recv transport stats for bandwidth estimation
     pub async fn get_recv_transport_stats(
         &self,

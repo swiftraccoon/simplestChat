@@ -569,6 +569,19 @@ impl RoomManager {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
+    /// Subscribes to BWE events for a participant's recv transport
+    pub async fn subscribe_bwe_events(
+        &self,
+        participant_id: &str,
+        bwe_sender: mpsc::Sender<u32>,
+    ) -> Result<()> {
+        self.media_server
+            .transport_manager()
+            .subscribe_bwe_events(participant_id, bwe_sender)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
     /// Restarts ICE on a transport, returning new ICE parameters
     pub async fn restart_ice(
         &self,
