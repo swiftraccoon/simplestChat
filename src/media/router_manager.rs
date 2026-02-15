@@ -50,8 +50,7 @@ impl RouterManager {
         }
         
         // Get the least loaded worker
-        let worker = self.worker_manager.get_least_loaded_worker().await?;
-        let worker_id = worker.id();
+        let (worker, worker_id) = self.worker_manager.get_least_loaded_worker().await?;
         
         // Create the router
         let router_options = config.to_router_options();

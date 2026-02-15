@@ -7,6 +7,7 @@ use crate::media::types::{MediaError, MediaResult};
 use mediasoup::prelude::*;
 use mediasoup::worker::{WorkerId, WorkerDump};
 use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::RwLock;
@@ -17,6 +18,7 @@ use anyhow::Result;
 pub struct WorkerManager {
     workers: Arc<RwLock<Vec<Worker>>>,
     worker_load: Arc<RwLock<HashMap<WorkerId, usize>>>,
+    webrtc_servers: Arc<RwLock<HashMap<WorkerId, WebRtcServer>>>,
     config: Arc<MediaConfig>,
     next_worker_idx: AtomicUsize,
     mediasoup_worker_manager: Arc<mediasoup::worker_manager::WorkerManager>,
@@ -34,6 +36,14 @@ impl WorkerManager {
         let mediasoup_worker_manager = Arc::new(mediasoup::worker_manager::WorkerManager::new());
         let mut workers = Vec::with_capacity(num_workers);
         let mut worker_load = HashMap::new();
+        let mut webrtc_servers = HashMap::new();
+
+        // Derive announced_address from transport config (if set)
+        let announced_address = config
+            .webrtc_transport_config
+            .listen_ips
+            .first()
+            .and_then(|li| li.announced_address.clone());
 
         // Create all workers
         for i in 0..num_workers {
@@ -45,6 +55,31 @@ impl WorkerManager {
             // Set up worker event handlers
             Self::setup_worker_handlers(&worker, i);
 
+            // Create a WebRtcServer for this worker on a dedicated port
+            let port = config.webrtc_server_port_base + i as u16;
+            let listen_info = ListenInfo {
+                protocol: Protocol::Udp,
+                ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                announced_address: announced_address.clone(),
+                port: Some(port),
+                port_range: None,
+                flags: None,
+                send_buffer_size: None,
+                recv_buffer_size: None,
+                expose_internal_ip: false,
+            };
+            let server_options = WebRtcServerOptions::new(
+                WebRtcServerListenInfos::new(listen_info),
+            );
+            let webrtc_server = worker
+                .create_webrtc_server(server_options)
+                .await
+                .map_err(|e| MediaError::WorkerError(
+                    format!("Failed to create WebRtcServer on port {port} for worker {worker_id}: {e}")
+                ))?;
+            info!("Created WebRtcServer on UDP port {} for worker {} (index {})", port, worker_id, i);
+            webrtc_servers.insert(worker_id, webrtc_server);
+
             worker_load.insert(worker_id, 0);
             workers.push(worker);
         }
@@ -52,6 +87,7 @@ impl WorkerManager {
         Ok(Self {
             workers: Arc::new(RwLock::new(workers)),
             worker_load: Arc::new(RwLock::new(worker_load)),
+            webrtc_servers: Arc::new(RwLock::new(webrtc_servers)),
             config,
             next_worker_idx: AtomicUsize::new(0),
             mediasoup_worker_manager,
@@ -99,11 +135,12 @@ impl WorkerManager {
         });
     }
     
-    /// Gets the least loaded worker using round-robin with load balancing
+    /// Gets the least loaded worker using round-robin with load balancing.
+    /// Returns both the Worker and its WorkerId (needed to look up the WebRtcServer).
     ///
     /// # Errors
     /// Returns `MediaError::WorkerError` if no workers are available
-    pub async fn get_least_loaded_worker(&self) -> MediaResult<Worker> {
+    pub async fn get_least_loaded_worker(&self) -> MediaResult<(Worker, WorkerId)> {
         let workers = self.workers.read().await;
 
         if workers.is_empty() {
@@ -114,17 +151,32 @@ impl WorkerManager {
         // Using Relaxed ordering is safe here - occasional duplicates in load balancing are acceptable
         let idx = self.next_worker_idx.fetch_add(1, Ordering::Relaxed) % workers.len();
         let worker = workers[idx].clone();
-        
+        let worker_id = worker.id();
+
         // Increment load counter for this worker
         let mut load = self.worker_load.write().await;
-        if let Some(count) = load.get_mut(&worker.id()) {
+        if let Some(count) = load.get_mut(&worker_id) {
             *count += 1;
         }
-        
-        debug!("Selected worker {} (index {})", worker.id(), idx);
-        Ok(worker)
+
+        debug!("Selected worker {} (index {})", worker_id, idx);
+        Ok((worker, worker_id))
     }
     
+    /// Gets the WebRtcServer associated with a worker.
+    ///
+    /// # Errors
+    /// Returns `MediaError::WorkerError` if no WebRtcServer exists for the given worker_id
+    pub async fn get_webrtc_server(&self, worker_id: WorkerId) -> MediaResult<WebRtcServer> {
+        let servers = self.webrtc_servers.read().await;
+        servers
+            .get(&worker_id)
+            .cloned()
+            .ok_or_else(|| MediaError::WorkerError(
+                format!("No WebRtcServer found for worker: {worker_id}")
+            ))
+    }
+
     /// Decrements the load counter for a worker (called when a router is closed)
     ///
     /// # Errors
@@ -234,6 +286,9 @@ impl WorkerManager {
     /// Gracefully shuts down all workers
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down all workers");
+
+        // Drop WebRtcServers first (they reference workers)
+        self.webrtc_servers.write().await.clear();
 
         let mut workers = self.workers.write().await;
 

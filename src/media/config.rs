@@ -12,6 +12,8 @@ pub struct MediaConfig {
     pub worker_config: WorkerConfig,
     pub router_config: RouterConfig,
     pub webrtc_transport_config: WebRtcTransportConfig,
+    /// Base UDP port for WebRtcServer per worker. Worker i listens on base + i.
+    pub webrtc_server_port_base: u16,
 }
 
 impl Default for MediaConfig {
@@ -20,6 +22,7 @@ impl Default for MediaConfig {
             worker_config: WorkerConfig::default(),
             router_config: RouterConfig::default(),
             webrtc_transport_config: WebRtcTransportConfig::default(),
+            webrtc_server_port_base: 40000,
         }
     }
 }
