@@ -430,18 +430,11 @@ async fn handle_reconnect(
 }
 
 /// Spawns a background task that performs bandwidth adaptation and sends connection stats.
-/// Returns a JoinHandle that can be aborted on disconnect.
-///
-/// Uses adaptive polling intervals to reduce CPU at scale:
-/// - 2s when consumers are active and bandwidth is changing
-/// - 5s when consumers are active but bandwidth tier is stable (3+ consecutive same-tier polls)
-/// - 10s when no consumers exist (publish-only, no layer adaptation needed)
-/// Spawns a background task that performs bandwidth adaptation and sends connection stats.
 ///
 /// Uses event-driven BWE (bandwidth estimation) events for layer adaptation:
 /// - BWE events arrive via channel when mediasoup detects bandwidth changes
-/// - Layer preferences update immediately on tier change (debounced at 500ms)
-/// - ConnectionStats sent to client every ~10s using last-known bitrate (no IPC)
+/// - Layer preferences update immediately on tier change (debounced at 2s)
+/// - ConnectionStats sent to client every ~10s using last-known bitrate (no IPC, skipped if unchanged)
 fn spawn_stats_task(
     room_manager: Arc<RoomManager>,
     participant_id: String,
@@ -451,11 +444,12 @@ fn spawn_stats_task(
     tokio::spawn(async move {
         let mut current_layers: HashMap<String, u8> = HashMap::new();
         let mut last_bitrate: u32 = 0;
+        let mut last_sent_bitrate: u32 = 0;
         let mut last_tier: Option<u8> = None;
 
         // Minimum interval between layer updates (debounce rapid BWE fluctuations)
         let mut last_layer_update = Instant::now();
-        let debounce = Duration::from_millis(500);
+        let debounce = Duration::from_secs(2);
 
         // ConnectionStats interval — no IPC call, just uses last-known bitrate
         let mut stats_interval = tokio::time::interval(Duration::from_secs(10));
@@ -484,7 +478,7 @@ fn spawn_stats_task(
 
                                 // Get current consumer IDs (in-memory only — zero IPC)
                                 match room_manager.get_consumer_ids(&participant_id).await {
-                                    Ok(consumer_ids) => {
+                                    Ok(consumer_ids) if !consumer_ids.is_empty() => {
                                         for consumer_id in &consumer_ids {
                                             let prev = current_layers.get(consumer_id).copied();
                                             if prev != Some(target_layer) {
@@ -502,6 +496,10 @@ fn spawn_stats_task(
                                         }
                                         current_layers.retain(|id, _| consumer_ids.contains(id));
                                     }
+                                    Ok(_) => {
+                                        // No consumers — skip layer updates, clear stale state
+                                        current_layers.clear();
+                                    }
                                     Err(e) => {
                                         debug!("Failed to get consumer IDs for {}: {}", participant_id, e);
                                     }
@@ -514,7 +512,8 @@ fn spawn_stats_task(
 
                 // Timer: send ConnectionStats every ~10s using last-known bitrate (zero IPC)
                 _ = stats_interval.tick() => {
-                    if last_bitrate > 0 {
+                    if last_bitrate > 0 && last_bitrate != last_sent_bitrate {
+                        last_sent_bitrate = last_bitrate;
                         if let Ok(json) = serde_json::to_string(&ServerMessage::ConnectionStats {
                             available_bitrate: Some(last_bitrate),
                             rtt: None,
