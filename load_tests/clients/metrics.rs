@@ -407,12 +407,12 @@ impl TestSummary {
         if self.successful_connections > 0 && self.average_session_duration_ms > 0 {
             let bytes_sent_per_client = self.total_bytes_sent / self.successful_connections as u64;
             let bytes_recv_per_client = self.total_bytes_received / self.successful_connections as u64;
-            let send_kbps = bytes_sent_per_client * 8 * 1000 / self.average_session_duration_ms;
-            let recv_kbps = bytes_recv_per_client * 8 * 1000 / self.average_session_duration_ms;
-            let total_send_kbps = self.total_bytes_sent * 8 * 1000 / self.average_session_duration_ms;
-            println!("  Avg Send Bitrate: {:.2} Mbps/client", send_kbps as f64 / 1000.0);
-            println!("  Avg Recv Bitrate: {:.2} Mbps/client", recv_kbps as f64 / 1000.0);
-            println!("  Total Aggregate Send: {:.2} Gbps", total_send_kbps as f64 / 1_000_000.0);
+            let send_bps = bytes_sent_per_client * 8 * 1000 / self.average_session_duration_ms;
+            let recv_bps = bytes_recv_per_client * 8 * 1000 / self.average_session_duration_ms;
+            let total_send_bps = self.total_bytes_sent * 8 * 1000 / self.average_session_duration_ms;
+            println!("  Avg Send Bitrate: {:.2} Mbps/client", send_bps as f64 / 1_000_000.0);
+            println!("  Avg Recv Bitrate: {:.2} Mbps/client", recv_bps as f64 / 1_000_000.0);
+            println!("  Total Aggregate Send: {:.2} Gbps", total_send_bps as f64 / 1_000_000_000.0);
         }
 
         // Signaling latencies
