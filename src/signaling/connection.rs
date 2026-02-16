@@ -681,7 +681,6 @@ async fn handle_client_message(
                     .media_server()
                     .transport_manager()
                     .find_producer_paused(producer_id)
-                    .await
                     .unwrap_or(false);
 
                 let consumer_info = room_manager

@@ -23,6 +23,9 @@ use anyhow::Result;
 /// but only blocking that specific participant).
 pub struct TransportManager {
     participants: Arc<StdRwLock<HashMap<String, Arc<TokioMutex<ParticipantMedia>>>>>,
+    /// Index of producer paused state: producer_id -> paused.
+    /// Maintained by pause_producer, resume_producer, close_producer, remove_participant.
+    paused_producers: Arc<StdRwLock<HashMap<String, bool>>>,
 }
 
 impl TransportManager {
@@ -30,6 +33,7 @@ impl TransportManager {
     pub fn new() -> Self {
         Self {
             participants: Arc::new(StdRwLock::new(HashMap::new())),
+            paused_producers: Arc::new(StdRwLock::new(HashMap::new())),
         }
     }
 
@@ -172,6 +176,12 @@ impl TransportManager {
         self.setup_producer_handlers(&producer, participant_id);
         participant.producers.insert(producer_id.clone(), producer.clone());
 
+        // Initialize paused index (producers start unpaused)
+        {
+            let mut index = self.paused_producers.write().unwrap_or_else(|e| e.into_inner());
+            index.insert(producer_id.clone(), false);
+        }
+
         info!("Created {:?} producer {} for participant {}", kind, producer_id, participant_id);
         Ok(producer)
     }
@@ -291,6 +301,12 @@ impl TransportManager {
             .await
             .map_err(|e| MediaError::ProducerError(format!("Failed to pause producer: {e}")))?;
 
+        // Update paused index
+        {
+            let mut index = self.paused_producers.write().unwrap_or_else(|e| e.into_inner());
+            index.insert(producer_id.to_string(), true);
+        }
+
         info!("Paused producer {} for participant {}", producer_id, participant_id);
         Ok(())
     }
@@ -314,31 +330,22 @@ impl TransportManager {
             .await
             .map_err(|e| MediaError::ProducerError(format!("Failed to resume producer: {e}")))?;
 
+        // Update paused index
+        {
+            let mut index = self.paused_producers.write().unwrap_or_else(|e| e.into_inner());
+            index.insert(producer_id.to_string(), false);
+        }
+
         info!("Resumed producer {} for participant {}", producer_id, participant_id);
         Ok(())
     }
 
-    /// Searches across all participants to find if a producer is paused.
+    /// Checks if a producer is paused using the in-memory index.
     /// Returns `Some(paused)` if found, `None` if the producer doesn't exist.
-    pub async fn find_producer_paused(&self, producer_id: &str) -> Option<bool> {
-        let target_id: ProducerId = producer_id.parse().ok()?;
-
-        let all_locks: Vec<Arc<TokioMutex<ParticipantMedia>>> = {
-            let participants = self.participants.read().unwrap_or_else(|e| e.into_inner());
-            participants.values().cloned().collect()
-        };
-
-        for lock in all_locks {
-            let participant = lock.lock().await;
-            for (pid, producer) in &participant.producers {
-                if producer.id() == target_id {
-                    debug!("Found producer {} (paused={}) in participant {}", pid, producer.paused(), participant.id);
-                    return Some(producer.paused());
-                }
-            }
-        }
-
-        None
+    /// O(1) lookup — no per-participant locking needed.
+    pub fn find_producer_paused(&self, producer_id: &str) -> Option<bool> {
+        let index = self.paused_producers.read().unwrap_or_else(|e| e.into_inner());
+        index.get(producer_id).copied()
     }
 
     /// Pauses all consumers whose producer matches the given producer_id.
@@ -503,6 +510,12 @@ impl TransportManager {
             .remove(producer_id)
             .ok_or_else(|| MediaError::ProducerError(format!("Producer not found: {producer_id}")))?;
 
+        // Clean up paused index
+        {
+            let mut index = self.paused_producers.write().unwrap_or_else(|e| e.into_inner());
+            index.remove(producer_id);
+        }
+
         info!("Closed producer {} for participant {}", producer_id, participant_id);
         Ok(())
     }
@@ -524,6 +537,15 @@ impl TransportManager {
 
         if let Some(lock) = participant_lock {
             let mut participant = lock.lock().await;
+
+            // Clean up paused index for all this participant's producers
+            {
+                let mut index = self.paused_producers.write().unwrap_or_else(|e| e.into_inner());
+                for producer_id in participant.producers.keys() {
+                    index.remove(producer_id);
+                }
+            }
+
             participant.close_all().await;
             info!("Removed participant {} and closed all media resources", participant_id);
             Ok(())
