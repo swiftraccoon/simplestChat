@@ -604,30 +604,6 @@ impl RoomManager {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
-    /// Gets recv transport stats for bandwidth estimation
-    pub async fn get_recv_transport_stats(
-        &self,
-        participant_id: &str,
-    ) -> Result<Option<(u32, Vec<String>)>> {
-        self.media_server
-            .transport_manager()
-            .get_recv_transport_stats(participant_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
-    }
-
-    /// Gets send transport stats for connection quality reporting
-    pub async fn get_send_transport_stats(
-        &self,
-        participant_id: &str,
-    ) -> Result<Option<Option<u32>>> {
-        self.media_server
-            .transport_manager()
-            .get_send_transport_stats(participant_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
-    }
-
     /// Rebinds a participant's WS sender after reconnection
     pub async fn rebind_participant_sender(
         &self,

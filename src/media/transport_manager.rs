@@ -144,52 +144,6 @@ impl TransportManager {
         Ok(())
     }
 
-    /// Connects a send transport with DTLS parameters
-    pub async fn connect_send_transport(
-        &self,
-        participant_id: &str,
-        dtls_parameters: DtlsParameters,
-    ) -> MediaResult<()> {
-        let participant_lock = self.get_participant_lock(participant_id)?;
-        let participant = participant_lock.lock().await;
-
-        let transport = participant
-            .send_transport
-            .as_ref()
-            .ok_or_else(|| MediaError::TransportError("Send transport not found".to_string()))?;
-
-        transport
-            .connect(WebRtcTransportRemoteParameters { dtls_parameters })
-            .await
-            .map_err(|e| MediaError::TransportError(format!("Failed to connect send transport: {e}")))?;
-
-        info!("Connected send transport for participant {}", participant_id);
-        Ok(())
-    }
-
-    /// Connects a receive transport with DTLS parameters
-    pub async fn connect_recv_transport(
-        &self,
-        participant_id: &str,
-        dtls_parameters: DtlsParameters,
-    ) -> MediaResult<()> {
-        let participant_lock = self.get_participant_lock(participant_id)?;
-        let participant = participant_lock.lock().await;
-
-        let transport = participant
-            .recv_transport
-            .as_ref()
-            .ok_or_else(|| MediaError::TransportError("Receive transport not found".to_string()))?;
-
-        transport
-            .connect(WebRtcTransportRemoteParameters { dtls_parameters })
-            .await
-            .map_err(|e| MediaError::TransportError(format!("Failed to connect receive transport: {e}")))?;
-
-        info!("Connected receive transport for participant {}", participant_id);
-        Ok(())
-    }
-
     /// Creates a producer on the participant's send transport
     pub async fn create_producer(
         &self,
@@ -535,59 +489,6 @@ impl TransportManager {
         Ok(participant.consumers.keys().cloned().collect())
     }
 
-    /// Gets recv transport stats for bandwidth estimation
-    pub async fn get_recv_transport_stats(
-        &self,
-        participant_id: &str,
-    ) -> MediaResult<Option<(u32, Vec<String>)>> {
-        let participant_lock = self.get_participant_lock(participant_id)?;
-        let participant = participant_lock.lock().await;
-
-        let transport = match &participant.recv_transport {
-            Some(t) => t,
-            None => return Ok(None),
-        };
-
-        let stats = transport
-            .get_stats()
-            .await
-            .map_err(|e| MediaError::TransportError(format!("Failed to get transport stats: {e}")))?;
-
-        // Access available_outgoing_bitrate directly from WebRtcTransportStat struct
-        let bitrate = stats.first()
-            .and_then(|s| s.available_outgoing_bitrate)
-            .unwrap_or(0);
-
-        let consumer_ids: Vec<String> = participant.consumers.keys().cloned().collect();
-
-        Ok(Some((bitrate, consumer_ids)))
-    }
-
-    /// Gets send transport stats for connection quality reporting
-    pub async fn get_send_transport_stats(
-        &self,
-        participant_id: &str,
-    ) -> MediaResult<Option<Option<u32>>> {
-        let participant_lock = self.get_participant_lock(participant_id)?;
-        let participant = participant_lock.lock().await;
-
-        let transport = match &participant.send_transport {
-            Some(t) => t,
-            None => return Ok(None),
-        };
-
-        let stats = transport
-            .get_stats()
-            .await
-            .map_err(|e| MediaError::TransportError(format!("Failed to get send transport stats: {e}")))?;
-
-        // Access available_outgoing_bitrate directly from WebRtcTransportStat struct
-        let bitrate = stats.first()
-            .and_then(|s| s.available_outgoing_bitrate);
-
-        Ok(Some(bitrate))
-    }
-
     /// Closes a producer for a participant
     pub async fn close_producer(
         &self,
@@ -777,24 +678,6 @@ impl TransportManager {
                 }
             }).detach();
         }
-    }
-
-    /// Gets transport statistics
-    pub async fn get_transport_stats(&self, participant_id: &str, transport_type: &str) -> MediaResult<String> {
-        let participant_lock = self.get_participant_lock(participant_id)?;
-        let participant = participant_lock.lock().await;
-
-        let transport = match transport_type {
-            "send" => &participant.send_transport,
-            "recv" => &participant.recv_transport,
-            _ => return Err(MediaError::InvalidState("Invalid transport type".to_string())),
-        };
-
-        let transport = transport
-            .as_ref()
-            .ok_or_else(|| MediaError::TransportError(format!("{transport_type} transport not found")))?;
-
-        Ok(format!("{:?}", transport.id()))
     }
 
     /// Closes all transports for all participants
