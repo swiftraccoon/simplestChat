@@ -105,6 +105,8 @@ async fn main() -> Result<()> {
     // Parse command line arguments
     let args: Vec<String> = std::env::args().collect();
     let mut config = TestConfig::default();
+    let mut quality_override: Option<String> = None;
+    let mut fps_override: Option<u8> = None;
 
     let mut i = 1;
     while i < args.len() {
@@ -206,6 +208,22 @@ async fn main() -> Result<()> {
                     i += 1;
                 }
             }
+            "--quality" | "-q" => {
+                if i + 1 < args.len() {
+                    quality_override = Some(args[i + 1].clone());
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            "--fps" => {
+                if i + 1 < args.len() {
+                    fps_override = Some(args[i + 1].parse().unwrap_or(30));
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
             "--audio-only" => {
                 config.media_config = MediaConfig::audio_only();
                 i += 1;
@@ -222,6 +240,25 @@ async fn main() -> Result<()> {
                 i += 1;
             }
         }
+    }
+
+    // Apply quality preset (after all args parsed so order doesn't matter)
+    if let Some(ref quality) = quality_override {
+        let fps = fps_override.unwrap_or(30);
+        let fps = match fps {
+            15 | 30 | 60 => fps,
+            _ => { eprintln!("Invalid FPS '{}', using 30", fps); 30 }
+        };
+        config.media_config = MediaConfig::from_preset(quality, fps);
+    } else if let Some(fps) = fps_override {
+        let fps = match fps {
+            15 | 30 | 60 => fps,
+            _ => { eprintln!("Invalid FPS '{}', using 30", fps); 30 }
+        };
+        config.media_config.video_fps = fps;
+        let multiplier = match fps { 15 => 0.6, 60 => 1.5, _ => 1.0 };
+        config.media_config.video_bitrate_kbps =
+            (config.media_config.video_bitrate_kbps as f64 * multiplier) as u32;
     }
 
     run_load_test(config).await
@@ -255,6 +292,11 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
     println!("Media: Audio={}, Video={}",
         config.media_config.audio_enabled,
         config.media_config.video_enabled
+    );
+    println!("Quality: {} ({} kbps video, {} kbps audio)",
+        config.media_config.quality_label(),
+        config.media_config.video_bitrate_kbps,
+        config.media_config.audio_bitrate_kbps,
     );
     println!("Max consumers: audio={}, video={}",
         config.max_audio_consumers, config.max_video_consumers);
@@ -660,7 +702,7 @@ async fn run_client_inner(
         // Produce audio if enabled (timed)
         if config.media_config.audio_enabled {
             let t = Instant::now();
-            let audio_params = extract_rtp_parameters(MediaKind::Audio, audio_ssrc);
+            let audio_params = extract_rtp_parameters(MediaKind::Audio, audio_ssrc, config.media_config.video_bitrate_kbps);
             let produce_msg = ClientMessage::Produce {
                 transport_id: st_id.clone(),
                 kind: MediaKind::Audio,
@@ -683,7 +725,7 @@ async fn run_client_inner(
         // Produce video if enabled (timed)
         if config.media_config.video_enabled {
             let t = Instant::now();
-            let video_params = extract_rtp_parameters(MediaKind::Video, video_ssrc);
+            let video_params = extract_rtp_parameters(MediaKind::Video, video_ssrc, config.media_config.video_bitrate_kbps);
             let produce_msg = ClientMessage::Produce {
                 transport_id: st_id.clone(),
                 kind: MediaKind::Video,
@@ -939,22 +981,26 @@ async fn send_real_media_loop(
             }
             _ = video_interval.tick(), if config.video_enabled => {
                 if let Some(track) = &video_track {
-                    let packet_bytes = media_gen.generate_video_packet();
-
-                    match track.write(&packet_bytes).await {
-                        Ok(_) => {
-                            metrics.record_packet_sent(packet_bytes.len());
-                            if first_packet {
-                                metrics.mark_first_media_sent();
-                                first_packet = false;
-                                tracing::info!("{}: First REAL RTP packet sent!", client_id);
+                    let frame_packets = media_gen.generate_video_frame();
+                    let mut send_error = false;
+                    for packet_bytes in frame_packets {
+                        match track.write(&packet_bytes).await {
+                            Ok(_) => {
+                                metrics.record_packet_sent(packet_bytes.len());
+                                if first_packet {
+                                    metrics.mark_first_media_sent();
+                                    first_packet = false;
+                                    tracing::info!("{}: First REAL RTP packet sent!", client_id);
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!("{}: Failed to send RTP: {}", client_id, e);
+                                send_error = true;
+                                break;
                             }
                         }
-                        Err(e) => {
-                            tracing::error!("{}: Failed to send RTP: {}", client_id, e);
-                            break;
-                        }
                     }
+                    if send_error { break; }
                 }
             }
         }
@@ -1343,7 +1389,7 @@ async fn receive_response(
     }
 }
 
-fn extract_rtp_parameters(kind: MediaKind, ssrc: u32) -> RtpParameters {
+fn extract_rtp_parameters(kind: MediaKind, ssrc: u32, video_bitrate_kbps: u32) -> RtpParameters {
     // Payload types must match the router's codec config (see config.rs)
     match kind {
         MediaKind::Audio => RtpParameters {
@@ -1387,7 +1433,7 @@ fn extract_rtp_parameters(kind: MediaKind, ssrc: u32) -> RtpParameters {
             ],
             encodings: vec![RtpEncodingParameters {
                 ssrc: Some(ssrc),
-                max_bitrate: Some(500_000),
+                max_bitrate: Some(video_bitrate_kbps * 1000),
                 ..Default::default()
             }],
             rtcp: RtcpParameters::default(),
@@ -1412,6 +1458,10 @@ fn print_usage() {
     println!("  --churn-rate <N>           Clients churning (disconnect/reconnect) per second (default: 0)");
     println!("  --audio-only               Send only audio (no video)");
     println!("  --video-only               Send only video (no audio)");
+    println!("  -q, --quality <PRESET>     Video quality: 480p (default), 720p, 1080p");
+    println!("                             Sets resolution and bitrate to realistic values");
+    println!("  --fps <15|30|60>           Frames per second (default: 30)");
+    println!("                             Bitrate scales: 15fps=0.6x, 30fps=1x, 60fps=1.5x");
     println!("  -h, --help                 Print this help message");
     println!("\nExamples:");
     println!("  # Basic load test");

@@ -11,6 +11,7 @@ pub struct MediaConfig {
     pub video_codec: String,      // "VP8" or "H264"
     pub audio_sample_rate: u32,   // 48000 Hz
     pub audio_channels: u8,       // 1 or 2
+    pub audio_bitrate_kbps: u32,  // 128 (high-quality Opus)
     pub video_width: u32,         // 640, 1280, etc.
     pub video_height: u32,        // 480, 720, etc.
     pub video_fps: u8,            // 30
@@ -26,10 +27,11 @@ impl Default for MediaConfig {
             video_codec: "VP8".to_string(),
             audio_sample_rate: 48000,
             audio_channels: 2,
+            audio_bitrate_kbps: 128,
             video_width: 640,
             video_height: 480,
             video_fps: 30,
-            video_bitrate_kbps: 500,
+            video_bitrate_kbps: 1000,
         }
     }
 }
@@ -50,7 +52,41 @@ impl MediaConfig {
             ..Default::default()
         }
     }
+
+    pub fn from_preset(preset: &str, fps: u8) -> Self {
+        let fps_multiplier = match fps {
+            15 => 0.6,
+            60 => 1.5,
+            _ => 1.0,
+        };
+        let (width, height, base_bitrate_kbps) = match preset {
+            "720p" => (1280, 720, 2500u32),
+            "1080p" => (1920, 1080, 4500u32),
+            _ => (640, 480, 1000u32),
+        };
+        Self {
+            video_width: width,
+            video_height: height,
+            video_fps: fps,
+            video_bitrate_kbps: (base_bitrate_kbps as f64 * fps_multiplier) as u32,
+            ..Default::default()
+        }
+    }
+
+    pub fn quality_label(&self) -> String {
+        let preset = match (self.video_width, self.video_height) {
+            (1920, 1080) => "1080p",
+            (1280, 720) => "720p",
+            _ => "480p",
+        };
+        format!("{} @ {}fps", preset, self.video_fps)
+    }
 }
+
+/// Maximum RTP payload (after header + extension). Chrome uses 1200; 1100 leaves headroom.
+const MAX_RTP_PAYLOAD: usize = 1100;
+const VP8_DESCRIPTOR_SIZE: usize = 3;
+const FRAME_DATA_PER_PACKET: usize = MAX_RTP_PAYLOAD - VP8_DESCRIPTOR_SIZE;
 
 /// Generates synthetic media packets
 pub struct MediaGenerator {
@@ -146,7 +182,7 @@ impl MediaGenerator {
     pub fn generate_audio_packet(&mut self) -> Vec<u8> {
         // Opus typically uses 20ms packets at 48kHz = 960 samples
         // Payload size varies (compressed), typically 20-100 bytes for speech
-        let payload_size = 60; // Simulated Opus frame size
+        let payload_size = (self.config.audio_bitrate_kbps * 1000 / 8 / 50) as usize;
 
         let mut packet = Vec::with_capacity(12 + 8 + payload_size);
 
@@ -180,81 +216,96 @@ impl MediaGenerator {
         packet
     }
 
-    /// Generate a synthetic video RTP packet with valid VP8 payload descriptor
+    fn compute_frame_size(&self, is_keyframe: bool) -> usize {
+        let bytes_per_sec = (self.config.video_bitrate_kbps as usize) * 1000 / 8;
+        let keyframe_interval = self.config.video_fps as usize * 5;
+        let inter_frames = keyframe_interval - 1;
+        let inter_size = (bytes_per_sec * 5) / (inter_frames + 5);
+        let key_size = inter_size * 5;
+        if is_keyframe { key_size } else { inter_size }
+    }
+
+    /// Generate synthetic video RTP packets for a single frame.
     ///
-    /// VP8 RTP payload format (RFC 7741):
-    ///   Byte 0: [X|R|N|S|R|PID] - payload descriptor
-    ///   Byte 1+: VP8 frame data (P bit in LSB: 0=keyframe, 1=interframe)
-    ///
-    /// mediasoup's C++ worker parses the VP8 payload descriptor and will crash
-    /// on malformed payloads (free(): invalid pointer). We must produce valid
-    /// descriptor bytes and a correct keyframe signature.
-    pub fn generate_video_packet(&mut self) -> Vec<u8> {
-        let is_keyframe = self.frame_count % 150 == 0; // Keyframe every 5 seconds @ 30fps
-        let payload_size = if is_keyframe { 2000 } else { 500 };
-
-        let mut packet = Vec::with_capacity(12 + 8 + payload_size);
-
-        // RTP Header (12 bytes)
-        let marker_bit = if is_keyframe { 0x80 } else { 0x00 };
-        packet.push(0x90); // V=2, P=0, X=1, CC=0 (X=1 for header extension)
-        packet.push(0x60 | marker_bit); // M bit on keyframes, PT=96
-
-        // Sequence number
-        packet.extend_from_slice(&self.video_sequence.to_be_bytes());
-        self.video_sequence = self.video_sequence.wrapping_add(1);
-
-        // Timestamp (4 bytes) - increments by 3000 for 30fps @ 90kHz clock
-        packet.extend_from_slice(&self.video_timestamp.to_be_bytes());
-        let timestamp_increment = 90000 / self.config.video_fps as u32;
-        self.video_timestamp = self.video_timestamp.wrapping_add(timestamp_increment);
-
-        // SSRC
-        packet.extend_from_slice(&self.video_ssrc.to_be_bytes());
-
-        // One-byte RTP header extension (RFC 5285)
-        // Profile: 0xBEDE, Length: 1 word (4 bytes of extension data)
-        packet.extend_from_slice(&[0xBE, 0xDE, 0x00, 0x01]);
-        // MID extension: ID=1, L=0 (1 byte value), value='1' (video mid)
-        packet.push(0x10); // (ID=1 << 4) | (length-1=0)
-        packet.push(b'1');  // mid value "1" for video m-section
-        packet.push(0x00); // padding
-        packet.push(0x00); // padding
-
-        // VP8 RTP payload descriptor (RFC 7741) with Picture ID.
-        // mediasoup's C++ PayloadDescriptorHandler requires a picture ID to
-        // properly rewrite descriptors during forwarding. Without it, the
-        // handler can segfault when accessing NULL picture ID state.
-        //
-        // Byte 0: X=1, S=1, PID=0 → 0x90
-        // Byte 1: I=1, L=0, T=0, K=0 → 0x80
-        // Byte 2: M=0, PictureID (7-bit) → 0x00-0x7F
+    /// Returns multiple MTU-sized packets that together represent one video frame.
+    /// Each packet contains a valid VP8 RTP payload descriptor (RFC 7741) with
+    /// picture ID so mediasoup can properly rewrite descriptors during forwarding.
+    pub fn generate_video_frame(&mut self) -> Vec<Vec<u8>> {
+        let keyframe_interval = self.config.video_fps as u64 * 5;
+        let is_keyframe = self.frame_count % keyframe_interval == 0;
+        let frame_size = self.compute_frame_size(is_keyframe);
         let pic_id = (self.frame_count & 0x7F) as u8;
-        packet.push(0x90); // X=1, S=1, PID=0
-        packet.push(0x80); // I=1 (picture ID present)
-        packet.push(pic_id); // 7-bit picture ID
 
-        // VP8 frame data
-        if is_keyframe {
-            packet.push(0x10); // frame_type=0 (key), version=0, show_frame=1
-            packet.push(0x00); // first_part_size continuation
-            packet.push(0x00); // first_part_size continuation
-            packet.push(0x9D); // VP8 keyframe start code
-            packet.push(0x01);
-            packet.push(0x2A);
-            packet.extend_from_slice(&[0x80, 0x02]); // width=640
-            packet.extend_from_slice(&[0xE0, 0x01]); // height=480
-            packet.extend(std::iter::repeat(0x00).take(payload_size - 12));
-        } else {
-            packet.push(0x11); // frame_type=1 (inter), version=0, show_frame=1
-            packet.push(0x00); // first_part_size continuation
-            packet.push(0x00); // first_part_size continuation
-            packet.extend(std::iter::repeat(0x00).take(payload_size - 6));
-        }
-
+        let timestamp_increment = 90000 / self.config.video_fps as u32;
+        let frame_timestamp = self.video_timestamp;
+        self.video_timestamp = self.video_timestamp.wrapping_add(timestamp_increment);
         self.frame_count += 1;
 
-        packet
+        let num_packets = ((frame_size + FRAME_DATA_PER_PACKET - 1) / FRAME_DATA_PER_PACKET).max(1);
+        let mut packets = Vec::with_capacity(num_packets);
+        let mut remaining = frame_size;
+
+        for i in 0..num_packets {
+            let is_first = i == 0;
+            let is_last = i == num_packets - 1;
+            let chunk_size = remaining.min(FRAME_DATA_PER_PACKET);
+            remaining -= chunk_size;
+
+            let mut packet = Vec::with_capacity(12 + 8 + VP8_DESCRIPTOR_SIZE + chunk_size);
+
+            // RTP Header (12 bytes)
+            packet.push(0x90); // V=2, P=0, X=1, CC=0
+            let marker_bit = if is_last { 0x80 } else { 0x00 };
+            packet.push(0x60 | marker_bit); // PT=96, M on last packet
+
+            packet.extend_from_slice(&self.video_sequence.to_be_bytes());
+            self.video_sequence = self.video_sequence.wrapping_add(1);
+
+            packet.extend_from_slice(&frame_timestamp.to_be_bytes());
+            packet.extend_from_slice(&self.video_ssrc.to_be_bytes());
+
+            // One-byte RTP header extension (RFC 5285)
+            packet.extend_from_slice(&[0xBE, 0xDE, 0x00, 0x01]);
+            packet.push(0x10);
+            packet.push(b'1');
+            packet.push(0x00);
+            packet.push(0x00);
+
+            // VP8 RTP payload descriptor (RFC 7741)
+            if is_first {
+                packet.push(0x90); // X=1, S=1
+            } else {
+                packet.push(0x80); // X=1, S=0
+            }
+            packet.push(0x80); // I=1
+            packet.push(pic_id);
+
+            // Frame data
+            if is_first && is_keyframe {
+                packet.push(0x10);
+                packet.push(0x00);
+                packet.push(0x00);
+                packet.push(0x9D);
+                packet.push(0x01);
+                packet.push(0x2A);
+                packet.extend_from_slice(&(self.config.video_width as u16).to_le_bytes());
+                packet.extend_from_slice(&(self.config.video_height as u16).to_le_bytes());
+                let header_size = 10;
+                packet.extend(std::iter::repeat(0x00).take(chunk_size.saturating_sub(header_size)));
+            } else if is_first {
+                packet.push(0x11);
+                packet.push(0x00);
+                packet.push(0x00);
+                let header_size = 3;
+                packet.extend(std::iter::repeat(0x00).take(chunk_size.saturating_sub(header_size)));
+            } else {
+                packet.extend(std::iter::repeat(0x00).take(chunk_size));
+            }
+
+            packets.push(packet);
+        }
+
+        packets
     }
 
     /// Get the audio SSRC used in generated packets
