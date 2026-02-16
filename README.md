@@ -40,21 +40,19 @@ Client (WebSocket) ──► Axum Signaling Server
 | Media | `src/media/mod.rs` | MediaServer orchestrator |
 | Workers | `src/media/worker_manager.rs` | Worker pool, WebRtcServer per worker, load-aware selection |
 | Routers | `src/media/router_manager.rs` | Per-room media routing |
-| Transports | `src/media/transport_manager.rs` | WebRTC transport, producers, consumers, BWE subscription |
+| Transports | `src/media/transport_manager.rs` | WebRTC transport, producers, consumers |
 
 ## Performance
 
-Validated with progressive stress testing (AMD Ryzen 9 8945HS, 8C/16T, 90GB RAM).
-WebRtcServer shared ports, event-driven BWE, load-aware worker selection, 4+4 consumer caps:
+Validated with progressive stress testing (AMD Ryzen 9 8945HS, 8C/16T, 90GB RAM):
 
-| Clients | Rooms | P99 Latency | Errors | Consumers | FDs |
-|---------|-------|-------------|--------|-----------|-----|
-| 100 | 1 | 2ms | 0 | 800 | — |
-| 1000 | 16 | 4ms | 0 | 8K | 1143 |
-| 5000 | 16 | 84ms | 0 | 40K | 5143 |
-| 10000 | 16 | 274ms | 0 | 80K | ~10K |
+| Clients | Rooms | P99 Latency | Errors | Consumers |
+|---------|-------|-------------|--------|-----------|
+| 100 | 16 | 2ms | 0 | 800 |
+| 5000 | 16 | 17ms | 0 | 40K |
+| 10000 | 16 | 223ms | 0 | 80K |
 
-- **Comfortable limit**: 10000 clients/server (P99 < 300ms)
+- **Comfortable limit**: 10000 clients/server (P99 < 250ms)
 - ~1 MB per client, CPU distributed across 16 mediasoup workers
 - WebRtcServer 5-tuple DEMUX eliminates per-transport file descriptors
 - Requires `ulimit -n 65536` for large tests
@@ -103,6 +101,31 @@ The load test binary (`load_tests/bin/load_test.rs`) creates real WebRTC clients
 4. Consumes media from all other participants
 5. Collects per-client metrics (connection time, packets sent/received, errors)
 
+### Quality Presets
+
+Realistic bandwidth simulation with multi-packet RTP frame fragmentation:
+
+```bash
+--quality 480p|720p|1080p    # Video quality preset (default: 480p)
+--fps 15|30|60               # Frames per second (default: 30)
+```
+
+| Preset | Video Bitrate | Packets/Frame | Audio |
+|--------|--------------|---------------|-------|
+| 480p | 1.0 Mbps | 4 | 128 kbps |
+| 720p | 2.5 Mbps | 10 | 128 kbps |
+| 1080p | 4.5 Mbps | 17 | 128 kbps |
+
+### Bandwidth Results
+
+| Clients | Quality | P99 | Send/Client | Aggregate Send |
+|---------|---------|-----|-------------|----------------|
+| 100 | 480p | 1ms | 1.07 Mbps | 0.11 Gbps |
+| 100 | 1080p | 1ms | 4.38 Mbps | 0.44 Gbps |
+| 500 | 1080p | 1ms | 4.20 Mbps | 2.10 Gbps |
+| 1000 | 720p | 1ms | 2.14 Mbps | 2.14 Gbps |
+| 1000 | 1080p | 2ms | 3.76 Mbps | 3.76 Gbps |
+
 Output: `load_test_results.json` (per-client) and `load_test_summary.json` (aggregate).
 
 See `load_tests/README.md` for full documentation.
@@ -112,6 +135,7 @@ See `load_tests/README.md` for full documentation.
 ```
 src/
 ├── main.rs                    # Server entry point
+├── lib.rs                     # Library re-exports
 ├── metrics.rs                 # Prometheus metrics (AtomicU64, histogram)
 ├── turn.rs                    # TURN credential generation
 ├── signaling/
@@ -120,6 +144,8 @@ src/
 │   └── protocol.rs            # Client/Server message types
 ├── media/
 │   ├── mod.rs                 # MediaServer orchestrator
+│   ├── config.rs              # MediaConfig, transport options
+│   ├── types.rs               # MediaError, ParticipantMedia, stats types
 │   ├── worker_manager.rs      # mediasoup worker pool
 │   ├── router_manager.rs      # Per-room routers
 │   └── transport_manager.rs   # Transports, producers, consumers
@@ -129,9 +155,20 @@ src/
 load_tests/
 ├── bin/load_test.rs           # Load test binary
 └── clients/
+    ├── mod.rs                 # Module declarations
     ├── webrtc_client.rs       # Real WebRTC client (webrtc-rs)
     ├── media_generator.rs     # RTP packet generation
     └── metrics.rs             # Atomic metrics collection
+
+web/                           # Browser client (Vite + TypeScript)
+├── src/
+│   ├── main.ts               # Entry point
+│   ├── signaling.ts          # WebSocket client
+│   ├── media.ts              # WebRTC media handling
+│   ├── room.ts               # Room UI logic
+│   └── protocol.ts           # Message types
+├── index.html
+└── vite.config.ts
 
 scripts/                       # Deployment, server management, testing
 ```
