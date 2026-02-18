@@ -909,6 +909,13 @@ function removeRemoteTrack(participantId: string, _producerId: string, kind: 'au
     }
     teardownSpeakingAnalyser(participantId);
   }
+
+  // Remove tile entirely if no active media remains
+  if (!tile.querySelector('video') && !tile.querySelector('audio')) {
+    tile.remove();
+    remoteTiles.delete(participantId);
+    updateVideoGridCount();
+  }
 }
 
 function handleParticipantLeft(participantId: string): void {
