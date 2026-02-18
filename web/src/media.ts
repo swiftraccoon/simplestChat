@@ -159,38 +159,48 @@ export class MediaManager {
     }
   }
 
-  /** Capture camera + mic, produce both tracks */
-  async startCapture(): Promise<MediaStream> {
-    this.localStream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
+  /** Lazily capture mic and create audio producer */
+  private async ensureAudioProducer(): Promise<boolean> {
+    if (this.audioProducer) return true;
+    if (!this.sendTransport) return false;
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioTrack = stream.getAudioTracks()[0];
+    if (!audioTrack) return false;
+
+    if (!this.localStream) this.localStream = new MediaStream();
+    this.localStream.addTrack(audioTrack);
+
+    this.audioProducer = await this.sendTransport.produce({ track: audioTrack });
+    console.log('[media] audio producer created:', this.audioProducer.id);
+    return true;
+  }
+
+  /** Lazily capture camera and create video producer with simulcast */
+  private async ensureVideoProducer(): Promise<boolean> {
+    if (this.videoProducer) return true;
+    if (!this.sendTransport) return false;
+
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
     });
+    const videoTrack = stream.getVideoTracks()[0];
+    if (!videoTrack) return false;
 
-    if (!this.sendTransport) throw new Error('Send transport not ready');
+    if (!this.localStream) this.localStream = new MediaStream();
+    this.localStream.addTrack(videoTrack);
 
-    // Produce audio
-    const audioTrack = this.localStream.getAudioTracks()[0];
-    if (audioTrack) {
-      this.audioProducer = await this.sendTransport.produce({ track: audioTrack });
-      console.log('[media] audio producer created:', this.audioProducer.id);
-    }
-
-    // Produce video with simulcast (3 quality layers)
-    const videoTrack = this.localStream.getVideoTracks()[0];
-    if (videoTrack) {
-      this.videoProducer = await this.sendTransport.produce({
-        track: videoTrack,
-        encodings: [
-          { rid: 'r0', maxBitrate: 100_000, scaleResolutionDownBy: 4 },
-          { rid: 'r1', maxBitrate: 300_000, scaleResolutionDownBy: 2 },
-          { rid: 'r2', maxBitrate: 900_000 },
-        ],
-        codecOptions: { videoGoogleStartBitrate: 1000 },
-      });
-      console.log('[media] video producer created (simulcast):', this.videoProducer.id);
-    }
-
-    return this.localStream;
+    this.videoProducer = await this.sendTransport.produce({
+      track: videoTrack,
+      encodings: [
+        { rid: 'r0', maxBitrate: 100_000, scaleResolutionDownBy: 4 },
+        { rid: 'r1', maxBitrate: 300_000, scaleResolutionDownBy: 2 },
+        { rid: 'r2', maxBitrate: 900_000 },
+      ],
+      codecOptions: { videoGoogleStartBitrate: 1000 },
+    });
+    console.log('[media] video producer created (simulcast):', this.videoProducer.id);
+    return true;
   }
 
   /** Consume a remote producer, returns the track */
@@ -260,9 +270,13 @@ export class MediaManager {
     return this.localStream;
   }
 
-  /** Toggle local audio (pause/resume producer) */
-  toggleAudio(): boolean {
-    if (!this.audioProducer) return false;
+  /** Toggle local audio — lazily captures mic on first call */
+  async toggleAudio(): Promise<boolean> {
+    if (!this.audioProducer) {
+      // First time — capture mic, create producer (starts active)
+      if (!(await this.ensureAudioProducer())) return false;
+      return true;
+    }
     if (this.audioProducer.paused) {
       this.audioProducer.resume();
       this.signaling.send({ type: 'resumeProducer', producerId: this.audioProducer.id });
@@ -273,7 +287,7 @@ export class MediaManager {
     return !this.audioProducer.paused;
   }
 
-  /** Explicitly mute audio (idempotent) */
+  /** Explicitly mute audio (idempotent, no-op if no producer yet) */
   muteAudio(): void {
     if (this.audioProducer && !this.audioProducer.paused) {
       this.audioProducer.pause();
@@ -281,15 +295,16 @@ export class MediaManager {
     }
   }
 
-  /** Explicitly unmute audio (idempotent) */
-  unmuteAudio(): void {
-    if (this.audioProducer && this.audioProducer.paused) {
-      this.audioProducer.resume();
-      this.signaling.send({ type: 'resumeProducer', producerId: this.audioProducer.id });
+  /** Explicitly unmute audio — lazily captures mic on first call */
+  async unmuteAudio(): Promise<void> {
+    if (!(await this.ensureAudioProducer())) return;
+    if (this.audioProducer!.paused) {
+      this.audioProducer!.resume();
+      this.signaling.send({ type: 'resumeProducer', producerId: this.audioProducer!.id });
     }
   }
 
-  /** Explicitly pause video (idempotent) */
+  /** Explicitly pause video (idempotent, no-op if no producer yet) */
   pauseVideo(): void {
     if (this.videoProducer && !this.videoProducer.paused) {
       this.videoProducer.pause();
@@ -297,17 +312,22 @@ export class MediaManager {
     }
   }
 
-  /** Explicitly unpause video (idempotent) */
-  unmuteVideo(): void {
-    if (this.videoProducer && this.videoProducer.paused) {
-      this.videoProducer.resume();
-      this.signaling.send({ type: 'resumeProducer', producerId: this.videoProducer.id });
+  /** Explicitly unpause video — lazily captures camera on first call */
+  async unmuteVideo(): Promise<void> {
+    if (!(await this.ensureVideoProducer())) return;
+    if (this.videoProducer!.paused) {
+      this.videoProducer!.resume();
+      this.signaling.send({ type: 'resumeProducer', producerId: this.videoProducer!.id });
     }
   }
 
-  /** Toggle local video (pause/resume producer) */
-  toggleVideo(): boolean {
-    if (!this.videoProducer) return false;
+  /** Toggle local video — lazily captures camera on first call */
+  async toggleVideo(): Promise<boolean> {
+    if (!this.videoProducer) {
+      // First time — capture camera, create producer (starts active)
+      if (!(await this.ensureVideoProducer())) return false;
+      return true;
+    }
     if (this.videoProducer.paused) {
       this.videoProducer.resume();
       this.signaling.send({ type: 'resumeProducer', producerId: this.videoProducer.id });

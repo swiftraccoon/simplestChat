@@ -72,17 +72,13 @@ export class RoomClient {
     }
     this.events.onParticipantsChanged(this.participants);
 
-    // Set up media (device, transports)
+    // Set up media transports only — no capture, no producers.
+    // Camera/mic are captured lazily when user explicitly enables them.
     this.media = new MediaManager(this.signaling);
     try {
       await this.media.setup();
-      const localStream = await this.media.startCapture();
-      // Privacy: join muted with cam off — user must explicitly enable
-      this.media.muteAudio();
-      this.media.pauseVideo();
-      this.events.onLocalStream(localStream);
     } catch (e) {
-      // Media setup failed (e.g. camera denied, not HTTPS)
+      // Media setup failed (e.g. not HTTPS)
       // Stay in room for chat — media is optional
       console.warn('[room] media setup failed, continuing without camera/mic:', e);
       this.media.close();
@@ -113,20 +109,20 @@ export class RoomClient {
     this.signaling.send({ type: 'chatMessage', content });
   }
 
-  toggleAudio(): boolean {
-    return this.media?.toggleAudio() ?? false;
+  async toggleAudio(): Promise<boolean> {
+    return await this.media?.toggleAudio() ?? false;
   }
 
-  toggleVideo(): boolean {
-    return this.media?.toggleVideo() ?? false;
+  async toggleVideo(): Promise<boolean> {
+    return await this.media?.toggleVideo() ?? false;
   }
 
   muteAudio(): void {
     this.media?.muteAudio();
   }
 
-  unmuteAudio(): void {
-    this.media?.unmuteAudio();
+  async unmuteAudio(): Promise<void> {
+    await this.media?.unmuteAudio();
   }
 
   get audioEnabled(): boolean {

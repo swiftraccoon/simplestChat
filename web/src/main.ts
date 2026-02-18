@@ -235,7 +235,7 @@ joinBtn.addEventListener('click', async () => {
   try {
     room = new RoomClient(signaling, {
       onParticipantsChanged: renderParticipants,
-      onLocalStream: renderLocalVideo,
+      onLocalStream: () => {}, // Unused — local tile managed by updateLocalTile on user action
       onRemoteTrack: renderRemoteTrack,
       onRemoteTrackRemoved: removeRemoteTrack,
       onParticipantLeft: handleParticipantLeft,
@@ -445,10 +445,10 @@ function addLocalAvatar(tile: HTMLElement, name: string): void {
   tile.insertBefore(noVideoAvatar, tile.firstChild);
 }
 
-function pttActivate(): void {
+async function pttActivate(): Promise<void> {
   if (!room || !room.hasMedia || pttHeld) return;
   pttHeld = true;
-  room.unmuteAudio();
+  await room.unmuteAudio();
   updateMicButton(true);
   updateLocalTile();
 }
@@ -477,20 +477,20 @@ micBtn.addEventListener('mouseleave', () => {
   if (micMode === 'ptt') pttDeactivate();
 });
 
-micBtn.addEventListener('click', () => {
+micBtn.addEventListener('click', async () => {
   if (!room || !room.hasMedia) return;
   if (micMode === 'open') {
-    const enabled = room.toggleAudio();
+    const enabled = await room.toggleAudio();
     updateMicButton(enabled);
     updateLocalTile();
   }
   // In PTT mode, click is handled by mousedown/mouseup above
 });
 
-camBtn.addEventListener('click', () => {
+camBtn.addEventListener('click', async () => {
   if (!room) return;
   if (!room.hasMedia) return;
-  const enabled = room.toggleVideo();
+  const enabled = await room.toggleVideo();
   updateCamButton(enabled);
   updateLocalTile();
 });
@@ -837,28 +837,6 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
   }
 }
 
-function renderLocalVideo(stream: MediaStream): void {
-  document.getElementById('local-tile')?.remove();
-
-  const tile = document.createElement('div');
-  tile.className = 'video-tile local';
-  tile.id = 'local-tile';
-
-  const video = document.createElement('video');
-  video.autoplay = true;
-  video.muted = true;
-  video.playsInline = true;
-  video.srcObject = stream;
-
-  const nameTag = document.createElement('div');
-  nameTag.className = 'name-tag';
-  nameTag.textContent = `${nameInput.value.trim()} (You)`;
-
-  tile.appendChild(video);
-  tile.appendChild(nameTag);
-  videoGrid.prepend(tile);
-  updateVideoGridCount();
-}
 
 function renderRemoteTrack(participantId: string, participantName: string, track: MediaStreamTrack, _kind: 'audio' | 'video'): void {
   let tile = remoteTiles.get(participantId);
@@ -1030,16 +1008,18 @@ document.addEventListener('keydown', (e) => {
   switch (key) {
     case 'm':
       if (micMode === 'open' && room && room.hasMedia) {
-        const enabled = room.toggleAudio();
-        updateMicButton(enabled);
-        updateLocalTile();
+        room.toggleAudio().then(enabled => {
+          updateMicButton(enabled);
+          updateLocalTile();
+        });
       }
       break;
     case 'v':
       if (room && room.hasMedia) {
-        const enabled = room.toggleVideo();
-        updateCamButton(enabled);
-        updateLocalTile();
+        room.toggleVideo().then(enabled => {
+          updateCamButton(enabled);
+          updateLocalTile();
+        });
       }
       break;
     case 'escape':
