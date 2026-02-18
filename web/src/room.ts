@@ -31,6 +31,9 @@ export class RoomClient {
   private events: RoomEventHandler;
   private reconnectToken: string | null = null;
   private connectionQuality: ConnectionQuality = 'unknown';
+  // Producers known to be paused — prevents showing black tiles from race condition
+  // where ProducerPaused arrives before consumeProducer finishes
+  private pausedProducers = new Set<string>();
 
   constructor(signaling: SignalingClient, events: RoomEventHandler) {
     this.signaling = signaling;
@@ -97,6 +100,7 @@ export class RoomClient {
     this.media = null;
     this.signaling.send({ type: 'leaveRoom' });
     this.participants.clear();
+    this.pausedProducers.clear();
     this.localId = null;
     this.roomId = null;
     this.reconnectToken = null;
@@ -218,7 +222,11 @@ export class RoomClient {
     const name = participant?.name ?? participantId.slice(0, 8);
     try {
       const track = await this.media.consume(producerId);
-      this.events.onRemoteTrack(participantId, name, track, kind);
+      // Skip rendering if producer is paused (user has mic/cam off).
+      // ProducerPaused may arrive before consume finishes — the set handles this race.
+      if (!this.pausedProducers.has(producerId)) {
+        this.events.onRemoteTrack(participantId, name, track, kind);
+      }
     } catch (e) {
       console.error(`Failed to consume producer ${producerId}:`, e);
     }
@@ -237,6 +245,13 @@ export class RoomClient {
         break;
       }
       case 'participantLeft': {
+        // Clean up paused state for this participant's producers
+        const leaving = this.participants.get(msg.participantId);
+        if (leaving) {
+          for (const producerId of leaving.producers.keys()) {
+            this.pausedProducers.delete(producerId);
+          }
+        }
         this.participants.delete(msg.participantId);
         this.events.onParticipantLeft(msg.participantId);
         this.events.onParticipantsChanged(this.participants);
@@ -253,6 +268,7 @@ export class RoomClient {
         break;
       }
       case 'producerClosed': {
+        this.pausedProducers.delete(msg.producerId);
         // Find which participant owned this producer and close the consumer
         for (const [pid, p] of this.participants) {
           if (p.producers.has(msg.producerId)) {
@@ -292,6 +308,7 @@ export class RoomClient {
         break;
       }
       case 'producerPaused': {
+        this.pausedProducers.add(msg.producerId);
         for (const [pid, p] of this.participants) {
           if (p.producers.has(msg.producerId)) {
             const kind = p.producers.get(msg.producerId)!;
@@ -303,6 +320,7 @@ export class RoomClient {
         break;
       }
       case 'producerResumed': {
+        this.pausedProducers.delete(msg.producerId);
         for (const [pid, p] of this.participants) {
           if (p.producers.has(msg.producerId)) {
             const kind = p.producers.get(msg.producerId)!;
