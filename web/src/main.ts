@@ -10,6 +10,7 @@ const connectionStatus = document.getElementById('connection-status')!;
 const joinScreen = document.getElementById('join-screen')!;
 const roomScreen = document.getElementById('room-screen')!;
 const roomLabel = document.getElementById('room-label')!;
+const roomTopic = document.getElementById('room-topic')!;
 const nameInput = document.getElementById('name-input') as HTMLInputElement;
 const roomInput = document.getElementById('room-input') as HTMLInputElement;
 const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
@@ -943,11 +944,15 @@ joinBtn.addEventListener('click', async () => {
         // Re-render participants to update role badges
         if (room) renderParticipants(room.getParticipants());
       },
-      onRoomSettingsChanged: (_settings) => {
+      onRoomSettingsChanged: (settings) => {
         showToast('Room settings have been updated');
         updateRoomModeUI();
+        roomTopic.textContent = settings.topic ?? '';
+        roomTopic.hidden = !settings.topic;
       },
       onTopicChanged: (topic, changedBy) => {
+        roomTopic.textContent = topic;
+        roomTopic.hidden = !topic;
         showToast(`Topic changed by ${changedBy}: ${topic}`);
       },
       onVoiceRequested: (participantId, displayName) => {
@@ -999,6 +1004,20 @@ joinBtn.addEventListener('click', async () => {
     // Show room label in header
     roomLabel.textContent = roomId;
     roomLabel.hidden = false;
+
+    const topic = room?.roomSettings?.topic;
+    roomTopic.textContent = topic ?? '';
+    roomTopic.hidden = !topic;
+
+    roomTopic.addEventListener('click', () => {
+      const role = room?.role ?? 'user';
+      if (role !== 'owner' && role !== 'admin') return;
+      const current = room?.roomSettings?.topic ?? '';
+      const newTopic = prompt('Enter new topic:', current);
+      if (newTopic !== null && newTopic !== current) {
+        room?.setTopic(newTopic);
+      }
+    });
 
     // Update control buttons — always start muted + cam off (privacy)
     if (room.hasMedia) {
@@ -1082,6 +1101,8 @@ leaveBtn.addEventListener('click', async () => {
   lobbyScreen.hidden = true;
   joinScreen.hidden = false;
   roomLabel.hidden = true;
+  roomTopic.hidden = true;
+  roomTopic.textContent = '';
   joinBtn.textContent = 'Join Room';
   qualityIndicator.hidden = true;
   qualityIndicator.className = 'quality-dot';

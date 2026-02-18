@@ -1542,3 +1542,17 @@ header h1 {
 .settings-section:last-child { border-bottom: none; margin-bottom: 0; }
 .settings-section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary, #b0b0b0); margin-bottom: 0.5rem; }
 .setting-hint { display: block; font-size: 0.75rem; color: var(--text-secondary, #b0b0b0); margin-top: 0.25rem; }
+
+/* --- Room Topic --- */
+.room-topic {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #b0b0b0);
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.room-topic:hover {
+  color: var(--text-primary, #e0e0e0);
+}
