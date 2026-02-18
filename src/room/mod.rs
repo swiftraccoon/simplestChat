@@ -191,18 +191,32 @@ impl RoomManager {
         let router_id = self.media_server.create_router(room_id.to_string()).await?;
         self.metrics.inc_rooms_created();
 
+        // Re-check under write lock before setting up observers (handles concurrent creation)
+        {
+            let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
+            if let Some(existing) = rooms.get(room_id) {
+                return Ok(existing.clone());
+            }
+        }
+
         // Get the Router object to create observers on
         let router = self.media_server.router_manager().get_router(room_id).await
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        // Create channel for observer events
-        let (observer_tx, observer_rx) = tokio::sync::mpsc::unbounded_channel::<ObserverEvent>();
+        // Create bounded channel for observer events (observer events are ephemeral UI hints)
+        let (observer_tx, observer_rx) = tokio::sync::mpsc::channel::<ObserverEvent>(16);
 
         // Create active speaker observer (default interval=300ms)
-        let active_speaker_observer = router
+        let active_speaker_observer = match router
             .create_active_speaker_observer(ActiveSpeakerObserverOptions::default())
             .await
-            .ok();
+        {
+            Ok(obs) => Some(obs),
+            Err(e) => {
+                warn!("Failed to create active speaker observer for room {}: {}", room_id, e);
+                None
+            }
+        };
 
         // Create audio level observer
         let audio_level_observer = {
@@ -210,14 +224,20 @@ impl RoomManager {
             opts.max_entries = std::num::NonZeroU16::new(10).unwrap();
             opts.threshold = -50;
             opts.interval = 800; // ms - don't send too frequently
-            router.create_audio_level_observer(opts).await.ok()
+            match router.create_audio_level_observer(opts).await {
+                Ok(obs) => Some(obs),
+                Err(e) => {
+                    warn!("Failed to create audio level observer for room {}: {}", room_id, e);
+                    None
+                }
+            }
         };
 
-        // Set up callbacks
+        // Set up callbacks (use try_send — dropping stale events is fine)
         if let Some(obs) = &active_speaker_observer {
             let tx = observer_tx.clone();
             obs.on_dominant_speaker(move |speaker| {
-                let _ = tx.send(ObserverEvent::ActiveSpeaker {
+                let _ = tx.try_send(ObserverEvent::ActiveSpeaker {
                     producer_id: speaker.producer.id(),
                 });
             });
@@ -230,7 +250,7 @@ impl RoomManager {
                     .iter()
                     .map(|v| (v.producer.id(), v.volume))
                     .collect();
-                let _ = tx.send(ObserverEvent::AudioLevels { volumes: entries });
+                let _ = tx.try_send(ObserverEvent::AudioLevels { volumes: entries });
             });
         }
         drop(observer_tx); // Only clones in callbacks remain
@@ -239,21 +259,20 @@ impl RoomManager {
         let room_arc = {
             let mut rooms = self.rooms.write().unwrap_or_else(|e| e.into_inner());
             if let Some(existing) = rooms.get(room_id) {
-                existing.clone()
-            } else {
-                let new_room = Arc::new(TokioRwLock::new(Room::new_with_observers(
-                    room_id.to_string(),
-                    router_id,
-                    room_settings,
-                    active_speaker_observer,
-                    audio_level_observer,
-                )));
-                rooms.insert(room_id.to_string(), new_room.clone());
-                new_room
+                return Ok(existing.clone());
             }
+            let new_room = Arc::new(TokioRwLock::new(Room::new_with_observers(
+                room_id.to_string(),
+                router_id,
+                room_settings,
+                active_speaker_observer,
+                audio_level_observer,
+            )));
+            rooms.insert(room_id.to_string(), new_room.clone());
+            new_room
         };
 
-        // Spawn background task with Weak reference
+        // Spawn background task with Weak reference (only for newly created rooms)
         let weak_room = Arc::downgrade(&room_arc);
         tokio::spawn(Self::observer_broadcast_task(observer_rx, weak_room));
 
@@ -263,7 +282,7 @@ impl RoomManager {
     /// Background task that reads observer events and broadcasts to room participants.
     /// Uses a Weak reference so the task exits when the room is dropped.
     async fn observer_broadcast_task(
-        mut rx: tokio::sync::mpsc::UnboundedReceiver<ObserverEvent>,
+        mut rx: tokio::sync::mpsc::Receiver<ObserverEvent>,
         weak_room: Weak<TokioRwLock<Room>>,
     ) {
         while let Some(event) = rx.recv().await {
