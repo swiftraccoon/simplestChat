@@ -1234,8 +1234,8 @@ impl RoomManager {
         let moderator = room.participants.get(moderator_id)
             .ok_or_else(|| anyhow::anyhow!("Moderator not found"))?;
 
-        if moderator.role < roles::Role::Moderator {
-            anyhow::bail!("Insufficient permissions to unban");
+        if moderator.role < roles::Role::Admin {
+            anyhow::bail!("Insufficient permissions to unban (requires Admin+)");
         }
 
         if !room.banned_participants.remove(target_participant_id) {
