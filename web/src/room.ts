@@ -48,6 +48,7 @@ export class RoomClient {
   // Producers known to be paused — prevents showing black tiles from race condition
   // where ProducerPaused arrives before consumeProducer finishes
   private pausedProducers = new Set<string>();
+  private awaitingPostAdmission = false;
 
   constructor(signaling: SignalingClient, events: RoomEventHandler) {
     this.signaling = signaling;
@@ -139,6 +140,7 @@ export class RoomClient {
     this.signaling.send({ type: 'leaveRoom' });
     this.participants.clear();
     this.pausedProducers.clear();
+    this.awaitingPostAdmission = false;
     this.localId = null;
     this.roomId = null;
     this.reconnectToken = null;
@@ -345,6 +347,38 @@ export class RoomClient {
       for (const producer of p.producers) {
         await this.consumeProducer(p.id, producer.id, producer.kind, producer.source);
       }
+    }
+  }
+
+  private async handlePostAdmission(msg: ServerMessage): Promise<void> {
+    if (msg.type !== 'roomJoined') return;
+
+    this.localId = msg.participantId;
+    this.reconnectToken = msg.reconnectToken;
+    this.localRole = msg.yourRole ?? 'user';
+    this._roomSettings = msg.roomSettings ?? null;
+
+    for (const p of msg.participants) {
+      this.participants.set(p.id, {
+        id: p.id,
+        name: p.name,
+        role: p.role,
+        producers: new Map(p.producers.map((pr) => [pr.id, { kind: pr.kind, source: pr.source }])),
+      });
+    }
+    this.events.onParticipantsChanged(this.participants);
+
+    this.media = new MediaManager(this.signaling);
+    try {
+      await this.media.setup();
+    } catch (e) {
+      console.warn('[room] media setup failed after lobby admission:', e);
+      this.media.close();
+      this.media = null;
+    }
+
+    if (this.media) {
+      await this.consumeExistingProducers(msg.participants);
     }
   }
 
@@ -560,11 +594,18 @@ export class RoomClient {
         break;
       }
       case 'lobbyAdmitted': {
+        this.awaitingPostAdmission = true;
         this.events.onLobbyAdmitted();
         break;
       }
       case 'lobbyDenied': {
         this.events.onLobbyDenied(msg.reason);
+        break;
+      }
+      case 'roomJoined': {
+        if (!this.awaitingPostAdmission) break;
+        this.awaitingPostAdmission = false;
+        void this.handlePostAdmission(msg);
         break;
       }
       default:
