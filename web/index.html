@@ -21,9 +21,36 @@
 
     <div id="join-screen">
       <div class="join-card">
-        <div class="join-brand">SimplestChat</div>
-        <div class="join-subtitle">Video chat, simplified</div>
+        <!-- Auth bar: shown when logged out -->
+        <div id="auth-bar-guest" class="auth-bar">
+          <div class="join-brand">SimplestChat</div>
+          <div class="join-subtitle">Video chat, simplified</div>
+          <button id="sign-in-btn" class="auth-link-btn">Sign in</button>
+        </div>
+        <!-- Auth bar: shown when logged in -->
+        <div id="auth-bar-user" class="auth-bar" hidden>
+          <div class="join-brand">SimplestChat</div>
+          <div class="auth-user-info">
+            <span id="auth-display-name"></span>
+            <button id="logout-btn" class="auth-link-btn">Sign out</button>
+          </div>
+        </div>
+
+        <!-- Room browser (shown when logged in) -->
+        <div id="room-browser" hidden>
+          <div class="room-browser-header">
+            <div class="room-search-row">
+              <input type="text" id="room-search-input" placeholder="Search rooms..." autocomplete="off" />
+            </div>
+            <button id="create-room-btn" class="btn-primary" title="Create Room">+ Create Room</button>
+          </div>
+          <div id="room-list" class="room-list"></div>
+          <button id="room-load-more" class="btn-secondary" hidden>Load more</button>
+        </div>
+
+        <!-- Manual join form (always visible) -->
         <div class="join-form">
+          <div id="join-form-divider" class="divider" hidden><span>or join directly</span></div>
           <input type="text" id="name-input" placeholder="Your name" autocomplete="off" />
           <input type="text" id="room-input" placeholder="Room name" autocomplete="off" />
           <button id="join-btn" disabled>Join Room</button>
@@ -110,6 +137,112 @@
     </div>
 
     <div id="toast-container"></div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal-overlay" hidden>
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h2>Sign In</h2>
+          <button id="login-close" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="login-error" class="auth-error" hidden></div>
+          <div class="setting-group">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
+          </div>
+          <div class="setting-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" />
+          </div>
+          <button id="login-submit" class="btn-primary btn-full">Sign In</button>
+          <div class="auth-alt-actions">
+            <button id="login-passkey-btn" class="auth-link-btn">Use a passkey</button>
+            <button id="login-to-register" class="auth-link-btn">Create account</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div id="register-modal" class="modal-overlay" hidden>
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h2>Create Account</h2>
+          <button id="register-close" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="register-error" class="auth-error" hidden></div>
+          <div class="setting-group">
+            <label for="register-email">Email</label>
+            <input type="email" id="register-email" placeholder="you@example.com" autocomplete="email" />
+          </div>
+          <div class="setting-group">
+            <label for="register-name">Display Name</label>
+            <input type="text" id="register-name" placeholder="Display name" autocomplete="name" />
+          </div>
+          <div class="setting-group">
+            <label for="register-password">Password</label>
+            <input type="password" id="register-password" placeholder="Password (min 8 chars)" autocomplete="new-password" />
+          </div>
+          <div class="setting-group">
+            <label for="register-confirm">Confirm Password</label>
+            <input type="password" id="register-confirm" placeholder="Confirm password" autocomplete="new-password" />
+          </div>
+          <button id="register-submit" class="btn-primary btn-full">Create Account</button>
+          <div class="auth-alt-actions">
+            <button id="register-passkey-btn" class="auth-link-btn">Register with passkey</button>
+            <button id="register-to-login" class="auth-link-btn">Already have an account? Sign in</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Room Modal -->
+    <div id="create-room-modal" class="modal-overlay" hidden>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Create Room</h2>
+          <button id="create-room-close" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="create-room-error" class="auth-error" hidden></div>
+          <div class="setting-group">
+            <label for="cr-id">Room ID</label>
+            <input type="text" id="cr-id" placeholder="my-room (URL-safe slug)" autocomplete="off" />
+          </div>
+          <div class="setting-group">
+            <label for="cr-name">Display Name</label>
+            <input type="text" id="cr-name" placeholder="My Room" autocomplete="off" />
+          </div>
+          <div class="setting-group">
+            <label for="cr-topic">Topic (optional)</label>
+            <input type="text" id="cr-topic" placeholder="What's this room about?" autocomplete="off" />
+          </div>
+          <div class="setting-group">
+            <label for="cr-password">Password (optional)</label>
+            <input type="password" id="cr-password" placeholder="Leave blank for open access" autocomplete="off" />
+          </div>
+          <div class="setting-group setting-toggle">
+            <label for="cr-moderated">Moderated</label>
+            <input type="checkbox" id="cr-moderated" />
+          </div>
+          <div class="setting-group setting-toggle">
+            <label for="cr-lobby">Lobby Enabled</label>
+            <input type="checkbox" id="cr-lobby" />
+          </div>
+          <div class="setting-group setting-toggle">
+            <label for="cr-secret">Secret (hidden from browser)</label>
+            <input type="checkbox" id="cr-secret" />
+          </div>
+          <div class="setting-group setting-toggle">
+            <label for="cr-guests">Guests Allowed</label>
+            <input type="checkbox" id="cr-guests" checked />
+          </div>
+          <button id="create-room-submit" class="btn-primary btn-full">Create Room</button>
+        </div>
+      </div>
+    </div>
 
     <div id="settings-modal" class="modal-overlay" hidden>
       <div class="modal-content">
