@@ -254,16 +254,10 @@ joinBtn.addEventListener('click', async () => {
     roomLabel.textContent = roomId;
     roomLabel.hidden = false;
 
-    // Update control buttons
+    // Update control buttons — always start muted + cam off (privacy)
     if (room.hasMedia) {
-      // If PTT mode, mute mic immediately on join
-      if (micMode === 'ptt') {
-        room.muteAudio();
-        updateMicButton(false);
-      } else {
-        updateMicButton(room.audioEnabled);
-      }
-      updateCamButton(room.videoEnabled);
+      updateMicButton(false);
+      updateCamButton(false);
     } else {
       // Media unavailable — show disabled state
       console.warn('[ui] media not available, buttons will be non-functional');

@@ -281,6 +281,22 @@ export class MediaManager {
     }
   }
 
+  /** Explicitly pause video (idempotent) */
+  pauseVideo(): void {
+    if (this.videoProducer && !this.videoProducer.paused) {
+      this.videoProducer.pause();
+      this.signaling.send({ type: 'pauseProducer', producerId: this.videoProducer.id });
+    }
+  }
+
+  /** Explicitly unpause video (idempotent) */
+  unmuteVideo(): void {
+    if (this.videoProducer && this.videoProducer.paused) {
+      this.videoProducer.resume();
+      this.signaling.send({ type: 'resumeProducer', producerId: this.videoProducer.id });
+    }
+  }
+
   /** Toggle local video (pause/resume producer) */
   toggleVideo(): boolean {
     if (!this.videoProducer) return false;

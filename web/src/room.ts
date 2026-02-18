@@ -74,6 +74,9 @@ export class RoomClient {
     try {
       await this.media.setup();
       const localStream = await this.media.startCapture();
+      // Privacy: join muted with cam off — user must explicitly enable
+      this.media.muteAudio();
+      this.media.pauseVideo();
       this.events.onLocalStream(localStream);
     } catch (e) {
       // Media setup failed (e.g. camera denied, not HTTPS)
