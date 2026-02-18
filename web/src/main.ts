@@ -36,6 +36,11 @@ const lobbyTopic = document.getElementById('lobby-topic')!;
 const lobbyCount = document.getElementById('lobby-count')!;
 const lobbyCancelBtn = document.getElementById('lobby-cancel-btn')!;
 
+// Lobby management panel
+const lobbyTab = document.getElementById('lobby-tab') as HTMLButtonElement;
+const lobbyListEl = document.getElementById('lobby-list')!;
+const lobbyEmpty = document.getElementById('lobby-empty')!;
+
 // Auth UI
 const authBarGuest = document.getElementById('auth-bar-guest')!;
 const authBarUser = document.getElementById('auth-bar-user')!;
@@ -145,6 +150,7 @@ let room: RoomClient | null = null;
 const remoteTiles = new Map<string, HTMLDivElement>();
 let unreadCount = 0;
 let isAtBottom = true;
+const lobbyWaiters = new Map<string, string>(); // participantId → displayName
 
 // Active speaker / audio level tracking — avoids querySelectorAll on every event
 const AUDIO_LEVEL_THRESHOLD = -50; // dB; only highlight above this
@@ -289,6 +295,57 @@ function updateRoomModeUI(): void {
 
   // Show room settings button for admins+
   roomSettingsBtn.hidden = !(role === 'owner' || role === 'admin');
+
+  renderLobbyPanel();
+}
+
+function renderLobbyPanel(): void {
+  const role = room?.role ?? 'user';
+  const lobbyEnabled = room?.roomSettings?.lobbyEnabled ?? false;
+  const canAdmit = role === 'owner' || role === 'admin' || role === 'moderator';
+
+  // Show/hide lobby tab
+  lobbyTab.hidden = !(canAdmit && lobbyEnabled);
+
+  clearChildren(lobbyListEl);
+  lobbyEmpty.hidden = lobbyWaiters.size > 0;
+
+  for (const [id, name] of lobbyWaiters) {
+    const li = document.createElement('li');
+    li.className = 'lobby-entry';
+    li.dataset['participantId'] = id;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'lobby-entry-name';
+    nameSpan.textContent = name;
+
+    const actions = document.createElement('div');
+    actions.className = 'lobby-entry-actions';
+
+    const admitBtn = document.createElement('button');
+    admitBtn.className = 'lobby-admit-btn';
+    admitBtn.textContent = 'Admit';
+    admitBtn.addEventListener('click', () => {
+      room?.admitFromLobby(id);
+      lobbyWaiters.delete(id);
+      renderLobbyPanel();
+    });
+
+    const denyBtn = document.createElement('button');
+    denyBtn.className = 'lobby-deny-btn';
+    denyBtn.textContent = 'Deny';
+    denyBtn.addEventListener('click', () => {
+      room?.denyFromLobby(id);
+      lobbyWaiters.delete(id);
+      renderLobbyPanel();
+    });
+
+    actions.appendChild(admitBtn);
+    actions.appendChild(denyBtn);
+    li.appendChild(nameSpan);
+    li.appendChild(actions);
+    lobbyListEl.appendChild(li);
+  }
 }
 
 function populateRoomSettingsModal(): void {
@@ -333,6 +390,12 @@ sidebarTabs.forEach((tab) => {
     sidebarTabs.forEach((t) => t.classList.toggle('active', t === tab));
     tabContents.forEach((c) => c.classList.toggle('active', c.id === `${target}-panel`));
   });
+});
+
+// Wire lobby tab — queried at load time so hidden tabs may not be in sidebarTabs NodeList
+lobbyTab.addEventListener('click', () => {
+  document.querySelectorAll<HTMLButtonElement>('#sidebar-tabs .tab').forEach(t => t.classList.toggle('active', t === lobbyTab));
+  document.querySelectorAll<HTMLDivElement>('#sidebar-content .tab-content').forEach(c => c.classList.toggle('active', c.id === 'lobby-panel'));
 });
 
 // Set tab content with icons (these are static SVG literals from our icons module)
@@ -818,7 +881,9 @@ joinBtn.addEventListener('click', async () => {
         lobbyTopic.hidden = !topic;
         lobbyCount.textContent = `${count} participant${count !== 1 ? 's' : ''} in room`;
       },
-      onLobbyJoin: (_participantId, displayName) => {
+      onLobbyJoin: (participantId, displayName) => {
+        lobbyWaiters.set(participantId, displayName);
+        renderLobbyPanel();
         showToast(`${displayName} is waiting in the lobby`);
       },
       onLobbyAdmitted: () => {
@@ -896,6 +961,7 @@ leaveBtn.addEventListener('click', async () => {
   clearChildren(participantList);
   clearChildren(chatMessages);
   remoteTiles.clear();
+  lobbyWaiters.clear();
 
   // Remove classic users panel if present
   document.getElementById('classic-users-panel')?.remove();
@@ -1548,6 +1614,7 @@ function removeRemoteTrack(participantId: string, _producerId: string, kind: 'au
 }
 
 function handleParticipantLeft(participantId: string): void {
+  lobbyWaiters.delete(participantId);
   const tile = remoteTiles.get(participantId);
   const name = tile?.querySelector('.name-tag')?.textContent;
   if (tile) {
@@ -1565,7 +1632,8 @@ function handleParticipantLeft(participantId: string): void {
 }
 
 function handleParticipantJoined(participantId: string, participantName: string): void {
-  void participantId; // unused but part of callback signature
+  lobbyWaiters.delete(participantId);
+  renderLobbyPanel();
   appendSystemMessage(`${participantName} joined`);
 }
 

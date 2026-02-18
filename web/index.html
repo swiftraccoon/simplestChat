@@ -66,6 +66,7 @@
         <div id="sidebar-tabs">
           <button class="tab active" data-tab="chat">Chat</button>
           <button class="tab" data-tab="users">Users</button>
+          <button class="tab" data-tab="lobby" id="lobby-tab" hidden>Lobby</button>
         </div>
         <div id="sidebar-content">
           <div id="chat-panel" class="tab-content active">
@@ -80,6 +81,10 @@
           </div>
           <div id="users-panel" class="tab-content">
             <ul id="participant-list"></ul>
+          </div>
+          <div id="lobby-panel" class="tab-content">
+            <ul id="lobby-list"></ul>
+            <div id="lobby-empty" class="room-list-empty">No one waiting</div>
           </div>
         </div>
       </div>
