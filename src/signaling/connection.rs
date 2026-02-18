@@ -549,7 +549,15 @@ fn make_ice_servers(turn_config: &Option<Arc<TurnConfig>>, participant_id: &str)
 
 const MAX_ROOM_ID_LEN: usize = 128;
 const MAX_PARTICIPANT_NAME_LEN: usize = 64;
+const MAX_TARGET_ID_LEN: usize = 128;
 const MAX_CHAT_LEN: usize = 4096;
+
+fn validate_target_id(id: &str) -> anyhow::Result<()> {
+    if id.is_empty() || id.len() > MAX_TARGET_ID_LEN {
+        anyhow::bail!("Invalid target participant ID: must be 1-{MAX_TARGET_ID_LEN} characters");
+    }
+    Ok(())
+}
 
 /// Handle a single client message
 async fn handle_client_message(
@@ -826,46 +834,55 @@ async fn handle_client_message(
 
         ClientMessage::CloseCam { target_participant_id } => {
             let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_participant_id)?;
             room_manager.close_cam(room_id, participant_id, target_participant_id).await?;
         }
 
         ClientMessage::CamBan { target_participant_id, reason } => {
             let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_participant_id)?;
             room_manager.cam_ban(room_id, participant_id, target_participant_id, reason.as_deref()).await?;
         }
 
         ClientMessage::CamUnban { target_participant_id } => {
             let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_participant_id)?;
             room_manager.cam_unban(room_id, participant_id, target_participant_id).await?;
         }
 
         ClientMessage::TextMute { target_participant_id } => {
             let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_participant_id)?;
             room_manager.text_mute(room_id, participant_id, target_participant_id).await?;
         }
 
         ClientMessage::TextUnmute { target_participant_id } => {
             let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_participant_id)?;
             room_manager.text_unmute(room_id, participant_id, target_participant_id).await?;
         }
 
         ClientMessage::Kick { target_participant_id, reason } => {
             let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_participant_id)?;
             room_manager.kick_participant(room_id, participant_id, target_participant_id, reason.as_deref()).await?;
         }
 
         ClientMessage::Ban { target_participant_id, reason, duration } => {
             let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_participant_id)?;
             room_manager.ban_participant(room_id, participant_id, target_participant_id, reason.as_deref(), *duration).await?;
         }
 
-        ClientMessage::Unban { target_user_id: _ } => {
-            // Stub — no persistent ban list yet
-            anyhow::bail!("Unban not yet implemented (no persistent ban list)");
+        ClientMessage::Unban { target_user_id } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_user_id)?;
+            room_manager.unban_participant(room_id, participant_id, target_user_id).await?;
         }
 
         ClientMessage::SetRole { target_participant_id, role } => {
             let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_participant_id)?;
             let new_role = crate::room::roles::Role::from_u8(*role)
                 .ok_or_else(|| anyhow::anyhow!("Invalid role value: {}", role))?;
             room_manager.set_participant_role(room_id, participant_id, target_participant_id, new_role).await?;

@@ -15,7 +15,7 @@ use mediasoup::audio_level_observer::{AudioLevelObserver, AudioLevelObserverOpti
 use mediasoup::prelude::*;
 use mediasoup::producer::ProducerId;
 use mediasoup::rtp_observer::{RtpObserver, RtpObserverAddProducerOptions};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Weak};
 use std::sync::RwLock as StdRwLock;
 use tokio::sync::RwLock as TokioRwLock;
@@ -50,6 +50,8 @@ pub struct Room {
     audio_level_observer: Option<AudioLevelObserver>,
     /// Map producer_id -> participant_id for observer lookups
     producer_to_participant: HashMap<String, String>,
+    /// In-memory ban list — prevents banned participants from rejoining
+    banned_participants: HashSet<String>,
 }
 
 impl Room {
@@ -62,6 +64,7 @@ impl Room {
             active_speaker_observer: None,
             audio_level_observer: None,
             producer_to_participant: HashMap::new(),
+            banned_participants: HashSet::new(),
         }
     }
 
@@ -80,6 +83,7 @@ impl Room {
             active_speaker_observer,
             audio_level_observer,
             producer_to_participant: HashMap::new(),
+            banned_participants: HashSet::new(),
         }
     }
 
@@ -382,6 +386,11 @@ impl RoomManager {
     ) -> Result<Vec<ParticipantInfo>> {
         let room_lock = self.get_or_create_room(room_id).await?;
         let mut room = room_lock.write().await;
+
+        // Check ban list before allowing join
+        if room.banned_participants.contains(&participant_id) {
+            anyhow::bail!("You are banned from this room");
+        }
 
         // First participant in a room becomes Owner (no DB for now)
         let role = if room.participants.is_empty() {
@@ -1000,15 +1009,25 @@ impl RoomManager {
         target_participant_id: &str,
         _reason: Option<&str>,
     ) -> Result<()> {
-        // First close existing cam producers
+        // First close existing cam producers (permission check inside)
         self.close_cam(room_id, moderator_id, target_participant_id).await?;
 
-        // Then set the cam_banned flag
+        // Re-check permissions and set flag atomically (guards against TOCTOU role demotion)
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
-        if let Some(target) = room.participants.get_mut(target_participant_id) {
-            target.punitive.cam_banned = true;
+
+        let moderator = room.participants.get(moderator_id)
+            .ok_or_else(|| anyhow::anyhow!("Moderator not found"))?;
+        let target = room.participants.get(target_participant_id)
+            .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+
+        if !moderator.role.can_moderate(target.role) {
+            anyhow::bail!("Insufficient permissions (role changed during operation)");
         }
+
+        let target = room.participants.get_mut(target_participant_id).unwrap();
+        target.punitive.cam_banned = true;
+
         room.broadcast_all(&ServerMessage::CamBanned {
             participant_id: target_participant_id.to_string(),
         });
@@ -1153,7 +1172,7 @@ impl RoomManager {
         Ok(())
     }
 
-    /// Ban a participant from the room (kick + mark as banned, in-memory only for now)
+    /// Ban a participant from the room (kick + add to ban list, in-memory only for now)
     pub async fn ban_participant(
         &self,
         room_id: &str,
@@ -1162,7 +1181,7 @@ impl RoomManager {
         reason: Option<&str>,
         _duration: Option<u64>,
     ) -> Result<()> {
-        // Check permissions and remove under room lock
+        // Check permissions, add to ban list, and remove — all under one write lock
         {
             let room_lock = self.get_room(room_id)?;
             let mut room = room_lock.write().await;
@@ -1175,6 +1194,9 @@ impl RoomManager {
             if !moderator.role.can_moderate(target.role) {
                 anyhow::bail!("Insufficient permissions to ban this participant");
             }
+
+            // Add to ban list — prevents rejoining
+            room.banned_participants.insert(target_participant_id.to_string());
 
             // Broadcast ban to everyone (including the target) before removing
             room.broadcast_all(&ServerMessage::ParticipantBanned {
@@ -1196,6 +1218,31 @@ impl RoomManager {
         }
 
         info!("ban: {} banned {} from room {}", moderator_id, target_participant_id, room_id);
+        Ok(())
+    }
+
+    /// Remove a participant from the room's ban list
+    pub async fn unban_participant(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        target_participant_id: &str,
+    ) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+
+        let moderator = room.participants.get(moderator_id)
+            .ok_or_else(|| anyhow::anyhow!("Moderator not found"))?;
+
+        if moderator.role < roles::Role::Moderator {
+            anyhow::bail!("Insufficient permissions to unban");
+        }
+
+        if !room.banned_participants.remove(target_participant_id) {
+            anyhow::bail!("Participant is not banned");
+        }
+
+        info!("unban: {} unbanned {} from room {}", moderator_id, target_participant_id, room_id);
         Ok(())
     }
 
