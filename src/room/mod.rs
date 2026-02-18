@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 // Room module - Room state management and participant tracking
+pub mod api;
 pub mod roles;
 pub mod settings;
 
@@ -709,5 +710,14 @@ impl RoomManager {
             }
         }
         total
+    }
+
+    /// Gets participant count for a specific room (non-async, brief read lock)
+    pub fn participant_count_for_room(&self, room_id: &str) -> usize {
+        let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
+        rooms.get(room_id)
+            .and_then(|lock| lock.try_read().ok())
+            .map(|room| room.participants.len())
+            .unwrap_or(0)
     }
 }
