@@ -15,7 +15,9 @@ export type ClientMessage =
   | { type: 'resumeConsumer'; consumerId: string }
   | { type: 'pauseConsumer'; consumerId: string }
   | { type: 'closeProducer'; producerId: string }
-  | { type: 'reconnect'; participantId: string; roomId: string }
+  | { type: 'pauseProducer'; producerId: string }
+  | { type: 'resumeProducer'; producerId: string }
+  | { type: 'reconnect'; participantId: string; roomId: string; reconnectToken: string }
   | { type: 'restartIce'; transportId: string }
   | { type: 'setConsumerPreferredLayers'; consumerId: string; spatialLayer: number; temporalLayer?: number }
   | { type: 'chatMessage'; content: string };
@@ -23,7 +25,7 @@ export type ClientMessage =
 // --- Server → Client ---
 
 export type ServerMessage =
-  | { type: 'roomJoined'; participantId: string; participants: ParticipantInfo[] }
+  | { type: 'roomJoined'; participantId: string; participants: ParticipantInfo[]; reconnectToken: string }
   | { type: 'error'; message: string }
   | { type: 'routerRtpCapabilities'; rtpCapabilities: RtpCapabilitiesFinalized }
   | { type: 'transportCreated'; transportId: string; iceParameters: IceParameters; iceCandidates: IceCandidate[]; dtlsParameters: DtlsParameters; iceServers?: IceServerEntry[] }
@@ -34,6 +36,8 @@ export type ServerMessage =
   | { type: 'participantLeft'; participantId: string }
   | { type: 'newProducer'; participantId: string; producerId: string; kind: MediaKind }
   | { type: 'producerClosed'; producerId: string }
+  | { type: 'producerPaused'; producerId: string }
+  | { type: 'producerResumed'; producerId: string }
   | { type: 'consumerResumed'; consumerId: string }
   | { type: 'consumerPaused'; consumerId: string }
   | { type: 'reconnectResult'; success: boolean; participantId: string }

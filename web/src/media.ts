@@ -257,8 +257,10 @@ export class MediaManager {
     if (!this.audioProducer) return false;
     if (this.audioProducer.paused) {
       this.audioProducer.resume();
+      this.signaling.send({ type: 'resumeProducer', producerId: this.audioProducer.id });
     } else {
       this.audioProducer.pause();
+      this.signaling.send({ type: 'pauseProducer', producerId: this.audioProducer.id });
     }
     return !this.audioProducer.paused;
   }
@@ -267,6 +269,7 @@ export class MediaManager {
   muteAudio(): void {
     if (this.audioProducer && !this.audioProducer.paused) {
       this.audioProducer.pause();
+      this.signaling.send({ type: 'pauseProducer', producerId: this.audioProducer.id });
     }
   }
 
@@ -274,6 +277,7 @@ export class MediaManager {
   unmuteAudio(): void {
     if (this.audioProducer && this.audioProducer.paused) {
       this.audioProducer.resume();
+      this.signaling.send({ type: 'resumeProducer', producerId: this.audioProducer.id });
     }
   }
 
@@ -282,8 +286,10 @@ export class MediaManager {
     if (!this.videoProducer) return false;
     if (this.videoProducer.paused) {
       this.videoProducer.resume();
+      this.signaling.send({ type: 'resumeProducer', producerId: this.videoProducer.id });
     } else {
       this.videoProducer.pause();
+      this.signaling.send({ type: 'pauseProducer', producerId: this.videoProducer.id });
     }
     return !this.videoProducer.paused;
   }

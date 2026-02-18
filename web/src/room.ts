@@ -29,6 +29,7 @@ export class RoomClient {
   private roomId: string | null = null;
   private participantName: string | null = null;
   private events: RoomEventHandler;
+  private reconnectToken: string | null = null;
   private connectionQuality: ConnectionQuality = 'unknown';
 
   constructor(signaling: SignalingClient, events: RoomEventHandler) {
@@ -56,6 +57,7 @@ export class RoomClient {
     >({ type: 'joinRoom', roomId, participantName }, 'roomJoined');
 
     this.localId = response.participantId;
+    this.reconnectToken = response.reconnectToken;
 
     // Store existing participants
     for (const p of response.participants) {
@@ -94,6 +96,7 @@ export class RoomClient {
     this.participants.clear();
     this.localId = null;
     this.roomId = null;
+    this.reconnectToken = null;
     this.participantName = null;
     this.connectionQuality = 'unknown';
     this.events.onParticipantsChanged(this.participants);
@@ -155,7 +158,7 @@ export class RoomClient {
       const result = await this.signaling.request<
         Extract<ServerMessage, { type: 'reconnectResult' }>
       >(
-        { type: 'reconnect', participantId: this.localId, roomId: this.roomId },
+        { type: 'reconnect', participantId: this.localId, roomId: this.roomId, reconnectToken: this.reconnectToken! },
         'reconnectResult',
         10000,
       );
@@ -283,6 +286,24 @@ export class RoomClient {
       }
       case 'chatReceived': {
         this.events.onChatMessage(msg.participantId, msg.participantName, msg.content);
+        break;
+      }
+      case 'producerPaused': {
+        for (const p of this.participants.values()) {
+          if (p.producers.has(msg.producerId)) {
+            console.log(`[room] producer ${msg.producerId} paused (remote mute)`);
+            break;
+          }
+        }
+        break;
+      }
+      case 'producerResumed': {
+        for (const p of this.participants.values()) {
+          if (p.producers.has(msg.producerId)) {
+            console.log(`[room] producer ${msg.producerId} resumed (remote unmute)`);
+            break;
+          }
+        }
         break;
       }
       default:
