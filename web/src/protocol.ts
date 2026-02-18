@@ -139,3 +139,44 @@ export interface IceServerEntry {
   username?: string;
   credential?: string;
 }
+
+// --- Auth API types ---
+
+export interface AuthResponse {
+  token: string;
+  user: UserInfo;
+}
+
+export interface UserInfo {
+  id: string;
+  email: string;
+  display_name: string;
+}
+
+export interface AuthErrorResponse {
+  error: string;
+}
+
+export interface RoomListItem {
+  id: string;
+  display_name: string;
+  topic: string | null;
+  participant_count: number;
+  password_protected: boolean;
+  moderated: boolean;
+}
+
+export interface CreateRoomRequest {
+  id: string;
+  display_name: string;
+  password?: string;
+  require_registration?: boolean;
+  max_participants?: number;
+  max_broadcasters?: number;
+  moderated?: boolean;
+  secret?: boolean;
+  lobby_enabled?: boolean;
+  guests_allowed?: boolean;
+  guests_can_broadcast?: boolean;
+  topic?: string;
+}
