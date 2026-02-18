@@ -455,10 +455,17 @@ export class MediaManager {
     if (!this.sendTransport) return null;
     if (this.screenProducer) return null; // Already sharing
 
-    const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
-      audio: true,  // Chrome-only tab audio; gracefully absent on FF/Safari
-    });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,  // Chrome-only tab audio; gracefully absent on FF/Safari
+      });
+    } catch {
+      // User cancelled the picker or permission denied — not an error
+      console.log('[media] screen share cancelled or denied');
+      return null;
+    }
 
     const videoTrack = stream.getVideoTracks()[0];
     if (!videoTrack) return null;
@@ -490,21 +497,26 @@ export class MediaManager {
     return { videoTrack, audioTrack };
   }
 
-  /** Stop screen sharing — closes producers and notifies server */
+  /** Stop screen sharing — closes producers and notifies server.
+   *  Uses null-then-act pattern to prevent duplicate closeProducer messages
+   *  when browser "Stop sharing" and user click race. */
   stopScreenShare(): void {
-    if (this.screenProducer) {
-      const track = this.screenProducer.track;
+    const sp = this.screenProducer;
+    const sap = this.screenAudioProducer;
+    this.screenProducer = null;
+    this.screenAudioProducer = null;
+
+    if (sp) {
+      const track = sp.track;
       if (track) track.stop();
-      this.screenProducer.close();
-      this.signaling.send({ type: 'closeProducer', producerId: this.screenProducer.id });
-      this.screenProducer = null;
+      sp.close();
+      this.signaling.send({ type: 'closeProducer', producerId: sp.id });
     }
-    if (this.screenAudioProducer) {
-      const track = this.screenAudioProducer.track;
+    if (sap) {
+      const track = sap.track;
       if (track) track.stop();
-      this.screenAudioProducer.close();
-      this.signaling.send({ type: 'closeProducer', producerId: this.screenAudioProducer.id });
-      this.screenAudioProducer = null;
+      sap.close();
+      this.signaling.send({ type: 'closeProducer', producerId: sap.id });
     }
     this.onScreenShareStoppedCb?.();
   }
