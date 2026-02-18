@@ -24,7 +24,7 @@ pub struct Participant {
     pub id: String,
     pub name: String,
     pub sender: mpsc::Sender<Arc<String>>,
-    pub producers: HashMap<String, MediaKind>,
+    pub producers: HashMap<String, (MediaKind, Option<String>)>,
 }
 
 /// Room state
@@ -203,9 +203,10 @@ impl RoomManager {
             .map(|p| ParticipantInfo {
                 id: p.id.clone(),
                 name: p.name.clone(),
-                producers: p.producers.iter().map(|(id, kind)| ProducerMetadata {
+                producers: p.producers.iter().map(|(id, (kind, source))| ProducerMetadata {
                     id: id.clone(),
                     kind: *kind,
+                    source: source.clone(),
                 }).collect(),
             })
             .collect();
@@ -359,6 +360,7 @@ impl RoomManager {
         participant_id: &str,
         kind: MediaKind,
         rtp_parameters: RtpParameters,
+        source: Option<String>,
     ) -> Result<String> {
         // Create producer WITHOUT room lock
         let producer = self.media_server
@@ -378,13 +380,14 @@ impl RoomManager {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
         if let Some(participant) = room.participants.get_mut(participant_id) {
-            participant.producers.insert(producer_id.clone(), kind);
+            participant.producers.insert(producer_id.clone(), (kind, source.clone()));
         }
 
         room.broadcast_except(participant_id, &ServerMessage::NewProducer {
             participant_id: participant_id.to_string(),
             producer_id: producer_id.clone(),
             kind,
+            source,
         });
 
         info!("Created {:?} producer {} for participant {} in room {}",

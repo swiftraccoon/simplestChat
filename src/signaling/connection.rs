@@ -664,10 +664,10 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::Produce { transport_id: _, kind, rtp_parameters } => {
+        ClientMessage::Produce { transport_id: _, kind, rtp_parameters, source } => {
             if let Some(room_id) = current_room_id.as_ref() {
                 let producer_id = room_manager
-                    .create_producer(room_id, participant_id, *kind, rtp_parameters.clone())
+                    .create_producer(room_id, participant_id, *kind, rtp_parameters.clone(), source.clone())
                     .await?;
 
                 metrics.inc_producers_created();

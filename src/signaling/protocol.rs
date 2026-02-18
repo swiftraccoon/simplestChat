@@ -36,6 +36,8 @@ pub enum ClientMessage {
         transport_id: String,
         kind: MediaKind,
         rtp_parameters: RtpParameters,
+        #[serde(default)]
+        source: Option<String>,  // "camera", "microphone", "screen", "screen-audio"
     },
     /// Consume media from another participant
     #[serde(rename_all = "camelCase")]
@@ -158,6 +160,8 @@ pub enum ServerMessage {
         participant_id: String,
         producer_id: String,
         kind: MediaKind,
+        #[serde(default)]
+        source: Option<String>,
     },
     /// Producer closed by another participant
     #[serde(rename_all = "camelCase")]
@@ -233,4 +237,6 @@ pub struct ParticipantInfo {
 pub struct ProducerMetadata {
     pub id: String,
     pub kind: MediaKind,
+    #[serde(default)]
+    pub source: Option<String>,
 }

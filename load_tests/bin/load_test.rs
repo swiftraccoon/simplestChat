@@ -546,6 +546,7 @@ async fn run_client_inner(
                             participant_id: p.id.clone(),
                             producer_id: producer.id.clone(),
                             kind: producer.kind,
+                            source: producer.source.clone(),
                         });
                     }
                 }
@@ -1245,7 +1246,7 @@ async fn handle_server_message(
     max_video: usize,
 ) {
     match msg {
-        ServerMessage::NewProducer { participant_id: _, producer_id, kind } => {
+        ServerMessage::NewProducer { participant_id: _, producer_id, kind, .. } => {
             // Smart subscription: separate caps for audio and video
             let at_cap = match kind {
                 MediaKind::Audio => *audio_consumes_sent >= max_audio,
