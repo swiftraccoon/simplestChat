@@ -5,6 +5,7 @@
 pub mod protocol;
 pub mod connection;
 
+use crate::auth::webauthn::ChallengeStore;
 use crate::metrics::ServerMetrics;
 use crate::room::RoomManager;
 use crate::turn::TurnConfig;
@@ -34,6 +35,8 @@ pub struct SignalingServer {
     connection_semaphore: Arc<Semaphore>,
     db_pool: Option<PgPool>,
     jwt_secret: Option<String>,
+    webauthn: Option<Arc<webauthn_rs::prelude::Webauthn>>,
+    challenge_store: Option<Arc<ChallengeStore>>,
 }
 
 impl SignalingServer {
@@ -56,6 +59,10 @@ impl SignalingServer {
             info!("JWT_SECRET not set — authentication disabled");
         }
 
+        let (webauthn, challenge_store) = crate::auth::webauthn::init_webauthn()
+            .map(|(w, c)| (Some(Arc::new(w)), Some(c)))
+            .unwrap_or((None, None));
+
         Self {
             room_manager,
             turn_config: turn_config.map(Arc::new),
@@ -64,6 +71,8 @@ impl SignalingServer {
             connection_semaphore: Arc::new(Semaphore::new(max_connections)),
             db_pool,
             jwt_secret,
+            webauthn,
+            challenge_store,
         }
     }
 
@@ -75,6 +84,14 @@ impl SignalingServer {
         self.jwt_secret.as_deref()
     }
 
+    pub fn webauthn(&self) -> Option<&webauthn_rs::prelude::Webauthn> {
+        self.webauthn.as_deref()
+    }
+
+    pub fn challenge_store(&self) -> Option<&ChallengeStore> {
+        self.challenge_store.as_deref()
+    }
+
     /// Creates the Axum router for the signaling server
     pub fn router(self) -> Router {
         use axum::routing::post;
@@ -82,7 +99,11 @@ impl SignalingServer {
         let auth_routes = Router::new()
             .route("/register", post(crate::auth::routes::register))
             .route("/login", post(crate::auth::routes::login))
-            .route("/refresh", post(crate::auth::routes::refresh));
+            .route("/refresh", post(crate::auth::routes::refresh))
+            .route("/passkey/register/start", post(crate::auth::routes::passkey_register_start))
+            .route("/passkey/register/finish", post(crate::auth::routes::passkey_register_finish))
+            .route("/passkey/login/start", post(crate::auth::routes::passkey_login_start))
+            .route("/passkey/login/finish", post(crate::auth::routes::passkey_login_finish));
 
         Router::new()
             .route("/ws", get(ws_handler))
