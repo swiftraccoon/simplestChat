@@ -52,8 +52,12 @@ pub struct LobbyEntry {
 
 /// Result of an add_participant attempt
 pub enum JoinResult {
-    /// Successfully joined the room
-    Joined(Vec<ParticipantInfo>),
+    /// Successfully joined the room — includes participant list, role, and room settings
+    Joined {
+        participants: Vec<ParticipantInfo>,
+        role: String,
+        room_settings: Option<serde_json::Value>,
+    },
     /// Placed in the lobby awaiting moderator approval
     Lobbied,
 }
@@ -527,6 +531,8 @@ impl RoomManager {
         room.broadcast_except(&participant_id, &ServerMessage::ParticipantJoined {
             participant_id: participant_id.clone(),
             participant_name,
+            role: role.name().to_string(),
+            authenticated,
         });
 
         // Return list of existing participants
@@ -542,10 +548,19 @@ impl RoomManager {
                     kind: *kind,
                     source: source.clone(),
                 }).collect(),
+                role: p.role.name().to_string(),
             })
             .collect();
 
-        Ok(JoinResult::Joined(participants))
+        // Serialize room settings for the joining client
+        let room_settings = room.settings.as_ref()
+            .and_then(|s| serde_json::to_value(s).ok());
+
+        Ok(JoinResult::Joined {
+            participants,
+            role: role.name().to_string(),
+            room_settings,
+        })
     }
 
     /// Removes a participant from a room
@@ -1648,16 +1663,19 @@ impl RoomManager {
                     kind: *kind,
                     source: source.clone(),
                 }).collect(),
+                role: p.role.name().to_string(),
             })
             .collect();
 
-        // Insert into participants with Role::User
+        let admitted_role = roles::Role::User;
+
+        // Insert into participants
         let participant = Participant {
             id: entry.participant_id.clone(),
             name: entry.name.clone(),
             sender: entry.sender.clone(),
             producers: HashMap::new(),
-            role: roles::Role::User,
+            role: admitted_role,
             punitive: moderation::PunitiveState::default(),
         };
         room.participants.insert(entry.participant_id.clone(), participant);
@@ -1673,10 +1691,14 @@ impl RoomManager {
         } else {
             entry.reconnect_token.clone()
         };
+        let room_settings = room.settings.as_ref()
+            .and_then(|s| serde_json::to_value(s).ok());
         if let Ok(json) = serde_json::to_string(&ServerMessage::RoomJoined {
             participant_id: entry.participant_id.clone(),
             participants,
             reconnect_token,
+            your_role: admitted_role.name().to_string(),
+            room_settings,
         }) {
             let _ = entry.sender.try_send(Arc::new(json));
         }
@@ -1685,6 +1707,8 @@ impl RoomManager {
         room.broadcast_except(&entry.participant_id, &ServerMessage::ParticipantJoined {
             participant_id: entry.participant_id.clone(),
             participant_name: entry.name.clone(),
+            role: admitted_role.name().to_string(),
+            authenticated: entry.authenticated,
         });
 
         info!("admit_from_lobby: {} admitted {} to room {}",

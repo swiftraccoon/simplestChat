@@ -162,6 +162,9 @@ pub enum ServerMessage {
         participant_id: String,
         participants: Vec<ParticipantInfo>,
         reconnect_token: String,
+        your_role: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        room_settings: Option<serde_json::Value>,
     },
     /// Error response
     Error {
@@ -205,6 +208,8 @@ pub enum ServerMessage {
     ParticipantJoined {
         participant_id: String,
         participant_name: String,
+        role: String,
+        authenticated: bool,
     },
     /// Participant left the room
     #[serde(rename_all = "camelCase")]
@@ -354,6 +359,7 @@ pub struct ParticipantInfo {
     pub id: String,
     pub name: String,
     pub producers: Vec<ProducerMetadata>,
+    pub role: String,
 }
 
 /// Producer metadata

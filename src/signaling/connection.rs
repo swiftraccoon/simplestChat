@@ -621,7 +621,7 @@ async fn handle_client_message(
                 .await?;
 
             match join_result {
-                JoinResult::Joined(participants) => {
+                JoinResult::Joined { participants, role, room_settings } => {
                     *current_room_id = Some(room_id.clone());
                     *in_lobby = false;
                     metrics.inc_joins();
@@ -630,6 +630,8 @@ async fn handle_client_message(
                         participant_id: participant_id.to_string(),
                         participants,
                         reconnect_token: reconnect_token.to_string(),
+                        your_role: role,
+                        room_settings,
                     })?;
                 }
                 JoinResult::Lobbied => {
