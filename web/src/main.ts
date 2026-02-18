@@ -280,6 +280,33 @@ joinBtn.addEventListener('click', async () => {
           }
         }
       },
+      onModeration: (action, participantId, reason) => {
+        console.log(`[moderation] ${action} on ${participantId}${reason ? `: ${reason}` : ''}`);
+      },
+      onRoleChanged: (participantId, newRole) => {
+        console.log(`[moderation] role changed: ${participantId} → ${newRole}`);
+      },
+      onRoomSettingsChanged: (settings) => {
+        console.log('[room] settings changed:', settings);
+      },
+      onTopicChanged: (topic, changedBy) => {
+        console.log(`[room] topic changed by ${changedBy}: ${topic}`);
+      },
+      onVoiceRequested: (participantId, displayName) => {
+        console.log(`[room] voice requested by ${displayName} (${participantId})`);
+      },
+      onLobbyWaiting: (roomName, topic, count) => {
+        console.log(`[lobby] waiting in ${roomName} (${count} participants)${topic ? `: ${topic}` : ''}`);
+      },
+      onLobbyJoin: (participantId, displayName) => {
+        console.log(`[lobby] ${displayName} (${participantId}) joined lobby`);
+      },
+      onLobbyAdmitted: () => {
+        console.log('[lobby] admitted to room');
+      },
+      onLobbyDenied: (reason) => {
+        console.log(`[lobby] denied${reason ? `: ${reason}` : ''}`);
+      },
     });
 
     await room.join(roomId, name);

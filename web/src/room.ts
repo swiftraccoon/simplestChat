@@ -1,4 +1,4 @@
-import type { ParticipantInfo, ServerMessage } from './protocol';
+import type { ParticipantInfo, RoomSettings, ServerMessage } from './protocol';
 import { SignalingClient } from './signaling';
 import { MediaManager } from './media';
 
@@ -21,6 +21,15 @@ export type RoomEventHandler = {
   onConnectionQuality: (quality: ConnectionQuality) => void;
   onActiveSpeaker: (participantId: string) => void;
   onAudioLevels: (levels: { participantId: string; volume: number }[]) => void;
+  onModeration: (action: string, participantId: string, reason?: string) => void;
+  onRoleChanged: (participantId: string, newRole: string) => void;
+  onRoomSettingsChanged: (settings: RoomSettings) => void;
+  onTopicChanged: (topic: string, changedBy: string) => void;
+  onVoiceRequested: (participantId: string, displayName: string) => void;
+  onLobbyWaiting: (roomName: string, topic: string | undefined, count: number) => void;
+  onLobbyJoin: (participantId: string, displayName: string) => void;
+  onLobbyAdmitted: () => void;
+  onLobbyDenied: (reason?: string) => void;
 };
 
 export class RoomClient {
@@ -33,6 +42,8 @@ export class RoomClient {
   private events: RoomEventHandler;
   private reconnectToken: string | null = null;
   private connectionQuality: ConnectionQuality = 'unknown';
+  private localRole: string = 'user';
+  private _roomSettings: RoomSettings | null = null;
   // Producers known to be paused — prevents showing black tiles from race condition
   // where ProducerPaused arrives before consumeProducer finishes
   private pausedProducers = new Set<string>();
@@ -56,13 +67,39 @@ export class RoomClient {
     this.roomId = roomId;
     this.participantName = participantName;
 
-    // Join room
-    const response = await this.signaling.request<
-      Extract<ServerMessage, { type: 'roomJoined' }>
-    >({ type: 'joinRoom', roomId, participantName }, 'roomJoined');
+    // Join room — may get roomJoined or lobbyWaiting
+    const response = await new Promise<ServerMessage>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Timeout waiting for join response')), 10000);
+      // Temporarily intercept the next roomJoined or lobbyWaiting message
+      const origHandler = this.signaling['onMessage'];
+      const interceptor = (msg: ServerMessage) => {
+        if (msg.type === 'roomJoined' || msg.type === 'lobbyWaiting' || msg.type === 'error') {
+          clearTimeout(timer);
+          this.signaling['onMessage'] = origHandler;
+          if (msg.type === 'error') {
+            reject(new Error(msg.message));
+          } else {
+            resolve(msg);
+          }
+          return;
+        }
+        origHandler?.(msg);
+      };
+      this.signaling['onMessage'] = interceptor;
+      this.signaling.send({ type: 'joinRoom', roomId, participantName });
+    });
+
+    if (response.type === 'lobbyWaiting') {
+      this.events.onLobbyWaiting(response.roomName, response.topic, response.participantCount);
+      return;
+    }
+
+    if (response.type !== 'roomJoined') return;
 
     this.localId = response.participantId;
     this.reconnectToken = response.reconnectToken;
+    this.localRole = response.yourRole ?? 'user';
+    this._roomSettings = response.roomSettings ?? null;
 
     // Store existing participants
     for (const p of response.participants) {
@@ -105,6 +142,8 @@ export class RoomClient {
     this.reconnectToken = null;
     this.participantName = null;
     this.connectionQuality = 'unknown';
+    this.localRole = 'user';
+    this._roomSettings = null;
     this.events.onParticipantsChanged(this.participants);
   }
 
@@ -180,6 +219,72 @@ export class RoomClient {
 
   async switchMic(deviceId: string): Promise<void> {
     await this.media?.switchMic(deviceId);
+  }
+
+  get role(): string {
+    return this.localRole;
+  }
+
+  get roomSettings(): RoomSettings | null {
+    return this._roomSettings;
+  }
+
+  // --- Moderation methods ---
+
+  closeCam(targetId: string): void {
+    this.signaling.send({ type: 'closeCam', targetParticipantId: targetId });
+  }
+
+  camBan(targetId: string, reason?: string): void {
+    this.signaling.send({ type: 'camBan', targetParticipantId: targetId, reason });
+  }
+
+  camUnban(targetId: string): void {
+    this.signaling.send({ type: 'camUnban', targetParticipantId: targetId });
+  }
+
+  textMute(targetId: string): void {
+    this.signaling.send({ type: 'textMute', targetParticipantId: targetId });
+  }
+
+  textUnmute(targetId: string): void {
+    this.signaling.send({ type: 'textUnmute', targetParticipantId: targetId });
+  }
+
+  kick(targetId: string, reason?: string): void {
+    this.signaling.send({ type: 'kick', targetParticipantId: targetId, reason });
+  }
+
+  ban(targetId: string, reason?: string, duration?: number): void {
+    this.signaling.send({ type: 'ban', targetParticipantId: targetId, reason, duration });
+  }
+
+  unban(targetUserId: string): void {
+    this.signaling.send({ type: 'unban', targetUserId });
+  }
+
+  setRole(targetId: string, role: number): void {
+    this.signaling.send({ type: 'setRole', targetParticipantId: targetId, role });
+  }
+
+  requestVoice(): void {
+    this.signaling.send({ type: 'requestVoice' });
+  }
+
+  updateRoomSettings(settings: Partial<RoomSettings>): void {
+    this.signaling.send({ type: 'updateRoomSettings', ...settings });
+  }
+
+  setTopic(topic: string): void {
+    this.signaling.send({ type: 'setTopic', topic });
+  }
+
+  admitFromLobby(targetId: string): void {
+    this.signaling.send({ type: 'admitFromLobby', targetParticipantId: targetId });
+  }
+
+  denyFromLobby(targetId: string): void {
+    this.signaling.send({ type: 'denyFromLobby', targetParticipantId: targetId });
   }
 
   private async attemptReconnect(): Promise<void> {
@@ -365,6 +470,94 @@ export class RoomClient {
       }
       case 'audioLevels': {
         this.events.onAudioLevels(msg.levels);
+        break;
+      }
+      // Moderation broadcasts
+      case 'forceClosedProducer': {
+        // Handle same as producerClosed — remove from participants and clean up
+        this.pausedProducers.delete(msg.producerId);
+        for (const [pid, p] of this.participants) {
+          if (p.producers.has(msg.producerId)) {
+            const meta = p.producers.get(msg.producerId)!;
+            p.producers.delete(msg.producerId);
+            this.media?.closeConsumerByProducer(msg.producerId);
+            this.events.onRemoteTrackRemoved(pid, msg.producerId, meta.kind, meta.source);
+            break;
+          }
+        }
+        this.events.onParticipantsChanged(this.participants);
+        break;
+      }
+      case 'camBanned': {
+        this.events.onModeration('camBanned', msg.participantId);
+        break;
+      }
+      case 'camUnbanned': {
+        this.events.onModeration('camUnbanned', msg.participantId);
+        break;
+      }
+      case 'textMuted': {
+        this.events.onModeration('textMuted', msg.participantId);
+        break;
+      }
+      case 'textUnmuted': {
+        this.events.onModeration('textUnmuted', msg.participantId);
+        break;
+      }
+      case 'participantKicked': {
+        this.events.onModeration('kicked', msg.participantId, msg.reason);
+        // If it's us, leave the room
+        if (msg.participantId === this.localId) {
+          void this.leave();
+        }
+        break;
+      }
+      case 'participantBanned': {
+        this.events.onModeration('banned', msg.participantId, msg.reason);
+        if (msg.participantId === this.localId) {
+          void this.leave();
+        }
+        break;
+      }
+      case 'roleChanged': {
+        if (msg.participantId === this.localId) {
+          this.localRole = msg.newRole;
+        }
+        this.events.onRoleChanged(msg.participantId, msg.newRole);
+        break;
+      }
+      case 'voiceRequested': {
+        this.events.onVoiceRequested(msg.participantId, msg.displayName);
+        break;
+      }
+      // Room state
+      case 'roomSettingsChanged': {
+        this._roomSettings = msg.settings;
+        this.events.onRoomSettingsChanged(msg.settings);
+        break;
+      }
+      case 'topicChanged': {
+        if (this._roomSettings) {
+          this._roomSettings.topic = msg.topic;
+        }
+        this.events.onTopicChanged(msg.topic, msg.changedBy);
+        break;
+      }
+      // Lobby
+      case 'lobbyWaiting': {
+        this.events.onLobbyWaiting(msg.roomName, msg.topic, msg.participantCount);
+        break;
+      }
+      case 'lobbyJoin': {
+        this.events.onLobbyJoin(msg.participantId, msg.displayName);
+        break;
+      }
+      case 'lobbyAdmitted': {
+        this.events.onLobbyAdmitted();
+        break;
+      }
+      case 'lobbyDenied': {
+        this.events.onLobbyDenied(msg.reason);
         break;
       }
       default:
