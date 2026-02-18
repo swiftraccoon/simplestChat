@@ -43,6 +43,11 @@ const remoteTiles = new Map<string, HTMLDivElement>();
 let unreadCount = 0;
 let isAtBottom = true;
 
+// Active speaker / audio level tracking — avoids querySelectorAll on every event
+const AUDIO_LEVEL_THRESHOLD = -50; // dB; only highlight above this
+let currentDominantTile: HTMLDivElement | null = null;
+const currentlySpeaking = new Set<HTMLElement>(); // tiles + list items with .speaking
+
 // Push-to-Talk state
 type MicMode = 'open' | 'ptt';
 let micMode: MicMode = (localStorage.getItem('micMode') as MicMode) || 'open';
@@ -236,22 +241,42 @@ joinBtn.addEventListener('click', async () => {
       onConnectionQuality: renderConnectionQuality,
       onParticipantJoined: handleParticipantJoined,
       onActiveSpeaker: (participantId) => {
-        // Clear previous highlight
-        document.querySelectorAll('.video-tile.dominant-speaker').forEach(t => t.classList.remove('dominant-speaker'));
+        if (currentDominantTile) {
+          currentDominantTile.classList.remove('dominant-speaker');
+          currentDominantTile = null;
+        }
         const tile = remoteTiles.get(participantId);
-        if (tile) tile.classList.add('dominant-speaker');
+        if (tile) {
+          tile.classList.add('dominant-speaker');
+          currentDominantTile = tile;
+        }
       },
       onAudioLevels: (levels) => {
-        // Reset all speaking indicators
-        document.querySelectorAll('.video-tile.speaking').forEach(t => t.classList.remove('speaking'));
-        document.querySelectorAll('#participant-list li.speaking, .classic-user-list li.speaking').forEach(el => el.classList.remove('speaking'));
+        // Clear only previously-speaking elements (O(n) on speakers, not DOM)
+        for (const el of currentlySpeaking) {
+          el.classList.remove('speaking');
+        }
+        currentlySpeaking.clear();
         for (const { participantId, volume } of levels) {
-          if (volume > -50) { // Only show for audible levels
+          if (volume > AUDIO_LEVEL_THRESHOLD) {
             const tile = remoteTiles.get(participantId);
-            if (tile) tile.classList.add('speaking');
-            // Also update participant list
-            const participantEls = document.querySelectorAll(`[data-participant-id="${CSS.escape(participantId)}"]`);
-            participantEls.forEach((el) => el.classList.add('speaking'));
+            if (tile) {
+              tile.classList.add('speaking');
+              currentlySpeaking.add(tile);
+            }
+            // Also update participant list items (cached by data attribute)
+            const listItem = participantList.querySelector<HTMLElement>(`[data-participant-id="${CSS.escape(participantId)}"]`);
+            if (listItem) {
+              listItem.classList.add('speaking');
+              currentlySpeaking.add(listItem);
+            }
+            // Classic users panel
+            const classicItem = document.getElementById('classic-users-panel')
+              ?.querySelector<HTMLElement>(`[data-participant-id="${CSS.escape(participantId)}"]`);
+            if (classicItem) {
+              classicItem.classList.add('speaking');
+              currentlySpeaking.add(classicItem);
+            }
           }
         }
       },
@@ -309,6 +334,10 @@ leaveBtn.addEventListener('click', async () => {
 
   // Remove classic users panel if present
   document.getElementById('classic-users-panel')?.remove();
+
+  // Reset speaking/active-speaker tracking
+  currentDominantTile = null;
+  currentlySpeaking.clear();
 
   // Reset PTT state
   pttHeld = false;
