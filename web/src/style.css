@@ -1512,3 +1512,18 @@ header h1 {
 
 .lobby-deny-btn { background: rgba(220, 53, 69, 0.2); color: #ff6b7a; }
 .lobby-deny-btn:hover { background: rgba(220, 53, 69, 0.35); }
+
+/* --- Mod Menu Group --- */
+.mod-menu-group {
+  border-top: 1px solid var(--border, #333);
+  margin-top: 2px;
+  padding-top: 2px;
+}
+
+.mod-menu-label {
+  padding: 4px 12px;
+  font-size: 0.7rem;
+  color: var(--text-secondary, #b0b0b0);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

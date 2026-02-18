@@ -221,24 +221,29 @@ function showToast(message: string, duration = 3000): void {
 
 // --- Moderation Context Menu ---
 function showModerationMenu(targetId: string, _targetName: string, x: number, y: number): void {
-  // Remove any existing menu
   document.getElementById('mod-menu')?.remove();
 
   const role = room?.role ?? 'user';
+  const isMod = role === 'owner' || role === 'admin' || role === 'moderator';
+  const isAdmin = role === 'owner' || role === 'admin';
+
+  if (!isMod) return;
 
   const items: { label: string; action: () => void; danger?: boolean }[] = [];
 
-  if (role === 'owner' || role === 'admin' || role === 'moderator') {
-    items.push({ label: 'Close Camera', action: () => room?.closeCam(targetId) });
-    items.push({ label: 'Mute Text', action: () => room?.textMute(targetId) });
-    items.push({ label: 'Kick', action: () => room?.kick(targetId), danger: true });
-  }
-  if (role === 'owner' || role === 'admin') {
+  // Mod+ actions
+  items.push({ label: 'Close Camera', action: () => room?.closeCam(targetId) });
+  items.push({ label: 'Cam Unban', action: () => room?.camUnban(targetId) });
+  items.push({ label: 'Mute Text', action: () => room?.textMute(targetId) });
+  items.push({ label: 'Text Unmute', action: () => room?.textUnmute(targetId) });
+  items.push({ label: 'Kick', action: () => room?.kick(targetId), danger: true });
+
+  // Admin+ actions
+  if (isAdmin) {
     items.push({ label: 'Cam Ban', action: () => room?.camBan(targetId), danger: true });
     items.push({ label: 'Ban', action: () => room?.ban(targetId), danger: true });
+    items.push({ label: 'Unban', action: () => room?.unban(targetId), danger: false });
   }
-
-  if (items.length === 0) return; // Don't show empty menu for regular users
 
   const menu = document.createElement('div');
   menu.id = 'mod-menu';
@@ -252,12 +257,40 @@ function showModerationMenu(targetId: string, _targetName: string, x: number, y:
     menu.appendChild(btn);
   }
 
-  // Position the menu, ensuring it stays within the viewport
+  // Set Role sub-menu
+  const roleOptions: { label: string; value: number }[] = [];
+  if (isMod) {
+    roleOptions.push({ label: 'User', value: 1 });
+    roleOptions.push({ label: 'Member', value: 2 });
+  }
+  if (isAdmin) {
+    roleOptions.push({ label: 'Moderator', value: 3 });
+  }
+  if (role === 'owner') {
+    roleOptions.push({ label: 'Admin', value: 4 });
+  }
+
+  if (roleOptions.length > 0) {
+    const group = document.createElement('div');
+    group.className = 'mod-menu-group';
+    const label = document.createElement('div');
+    label.className = 'mod-menu-label';
+    label.textContent = 'Set Role';
+    group.appendChild(label);
+
+    for (const opt of roleOptions) {
+      const btn = document.createElement('button');
+      btn.textContent = opt.label;
+      btn.addEventListener('click', () => { room?.setRole(targetId, opt.value); menu.remove(); });
+      group.appendChild(btn);
+    }
+    menu.appendChild(group);
+  }
+
   menu.style.left = `${Math.min(x, window.innerWidth - 180)}px`;
-  menu.style.top = `${Math.min(y, window.innerHeight - items.length * 36 - 16)}px`;
+  menu.style.top = `${Math.min(y, window.innerHeight - (items.length + roleOptions.length + 2) * 36 - 16)}px`;
   document.body.appendChild(menu);
 
-  // Close on click outside
   const close = (e: MouseEvent) => {
     if (!menu.contains(e.target as Node)) {
       menu.remove();
