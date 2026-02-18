@@ -98,6 +98,16 @@ const rsLobby = document.getElementById('rs-lobby') as HTMLInputElement;
 const rsScreen = document.getElementById('rs-screen') as HTMLInputElement;
 const rsChat = document.getElementById('rs-chat') as HTMLInputElement;
 const rsGuests = document.getElementById('rs-guests') as HTMLInputElement;
+const rsGuestsBroadcast = document.getElementById('rs-guests-broadcast') as HTMLInputElement;
+const rsRequireReg = document.getElementById('rs-require-reg') as HTMLInputElement;
+const rsInviteOnly = document.getElementById('rs-invite-only') as HTMLInputElement;
+const rsSecret = document.getElementById('rs-secret') as HTMLInputElement;
+const rsVideo = document.getElementById('rs-video') as HTMLInputElement;
+const rsPtt = document.getElementById('rs-ptt') as HTMLInputElement;
+const rsMaxBroadcasters = document.getElementById('rs-max-broadcasters') as HTMLInputElement;
+const rsMaxParticipants = document.getElementById('rs-max-participants') as HTMLInputElement;
+const rsTopic = document.getElementById('rs-topic') as HTMLInputElement;
+const rsPassword = document.getElementById('rs-password') as HTMLInputElement;
 
 // Toast container
 const toastContainer = document.getElementById('toast-container')!;
@@ -411,6 +421,16 @@ function populateRoomSettingsModal(): void {
   rsScreen.checked = settings.allowScreenSharing;
   rsChat.checked = settings.allowChat;
   rsGuests.checked = settings.guestsAllowed;
+  rsGuestsBroadcast.checked = settings.guestsCanBroadcast;
+  rsRequireReg.checked = settings.requireRegistration;
+  rsInviteOnly.checked = settings.inviteOnly;
+  rsSecret.checked = settings.secret;
+  rsVideo.checked = settings.allowVideo;
+  rsPtt.checked = settings.pushToTalk;
+  rsMaxBroadcasters.value = settings.maxBroadcasters?.toString() ?? '';
+  rsMaxParticipants.value = settings.maxParticipants?.toString() ?? '';
+  rsTopic.value = settings.topic ?? '';
+  rsPassword.value = '';
 }
 
 // --- Layout Management ---
@@ -1276,24 +1296,45 @@ roomSettingsModal.addEventListener('click', (e) => {
   if (e.target === roomSettingsModal) roomSettingsModal.hidden = true;
 });
 
-rsModerated.addEventListener('change', () => {
-  room?.updateRoomSettings({ moderated: rsModerated.checked });
+// Room settings toggle handlers
+const settingsToggles: [HTMLInputElement, string][] = [
+  [rsModerated, 'moderated'],
+  [rsLobby, 'lobbyEnabled'],
+  [rsScreen, 'allowScreenSharing'],
+  [rsChat, 'allowChat'],
+  [rsGuests, 'guestsAllowed'],
+  [rsGuestsBroadcast, 'guestsCanBroadcast'],
+  [rsRequireReg, 'requireRegistration'],
+  [rsInviteOnly, 'inviteOnly'],
+  [rsSecret, 'secret'],
+  [rsVideo, 'allowVideo'],
+  [rsPtt, 'pushToTalk'],
+];
+
+for (const [el, key] of settingsToggles) {
+  el.addEventListener('change', () => {
+    room?.updateRoomSettings({ [key]: el.checked });
+  });
+}
+
+rsTopic.addEventListener('change', () => {
+  const topic = rsTopic.value.trim();
+  room?.setTopic(topic);
 });
 
-rsLobby.addEventListener('change', () => {
-  room?.updateRoomSettings({ lobbyEnabled: rsLobby.checked });
+rsPassword.addEventListener('change', () => {
+  const password = rsPassword.value;
+  room?.updateRoomSettings({ password: password || undefined } as any);
 });
 
-rsScreen.addEventListener('change', () => {
-  room?.updateRoomSettings({ allowScreenSharing: rsScreen.checked });
+rsMaxBroadcasters.addEventListener('change', () => {
+  const val = parseInt(rsMaxBroadcasters.value, 10);
+  room?.updateRoomSettings({ maxBroadcasters: isNaN(val) ? undefined : val });
 });
 
-rsChat.addEventListener('change', () => {
-  room?.updateRoomSettings({ allowChat: rsChat.checked });
-});
-
-rsGuests.addEventListener('change', () => {
-  room?.updateRoomSettings({ guestsAllowed: rsGuests.checked });
+rsMaxParticipants.addEventListener('change', () => {
+  const val = parseInt(rsMaxParticipants.value, 10);
+  room?.updateRoomSettings({ maxParticipants: isNaN(val) ? undefined : val });
 });
 
 // --- Settings Modal ---

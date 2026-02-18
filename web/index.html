@@ -117,25 +117,78 @@
           <button id="room-settings-close" class="modal-close">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="setting-group setting-toggle">
-            <label for="rs-moderated">Moderated</label>
-            <input type="checkbox" id="rs-moderated" />
+          <div class="settings-section">
+            <div class="settings-section-title">General</div>
+            <div class="setting-group">
+              <label for="rs-topic">Topic</label>
+              <input type="text" id="rs-topic" placeholder="Room topic" autocomplete="off" />
+            </div>
+            <div class="setting-group">
+              <label for="rs-password">Password</label>
+              <input type="password" id="rs-password" placeholder="Leave blank to remove" autocomplete="off" />
+              <span class="setting-hint">Set or change the room password</span>
+            </div>
           </div>
-          <div class="setting-group setting-toggle">
-            <label for="rs-lobby">Lobby Enabled</label>
-            <input type="checkbox" id="rs-lobby" />
+          <div class="settings-section">
+            <div class="settings-section-title">Access</div>
+            <div class="setting-group setting-toggle">
+              <label for="rs-guests">Guests Allowed</label>
+              <input type="checkbox" id="rs-guests" />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="rs-guests-broadcast">Guests Can Broadcast</label>
+              <input type="checkbox" id="rs-guests-broadcast" />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="rs-require-reg">Require Registration</label>
+              <input type="checkbox" id="rs-require-reg" />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="rs-invite-only">Invite Only</label>
+              <input type="checkbox" id="rs-invite-only" />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="rs-secret">Secret</label>
+              <input type="checkbox" id="rs-secret" />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="rs-lobby">Lobby Enabled</label>
+              <input type="checkbox" id="rs-lobby" />
+            </div>
           </div>
-          <div class="setting-group setting-toggle">
-            <label for="rs-screen">Allow Screen Sharing</label>
-            <input type="checkbox" id="rs-screen" />
+          <div class="settings-section">
+            <div class="settings-section-title">Media</div>
+            <div class="setting-group setting-toggle">
+              <label for="rs-video">Allow Video</label>
+              <input type="checkbox" id="rs-video" />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="rs-chat">Allow Chat</label>
+              <input type="checkbox" id="rs-chat" />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="rs-screen">Allow Screen Sharing</label>
+              <input type="checkbox" id="rs-screen" />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="rs-ptt">Push to Talk</label>
+              <input type="checkbox" id="rs-ptt" />
+            </div>
+            <div class="setting-group">
+              <label for="rs-max-broadcasters">Max Broadcasters</label>
+              <input type="number" id="rs-max-broadcasters" min="0" placeholder="0 = unlimited" />
+            </div>
+            <div class="setting-group">
+              <label for="rs-max-participants">Max Participants</label>
+              <input type="number" id="rs-max-participants" min="0" placeholder="0 = unlimited" />
+            </div>
           </div>
-          <div class="setting-group setting-toggle">
-            <label for="rs-chat">Allow Chat</label>
-            <input type="checkbox" id="rs-chat" />
-          </div>
-          <div class="setting-group setting-toggle">
-            <label for="rs-guests">Guests Allowed</label>
-            <input type="checkbox" id="rs-guests" />
+          <div class="settings-section">
+            <div class="settings-section-title">Moderation</div>
+            <div class="setting-group setting-toggle">
+              <label for="rs-moderated">Moderated</label>
+              <input type="checkbox" id="rs-moderated" />
+            </div>
           </div>
         </div>
       </div>
