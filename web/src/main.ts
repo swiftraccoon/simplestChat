@@ -890,7 +890,13 @@ joinBtn.addEventListener('click', async () => {
         }
       },
       onModeration: (action, participantId, reason) => {
-        // Find participant name
+        const isLocal = participantId === room?.localParticipantId;
+        if (isLocal && (action === 'kicked' || action === 'banned')) {
+          const reasonText = reason ? `\nReason: ${reason}` : '';
+          alert(`You have been ${action} from this room.${reasonText}`);
+          return;
+        }
+        // For other participants, show toast as before
         const participants = room?.getParticipants();
         const targetName = participants?.get(participantId)?.name ?? participantId.slice(0, 8);
         const reasonText = reason ? ` (${reason})` : '';
