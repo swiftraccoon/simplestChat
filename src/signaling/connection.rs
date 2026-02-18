@@ -940,12 +940,38 @@ async fn handle_client_message(
 
         // === Room management (stubs) ===
 
-        ClientMessage::UpdateRoomSettings { .. } => {
-            anyhow::bail!("Not yet implemented");
+        ClientMessage::UpdateRoomSettings {
+            moderated,
+            lobby_enabled,
+            guests_allowed,
+            guests_can_broadcast,
+            max_broadcasters,
+            allow_screen_sharing,
+            allow_chat,
+            push_to_talk,
+            secret,
+            password,
+        } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            room_manager.update_room_settings(
+                room_id,
+                participant_id,
+                *moderated,
+                *lobby_enabled,
+                *guests_allowed,
+                *guests_can_broadcast,
+                *max_broadcasters,
+                *allow_screen_sharing,
+                *allow_chat,
+                *push_to_talk,
+                *secret,
+                password.clone(),
+            ).await?;
         }
 
-        ClientMessage::SetTopic { .. } => {
-            anyhow::bail!("Not yet implemented");
+        ClientMessage::SetTopic { topic } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            room_manager.set_topic(room_id, participant_id, topic.clone()).await?;
         }
 
         // === Lobby ===

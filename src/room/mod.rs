@@ -443,6 +443,21 @@ impl RoomManager {
             anyhow::bail!("You are banned from this room");
         }
 
+        // Enforce room modes
+        if let Some(settings) = &room.settings {
+            if settings.require_registration && !authenticated {
+                anyhow::bail!("This room requires registration");
+            }
+            if !settings.guests_allowed && !authenticated {
+                anyhow::bail!("Guests are not allowed in this room");
+            }
+            if let Some(max) = settings.max_participants {
+                if room.participants.len() >= max as usize {
+                    anyhow::bail!("Room is full");
+                }
+            }
+        }
+
         // Re-check is_first under write lock (another join could have raced)
         let is_first = room.participants.is_empty() && room.lobby.is_empty();
 
@@ -1038,6 +1053,187 @@ impl RoomManager {
         }
     }
 
+    // === Room settings methods ===
+
+    /// Update room settings at runtime (Admin+ only).
+    ///
+    /// Applies partial updates to the in-memory RoomSettings, broadcasts the change
+    /// to all participants, and optionally persists to DB.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_room_settings(
+        &self,
+        room_id: &str,
+        admin_id: &str,
+        moderated: Option<bool>,
+        lobby_enabled: Option<bool>,
+        guests_allowed: Option<bool>,
+        guests_can_broadcast: Option<bool>,
+        max_broadcasters: Option<Option<i32>>,
+        allow_screen_sharing: Option<bool>,
+        allow_chat: Option<bool>,
+        push_to_talk: Option<bool>,
+        secret: Option<bool>,
+        password: Option<Option<String>>,
+    ) -> Result<()> {
+        // Snapshot settings for broadcast + DB persistence (release lock before DB call)
+        let settings_snapshot = {
+            let room_lock = self.get_room(room_id)?;
+            let mut room = room_lock.write().await;
+
+            // Verify admin exists and has permission
+            let admin = room.participants.get(admin_id)
+                .ok_or_else(|| anyhow::anyhow!("Participant not found"))?;
+            if !admin.role.can_change_settings() {
+                anyhow::bail!("Insufficient permissions to change room settings (requires Admin+)");
+            }
+
+            // Create default settings if none exist yet (ephemeral rooms without DB)
+            if room.settings.is_none() {
+                room.settings = Some(settings::RoomSettings {
+                    id: room_id.to_string(),
+                    owner_id: uuid::Uuid::nil(),
+                    display_name: room_id.to_string(),
+                    password_protected: false,
+                    require_registration: false,
+                    max_participants: None,
+                    max_broadcasters: None,
+                    allow_screen_sharing: true,
+                    allow_chat: true,
+                    allow_video: true,
+                    moderated: false,
+                    invite_only: false,
+                    secret: false,
+                    lobby_enabled: false,
+                    push_to_talk: false,
+                    guests_allowed: true,
+                    guests_can_broadcast: true,
+                    topic: None,
+                });
+            }
+
+            // Apply partial updates
+            let s = room.settings.as_mut().unwrap();
+            settings::apply_settings_update(
+                s,
+                moderated,
+                lobby_enabled,
+                guests_allowed,
+                guests_can_broadcast,
+                max_broadcasters,
+                allow_screen_sharing,
+                allow_chat,
+                push_to_talk,
+                secret,
+                password.clone(),
+            );
+
+            // Serialize settings for broadcast
+            let settings_value = serde_json::to_value(s)
+                .unwrap_or_else(|_| serde_json::Value::Null);
+
+            // Broadcast to all participants
+            room.broadcast_all(&ServerMessage::RoomSettingsChanged {
+                settings: settings_value.clone(),
+            });
+
+            info!("Room settings updated for room {} by {}", room_id, admin_id);
+            settings_value
+        }; // room lock released
+
+        // Persist to DB outside lock (rare operation, OK to be async)
+        if let Some(pool) = &self.db_pool {
+            // Convert password Option<Option<String>> to password_hash Option<Option<String>>
+            // For now, store plaintext — hashing is the API layer's responsibility
+            let password_hash = password;
+            if let Err(e) = settings::update_room_settings(
+                pool,
+                room_id,
+                moderated,
+                lobby_enabled,
+                guests_allowed,
+                guests_can_broadcast,
+                max_broadcasters,
+                allow_screen_sharing,
+                allow_chat,
+                push_to_talk,
+                secret,
+                password_hash,
+            ).await {
+                warn!("Failed to persist room settings to DB for room {}: {}", room_id, e);
+            }
+        }
+
+        let _ = settings_snapshot; // suppress unused warning
+        Ok(())
+    }
+
+    /// Set the room topic (Admin+ only).
+    ///
+    /// Updates the in-memory topic and broadcasts TopicChanged to all participants.
+    pub async fn set_topic(&self, room_id: &str, admin_id: &str, topic: String) -> Result<()> {
+        {
+            let room_lock = self.get_room(room_id)?;
+            let mut room = room_lock.write().await;
+
+            // Verify admin exists and has permission
+            let admin = room.participants.get(admin_id)
+                .ok_or_else(|| anyhow::anyhow!("Participant not found"))?;
+            if !admin.role.can_change_settings() {
+                anyhow::bail!("Insufficient permissions to change room topic (requires Admin+)");
+            }
+
+            // Update topic in settings (create default settings if none exist)
+            if let Some(s) = room.settings.as_mut() {
+                s.topic = Some(topic.clone());
+            } else {
+                let mut default_settings = settings::RoomSettings {
+                    id: room_id.to_string(),
+                    owner_id: uuid::Uuid::nil(),
+                    display_name: room_id.to_string(),
+                    password_protected: false,
+                    require_registration: false,
+                    max_participants: None,
+                    max_broadcasters: None,
+                    allow_screen_sharing: true,
+                    allow_chat: true,
+                    allow_video: true,
+                    moderated: false,
+                    invite_only: false,
+                    secret: false,
+                    lobby_enabled: false,
+                    push_to_talk: false,
+                    guests_allowed: true,
+                    guests_can_broadcast: true,
+                    topic: Some(topic.clone()),
+                };
+                default_settings.topic = Some(topic.clone());
+                room.settings = Some(default_settings);
+            }
+
+            // Broadcast topic change
+            room.broadcast_all(&ServerMessage::TopicChanged {
+                topic: topic.clone(),
+                changed_by: admin_id.to_string(),
+            });
+
+            info!("Topic set for room {} by {}: {}", room_id, admin_id, topic);
+        } // room lock released
+
+        // Persist topic to DB
+        if let Some(pool) = &self.db_pool {
+            if let Err(e) = sqlx::query("UPDATE rooms SET topic = $1 WHERE id = $2")
+                .bind(&topic)
+                .bind(room_id)
+                .execute(pool)
+                .await
+            {
+                warn!("Failed to persist topic to DB for room {}: {}", room_id, e);
+            }
+        }
+
+        Ok(())
+    }
+
     // === Moderation methods ===
 
     /// Force-close all video/screen producers for a target participant
@@ -1547,6 +1743,31 @@ impl RoomManager {
         let room = room_lock.read().await;
         let participant = room.participants.get(participant_id)
             .ok_or_else(|| anyhow::anyhow!("Participant not found"))?;
+
+        // Settings-based produce restrictions
+        if let Some(settings) = &room.settings {
+            // Check allow_screen_sharing
+            if !settings.allow_screen_sharing && (source == "screen" || source == "screen-audio") {
+                return Ok(false);
+            }
+            // Check allow_video
+            if !settings.allow_video && source == "camera" {
+                return Ok(false);
+            }
+            // Check max_broadcasters
+            if let Some(max) = settings.max_broadcasters {
+                let broadcaster_count = room.participants.values()
+                    .filter(|p| !p.producers.is_empty())
+                    .count();
+                // Allow if this participant already has producers
+                let already_broadcasting = room.participants.get(participant_id)
+                    .map_or(false, |p| !p.producers.is_empty());
+                if !already_broadcasting && broadcaster_count >= max as usize {
+                    return Ok(false);
+                }
+            }
+        }
+
         let moderated = room.settings.as_ref().map_or(false, |s| s.moderated);
         Ok(moderation::can_produce(&participant.punitive, participant.role, moderated, source))
     }

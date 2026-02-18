@@ -148,6 +148,99 @@ pub async fn create_room(
     })
 }
 
+/// Apply partial updates to an in-memory RoomSettings struct.
+/// Only fields that are `Some` are updated; `None` fields are left unchanged.
+pub fn apply_settings_update(
+    settings: &mut RoomSettings,
+    moderated: Option<bool>,
+    lobby_enabled: Option<bool>,
+    guests_allowed: Option<bool>,
+    guests_can_broadcast: Option<bool>,
+    max_broadcasters: Option<Option<i32>>,
+    allow_screen_sharing: Option<bool>,
+    allow_chat: Option<bool>,
+    push_to_talk: Option<bool>,
+    secret: Option<bool>,
+    password: Option<Option<String>>,
+) {
+    if let Some(v) = moderated { settings.moderated = v; }
+    if let Some(v) = lobby_enabled { settings.lobby_enabled = v; }
+    if let Some(v) = guests_allowed { settings.guests_allowed = v; }
+    if let Some(v) = guests_can_broadcast { settings.guests_can_broadcast = v; }
+    if let Some(v) = max_broadcasters { settings.max_broadcasters = v; }
+    if let Some(v) = allow_screen_sharing { settings.allow_screen_sharing = v; }
+    if let Some(v) = allow_chat { settings.allow_chat = v; }
+    if let Some(v) = push_to_talk { settings.push_to_talk = v; }
+    if let Some(v) = secret { settings.secret = v; }
+    if let Some(v) = password {
+        settings.password_protected = v.is_some();
+        // Don't store actual password in RoomSettings — it goes to DB only
+    }
+}
+
+/// Persist partial room settings updates to the database.
+/// Only updates columns whose corresponding parameter is `Some`.
+pub async fn update_room_settings(
+    pool: &PgPool,
+    room_id: &str,
+    moderated: Option<bool>,
+    lobby_enabled: Option<bool>,
+    guests_allowed: Option<bool>,
+    guests_can_broadcast: Option<bool>,
+    max_broadcasters: Option<Option<i32>>,
+    allow_screen_sharing: Option<bool>,
+    allow_chat: Option<bool>,
+    push_to_talk: Option<bool>,
+    secret: Option<bool>,
+    password_hash: Option<Option<String>>,
+) -> Result<(), sqlx::Error> {
+    // Build a dynamic SET clause for only the provided fields
+    let mut set_parts: Vec<String> = Vec::new();
+    let mut param_idx: usize = 2; // $1 is room_id
+
+    macro_rules! maybe_add {
+        ($opt:expr, $col:expr) => {
+            if $opt.is_some() {
+                set_parts.push(format!("{} = ${}", $col, param_idx));
+                param_idx += 1;
+            }
+        };
+    }
+
+    maybe_add!(moderated, "moderated");
+    maybe_add!(lobby_enabled, "lobby_enabled");
+    maybe_add!(guests_allowed, "guests_allowed");
+    maybe_add!(guests_can_broadcast, "guests_can_broadcast");
+    maybe_add!(max_broadcasters, "max_broadcasters");
+    maybe_add!(allow_screen_sharing, "allow_screen_sharing");
+    maybe_add!(allow_chat, "allow_chat");
+    maybe_add!(push_to_talk, "push_to_talk");
+    maybe_add!(secret, "secret");
+    maybe_add!(password_hash, "password_hash");
+
+    if set_parts.is_empty() {
+        return Ok(()); // Nothing to update
+    }
+
+    let sql = format!("UPDATE rooms SET {} WHERE id = $1", set_parts.join(", "));
+    let mut query = sqlx::query(&sql).bind(room_id);
+
+    // Bind values in the same order as the SET parts
+    if let Some(v) = moderated { query = query.bind(v); }
+    if let Some(v) = lobby_enabled { query = query.bind(v); }
+    if let Some(v) = guests_allowed { query = query.bind(v); }
+    if let Some(v) = guests_can_broadcast { query = query.bind(v); }
+    if let Some(v) = max_broadcasters { query = query.bind(v); }
+    if let Some(v) = allow_screen_sharing { query = query.bind(v); }
+    if let Some(v) = allow_chat { query = query.bind(v); }
+    if let Some(v) = push_to_talk { query = query.bind(v); }
+    if let Some(v) = secret { query = query.bind(v); }
+    if let Some(v) = password_hash { query = query.bind(v); }
+
+    query.execute(pool).await?;
+    Ok(())
+}
+
 pub async fn delete_room(pool: &PgPool, room_id: &str) -> Result<bool, sqlx::Error> {
     let result = sqlx::query("DELETE FROM rooms WHERE id = $1")
         .bind(room_id)
