@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 // Room module - Room state management and participant tracking
+pub mod roles;
 pub mod settings;
 
 use crate::media::{MediaServer, MediaConfig};
