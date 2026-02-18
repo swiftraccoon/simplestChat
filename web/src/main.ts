@@ -219,6 +219,28 @@ function showToast(message: string, duration = 3000): void {
   setTimeout(() => toast.remove(), duration);
 }
 
+function showActionToast(message: string, actions: { label: string; action: () => void }[], duration = 10000): void {
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-action';
+
+  const msg = document.createElement('div');
+  msg.textContent = message;
+  toast.appendChild(msg);
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'toast-actions';
+  for (const a of actions) {
+    const btn = document.createElement('button');
+    btn.textContent = a.label;
+    btn.addEventListener('click', () => { a.action(); toast.remove(); });
+    btnRow.appendChild(btn);
+  }
+  toast.appendChild(btnRow);
+
+  toastContainer.appendChild(toast);
+  setTimeout(() => toast.remove(), duration);
+}
+
 // --- Moderation Context Menu ---
 function showModerationMenu(targetId: string, _targetName: string, x: number, y: number): void {
   document.getElementById('mod-menu')?.remove();
@@ -902,8 +924,17 @@ joinBtn.addEventListener('click', async () => {
       onTopicChanged: (topic, changedBy) => {
         showToast(`Topic changed by ${changedBy}: ${topic}`);
       },
-      onVoiceRequested: (_participantId, displayName) => {
-        showToast(`${displayName} is requesting voice`);
+      onVoiceRequested: (participantId, displayName) => {
+        const role = room?.role ?? 'user';
+        const canGrant = role === 'owner' || role === 'admin' || role === 'moderator';
+        if (canGrant) {
+          showActionToast(`${displayName} is requesting voice`, [
+            { label: 'Grant', action: () => room?.setRole(participantId, 2) },
+            { label: 'Dismiss', action: () => {} },
+          ]);
+        } else {
+          showToast(`${displayName} is requesting voice`);
+        }
       },
       onLobbyWaiting: (roomName, topic, count) => {
         joinScreen.hidden = true;

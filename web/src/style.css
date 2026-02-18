@@ -1527,3 +1527,12 @@ header h1 {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
+/* --- Action Toast --- */
+.toast-action { display: flex; flex-direction: column; gap: 0.5rem; }
+.toast-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+.toast-actions button {
+  padding: 0.25rem 0.75rem; border-radius: 4px; border: none; cursor: pointer;
+  font-size: 0.8rem; background: rgba(108, 159, 255, 0.2); color: var(--accent, #6c9fff);
+}
+.toast-actions button:hover { background: rgba(108, 159, 255, 0.35); }
