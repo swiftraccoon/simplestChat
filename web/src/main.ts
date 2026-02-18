@@ -365,6 +365,26 @@ function updateRoomModeUI(): void {
   renderLobbyPanel();
 }
 
+function applyRoomSettingsToUI(): void {
+  const settings = room?.roomSettings;
+  if (!settings) return;
+
+  // Chat: disable input when chat is off
+  chatInput.disabled = !settings.allowChat;
+  chatInput.placeholder = settings.allowChat ? 'Type a message...' : 'Chat is disabled';
+  chatSendBtn.classList.toggle('disabled', !settings.allowChat);
+
+  // Screen sharing: hide button when disabled
+  if (!settings.allowScreenSharing) {
+    screenBtn.hidden = true;
+  } else {
+    screenBtn.hidden = !navigator.mediaDevices?.getDisplayMedia;
+  }
+
+  // Video: hide cam button when disabled
+  camBtn.hidden = !settings.allowVideo;
+}
+
 function renderLobbyPanel(): void {
   const role = room?.role ?? 'user';
   const lobbyEnabled = room?.roomSettings?.lobbyEnabled ?? false;
@@ -947,6 +967,7 @@ joinBtn.addEventListener('click', async () => {
       onRoomSettingsChanged: (settings) => {
         showToast('Room settings have been updated');
         updateRoomModeUI();
+        applyRoomSettingsToUI();
         roomTopic.textContent = settings.topic ?? '';
         roomTopic.hidden = !settings.topic;
       },
@@ -1041,6 +1062,7 @@ joinBtn.addEventListener('click', async () => {
 
     qualityIndicator.hidden = false;
     updateRoomModeUI();
+    applyRoomSettingsToUI();
   } catch (e) {
     console.error('Failed to join:', e);
     alert(`Failed to join: ${e instanceof Error ? e.message : String(e)}`);
@@ -1096,6 +1118,13 @@ leaveBtn.addEventListener('click', async () => {
   setButtonContent(screenBtn, icons.screenShare(), 'Screen (S)');
   // Remove PTT label if present
   micBtn.querySelector('.ptt-label')?.remove();
+
+  // Reset settings-driven UI
+  chatInput.disabled = false;
+  chatInput.placeholder = 'Type a message...';
+  chatSendBtn.classList.remove('disabled');
+  screenBtn.hidden = !navigator.mediaDevices?.getDisplayMedia;
+  camBtn.hidden = false;
 
   roomScreen.hidden = true;
   lobbyScreen.hidden = true;
