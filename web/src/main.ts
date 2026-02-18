@@ -2,6 +2,8 @@ import './style.css';
 import { SignalingClient } from './signaling';
 import { RoomClient, type Participant, type ConnectionQuality } from './room';
 import * as icons from './icons';
+import { AuthManager } from './auth';
+import type { RoomListItem, CreateRoomRequest } from './protocol';
 
 // --- DOM refs ---
 const connectionStatus = document.getElementById('connection-status')!;
@@ -34,6 +36,55 @@ const lobbyTopic = document.getElementById('lobby-topic')!;
 const lobbyCount = document.getElementById('lobby-count')!;
 const lobbyCancelBtn = document.getElementById('lobby-cancel-btn')!;
 
+// Auth UI
+const authBarGuest = document.getElementById('auth-bar-guest')!;
+const authBarUser = document.getElementById('auth-bar-user')!;
+const authDisplayName = document.getElementById('auth-display-name')!;
+const signInBtn = document.getElementById('sign-in-btn')!;
+const logoutBtn = document.getElementById('logout-btn')!;
+const roomBrowser = document.getElementById('room-browser')!;
+const roomSearchInput = document.getElementById('room-search-input') as HTMLInputElement;
+const roomList = document.getElementById('room-list')!;
+const roomLoadMore = document.getElementById('room-load-more') as HTMLButtonElement;
+const createRoomBtn = document.getElementById('create-room-btn')!;
+const joinFormDivider = document.getElementById('join-form-divider')!;
+
+// Login modal
+const loginModal = document.getElementById('login-modal')!;
+const loginClose = document.getElementById('login-close')!;
+const loginEmail = document.getElementById('login-email') as HTMLInputElement;
+const loginPassword = document.getElementById('login-password') as HTMLInputElement;
+const loginSubmit = document.getElementById('login-submit') as HTMLButtonElement;
+const loginError = document.getElementById('login-error')!;
+const loginPasskeyBtn = document.getElementById('login-passkey-btn')!;
+const loginToRegister = document.getElementById('login-to-register')!;
+
+// Register modal
+const registerModal = document.getElementById('register-modal')!;
+const registerClose = document.getElementById('register-close')!;
+const registerEmail = document.getElementById('register-email') as HTMLInputElement;
+const registerName = document.getElementById('register-name') as HTMLInputElement;
+const registerPassword = document.getElementById('register-password') as HTMLInputElement;
+const registerConfirm = document.getElementById('register-confirm') as HTMLInputElement;
+const registerSubmit = document.getElementById('register-submit') as HTMLButtonElement;
+const registerError = document.getElementById('register-error')!;
+const registerPasskeyBtn = document.getElementById('register-passkey-btn')!;
+const registerToLogin = document.getElementById('register-to-login')!;
+
+// Create room modal
+const createRoomModal = document.getElementById('create-room-modal')!;
+const createRoomClose = document.getElementById('create-room-close')!;
+const crId = document.getElementById('cr-id') as HTMLInputElement;
+const crName = document.getElementById('cr-name') as HTMLInputElement;
+const crTopic = document.getElementById('cr-topic') as HTMLInputElement;
+const crPassword = document.getElementById('cr-password') as HTMLInputElement;
+const crModerated = document.getElementById('cr-moderated') as HTMLInputElement;
+const crLobby = document.getElementById('cr-lobby') as HTMLInputElement;
+const crSecret = document.getElementById('cr-secret') as HTMLInputElement;
+const crGuests = document.getElementById('cr-guests') as HTMLInputElement;
+const createRoomSubmit = document.getElementById('create-room-submit') as HTMLButtonElement;
+const createRoomError = document.getElementById('create-room-error')!;
+
 // Room settings modal
 const roomSettingsModal = document.getElementById('room-settings-modal')!;
 const roomSettingsClose = document.getElementById('room-settings-close')!;
@@ -57,6 +108,37 @@ const layoutSelect = document.getElementById('layout-select') as HTMLSelectEleme
 const micModeSelect = document.getElementById('mic-mode-select') as HTMLSelectElement;
 const cameraSelect = document.getElementById('camera-select') as HTMLSelectElement;
 const micSelect = document.getElementById('mic-select') as HTMLSelectElement;
+
+// --- Auth ---
+const auth = new AuthManager();
+
+function updateAuthUI(): void {
+  if (auth.isLoggedIn) {
+    authBarGuest.hidden = true;
+    authBarUser.hidden = false;
+    authDisplayName.textContent = auth.displayName ?? '';
+    roomBrowser.hidden = false;
+    joinFormDivider.hidden = false;
+    // Pre-fill name input with auth display name
+    if (auth.displayName && !nameInput.value.trim()) {
+      nameInput.value = auth.displayName;
+    }
+    loadRoomBrowser();
+  } else {
+    authBarGuest.hidden = false;
+    authBarUser.hidden = true;
+    roomBrowser.hidden = true;
+    joinFormDivider.hidden = true;
+  }
+  updateJoinBtn();
+}
+
+auth.setOnChange((loggedIn) => {
+  updateAuthUI();
+  // Reconnect WS with new/cleared token
+  signaling.disconnect();
+  signaling.connect(loggedIn ? (auth.jwt ?? undefined) : undefined);
+});
 
 // --- State ---
 let room: RoomClient | null = null;
@@ -326,7 +408,11 @@ signaling.setOnStatusChange((status) => {
   joinBtn.disabled = status !== 'connected' || !nameInput.value.trim() || !roomInput.value.trim();
 });
 
-signaling.connect();
+// Try to restore auth session from cookie, then connect WS
+auth.tryRestore().then(() => {
+  updateAuthUI();
+  signaling.connect(auth.jwt ?? undefined);
+});
 
 // --- Join form ---
 function updateJoinBtn(): void {
@@ -338,6 +424,291 @@ roomInput.addEventListener('input', updateJoinBtn);
 
 nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
 roomInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
+
+// --- Room Browser ---
+let roomBrowserPage = 1;
+let roomBrowserQuery = '';
+let roomBrowserHasMore = false;
+
+async function loadRoomBrowser(append = false): Promise<void> {
+  if (!append) {
+    roomBrowserPage = 1;
+    clearChildren(roomList);
+  }
+  try {
+    const params = new URLSearchParams({ page: String(roomBrowserPage), limit: '20' });
+    if (roomBrowserQuery) params.set('q', roomBrowserQuery);
+    const resp = await fetch(`/api/rooms?${params}`, {
+      headers: auth.jwt ? { Authorization: `Bearer ${auth.jwt}` } : {},
+    });
+    if (!resp.ok) return;
+    const rooms: RoomListItem[] = await resp.json();
+    roomBrowserHasMore = rooms.length === 20;
+    roomLoadMore.hidden = !roomBrowserHasMore;
+
+    if (rooms.length === 0 && !append) {
+      const empty = document.createElement('div');
+      empty.className = 'room-list-empty';
+      empty.textContent = roomBrowserQuery ? 'No rooms match your search' : 'No rooms yet — create one!';
+      roomList.appendChild(empty);
+      return;
+    }
+
+    for (const r of rooms) {
+      const card = document.createElement('div');
+      card.className = 'room-card';
+      card.addEventListener('click', () => {
+        roomInput.value = r.id;
+        if (auth.displayName && !nameInput.value.trim()) {
+          nameInput.value = auth.displayName;
+        }
+        updateJoinBtn();
+        joinBtn.focus();
+      });
+
+      const info = document.createElement('div');
+      info.className = 'room-card-info';
+
+      const nameRow = document.createElement('div');
+      nameRow.className = 'room-card-name';
+      const nameText = document.createElement('span');
+      nameText.textContent = r.display_name;
+      nameRow.appendChild(nameText);
+      if (r.password_protected) {
+        const lockSpan = document.createElement('span');
+        lockSpan.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>');
+        nameRow.appendChild(lockSpan);
+      }
+      info.appendChild(nameRow);
+
+      if (r.topic) {
+        const topic = document.createElement('div');
+        topic.className = 'room-card-topic';
+        topic.textContent = r.topic;
+        info.appendChild(topic);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'room-card-meta';
+      const count = document.createElement('span');
+      count.textContent = `${r.participant_count} online`;
+      meta.appendChild(count);
+      if (r.moderated) {
+        const badge = document.createElement('span');
+        badge.className = 'room-card-badge';
+        badge.textContent = 'Moderated';
+        meta.appendChild(badge);
+      }
+
+      card.appendChild(info);
+      card.appendChild(meta);
+      roomList.appendChild(card);
+    }
+  } catch (e) {
+    console.error('Failed to load rooms:', e);
+  }
+}
+
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+roomSearchInput.addEventListener('input', () => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    roomBrowserQuery = roomSearchInput.value.trim();
+    loadRoomBrowser();
+  }, 300);
+});
+
+roomLoadMore.addEventListener('click', () => {
+  roomBrowserPage++;
+  loadRoomBrowser(true);
+});
+
+// --- Auth Events ---
+signInBtn.addEventListener('click', () => { loginModal.hidden = false; });
+logoutBtn.addEventListener('click', () => { auth.logout(); });
+
+// Login
+loginClose.addEventListener('click', () => { loginModal.hidden = true; });
+loginModal.addEventListener('click', (e) => { if (e.target === loginModal) loginModal.hidden = true; });
+
+loginSubmit.addEventListener('click', async () => {
+  loginError.hidden = true;
+  loginSubmit.disabled = true;
+  loginSubmit.textContent = 'Signing in...';
+  try {
+    await auth.login(loginEmail.value.trim(), loginPassword.value);
+    loginModal.hidden = true;
+    loginEmail.value = '';
+    loginPassword.value = '';
+  } catch (e) {
+    loginError.textContent = e instanceof Error ? e.message : 'Login failed';
+    loginError.hidden = false;
+  } finally {
+    loginSubmit.disabled = false;
+    loginSubmit.textContent = 'Sign In';
+  }
+});
+
+loginEmail.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginPassword.focus(); });
+loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginSubmit.click(); });
+
+loginPasskeyBtn.addEventListener('click', async () => {
+  const email = loginEmail.value.trim();
+  if (!email) {
+    loginError.textContent = 'Enter your email first';
+    loginError.hidden = false;
+    return;
+  }
+  loginError.hidden = true;
+  try {
+    const options = await auth.passkeyLoginStart(email);
+    const credential = await navigator.credentials.get(options);
+    if (!credential) throw new Error('Passkey cancelled');
+    await auth.passkeyLoginFinish(email, credential);
+    loginModal.hidden = true;
+    loginEmail.value = '';
+    loginPassword.value = '';
+  } catch (e) {
+    loginError.textContent = e instanceof Error ? e.message : 'Passkey login failed';
+    loginError.hidden = false;
+  }
+});
+
+loginToRegister.addEventListener('click', () => {
+  loginModal.hidden = true;
+  registerModal.hidden = false;
+});
+
+// Register
+registerClose.addEventListener('click', () => { registerModal.hidden = true; });
+registerModal.addEventListener('click', (e) => { if (e.target === registerModal) registerModal.hidden = true; });
+
+registerSubmit.addEventListener('click', async () => {
+  registerError.hidden = true;
+  if (registerPassword.value !== registerConfirm.value) {
+    registerError.textContent = 'Passwords do not match';
+    registerError.hidden = false;
+    return;
+  }
+  if (registerPassword.value.length < 8) {
+    registerError.textContent = 'Password must be at least 8 characters';
+    registerError.hidden = false;
+    return;
+  }
+  registerSubmit.disabled = true;
+  registerSubmit.textContent = 'Creating account...';
+  try {
+    await auth.register(registerEmail.value.trim(), registerName.value.trim(), registerPassword.value);
+    registerModal.hidden = true;
+    registerEmail.value = '';
+    registerName.value = '';
+    registerPassword.value = '';
+    registerConfirm.value = '';
+  } catch (e) {
+    registerError.textContent = e instanceof Error ? e.message : 'Registration failed';
+    registerError.hidden = false;
+  } finally {
+    registerSubmit.disabled = false;
+    registerSubmit.textContent = 'Create Account';
+  }
+});
+
+registerPasskeyBtn.addEventListener('click', async () => {
+  const email = registerEmail.value.trim();
+  const displayName = registerName.value.trim();
+  if (!email || !displayName) {
+    registerError.textContent = 'Fill in email and display name first';
+    registerError.hidden = false;
+    return;
+  }
+  registerError.hidden = true;
+  try {
+    const options = await auth.passkeyRegisterStart(email, displayName);
+    const credential = await navigator.credentials.create(options);
+    if (!credential) throw new Error('Passkey registration cancelled');
+    await auth.passkeyRegisterFinish(email, credential);
+    registerModal.hidden = true;
+    registerEmail.value = '';
+    registerName.value = '';
+    registerPassword.value = '';
+    registerConfirm.value = '';
+  } catch (e) {
+    registerError.textContent = e instanceof Error ? e.message : 'Passkey registration failed';
+    registerError.hidden = false;
+  }
+});
+
+registerToLogin.addEventListener('click', () => {
+  registerModal.hidden = true;
+  loginModal.hidden = false;
+});
+
+// --- Create Room ---
+createRoomBtn.addEventListener('click', () => { createRoomModal.hidden = false; });
+createRoomClose.addEventListener('click', () => { createRoomModal.hidden = true; });
+createRoomModal.addEventListener('click', (e) => { if (e.target === createRoomModal) createRoomModal.hidden = true; });
+
+createRoomSubmit.addEventListener('click', async () => {
+  createRoomError.hidden = true;
+  const id = crId.value.trim();
+  const displayName = crName.value.trim();
+  if (!id || !displayName) {
+    createRoomError.textContent = 'Room ID and Display Name are required';
+    createRoomError.hidden = false;
+    return;
+  }
+  createRoomSubmit.disabled = true;
+  createRoomSubmit.textContent = 'Creating...';
+  try {
+    const body: CreateRoomRequest = {
+      id,
+      display_name: displayName,
+    };
+    if (crTopic.value.trim()) body.topic = crTopic.value.trim();
+    if (crPassword.value) body.password = crPassword.value;
+    if (crModerated.checked) body.moderated = true;
+    if (crLobby.checked) body.lobby_enabled = true;
+    if (crSecret.checked) body.secret = true;
+    if (!crGuests.checked) body.guests_allowed = false;
+
+    const resp = await fetch('/api/rooms', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${auth.jwt}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: 'Failed to create room' }));
+      throw new Error(err.error ?? 'Failed to create room');
+    }
+
+    createRoomModal.hidden = true;
+    // Auto-join the created room
+    roomInput.value = id;
+    if (auth.displayName && !nameInput.value.trim()) {
+      nameInput.value = auth.displayName;
+    }
+    updateJoinBtn();
+    joinBtn.click();
+    // Reset form
+    crId.value = '';
+    crName.value = '';
+    crTopic.value = '';
+    crPassword.value = '';
+    crModerated.checked = false;
+    crLobby.checked = false;
+    crSecret.checked = false;
+    crGuests.checked = true;
+  } catch (e) {
+    createRoomError.textContent = e instanceof Error ? e.message : 'Failed to create room';
+    createRoomError.hidden = false;
+  } finally {
+    createRoomSubmit.disabled = false;
+    createRoomSubmit.textContent = 'Create Room';
+  }
+});
 
 joinBtn.addEventListener('click', async () => {
   const name = nameInput.value.trim();
@@ -1306,6 +1677,9 @@ document.addEventListener('keydown', (e) => {
     case 'escape':
       settingsModal.hidden = true;
       roomSettingsModal.hidden = true;
+      loginModal.hidden = true;
+      registerModal.hidden = true;
+      createRoomModal.hidden = true;
       document.getElementById('mod-menu')?.remove();
       break;
   }
