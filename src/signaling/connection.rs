@@ -5,7 +5,7 @@
 use super::protocol::{ClientMessage, ServerMessage};
 use crate::auth::types::Claims;
 use crate::metrics::ServerMetrics;
-use crate::room::RoomManager;
+use crate::room::{JoinResult, RoomManager};
 use crate::turn::TurnConfig;
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
@@ -252,6 +252,7 @@ pub async fn handle_connection(
                             &metrics,
                             &reconnect_token,
                             &bwe_sender,
+                            is_authenticated,
                         ).await;
                         metrics.observe_message_handling(start.elapsed());
 
@@ -570,6 +571,7 @@ async fn handle_client_message(
     metrics: &ServerMetrics,
     reconnect_token: &str,
     bwe_sender: &Option<mpsc::Sender<u32>>,
+    is_authenticated: bool,
 ) -> anyhow::Result<()> {
     match message {
         ClientMessage::JoinRoom { room_id, participant_name } => {
@@ -584,19 +586,30 @@ async fn handle_client_message(
                 room_manager.remove_participant(&old_room_id, participant_id).await?;
             }
 
-            // Join new room
-            let participants = room_manager
-                .add_participant(room_id, participant_id.to_string(), participant_name.clone(), sender.clone())
+            // Join new room (may be placed in lobby)
+            let join_result = room_manager
+                .add_participant(room_id, participant_id.to_string(), participant_name.clone(), sender.clone(), is_authenticated)
                 .await?;
 
-            *current_room_id = Some(room_id.clone());
-            metrics.inc_joins();
+            match join_result {
+                JoinResult::Joined(participants) => {
+                    *current_room_id = Some(room_id.clone());
+                    metrics.inc_joins();
 
-            send_json(sender, &ServerMessage::RoomJoined {
-                participant_id: participant_id.to_string(),
-                participants,
-                reconnect_token: reconnect_token.to_string(),
-            })?;
+                    send_json(sender, &ServerMessage::RoomJoined {
+                        participant_id: participant_id.to_string(),
+                        participants,
+                        reconnect_token: reconnect_token.to_string(),
+                    })?;
+                }
+                JoinResult::Lobbied => {
+                    // Set current_room_id so disconnect cleanup removes from lobby
+                    *current_room_id = Some(room_id.clone());
+                    // Don't send RoomJoined — participant is in lobby
+                    // Don't start stats task — no media for lobby participants
+                    // LobbyWaiting was already sent by add_participant
+                }
+            }
         }
 
         ClientMessage::LeaveRoom => {
@@ -903,14 +916,18 @@ async fn handle_client_message(
             anyhow::bail!("Not yet implemented");
         }
 
-        // === Lobby (stubs) ===
+        // === Lobby ===
 
-        ClientMessage::AdmitFromLobby { .. } => {
-            anyhow::bail!("Not yet implemented");
+        ClientMessage::AdmitFromLobby { target_participant_id } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_participant_id)?;
+            room_manager.admit_from_lobby(room_id, participant_id, target_participant_id).await?;
         }
 
-        ClientMessage::DenyFromLobby { .. } => {
-            anyhow::bail!("Not yet implemented");
+        ClientMessage::DenyFromLobby { target_participant_id } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_participant_id)?;
+            room_manager.deny_from_lobby(room_id, participant_id, target_participant_id, None).await?;
         }
     }
 

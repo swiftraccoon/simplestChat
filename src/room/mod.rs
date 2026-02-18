@@ -40,6 +40,22 @@ pub struct Participant {
     pub punitive: moderation::PunitiveState,
 }
 
+/// Entry for a participant waiting in the lobby
+pub struct LobbyEntry {
+    pub participant_id: String,
+    pub name: String,
+    pub sender: mpsc::Sender<Arc<String>>,
+    pub authenticated: bool,
+}
+
+/// Result of an add_participant attempt
+pub enum JoinResult {
+    /// Successfully joined the room
+    Joined(Vec<ParticipantInfo>),
+    /// Placed in the lobby awaiting moderator approval
+    Lobbied,
+}
+
 /// Room state
 pub struct Room {
     pub id: String,
@@ -52,6 +68,8 @@ pub struct Room {
     producer_to_participant: HashMap<String, String>,
     /// In-memory ban list — prevents banned participants from rejoining
     banned_participants: HashSet<String>,
+    /// Lobby: participants waiting for moderator approval
+    pub lobby: HashMap<String, LobbyEntry>,
 }
 
 impl Room {
@@ -65,6 +83,7 @@ impl Room {
             audio_level_observer: None,
             producer_to_participant: HashMap::new(),
             banned_participants: HashSet::new(),
+            lobby: HashMap::new(),
         }
     }
 
@@ -84,6 +103,7 @@ impl Room {
             audio_level_observer,
             producer_to_participant: HashMap::new(),
             banned_participants: HashSet::new(),
+            lobby: HashMap::new(),
         }
     }
 
@@ -375,6 +395,9 @@ impl RoomManager {
 
     /// Adds a participant to a room (creates room if needed)
     ///
+    /// If the room has `lobby_enabled` and the participant's role would be < Moderator
+    /// (and they are not the first participant), they are placed in the lobby instead.
+    ///
     /// # Errors
     /// Returns an error if media server operations fail
     pub async fn add_participant(
@@ -383,7 +406,8 @@ impl RoomManager {
         participant_id: String,
         participant_name: String,
         sender: mpsc::Sender<Arc<String>>,
-    ) -> Result<Vec<ParticipantInfo>> {
+        authenticated: bool,
+    ) -> Result<JoinResult> {
         let room_lock = self.get_or_create_room(room_id).await?;
         let mut room = room_lock.write().await;
 
@@ -393,11 +417,50 @@ impl RoomManager {
         }
 
         // First participant in a room becomes Owner (no DB for now)
-        let role = if room.participants.is_empty() {
+        let is_first = room.participants.is_empty();
+        let role = if is_first {
             roles::Role::Owner
         } else {
             roles::Role::User
         };
+
+        // Check lobby: if lobby_enabled AND not the first participant AND role < Moderator
+        let lobby_enabled = room.settings.as_ref().map_or(false, |s| s.lobby_enabled);
+        if lobby_enabled && !is_first && role < roles::Role::Moderator {
+            // Place in lobby
+            let room_name = room.settings.as_ref()
+                .map_or_else(|| room.id.clone(), |s| s.display_name.clone());
+            let topic = room.settings.as_ref().and_then(|s| s.topic.clone());
+            let participant_count = room.participants.len() as u32;
+
+            // Send LobbyWaiting to the participant
+            let lobby_waiting = ServerMessage::LobbyWaiting {
+                room_name,
+                topic,
+                participant_count,
+            };
+            if let Ok(json) = serde_json::to_string(&lobby_waiting) {
+                let _ = sender.try_send(Arc::new(json));
+            }
+
+            // Broadcast LobbyJoin to Moderator+ participants
+            room.broadcast_to_role(roles::Role::Moderator, &ServerMessage::LobbyJoin {
+                participant_id: participant_id.clone(),
+                display_name: participant_name.clone(),
+                authenticated,
+            });
+
+            // Add to lobby map
+            room.lobby.insert(participant_id.clone(), LobbyEntry {
+                participant_id: participant_id.clone(),
+                name: participant_name.clone(),
+                sender,
+                authenticated,
+            });
+
+            info!("Participant {} ({}) entered lobby for room {}", participant_id, participant_name, room_id);
+            return Ok(JoinResult::Lobbied);
+        }
 
         let participant = Participant {
             id: participant_id.clone(),
@@ -434,7 +497,7 @@ impl RoomManager {
             })
             .collect();
 
-        Ok(participants)
+        Ok(JoinResult::Joined(participants))
     }
 
     /// Removes a participant from a room
@@ -460,6 +523,14 @@ impl RoomManager {
         // Lock only this room
         {
             let mut room = room_lock.write().await;
+
+            // Also remove from lobby if present (lobby participants have no media to clean up)
+            if room.lobby.remove(participant_id).is_some() {
+                info!("Lobby participant {} removed from room {}", participant_id, room_id);
+                room_empty = room.participants.is_empty() && room.lobby.is_empty();
+                // No media cleanup needed for lobby participants
+            }
+
             if let Some(participant) = room.participants.remove(participant_id) {
                 removed = true;
                 info!("Participant {} left room {}", participant_id, room_id);
@@ -484,7 +555,7 @@ impl RoomManager {
                     participant_id: participant_id.to_string(),
                 });
 
-                room_empty = room.participants.is_empty();
+                room_empty = room.participants.is_empty() && room.lobby.is_empty();
             }
         } // Release per-room lock before outer write
 
@@ -1301,6 +1372,119 @@ impl RoomManager {
         });
 
         info!("request_voice: {} requested voice in room {}", participant_id, room_id);
+        Ok(())
+    }
+
+    // === Lobby methods ===
+
+    /// Admit a participant from the lobby into the room.
+    ///
+    /// Moves the target from `room.lobby` to `room.participants`, sends
+    /// `LobbyAdmitted` + `RoomJoined` to the admitted participant via their
+    /// stored sender, and broadcasts `ParticipantJoined` to existing participants.
+    pub async fn admit_from_lobby(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        target_id: &str,
+    ) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+
+        // Verify moderator exists and has permission
+        let moderator = room.participants.get(moderator_id)
+            .ok_or_else(|| anyhow::anyhow!("Moderator not found"))?;
+        if !moderator.role.can_admit_lobby() {
+            anyhow::bail!("Insufficient permissions to admit from lobby");
+        }
+
+        // Remove from lobby
+        let entry = room.lobby.remove(target_id)
+            .ok_or_else(|| anyhow::anyhow!("Participant not found in lobby"))?;
+
+        // Build the participants list (before inserting the new one)
+        let participants: Vec<ParticipantInfo> = room
+            .participants
+            .values()
+            .map(|p| ParticipantInfo {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                producers: p.producers.iter().map(|(id, (kind, source))| ProducerMetadata {
+                    id: id.clone(),
+                    kind: *kind,
+                    source: source.clone(),
+                }).collect(),
+            })
+            .collect();
+
+        // Insert into participants with Role::User
+        let participant = Participant {
+            id: entry.participant_id.clone(),
+            name: entry.name.clone(),
+            sender: entry.sender.clone(),
+            producers: HashMap::new(),
+            role: roles::Role::User,
+            punitive: moderation::PunitiveState::default(),
+        };
+        room.participants.insert(entry.participant_id.clone(), participant);
+
+        // Send LobbyAdmitted to the admitted participant
+        if let Ok(json) = serde_json::to_string(&ServerMessage::LobbyAdmitted) {
+            let _ = entry.sender.try_send(Arc::new(json));
+        }
+
+        // Send RoomJoined to the admitted participant (generate a reconnect token)
+        let reconnect_token = uuid::Uuid::new_v4().to_string();
+        if let Ok(json) = serde_json::to_string(&ServerMessage::RoomJoined {
+            participant_id: entry.participant_id.clone(),
+            participants,
+            reconnect_token,
+        }) {
+            let _ = entry.sender.try_send(Arc::new(json));
+        }
+
+        // Broadcast ParticipantJoined to existing participants (excluding the admitted one)
+        room.broadcast_except(&entry.participant_id, &ServerMessage::ParticipantJoined {
+            participant_id: entry.participant_id.clone(),
+            participant_name: entry.name.clone(),
+        });
+
+        info!("admit_from_lobby: {} admitted {} to room {}",
+              moderator_id, target_id, room_id);
+        Ok(())
+    }
+
+    /// Deny a participant from the lobby.
+    ///
+    /// Removes the target from `room.lobby` and sends `LobbyDenied` to them.
+    pub async fn deny_from_lobby(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        target_id: &str,
+        reason: Option<String>,
+    ) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+
+        // Verify moderator exists and has permission
+        let moderator = room.participants.get(moderator_id)
+            .ok_or_else(|| anyhow::anyhow!("Moderator not found"))?;
+        if !moderator.role.can_admit_lobby() {
+            anyhow::bail!("Insufficient permissions to deny from lobby");
+        }
+
+        // Remove from lobby
+        let entry = room.lobby.remove(target_id)
+            .ok_or_else(|| anyhow::anyhow!("Participant not found in lobby"))?;
+
+        // Send LobbyDenied to the denied participant
+        if let Ok(json) = serde_json::to_string(&ServerMessage::LobbyDenied { reason }) {
+            let _ = entry.sender.try_send(Arc::new(json));
+        }
+
+        info!("deny_from_lobby: {} denied {} from room {}",
+              moderator_id, target_id, room_id);
         Ok(())
     }
 
