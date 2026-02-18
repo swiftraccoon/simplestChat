@@ -46,6 +46,8 @@ pub struct LobbyEntry {
     pub name: String,
     pub sender: mpsc::Sender<Arc<String>>,
     pub authenticated: bool,
+    /// Reconnect token for grace period (set by connection handler after lobby entry)
+    pub reconnect_token: String,
 }
 
 /// Result of an add_participant attempt
@@ -417,15 +419,31 @@ impl RoomManager {
         }
 
         // First participant in a room becomes Owner (no DB for now)
-        let is_first = room.participants.is_empty();
+        let is_first = room.participants.is_empty() && room.lobby.is_empty();
+        let lobby_enabled = room.settings.as_ref().map_or(false, |s| s.lobby_enabled);
+
+        // Resolve role: Owner if first, DB lookup when lobby is enabled, else User
         let role = if is_first {
             roles::Role::Owner
+        } else if lobby_enabled {
+            if let (Some(pool), Some(settings)) = (&self.db_pool, &room.settings) {
+                if let Ok(uid) = participant_id.parse::<uuid::Uuid>() {
+                    roles::resolve_role(pool, room_id, Some(&uid), &settings.owner_id, authenticated).await
+                } else if authenticated {
+                    roles::Role::User
+                } else {
+                    roles::Role::Guest
+                }
+            } else if authenticated {
+                roles::Role::User
+            } else {
+                roles::Role::Guest
+            }
         } else {
             roles::Role::User
         };
 
         // Check lobby: if lobby_enabled AND not the first participant AND role < Moderator
-        let lobby_enabled = room.settings.as_ref().map_or(false, |s| s.lobby_enabled);
         if lobby_enabled && !is_first && role < roles::Role::Moderator {
             // Place in lobby
             let room_name = room.settings.as_ref()
@@ -450,12 +468,13 @@ impl RoomManager {
                 authenticated,
             });
 
-            // Add to lobby map
+            // Add to lobby map (reconnect_token set later by connection handler)
             room.lobby.insert(participant_id.clone(), LobbyEntry {
                 participant_id: participant_id.clone(),
                 name: participant_name.clone(),
                 sender,
                 authenticated,
+                reconnect_token: String::new(),
             });
 
             info!("Participant {} ({}) entered lobby for room {}", participant_id, participant_name, room_id);
@@ -1433,8 +1452,12 @@ impl RoomManager {
             let _ = entry.sender.try_send(Arc::new(json));
         }
 
-        // Send RoomJoined to the admitted participant (generate a reconnect token)
-        let reconnect_token = uuid::Uuid::new_v4().to_string();
+        // Send RoomJoined to the admitted participant (use stored reconnect token)
+        let reconnect_token = if entry.reconnect_token.is_empty() {
+            uuid::Uuid::new_v4().to_string()
+        } else {
+            entry.reconnect_token.clone()
+        };
         if let Ok(json) = serde_json::to_string(&ServerMessage::RoomJoined {
             participant_id: entry.participant_id.clone(),
             participants,
@@ -1485,6 +1508,16 @@ impl RoomManager {
 
         info!("deny_from_lobby: {} denied {} from room {}",
               moderator_id, target_id, room_id);
+        Ok(())
+    }
+
+    /// Store a reconnect token in a lobby entry (called by connection handler after lobby join)
+    pub async fn store_lobby_reconnect_token(&self, room_id: &str, participant_id: &str, token: &str) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+        if let Some(entry) = room.lobby.get_mut(participant_id) {
+            entry.reconnect_token = token.to_string();
+        }
         Ok(())
     }
 

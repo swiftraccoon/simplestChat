@@ -140,6 +140,7 @@ pub async fn handle_connection(
 
     // Handle incoming messages
     let mut current_room_id: Option<String> = None;
+    let mut in_lobby = false; // true when participant is in lobby (not full room member)
     let mut stats_task: Option<tokio::task::JoinHandle<()>> = None;
     let mut bwe_sender: Option<mpsc::Sender<u32>> = None;
 
@@ -246,6 +247,7 @@ pub async fn handle_connection(
                             &client_msg,
                             &participant_id,
                             &mut current_room_id,
+                            &mut in_lobby,
                             &tx,
                             &room_manager,
                             &turn_config,
@@ -268,25 +270,32 @@ pub async fn handle_connection(
                             });
                         }
 
-                        // Start stats task when joining a room
+                        // Start stats task when joining a room (not lobby)
                         if is_join && current_room_id.is_some() {
                             // Generate a fresh reconnect token for the new session
                             reconnect_token = Uuid::new_v4().to_string();
 
-                            if let Some(task) = stats_task.take() {
-                                task.abort();
+                            if in_lobby {
+                                // Store the token in the lobby entry for use when admitted
+                                if let Some(room_id) = current_room_id.as_ref() {
+                                    let _ = room_manager.store_lobby_reconnect_token(room_id, &participant_id, &reconnect_token).await;
+                                }
+                            } else {
+                                if let Some(task) = stats_task.take() {
+                                    task.abort();
+                                }
+
+                                // Create BWE event channel (subscription happens later in CreateRecvTransport)
+                                let (bwe_tx, bwe_rx) = mpsc::channel::<u32>(32);
+                                bwe_sender = Some(bwe_tx);
+
+                                stats_task = Some(spawn_stats_task(
+                                    room_manager.clone(),
+                                    participant_id.clone(),
+                                    tx.clone(),
+                                    bwe_rx,
+                                ));
                             }
-
-                            // Create BWE event channel (subscription happens later in CreateRecvTransport)
-                            let (bwe_tx, bwe_rx) = mpsc::channel::<u32>(32);
-                            bwe_sender = Some(bwe_tx);
-
-                            stats_task = Some(spawn_stats_task(
-                                room_manager.clone(),
-                                participant_id.clone(),
-                                tx.clone(),
-                                bwe_rx,
-                            ));
                         }
 
                         // Stop stats task when leaving a room
@@ -565,6 +574,7 @@ async fn handle_client_message(
     message: &ClientMessage,
     participant_id: &str,
     current_room_id: &mut Option<String>,
+    in_lobby: &mut bool,
     sender: &mpsc::Sender<Arc<String>>,
     room_manager: &Arc<RoomManager>,
     turn_config: &Option<Arc<TurnConfig>>,
@@ -594,6 +604,7 @@ async fn handle_client_message(
             match join_result {
                 JoinResult::Joined(participants) => {
                     *current_room_id = Some(room_id.clone());
+                    *in_lobby = false;
                     metrics.inc_joins();
 
                     send_json(sender, &ServerMessage::RoomJoined {
@@ -605,6 +616,7 @@ async fn handle_client_message(
                 JoinResult::Lobbied => {
                     // Set current_room_id so disconnect cleanup removes from lobby
                     *current_room_id = Some(room_id.clone());
+                    *in_lobby = true;
                     // Don't send RoomJoined — participant is in lobby
                     // Don't start stats task — no media for lobby participants
                     // LobbyWaiting was already sent by add_participant
@@ -615,6 +627,7 @@ async fn handle_client_message(
         ClientMessage::LeaveRoom => {
             if let Some(room_id) = current_room_id.take() {
                 room_manager.remove_participant(&room_id, participant_id).await?;
+                *in_lobby = false;
                 metrics.inc_leaves();
             }
         }
