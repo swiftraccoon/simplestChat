@@ -3,6 +3,7 @@
 // WebSocket connection handler for individual clients
 
 use super::protocol::{ClientMessage, ServerMessage};
+use crate::auth::types::Claims;
 use crate::metrics::ServerMetrics;
 use crate::room::RoomManager;
 use crate::turn::TurnConfig;
@@ -96,9 +97,20 @@ pub async fn handle_connection(
     grace_periods: GracePeriodMap,
     metrics: ServerMetrics,
     _permit: OwnedSemaphorePermit,
+    authenticated_user: Option<Claims>,
 ) {
-    let mut participant_id = Uuid::new_v4().to_string();
-    info!("New WebSocket connection: {}", participant_id);
+    // Use authenticated user ID if available, otherwise generate anonymous UUID
+    let mut participant_id = authenticated_user
+        .as_ref()
+        .map(|c| c.sub.clone())
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+    let is_authenticated = authenticated_user.is_some();
+    let _display_name = authenticated_user
+        .as_ref()
+        .map(|c| c.name.clone());
+
+    info!("New WebSocket connection: {} (authenticated: {})", participant_id, is_authenticated);
 
     metrics.inc_connections_total();
     let _conn_guard = metrics.connection_active_guard();

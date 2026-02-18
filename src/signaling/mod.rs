@@ -11,12 +11,13 @@ use crate::room::RoomManager;
 use crate::turn::TurnConfig;
 use sqlx::PgPool;
 use axum::{
-    extract::{ws::WebSocketUpgrade, State},
+    extract::{ws::WebSocketUpgrade, Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,
 };
+use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tower_http::services::ServeDir;
@@ -171,8 +172,14 @@ async fn metrics_handler(
     ).into_response()
 }
 
+#[derive(Deserialize)]
+struct WsParams {
+    token: Option<String>,
+}
+
 /// WebSocket upgrade handler
 async fn ws_handler(
+    Query(params): Query<WsParams>,
     ws: WebSocketUpgrade,
     State(server): State<SignalingServer>,
 ) -> Response {
@@ -184,6 +191,14 @@ async fn ws_handler(
             return (StatusCode::SERVICE_UNAVAILABLE, "Too many connections").into_response();
         }
     };
+
+    // Validate JWT if provided
+    let authenticated_user = params.token
+        .as_deref()
+        .and_then(|token| {
+            server.jwt_secret()
+                .and_then(|secret| crate::auth::jwt::validate_token(token, secret).ok())
+        });
 
     ws.max_message_size(65_536)
         .on_failed_upgrade(|error| {
@@ -197,6 +212,7 @@ async fn ws_handler(
                 server.grace_periods,
                 server.metrics,
                 permit,
+                authenticated_user,
             )
         })
 }
