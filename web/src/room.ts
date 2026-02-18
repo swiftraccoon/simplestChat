@@ -292,18 +292,25 @@ export class RoomClient {
         break;
       }
       case 'producerPaused': {
-        for (const p of this.participants.values()) {
+        for (const [pid, p] of this.participants) {
           if (p.producers.has(msg.producerId)) {
-            console.log(`[room] producer ${msg.producerId} paused (remote mute)`);
+            const kind = p.producers.get(msg.producerId)!;
+            console.log(`[room] producer ${msg.producerId} paused → hiding ${kind} tile`);
+            this.events.onRemoteTrackRemoved(pid, msg.producerId, kind);
             break;
           }
         }
         break;
       }
       case 'producerResumed': {
-        for (const p of this.participants.values()) {
+        for (const [pid, p] of this.participants) {
           if (p.producers.has(msg.producerId)) {
-            console.log(`[room] producer ${msg.producerId} resumed (remote unmute)`);
+            const kind = p.producers.get(msg.producerId)!;
+            console.log(`[room] producer ${msg.producerId} resumed → showing ${kind} tile`);
+            const track = this.media?.getConsumerTrackByProducer(msg.producerId);
+            if (track) {
+              this.events.onRemoteTrack(pid, p.name, track, kind);
+            }
             break;
           }
         }

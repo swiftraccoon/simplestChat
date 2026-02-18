@@ -236,6 +236,14 @@ export class MediaManager {
     });
   }
 
+  /** Get a consumer's track by its associated producer ID */
+  getConsumerTrackByProducer(producerId: string): MediaStreamTrack | null {
+    const consumerId = this.producerToConsumer.get(producerId);
+    if (!consumerId) return null;
+    const consumer = this.consumers.get(consumerId);
+    return consumer?.track ?? null;
+  }
+
   /** Close and remove the consumer for a given producer */
   closeConsumerByProducer(producerId: string): void {
     const consumerId = this.producerToConsumer.get(producerId);

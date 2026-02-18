@@ -701,10 +701,16 @@ async fn handle_client_message(
                 metrics.inc_consumers_created();
                 send_json(sender, &ServerMessage::ConsumerCreated {
                     consumer_id: consumer_info.id,
-                    producer_id: consumer_info.producer_id,
+                    producer_id: consumer_info.producer_id.clone(),
                     kind: consumer_info.kind,
                     rtp_parameters: consumer_info.rtp_parameters,
                 })?;
+
+                // If the producer is already paused, immediately notify the consuming client
+                // so it can hide the video tile instead of showing a black square.
+                if producer_paused {
+                    send_json(sender, &ServerMessage::ProducerPaused { producer_id: producer_id.clone() })?;
+                }
             } else {
                 anyhow::bail!("Not in a room");
             }
