@@ -62,7 +62,14 @@ pub async fn register(
     .bind(&hash)
     .fetch_one(pool)
     .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+    .map_err(|e| {
+        if let sqlx::Error::Database(ref db_err) = e {
+            if db_err.code().as_deref() == Some("23505") {
+                return AuthError::EmailAlreadyExists;
+            }
+        }
+        AuthError::DatabaseError(e.to_string())
+    })?;
 
     let user_id = row.0.to_string();
     let token = jwt::create_token(&user_id, &row.2, secret)?;
@@ -100,6 +107,11 @@ pub async fn login(
     .await
     .map_err(|e| AuthError::DatabaseError(e.to_string()))?
     .ok_or(AuthError::InvalidCredentials)?;
+
+    // Reject excessively long passwords before bcrypt (DoS prevention)
+    if req.password.len() > 128 {
+        return Err(AuthError::InvalidCredentials);
+    }
 
     // Verify password
     let password_hash = row.3.as_deref().ok_or(AuthError::InvalidCredentials)?;
@@ -211,14 +223,12 @@ pub async fn passkey_register_start(
         .start_passkey_registration(user_id, &req.email, &req.display_name, None)
         .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
 
-    store.store_registration(&req.email, reg_state);
+    if !store.store_registration(&req.email, reg_state, user_id, req.email.clone(), req.display_name.clone()) {
+        return Err(AuthError::WebAuthnError("Too many pending registrations, try again later".into()));
+    }
 
-    let mut response = serde_json::to_value(&ccr)
+    let response = serde_json::to_value(&ccr)
         .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
-
-    response["_user_id"] = serde_json::Value::String(user_id.to_string());
-    response["_email"] = serde_json::Value::String(req.email);
-    response["_display_name"] = serde_json::Value::String(req.display_name);
 
     Ok(Json(response))
 }
@@ -233,22 +243,20 @@ pub async fn passkey_register_finish(
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
 
-    let email = body["email"].as_str().ok_or(AuthError::WebAuthnError("Missing email".into()))?;
+    let email_key = body["email"].as_str().ok_or(AuthError::WebAuthnError("Missing email".into()))?;
     let credential: RegisterPublicKeyCredential = serde_json::from_value(body["credential"].clone())
         .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
 
-    let reg_state = store.take_registration(email)
+    let reg_data = store.take_registration(email_key)
         .ok_or(AuthError::WebAuthnError("No pending registration or challenge expired".into()))?;
 
     let passkey = webauthn
-        .finish_passkey_registration(&credential, &reg_state)
+        .finish_passkey_registration(&credential, &reg_data.state)
         .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
 
-    let user_id = body["user_id"].as_str()
-        .and_then(|s| uuid::Uuid::parse_str(s).ok())
-        .unwrap_or_else(uuid::Uuid::new_v4);
-
-    let display_name = body["display_name"].as_str().unwrap_or(email);
+    let user_id = reg_data.user_id;
+    let email = &reg_data.email;
+    let display_name = &reg_data.display_name;
 
     sqlx::query(
         "INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3)"
@@ -331,7 +339,9 @@ pub async fn passkey_login_start(
         .start_passkey_authentication(&passkeys)
         .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
 
-    store.store_authentication(email, auth_state);
+    if !store.store_authentication(email, auth_state) {
+        return Err(AuthError::WebAuthnError("Too many pending authentications, try again later".into()));
+    }
 
     let response = serde_json::to_value(&rcr)
         .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;

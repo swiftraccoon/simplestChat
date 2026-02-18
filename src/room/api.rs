@@ -40,7 +40,8 @@ pub async fn list_rooms(
     let offset = ((params.page.unwrap_or(1).max(1) - 1) as i64) * limit;
 
     let rooms = if let Some(q) = &params.q {
-        let pattern = format!("%{}%", q);
+        let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let pattern = format!("%{}%", escaped);
         sqlx::query_as::<_, (String, String, Option<String>, bool, bool)>(
             "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated
              FROM rooms WHERE secret = false

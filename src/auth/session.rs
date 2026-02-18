@@ -46,6 +46,12 @@ pub async fn consume_refresh_token(
     .map_err(|e| AuthError::DatabaseError(e.to_string()))?
     .ok_or(AuthError::InvalidToken)?;
 
+    // Opportunistic cleanup: spawn non-blocking expired session cleanup
+    let pool_clone = pool.clone();
+    tokio::spawn(async move {
+        let _ = cleanup_expired(&pool_clone).await;
+    });
+
     Ok(row.1)
 }
 
