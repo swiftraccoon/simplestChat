@@ -77,10 +77,17 @@ impl SignalingServer {
 
     /// Creates the Axum router for the signaling server
     pub fn router(self) -> Router {
+        use axum::routing::post;
+
+        let auth_routes = Router::new()
+            .route("/register", post(crate::auth::routes::register))
+            .route("/login", post(crate::auth::routes::login));
+
         Router::new()
             .route("/ws", get(ws_handler))
             .route("/health", get(health_handler))
             .route("/metrics", get(metrics_handler))
+            .nest("/api/auth", auth_routes)
             .with_state(self)
             .layer(CorsLayer::permissive())
             .fallback_service(ServeDir::new("web/dist"))

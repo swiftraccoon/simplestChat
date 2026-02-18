@@ -3,3 +3,4 @@
 pub mod types;
 pub mod password;
 pub mod jwt;
+pub mod routes;
