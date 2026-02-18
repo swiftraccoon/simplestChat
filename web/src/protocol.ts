@@ -44,7 +44,9 @@ export type ServerMessage =
   | { type: 'iceRestarted'; transportId: string; iceParameters: IceParameters }
   | { type: 'connectionStats'; availableBitrate: number | null; rtt: number | null }
   | { type: 'consumerLayersChanged'; consumerId: string; spatialLayer: number | null; temporalLayer: number | null }
-  | { type: 'chatReceived'; participantId: string; participantName: string; content: string };
+  | { type: 'chatReceived'; participantId: string; participantName: string; content: string }
+  | { type: 'activeSpeaker'; participantId: string }
+  | { type: 'audioLevels'; levels: { participantId: string; volume: number }[] };
 
 // --- Shared types ---
 

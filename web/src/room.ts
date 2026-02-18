@@ -19,6 +19,8 @@ export type RoomEventHandler = {
   onParticipantJoined: (participantId: string, participantName: string) => void;
   onChatMessage: (participantId: string, participantName: string, content: string) => void;
   onConnectionQuality: (quality: ConnectionQuality) => void;
+  onActiveSpeaker: (participantId: string) => void;
+  onAudioLevels: (levels: { participantId: string; volume: number }[]) => void;
 };
 
 export class RoomClient {
@@ -355,6 +357,14 @@ export class RoomClient {
             break;
           }
         }
+        break;
+      }
+      case 'activeSpeaker': {
+        this.events.onActiveSpeaker(msg.participantId);
+        break;
+      }
+      case 'audioLevels': {
+        this.events.onAudioLevels(msg.levels);
         break;
       }
       default:

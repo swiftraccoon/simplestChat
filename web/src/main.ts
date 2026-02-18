@@ -48,19 +48,6 @@ type MicMode = 'open' | 'ptt';
 let micMode: MicMode = (localStorage.getItem('micMode') as MicMode) || 'open';
 let pttHeld = false;
 
-// Speaking detection state — shared AudioContext to avoid browser limit (~6 per page)
-let sharedAudioCtx: AudioContext | null = null;
-const speakingAnalysers = new Map<string, { analyser: AnalyserNode; source: MediaStreamAudioSourceNode }>();
-let speakingTimerId: ReturnType<typeof setTimeout> | null = null;
-const speakingState = new Map<string, boolean>();
-
-function getSharedAudioContext(): AudioContext {
-  if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
-    sharedAudioCtx = new AudioContext();
-  }
-  return sharedAudioCtx;
-}
-
 // Restore display name from localStorage
 const savedName = localStorage.getItem('displayName');
 if (savedName) nameInput.value = savedName;
@@ -248,6 +235,26 @@ joinBtn.addEventListener('click', async () => {
       onChatMessage: appendChatMessage,
       onConnectionQuality: renderConnectionQuality,
       onParticipantJoined: handleParticipantJoined,
+      onActiveSpeaker: (participantId) => {
+        // Clear previous highlight
+        document.querySelectorAll('.video-tile.dominant-speaker').forEach(t => t.classList.remove('dominant-speaker'));
+        const tile = remoteTiles.get(participantId);
+        if (tile) tile.classList.add('dominant-speaker');
+      },
+      onAudioLevels: (levels) => {
+        // Reset all speaking indicators
+        document.querySelectorAll('.video-tile.speaking').forEach(t => t.classList.remove('speaking'));
+        document.querySelectorAll('#participant-list li.speaking, .classic-user-list li.speaking').forEach(el => el.classList.remove('speaking'));
+        for (const { participantId, volume } of levels) {
+          if (volume > -50) { // Only show for audible levels
+            const tile = remoteTiles.get(participantId);
+            if (tile) tile.classList.add('speaking');
+            // Also update participant list
+            const participantEls = document.querySelectorAll(`[data-participant-id="${CSS.escape(participantId)}"]`);
+            participantEls.forEach((el) => el.classList.add('speaking'));
+          }
+        }
+      },
     });
 
     await room.join(roomId, name);
@@ -281,9 +288,6 @@ joinBtn.addEventListener('click', async () => {
     }
 
     qualityIndicator.hidden = false;
-
-    // Start speaking detection loop
-    startSpeakingDetection();
   } catch (e) {
     console.error('Failed to join:', e);
     alert(`Failed to join: ${e instanceof Error ? e.message : String(e)}`);
@@ -298,18 +302,10 @@ leaveBtn.addEventListener('click', async () => {
   await room?.leave();
   room = null;
 
-  stopSpeakingDetection();
-  // Close shared AudioContext when leaving room
-  if (sharedAudioCtx) {
-    sharedAudioCtx.close().catch(() => {});
-    sharedAudioCtx = null;
-  }
   clearChildren(videoGrid);
   clearChildren(participantList);
   clearChildren(chatMessages);
   remoteTiles.clear();
-  speakingAnalysers.clear();
-  speakingState.clear();
 
   // Remove classic users panel if present
   document.getElementById('classic-users-panel')?.remove();
@@ -635,75 +631,6 @@ chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') sendChatMessage();
 });
 
-// --- Speaking Detection (Web Audio API) ---
-function setupSpeakingAnalyser(participantId: string, audioTrack: MediaStreamTrack): void {
-  teardownSpeakingAnalyser(participantId);
-
-  try {
-    const ctx = getSharedAudioContext();
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.5;
-    const source = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
-    source.connect(analyser);
-    speakingAnalysers.set(participantId, { analyser, source });
-  } catch (e) {
-    console.warn('Could not setup speaking analyser:', e);
-  }
-}
-
-function teardownSpeakingAnalyser(participantId: string): void {
-  const entry = speakingAnalysers.get(participantId);
-  if (entry) {
-    entry.source.disconnect();
-    speakingAnalysers.delete(participantId);
-  }
-}
-
-function startSpeakingDetection(): void {
-  if (speakingTimerId !== null) return;
-
-  const data = new Uint8Array(128);
-  const THRESHOLD = 25;
-
-  function poll(): void {
-    for (const [pid, entry] of speakingAnalysers) {
-      entry.analyser.getByteFrequencyData(data);
-      let sum = 0;
-      for (let i = 0; i < data.length; i++) sum += data[i]!;
-      const avg = sum / data.length;
-      const isSpeaking = avg > THRESHOLD;
-      const wasSpeaking = speakingState.get(pid) ?? false;
-
-      if (isSpeaking !== wasSpeaking) {
-        speakingState.set(pid, isSpeaking);
-        // Update video tile
-        const tile = remoteTiles.get(pid);
-        if (tile) tile.classList.toggle('speaking', isSpeaking);
-        // Update participant list items
-        const participantEls = document.querySelectorAll(`[data-participant-id="${CSS.escape(pid)}"]`);
-        participantEls.forEach((el) => {
-          el.classList.toggle('speaking', isSpeaking);
-        });
-      }
-    }
-    speakingTimerId = setTimeout(poll, 66); // ~15fps
-  }
-
-  poll();
-}
-
-function stopSpeakingDetection(): void {
-  if (speakingTimerId !== null) {
-    clearTimeout(speakingTimerId);
-    speakingTimerId = null;
-  }
-  for (const pid of [...speakingAnalysers.keys()]) {
-    teardownSpeakingAnalyser(pid);
-  }
-  speakingState.clear();
-}
-
 // --- Update video grid count for adaptive sizing ---
 function updateVideoGridCount(): void {
   const count = videoGrid.children.length;
@@ -785,9 +712,6 @@ function renderParticipants(participants: Map<string, Participant>): void {
       }</svg>`);
     mediaIcons.appendChild(camIcon);
 
-    // Apply speaking state
-    if (speakingState.get(p.id)) li.classList.add('speaking');
-
     li.appendChild(avatar);
     li.appendChild(info);
     li.appendChild(mediaIcons);
@@ -858,8 +782,6 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
     nameSpan.textContent = p.name;
     if (p.id === room?.localParticipantId) nameSpan.textContent += ' (you)';
 
-    if (speakingState.get(p.id)) li.classList.add('speaking');
-
     li.appendChild(avatar);
     li.appendChild(nameSpan);
     list.appendChild(li);
@@ -918,10 +840,6 @@ function renderRemoteTrack(participantId: string, participantName: string, track
       tile.appendChild(audio);
     }
     audio.srcObject = new MediaStream([track]);
-    // Only set up speaking analyser for non-screen audio
-    if (!isScreen) {
-      setupSpeakingAnalyser(participantId, track);
-    }
   }
 }
 
@@ -944,9 +862,6 @@ function removeRemoteTrack(participantId: string, _producerId: string, kind: 'au
     if (audio) {
       audio.srcObject = null;
       audio.remove();
-    }
-    if (!isScreen) {
-      teardownSpeakingAnalyser(participantId);
     }
   }
 
@@ -972,8 +887,6 @@ function handleParticipantLeft(participantId: string): void {
     remoteTiles.delete(`${participantId}:screen`);
   }
   updateVideoGridCount();
-  teardownSpeakingAnalyser(participantId);
-  speakingState.delete(participantId);
   if (name) appendSystemMessage(`${name} left`);
 }
 

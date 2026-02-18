@@ -310,6 +310,11 @@ header h1 {
   transform: scale(1.01);
 }
 
+/* Dominant speaker indicator — stronger accent border */
+.video-tile.dominant-speaker {
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
 /* Screen share tile — spans wider in grid */
 .video-tile.screen-share {
   grid-column: span 2;
