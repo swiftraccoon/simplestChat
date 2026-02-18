@@ -220,6 +220,24 @@ pub enum ServerMessage {
         participant_name: String,
         content: String,
     },
+    /// Active/dominant speaker changed
+    #[serde(rename_all = "camelCase")]
+    ActiveSpeaker {
+        participant_id: String,
+    },
+    /// Audio levels for all speaking participants
+    #[serde(rename_all = "camelCase")]
+    AudioLevels {
+        levels: Vec<AudioLevelEntry>,
+    },
+}
+
+/// Audio level entry for a speaking participant
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioLevelEntry {
+    pub participant_id: String,
+    pub volume: i8, // dBov (0 = loudest, -127 = silence)
 }
 
 /// Participant information for room state

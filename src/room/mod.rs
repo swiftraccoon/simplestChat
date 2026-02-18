@@ -8,15 +8,25 @@ pub mod settings;
 use crate::media::{MediaServer, MediaConfig};
 use crate::media::types::{MediaResult, TransportInfo};
 use crate::metrics::ServerMetrics;
-use crate::signaling::protocol::{ParticipantInfo, ProducerMetadata, ServerMessage};
+use crate::signaling::protocol::{AudioLevelEntry, ParticipantInfo, ProducerMetadata, ServerMessage};
+use mediasoup::active_speaker_observer::{ActiveSpeakerObserver, ActiveSpeakerObserverOptions};
+use mediasoup::audio_level_observer::{AudioLevelObserver, AudioLevelObserverOptions};
 use mediasoup::prelude::*;
+use mediasoup::producer::ProducerId;
+use mediasoup::rtp_observer::{RtpObserver, RtpObserverAddProducerOptions};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::sync::RwLock as StdRwLock;
 use tokio::sync::RwLock as TokioRwLock;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 use anyhow::Result;
+
+/// Events sent from observer callbacks (sync Fn) to async broadcast task
+enum ObserverEvent {
+    ActiveSpeaker { producer_id: ProducerId },
+    AudioLevels { volumes: Vec<(ProducerId, i8)> },
+}
 
 /// Participant in a room
 #[derive(Clone)]
@@ -33,6 +43,10 @@ pub struct Room {
     pub router_id: String,
     pub participants: HashMap<String, Participant>,
     pub settings: Option<settings::RoomSettings>,
+    active_speaker_observer: Option<ActiveSpeakerObserver>,
+    audio_level_observer: Option<AudioLevelObserver>,
+    /// Map producer_id -> participant_id for observer lookups
+    producer_to_participant: HashMap<String, String>,
 }
 
 impl Room {
@@ -42,6 +56,27 @@ impl Room {
             router_id,
             participants: HashMap::new(),
             settings,
+            active_speaker_observer: None,
+            audio_level_observer: None,
+            producer_to_participant: HashMap::new(),
+        }
+    }
+
+    fn new_with_observers(
+        id: String,
+        router_id: String,
+        settings: Option<settings::RoomSettings>,
+        active_speaker_observer: Option<ActiveSpeakerObserver>,
+        audio_level_observer: Option<AudioLevelObserver>,
+    ) -> Self {
+        Self {
+            id,
+            router_id,
+            participants: HashMap::new(),
+            settings,
+            active_speaker_observer,
+            audio_level_observer,
+            producer_to_participant: HashMap::new(),
         }
     }
 
@@ -156,12 +191,114 @@ impl RoomManager {
         let router_id = self.media_server.create_router(room_id.to_string()).await?;
         self.metrics.inc_rooms_created();
 
+        // Get the Router object to create observers on
+        let router = self.media_server.router_manager().get_router(room_id).await
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        // Create channel for observer events
+        let (observer_tx, observer_rx) = tokio::sync::mpsc::unbounded_channel::<ObserverEvent>();
+
+        // Create active speaker observer (default interval=300ms)
+        let active_speaker_observer = router
+            .create_active_speaker_observer(ActiveSpeakerObserverOptions::default())
+            .await
+            .ok();
+
+        // Create audio level observer
+        let audio_level_observer = {
+            let mut opts = AudioLevelObserverOptions::default();
+            opts.max_entries = std::num::NonZeroU16::new(10).unwrap();
+            opts.threshold = -50;
+            opts.interval = 800; // ms - don't send too frequently
+            router.create_audio_level_observer(opts).await.ok()
+        };
+
+        // Set up callbacks
+        if let Some(obs) = &active_speaker_observer {
+            let tx = observer_tx.clone();
+            obs.on_dominant_speaker(move |speaker| {
+                let _ = tx.send(ObserverEvent::ActiveSpeaker {
+                    producer_id: speaker.producer.id(),
+                });
+            });
+        }
+
+        if let Some(obs) = &audio_level_observer {
+            let tx = observer_tx.clone();
+            obs.on_volumes(move |volumes| {
+                let entries: Vec<_> = volumes
+                    .iter()
+                    .map(|v| (v.producer.id(), v.volume))
+                    .collect();
+                let _ = tx.send(ObserverEvent::AudioLevels { volumes: entries });
+            });
+        }
+        drop(observer_tx); // Only clones in callbacks remain
+
         // Insert under write lock (re-check for concurrent creation)
-        let mut rooms = self.rooms.write().unwrap_or_else(|e| e.into_inner());
-        Ok(rooms
-            .entry(room_id.to_string())
-            .or_insert_with(|| Arc::new(TokioRwLock::new(Room::new(room_id.to_string(), router_id, room_settings))))
-            .clone())
+        let room_arc = {
+            let mut rooms = self.rooms.write().unwrap_or_else(|e| e.into_inner());
+            if let Some(existing) = rooms.get(room_id) {
+                existing.clone()
+            } else {
+                let new_room = Arc::new(TokioRwLock::new(Room::new_with_observers(
+                    room_id.to_string(),
+                    router_id,
+                    room_settings,
+                    active_speaker_observer,
+                    audio_level_observer,
+                )));
+                rooms.insert(room_id.to_string(), new_room.clone());
+                new_room
+            }
+        };
+
+        // Spawn background task with Weak reference
+        let weak_room = Arc::downgrade(&room_arc);
+        tokio::spawn(Self::observer_broadcast_task(observer_rx, weak_room));
+
+        Ok(room_arc)
+    }
+
+    /// Background task that reads observer events and broadcasts to room participants.
+    /// Uses a Weak reference so the task exits when the room is dropped.
+    async fn observer_broadcast_task(
+        mut rx: tokio::sync::mpsc::UnboundedReceiver<ObserverEvent>,
+        weak_room: Weak<TokioRwLock<Room>>,
+    ) {
+        while let Some(event) = rx.recv().await {
+            let room_arc = match weak_room.upgrade() {
+                Some(r) => r,
+                None => break, // Room is gone
+            };
+
+            let room = room_arc.read().await;
+            match event {
+                ObserverEvent::ActiveSpeaker { producer_id } => {
+                    if let Some(participant_id) = room.producer_to_participant.get(&producer_id.to_string()) {
+                        room.broadcast_all(&ServerMessage::ActiveSpeaker {
+                            participant_id: participant_id.clone(),
+                        });
+                    }
+                }
+                ObserverEvent::AudioLevels { volumes } => {
+                    let levels: Vec<AudioLevelEntry> = volumes
+                        .iter()
+                        .filter_map(|(pid, vol)| {
+                            room.producer_to_participant
+                                .get(&pid.to_string())
+                                .map(|participant_id| AudioLevelEntry {
+                                    participant_id: participant_id.clone(),
+                                    volume: *vol,
+                                })
+                        })
+                        .collect();
+                    if !levels.is_empty() {
+                        room.broadcast_all(&ServerMessage::AudioLevels { levels });
+                    }
+                }
+            }
+        }
     }
 
     /// Adds a participant to a room (creates room if needed)
@@ -221,6 +358,9 @@ impl RoomManager {
     pub async fn remove_participant(&self, room_id: &str, participant_id: &str) -> Result<()> {
         let mut removed = false;
         let mut room_empty = false;
+        let mut audio_producer_ids: Vec<String> = Vec::new();
+        let mut active_obs = None;
+        let mut audio_obs = None;
 
         // Get room lock (brief outer read)
         let room_lock = {
@@ -234,9 +374,25 @@ impl RoomManager {
         // Lock only this room
         {
             let mut room = room_lock.write().await;
-            if room.participants.remove(participant_id).is_some() {
+            if let Some(participant) = room.participants.remove(participant_id) {
                 removed = true;
                 info!("Participant {} left room {}", participant_id, room_id);
+
+                // Collect audio producer IDs for observer cleanup
+                for (pid, (kind, _)) in &participant.producers {
+                    if *kind == MediaKind::Audio {
+                        audio_producer_ids.push(pid.clone());
+                    }
+                }
+
+                // Remove from producer_to_participant map
+                for pid in &audio_producer_ids {
+                    room.producer_to_participant.remove(pid);
+                }
+
+                // Clone observers before releasing lock
+                active_obs = room.active_speaker_observer.clone();
+                audio_obs = room.audio_level_observer.clone();
 
                 room.broadcast_all(&ServerMessage::ParticipantLeft {
                     participant_id: participant_id.to_string(),
@@ -245,6 +401,18 @@ impl RoomManager {
                 room_empty = room.participants.is_empty();
             }
         } // Release per-room lock before outer write
+
+        // Remove audio producers from observers OUTSIDE lock
+        for pid_str in &audio_producer_ids {
+            if let Ok(pid) = pid_str.parse::<ProducerId>() {
+                if let Some(obs) = &active_obs {
+                    let _ = obs.remove_producer(pid).await;
+                }
+                if let Some(obs) = &audio_obs {
+                    let _ = obs.remove_producer(pid).await;
+                }
+            }
+        }
 
         // If room is empty, remove from map
         if room_empty {
@@ -375,20 +543,44 @@ impl RoomManager {
             .map_err(|e| anyhow::anyhow!(e))?;
 
         let producer_id = producer.id().to_string();
+        let producer_id_typed = producer.id();
 
-        // Store producer info and broadcast (per-room write lock)
-        let room_lock = self.get_room(room_id)?;
-        let mut room = room_lock.write().await;
-        if let Some(participant) = room.participants.get_mut(participant_id) {
-            participant.producers.insert(producer_id.clone(), (kind, source.clone()));
+        // Store producer info, broadcast, and clone observers (per-room write lock)
+        let (active_obs, audio_obs) = {
+            let room_lock = self.get_room(room_id)?;
+            let mut room = room_lock.write().await;
+            if let Some(participant) = room.participants.get_mut(participant_id) {
+                participant.producers.insert(producer_id.clone(), (kind, source.clone()));
+            }
+            if kind == MediaKind::Audio {
+                room.producer_to_participant
+                    .insert(producer_id.clone(), participant_id.to_string());
+            }
+
+            room.broadcast_except(participant_id, &ServerMessage::NewProducer {
+                participant_id: participant_id.to_string(),
+                producer_id: producer_id.clone(),
+                kind,
+                source,
+            });
+
+            // Clone observers before releasing lock
+            (room.active_speaker_observer.clone(), room.audio_level_observer.clone())
+        }; // room lock released
+
+        // Add to observers OUTSIDE lock (async IPC)
+        if kind == MediaKind::Audio {
+            if let Some(obs) = &active_obs {
+                let _ = obs
+                    .add_producer(RtpObserverAddProducerOptions::new(producer_id_typed))
+                    .await;
+            }
+            if let Some(obs) = &audio_obs {
+                let _ = obs
+                    .add_producer(RtpObserverAddProducerOptions::new(producer_id_typed))
+                    .await;
+            }
         }
-
-        room.broadcast_except(participant_id, &ServerMessage::NewProducer {
-            participant_id: participant_id.to_string(),
-            producer_id: producer_id.clone(),
-            kind,
-            source,
-        });
 
         info!("Created {:?} producer {} for participant {} in room {}",
               kind, producer_id, participant_id, room_id);
@@ -487,16 +679,34 @@ impl RoomManager {
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        // Remove from room's participant tracking and notify others (per-room write lock)
-        let room_lock = self.get_room(room_id)?;
-        let mut room = room_lock.write().await;
-        if let Some(participant) = room.participants.get_mut(participant_id) {
-            participant.producers.remove(producer_id);
-        }
+        // Remove from room's participant tracking, observer maps, and notify others (per-room write lock)
+        let (active_obs, audio_obs, was_audio) = {
+            let room_lock = self.get_room(room_id)?;
+            let mut room = room_lock.write().await;
+            if let Some(participant) = room.participants.get_mut(participant_id) {
+                participant.producers.remove(producer_id);
+            }
+            let was_audio = room.producer_to_participant.remove(producer_id).is_some();
 
-        room.broadcast_except(participant_id, &ServerMessage::ProducerClosed {
-            producer_id: producer_id.to_string(),
-        });
+            room.broadcast_except(participant_id, &ServerMessage::ProducerClosed {
+                producer_id: producer_id.to_string(),
+            });
+
+            // Clone observers before releasing lock
+            (room.active_speaker_observer.clone(), room.audio_level_observer.clone(), was_audio)
+        }; // room lock released
+
+        // Remove from observers OUTSIDE lock
+        if was_audio {
+            if let Ok(pid) = producer_id.parse::<ProducerId>() {
+                if let Some(obs) = &active_obs {
+                    let _ = obs.remove_producer(pid).await;
+                }
+                if let Some(obs) = &audio_obs {
+                    let _ = obs.remove_producer(pid).await;
+                }
+            }
+        }
 
         info!("Closed producer {} for participant {} in room {}", producer_id, participant_id, room_id);
         Ok(())
