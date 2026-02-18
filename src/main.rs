@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod auth;
 mod db;
 mod signaling;
 mod media;
