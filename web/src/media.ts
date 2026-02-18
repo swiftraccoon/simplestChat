@@ -270,70 +270,126 @@ export class MediaManager {
     return this.localStream;
   }
 
+  /** Stop and release a local audio track */
+  private stopLocalAudioTrack(): void {
+    const track = this.localStream?.getAudioTracks()[0];
+    if (track) {
+      track.stop();
+      this.localStream?.removeTrack(track);
+    }
+  }
+
+  /** Stop and release a local video track (turns off camera light) */
+  private stopLocalVideoTrack(): void {
+    const track = this.localStream?.getVideoTracks()[0];
+    if (track) {
+      track.stop();
+      this.localStream?.removeTrack(track);
+    }
+  }
+
+  /** Re-capture mic and replace track on existing producer */
+  private async recaptureAudio(): Promise<void> {
+    if (!this.audioProducer) return;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const newTrack = stream.getAudioTracks()[0];
+    if (!newTrack) return;
+    await this.audioProducer.replaceTrack({ track: newTrack });
+    this.stopLocalAudioTrack();
+    if (!this.localStream) this.localStream = new MediaStream();
+    this.localStream.addTrack(newTrack);
+  }
+
+  /** Re-capture camera and replace track on existing producer */
+  private async recaptureVideo(): Promise<void> {
+    if (!this.videoProducer) return;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+    });
+    const newTrack = stream.getVideoTracks()[0];
+    if (!newTrack) return;
+    await this.videoProducer.replaceTrack({ track: newTrack });
+    this.stopLocalVideoTrack();
+    if (!this.localStream) this.localStream = new MediaStream();
+    this.localStream.addTrack(newTrack);
+  }
+
   /** Toggle local audio — lazily captures mic on first call */
   async toggleAudio(): Promise<boolean> {
     if (!this.audioProducer) {
-      // First time — capture mic, create producer (starts active)
       if (!(await this.ensureAudioProducer())) return false;
       return true;
     }
     if (this.audioProducer.paused) {
+      await this.recaptureAudio();
       this.audioProducer.resume();
       this.signaling.send({ type: 'resumeProducer', producerId: this.audioProducer.id });
     } else {
       this.audioProducer.pause();
       this.signaling.send({ type: 'pauseProducer', producerId: this.audioProducer.id });
+      this.stopLocalAudioTrack();
     }
     return !this.audioProducer.paused;
   }
 
-  /** Explicitly mute audio (idempotent, no-op if no producer yet) */
+  /** Explicitly mute audio — stops mic track */
   muteAudio(): void {
     if (this.audioProducer && !this.audioProducer.paused) {
       this.audioProducer.pause();
       this.signaling.send({ type: 'pauseProducer', producerId: this.audioProducer.id });
+      this.stopLocalAudioTrack();
     }
   }
 
-  /** Explicitly unmute audio — lazily captures mic on first call */
+  /** Explicitly unmute audio — re-captures mic, lazily creates producer on first call */
   async unmuteAudio(): Promise<void> {
-    if (!(await this.ensureAudioProducer())) return;
-    if (this.audioProducer!.paused) {
-      this.audioProducer!.resume();
-      this.signaling.send({ type: 'resumeProducer', producerId: this.audioProducer!.id });
+    if (!this.audioProducer) {
+      await this.ensureAudioProducer();
+      return;
+    }
+    if (this.audioProducer.paused) {
+      await this.recaptureAudio();
+      this.audioProducer.resume();
+      this.signaling.send({ type: 'resumeProducer', producerId: this.audioProducer.id });
     }
   }
 
-  /** Explicitly pause video (idempotent, no-op if no producer yet) */
+  /** Explicitly pause video — stops camera track */
   pauseVideo(): void {
     if (this.videoProducer && !this.videoProducer.paused) {
       this.videoProducer.pause();
       this.signaling.send({ type: 'pauseProducer', producerId: this.videoProducer.id });
+      this.stopLocalVideoTrack();
     }
   }
 
-  /** Explicitly unpause video — lazily captures camera on first call */
+  /** Explicitly unpause video — re-captures camera, lazily creates producer on first call */
   async unmuteVideo(): Promise<void> {
-    if (!(await this.ensureVideoProducer())) return;
-    if (this.videoProducer!.paused) {
-      this.videoProducer!.resume();
-      this.signaling.send({ type: 'resumeProducer', producerId: this.videoProducer!.id });
+    if (!this.videoProducer) {
+      await this.ensureVideoProducer();
+      return;
+    }
+    if (this.videoProducer.paused) {
+      await this.recaptureVideo();
+      this.videoProducer.resume();
+      this.signaling.send({ type: 'resumeProducer', producerId: this.videoProducer.id });
     }
   }
 
   /** Toggle local video — lazily captures camera on first call */
   async toggleVideo(): Promise<boolean> {
     if (!this.videoProducer) {
-      // First time — capture camera, create producer (starts active)
       if (!(await this.ensureVideoProducer())) return false;
       return true;
     }
     if (this.videoProducer.paused) {
+      await this.recaptureVideo();
       this.videoProducer.resume();
       this.signaling.send({ type: 'resumeProducer', producerId: this.videoProducer.id });
     } else {
       this.videoProducer.pause();
       this.signaling.send({ type: 'pauseProducer', producerId: this.videoProducer.id });
+      this.stopLocalVideoTrack();
     }
     return !this.videoProducer.paused;
   }
