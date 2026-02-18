@@ -93,6 +93,63 @@ pub enum ClientMessage {
     ChatMessage {
         content: String,
     },
+
+    // === Moderation ===
+    /// Force-close a participant's camera/screen producer
+    #[serde(rename_all = "camelCase")]
+    CloseCam { target_participant_id: String },
+    /// Ban a participant from producing video/screen
+    #[serde(rename_all = "camelCase")]
+    CamBan { target_participant_id: String, reason: Option<String> },
+    /// Unban a participant from producing video/screen
+    #[serde(rename_all = "camelCase")]
+    CamUnban { target_participant_id: String },
+    /// Mute a participant's text chat
+    #[serde(rename_all = "camelCase")]
+    TextMute { target_participant_id: String },
+    /// Unmute a participant's text chat
+    #[serde(rename_all = "camelCase")]
+    TextUnmute { target_participant_id: String },
+    /// Kick a participant from the room
+    #[serde(rename_all = "camelCase")]
+    Kick { target_participant_id: String, reason: Option<String> },
+    /// Ban a participant from the room
+    #[serde(rename_all = "camelCase")]
+    Ban { target_participant_id: String, reason: Option<String>, duration: Option<u64> },
+    /// Unban a user (stub — no persistent ban list yet)
+    #[serde(rename_all = "camelCase")]
+    Unban { target_user_id: String },
+    /// Set a participant's role
+    #[serde(rename_all = "camelCase")]
+    SetRole { target_participant_id: String, role: u8 },
+    /// Request voice in a moderated room (sent by User/Guest)
+    RequestVoice,
+
+    // === Room management ===
+    /// Update room settings (Admin+)
+    #[serde(rename_all = "camelCase")]
+    UpdateRoomSettings {
+        moderated: Option<bool>,
+        lobby_enabled: Option<bool>,
+        guests_allowed: Option<bool>,
+        guests_can_broadcast: Option<bool>,
+        max_broadcasters: Option<Option<i32>>,
+        allow_screen_sharing: Option<bool>,
+        allow_chat: Option<bool>,
+        push_to_talk: Option<bool>,
+        secret: Option<bool>,
+        password: Option<Option<String>>,
+    },
+    /// Set the room topic
+    SetTopic { topic: String },
+
+    // === Lobby ===
+    /// Admit a participant from the lobby
+    #[serde(rename_all = "camelCase")]
+    AdmitFromLobby { target_participant_id: String },
+    /// Deny a participant from the lobby
+    #[serde(rename_all = "camelCase")]
+    DenyFromLobby { target_participant_id: String },
 }
 
 /// Server-to-Client messages
@@ -230,6 +287,56 @@ pub enum ServerMessage {
     AudioLevels {
         levels: Vec<AudioLevelEntry>,
     },
+
+    // === Moderation broadcasts ===
+    /// A producer was force-closed by a moderator
+    #[serde(rename_all = "camelCase")]
+    ForceClosedProducer { producer_id: String, reason: String },
+    /// Participant's camera was banned
+    #[serde(rename_all = "camelCase")]
+    CamBanned { participant_id: String },
+    /// Participant's camera ban was lifted
+    #[serde(rename_all = "camelCase")]
+    CamUnbanned { participant_id: String },
+    /// Participant was text-muted
+    #[serde(rename_all = "camelCase")]
+    TextMuted { participant_id: String },
+    /// Participant was text-unmuted
+    #[serde(rename_all = "camelCase")]
+    TextUnmuted { participant_id: String },
+    /// Participant was kicked from the room
+    #[serde(rename_all = "camelCase")]
+    ParticipantKicked { participant_id: String, reason: Option<String> },
+    /// Participant was banned from the room
+    #[serde(rename_all = "camelCase")]
+    ParticipantBanned { participant_id: String, reason: Option<String> },
+    /// Participant's role was changed
+    #[serde(rename_all = "camelCase")]
+    RoleChanged { participant_id: String, new_role: String, granted_by: String },
+    /// A participant requested voice (sent to Moderator+)
+    #[serde(rename_all = "camelCase")]
+    VoiceRequested { participant_id: String, display_name: String },
+
+    // === Room state ===
+    /// Room settings were changed
+    #[serde(rename_all = "camelCase")]
+    RoomSettingsChanged { settings: serde_json::Value },
+    /// Room topic was changed
+    #[serde(rename_all = "camelCase")]
+    TopicChanged { topic: String, changed_by: String },
+
+    // === Lobby ===
+    /// Client is waiting in the lobby
+    #[serde(rename_all = "camelCase")]
+    LobbyWaiting { room_name: String, topic: Option<String>, participant_count: u32 },
+    /// A participant joined the lobby (sent to Moderator+)
+    #[serde(rename_all = "camelCase")]
+    LobbyJoin { participant_id: String, display_name: String, authenticated: bool },
+    /// Lobby admission was denied
+    #[serde(rename_all = "camelCase")]
+    LobbyDenied { reason: Option<String> },
+    /// Client was admitted from the lobby
+    LobbyAdmitted,
 }
 
 /// Audio level entry for a speaking participant

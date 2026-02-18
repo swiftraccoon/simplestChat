@@ -2,6 +2,7 @@
 
 // Room module - Room state management and participant tracking
 pub mod api;
+pub mod moderation;
 pub mod roles;
 pub mod settings;
 
@@ -35,6 +36,8 @@ pub struct Participant {
     pub name: String,
     pub sender: mpsc::Sender<Arc<String>>,
     pub producers: HashMap<String, (MediaKind, Option<String>)>,
+    pub role: roles::Role,
+    pub punitive: moderation::PunitiveState,
 }
 
 /// Room state
@@ -91,6 +94,52 @@ impl Room {
         };
         for (id, participant) in &self.participants {
             if id != sender_id {
+                match participant.sender.try_send(json.clone()) {
+                    Ok(()) => {}
+                    Err(mpsc::error::TrySendError::Full(_)) => {
+                        warn!("Channel full for participant {} in room {}, dropping message", id, self.id);
+                    }
+                    Err(mpsc::error::TrySendError::Closed(_)) => {
+                        debug!("Channel closed for participant {} in room {} (disconnected)", id, self.id);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Send a message to a specific participant
+    fn send_to(&self, participant_id: &str, message: &ServerMessage) {
+        let json = match serde_json::to_string(message) {
+            Ok(j) => Arc::new(j),
+            Err(e) => {
+                warn!("Failed to serialize message: {}", e);
+                return;
+            }
+        };
+        if let Some(participant) = self.participants.get(participant_id) {
+            match participant.sender.try_send(json) {
+                Ok(()) => {}
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    warn!("Channel full for participant {} in room {}, dropping message", participant_id, self.id);
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => {
+                    debug!("Channel closed for participant {} in room {} (disconnected)", participant_id, self.id);
+                }
+            }
+        }
+    }
+
+    /// Broadcast a message to all participants with role >= min_role
+    fn broadcast_to_role(&self, min_role: roles::Role, message: &ServerMessage) {
+        let json = match serde_json::to_string(message) {
+            Ok(j) => Arc::new(j),
+            Err(e) => {
+                warn!("Failed to serialize broadcast message: {}", e);
+                return;
+            }
+        };
+        for (id, participant) in &self.participants {
+            if participant.role >= min_role {
                 match participant.sender.try_send(json.clone()) {
                     Ok(()) => {}
                     Err(mpsc::error::TrySendError::Full(_)) => {
@@ -334,11 +383,20 @@ impl RoomManager {
         let room_lock = self.get_or_create_room(room_id).await?;
         let mut room = room_lock.write().await;
 
+        // First participant in a room becomes Owner (no DB for now)
+        let role = if room.participants.is_empty() {
+            roles::Role::Owner
+        } else {
+            roles::Role::User
+        };
+
         let participant = Participant {
             id: participant_id.clone(),
             name: participant_name.clone(),
             sender,
             producers: HashMap::new(),
+            role,
+            punitive: moderation::PunitiveState::default(),
         };
 
         room.participants.insert(participant_id.clone(), participant);
@@ -865,6 +923,358 @@ impl RoomManager {
         } else {
             Ok(false)
         }
+    }
+
+    // === Moderation methods ===
+
+    /// Force-close all video/screen producers for a target participant
+    pub async fn close_cam(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        target_participant_id: &str,
+    ) -> Result<()> {
+        // Collect producer IDs to close (under room lock)
+        let producers_to_close: Vec<String> = {
+            let room_lock = self.get_room(room_id)?;
+            let room = room_lock.read().await;
+
+            let moderator = room.participants.get(moderator_id)
+                .ok_or_else(|| anyhow::anyhow!("Moderator not found"))?;
+            let target = room.participants.get(target_participant_id)
+                .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+
+            if !moderator.role.can_moderate(target.role) {
+                anyhow::bail!("Insufficient permissions to moderate this participant");
+            }
+
+            // Collect video producers (camera and screen)
+            target.producers.iter()
+                .filter(|(_, (kind, _))| *kind == MediaKind::Video)
+                .map(|(id, _)| id.clone())
+                .collect()
+        };
+
+        // Close producers outside room lock (async mediasoup IPC)
+        for producer_id in &producers_to_close {
+            if let Err(e) = self.media_server
+                .transport_manager()
+                .close_producer(target_participant_id, producer_id)
+                .await
+            {
+                warn!("Failed to close producer {} for close_cam: {}", producer_id, e);
+            }
+        }
+
+        // Remove from room tracking and broadcast
+        {
+            let room_lock = self.get_room(room_id)?;
+            let mut room = room_lock.write().await;
+            if let Some(target) = room.participants.get_mut(target_participant_id) {
+                for pid in &producers_to_close {
+                    target.producers.remove(pid);
+                }
+            }
+            for pid in &producers_to_close {
+                room.producer_to_participant.remove(pid);
+                room.broadcast_all(&ServerMessage::ForceClosedProducer {
+                    producer_id: pid.clone(),
+                    reason: "Closed by moderator".to_string(),
+                });
+                room.broadcast_all(&ServerMessage::ProducerClosed {
+                    producer_id: pid.clone(),
+                });
+            }
+        }
+
+        info!("close_cam: {} closed {} video producers for {} in room {}",
+              moderator_id, producers_to_close.len(), target_participant_id, room_id);
+        Ok(())
+    }
+
+    /// Ban a participant from producing video/screen (close existing + prevent future)
+    pub async fn cam_ban(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        target_participant_id: &str,
+        _reason: Option<&str>,
+    ) -> Result<()> {
+        // First close existing cam producers
+        self.close_cam(room_id, moderator_id, target_participant_id).await?;
+
+        // Then set the cam_banned flag
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+        if let Some(target) = room.participants.get_mut(target_participant_id) {
+            target.punitive.cam_banned = true;
+        }
+        room.broadcast_all(&ServerMessage::CamBanned {
+            participant_id: target_participant_id.to_string(),
+        });
+
+        info!("cam_ban: {} cam-banned {} in room {}", moderator_id, target_participant_id, room_id);
+        Ok(())
+    }
+
+    /// Remove cam ban from a participant
+    pub async fn cam_unban(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        target_participant_id: &str,
+    ) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+
+        let moderator = room.participants.get(moderator_id)
+            .ok_or_else(|| anyhow::anyhow!("Moderator not found"))?;
+        let target = room.participants.get(target_participant_id)
+            .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+
+        if !moderator.role.can_moderate(target.role) {
+            anyhow::bail!("Insufficient permissions to moderate this participant");
+        }
+
+        // Need to re-borrow mutably after immutable borrows
+        let target = room.participants.get_mut(target_participant_id).unwrap();
+        target.punitive.cam_banned = false;
+
+        room.broadcast_all(&ServerMessage::CamUnbanned {
+            participant_id: target_participant_id.to_string(),
+        });
+
+        info!("cam_unban: {} cam-unbanned {} in room {}", moderator_id, target_participant_id, room_id);
+        Ok(())
+    }
+
+    /// Mute a participant's text chat
+    pub async fn text_mute(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        target_participant_id: &str,
+    ) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+
+        let moderator = room.participants.get(moderator_id)
+            .ok_or_else(|| anyhow::anyhow!("Moderator not found"))?;
+        let target = room.participants.get(target_participant_id)
+            .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+
+        if !moderator.role.can_moderate(target.role) {
+            anyhow::bail!("Insufficient permissions to moderate this participant");
+        }
+
+        let target = room.participants.get_mut(target_participant_id).unwrap();
+        target.punitive.text_muted = true;
+
+        room.broadcast_all(&ServerMessage::TextMuted {
+            participant_id: target_participant_id.to_string(),
+        });
+
+        info!("text_mute: {} text-muted {} in room {}", moderator_id, target_participant_id, room_id);
+        Ok(())
+    }
+
+    /// Unmute a participant's text chat
+    pub async fn text_unmute(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        target_participant_id: &str,
+    ) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+
+        let moderator = room.participants.get(moderator_id)
+            .ok_or_else(|| anyhow::anyhow!("Moderator not found"))?;
+        let target = room.participants.get(target_participant_id)
+            .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+
+        if !moderator.role.can_moderate(target.role) {
+            anyhow::bail!("Insufficient permissions to moderate this participant");
+        }
+
+        let target = room.participants.get_mut(target_participant_id).unwrap();
+        target.punitive.text_muted = false;
+
+        room.broadcast_all(&ServerMessage::TextUnmuted {
+            participant_id: target_participant_id.to_string(),
+        });
+
+        info!("text_unmute: {} text-unmuted {} in room {}", moderator_id, target_participant_id, room_id);
+        Ok(())
+    }
+
+    /// Kick a participant from the room
+    pub async fn kick_participant(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        target_participant_id: &str,
+        reason: Option<&str>,
+    ) -> Result<()> {
+        // Check permissions and remove under room lock
+        {
+            let room_lock = self.get_room(room_id)?;
+            let mut room = room_lock.write().await;
+
+            let moderator = room.participants.get(moderator_id)
+                .ok_or_else(|| anyhow::anyhow!("Moderator not found"))?;
+            let target = room.participants.get(target_participant_id)
+                .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+
+            if !moderator.role.can_moderate(target.role) {
+                anyhow::bail!("Insufficient permissions to kick this participant");
+            }
+
+            // Broadcast kick to everyone (including the target) before removing
+            room.broadcast_all(&ServerMessage::ParticipantKicked {
+                participant_id: target_participant_id.to_string(),
+                reason: reason.map(String::from),
+            });
+
+            room.participants.remove(target_participant_id);
+
+            // Broadcast leave to remaining participants
+            room.broadcast_all(&ServerMessage::ParticipantLeft {
+                participant_id: target_participant_id.to_string(),
+            });
+        }
+
+        // Clean up media outside lock
+        if let Err(e) = self.media_server.transport_manager().remove_participant(target_participant_id).await {
+            warn!("Failed to clean up media for kicked participant {}: {}", target_participant_id, e);
+        }
+
+        info!("kick: {} kicked {} from room {}", moderator_id, target_participant_id, room_id);
+        Ok(())
+    }
+
+    /// Ban a participant from the room (kick + mark as banned, in-memory only for now)
+    pub async fn ban_participant(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        target_participant_id: &str,
+        reason: Option<&str>,
+        _duration: Option<u64>,
+    ) -> Result<()> {
+        // Check permissions and remove under room lock
+        {
+            let room_lock = self.get_room(room_id)?;
+            let mut room = room_lock.write().await;
+
+            let moderator = room.participants.get(moderator_id)
+                .ok_or_else(|| anyhow::anyhow!("Moderator not found"))?;
+            let target = room.participants.get(target_participant_id)
+                .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+
+            if !moderator.role.can_moderate(target.role) {
+                anyhow::bail!("Insufficient permissions to ban this participant");
+            }
+
+            // Broadcast ban to everyone (including the target) before removing
+            room.broadcast_all(&ServerMessage::ParticipantBanned {
+                participant_id: target_participant_id.to_string(),
+                reason: reason.map(String::from),
+            });
+
+            room.participants.remove(target_participant_id);
+
+            // Broadcast leave to remaining participants
+            room.broadcast_all(&ServerMessage::ParticipantLeft {
+                participant_id: target_participant_id.to_string(),
+            });
+        }
+
+        // Clean up media outside lock
+        if let Err(e) = self.media_server.transport_manager().remove_participant(target_participant_id).await {
+            warn!("Failed to clean up media for banned participant {}: {}", target_participant_id, e);
+        }
+
+        info!("ban: {} banned {} from room {}", moderator_id, target_participant_id, room_id);
+        Ok(())
+    }
+
+    /// Set a participant's role
+    pub async fn set_participant_role(
+        &self,
+        room_id: &str,
+        setter_id: &str,
+        target_participant_id: &str,
+        new_role: roles::Role,
+    ) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+
+        let setter = room.participants.get(setter_id)
+            .ok_or_else(|| anyhow::anyhow!("Setter not found"))?;
+        let target = room.participants.get(target_participant_id)
+            .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+
+        if !setter.role.can_set_role(target.role, new_role) {
+            anyhow::bail!("Insufficient permissions to set this role");
+        }
+
+        let setter_name = setter.id.clone();
+
+        let target = room.participants.get_mut(target_participant_id).unwrap();
+        target.role = new_role;
+
+        room.broadcast_all(&ServerMessage::RoleChanged {
+            participant_id: target_participant_id.to_string(),
+            new_role: new_role.name().to_string(),
+            granted_by: setter_name,
+        });
+
+        info!("set_role: {} set {} to {:?} in room {}", setter_id, target_participant_id, new_role, room_id);
+        Ok(())
+    }
+
+    /// Request voice in a moderated room (broadcasts to Moderator+ participants)
+    pub async fn request_voice(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+    ) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let room = room_lock.read().await;
+
+        let participant = room.participants.get(participant_id)
+            .ok_or_else(|| anyhow::anyhow!("Participant not found"))?;
+
+        let display_name = participant.name.clone();
+
+        room.broadcast_to_role(roles::Role::Moderator, &ServerMessage::VoiceRequested {
+            participant_id: participant_id.to_string(),
+            display_name,
+        });
+
+        info!("request_voice: {} requested voice in room {}", participant_id, room_id);
+        Ok(())
+    }
+
+    /// Check if a participant can produce a given source type
+    pub async fn can_participant_produce(&self, room_id: &str, participant_id: &str, source: &str) -> Result<bool> {
+        let room_lock = self.get_room(room_id)?;
+        let room = room_lock.read().await;
+        let participant = room.participants.get(participant_id)
+            .ok_or_else(|| anyhow::anyhow!("Participant not found"))?;
+        let moderated = room.settings.as_ref().map_or(false, |s| s.moderated);
+        Ok(moderation::can_produce(&participant.punitive, participant.role, moderated, source))
+    }
+
+    /// Check if a participant can chat
+    pub async fn can_participant_chat(&self, room_id: &str, participant_id: &str) -> Result<bool> {
+        let room_lock = self.get_room(room_id)?;
+        let room = room_lock.read().await;
+        let participant = room.participants.get(participant_id)
+            .ok_or_else(|| anyhow::anyhow!("Participant not found"))?;
+        let moderated = room.settings.as_ref().map_or(false, |s| s.moderated);
+        Ok(moderation::can_chat(&participant.punitive, participant.role, moderated))
     }
 
     /// Broadcasts a chat message to all participants in a room except the sender

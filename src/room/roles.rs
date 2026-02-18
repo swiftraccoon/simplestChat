@@ -14,6 +14,18 @@ pub enum Role {
 }
 
 impl Role {
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Role::Guest),
+            1 => Some(Role::User),
+            2 => Some(Role::Member),
+            3 => Some(Role::Moderator),
+            4 => Some(Role::Admin),
+            5 => Some(Role::Owner),
+            _ => None,
+        }
+    }
+
     pub fn from_db(value: i16) -> Self {
         match value {
             1 => Role::Member,

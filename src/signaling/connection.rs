@@ -666,6 +666,12 @@ async fn handle_client_message(
 
         ClientMessage::Produce { transport_id: _, kind, rtp_parameters, source } => {
             if let Some(room_id) = current_room_id.as_ref() {
+                // Check if participant can produce this source type
+                let source_str = source.as_deref().unwrap_or("camera");
+                if !room_manager.can_participant_produce(room_id, participant_id, source_str).await? {
+                    anyhow::bail!("You are not allowed to produce this media type");
+                }
+
                 let producer_id = room_manager
                     .create_producer(room_id, participant_id, *kind, rtp_parameters.clone(), source.clone())
                     .await?;
@@ -803,12 +809,91 @@ async fn handle_client_message(
                 anyhow::bail!("Invalid chat message: must be 1-{MAX_CHAT_LEN} characters");
             }
             if let Some(room_id) = current_room_id.as_ref() {
+                // Check if participant can chat
+                if !room_manager.can_participant_chat(room_id, participant_id).await? {
+                    anyhow::bail!("You are not allowed to chat");
+                }
+
                 room_manager
                     .broadcast_chat(room_id, participant_id, content.clone())
                     .await?;
             } else {
                 anyhow::bail!("Not in a room");
             }
+        }
+
+        // === Moderation ===
+
+        ClientMessage::CloseCam { target_participant_id } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            room_manager.close_cam(room_id, participant_id, target_participant_id).await?;
+        }
+
+        ClientMessage::CamBan { target_participant_id, reason } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            room_manager.cam_ban(room_id, participant_id, target_participant_id, reason.as_deref()).await?;
+        }
+
+        ClientMessage::CamUnban { target_participant_id } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            room_manager.cam_unban(room_id, participant_id, target_participant_id).await?;
+        }
+
+        ClientMessage::TextMute { target_participant_id } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            room_manager.text_mute(room_id, participant_id, target_participant_id).await?;
+        }
+
+        ClientMessage::TextUnmute { target_participant_id } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            room_manager.text_unmute(room_id, participant_id, target_participant_id).await?;
+        }
+
+        ClientMessage::Kick { target_participant_id, reason } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            room_manager.kick_participant(room_id, participant_id, target_participant_id, reason.as_deref()).await?;
+        }
+
+        ClientMessage::Ban { target_participant_id, reason, duration } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            room_manager.ban_participant(room_id, participant_id, target_participant_id, reason.as_deref(), *duration).await?;
+        }
+
+        ClientMessage::Unban { target_user_id: _ } => {
+            // Stub — no persistent ban list yet
+            anyhow::bail!("Unban not yet implemented (no persistent ban list)");
+        }
+
+        ClientMessage::SetRole { target_participant_id, role } => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let new_role = crate::room::roles::Role::from_u8(*role)
+                .ok_or_else(|| anyhow::anyhow!("Invalid role value: {}", role))?;
+            room_manager.set_participant_role(room_id, participant_id, target_participant_id, new_role).await?;
+        }
+
+        ClientMessage::RequestVoice => {
+            let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            room_manager.request_voice(room_id, participant_id).await?;
+        }
+
+        // === Room management (stubs) ===
+
+        ClientMessage::UpdateRoomSettings { .. } => {
+            anyhow::bail!("Not yet implemented");
+        }
+
+        ClientMessage::SetTopic { .. } => {
+            anyhow::bail!("Not yet implemented");
+        }
+
+        // === Lobby (stubs) ===
+
+        ClientMessage::AdmitFromLobby { .. } => {
+            anyhow::bail!("Not yet implemented");
+        }
+
+        ClientMessage::DenyFromLobby { .. } => {
+            anyhow::bail!("Not yet implemented");
         }
     }
 
