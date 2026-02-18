@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,6 +26,28 @@ pub struct RoomSettings {
     pub topic: Option<String>,
 }
 
+#[derive(FromRow)]
+struct RoomRow {
+    id: String,
+    owner_id: Uuid,
+    display_name: String,
+    password_hash: Option<String>,
+    require_registration: bool,
+    max_participants: Option<i32>,
+    max_broadcasters: Option<i32>,
+    allow_screen_sharing: bool,
+    allow_chat: bool,
+    allow_video: bool,
+    moderated: bool,
+    invite_only: bool,
+    secret: bool,
+    lobby_enabled: bool,
+    push_to_talk: bool,
+    guests_allowed: bool,
+    guests_can_broadcast: bool,
+    topic: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateRoomRequest {
     pub id: String,
@@ -43,11 +65,7 @@ pub struct CreateRoomRequest {
 }
 
 pub async fn load_room(pool: &PgPool, room_id: &str) -> Result<Option<RoomSettings>, sqlx::Error> {
-    let row = sqlx::query_as::<_, (
-        String, Uuid, String, Option<String>, bool,
-        Option<i32>, Option<i32>, bool, bool, bool,
-        bool, bool, bool, bool, bool, bool, bool, Option<String>,
-    )>(
+    let row = sqlx::query_as::<_, RoomRow>(
         "SELECT id, owner_id, display_name, password_hash, require_registration,
                 max_participants, max_broadcasters, allow_screen_sharing, allow_chat, allow_video,
                 moderated, invite_only, secret, lobby_enabled, push_to_talk,
@@ -59,24 +77,24 @@ pub async fn load_room(pool: &PgPool, room_id: &str) -> Result<Option<RoomSettin
     .await?;
 
     Ok(row.map(|r| RoomSettings {
-        id: r.0,
-        owner_id: r.1,
-        display_name: r.2,
-        password_protected: r.3.is_some(),
-        require_registration: r.4,
-        max_participants: r.5,
-        max_broadcasters: r.6,
-        allow_screen_sharing: r.7,
-        allow_chat: r.8,
-        allow_video: r.9,
-        moderated: r.10,
-        invite_only: r.11,
-        secret: r.12,
-        lobby_enabled: r.13,
-        push_to_talk: r.14,
-        guests_allowed: r.15,
-        guests_can_broadcast: r.16,
-        topic: r.17,
+        id: r.id,
+        owner_id: r.owner_id,
+        display_name: r.display_name,
+        password_protected: r.password_hash.is_some(),
+        require_registration: r.require_registration,
+        max_participants: r.max_participants,
+        max_broadcasters: r.max_broadcasters,
+        allow_screen_sharing: r.allow_screen_sharing,
+        allow_chat: r.allow_chat,
+        allow_video: r.allow_video,
+        moderated: r.moderated,
+        invite_only: r.invite_only,
+        secret: r.secret,
+        lobby_enabled: r.lobby_enabled,
+        push_to_talk: r.push_to_talk,
+        guests_allowed: r.guests_allowed,
+        guests_can_broadcast: r.guests_can_broadcast,
+        topic: r.topic,
     }))
 }
 
