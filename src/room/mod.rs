@@ -1206,7 +1206,6 @@ impl RoomManager {
                     guests_can_broadcast: true,
                     topic: Some(topic.clone()),
                 };
-                default_settings.topic = Some(topic.clone());
                 room.settings = Some(default_settings);
             }
 
@@ -1631,6 +1630,12 @@ impl RoomManager {
         let entry = room.lobby.remove(target_id)
             .ok_or_else(|| anyhow::anyhow!("Participant not found in lobby"))?;
 
+        // Check if the lobby participant's connection is still alive BEFORE inserting
+        if entry.sender.is_closed() {
+            warn!("Lobby participant {} already disconnected, cannot admit", target_id);
+            anyhow::bail!("Participant has already disconnected");
+        }
+
         // Build the participants list (before inserting the new one)
         let participants: Vec<ParticipantInfo> = room
             .participants
@@ -1656,12 +1661,6 @@ impl RoomManager {
             punitive: moderation::PunitiveState::default(),
         };
         room.participants.insert(entry.participant_id.clone(), participant);
-
-        // Check if the lobby participant's connection is still alive
-        if entry.sender.is_closed() {
-            warn!("Lobby participant {} already disconnected, cannot admit", target_id);
-            anyhow::bail!("Participant has already disconnected");
-        }
 
         // Send LobbyAdmitted to the admitted participant
         if let Ok(json) = serde_json::to_string(&ServerMessage::LobbyAdmitted) {
