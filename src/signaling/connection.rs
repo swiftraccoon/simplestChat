@@ -333,30 +333,38 @@ pub async fn handle_connection(
         task.abort();
     }
 
-    // On disconnect: start grace period instead of immediate cleanup
+    // On disconnect: lobby participants clean up immediately, room participants get grace period
     if let Some(room_id) = current_room_id.take() {
-        info!("Participant {} disconnected from room {}, starting 30s grace period", participant_id, room_id);
-
-        let grace_map = grace_periods.clone();
-        let rm = room_manager.clone();
-        let pid = participant_id.clone();
-        let rid = room_id.clone();
-
-        let timer = tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
-            // Grace period expired — clean up
-            info!("Grace period expired for participant {} in room {}", pid, rid);
-            grace_map.remove(&pid);
-            if let Err(e) = rm.remove_participant(&rid, &pid).await {
-                error!("Error removing participant after grace period: {}", e);
+        if in_lobby {
+            // Lobby participants have no transports/media — clean up immediately
+            info!("Lobby participant {} disconnected from room {}, cleaning up immediately", participant_id, room_id);
+            if let Err(e) = room_manager.remove_participant(&room_id, &participant_id).await {
+                error!("Error removing lobby participant: {}", e);
             }
-        });
+        } else {
+            info!("Participant {} disconnected from room {}, starting 30s grace period", participant_id, room_id);
 
-        grace_periods.insert(participant_id.clone(), GraceEntry {
-            room_id,
-            reconnect_token,
-            timer,
-        });
+            let grace_map = grace_periods.clone();
+            let rm = room_manager.clone();
+            let pid = participant_id.clone();
+            let rid = room_id.clone();
+
+            let timer = tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+                // Grace period expired — clean up
+                info!("Grace period expired for participant {} in room {}", pid, rid);
+                grace_map.remove(&pid);
+                if let Err(e) = rm.remove_participant(&rid, &pid).await {
+                    error!("Error removing participant after grace period: {}", e);
+                }
+            });
+
+            grace_periods.insert(participant_id.clone(), GraceEntry {
+                room_id,
+                reconnect_token,
+                timer,
+            });
+        }
     }
 
     // _conn_guard dropped here → dec_connections_active
@@ -583,6 +591,17 @@ async fn handle_client_message(
     bwe_sender: &Option<mpsc::Sender<u32>>,
     is_authenticated: bool,
 ) -> anyhow::Result<()> {
+    // Block media/moderation operations for lobby participants
+    if *in_lobby {
+        match message {
+            ClientMessage::JoinRoom { .. }
+            | ClientMessage::LeaveRoom
+            | ClientMessage::ChatMessage { .. }
+            | ClientMessage::Reconnect { .. } => {} // allowed while in lobby
+            _ => anyhow::bail!("Cannot perform this action while waiting in lobby"),
+        }
+    }
+
     match message {
         ClientMessage::JoinRoom { room_id, participant_name } => {
             if room_id.is_empty() || room_id.len() > MAX_ROOM_ID_LEN {

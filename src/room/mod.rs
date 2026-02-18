@@ -411,6 +411,31 @@ impl RoomManager {
         authenticated: bool,
     ) -> Result<JoinResult> {
         let room_lock = self.get_or_create_room(room_id).await?;
+
+        // Brief read lock to check conditions for role resolution
+        let (lobby_enabled, settings_owner_id) = {
+            let room = room_lock.read().await;
+            let lobby = room.settings.as_ref().map_or(false, |s| s.lobby_enabled);
+            let owner = room.settings.as_ref().map(|s| s.owner_id);
+            (lobby, owner)
+        }; // read lock released
+
+        // Resolve role outside any lock when lobby is enabled (DB call may await)
+        let resolved_role = if lobby_enabled {
+            if let (Some(pool), Some(owner_id)) = (&self.db_pool, settings_owner_id) {
+                if let Ok(uid) = participant_id.parse::<uuid::Uuid>() {
+                    Some(roles::resolve_role(pool, room_id, Some(&uid), &owner_id, authenticated).await)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Now acquire write lock for mutation
         let mut room = room_lock.write().await;
 
         // Check ban list before allowing join
@@ -418,29 +443,18 @@ impl RoomManager {
             anyhow::bail!("You are banned from this room");
         }
 
-        // First participant in a room becomes Owner (no DB for now)
+        // Re-check is_first under write lock (another join could have raced)
         let is_first = room.participants.is_empty() && room.lobby.is_empty();
-        let lobby_enabled = room.settings.as_ref().map_or(false, |s| s.lobby_enabled);
 
-        // Resolve role: Owner if first, DB lookup when lobby is enabled, else User
+        // Determine final role
         let role = if is_first {
             roles::Role::Owner
-        } else if lobby_enabled {
-            if let (Some(pool), Some(settings)) = (&self.db_pool, &room.settings) {
-                if let Ok(uid) = participant_id.parse::<uuid::Uuid>() {
-                    roles::resolve_role(pool, room_id, Some(&uid), &settings.owner_id, authenticated).await
-                } else if authenticated {
-                    roles::Role::User
-                } else {
-                    roles::Role::Guest
-                }
-            } else if authenticated {
-                roles::Role::User
-            } else {
-                roles::Role::Guest
-            }
-        } else {
+        } else if let Some(db_role) = resolved_role {
+            db_role
+        } else if authenticated {
             roles::Role::User
+        } else {
+            roles::Role::Guest
         };
 
         // Check lobby: if lobby_enabled AND not the first participant AND role < Moderator
@@ -1446,6 +1460,12 @@ impl RoomManager {
             punitive: moderation::PunitiveState::default(),
         };
         room.participants.insert(entry.participant_id.clone(), participant);
+
+        // Check if the lobby participant's connection is still alive
+        if entry.sender.is_closed() {
+            warn!("Lobby participant {} already disconnected, cannot admit", target_id);
+            anyhow::bail!("Participant has already disconnected");
+        }
 
         // Send LobbyAdmitted to the admitted participant
         if let Ok(json) = serde_json::to_string(&ServerMessage::LobbyAdmitted) {
