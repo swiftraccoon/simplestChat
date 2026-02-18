@@ -10,7 +10,7 @@ export type ClientMessage =
   | { type: 'createSendTransport' }
   | { type: 'createRecvTransport' }
   | { type: 'connectTransport'; transportId: string; dtlsParameters: DtlsParameters }
-  | { type: 'produce'; transportId: string; kind: MediaKind; rtpParameters: RtpParameters }
+  | { type: 'produce'; transportId: string; kind: MediaKind; rtpParameters: RtpParameters; source?: string }
   | { type: 'consume'; producerId: string; rtpCapabilities: RtpCapabilities }
   | { type: 'resumeConsumer'; consumerId: string }
   | { type: 'pauseConsumer'; consumerId: string }
@@ -34,7 +34,7 @@ export type ServerMessage =
   | { type: 'consumerCreated'; consumerId: string; producerId: string; kind: MediaKind; rtpParameters: RtpParameters }
   | { type: 'participantJoined'; participantId: string; participantName: string }
   | { type: 'participantLeft'; participantId: string }
-  | { type: 'newProducer'; participantId: string; producerId: string; kind: MediaKind }
+  | { type: 'newProducer'; participantId: string; producerId: string; kind: MediaKind; source?: string }
   | { type: 'producerClosed'; producerId: string }
   | { type: 'producerPaused'; producerId: string }
   | { type: 'producerResumed'; producerId: string }
@@ -57,6 +57,7 @@ export interface ParticipantInfo {
 export interface ProducerMetadata {
   id: string;
   kind: MediaKind;
+  source?: string;
 }
 
 export type MediaKind = 'audio' | 'video';

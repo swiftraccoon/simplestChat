@@ -9,15 +9,24 @@ export class MediaManager {
   private recvTransport: mediasoupClient.types.Transport | null = null;
   private audioProducer: mediasoupClient.types.Producer | null = null;
   private videoProducer: mediasoupClient.types.Producer | null = null;
+  private screenProducer: mediasoupClient.types.Producer | null = null;
+  private screenAudioProducer: mediasoupClient.types.Producer | null = null;
   private consumers = new Map<string, mediasoupClient.types.Consumer>();
   // Map producerId → consumerId for cleanup when producer closes
   private producerToConsumer = new Map<string, string>();
   private localStream: MediaStream | null = null;
   // ICE restart timers per transport
   private iceRestartTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  // Callback when screen share stops (browser "Stop sharing" or explicit stop)
+  private onScreenShareStoppedCb: (() => void) | null = null;
 
   constructor(signaling: SignalingClient) {
     this.signaling = signaling;
+  }
+
+  /** Register callback for when screen share stops */
+  set onScreenShareStopped(cb: (() => void) | null) {
+    this.onScreenShareStoppedCb = cb;
   }
 
   get audioEnabled(): boolean {
@@ -63,12 +72,12 @@ export class MediaManager {
         .catch(errback);
     });
 
-    this.sendTransport.on('produce', async ({ kind, rtpParameters }, callback, errback) => {
+    this.sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
       try {
         const resp = await this.signaling.request<
           Extract<ServerMessage, { type: 'producerCreated' }>
         >(
-          { type: 'produce', transportId: this.sendTransport!.id, kind, rtpParameters },
+          { type: 'produce', transportId: this.sendTransport!.id, kind, rtpParameters, source: appData?.source as string | undefined },
           'producerCreated',
         );
         callback({ id: resp.producerId });
@@ -171,7 +180,7 @@ export class MediaManager {
     if (!this.localStream) this.localStream = new MediaStream();
     this.localStream.addTrack(audioTrack);
 
-    this.audioProducer = await this.sendTransport.produce({ track: audioTrack });
+    this.audioProducer = await this.sendTransport.produce({ track: audioTrack, appData: { source: 'microphone' } });
     console.log('[media] audio producer created:', this.audioProducer.id);
     return true;
   }
@@ -198,6 +207,7 @@ export class MediaManager {
         { rid: 'r2', maxBitrate: 900_000 },
       ],
       codecOptions: { videoGoogleStartBitrate: 1000 },
+      appData: { source: 'camera' },
     });
     console.log('[media] video producer created (simulcast):', this.videoProducer.id);
     return true;
@@ -440,6 +450,69 @@ export class MediaManager {
     console.log('[media] microphone switched to:', deviceId);
   }
 
+  /** Start screen sharing — creates screen video producer (and optional audio) */
+  async startScreenShare(): Promise<{ videoTrack: MediaStreamTrack; audioTrack?: MediaStreamTrack } | null> {
+    if (!this.sendTransport) return null;
+    if (this.screenProducer) return null; // Already sharing
+
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true,  // Chrome-only tab audio; gracefully absent on FF/Safari
+    });
+
+    const videoTrack = stream.getVideoTracks()[0];
+    if (!videoTrack) return null;
+
+    // Produce screen video
+    this.screenProducer = await this.sendTransport.produce({
+      track: videoTrack,
+      appData: { source: 'screen' },
+    });
+    console.log('[media] screen producer created:', this.screenProducer.id);
+
+    // Handle browser "Stop sharing" button
+    videoTrack.addEventListener('ended', () => {
+      this.stopScreenShare();
+    });
+
+    // Produce screen audio if available (Chrome-only)
+    let audioTrack: MediaStreamTrack | undefined;
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length > 0) {
+      audioTrack = audioTracks[0];
+      this.screenAudioProducer = await this.sendTransport.produce({
+        track: audioTrack,
+        appData: { source: 'screen-audio' },
+      });
+      console.log('[media] screen audio producer created:', this.screenAudioProducer.id);
+    }
+
+    return { videoTrack, audioTrack };
+  }
+
+  /** Stop screen sharing — closes producers and notifies server */
+  stopScreenShare(): void {
+    if (this.screenProducer) {
+      const track = this.screenProducer.track;
+      if (track) track.stop();
+      this.screenProducer.close();
+      this.signaling.send({ type: 'closeProducer', producerId: this.screenProducer.id });
+      this.screenProducer = null;
+    }
+    if (this.screenAudioProducer) {
+      const track = this.screenAudioProducer.track;
+      if (track) track.stop();
+      this.screenAudioProducer.close();
+      this.signaling.send({ type: 'closeProducer', producerId: this.screenAudioProducer.id });
+      this.screenAudioProducer = null;
+    }
+    this.onScreenShareStoppedCb?.();
+  }
+
+  get isScreenSharing(): boolean {
+    return this.screenProducer !== null && !this.screenProducer.closed;
+  }
+
   close(): void {
     // Clear ICE restart timers
     for (const timer of this.iceRestartTimers.values()) {
@@ -455,8 +528,12 @@ export class MediaManager {
 
     this.audioProducer?.close();
     this.videoProducer?.close();
+    this.screenProducer?.close();
+    this.screenAudioProducer?.close();
     this.audioProducer = null;
     this.videoProducer = null;
+    this.screenProducer = null;
+    this.screenAudioProducer = null;
 
     this.sendTransport?.close();
     this.recvTransport?.close();

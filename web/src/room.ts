@@ -5,7 +5,7 @@ import { MediaManager } from './media';
 export interface Participant {
   id: string;
   name: string;
-  producers: Map<string, 'audio' | 'video'>;
+  producers: Map<string, { kind: 'audio' | 'video'; source?: string }>;
 }
 
 export type ConnectionQuality = 'good' | 'fair' | 'poor' | 'unknown';
@@ -13,8 +13,8 @@ export type ConnectionQuality = 'good' | 'fair' | 'poor' | 'unknown';
 export type RoomEventHandler = {
   onParticipantsChanged: (participants: Map<string, Participant>) => void;
   onLocalStream: (stream: MediaStream) => void;
-  onRemoteTrack: (participantId: string, participantName: string, track: MediaStreamTrack, kind: 'audio' | 'video') => void;
-  onRemoteTrackRemoved: (participantId: string, producerId: string, kind: 'audio' | 'video') => void;
+  onRemoteTrack: (participantId: string, participantName: string, track: MediaStreamTrack, kind: 'audio' | 'video', source?: string) => void;
+  onRemoteTrackRemoved: (participantId: string, producerId: string, kind: 'audio' | 'video', source?: string) => void;
   onParticipantLeft: (participantId: string) => void;
   onParticipantJoined: (participantId: string, participantName: string) => void;
   onChatMessage: (participantId: string, participantName: string, content: string) => void;
@@ -67,7 +67,7 @@ export class RoomClient {
       this.participants.set(p.id, {
         id: p.id,
         name: p.name,
-        producers: new Map(p.producers.map((pr) => [pr.id, pr.kind])),
+        producers: new Map(p.producers.map((pr) => [pr.id, { kind: pr.kind, source: pr.source }])),
       });
     }
     this.events.onParticipantsChanged(this.participants);
@@ -92,6 +92,7 @@ export class RoomClient {
   }
 
   async leave(): Promise<void> {
+    this.media?.stopScreenShare();
     this.media?.close();
     this.media = null;
     this.signaling.send({ type: 'leaveRoom' });
@@ -135,6 +136,32 @@ export class RoomClient {
 
   get hasMedia(): boolean {
     return this.media !== null;
+  }
+
+  async startScreenShare(): Promise<boolean> {
+    if (!this.media) return false;
+    try {
+      const result = await this.media.startScreenShare();
+      return result !== null;
+    } catch (e) {
+      console.error('[room] screen share failed:', e);
+      return false;
+    }
+  }
+
+  stopScreenShare(): void {
+    this.media?.stopScreenShare();
+  }
+
+  get isScreenSharing(): boolean {
+    return this.media?.isScreenSharing ?? false;
+  }
+
+  /** Register callback for when screen share stops (browser button or explicit) */
+  set onScreenShareStopped(cb: (() => void) | null) {
+    if (this.media) {
+      this.media.onScreenShareStopped = cb;
+    }
   }
 
   getParticipants(): Map<string, Participant> {
@@ -207,12 +234,12 @@ export class RoomClient {
   private async consumeExistingProducers(participants: ParticipantInfo[]): Promise<void> {
     for (const p of participants) {
       for (const producer of p.producers) {
-        await this.consumeProducer(p.id, producer.id, producer.kind);
+        await this.consumeProducer(p.id, producer.id, producer.kind, producer.source);
       }
     }
   }
 
-  private async consumeProducer(participantId: string, producerId: string, kind: 'audio' | 'video'): Promise<void> {
+  private async consumeProducer(participantId: string, producerId: string, kind: 'audio' | 'video', source?: string): Promise<void> {
     if (!this.media) return;
     const participant = this.participants.get(participantId);
     const name = participant?.name ?? participantId.slice(0, 8);
@@ -221,7 +248,7 @@ export class RoomClient {
       // Skip rendering if producer is paused (user has mic/cam off).
       // ProducerPaused may arrive before consume finishes — the set handles this race.
       if (!this.pausedProducers.has(producerId)) {
-        this.events.onRemoteTrack(participantId, name, track, kind);
+        this.events.onRemoteTrack(participantId, name, track, kind, source);
       }
     } catch (e) {
       console.error(`Failed to consume producer ${producerId}:`, e);
@@ -256,11 +283,11 @@ export class RoomClient {
       case 'newProducer': {
         const participant = this.participants.get(msg.participantId);
         if (participant) {
-          participant.producers.set(msg.producerId, msg.kind);
+          participant.producers.set(msg.producerId, { kind: msg.kind, source: msg.source });
         }
         this.events.onParticipantsChanged(this.participants);
         // Auto-consume the new producer
-        void this.consumeProducer(msg.participantId, msg.producerId, msg.kind);
+        void this.consumeProducer(msg.participantId, msg.producerId, msg.kind, msg.source);
         break;
       }
       case 'producerClosed': {
@@ -268,10 +295,10 @@ export class RoomClient {
         // Find which participant owned this producer and close the consumer
         for (const [pid, p] of this.participants) {
           if (p.producers.has(msg.producerId)) {
-            const kind = p.producers.get(msg.producerId)!;
+            const meta = p.producers.get(msg.producerId)!;
             p.producers.delete(msg.producerId);
             this.media?.closeConsumerByProducer(msg.producerId);
-            this.events.onRemoteTrackRemoved(pid, msg.producerId, kind);
+            this.events.onRemoteTrackRemoved(pid, msg.producerId, meta.kind, meta.source);
             break;
           }
         }
@@ -307,9 +334,9 @@ export class RoomClient {
         this.pausedProducers.add(msg.producerId);
         for (const [pid, p] of this.participants) {
           if (p.producers.has(msg.producerId)) {
-            const kind = p.producers.get(msg.producerId)!;
-            console.log(`[room] producer ${msg.producerId} paused → hiding ${kind} tile`);
-            this.events.onRemoteTrackRemoved(pid, msg.producerId, kind);
+            const meta = p.producers.get(msg.producerId)!;
+            console.log(`[room] producer ${msg.producerId} paused → hiding ${meta.kind} tile`);
+            this.events.onRemoteTrackRemoved(pid, msg.producerId, meta.kind, meta.source);
             break;
           }
         }
@@ -319,11 +346,11 @@ export class RoomClient {
         this.pausedProducers.delete(msg.producerId);
         for (const [pid, p] of this.participants) {
           if (p.producers.has(msg.producerId)) {
-            const kind = p.producers.get(msg.producerId)!;
-            console.log(`[room] producer ${msg.producerId} resumed → showing ${kind} tile`);
+            const meta = p.producers.get(msg.producerId)!;
+            console.log(`[room] producer ${msg.producerId} resumed → showing ${meta.kind} tile`);
             const track = this.media?.getConsumerTrackByProducer(msg.producerId);
             if (track) {
-              this.events.onRemoteTrack(pid, p.name, track, kind);
+              this.events.onRemoteTrack(pid, p.name, track, meta.kind, meta.source);
             }
             break;
           }

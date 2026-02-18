@@ -310,6 +310,25 @@ header h1 {
   transform: scale(1.01);
 }
 
+/* Screen share tile — spans wider in grid */
+.video-tile.screen-share {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+/* Screen share video should use contain not cover (to show full screen) */
+.video-tile.screen-share video {
+  object-fit: contain;
+  background: black;
+}
+
+/* Screen share active button state */
+#screen-btn.active {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+
 /* No-video state: show initial */
 .video-tile .no-video-avatar {
   position: absolute;

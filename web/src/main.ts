@@ -18,6 +18,7 @@ const chatInput = document.getElementById('chat-input') as HTMLInputElement;
 const chatSendBtn = document.getElementById('chat-send-btn')!;
 const micBtn = document.getElementById('mic-btn')!;
 const camBtn = document.getElementById('cam-btn')!;
+const screenBtn = document.getElementById('screen-btn')!;
 const settingsBtn = document.getElementById('settings-btn')!;
 const leaveBtn = document.getElementById('leave-btn')!;
 const qualityIndicator = document.getElementById('quality-indicator')!;
@@ -171,6 +172,11 @@ function setButtonContent(btn: HTMLElement, iconHtml: string, tooltip?: string):
 setButtonContent(chatSendBtn, icons.send());
 setButtonContent(micBtn, icons.micOn(), 'Mic (M)');
 setButtonContent(camBtn, icons.camOn(), 'Cam (V)');
+setButtonContent(screenBtn, icons.screenShare(), 'Screen (S)');
+// Hide screen share button if getDisplayMedia is not supported (mobile)
+if (!navigator.mediaDevices?.getDisplayMedia) {
+  screenBtn.hidden = true;
+}
 setButtonContent(settingsBtn, icons.settings(), 'Settings');
 setButtonContent(leaveBtn, icons.leave(), 'Leave');
 
@@ -258,6 +264,11 @@ joinBtn.addEventListener('click', async () => {
     if (room.hasMedia) {
       updateMicButton(false);
       updateCamButton(false);
+      updateScreenButton(false);
+      // Register callback so UI updates when browser's "Stop sharing" button is clicked
+      room.onScreenShareStopped = () => {
+        updateScreenButton(false);
+      };
     } else {
       // Media unavailable — show disabled state
       console.warn('[ui] media not available, buttons will be non-functional');
@@ -311,8 +322,10 @@ leaveBtn.addEventListener('click', async () => {
   camBtn.style.opacity = '';
   micBtn.classList.remove('active', 'muted', 'ptt-active');
   camBtn.classList.remove('active', 'muted');
+  screenBtn.classList.remove('active');
   setButtonContent(micBtn, icons.micOn(), 'Mic (M)');
   setButtonContent(camBtn, icons.camOn(), 'Cam (V)');
+  setButtonContent(screenBtn, icons.screenShare(), 'Screen (S)');
   // Remove PTT label if present
   micBtn.querySelector('.ptt-label')?.remove();
 
@@ -356,6 +369,11 @@ function updateCamButton(enabled: boolean): void {
   setButtonContent(camBtn, enabled ? icons.camOn() : icons.camOff(), enabled ? 'Cam Off (V)' : 'Cam On (V)');
   camBtn.classList.toggle('active', enabled);
   camBtn.classList.toggle('muted', !enabled);
+}
+
+function updateScreenButton(active: boolean): void {
+  setButtonContent(screenBtn, active ? icons.screenShareOff() : icons.screenShare(), active ? 'Stop Sharing (S)' : 'Screen (S)');
+  screenBtn.classList.toggle('active', active);
 }
 
 /** Show/hide/update the local video tile based on current mic+cam state */
@@ -493,6 +511,17 @@ camBtn.addEventListener('click', async () => {
   const enabled = await room.toggleVideo();
   updateCamButton(enabled);
   updateLocalTile();
+});
+
+screenBtn.addEventListener('click', async () => {
+  if (!room || !room.hasMedia) return;
+  if (room.isScreenSharing) {
+    room.stopScreenShare();
+    updateScreenButton(false);
+  } else {
+    const success = await room.startScreenShare();
+    updateScreenButton(success);
+  }
 });
 
 // --- Settings Modal ---
@@ -693,9 +722,9 @@ function renderParticipants(participants: Map<string, Participant>): void {
   const allParticipants: Participant[] = [];
   if (room?.localParticipantId) {
     // Build local producers map from actual media state
-    const localProducers = new Map<string, 'audio' | 'video'>();
-    if (room.audioEnabled) localProducers.set('local-audio', 'audio');
-    if (room.videoEnabled) localProducers.set('local-video', 'video');
+    const localProducers = new Map<string, { kind: 'audio' | 'video'; source?: string }>();
+    if (room.audioEnabled) localProducers.set('local-audio', { kind: 'audio', source: 'microphone' });
+    if (room.videoEnabled) localProducers.set('local-video', { kind: 'video', source: 'camera' });
     allParticipants.push({
       id: room.localParticipantId,
       name: nameInput.value.trim(),
@@ -734,8 +763,8 @@ function renderParticipants(participants: Map<string, Participant>): void {
     const mediaIcons = document.createElement('div');
     mediaIcons.className = 'participant-media-icons';
 
-    const hasAudio = [...p.producers.values()].includes('audio');
-    const hasVideo = [...p.producers.values()].includes('video');
+    const hasAudio = [...p.producers.values()].some((v) => v.kind === 'audio');
+    const hasVideo = [...p.producers.values()].some((v) => v.kind === 'video');
 
     const micIcon = document.createElement('span');
     micIcon.className = `media-icon ${hasAudio ? 'active' : 'muted'}`;
@@ -800,9 +829,9 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
   // Include local user with actual media state
   const allParticipants: Participant[] = [];
   if (room?.localParticipantId) {
-    const localProducers = new Map<string, 'audio' | 'video'>();
-    if (room.audioEnabled) localProducers.set('local-audio', 'audio');
-    if (room.videoEnabled) localProducers.set('local-video', 'video');
+    const localProducers = new Map<string, { kind: 'audio' | 'video'; source?: string }>();
+    if (room.audioEnabled) localProducers.set('local-audio', { kind: 'audio', source: 'microphone' });
+    if (room.videoEnabled) localProducers.set('local-video', { kind: 'video', source: 'camera' });
     allParticipants.push({
       id: room.localParticipantId,
       name: nameInput.value.trim(),
@@ -838,30 +867,34 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
 }
 
 
-function renderRemoteTrack(participantId: string, participantName: string, track: MediaStreamTrack, _kind: 'audio' | 'video'): void {
-  let tile = remoteTiles.get(participantId);
+function renderRemoteTrack(participantId: string, participantName: string, track: MediaStreamTrack, _kind: 'audio' | 'video', source?: string): void {
+  const isScreen = source === 'screen' || source === 'screen-audio';
+  const tileKey = isScreen ? `${participantId}:screen` : participantId;
+  let tile = remoteTiles.get(tileKey);
 
   if (!tile) {
     tile = document.createElement('div');
-    tile.className = 'video-tile';
+    tile.className = isScreen ? 'video-tile screen-share' : 'video-tile';
     tile.dataset['participantId'] = participantId;
 
-    // No-video avatar
-    const noVideoAvatar = document.createElement('div');
-    noVideoAvatar.className = 'no-video-avatar';
-    const initial = document.createElement('div');
-    initial.className = 'avatar-initial';
-    initial.style.background = nameColor(participantName);
-    initial.textContent = participantName.charAt(0).toUpperCase();
-    noVideoAvatar.appendChild(initial);
-    tile.appendChild(noVideoAvatar);
+    // No-video avatar (not shown for screen share tiles)
+    if (!isScreen) {
+      const noVideoAvatar = document.createElement('div');
+      noVideoAvatar.className = 'no-video-avatar';
+      const initial = document.createElement('div');
+      initial.className = 'avatar-initial';
+      initial.style.background = nameColor(participantName);
+      initial.textContent = participantName.charAt(0).toUpperCase();
+      noVideoAvatar.appendChild(initial);
+      tile.appendChild(noVideoAvatar);
+    }
 
     const nameTag = document.createElement('div');
     nameTag.className = 'name-tag';
-    nameTag.textContent = participantName;
+    nameTag.textContent = isScreen ? `${participantName} (Screen)` : participantName;
     tile.appendChild(nameTag);
 
-    remoteTiles.set(participantId, tile);
+    remoteTiles.set(tileKey, tile);
     videoGrid.appendChild(tile);
     updateVideoGridCount();
   }
@@ -885,12 +918,17 @@ function renderRemoteTrack(participantId: string, participantName: string, track
       tile.appendChild(audio);
     }
     audio.srcObject = new MediaStream([track]);
-    setupSpeakingAnalyser(participantId, track);
+    // Only set up speaking analyser for non-screen audio
+    if (!isScreen) {
+      setupSpeakingAnalyser(participantId, track);
+    }
   }
 }
 
-function removeRemoteTrack(participantId: string, _producerId: string, kind: 'audio' | 'video'): void {
-  const tile = remoteTiles.get(participantId);
+function removeRemoteTrack(participantId: string, _producerId: string, kind: 'audio' | 'video', source?: string): void {
+  const isScreen = source === 'screen' || source === 'screen-audio';
+  const tileKey = isScreen ? `${participantId}:screen` : participantId;
+  const tile = remoteTiles.get(tileKey);
   if (!tile) return;
 
   if (kind === 'video') {
@@ -907,13 +945,15 @@ function removeRemoteTrack(participantId: string, _producerId: string, kind: 'au
       audio.srcObject = null;
       audio.remove();
     }
-    teardownSpeakingAnalyser(participantId);
+    if (!isScreen) {
+      teardownSpeakingAnalyser(participantId);
+    }
   }
 
   // Remove tile entirely if no active media remains
   if (!tile.querySelector('video') && !tile.querySelector('audio')) {
     tile.remove();
-    remoteTiles.delete(participantId);
+    remoteTiles.delete(tileKey);
     updateVideoGridCount();
   }
 }
@@ -924,8 +964,14 @@ function handleParticipantLeft(participantId: string): void {
   if (tile) {
     tile.remove();
     remoteTiles.delete(participantId);
-    updateVideoGridCount();
   }
+  // Also clean up screen share tile if present
+  const screenTile = remoteTiles.get(`${participantId}:screen`);
+  if (screenTile) {
+    screenTile.remove();
+    remoteTiles.delete(`${participantId}:screen`);
+  }
+  updateVideoGridCount();
   teardownSpeakingAnalyser(participantId);
   speakingState.delete(participantId);
   if (name) appendSystemMessage(`${name} left`);
@@ -1027,6 +1073,18 @@ document.addEventListener('keydown', (e) => {
           updateCamButton(enabled);
           updateLocalTile();
         });
+      }
+      break;
+    case 's':
+      if (room && room.hasMedia) {
+        if (room.isScreenSharing) {
+          room.stopScreenShare();
+          updateScreenButton(false);
+        } else {
+          room.startScreenShare().then(success => {
+            updateScreenButton(success);
+          });
+        }
       }
       break;
     case 'escape':
