@@ -8,6 +8,7 @@ pub mod connection;
 use crate::metrics::ServerMetrics;
 use crate::room::RoomManager;
 use crate::turn::TurnConfig;
+use sqlx::PgPool;
 use axum::{
     extract::{ws::WebSocketUpgrade, State},
     http::{HeaderMap, StatusCode},
@@ -31,11 +32,13 @@ pub struct SignalingServer {
     grace_periods: GracePeriodMap,
     metrics: ServerMetrics,
     connection_semaphore: Arc<Semaphore>,
+    db_pool: Option<PgPool>,
+    jwt_secret: Option<String>,
 }
 
 impl SignalingServer {
     /// Creates a new signaling server
-    pub fn new(room_manager: Arc<RoomManager>, turn_config: Option<TurnConfig>, metrics: ServerMetrics) -> Self {
+    pub fn new(room_manager: Arc<RoomManager>, turn_config: Option<TurnConfig>, metrics: ServerMetrics, db_pool: Option<PgPool>) -> Self {
         let mut max_connections: usize = std::env::var("MAX_CONNECTIONS")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -46,13 +49,30 @@ impl SignalingServer {
         }
         info!("Max connections: {}", max_connections);
 
+        let jwt_secret = std::env::var("JWT_SECRET").ok();
+        if jwt_secret.is_some() {
+            info!("JWT authentication enabled");
+        } else {
+            info!("JWT_SECRET not set — authentication disabled");
+        }
+
         Self {
             room_manager,
             turn_config: turn_config.map(Arc::new),
             grace_periods: GracePeriodMap::new(),
             metrics,
             connection_semaphore: Arc::new(Semaphore::new(max_connections)),
+            db_pool,
+            jwt_secret,
         }
+    }
+
+    pub fn db_pool(&self) -> Option<&PgPool> {
+        self.db_pool.as_ref()
+    }
+
+    pub fn jwt_secret(&self) -> Option<&str> {
+        self.jwt_secret.as_deref()
     }
 
     /// Creates the Axum router for the signaling server

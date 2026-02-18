@@ -2,6 +2,7 @@
 
 // SimplestChat library - mediasoup-based real-time communication server
 
+pub mod db;
 pub mod media;
 pub mod metrics;
 pub mod room;

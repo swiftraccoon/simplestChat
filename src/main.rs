@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod db;
 mod signaling;
 mod media;
 mod metrics;
@@ -62,8 +63,11 @@ async fn main() -> Result<()> {
         info!("No TURN configured (set TURN_URLS and TURN_SECRET to enable)");
     }
 
+    // Connect to database (optional)
+    let db_pool = db::connect().await?;
+
     // Create and start signaling server
-    let signaling_server = SignalingServer::new(room_manager.clone(), turn_config, metrics);
+    let signaling_server = SignalingServer::new(room_manager.clone(), turn_config, metrics, db_pool);
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|v| v.parse().ok())
