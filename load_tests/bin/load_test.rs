@@ -708,6 +708,7 @@ async fn run_client_inner(
                 transport_id: st_id.clone(),
                 kind: MediaKind::Audio,
                 rtp_parameters: audio_params,
+                source: Some("microphone".to_string()),
             };
             send_message(&mut write, produce_msg).await?;
             match receive_response(&mut read, &mut buffered_events).await? {
@@ -731,6 +732,7 @@ async fn run_client_inner(
                 transport_id: st_id.clone(),
                 kind: MediaKind::Video,
                 rtp_parameters: video_params,
+                source: Some("camera".to_string()),
             };
             send_message(&mut write, produce_msg).await?;
             match receive_response(&mut read, &mut buffered_events).await? {
@@ -1385,6 +1387,23 @@ async fn receive_response(
             ServerMessage::ProducerPaused { .. } => {}
             ServerMessage::ProducerResumed { .. } => {}
             ServerMessage::ChatReceived { .. } => {}
+            ServerMessage::ActiveSpeaker { .. } => {}
+            ServerMessage::AudioLevels { .. } => {}
+            ServerMessage::ForceClosedProducer { .. } => {}
+            ServerMessage::CamBanned { .. } => {}
+            ServerMessage::CamUnbanned { .. } => {}
+            ServerMessage::TextMuted { .. } => {}
+            ServerMessage::TextUnmuted { .. } => {}
+            ServerMessage::ParticipantKicked { .. } => {}
+            ServerMessage::ParticipantBanned { .. } => {}
+            ServerMessage::RoleChanged { .. } => {}
+            ServerMessage::VoiceRequested { .. } => {}
+            ServerMessage::RoomSettingsChanged { .. } => {}
+            ServerMessage::TopicChanged { .. } => {}
+            ServerMessage::LobbyWaiting { .. } => {}
+            ServerMessage::LobbyJoin { .. } => {}
+            ServerMessage::LobbyDenied { .. } => {}
+            ServerMessage::LobbyAdmitted => {}
             msg => return Ok(msg),
         }
     }
