@@ -81,7 +81,8 @@ impl SignalingServer {
 
         let auth_routes = Router::new()
             .route("/register", post(crate::auth::routes::register))
-            .route("/login", post(crate::auth::routes::login));
+            .route("/login", post(crate::auth::routes::login))
+            .route("/refresh", post(crate::auth::routes::refresh));
 
         Router::new()
             .route("/ws", get(ws_handler))
