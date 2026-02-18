@@ -1292,7 +1292,7 @@ async fn handle_server_message(
             pending_resumes.push(consumer_id.clone());
             *needs_renegotiation = true;
         }
-        ServerMessage::ParticipantJoined { participant_id, participant_name } => {
+        ServerMessage::ParticipantJoined { participant_id, participant_name, .. } => {
             tracing::debug!("{}: Participant joined: {} ({})",
                 client_id, participant_name, participant_id);
         }
