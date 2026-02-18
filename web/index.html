@@ -60,10 +60,56 @@
         <button id="mic-btn" title="Toggle microphone"></button>
         <button id="cam-btn" title="Toggle camera"></button>
         <button id="screen-btn" title="Share screen"></button>
+        <button id="hand-btn" title="Raise hand" hidden></button>
+        <button id="room-settings-btn" title="Room settings" hidden></button>
         <button id="settings-btn" title="Settings"></button>
         <button id="leave-btn" title="Leave room"></button>
       </div>
     </div>
+
+    <div id="lobby-screen" hidden>
+      <div class="lobby-card">
+        <h2 id="lobby-room-name"></h2>
+        <p id="lobby-topic"></p>
+        <div class="lobby-spinner"></div>
+        <p class="lobby-waiting-text">Waiting for moderator approval...</p>
+        <p id="lobby-count"></p>
+        <button id="lobby-cancel-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="room-settings-modal" class="modal-overlay" hidden>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Room Settings</h2>
+          <button id="room-settings-close" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="setting-group setting-toggle">
+            <label for="rs-moderated">Moderated</label>
+            <input type="checkbox" id="rs-moderated" />
+          </div>
+          <div class="setting-group setting-toggle">
+            <label for="rs-lobby">Lobby Enabled</label>
+            <input type="checkbox" id="rs-lobby" />
+          </div>
+          <div class="setting-group setting-toggle">
+            <label for="rs-screen">Allow Screen Sharing</label>
+            <input type="checkbox" id="rs-screen" />
+          </div>
+          <div class="setting-group setting-toggle">
+            <label for="rs-chat">Allow Chat</label>
+            <input type="checkbox" id="rs-chat" />
+          </div>
+          <div class="setting-group setting-toggle">
+            <label for="rs-guests">Guests Allowed</label>
+            <input type="checkbox" id="rs-guests" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast-container"></div>
 
     <div id="settings-modal" class="modal-overlay" hidden>
       <div class="modal-content">

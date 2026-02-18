@@ -961,6 +961,255 @@ header h1 {
   to { opacity: 0; }
 }
 
+/* ========== Moderation Context Menu ========== */
+
+.mod-context-menu {
+  position: fixed;
+  z-index: 200;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel), 0 8px 24px rgba(0,0,0,0.4);
+  min-width: 160px;
+  padding: 4px 0;
+  animation: fadeIn 100ms ease;
+}
+
+.mod-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.9rem;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.mod-context-menu button:hover {
+  background: var(--surface-2);
+}
+
+.mod-context-menu button.danger {
+  color: var(--danger);
+}
+
+.mod-context-menu button.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ========== Lobby Screen ========== */
+
+#lobby-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lobby-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 2rem;
+  box-shadow: var(--shadow-panel), 0 0 40px rgba(0,0,0,0.3);
+  width: 360px;
+  max-width: calc(100vw - 2rem);
+  text-align: center;
+}
+
+.lobby-card h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.lobby-card p {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.lobby-waiting-text {
+  margin-top: 1rem;
+  color: var(--text) !important;
+  font-weight: 500;
+}
+
+.lobby-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 1rem 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.lobby-card button {
+  margin-top: 1.25rem;
+  padding: 0.55rem 1.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.lobby-card button:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+/* ========== Toast Notifications ========== */
+
+#toast-container {
+  position: fixed;
+  bottom: 80px;
+  right: 1rem;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 1rem;
+  color: var(--text);
+  font-size: 0.82rem;
+  box-shadow: var(--shadow-panel);
+  animation: toastIn 200ms ease, toastOut 300ms ease 2.7s forwards;
+  pointer-events: auto;
+  max-width: 320px;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* ========== Role Badges ========== */
+
+.role-badge {
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-right: 2px;
+}
+
+.role-badge.role-owner {
+  color: #f59e0b;
+}
+
+.role-badge.role-admin {
+  color: #ef4444;
+}
+
+.role-badge.role-moderator {
+  color: #22c55e;
+}
+
+.role-badge.role-member {
+  color: var(--accent);
+}
+
+/* ========== Room Settings Modal ========== */
+
+.setting-toggle {
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.setting-toggle input[type="checkbox"] {
+  width: 40px;
+  height: 22px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  position: relative;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.setting-toggle input[type="checkbox"]::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--text-dim);
+  border-radius: 50%;
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+
+.setting-toggle input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.setting-toggle input[type="checkbox"]:checked::after {
+  transform: translateX(18px);
+  background: white;
+}
+
+.setting-toggle label {
+  text-transform: none !important;
+  font-size: 0.85rem !important;
+  color: var(--text) !important;
+}
+
+/* Hand / raise hand button */
+#hand-btn {
+  font-size: 1.2rem;
+}
+
+#hand-btn.hand-raised {
+  background: rgba(245, 158, 11, 0.15) !important;
+  border-color: #f59e0b !important;
+}
+
+/* Room settings button */
+#room-settings-btn {
+  border-color: var(--border) !important;
+  background: var(--surface-2) !important;
+  color: var(--text-dim) !important;
+}
+
+#room-settings-btn:hover {
+  color: var(--text) !important;
+  border-color: var(--text-dim) !important;
+}
+
 /* ========== Responsive ========== */
 
 @media (max-width: 768px) {

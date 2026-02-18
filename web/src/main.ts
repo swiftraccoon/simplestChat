@@ -24,6 +24,27 @@ const leaveBtn = document.getElementById('leave-btn')!;
 const qualityIndicator = document.getElementById('quality-indicator')!;
 const scrollBottomBtn = document.getElementById('scroll-bottom-btn')!;
 const unreadBadge = document.getElementById('unread-badge')!;
+const handBtn = document.getElementById('hand-btn')!;
+const roomSettingsBtn = document.getElementById('room-settings-btn')!;
+
+// Lobby screen
+const lobbyScreen = document.getElementById('lobby-screen')!;
+const lobbyRoomName = document.getElementById('lobby-room-name')!;
+const lobbyTopic = document.getElementById('lobby-topic')!;
+const lobbyCount = document.getElementById('lobby-count')!;
+const lobbyCancelBtn = document.getElementById('lobby-cancel-btn')!;
+
+// Room settings modal
+const roomSettingsModal = document.getElementById('room-settings-modal')!;
+const roomSettingsClose = document.getElementById('room-settings-close')!;
+const rsModerated = document.getElementById('rs-moderated') as HTMLInputElement;
+const rsLobby = document.getElementById('rs-lobby') as HTMLInputElement;
+const rsScreen = document.getElementById('rs-screen') as HTMLInputElement;
+const rsChat = document.getElementById('rs-chat') as HTMLInputElement;
+const rsGuests = document.getElementById('rs-guests') as HTMLInputElement;
+
+// Toast container
+const toastContainer = document.getElementById('toast-container')!;
 
 // Sidebar tabs
 const sidebarTabs = document.querySelectorAll<HTMLButtonElement>('#sidebar-tabs .tab');
@@ -101,6 +122,103 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+// --- Toast Notifications ---
+function showToast(message: string, duration = 3000): void {
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+  setTimeout(() => toast.remove(), duration);
+}
+
+// --- Moderation Context Menu ---
+function showModerationMenu(targetId: string, _targetName: string, x: number, y: number): void {
+  // Remove any existing menu
+  document.getElementById('mod-menu')?.remove();
+
+  const role = room?.role ?? 'user';
+
+  const items: { label: string; action: () => void; danger?: boolean }[] = [];
+
+  if (role === 'owner' || role === 'admin' || role === 'moderator') {
+    items.push({ label: 'Close Camera', action: () => room?.closeCam(targetId) });
+    items.push({ label: 'Mute Text', action: () => room?.textMute(targetId) });
+    items.push({ label: 'Kick', action: () => room?.kick(targetId), danger: true });
+  }
+  if (role === 'owner' || role === 'admin') {
+    items.push({ label: 'Cam Ban', action: () => room?.camBan(targetId), danger: true });
+    items.push({ label: 'Ban', action: () => room?.ban(targetId), danger: true });
+  }
+
+  if (items.length === 0) return; // Don't show empty menu for regular users
+
+  const menu = document.createElement('div');
+  menu.id = 'mod-menu';
+  menu.className = 'mod-context-menu';
+
+  for (const item of items) {
+    const btn = document.createElement('button');
+    btn.textContent = item.label;
+    if (item.danger) btn.className = 'danger';
+    btn.addEventListener('click', () => { item.action(); menu.remove(); });
+    menu.appendChild(btn);
+  }
+
+  // Position the menu, ensuring it stays within the viewport
+  menu.style.left = `${Math.min(x, window.innerWidth - 180)}px`;
+  menu.style.top = `${Math.min(y, window.innerHeight - items.length * 36 - 16)}px`;
+  document.body.appendChild(menu);
+
+  // Close on click outside
+  const close = (e: MouseEvent) => {
+    if (!menu.contains(e.target as Node)) {
+      menu.remove();
+      document.removeEventListener('click', close);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', close), 0);
+}
+
+// --- Role Badge Helpers ---
+const ROLE_SYMBOLS: Record<string, string> = {
+  owner: '~',
+  admin: '&',
+  moderator: '@',
+  member: '+',
+};
+
+function getRoleBadgeSpan(role: string): HTMLSpanElement | null {
+  const symbol = ROLE_SYMBOLS[role];
+  if (!symbol) return null;
+  const span = document.createElement('span');
+  span.className = `role-badge role-${role}`;
+  span.textContent = symbol;
+  return span;
+}
+
+// --- Room Settings / Moderation UI Helpers ---
+function updateRoomModeUI(): void {
+  const role = room?.role ?? 'user';
+  const settings = room?.roomSettings;
+
+  // Show hand-raise button for non-privileged users in moderated rooms
+  const isPrivileged = role === 'owner' || role === 'admin' || role === 'moderator' || role === 'member';
+  handBtn.hidden = !(settings?.moderated && !isPrivileged);
+
+  // Show room settings button for admins+
+  roomSettingsBtn.hidden = !(role === 'owner' || role === 'admin');
+}
+
+function populateRoomSettingsModal(): void {
+  const settings = room?.roomSettings;
+  if (!settings) return;
+  rsModerated.checked = settings.moderated;
+  rsLobby.checked = settings.lobbyEnabled;
+  rsScreen.checked = settings.allowScreenSharing;
+  rsChat.checked = settings.allowChat;
+  rsGuests.checked = settings.guestsAllowed;
+}
+
 // --- Layout Management ---
 function getLayout(): 'modern' | 'classic' {
   return (localStorage.getItem('layout') as 'modern' | 'classic') || 'modern';
@@ -169,6 +287,8 @@ setButtonContent(screenBtn, icons.screenShare(), 'Screen (S)');
 if (!navigator.mediaDevices?.getDisplayMedia) {
   screenBtn.hidden = true;
 }
+setButtonContent(handBtn, icons.handRaised(), 'Raise Hand');
+setButtonContent(roomSettingsBtn, icons.roomSettings(), 'Room Settings');
 setButtonContent(settingsBtn, icons.settings(), 'Settings');
 setButtonContent(leaveBtn, icons.leave(), 'Leave');
 
@@ -281,31 +401,66 @@ joinBtn.addEventListener('click', async () => {
         }
       },
       onModeration: (action, participantId, reason) => {
-        console.log(`[moderation] ${action} on ${participantId}${reason ? `: ${reason}` : ''}`);
+        // Find participant name
+        const participants = room?.getParticipants();
+        const targetName = participants?.get(participantId)?.name ?? participantId.slice(0, 8);
+        const reasonText = reason ? ` (${reason})` : '';
+        const messages: Record<string, string> = {
+          camBanned: `${targetName} was camera banned${reasonText}`,
+          camUnbanned: `${targetName} was camera unbanned`,
+          textMuted: `${targetName} was text muted`,
+          textUnmuted: `${targetName} was text unmuted`,
+          kicked: `${targetName} was kicked${reasonText}`,
+          banned: `${targetName} was banned${reasonText}`,
+        };
+        showToast(messages[action] ?? `${action} on ${targetName}`);
       },
       onRoleChanged: (participantId, newRole) => {
-        console.log(`[moderation] role changed: ${participantId} → ${newRole}`);
+        const participants = room?.getParticipants();
+        const targetName = participants?.get(participantId)?.name
+          ?? (participantId === room?.localParticipantId ? nameInput.value.trim() : participantId.slice(0, 8));
+        if (participantId === room?.localParticipantId) {
+          showToast(`Your role has been changed to ${newRole}`);
+        } else {
+          showToast(`${targetName} is now ${newRole}`);
+        }
+        updateRoomModeUI();
+        // Re-render participants to update role badges
+        if (room) renderParticipants(room.getParticipants());
       },
-      onRoomSettingsChanged: (settings) => {
-        console.log('[room] settings changed:', settings);
+      onRoomSettingsChanged: (_settings) => {
+        showToast('Room settings have been updated');
+        updateRoomModeUI();
       },
       onTopicChanged: (topic, changedBy) => {
-        console.log(`[room] topic changed by ${changedBy}: ${topic}`);
+        showToast(`Topic changed by ${changedBy}: ${topic}`);
       },
-      onVoiceRequested: (participantId, displayName) => {
-        console.log(`[room] voice requested by ${displayName} (${participantId})`);
+      onVoiceRequested: (_participantId, displayName) => {
+        showToast(`${displayName} is requesting voice`);
       },
       onLobbyWaiting: (roomName, topic, count) => {
-        console.log(`[lobby] waiting in ${roomName} (${count} participants)${topic ? `: ${topic}` : ''}`);
+        joinScreen.hidden = true;
+        roomScreen.hidden = true;
+        lobbyScreen.hidden = false;
+        lobbyRoomName.textContent = roomName;
+        lobbyTopic.textContent = topic ?? '';
+        lobbyTopic.hidden = !topic;
+        lobbyCount.textContent = `${count} participant${count !== 1 ? 's' : ''} in room`;
       },
-      onLobbyJoin: (participantId, displayName) => {
-        console.log(`[lobby] ${displayName} (${participantId}) joined lobby`);
+      onLobbyJoin: (_participantId, displayName) => {
+        showToast(`${displayName} is waiting in the lobby`);
       },
       onLobbyAdmitted: () => {
-        console.log('[lobby] admitted to room');
+        lobbyScreen.hidden = true;
+        roomScreen.hidden = false;
+        showToast('You have been admitted to the room');
       },
       onLobbyDenied: (reason) => {
-        console.log(`[lobby] denied${reason ? `: ${reason}` : ''}`);
+        lobbyScreen.hidden = true;
+        joinScreen.hidden = false;
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Join Room';
+        alert(`Lobby access denied${reason ? `: ${reason}` : ''}`);
       },
     });
 
@@ -340,6 +495,7 @@ joinBtn.addEventListener('click', async () => {
     }
 
     qualityIndicator.hidden = false;
+    updateRoomModeUI();
   } catch (e) {
     console.error('Failed to join:', e);
     alert(`Failed to join: ${e instanceof Error ? e.message : String(e)}`);
@@ -347,6 +503,17 @@ joinBtn.addEventListener('click', async () => {
     joinBtn.disabled = false;
     joinBtn.textContent = 'Join Room';
   }
+});
+
+// --- Lobby Cancel ---
+lobbyCancelBtn.addEventListener('click', async () => {
+  await room?.leave();
+  room = null;
+  lobbyScreen.hidden = true;
+  joinScreen.hidden = false;
+  joinBtn.disabled = false;
+  joinBtn.textContent = 'Join Room';
+  updateJoinBtn();
 });
 
 // --- Leave ---
@@ -375,6 +542,9 @@ leaveBtn.addEventListener('click', async () => {
   micBtn.classList.remove('active', 'muted', 'ptt-active');
   camBtn.classList.remove('active', 'muted');
   screenBtn.classList.remove('active');
+  handBtn.hidden = true;
+  handBtn.classList.remove('hand-raised');
+  roomSettingsBtn.hidden = true;
   setButtonContent(micBtn, icons.micOn(), 'Mic (M)');
   setButtonContent(camBtn, icons.camOn(), 'Cam (V)');
   setButtonContent(screenBtn, icons.screenShare(), 'Screen (S)');
@@ -382,6 +552,7 @@ leaveBtn.addEventListener('click', async () => {
   micBtn.querySelector('.ptt-label')?.remove();
 
   roomScreen.hidden = true;
+  lobbyScreen.hidden = true;
   joinScreen.hidden = false;
   roomLabel.hidden = true;
   joinBtn.textContent = 'Join Room';
@@ -576,6 +747,48 @@ screenBtn.addEventListener('click', async () => {
   }
 });
 
+// --- Hand raise ---
+handBtn.addEventListener('click', () => {
+  if (!room) return;
+  room.requestVoice();
+  handBtn.classList.toggle('hand-raised');
+  showToast(handBtn.classList.contains('hand-raised') ? 'Hand raised' : 'Hand lowered');
+});
+
+// --- Room Settings Modal ---
+roomSettingsBtn.addEventListener('click', () => {
+  populateRoomSettingsModal();
+  roomSettingsModal.hidden = false;
+});
+
+roomSettingsClose.addEventListener('click', () => {
+  roomSettingsModal.hidden = true;
+});
+
+roomSettingsModal.addEventListener('click', (e) => {
+  if (e.target === roomSettingsModal) roomSettingsModal.hidden = true;
+});
+
+rsModerated.addEventListener('change', () => {
+  room?.updateRoomSettings({ moderated: rsModerated.checked });
+});
+
+rsLobby.addEventListener('change', () => {
+  room?.updateRoomSettings({ lobbyEnabled: rsLobby.checked });
+});
+
+rsScreen.addEventListener('change', () => {
+  room?.updateRoomSettings({ allowScreenSharing: rsScreen.checked });
+});
+
+rsChat.addEventListener('change', () => {
+  room?.updateRoomSettings({ allowChat: rsChat.checked });
+});
+
+rsGuests.addEventListener('change', () => {
+  room?.updateRoomSettings({ guestsAllowed: rsGuests.checked });
+});
+
 // --- Settings Modal ---
 settingsBtn.addEventListener('click', () => {
   settingsModal.hidden = false;
@@ -711,6 +924,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
     allParticipants.push({
       id: room.localParticipantId,
       name: nameInput.value.trim(),
+      role: room.role,
       producers: localProducers,
     });
   }
@@ -721,6 +935,14 @@ function renderParticipants(participants: Map<string, Participant>): void {
   for (const p of allParticipants) {
     const li = document.createElement('li');
     li.dataset['participantId'] = p.id;
+
+    // Context menu for moderation (only on remote participants)
+    if (p.id !== room?.localParticipantId) {
+      li.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showModerationMenu(p.id, p.name, e.clientX, e.clientY);
+      });
+    }
 
     // Avatar
     const avatar = document.createElement('div');
@@ -733,7 +955,12 @@ function renderParticipants(participants: Map<string, Participant>): void {
     info.className = 'participant-info';
     const nameSpan = document.createElement('span');
     nameSpan.className = 'participant-name';
-    nameSpan.textContent = p.name;
+
+    // Role badge
+    const badge = getRoleBadgeSpan(p.role);
+    if (badge) nameSpan.appendChild(badge);
+
+    nameSpan.appendChild(document.createTextNode(p.name));
     if (p.id === room?.localParticipantId) {
       const youTag = document.createElement('span');
       youTag.className = 'you-tag';
@@ -815,6 +1042,7 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
     allParticipants.push({
       id: room.localParticipantId,
       name: nameInput.value.trim(),
+      role: room.role,
       producers: localProducers,
     });
   }
@@ -826,6 +1054,14 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
     const li = document.createElement('li');
     li.dataset['participantId'] = p.id;
 
+    // Context menu for moderation (only on remote participants)
+    if (p.id !== room?.localParticipantId) {
+      li.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showModerationMenu(p.id, p.name, e.clientX, e.clientY);
+      });
+    }
+
     const avatar = document.createElement('div');
     avatar.className = 'participant-avatar';
     avatar.style.background = nameColor(p.name);
@@ -835,8 +1071,13 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
     avatar.textContent = p.name.charAt(0).toUpperCase();
 
     const nameSpan = document.createElement('span');
-    nameSpan.textContent = p.name;
-    if (p.id === room?.localParticipantId) nameSpan.textContent += ' (you)';
+    // Role badge in classic panel
+    const classicBadge = getRoleBadgeSpan(p.role);
+    if (classicBadge) nameSpan.appendChild(classicBadge);
+    nameSpan.appendChild(document.createTextNode(p.name));
+    if (p.id === room?.localParticipantId) {
+      nameSpan.appendChild(document.createTextNode(' (you)'));
+    }
 
     li.appendChild(avatar);
     li.appendChild(nameSpan);
@@ -854,6 +1095,12 @@ function renderRemoteTrack(participantId: string, participantName: string, track
     tile = document.createElement('div');
     tile.className = isScreen ? 'video-tile screen-share' : 'video-tile';
     tile.dataset['participantId'] = participantId;
+
+    // Context menu for moderation on remote tiles
+    tile.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showModerationMenu(participantId, participantName, e.clientX, e.clientY);
+    });
 
     // No-video avatar (not shown for screen share tiles)
     if (!isScreen) {
@@ -1058,6 +1305,8 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'escape':
       settingsModal.hidden = true;
+      roomSettingsModal.hidden = true;
+      document.getElementById('mod-menu')?.remove();
       break;
   }
 });

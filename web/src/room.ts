@@ -5,6 +5,7 @@ import { MediaManager } from './media';
 export interface Participant {
   id: string;
   name: string;
+  role: string;
   producers: Map<string, { kind: 'audio' | 'video'; source?: string }>;
 }
 
@@ -106,6 +107,7 @@ export class RoomClient {
       this.participants.set(p.id, {
         id: p.id,
         name: p.name,
+        role: p.role,
         producers: new Map(p.producers.map((pr) => [pr.id, { kind: pr.kind, source: pr.source }])),
       });
     }
@@ -368,6 +370,7 @@ export class RoomClient {
         this.participants.set(msg.participantId, {
           id: msg.participantId,
           name: msg.participantName,
+          role: msg.role,
           producers: new Map(),
         });
         this.events.onParticipantJoined(msg.participantId, msg.participantName);
@@ -522,6 +525,10 @@ export class RoomClient {
       case 'roleChanged': {
         if (msg.participantId === this.localId) {
           this.localRole = msg.newRole;
+        }
+        const roleTarget = this.participants.get(msg.participantId);
+        if (roleTarget) {
+          roleTarget.role = msg.newRole;
         }
         this.events.onRoleChanged(msg.participantId, msg.newRole);
         break;
