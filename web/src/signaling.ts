@@ -12,6 +12,7 @@ export class SignalingClient {
   private reconnectAttempt = 0;
   private onReconnected: (() => void) | null = null;
   private wasConnected = false;
+  private currentToken: string | undefined;
 
   // Pending request/response tracking
   private pendingResolvers: Array<{
@@ -37,13 +38,15 @@ export class SignalingClient {
     this.onReconnected = handler;
   }
 
-  connect(): void {
+  connect(token?: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
     this.shouldReconnect = true;
+    this.currentToken = token ?? this.currentToken;
     this.onStatusChange?.('connecting');
 
-    this.ws = new WebSocket(this.url);
+    const url = this.currentToken ? `${this.url}?token=${encodeURIComponent(this.currentToken)}` : this.url;
+    this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
       console.log('[ws] connected');
@@ -96,6 +99,7 @@ export class SignalingClient {
     this.shouldReconnect = false;
     this.wasConnected = false;
     this.reconnectAttempt = 0;
+    this.currentToken = undefined;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -146,6 +150,11 @@ export class SignalingClient {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  /** Update JWT token for next connection/reconnection */
+  setToken(token: string | undefined): void {
+    this.currentToken = token;
+  }
+
   private scheduleReconnect(): void {
     // Exponential backoff: 2s, 4s, 8s, 16s, max 30s
     const delay = Math.min(2000 * Math.pow(2, this.reconnectAttempt), 30000);
@@ -154,7 +163,7 @@ export class SignalingClient {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       console.log('[ws] attempting reconnect...');
-      this.connect();
+      this.connect(this.currentToken);
     }, delay);
   }
 
