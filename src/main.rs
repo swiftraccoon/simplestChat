@@ -52,7 +52,10 @@ async fn main() -> Result<()> {
     }
 
     let metrics = ServerMetrics::new();
-    let room_manager = Arc::new(RoomManager::new(media_config, metrics.clone()).await?);
+    // Connect to database (optional)
+    let db_pool = db::connect().await?;
+
+    let room_manager = Arc::new(RoomManager::new(media_config, metrics.clone(), db_pool.clone()).await?);
 
     info!("Room manager and media server initialized");
 
@@ -63,9 +66,6 @@ async fn main() -> Result<()> {
     } else {
         info!("No TURN configured (set TURN_URLS and TURN_SECRET to enable)");
     }
-
-    // Connect to database (optional)
-    let db_pool = db::connect().await?;
 
     // Create and start signaling server
     let signaling_server = SignalingServer::new(room_manager.clone(), turn_config, metrics, db_pool);

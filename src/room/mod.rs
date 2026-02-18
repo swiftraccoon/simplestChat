@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 // Room module - Room state management and participant tracking
+pub mod settings;
 
 use crate::media::{MediaServer, MediaConfig};
 use crate::media::types::{MediaResult, TransportInfo};
@@ -29,14 +30,16 @@ pub struct Room {
     pub id: String,
     pub router_id: String,
     pub participants: HashMap<String, Participant>,
+    pub settings: Option<settings::RoomSettings>,
 }
 
 impl Room {
-    fn new(id: String, router_id: String) -> Self {
+    fn new(id: String, router_id: String, settings: Option<settings::RoomSettings>) -> Self {
         Self {
             id,
             router_id,
             participants: HashMap::new(),
+            settings,
         }
     }
 
@@ -97,6 +100,7 @@ pub struct RoomManager {
     rooms: Arc<StdRwLock<HashMap<String, Arc<TokioRwLock<Room>>>>>,
     media_server: Arc<MediaServer>,
     metrics: ServerMetrics,
+    db_pool: Option<sqlx::PgPool>,
 }
 
 impl RoomManager {
@@ -104,13 +108,14 @@ impl RoomManager {
     ///
     /// # Errors
     /// Returns an error if media server initialization fails
-    pub async fn new(media_config: MediaConfig, metrics: ServerMetrics) -> Result<Self> {
+    pub async fn new(media_config: MediaConfig, metrics: ServerMetrics, db_pool: Option<sqlx::PgPool>) -> Result<Self> {
         let media_server = Arc::new(MediaServer::new(media_config).await?);
 
         Ok(Self {
             rooms: Arc::new(StdRwLock::new(HashMap::new())),
             media_server,
             metrics,
+            db_pool,
         })
     }
 
@@ -137,6 +142,13 @@ impl RoomManager {
             }
         }
 
+        // Load settings from DB if available
+        let room_settings = if let Some(pool) = &self.db_pool {
+            settings::load_room(pool, room_id).await.ok().flatten()
+        } else {
+            None
+        };
+
         // Slow path: create router (no lock held during async operation)
         info!("Creating new room: {}", room_id);
         let router_id = self.media_server.create_router(room_id.to_string()).await?;
@@ -146,7 +158,7 @@ impl RoomManager {
         let mut rooms = self.rooms.write().unwrap_or_else(|e| e.into_inner());
         Ok(rooms
             .entry(room_id.to_string())
-            .or_insert_with(|| Arc::new(TokioRwLock::new(Room::new(room_id.to_string(), router_id))))
+            .or_insert_with(|| Arc::new(TokioRwLock::new(Room::new(room_id.to_string(), router_id, room_settings))))
             .clone())
     }
 
