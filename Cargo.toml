@@ -28,7 +28,7 @@ sha1 = "0.10"
 base64 = "0.22"
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "tls-native-tls", "uuid", "chrono"] }
 argon2 = "0.5"
-jsonwebtoken = "9"
+jsonwebtoken = "10"
 webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
 url = "2"
 sha2 = "0.10"
