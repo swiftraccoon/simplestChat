@@ -200,14 +200,21 @@ async fn ws_handler(
     axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<std::net::SocketAddr>,
     State(server): State<SignalingServer>,
 ) -> Response {
-    // Client IP for guest ban enforcement — trust X-Forwarded-For when behind
-    // the reverse proxy (Caddy), else the socket peer address.
-    let client_ip = headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split(',').next())
-        .and_then(|v| v.trim().parse::<std::net::IpAddr>().ok())
-        .unwrap_or_else(|| peer.ip());
+    // Client IP for guest ban enforcement. X-Forwarded-For is client-supplied
+    // and trivially spoofable, so it is honored ONLY when the direct peer is
+    // the local reverse proxy (Caddy on loopback, per Caddyfile) — and then we
+    // take the RIGHTMOST entry (the one the proxy appended), never the
+    // client-controlled leftmost. Direct connections use the socket address.
+    let client_ip = if peer.ip().is_loopback() {
+        headers
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.split(',').next_back())
+            .and_then(|v| v.trim().parse::<std::net::IpAddr>().ok())
+            .unwrap_or_else(|| peer.ip())
+    } else {
+        peer.ip()
+    };
     // Acquire connection permit (non-blocking)
     let permit = match server.connection_semaphore.clone().try_acquire_owned() {
         Ok(permit) => permit,

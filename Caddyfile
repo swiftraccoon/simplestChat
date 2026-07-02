@@ -7,6 +7,10 @@
 #   3. sudo caddy start
 #
 # Caddy handles: HTTPS termination, auto-renew, HTTP→HTTPS redirect
+#
+# Security note: the server trusts X-Forwarded-For only from loopback peers
+# and reads the RIGHTMOST entry (the one Caddy appends). Client-supplied
+# X-Forwarded-For values are ignored for guest ban enforcement.
 
 simplestchat.example.com {
 	# WebSocket endpoint
