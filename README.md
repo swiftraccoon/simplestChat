@@ -72,8 +72,9 @@ Validated with progressive stress testing (AMD Ryzen 9 8945HS, 8C/16T, 90GB RAM)
 ### Prerequisites
 
 - Rust 1.90+ (stable)
-- Linux x86_64 (macOS cannot build mediasoup-sys)
-- `libstdc++-static`, `glibc-static`, `cmake`, `python3-pip`, `meson`, `ninja-build`
+- A C++ toolchain + `cmake`, `python3-pip`, `meson`, `ninja` (mediasoup-sys builds C++ workers)
+- Linux x86_64 for deployment: `libstdc++-static`, `glibc-static` (static linking)
+- macOS builds too (current Xcode CLT); nuck11/Linux is the canonical deploy host
 
 ### Build & Run
 
@@ -257,7 +258,7 @@ via `videoWidth > 0`). See `web/e2e/README.md`.
 
 ## Known Issues
 
-- **macOS cannot build mediasoup-sys** (`_LIBCPP_ENABLE_ASSERTIONS` error) - build on Linux
+- **macOS release builds need `build-override`** (in `Cargo.toml`): the release profile's optimize+strip corrupts the sqlx-macros proc-macro dylib ("mis-aligned LINKEDIT string pool") — the override builds proc-macros unoptimized to avoid it. (The old `_LIBCPP_ENABLE_ASSERTIONS` mediasoup-sys failure is resolved on current Xcode CLT.)
 - **Container io_uring warnings** - harmless, uses epoll fallback
 - **File descriptor limits** - raise `ulimit -n 65536` for 300+ clients
 - **`cargo test` needs `-- --test-threads=1`** - media tests bind fixed UDP ports (40000+) and collide in parallel (and with a running server)

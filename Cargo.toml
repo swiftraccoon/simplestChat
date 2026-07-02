@@ -37,6 +37,14 @@ hex = "0.4"
 [dev-dependencies]
 tokio-test = "0.4"
 
+# Build proc-macros / build scripts unoptimized even in release. Without this,
+# the release profile's optimize+strip on macOS produces a malformed Mach-O for
+# the sqlx-macros dylib ("mis-aligned LINKEDIT string pool") that dlopen rejects.
+# No effect on the app's own release codegen; harmless on Linux (nuck11).
+[profile.release.build-override]
+opt-level = 0
+strip = false
+
 [[bin]]
 name = "load_test"
 path = "load_tests/bin/load_test.rs"
