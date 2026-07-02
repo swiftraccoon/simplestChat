@@ -221,6 +221,11 @@ pub struct RoomManager {
     media_server: Arc<MediaServer>,
     metrics: ServerMetrics,
     db_pool: Option<sqlx::PgPool>,
+    /// Serializes room creation — two clients joining a brand-new room
+    /// concurrently would otherwise both call create_router and one would
+    /// fail with "Router already exists". Creation is rare (once per room),
+    /// so a single async mutex is cheap.
+    room_creation_lock: tokio::sync::Mutex<()>,
 }
 
 impl RoomManager {
@@ -236,6 +241,7 @@ impl RoomManager {
             media_server,
             metrics,
             db_pool,
+            room_creation_lock: tokio::sync::Mutex::new(()),
         })
     }
 
@@ -255,6 +261,18 @@ impl RoomManager {
     /// Gets or creates a room, creating a router if needed
     async fn get_or_create_room(&self, room_id: &str) -> Result<Arc<TokioRwLock<Room>>> {
         // Fast path: room exists (brief outer read lock)
+        {
+            let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
+            if let Some(room) = rooms.get(room_id) {
+                return Ok(room.clone());
+            }
+        }
+
+        // Serialize creation: a concurrent creator may be mid-way between
+        // create_router and inserting into the rooms map.
+        let _creation_guard = self.room_creation_lock.lock().await;
+
+        // Re-check now that we hold the creation lock
         {
             let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
             if let Some(room) = rooms.get(room_id) {
