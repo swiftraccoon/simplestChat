@@ -119,12 +119,13 @@ impl WorkerManager {
         let worker_id = worker.id();
 
         // Handle worker death
+        // .detach() — dropping the HandlerId would unregister the callback immediately
         worker.on_dead({
             move |_reason| {
                 error!("Worker {} (index {}) died!", worker_id, worker_index);
                 // In production, you'd want to recreate the worker here
             }
-        });
+        }).detach();
 
         // Handle new WebRTC server (for TCP/TLS connections)
         worker.on_new_webrtc_server({
@@ -135,9 +136,9 @@ impl WorkerManager {
                     move || {
                         debug!("WebRTC server closed on worker {}", worker_index);
                     }
-                });
+                }).detach();
             }
-        });
+        }).detach();
     }
     
     /// Gets the least loaded worker based on real-time consumer counts.

@@ -213,19 +213,20 @@ impl RouterManager {
     fn setup_router_handlers(&self, router: &Router, room_id: &str) {
         let room_id = room_id.to_string();
         
+        // .detach() — dropping the HandlerId would unregister the callback immediately
         router.on_close({
             let room_id = room_id.clone();
             move || {
                 warn!("Router closed for room: {}", room_id);
             }
-        });
-        
+        }).detach();
+
         router.on_worker_close({
             let room_id = room_id;
             move || {
                 warn!("Worker closed for router in room: {}", room_id);
             }
-        });
+        }).detach();
     }
     
     /// Gets all active room IDs
