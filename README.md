@@ -8,7 +8,17 @@ A WebRTC SFU (Selective Forwarding Unit) server built with Rust and mediasoup, d
 - **mediasoup 0.20** - C++ media workers for RTP packet routing
 - **Axum 0.8** - WebSocket signaling server
 - **tokio** - Async runtime
+- **PostgreSQL + sqlx 0.8** - Users, sessions, persisted rooms, roles (optional — runs anonymous-only without it)
 - **webrtc-rs 0.17** - Load test client with real ICE/DTLS/RTP
+- **TypeScript + Vite + mediasoup-client 3.21** - Browser client
+
+## Features
+
+- **Auth**: email/password (argon2), passkeys (WebAuthn), JWT access tokens + HttpOnly refresh cookie; guests work without any of it
+- **Rooms**: persisted rooms with owner, topic, password, and 15+ runtime-editable settings (moderated, lobby, guests, media toggles, caps)
+- **Roles & moderation**: owner/admin/moderator/member/user/guest hierarchy; kick, ban, cam-ban, text-mute, set-role, voice requests with grant/dismiss
+- **Lobby**: moderated entry — guests wait for moderator approval (admit/deny)
+- **Media**: camera, mic (open/push-to-talk), screen share, simulcast, server-side active speaker + audio level detection
 
 ## Architecture
 
@@ -136,10 +146,17 @@ See `load_tests/README.md` for full documentation.
 src/
 ├── main.rs                    # Server entry point
 ├── lib.rs                     # Library re-exports
+├── db.rs                      # PostgreSQL pool + auto-migrations (optional via DATABASE_URL)
 ├── metrics.rs                 # Prometheus metrics (AtomicU64, histogram)
 ├── turn.rs                    # TURN credential generation
+├── auth/
+│   ├── routes.rs              # /api/auth/* endpoints (register, login, refresh, passkeys)
+│   ├── jwt.rs                 # JWT create/validate (jsonwebtoken 10, HS256)
+│   ├── password.rs            # argon2 hashing
+│   ├── webauthn.rs            # Passkey registration/login
+│   └── session.rs             # Refresh-token sessions
 ├── signaling/
-│   ├── mod.rs                 # HTTP routes, /health, /metrics, WS upgrade
+│   ├── mod.rs                 # HTTP routes, /health, /metrics, WS upgrade, serves web/dist
 │   ├── connection.rs          # WebSocket message handler
 │   └── protocol.rs            # Client/Server message types
 ├── media/
@@ -150,7 +167,13 @@ src/
 │   ├── router_manager.rs      # Per-room routers
 │   └── transport_manager.rs   # Transports, producers, consumers
 └── room/
-    └── mod.rs                 # Room management + broadcasts
+    ├── mod.rs                 # Room management, lobby, broadcasts
+    ├── api.rs                 # /api/rooms REST (list, create)
+    ├── roles.rs               # Role hierarchy + permission checks
+    ├── moderation.rs          # Punitive states (camban, mute, ban)
+    └── settings.rs            # RoomSettings persistence (camelCase wire format)
+
+migrations/                    # sqlx migrations (auto-applied at startup)
 
 load_tests/
 ├── bin/load_test.rs           # Load test binary
@@ -162,11 +185,13 @@ load_tests/
 
 web/                           # Browser client (Vite + TypeScript)
 ├── src/
-│   ├── main.ts               # Entry point
-│   ├── signaling.ts          # WebSocket client
-│   ├── media.ts              # WebRTC media handling
-│   ├── room.ts               # Room UI logic
-│   └── protocol.ts           # Message types
+│   ├── main.ts               # UI wiring (auth, room browser, moderation, settings)
+│   ├── auth.ts               # AuthManager (JWT in memory, cookie refresh)
+│   ├── signaling.ts          # WebSocket client (optional ?token= auth)
+│   ├── media.ts              # WebRTC media handling (mediasoup-client)
+│   ├── room.ts               # RoomClient (join/lobby/moderation events)
+│   └── protocol.ts           # Message types (mirrors signaling/protocol.rs)
+├── e2e/                      # Playwright E2E suite (22 checks, see e2e/README.md)
 ├── index.html
 └── vite.config.ts
 
@@ -179,6 +204,10 @@ scripts/                       # Deployment, server management, testing
 |---------|---------|---------|
 | `ANNOUNCE_IP` | auto-detect (fallback `127.0.0.1`) | Server's public IP for ICE candidates |
 | `PORT` | `3000` | HTTP/WebSocket listen port |
+| `DATABASE_URL` | (none) | PostgreSQL URL; without it the server runs anonymous-only (no auth, no persisted rooms) |
+| `JWT_SECRET` | (none) | HS256 secret for access tokens; **auth endpoints return 503 without it** |
+| `WEBAUTHN_RP_ID` | (none) | Passkey relying-party ID (domain); passkeys disabled without it |
+| `WEBAUTHN_ORIGIN` | (none) | Expected origin for passkey ceremonies (e.g. `https://chat.example.com`) |
 | `MAX_CONNECTIONS` | `10000` | Max concurrent WebSocket connections |
 | `MAX_CONSUMERS_PER_PARTICIPANT` | `16` | Server-side consumer cap per participant |
 | `METRICS_TOKEN` | (none) | Bearer token for `/metrics` endpoint |
@@ -218,8 +247,16 @@ Hardcoded in `src/media/config.rs`:
 - **Bearer auth**: Set `METRICS_TOKEN` env var to require `Authorization: Bearer <token>`
 - **Zero dependencies**: Uses `std::sync::atomic::AtomicU64` — no prometheus/opentelemetry crates
 
+## End-to-End Testing
+
+`web/e2e/checklist.cjs` drives two Chromium instances (registered owner + guest) with fake
+media devices through 22 checks: auth, room browser, room creation, lobby admit/deny,
+all moderation actions, role hierarchy, live settings enforcement, and real bidirectional
+WebRTC video (asserted via `videoWidth > 0`). See `web/e2e/README.md`.
+
 ## Known Issues
 
 - **macOS cannot build mediasoup-sys** (`_LIBCPP_ENABLE_ASSERTIONS` error) - build on Linux
 - **Container io_uring warnings** - harmless, uses epoll fallback
 - **File descriptor limits** - raise `ulimit -n 65536` for 300+ clients
+- **`cargo test` needs `-- --test-threads=1`** - media tests bind fixed UDP ports (40000+) and collide in parallel (and with a running server)

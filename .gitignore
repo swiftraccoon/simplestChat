@@ -1,3 +1,4 @@
+.DS_Store
 /target
 /reference/
 /results
@@ -5,6 +6,9 @@
 /build.log
 web/node_modules
 web/dist
+web/e2e/node_modules
+web/e2e/artifacts
+web/e2e/package*.json
 
 # Local config
 /scripts/
