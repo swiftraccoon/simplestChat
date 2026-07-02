@@ -31,6 +31,8 @@ export type RoomEventHandler = {
   onLobbyJoin: (participantId: string, displayName: string) => void;
   onLobbyAdmitted: () => void;
   onLobbyDenied: (reason?: string) => void;
+  /** Fired after post-lobby-admission media setup finishes (room state + media are ready) */
+  onAdmissionComplete: () => void;
 };
 
 export class RoomClient {
@@ -65,7 +67,7 @@ export class RoomClient {
     return this.roomId;
   }
 
-  async join(roomId: string, participantName: string): Promise<void> {
+  async join(roomId: string, participantName: string): Promise<'joined' | 'lobby'> {
     this.roomId = roomId;
     this.participantName = participantName;
 
@@ -93,10 +95,14 @@ export class RoomClient {
 
     if (response.type === 'lobbyWaiting') {
       this.events.onLobbyWaiting(response.roomName, response.topic, response.participantCount);
-      return;
+      return 'lobby';
     }
 
-    if (response.type !== 'roomJoined') return;
+    if (response.type !== 'roomJoined') {
+      // 'error' is rejected inside the interceptor — this is unreachable,
+      // but narrows the type for the code below.
+      throw new Error(`Unexpected join response: ${response.type}`);
+    }
 
     this.localId = response.participantId;
     this.reconnectToken = response.reconnectToken;
@@ -131,6 +137,8 @@ export class RoomClient {
     if (this.media) {
       await this.consumeExistingProducers(response.participants);
     }
+
+    return 'joined';
   }
 
   async leave(): Promise<void> {
@@ -380,6 +388,8 @@ export class RoomClient {
     if (this.media) {
       await this.consumeExistingProducers(msg.participants);
     }
+
+    this.events.onAdmissionComplete();
   }
 
   private async consumeProducer(participantId: string, producerId: string, kind: 'audio' | 'video', source?: string): Promise<void> {

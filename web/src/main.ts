@@ -1004,8 +1004,14 @@ joinBtn.addEventListener('click', async () => {
       },
       onLobbyAdmitted: () => {
         lobbyScreen.hidden = true;
+        joinScreen.hidden = true;
         roomScreen.hidden = false;
+        applyJoinedRoomUI();
         showToast('You have been admitted to the room');
+      },
+      onAdmissionComplete: () => {
+        // Post-admission media + room state are ready — refresh buttons/settings UI
+        applyJoinedRoomUI();
       },
       onLobbyDenied: (reason) => {
         lobbyScreen.hidden = true;
@@ -1016,59 +1022,78 @@ joinBtn.addEventListener('click', async () => {
       },
     });
 
-    await room.join(roomId, name);
+    const status = await room.join(roomId, name);
+
+    if (status === 'lobby') {
+      // onLobbyWaiting already switched to the lobby screen. Room UI is applied
+      // by onLobbyAdmitted/onAdmissionComplete if/when we are admitted.
+      return;
+    }
 
     joinScreen.hidden = true;
     roomScreen.hidden = false;
-    setLayout(getLayout());
-
-    // Show room label in header
-    roomLabel.textContent = roomId;
-    roomLabel.hidden = false;
-
-    const topic = room?.roomSettings?.topic;
-    roomTopic.textContent = topic ?? '';
-    roomTopic.hidden = !topic;
-
-    roomTopic.addEventListener('click', () => {
-      const role = room?.role ?? 'user';
-      if (role !== 'owner' && role !== 'admin') return;
-      const current = room?.roomSettings?.topic ?? '';
-      const newTopic = prompt('Enter new topic:', current);
-      if (newTopic !== null && newTopic !== current) {
-        room?.setTopic(newTopic);
-      }
-    });
-
-    // Update control buttons — always start muted + cam off (privacy)
-    if (room.hasMedia) {
-      updateMicButton(false);
-      updateCamButton(false);
-      updateScreenButton(false);
-      // Register callback so UI updates when browser's "Stop sharing" button is clicked
-      room.onScreenShareStopped = () => {
-        updateScreenButton(false);
-      };
-    } else {
-      // Media unavailable — show disabled state
-      console.warn('[ui] media not available, buttons will be non-functional');
-      setButtonContent(micBtn, icons.micOff(), 'No mic access');
-      micBtn.classList.add('muted');
-      micBtn.style.opacity = '0.4';
-      setButtonContent(camBtn, icons.camOff(), 'No cam access');
-      camBtn.classList.add('muted');
-      camBtn.style.opacity = '0.4';
-    }
-
-    qualityIndicator.hidden = false;
-    updateRoomModeUI();
-    applyRoomSettingsToUI();
+    applyJoinedRoomUI();
   } catch (e) {
     console.error('Failed to join:', e);
     alert(`Failed to join: ${e instanceof Error ? e.message : String(e)}`);
     room = null;
     joinBtn.disabled = false;
     joinBtn.textContent = 'Join Room';
+  }
+});
+
+/** Apply all in-room UI state (label, topic, control buttons, settings-driven UI).
+ * Called on direct join, on lobby admission (media pending), and again once
+ * post-admission media setup completes. Idempotent. */
+function applyJoinedRoomUI(): void {
+  if (!room) return;
+  setLayout(getLayout());
+
+  roomLabel.textContent = room.currentRoomId ?? '';
+  roomLabel.hidden = false;
+
+  const topic = room.roomSettings?.topic;
+  roomTopic.textContent = topic ?? '';
+  roomTopic.hidden = !topic;
+
+  // Control buttons — always start muted + cam off (privacy)
+  if (room.hasMedia) {
+    micBtn.style.opacity = '';
+    camBtn.style.opacity = '';
+    micBtn.classList.remove('muted');
+    camBtn.classList.remove('muted');
+    updateMicButton(false);
+    updateCamButton(false);
+    updateScreenButton(false);
+    // Register callback so UI updates when browser's "Stop sharing" button is clicked
+    room.onScreenShareStopped = () => {
+      updateScreenButton(false);
+    };
+  } else {
+    // Media unavailable (or not yet set up while waiting in lobby)
+    console.warn('[ui] media not available, buttons will be non-functional');
+    setButtonContent(micBtn, icons.micOff(), 'No mic access');
+    micBtn.classList.add('muted');
+    micBtn.style.opacity = '0.4';
+    setButtonContent(camBtn, icons.camOff(), 'No cam access');
+    camBtn.classList.add('muted');
+    camBtn.style.opacity = '0.4';
+  }
+
+  qualityIndicator.hidden = false;
+  updateRoomModeUI();
+  applyRoomSettingsToUI();
+}
+
+// Topic click-to-edit for Admin+ — registered once at module level.
+// (Registering inside the join handler stacked one listener per join.)
+roomTopic.addEventListener('click', () => {
+  const role = room?.role ?? 'user';
+  if (role !== 'owner' && role !== 'admin') return;
+  const current = room?.roomSettings?.topic ?? '';
+  const newTopic = prompt('Enter new topic:', current);
+  if (newTopic !== null && newTopic !== current) {
+    room?.setTopic(newTopic);
   }
 });
 
@@ -1298,9 +1323,14 @@ micBtn.addEventListener('mouseleave', () => {
 micBtn.addEventListener('click', async () => {
   if (!room || !room.hasMedia) return;
   if (micMode === 'open') {
-    const enabled = await room.toggleAudio();
-    updateMicButton(enabled);
-    updateLocalTile();
+    try {
+      const enabled = await room.toggleAudio();
+      updateMicButton(enabled);
+      updateLocalTile();
+    } catch (e) {
+      updateMicButton(false);
+      showToast(e instanceof Error ? e.message : 'Could not enable microphone');
+    }
   }
   // In PTT mode, click is handled by mousedown/mouseup above
 });
@@ -1308,9 +1338,15 @@ micBtn.addEventListener('click', async () => {
 camBtn.addEventListener('click', async () => {
   if (!room) return;
   if (!room.hasMedia) return;
-  const enabled = await room.toggleVideo();
-  updateCamButton(enabled);
-  updateLocalTile();
+  try {
+    const enabled = await room.toggleVideo();
+    updateCamButton(enabled);
+    updateLocalTile();
+  } catch (e) {
+    // e.g. server rejects produce for non-voiced users in moderated rooms
+    updateCamButton(false);
+    showToast(e instanceof Error ? e.message : 'Could not enable camera');
+  }
 });
 
 screenBtn.addEventListener('click', async () => {
@@ -1379,12 +1415,13 @@ rsPassword.addEventListener('change', () => {
 
 rsMaxBroadcasters.addEventListener('change', () => {
   const val = parseInt(rsMaxBroadcasters.value, 10);
-  room?.updateRoomSettings({ maxBroadcasters: isNaN(val) ? undefined : val });
+  // null (not undefined) so "clear the limit" survives JSON serialization
+  room?.updateRoomSettings({ maxBroadcasters: isNaN(val) ? null : val } as any);
 });
 
 rsMaxParticipants.addEventListener('change', () => {
   const val = parseInt(rsMaxParticipants.value, 10);
-  room?.updateRoomSettings({ maxParticipants: isNaN(val) ? undefined : val });
+  room?.updateRoomSettings({ maxParticipants: isNaN(val) ? null : val } as any);
 });
 
 // --- Settings Modal ---
@@ -1880,6 +1917,9 @@ document.addEventListener('keydown', (e) => {
         room.toggleAudio().then(enabled => {
           updateMicButton(enabled);
           updateLocalTile();
+        }).catch(e => {
+          updateMicButton(false);
+          showToast(e instanceof Error ? e.message : 'Could not enable microphone');
         });
       }
       break;
@@ -1888,6 +1928,9 @@ document.addEventListener('keydown', (e) => {
         room.toggleVideo().then(enabled => {
           updateCamButton(enabled);
           updateLocalTile();
+        }).catch(e => {
+          updateCamButton(false);
+          showToast(e instanceof Error ? e.message : 'Could not enable camera');
         });
       }
       break;
