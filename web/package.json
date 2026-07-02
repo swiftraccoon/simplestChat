@@ -13,6 +13,6 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
-    "mediasoup-client": "^3.7.0"
+    "mediasoup-client": "^3.21.0"
   }
 }
