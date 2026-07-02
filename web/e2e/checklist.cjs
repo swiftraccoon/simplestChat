@@ -9,6 +9,8 @@ const BASE = 'http://localhost:3100';
 const TS = Date.now().toString(36);
 const MAIN = `e2e-main-${TS}`;
 const MOD = `e2e-mod-${TS}`;
+const PW = `e2e-pw-${TS}`;
+const PW_SECRET = 'sekret-room-123';
 const ADHOC = `e2e-adhoc-${TS}`;
 const EMAIL = `e2e-${TS}@test.local`;
 const PASS = 'SuperSecret123!';
@@ -77,6 +79,13 @@ const hidden = (page, sel) => page.locator(sel).isHidden();
 
 async function waitConnected(page) {
   await waitFor(page, () => page.locator('#connection-status.connected').isVisible(), 'WS connected');
+}
+
+async function ensureJoinScreen(page) {
+  if (await page.locator('#room-screen:not([hidden])').count() > 0) {
+    await page.click('#leave-btn');
+  }
+  await waitFor(page, () => vis(page, '#join-screen'), 'back at join screen');
 }
 
 async function joinRoom(page, name, roomId) {
@@ -205,6 +214,43 @@ async function remoteVideoPlaying(page, name) {
     }, 'created room in browser list');
   });
 
+  // ---------- Password enforcement ----------
+  await check('pw1', 'Owner joins own password room without prompt', async () => {
+    await pageA.click('#create-room-btn');
+    await pageA.fill('#cr-id', PW);
+    await pageA.fill('#cr-name', 'E2E Password Room');
+    await pageA.fill('#cr-password', PW_SECRET);
+    const promptsBefore = dlgA.messages.filter(m => m.type === 'prompt').length;
+    await pageA.click('#create-room-submit');
+    await waitFor(pageA, () => vis(pageA, '#room-screen'), 'owner auto-joined password room');
+    if (dlgA.messages.filter(m => m.type === 'prompt').length !== promptsBefore) throw new Error('owner was prompted for own room password');
+    await pageA.click('#leave-btn');
+    await waitFor(pageA, () => vis(pageA, '#join-screen'), 'owner left');
+  });
+
+  await check('pw2', 'Guest with wrong password is rejected', async () => {
+    await ensureJoinScreen(pageB);
+    const promptsBefore = dlgB.messages.filter(m => m.type === 'prompt').length;
+    dlgB.promptQueue.push('totally-wrong');
+    await joinRoom(pageB, GUEST_NAME, PW);
+    await waitFor(pageB, () => Promise.resolve(
+      dlgB.messages.filter(m => m.type === 'prompt').length > promptsBefore), 'password prompt shown', 8000);
+    // wrong password → join fails with alert, still on join screen
+    await waitFor(pageB, () => Promise.resolve(
+      dlgB.messages.some(m => m.type === 'alert' && /password/i.test(m.message))), 'wrong-password alert', 8000);
+    if (await vis(pageB, '#room-screen')) throw new Error('guest entered password room with wrong password');
+  });
+
+  await check('pw3', 'Guest with correct password joins', async () => {
+    await ensureJoinScreen(pageB);
+    dlgB.promptQueue.length = 0;
+    dlgB.promptQueue.push(PW_SECRET);
+    await joinRoom(pageB, GUEST_NAME, PW);
+    await waitFor(pageB, () => vis(pageB, '#room-screen'), 'guest in password room');
+    await pageB.click('#leave-btn');
+    await waitFor(pageB, () => vis(pageB, '#join-screen'), 'guest left password room');
+  });
+
   // Create the moderated + lobby room for the rest of the run
   await pageA.click('#create-room-btn');
   await pageA.fill('#cr-id', MOD);
@@ -218,6 +264,7 @@ async function remoteVideoPlaying(page, name) {
 
   // ---------- Item 7a: lobby waiting screen ----------
   await check('7a', 'Lobby: guest sees waiting screen', async () => {
+    await ensureJoinScreen(pageB);
     await joinRoom(pageB, GUEST_NAME, MOD);
     await waitFor(pageB, () => vis(pageB, '#lobby-screen'), 'lobby screen');
     const rn = await pageB.locator('#lobby-room-name').textContent();
@@ -295,6 +342,15 @@ async function remoteVideoPlaying(page, name) {
     await pageB.click('#cam-btn');
     await waitFor(pageB, () => pageB.locator('#local-tile video').count().then(c => c > 0), 'B local video tile');
     await remoteVideoPlaying(pageA, GUEST_NAME);
+  });
+
+  // ---------- Active speaker detection (server-side observers) ----------
+  await check('as1', 'Speaking member is highlighted on other clients', async () => {
+    await pageB.click('#mic-btn'); // fake audio device emits a tone
+    await waitFor(pageA, () =>
+      pageA.locator('.video-tile.speaking, .video-tile.dominant-speaker').count().then(c => c > 0),
+      'speaking/dominant highlight on A', 15000);
+    await pageB.click('#mic-btn'); // mute again
   });
 
   // ---------- Item 10b: moderator sees restricted menu ----------
@@ -438,16 +494,51 @@ async function remoteVideoPlaying(page, name) {
     await waitFor(pageB, () => Promise.resolve(dlgB.messages.length > before), 'ban alert', 8000);
     const msg = dlgB.messages[dlgB.messages.length - 1].message;
     if (!msg.includes('banned')) throw new Error(`alert: "${msg}"`);
-    // Attempt rejoin — record whether ban blocks it
+    // Rejoin after reconnect MUST be blocked (guest identity = IP, persisted in room_states)
     await pageB.reload();
     await waitConnected(pageB);
     const before2 = dlgB.messages.length;
     await joinRoom(pageB, GUEST_NAME, MOD);
-    await pageB.waitForTimeout(4000);
-    const rejoined = await vis(pageB, '#room-screen');
-    const errs = dlgB.messages.slice(before2).map(m => m.message);
-    note(`ban rejoin: rejoined=${rejoined} dialogs=[${errs.join(' | ')}]`);
-    if (rejoined) note('OBSERVATION: guest ban did not prevent rejoin after reconnect (guest identity not persisted?)');
+    await waitFor(pageB, () => Promise.resolve(
+      dlgB.messages.slice(before2).some(m => /banned/i.test(m.message))), 'rejoin-blocked alert', 8000);
+    if (await vis(pageB, '#room-screen')) throw new Error('banned guest rejoined after reconnect');
+  });
+
+  // ---------- Item 12c: registered-user ban persists across sessions ----------
+  await check('12c', 'Banned registered user cannot rejoin after re-login', async () => {
+    // B registers an account (authenticated bans key on user id, so IP rows for guests must
+    // not block authenticated users — this join must succeed despite the guest-IP ban above)
+    await pageB.reload();
+    await waitConnected(pageB);
+    await pageB.click('#sign-in-btn');
+    await pageB.click('#login-to-register');
+    await pageB.fill('#register-email', `e2e-b-${TS}@test.local`);
+    await pageB.fill('#register-name', 'BobUser');
+    await pageB.fill('#register-password', 'BobSecret123!');
+    await pageB.fill('#register-confirm', 'BobSecret123!');
+    await pageB.click('#register-submit');
+    await waitFor(pageB, () => vis(pageB, '#auth-bar-user'), 'B registered');
+    await waitConnected(pageB);
+    await joinRoom(pageB, 'BobUser', MOD);
+    await waitFor(pageB, () => vis(pageB, '#room-screen'), 'authed B joined despite guest-IP ban');
+    // A bans the registered user
+    await rightClickParticipant(pageA, 'BobUser');
+    const before = dlgB.messages.length;
+    await pageA.locator('#mod-menu > button', { hasText: /^Ban$/ }).click();
+    await waitFor(pageB, () => Promise.resolve(dlgB.messages.length > before), 'ban alert', 8000);
+    // Tear the room down (A leaves → room dropped from memory) so only DB
+    // persistence can block the rejoin — in-memory ban sets die with the room.
+    await pageA.click('#leave-btn');
+    await waitFor(pageA, () => vis(pageA, '#join-screen'), 'A left, room torn down');
+    // Fresh session, same account — rejoin must be blocked
+    await pageB.reload();
+    await waitConnected(pageB);
+    await waitFor(pageB, () => vis(pageB, '#auth-bar-user'), 'B session restored');
+    const before2 = dlgB.messages.length;
+    await joinRoom(pageB, 'BobUser', MOD);
+    await waitFor(pageB, () => Promise.resolve(
+      dlgB.messages.slice(before2).some(m => /banned/i.test(m.message))), 'authed rejoin-blocked alert', 8000);
+    if (await vis(pageB, '#room-screen')) throw new Error('banned registered user rejoined');
   });
 
   // ---------- summary ----------

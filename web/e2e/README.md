@@ -1,14 +1,18 @@
 # E2E Verification Suite
 
 `checklist.cjs` verifies the full client feature set against a deployed server by driving
-two Chromium instances (a registered room owner and a guest) through 22 checks:
+two Chromium instances (a registered room owner and a guest) through 27 checks:
 
 - Guest join, login modal, register, logout/login, room browser, room creation
+- Password rooms: owner bypass, wrong password rejected, prompt-and-retry flow
 - Lobby: waiting screen, moderator admit/deny panel, post-admission media setup
 - Moderation: all context-menu actions, role-hierarchy gating, voice request grant
 - Kick/ban alerts, topic display + click-to-edit, complete settings modal
+- Persistent bans: guest (IP) ban survives reconnect; registered-user ban survives
+  room teardown and re-login
 - Live settings enforcement (chat/screen/camera toggles propagate to participants)
 - Real bidirectional WebRTC video (`videoWidth > 0` on both sides)
+- Active-speaker highlighting from server-side audio observers
 - Moderated-room produce denial for unvoiced users
 
 ## Requirements
@@ -27,12 +31,16 @@ node checklist.cjs            # targets http://localhost:3100
 ```
 
 Each run uses unique room IDs/emails (timestamp-suffixed) so it is rerunnable, but it
-does leave `e2e-*` rooms and users in the database. Cleanup:
+does leave `e2e-*` rooms, users, and ban rows in the database. Cleanup (rooms first —
+`room_states.applied_by` references users without cascade):
 
 ```sql
 DELETE FROM rooms WHERE id LIKE 'e2e-%';
 DELETE FROM users WHERE email LIKE 'e2e-%@test.local';
 ```
+
+Note: the ban checks record IP bans against the test machine's IP (127.0.0.1 through
+the SSH tunnel) scoped to that run's unique room — they do not affect other rooms.
 
 Failures write screenshots and `results.json` (plus per-page console logs) to `artifacts/`.
 

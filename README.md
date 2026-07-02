@@ -15,8 +15,8 @@ A WebRTC SFU (Selective Forwarding Unit) server built with Rust and mediasoup, d
 ## Features
 
 - **Auth**: email/password (argon2), passkeys (WebAuthn), JWT access tokens + HttpOnly refresh cookie; guests work without any of it
-- **Rooms**: persisted rooms with owner, topic, password, and 15+ runtime-editable settings (moderated, lobby, guests, media toggles, caps)
-- **Roles & moderation**: owner/admin/moderator/member/user/guest hierarchy; kick, ban, cam-ban, text-mute, set-role, voice requests with grant/dismiss
+- **Rooms**: persisted rooms with owner, topic, password (argon2, enforced on join with Admin+ bypass), and 15+ runtime-editable settings (moderated, lobby, guests, media toggles, caps)
+- **Roles & moderation**: owner/admin/moderator/member/user/guest hierarchy; kick, ban, cam-ban, text-mute, set-role, voice requests with grant/dismiss. Bans persist (registered users by id, guests by IP) and survive reconnects and room teardown
 - **Lobby**: moderated entry — guests wait for moderator approval (admit/deny)
 - **Media**: camera, mic (open/push-to-talk), screen share, simulcast, server-side active speaker + audio level detection
 
@@ -250,9 +250,10 @@ Hardcoded in `src/media/config.rs`:
 ## End-to-End Testing
 
 `web/e2e/checklist.cjs` drives two Chromium instances (registered owner + guest) with fake
-media devices through 22 checks: auth, room browser, room creation, lobby admit/deny,
-all moderation actions, role hierarchy, live settings enforcement, and real bidirectional
-WebRTC video (asserted via `videoWidth > 0`). See `web/e2e/README.md`.
+media devices through 27 checks: auth, room browser, room creation, password enforcement,
+lobby admit/deny, all moderation actions, persistent bans, role hierarchy, live settings
+enforcement, active-speaker highlighting, and real bidirectional WebRTC video (asserted
+via `videoWidth > 0`). See `web/e2e/README.md`.
 
 ## Known Issues
 
