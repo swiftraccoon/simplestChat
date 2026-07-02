@@ -82,8 +82,9 @@ Validated with progressive stress testing (AMD Ryzen 9 8945HS, 8C/16T, 90GB RAM)
 # Build server + load test
 cargo build --release
 
-# Start server
-ANNOUNCE_IP=<your-ip> RUST_LOG=simplestChat=info,mediasoup=warn \
+# Start server — ANNOUNCE_IP must be a real IP reachable by clients.
+# Do NOT use 127.0.0.1: Firefox rejects loopback ICE candidates → black video.
+ANNOUNCE_IP=<your-lan-ip> RUST_LOG=simplestChat=info,mediasoup=warn \
   ./target/release/simplestChat
 
 # Run load test (2 clients, 30s)
@@ -97,10 +98,17 @@ ANNOUNCE_IP=<your-ip> RUST_LOG=simplestChat=info,mediasoup=warn \
 The `scripts/` directory contains deployment and testing helpers. Copy `scripts/` examples and customize server IPs/paths for your environment.
 
 ```bash
-# Build and run locally
+# Build and run locally — use your LAN IP, not 127.0.0.1
 cargo build --release
-ANNOUNCE_IP=127.0.0.1 ./target/release/simplestChat
+ANNOUNCE_IP=$(ipconfig getifaddr en0) ./target/release/simplestChat   # macOS
+# Linux: ANNOUNCE_IP=$(hostname -I | awk '{print $1}') ./target/release/simplestChat
 ```
+
+> **Firefox + `ANNOUNCE_IP=127.0.0.1` = black video.** ICE candidates are the
+> media path, and Firefox refuses loopback candidates by default, so media never
+> connects (Chromium tolerates loopback, hiding the problem). Announce a real LAN
+> IP even for same-machine testing — the browser still loads the page from
+> `localhost:3000`; only the WebRTC media targets the announced IP.
 
 ## Load Testing
 
