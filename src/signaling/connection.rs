@@ -99,6 +99,7 @@ pub async fn handle_connection(
     metrics: ServerMetrics,
     _permit: OwnedSemaphorePermit,
     authenticated_user: Option<Claims>,
+    client_ip: Option<std::net::IpAddr>,
 ) {
     // Use authenticated user ID if available, otherwise generate anonymous UUID
     let mut participant_id = authenticated_user
@@ -259,6 +260,7 @@ pub async fn handle_connection(
                             &reconnect_token,
                             &bwe_sender,
                             is_authenticated,
+                            client_ip,
                         ).await;
                         metrics.observe_message_handling(start.elapsed());
 
@@ -601,6 +603,7 @@ async fn handle_client_message(
     reconnect_token: &str,
     bwe_sender: &Option<mpsc::Sender<u32>>,
     is_authenticated: bool,
+    client_ip: Option<std::net::IpAddr>,
 ) -> anyhow::Result<()> {
     // Block media/moderation operations for lobby participants
     if in_lobby.load(Ordering::Acquire) {
@@ -614,7 +617,7 @@ async fn handle_client_message(
     }
 
     match message {
-        ClientMessage::JoinRoom { room_id, participant_name } => {
+        ClientMessage::JoinRoom { room_id, participant_name, password } => {
             if room_id.is_empty() || room_id.len() > MAX_ROOM_ID_LEN {
                 anyhow::bail!("Invalid room_id: must be 1-{MAX_ROOM_ID_LEN} characters");
             }
@@ -628,7 +631,16 @@ async fn handle_client_message(
 
             // Join new room (may be placed in lobby)
             let join_result = room_manager
-                .add_participant(room_id, participant_id.to_string(), participant_name.clone(), sender.clone(), is_authenticated, in_lobby.clone())
+                .add_participant(
+                    room_id,
+                    participant_id.to_string(),
+                    participant_name.clone(),
+                    sender.clone(),
+                    is_authenticated,
+                    in_lobby.clone(),
+                    password.as_deref(),
+                    client_ip,
+                )
                 .await?;
 
             match join_result {

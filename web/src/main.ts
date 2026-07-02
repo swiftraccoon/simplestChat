@@ -1022,7 +1022,25 @@ joinBtn.addEventListener('click', async () => {
       },
     });
 
-    const status = await room.join(roomId, name);
+    let status: 'joined' | 'lobby';
+    try {
+      status = await room.join(roomId, name);
+    } catch (e) {
+      // Password-protected room: ask once and retry
+      if (e instanceof Error && /requires a password/i.test(e.message)) {
+        const pw = prompt('This room requires a password:');
+        if (pw === null) {
+          room = null;
+          joinBtn.disabled = false;
+          joinBtn.textContent = 'Join Room';
+          updateJoinBtn();
+          return;
+        }
+        status = await room.join(roomId, name, pw);
+      } else {
+        throw e;
+      }
+    }
 
     if (status === 'lobby') {
       // onLobbyWaiting already switched to the lobby screen. Room UI is applied

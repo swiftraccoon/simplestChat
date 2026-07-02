@@ -516,6 +516,7 @@ async fn run_client_inner(
     let join_msg = ClientMessage::JoinRoom {
         room_id: config.room_id.clone(),
         participant_name: config.participant_name.clone(),
+        password: None,
     };
     send_message(&mut write, join_msg).await?;
 

@@ -137,7 +137,12 @@ impl SignalingServer {
         let listener = tokio::net::TcpListener::bind(&addr).await?;
         let app = self.router();
 
-        axum::serve(listener, app).await?;
+        // with_connect_info exposes the peer SocketAddr to ws_handler (guest ban IPs)
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .await?;
 
         Ok(())
     }
@@ -191,8 +196,18 @@ struct WsParams {
 async fn ws_handler(
     Query(params): Query<WsParams>,
     ws: WebSocketUpgrade,
+    headers: HeaderMap,
+    axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<std::net::SocketAddr>,
     State(server): State<SignalingServer>,
 ) -> Response {
+    // Client IP for guest ban enforcement — trust X-Forwarded-For when behind
+    // the reverse proxy (Caddy), else the socket peer address.
+    let client_ip = headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .and_then(|v| v.trim().parse::<std::net::IpAddr>().ok())
+        .unwrap_or_else(|| peer.ip());
     // Acquire connection permit (non-blocking)
     let permit = match server.connection_semaphore.clone().try_acquire_owned() {
         Ok(permit) => permit,
@@ -223,6 +238,7 @@ async fn ws_handler(
                 server.metrics,
                 permit,
                 authenticated_user,
+                Some(client_ip),
             )
         })
 }

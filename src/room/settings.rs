@@ -99,6 +99,16 @@ pub async fn load_room(pool: &PgPool, room_id: &str) -> Result<Option<RoomSettin
     }))
 }
 
+/// Load the argon2 password hash for a room (None if no password set)
+pub async fn load_password_hash(pool: &PgPool, room_id: &str) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT password_hash FROM rooms WHERE id = $1")
+            .bind(room_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.and_then(|(h,)| h))
+}
+
 pub async fn create_room(
     pool: &PgPool,
     owner_id: &Uuid,

@@ -4,7 +4,7 @@
 // --- Client → Server ---
 
 export type ClientMessage =
-  | { type: 'joinRoom'; roomId: string; participantName: string }
+  | { type: 'joinRoom'; roomId: string; participantName: string; password?: string }
   | { type: 'leaveRoom' }
   | { type: 'getRouterRtpCapabilities' }
   | { type: 'createSendTransport' }

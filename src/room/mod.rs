@@ -39,6 +39,10 @@ pub struct Participant {
     pub producers: HashMap<String, (MediaKind, Option<String>)>,
     pub role: roles::Role,
     pub punitive: moderation::PunitiveState,
+    /// True when the connection carried a valid JWT (id == user uuid)
+    pub authenticated: bool,
+    /// Client IP (from ConnectInfo / X-Forwarded-For) — used for guest bans
+    pub ip: Option<std::net::IpAddr>,
 }
 
 /// Entry for a participant waiting in the lobby
@@ -52,6 +56,8 @@ pub struct LobbyEntry {
     /// Shared with the participant's connection task — cleared on admission so the
     /// connection stops rejecting media/moderation messages with the lobby guard.
     pub in_lobby_flag: Arc<AtomicBool>,
+    /// Client IP — carried into Participant on admission
+    pub ip: Option<std::net::IpAddr>,
 }
 
 /// Result of an add_participant attempt
@@ -334,14 +340,16 @@ impl RoomManager {
             }
         };
 
-        // Set up callbacks (use try_send — dropping stale events is fine)
+        // Set up callbacks (use try_send — dropping stale events is fine).
+        // .detach() is required: dropping the returned HandlerId unregisters the
+        // callback, silently killing active-speaker/audio-level events.
         if let Some(obs) = &active_speaker_observer {
             let tx = observer_tx.clone();
             obs.on_dominant_speaker(move |speaker| {
                 let _ = tx.try_send(ObserverEvent::ActiveSpeaker {
                     producer_id: speaker.producer.id(),
                 });
-            });
+            }).detach();
         }
 
         if let Some(obs) = &audio_level_observer {
@@ -352,7 +360,7 @@ impl RoomManager {
                     .map(|v| (v.producer.id(), v.volume))
                     .collect();
                 let _ = tx.try_send(ObserverEvent::AudioLevels { volumes: entries });
-            });
+            }).detach();
         }
         drop(observer_tx); // Only clones in callbacks remain
 
@@ -428,6 +436,7 @@ impl RoomManager {
     ///
     /// # Errors
     /// Returns an error if media server operations fail
+    #[allow(clippy::too_many_arguments)]
     pub async fn add_participant(
         &self,
         room_id: &str,
@@ -436,19 +445,40 @@ impl RoomManager {
         sender: mpsc::Sender<Arc<String>>,
         authenticated: bool,
         in_lobby_flag: Arc<AtomicBool>,
+        password: Option<&str>,
+        client_ip: Option<std::net::IpAddr>,
     ) -> Result<JoinResult> {
         let room_lock = self.get_or_create_room(room_id).await?;
 
         // Brief read lock to check conditions for role resolution
-        let (lobby_enabled, settings_owner_id) = {
+        let (lobby_enabled, settings_owner_id, password_protected, persisted) = {
             let room = room_lock.read().await;
             let lobby = room.settings.as_ref().map_or(false, |s| s.lobby_enabled);
             let owner = room.settings.as_ref().map(|s| s.owner_id);
-            (lobby, owner)
+            let pw = room.settings.as_ref().map_or(false, |s| s.password_protected);
+            (lobby, owner, pw, room.settings.is_some())
         }; // read lock released
 
-        // Resolve role outside any lock when lobby is enabled (DB call may await)
-        let resolved_role = if lobby_enabled {
+        let user_uuid = if authenticated {
+            participant_id.parse::<uuid::Uuid>().ok()
+        } else {
+            None
+        };
+
+        // Persistent ban check (registered users by id, guests by IP)
+        if persisted {
+            if let Some(pool) = &self.db_pool {
+                match moderation::is_banned(pool, room_id, user_uuid, client_ip, authenticated).await {
+                    Ok(true) => anyhow::bail!("You are banned from this room"),
+                    Ok(false) => {}
+                    Err(e) => warn!("Ban check failed for room {}: {} — allowing join", room_id, e),
+                }
+            }
+        }
+
+        // Resolve role outside any lock when needed for lobby routing or
+        // password bypass (DB call may await)
+        let resolved_role = if lobby_enabled || password_protected {
             if let (Some(pool), Some(owner_id)) = (&self.db_pool, settings_owner_id) {
                 if let Ok(uid) = participant_id.parse::<uuid::Uuid>() {
                     Some(roles::resolve_role(pool, room_id, Some(&uid), &owner_id, authenticated).await)
@@ -461,6 +491,26 @@ impl RoomManager {
         } else {
             None
         };
+
+        // Password gate: everyone below Admin must present the room password
+        if password_protected && !resolved_role.map_or(false, |r| r >= roles::Role::Admin) {
+            let Some(pool) = &self.db_pool else {
+                anyhow::bail!("This room requires a password");
+            };
+            let hash = settings::load_password_hash(pool, room_id).await
+                .map_err(|e| anyhow::anyhow!("Password check failed: {e}"))?;
+            match (hash, password) {
+                (Some(_), None) => anyhow::bail!("This room requires a password"),
+                (Some(h), Some(pw)) => {
+                    let ok = crate::auth::password::verify_password(pw, &h).unwrap_or(false);
+                    if !ok {
+                        anyhow::bail!("Incorrect room password");
+                    }
+                }
+                // password_protected set but no hash stored — treat as open
+                (None, _) => {}
+            }
+        }
 
         // Now acquire write lock for mutation
         let mut room = room_lock.write().await;
@@ -532,6 +582,7 @@ impl RoomManager {
                 authenticated,
                 reconnect_token: String::new(),
                 in_lobby_flag,
+                ip: client_ip,
             });
 
             info!("Participant {} ({}) entered lobby for room {}", participant_id, participant_name, room_id);
@@ -545,6 +596,8 @@ impl RoomManager {
             producers: HashMap::new(),
             role,
             punitive: moderation::PunitiveState::default(),
+            authenticated,
+            ip: client_ip,
         };
 
         room.participants.insert(participant_id.clone(), participant);
@@ -1539,8 +1592,11 @@ impl RoomManager {
         moderator_id: &str,
         target_participant_id: &str,
         reason: Option<&str>,
-        _duration: Option<u64>,
+        duration: Option<u64>,
     ) -> Result<()> {
+        // Identity info for DB persistence, gathered under the lock below
+        let persist_info;
+
         // Check permissions, add to ban list, and remove — all under one write lock
         {
             let room_lock = self.get_room(room_id)?;
@@ -1554,6 +1610,13 @@ impl RoomManager {
             if !moderator.role.can_moderate(target.role) {
                 anyhow::bail!("Insufficient permissions to ban this participant");
             }
+
+            persist_info = (
+                room.settings.is_some(),
+                moderator.authenticated,
+                target.authenticated,
+                target.ip,
+            );
 
             // Add to ban list — prevents rejoining
             room.banned_participants.insert(target_participant_id.to_string());
@@ -1577,6 +1640,30 @@ impl RoomManager {
             warn!("Failed to clean up media for banned participant {}: {}", target_participant_id, e);
         }
 
+        // Persist the ban for DB-backed rooms so it survives reconnects and
+        // room teardown. Requires an authenticated moderator (applied_by FK).
+        let (room_persisted, moderator_authed, target_authed, target_ip) = persist_info;
+        if let Some(pool) = &self.db_pool {
+            let applied_by = moderator_authed
+                .then(|| moderator_id.parse::<uuid::Uuid>().ok())
+                .flatten();
+            let target_user = target_authed
+                .then(|| target_participant_id.parse::<uuid::Uuid>().ok())
+                .flatten();
+            if room_persisted && applied_by.is_some() && (target_user.is_some() || target_ip.is_some()) {
+                let expires_at = duration
+                    .map(|secs| chrono::Utc::now() + chrono::Duration::seconds(secs.min(i64::MAX as u64) as i64));
+                if let Err(e) = moderation::persist_ban(
+                    pool, room_id, target_user, target_ip, reason, expires_at, applied_by.unwrap(),
+                ).await {
+                    warn!("Failed to persist ban in room {}: {}", room_id, e);
+                }
+            } else {
+                debug!("Ban in room {} kept in-memory only (persisted={}, mod_authed={})",
+                       room_id, room_persisted, moderator_authed);
+            }
+        }
+
         info!("ban: {} banned {} from room {}", moderator_id, target_participant_id, room_id);
         Ok(())
     }
@@ -1598,7 +1685,23 @@ impl RoomManager {
             anyhow::bail!("Insufficient permissions to unban (requires Admin+)");
         }
 
-        if !room.banned_participants.remove(target_participant_id) {
+        let in_memory = room.banned_participants.remove(target_participant_id);
+        let room_persisted = room.settings.is_some();
+        drop(room);
+
+        // Also clear any persisted user ban (target id == user uuid for
+        // registered users; guests have no stable identity to unban)
+        let mut persisted_removed = false;
+        if room_persisted {
+            if let (Some(pool), Ok(uid)) = (&self.db_pool, target_participant_id.parse::<uuid::Uuid>()) {
+                match moderation::remove_user_ban(pool, room_id, uid).await {
+                    Ok(removed) => persisted_removed = removed,
+                    Err(e) => warn!("Failed to remove persisted ban in room {}: {}", room_id, e),
+                }
+            }
+        }
+
+        if !in_memory && !persisted_removed {
             anyhow::bail!("Participant is not banned");
         }
 
@@ -1723,6 +1826,8 @@ impl RoomManager {
             producers: HashMap::new(),
             role: admitted_role,
             punitive: moderation::PunitiveState::default(),
+            authenticated: entry.authenticated,
+            ip: entry.ip,
         };
         room.participants.insert(entry.participant_id.clone(), participant);
 

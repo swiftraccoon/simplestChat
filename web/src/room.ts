@@ -67,7 +67,7 @@ export class RoomClient {
     return this.roomId;
   }
 
-  async join(roomId: string, participantName: string): Promise<'joined' | 'lobby'> {
+  async join(roomId: string, participantName: string, password?: string): Promise<'joined' | 'lobby'> {
     this.roomId = roomId;
     this.participantName = participantName;
 
@@ -90,7 +90,7 @@ export class RoomClient {
         origHandler?.(msg);
       };
       this.signaling['onMessage'] = interceptor;
-      this.signaling.send({ type: 'joinRoom', roomId, participantName });
+      this.signaling.send({ type: 'joinRoom', roomId, participantName, password });
     });
 
     if (response.type === 'lobbyWaiting') {

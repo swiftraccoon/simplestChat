@@ -15,6 +15,9 @@ pub enum ClientMessage {
     JoinRoom {
         room_id: String,
         participant_name: String,
+        /// Required for password-protected rooms (Admin+ bypass)
+        #[serde(default)]
+        password: Option<String>,
     },
     /// Leave the current room
     LeaveRoom,
