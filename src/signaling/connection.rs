@@ -10,6 +10,7 @@ use crate::turn::TurnConfig;
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
 use std::time::{Duration, Instant};
@@ -140,7 +141,10 @@ pub async fn handle_connection(
 
     // Handle incoming messages
     let mut current_room_id: Option<String> = None;
-    let mut in_lobby = false; // true when participant is in lobby (not full room member)
+    // True while the participant waits in a lobby. Shared (Arc) because admission
+    // happens on the moderator's connection task — admit_from_lobby clears it via
+    // the LobbyEntry so this task's guard opens without any local event.
+    let in_lobby = Arc::new(AtomicBool::new(false));
     let mut stats_task: Option<tokio::task::JoinHandle<()>> = None;
     let mut bwe_sender: Option<mpsc::Sender<u32>> = None;
 
@@ -247,7 +251,7 @@ pub async fn handle_connection(
                             &client_msg,
                             &participant_id,
                             &mut current_room_id,
-                            &mut in_lobby,
+                            &in_lobby,
                             &tx,
                             &room_manager,
                             &turn_config,
@@ -270,32 +274,39 @@ pub async fn handle_connection(
                             });
                         }
 
-                        // Start stats task when joining a room (not lobby)
                         if is_join && current_room_id.is_some() {
                             // Generate a fresh reconnect token for the new session
                             reconnect_token = Uuid::new_v4().to_string();
 
-                            if in_lobby {
+                            if in_lobby.load(Ordering::Acquire) {
                                 // Store the token in the lobby entry for use when admitted
                                 if let Some(room_id) = current_room_id.as_ref() {
                                     let _ = room_manager.store_lobby_reconnect_token(room_id, &participant_id, &reconnect_token).await;
                                 }
-                            } else {
-                                if let Some(task) = stats_task.take() {
-                                    task.abort();
-                                }
-
-                                // Create BWE event channel (subscription happens later in CreateRecvTransport)
-                                let (bwe_tx, bwe_rx) = mpsc::channel::<u32>(32);
-                                bwe_sender = Some(bwe_tx);
-
-                                stats_task = Some(spawn_stats_task(
-                                    room_manager.clone(),
-                                    participant_id.clone(),
-                                    tx.clone(),
-                                    bwe_rx,
-                                ));
+                            } else if let Some(task) = stats_task.take() {
+                                // Joined a new room directly — restart stats below
+                                task.abort();
                             }
+                        }
+
+                        // Ensure a stats task runs whenever we are a full room member.
+                        // Invariant-based (not join-triggered) so it also covers lobby
+                        // admission: admit_from_lobby clears in_lobby, and the admitted
+                        // client's first media-setup message lands here.
+                        if current_room_id.is_some()
+                            && !in_lobby.load(Ordering::Acquire)
+                            && stats_task.is_none()
+                        {
+                            // Create BWE event channel (subscription happens later in CreateRecvTransport)
+                            let (bwe_tx, bwe_rx) = mpsc::channel::<u32>(32);
+                            bwe_sender = Some(bwe_tx);
+
+                            stats_task = Some(spawn_stats_task(
+                                room_manager.clone(),
+                                participant_id.clone(),
+                                tx.clone(),
+                                bwe_rx,
+                            ));
                         }
 
                         // Stop stats task when leaving a room
@@ -335,7 +346,7 @@ pub async fn handle_connection(
 
     // On disconnect: lobby participants clean up immediately, room participants get grace period
     if let Some(room_id) = current_room_id.take() {
-        if in_lobby {
+        if in_lobby.load(Ordering::Acquire) {
             // Lobby participants have no transports/media — clean up immediately
             info!("Lobby participant {} disconnected from room {}, cleaning up immediately", participant_id, room_id);
             if let Err(e) = room_manager.remove_participant(&room_id, &participant_id).await {
@@ -582,7 +593,7 @@ async fn handle_client_message(
     message: &ClientMessage,
     participant_id: &str,
     current_room_id: &mut Option<String>,
-    in_lobby: &mut bool,
+    in_lobby: &Arc<AtomicBool>,
     sender: &mpsc::Sender<Arc<String>>,
     room_manager: &Arc<RoomManager>,
     turn_config: &Option<Arc<TurnConfig>>,
@@ -592,7 +603,7 @@ async fn handle_client_message(
     is_authenticated: bool,
 ) -> anyhow::Result<()> {
     // Block media/moderation operations for lobby participants
-    if *in_lobby {
+    if in_lobby.load(Ordering::Acquire) {
         match message {
             ClientMessage::JoinRoom { .. }
             | ClientMessage::LeaveRoom
@@ -617,13 +628,13 @@ async fn handle_client_message(
 
             // Join new room (may be placed in lobby)
             let join_result = room_manager
-                .add_participant(room_id, participant_id.to_string(), participant_name.clone(), sender.clone(), is_authenticated)
+                .add_participant(room_id, participant_id.to_string(), participant_name.clone(), sender.clone(), is_authenticated, in_lobby.clone())
                 .await?;
 
             match join_result {
                 JoinResult::Joined { participants, role, room_settings } => {
                     *current_room_id = Some(room_id.clone());
-                    *in_lobby = false;
+                    in_lobby.store(false, Ordering::Release);
                     metrics.inc_joins();
 
                     send_json(sender, &ServerMessage::RoomJoined {
@@ -637,7 +648,7 @@ async fn handle_client_message(
                 JoinResult::Lobbied => {
                     // Set current_room_id so disconnect cleanup removes from lobby
                     *current_room_id = Some(room_id.clone());
-                    *in_lobby = true;
+                    in_lobby.store(true, Ordering::Release);
                     // Don't send RoomJoined — participant is in lobby
                     // Don't start stats task — no media for lobby participants
                     // LobbyWaiting was already sent by add_participant
@@ -648,7 +659,7 @@ async fn handle_client_message(
         ClientMessage::LeaveRoom => {
             if let Some(room_id) = current_room_id.take() {
                 room_manager.remove_participant(&room_id, participant_id).await?;
-                *in_lobby = false;
+                in_lobby.store(false, Ordering::Release);
                 metrics.inc_leaves();
             }
         }
@@ -727,8 +738,17 @@ async fn handle_client_message(
                     anyhow::bail!("You are not allowed to produce this media type");
                 }
 
+                // Newer Chromium omits the RTCP CNAME from its SDP, so browsers send an
+                // empty cname. Consumers' mediasoup-client uses the cname as the msid
+                // stream id, and Chromium rejects SDP with an empty msid stream id —
+                // normalize to a per-participant cname so consuming works everywhere.
+                let mut rtp_parameters = rtp_parameters.clone();
+                if rtp_parameters.rtcp.cname.as_deref().is_none_or(str::is_empty) {
+                    rtp_parameters.rtcp.cname = Some(format!("ms-{participant_id}"));
+                }
+
                 let producer_id = room_manager
-                    .create_producer(room_id, participant_id, *kind, rtp_parameters.clone(), source.clone())
+                    .create_producer(room_id, participant_id, *kind, rtp_parameters, source.clone())
                     .await?;
 
                 metrics.inc_producers_created();
@@ -948,8 +968,12 @@ async fn handle_client_message(
             guests_allowed,
             guests_can_broadcast,
             max_broadcasters,
+            max_participants,
             allow_screen_sharing,
             allow_chat,
+            allow_video,
+            require_registration,
+            invite_only,
             push_to_talk,
             secret,
             password,
@@ -963,8 +987,12 @@ async fn handle_client_message(
                 *guests_allowed,
                 *guests_can_broadcast,
                 *max_broadcasters,
+                *max_participants,
                 *allow_screen_sharing,
                 *allow_chat,
+                *allow_video,
+                *require_registration,
+                *invite_only,
                 *push_to_talk,
                 *secret,
                 password.clone(),

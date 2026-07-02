@@ -16,6 +16,7 @@ use mediasoup::prelude::*;
 use mediasoup::producer::ProducerId;
 use mediasoup::rtp_observer::{RtpObserver, RtpObserverAddProducerOptions};
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::sync::RwLock as StdRwLock;
 use tokio::sync::RwLock as TokioRwLock;
@@ -48,6 +49,9 @@ pub struct LobbyEntry {
     pub authenticated: bool,
     /// Reconnect token for grace period (set by connection handler after lobby entry)
     pub reconnect_token: String,
+    /// Shared with the participant's connection task — cleared on admission so the
+    /// connection stops rejecting media/moderation messages with the lobby guard.
+    pub in_lobby_flag: Arc<AtomicBool>,
 }
 
 /// Result of an add_participant attempt
@@ -413,6 +417,7 @@ impl RoomManager {
         participant_name: String,
         sender: mpsc::Sender<Arc<String>>,
         authenticated: bool,
+        in_lobby_flag: Arc<AtomicBool>,
     ) -> Result<JoinResult> {
         let room_lock = self.get_or_create_room(room_id).await?;
 
@@ -508,6 +513,7 @@ impl RoomManager {
                 sender,
                 authenticated,
                 reconnect_token: String::new(),
+                in_lobby_flag,
             });
 
             info!("Participant {} ({}) entered lobby for room {}", participant_id, participant_name, room_id);
@@ -1084,8 +1090,12 @@ impl RoomManager {
         guests_allowed: Option<bool>,
         guests_can_broadcast: Option<bool>,
         max_broadcasters: Option<Option<i32>>,
+        max_participants: Option<Option<i32>>,
         allow_screen_sharing: Option<bool>,
         allow_chat: Option<bool>,
+        allow_video: Option<bool>,
+        require_registration: Option<bool>,
+        invite_only: Option<bool>,
         push_to_talk: Option<bool>,
         secret: Option<bool>,
         password: Option<Option<String>>,
@@ -1135,8 +1145,12 @@ impl RoomManager {
                 guests_allowed,
                 guests_can_broadcast,
                 max_broadcasters,
+                max_participants,
                 allow_screen_sharing,
                 allow_chat,
+                allow_video,
+                require_registration,
+                invite_only,
                 push_to_talk,
                 secret,
                 password.clone(),
@@ -1157,9 +1171,19 @@ impl RoomManager {
 
         // Persist to DB outside lock (rare operation, OK to be async)
         if let Some(pool) = &self.db_pool {
-            // Convert password Option<Option<String>> to password_hash Option<Option<String>>
-            // For now, store plaintext — hashing is the API layer's responsibility
-            let password_hash = password;
+            // Hash the password before storage — the password_hash column must only
+            // ever contain argon2 hashes (create-room API relies on this).
+            let password_hash = match password {
+                Some(Some(pw)) => match crate::auth::password::hash_password(&pw) {
+                    Ok(h) => Some(Some(h)),
+                    Err(e) => {
+                        warn!("Failed to hash room password for room {}: {}", room_id, e);
+                        None // skip persisting an unusable password
+                    }
+                },
+                Some(None) => Some(None), // explicit password removal
+                None => None,
+            };
             if let Err(e) = settings::update_room_settings(
                 pool,
                 room_id,
@@ -1168,8 +1192,12 @@ impl RoomManager {
                 guests_allowed,
                 guests_can_broadcast,
                 max_broadcasters,
+                max_participants,
                 allow_screen_sharing,
                 allow_chat,
+                allow_video,
+                require_registration,
+                invite_only,
                 push_to_talk,
                 secret,
                 password_hash,
@@ -1679,6 +1707,10 @@ impl RoomManager {
             punitive: moderation::PunitiveState::default(),
         };
         room.participants.insert(entry.participant_id.clone(), participant);
+
+        // Clear the connection task's lobby guard BEFORE notifying the client,
+        // so its follow-up media-setup messages are not rejected.
+        entry.in_lobby_flag.store(false, Ordering::Release);
 
         // Send LobbyAdmitted to the admitted participant
         if let Ok(json) = serde_json::to_string(&ServerMessage::LobbyAdmitted) {

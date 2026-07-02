@@ -5,6 +5,7 @@ use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RoomSettings {
     pub id: String,
     pub owner_id: Uuid,
@@ -150,6 +151,7 @@ pub async fn create_room(
 
 /// Apply partial updates to an in-memory RoomSettings struct.
 /// Only fields that are `Some` are updated; `None` fields are left unchanged.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_settings_update(
     settings: &mut RoomSettings,
     moderated: Option<bool>,
@@ -157,8 +159,12 @@ pub fn apply_settings_update(
     guests_allowed: Option<bool>,
     guests_can_broadcast: Option<bool>,
     max_broadcasters: Option<Option<i32>>,
+    max_participants: Option<Option<i32>>,
     allow_screen_sharing: Option<bool>,
     allow_chat: Option<bool>,
+    allow_video: Option<bool>,
+    require_registration: Option<bool>,
+    invite_only: Option<bool>,
     push_to_talk: Option<bool>,
     secret: Option<bool>,
     password: Option<Option<String>>,
@@ -168,8 +174,12 @@ pub fn apply_settings_update(
     if let Some(v) = guests_allowed { settings.guests_allowed = v; }
     if let Some(v) = guests_can_broadcast { settings.guests_can_broadcast = v; }
     if let Some(v) = max_broadcasters { settings.max_broadcasters = v; }
+    if let Some(v) = max_participants { settings.max_participants = v; }
     if let Some(v) = allow_screen_sharing { settings.allow_screen_sharing = v; }
     if let Some(v) = allow_chat { settings.allow_chat = v; }
+    if let Some(v) = allow_video { settings.allow_video = v; }
+    if let Some(v) = require_registration { settings.require_registration = v; }
+    if let Some(v) = invite_only { settings.invite_only = v; }
     if let Some(v) = push_to_talk { settings.push_to_talk = v; }
     if let Some(v) = secret { settings.secret = v; }
     if let Some(v) = password {
@@ -180,6 +190,7 @@ pub fn apply_settings_update(
 
 /// Persist partial room settings updates to the database.
 /// Only updates columns whose corresponding parameter is `Some`.
+#[allow(clippy::too_many_arguments)]
 pub async fn update_room_settings(
     pool: &PgPool,
     room_id: &str,
@@ -188,8 +199,12 @@ pub async fn update_room_settings(
     guests_allowed: Option<bool>,
     guests_can_broadcast: Option<bool>,
     max_broadcasters: Option<Option<i32>>,
+    max_participants: Option<Option<i32>>,
     allow_screen_sharing: Option<bool>,
     allow_chat: Option<bool>,
+    allow_video: Option<bool>,
+    require_registration: Option<bool>,
+    invite_only: Option<bool>,
     push_to_talk: Option<bool>,
     secret: Option<bool>,
     password_hash: Option<Option<String>>,
@@ -212,8 +227,12 @@ pub async fn update_room_settings(
     maybe_add!(guests_allowed, "guests_allowed");
     maybe_add!(guests_can_broadcast, "guests_can_broadcast");
     maybe_add!(max_broadcasters, "max_broadcasters");
+    maybe_add!(max_participants, "max_participants");
     maybe_add!(allow_screen_sharing, "allow_screen_sharing");
     maybe_add!(allow_chat, "allow_chat");
+    maybe_add!(allow_video, "allow_video");
+    maybe_add!(require_registration, "require_registration");
+    maybe_add!(invite_only, "invite_only");
     maybe_add!(push_to_talk, "push_to_talk");
     maybe_add!(secret, "secret");
     maybe_add!(password_hash, "password_hash");
@@ -231,8 +250,12 @@ pub async fn update_room_settings(
     if let Some(v) = guests_allowed { query = query.bind(v); }
     if let Some(v) = guests_can_broadcast { query = query.bind(v); }
     if let Some(v) = max_broadcasters { query = query.bind(v); }
+    if let Some(v) = max_participants { query = query.bind(v); }
     if let Some(v) = allow_screen_sharing { query = query.bind(v); }
     if let Some(v) = allow_chat { query = query.bind(v); }
+    if let Some(v) = allow_video { query = query.bind(v); }
+    if let Some(v) = require_registration { query = query.bind(v); }
+    if let Some(v) = invite_only { query = query.bind(v); }
     if let Some(v) = push_to_talk { query = query.bind(v); }
     if let Some(v) = secret { query = query.bind(v); }
     if let Some(v) = password_hash { query = query.bind(v); }
@@ -247,4 +270,45 @@ pub async fn delete_room(pool: &PgPool, room_id: &str) -> Result<bool, sqlx::Err
         .execute(pool)
         .await?;
     Ok(result.rows_affected() > 0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The web client reads camelCase keys from the roomJoined/roomSettingsChanged
+    /// payloads — this guards against snake_case regressions in the wire format.
+    #[test]
+    fn room_settings_serialize_camel_case() {
+        let settings = RoomSettings {
+            id: "room-1".to_string(),
+            owner_id: Uuid::nil(),
+            display_name: "Room One".to_string(),
+            password_protected: false,
+            require_registration: false,
+            max_participants: Some(10),
+            max_broadcasters: None,
+            allow_screen_sharing: true,
+            allow_chat: true,
+            allow_video: true,
+            moderated: true,
+            invite_only: false,
+            secret: false,
+            lobby_enabled: true,
+            push_to_talk: false,
+            guests_allowed: true,
+            guests_can_broadcast: true,
+            topic: Some("hello".to_string()),
+        };
+        let value = serde_json::to_value(&settings).unwrap();
+        let obj = value.as_object().unwrap();
+        for key in [
+            "displayName", "passwordProtected", "requireRegistration", "maxParticipants",
+            "maxBroadcasters", "allowScreenSharing", "allowChat", "allowVideo",
+            "inviteOnly", "lobbyEnabled", "pushToTalk", "guestsAllowed", "guestsCanBroadcast",
+        ] {
+            assert!(obj.contains_key(key), "missing camelCase key: {key}");
+        }
+        assert!(!obj.contains_key("lobby_enabled"), "snake_case key leaked into wire format");
+    }
 }
