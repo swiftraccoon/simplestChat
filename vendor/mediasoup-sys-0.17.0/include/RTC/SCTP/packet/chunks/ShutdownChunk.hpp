@@ -1,0 +1,117 @@
+#ifndef MS_RTC_SCTP_SHUTDOWN_CHUNK_HPP
+#define MS_RTC_SCTP_SHUTDOWN_CHUNK_HPP
+
+#include "common.hpp"
+#include "RTC/SCTP/packet/Chunk.hpp"
+#include "Utils.hpp"
+
+namespace RTC
+{
+	namespace SCTP
+	{
+		/**
+		 * SCTP Shutdown Association Chunk (SHUTDOWN) (7).
+		 *
+		 * @see RFC 9260.
+		 *
+		 *  0                   1                   2                   3
+		 *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |   Type = 7    |  Chunk Flags  |          Length = 8           |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |                      Cumulative TSN Ack                       |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 *
+		 * - Chunk type (8 bits): 7.
+		 * - Flags (8 bits): All set to 0.
+		 * - Length (16 bits): 8.
+		 * - Cumulative TSN Ack (32 bits): The largest TSN, such that all TSNs
+		 *   smaller than or equal to it have been received and the next one has
+		 *   not been received.
+		 */
+
+		// Forward declaration.
+		class Packet;
+
+		class ShutdownChunk : public Chunk
+		{
+			// We need that packet calls protected and private methods in this class.
+			friend class Packet;
+
+		public:
+			static constexpr size_t ShutdownChunkHeaderLength{ 8 };
+
+		public:
+			/**
+			 * Parse a ShutdownChunk.
+			 *
+			 * @remarks
+			 * `bufferLength` may exceed the exact length of the chunk.
+			 */
+			static ShutdownChunk* Parse(const uint8_t* buffer, size_t bufferLength);
+
+			/**
+			 * Create a ShutdownChunk.
+			 *
+			 * @remarks
+			 * `bufferLength` could be greater than the chunk real length.
+			 */
+			static ShutdownChunk* Factory(uint8_t* buffer, size_t bufferLength);
+
+		private:
+			/**
+			 * Parse a ShutdownChunk.
+			 *
+			 * @remarks
+			 * To be used only by `Packet::Parse()`.
+			 */
+			static ShutdownChunk* ParseStrict(
+			  const uint8_t* buffer, size_t bufferLength, uint16_t chunkLength, uint8_t padding);
+
+		private:
+			/**
+			 * Only used by Parse(), ParseStrict() and Factory() static methods.
+			 */
+			ShutdownChunk(uint8_t* buffer, size_t bufferLength);
+
+		public:
+			~ShutdownChunk() override;
+
+			void Dump(int indentation = 0) const final;
+
+			ShutdownChunk* Clone(uint8_t* buffer, size_t bufferLength) const final;
+
+			bool CanHaveParameters() const final
+			{
+				return false;
+			}
+
+			bool CanHaveErrorCauses() const final
+			{
+				return false;
+			}
+
+			uint32_t GetCumulativeTsnAck() const
+			{
+				return Utils::Byte::Get4Bytes(GetBuffer(), 4);
+			}
+
+			void SetCumulativeTsnAck(uint32_t value);
+
+		protected:
+			ShutdownChunk* SoftClone(const uint8_t* buffer) const final;
+
+			/**
+			 * We don't really need to override this method since this chunk doesn't
+			 * have variable-length value (despite the fixed header doesn't have
+			 * default length).
+			 */
+			size_t GetHeaderLength() const final
+			{
+				return ShutdownChunk::ShutdownChunkHeaderLength;
+			}
+		};
+	} // namespace SCTP
+} // namespace RTC
+
+#endif

@@ -1,0 +1,241 @@
+#ifndef MS_RTC_PRODUCER_HPP
+#define MS_RTC_PRODUCER_HPP
+
+#include "common.hpp"
+#include "Channel/ChannelRequest.hpp"
+#include "Channel/ChannelSocket.hpp"
+#include "RTC/KeyFrameRequestManager.hpp"
+#include "RTC/RTCP/CompoundPacket.hpp"
+#include "RTC/RTCP/Packet.hpp"
+#include "RTC/RTCP/SenderReport.hpp"
+#include "RTC/RTCP/XrDelaySinceLastRr.hpp"
+#include "RTC/RTP/HeaderExtensionIds.hpp"
+#include "RTC/RTP/Packet.hpp"
+#include "RTC/RTP/RtpStreamRecv.hpp"
+#include "RTC/RtpDictionaries.hpp"
+#include "SharedInterface.hpp"
+#include <ankerl/unordered_dense.h>
+#include <string>
+#include <vector>
+
+namespace RTC
+{
+	class Producer : public RTC::RTP::RtpStreamRecv::Listener,
+	                 public RTC::KeyFrameRequestManager::Listener,
+	                 public Channel::ChannelSocket::RequestHandler,
+	                 public Channel::ChannelSocket::NotificationHandler
+	{
+	public:
+		class Listener
+		{
+		public:
+			virtual ~Listener() = default;
+
+		public:
+			virtual void OnProducerReceiveData(RTC::Producer* producer, size_t len) = 0;
+			virtual void OnProducerReceiveRtpPacket(RTC::Producer* producer, RTC::RTP::Packet* packet) = 0;
+			virtual void OnProducerPaused(RTC::Producer* producer)  = 0;
+			virtual void OnProducerResumed(RTC::Producer* producer) = 0;
+			virtual void OnProducerNewRtpStream(
+			  RTC::Producer* producer, RTC::RTP::RtpStreamRecv* rtpStream, uint32_t mappedSsrc) = 0;
+			virtual void OnProducerRtpStreamScore(
+			  RTC::Producer* producer,
+			  RTC::RTP::RtpStreamRecv* rtpStream,
+			  uint8_t score,
+			  uint8_t previousScore) = 0;
+			virtual void OnProducerRtcpSenderReport(
+			  RTC::Producer* producer, RTC::RTP::RtpStreamRecv* rtpStream, bool first) = 0;
+			virtual void OnProducerRtpPacketReceived(RTC::Producer* producer, RTC::RTP::Packet* packet) = 0;
+			virtual void OnProducerSendRtcpPacket(RTC::Producer* producer, RTC::RTCP::Packet* packet) = 0;
+			/**
+			 * Obtains the worst remote fraction lost of all the Consumers consuming the
+			 * given mapped SSRC of this Producer.
+			 */
+			virtual uint8_t OnProducerNeedWorstRemoteFractionLost(
+			  RTC::Producer* producer, uint32_t mappedSsrc) = 0;
+			/**
+			 * Capture instant of the given RTP timestamp of the given RTP stream, expressed
+			 * in our own monotonic clock.
+			 *
+			 * @returns No value while the capture instant cannot be told yet.
+			 */
+			virtual std::optional<uint64_t> OnProducerNeedLocalCaptureMs(
+			  RTC::Producer* producer, const RTC::RTP::RtpStreamRecv* rtpStream, uint32_t ts) = 0;
+			/**
+			 * Offset between the wall clock of the sender of this Producer and our own
+			 * monotonic one (ms).
+			 *
+			 * @returns No value while the offset cannot be told yet.
+			 */
+			virtual std::optional<int64_t> OnProducerNeedRemoteClockOffsetMs(const RTC::Producer* producer) = 0;
+		};
+
+	private:
+		struct RtpEncodingMapping
+		{
+			std::string rid;
+			uint32_t ssrc{ 0 };
+			uint32_t mappedSsrc{ 0 };
+		};
+
+	private:
+		struct RtpMapping
+		{
+			ankerl::unordered_dense::map<uint8_t, uint8_t> codecs;
+			std::vector<RtpEncodingMapping> encodings;
+		};
+
+	private:
+		struct VideoOrientation
+		{
+			bool camera{ false };
+			bool flip{ false };
+			uint16_t rotation{ 0 };
+		};
+
+	public:
+		enum class ReceiveRtpPacketResult : uint8_t
+		{
+			DISCARDED,
+			MEDIA,
+			RETRANSMISSION
+		};
+
+	private:
+		struct TraceEventTypes
+		{
+			bool rtp{ false };
+			bool keyframe{ false };
+			bool nack{ false };
+			bool pli{ false };
+			bool fir{ false };
+			bool sr{ false };
+		};
+
+	public:
+		Producer(
+		  SharedInterface* shared,
+		  const std::string& id,
+		  RTC::Producer::Listener* listener,
+		  const FBS::Transport::ProduceRequest* data);
+		~Producer() override;
+
+	public:
+		flatbuffers::Offset<FBS::Producer::DumpResponse> FillBuffer(
+		  flatbuffers::FlatBufferBuilder& builder) const;
+		flatbuffers::Offset<FBS::Producer::GetStatsResponse> FillBufferStats(
+		  flatbuffers::FlatBufferBuilder& builder);
+		RTC::Media::Kind GetKind() const
+		{
+			return this->kind;
+		}
+		const RTC::RtpParameters& GetRtpParameters() const
+		{
+			return this->rtpParameters;
+		}
+		const struct RTC::RTP::HeaderExtensionIds& GetRtpHeaderExtensionIds() const
+		{
+			return this->rtpHeaderExtensionIds;
+		}
+		RTC::RtpParameters::Type GetType() const
+		{
+			return this->type;
+		}
+		bool IsPaused() const
+		{
+			return this->paused;
+		}
+		const ankerl::unordered_dense::map<RTC::RTP::RtpStreamRecv*, uint32_t>& GetRtpStreams()
+		{
+			return this->mapRtpStreamMappedSsrc;
+		}
+		const std::vector<uint8_t>* GetRtpStreamScores() const
+		{
+			return std::addressof(this->rtpStreamScores);
+		}
+		ReceiveRtpPacketResult ReceiveRtpPacket(RTC::RTP::Packet* packet);
+		void ReceiveRtcpSenderReport(RTC::RTCP::SenderReport* report);
+		void ReceiveRtcpXrDelaySinceLastRr(RTC::RTCP::DelaySinceLastRr::SsrcInfo* ssrcInfo);
+		bool GetRtcp(RTC::RTCP::CompoundPacket* packet, uint64_t nowMs);
+		void RequestKeyFrame(uint32_t mappedSsrc);
+
+		/* Methods inherited from Channel::ChannelSocket::RequestHandler. */
+	public:
+		void HandleRequest(Channel::ChannelRequest* request) override;
+
+		/* Methods inherited from Channel::ChannelSocket::NotificationHandler. */
+	public:
+		void HandleNotification(Channel::ChannelNotification* notification) override;
+
+	private:
+		RTC::RTP::RtpStreamRecv* GetRtpStream(const RTC::RTP::Packet* packet);
+		RTC::RTP::RtpStreamRecv* CreateRtpStream(
+		  const RTC::RTP::Packet* packet, const RTC::RtpCodecParameters& mediaCodec, size_t encodingIdx);
+		void NotifyNewRtpStream(RTC::RTP::RtpStreamRecv* rtpStream);
+		bool MangleRtpPacket(RTC::RTP::Packet* packet, RTC::RTP::RtpStreamRecv* rtpStream) const;
+		/**
+		 * @param maxPacketTsChanged - Whether this packet became the one holding the
+		 * highest RTP timestamp of its RTP stream, which happens just for the first
+		 * arriving packet of each frame.
+		 *
+		 * @remarks
+		 * - Not "advanced": the stream also takes a packet as its new reference when its
+		 *   RTP timestamp is lower, be it the very first packet, a timestamp moving
+		 *   backwards after prolonged sender inactivity or a sequence number resync.
+		 */
+		void PostProcessRtpPacket(
+		  RTC::RTP::Packet* packet, RTC::RTP::RtpStreamRecv* rtpStream, bool maxPacketTsChanged);
+		void EmitScore() const;
+		void EmitTraceEventRtpAndKeyFrameTypes(const RTC::RTP::Packet* packet, bool isRtx = false) const;
+		void EmitTraceEventPliType(uint32_t ssrc) const;
+		void EmitTraceEventFirType(uint32_t ssrc) const;
+		void EmitTraceEventNackType() const;
+		void EmitTraceEventSrType(RTC::RTCP::SenderReport* report) const;
+		void EmitTraceEvent(flatbuffers::Offset<FBS::Producer::TraceNotification>& notification) const;
+
+		/* Pure virtual methods inherited from RTC::RtpStreamRecv::Listener. */
+	public:
+		void OnRtpStreamScore(RTC::RTP::RtpStream* rtpStream, uint8_t score, uint8_t previousScore) override;
+		void OnRtpStreamSendRtcpPacket(RTC::RTP::RtpStreamRecv* rtpStream, RTC::RTCP::Packet* packet) override;
+		uint8_t OnRtpStreamNeedWorstRemoteFractionLost(RTC::RTP::RtpStreamRecv* rtpStream) override;
+
+		/* Pure virtual methods inherited from RTC::KeyFrameRequestManager::Listener. */
+	public:
+		void OnKeyFrameNeeded(RTC::KeyFrameRequestManager* keyFrameRequestManager, uint32_t ssrc) override;
+
+	public:
+		// Passed by argument.
+		std::string id;
+
+	private:
+		// Passed by argument.
+		SharedInterface* shared{ nullptr };
+		RTC::Producer::Listener* listener{ nullptr };
+		// Allocated by this.
+		ankerl::unordered_dense::map<uint32_t, RTC::RTP::RtpStreamRecv*> mapSsrcRtpStream;
+		RTC::KeyFrameRequestManager* keyFrameRequestManager{ nullptr };
+		// Others.
+		RTC::Media::Kind kind;
+		RTC::RtpParameters rtpParameters;
+		RTC::RtpParameters::Type type;
+		struct RtpMapping rtpMapping;
+		std::vector<RTC::RTP::RtpStreamRecv*> rtpStreamByEncodingIdx;
+		std::vector<uint8_t> rtpStreamScores;
+		ankerl::unordered_dense::map<uint32_t, RTC::RTP::RtpStreamRecv*> mapRtxSsrcRtpStream;
+		ankerl::unordered_dense::map<RTC::RTP::RtpStreamRecv*, uint32_t> mapRtpStreamMappedSsrc;
+		ankerl::unordered_dense::map<uint32_t, uint32_t> mapMappedSsrcSsrc;
+		struct RTC::RTP::HeaderExtensionIds rtpHeaderExtensionIds;
+		bool paused{ false };
+		bool enableMediasoupPacketIdHeaderExtension{ false };
+		RTC::RTP::Packet* currentRtpPacket{ nullptr };
+		// Timestamp when last RTCP was sent.
+		uint64_t lastRtcpSentTime{ 0u };
+		uint16_t maxRtcpInterval{ 0u };
+		// Video orientation.
+		bool videoOrientationDetected{ false };
+		struct VideoOrientation videoOrientation;
+		struct TraceEventTypes traceEventTypes;
+	};
+} // namespace RTC
+
+#endif

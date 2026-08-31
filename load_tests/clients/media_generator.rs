@@ -123,6 +123,7 @@ impl MediaGenerator {
         // Use standard Opus parameters
         RtpParameters {
             mid: None,
+            msid: None,
             codecs: vec![RtpCodecParameters::Audio {
                 mime_type: MimeTypeAudio::Opus,
                 payload_type: 111, // Standard Opus payload type
@@ -163,6 +164,7 @@ impl MediaGenerator {
 
         RtpParameters {
             mid: None,
+            msid: None,
             codecs: vec![codec_params],
             header_extensions: vec![],
             encodings: vec![RtpEncodingParameters {

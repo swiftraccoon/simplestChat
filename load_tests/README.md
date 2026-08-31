@@ -26,6 +26,14 @@ Real WebRTC load testing for the SimplestChat mediasoup server. Each synthetic c
 ### Command Line
 
 ```bash
+# Run from the repository root after installing the pinned OpenSSL build as in
+# the main README.
+export OPENSSL_DIR="$PWD/target/openssl-3.5.8"
+export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
+export OPENSSL_STATIC=1
+export PIP_CONSTRAINT="$PWD/build/pip-constraints.txt"
+cargo build --locked --release --features load-test --bin load_test
+
 ./target/release/load_test \
   --server ws://localhost:3000/ws \
   --clients 10 \

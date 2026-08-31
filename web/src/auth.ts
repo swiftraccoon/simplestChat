@@ -1,12 +1,21 @@
 import type { AuthResponse, UserInfo } from './protocol';
 
-type AuthChangeHandler = (loggedIn: boolean) => void;
+type AuthChangeHandler = (loggedIn: boolean, tokenRefresh: boolean) => void;
+
+const REFRESH_LOCK_NAME = 'simplestchat-refresh-v1';
+// The server rejects, but does not revoke, the exact predecessor for two
+// seconds so simultaneous tabs do not destroy the winning refresh. Retrying
+// after that grace either uses the shared successor cookie or revokes a
+// successor created on another device with a stolen token.
+const REFRESH_REPLAY_CONFIRM_DELAY_MS = 2_250;
 
 export class AuthManager {
   private _token: string | null = null;
   private _user: UserInfo | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private onChange: AuthChangeHandler | null = null;
+  private registrationCeremonyId: string | null = null;
+  private authenticationCeremonyId: string | null = null;
 
   get isLoggedIn(): boolean {
     return this._token !== null;
@@ -31,10 +40,7 @@ export class AuthManager {
   /** Try to restore session from refresh token cookie on page load */
   async tryRestore(): Promise<boolean> {
     try {
-      const resp = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        credentials: 'include',
-      });
+      const resp = await this.requestRefreshWithReplayConfirmation();
       if (!resp.ok) return false;
       const data: AuthResponse = await resp.json();
       this.setSession(data);
@@ -78,22 +84,29 @@ export class AuthManager {
     const resp = await fetch('/api/auth/passkey/register/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: 'unused', display_name: displayName }),
+      body: JSON.stringify({ email, display_name: displayName }),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: 'Passkey registration failed' }));
       throw new Error(err.error ?? 'Passkey registration failed');
     }
     const options = await resp.json();
+    if (typeof options.ceremony_id !== 'string') {
+      throw new Error('Passkey registration response was incomplete');
+    }
+    this.registrationCeremonyId = options.ceremony_id;
     return deserializeCreationOptions(options);
   }
 
-  async passkeyRegisterFinish(email: string, credential: Credential): Promise<void> {
+  async passkeyRegisterFinish(credential: Credential): Promise<void> {
+    const ceremonyId = this.registrationCeremonyId;
+    this.registrationCeremonyId = null;
+    if (!ceremonyId) throw new Error('Passkey registration was not started');
     const resp = await fetch('/api/auth/passkey/register/finish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ email, credential: serializeCredential(credential) }),
+      body: JSON.stringify({ ceremony_id: ceremonyId, credential: serializeCredential(credential) }),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: 'Passkey registration failed' }));
@@ -114,15 +127,22 @@ export class AuthManager {
       throw new Error(err.error ?? 'Passkey login failed');
     }
     const options = await resp.json();
+    if (typeof options.ceremony_id !== 'string') {
+      throw new Error('Passkey login response was incomplete');
+    }
+    this.authenticationCeremonyId = options.ceremony_id;
     return deserializeRequestOptions(options);
   }
 
-  async passkeyLoginFinish(email: string, credential: Credential): Promise<void> {
+  async passkeyLoginFinish(credential: Credential): Promise<void> {
+    const ceremonyId = this.authenticationCeremonyId;
+    this.authenticationCeremonyId = null;
+    if (!ceremonyId) throw new Error('Passkey login was not started');
     const resp = await fetch('/api/auth/passkey/login/finish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ email, credential: serializeCredential(credential) }),
+      body: JSON.stringify({ ceremony_id: ceremonyId, credential: serializeCredential(credential) }),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: 'Passkey login failed' }));
@@ -132,21 +152,57 @@ export class AuthManager {
     this.setSession(data);
   }
 
-  logout(): void {
+  async logout(): Promise<void> {
+    const response = await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error('Sign out could not revoke the session; please try again');
+    }
+    this.clearSession();
+  }
+
+  private clearSession(): void {
     this._token = null;
     this._user = null;
+    this.registrationCeremonyId = null;
+    this.authenticationCeremonyId = null;
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
       this.refreshTimer = null;
     }
-    this.onChange?.(false);
+    this.onChange?.(false, false);
   }
 
-  private setSession(data: AuthResponse): void {
+  private setSession(data: AuthResponse, tokenRefresh = false): void {
     this._token = data.token;
     this._user = data.user;
     this.scheduleRefresh();
-    this.onChange?.(true);
+    this.onChange?.(true, tokenRefresh);
+  }
+
+  private async requestRefresh(): Promise<Response> {
+    const request = (): Promise<Response> => fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    });
+
+    // Refresh cookies are shared between same-origin tabs. Serializing their
+    // one-time rotation prevents a routine multi-tab race from looking like
+    // token theft. The direct path remains for older browsers.
+    if ('locks' in navigator && navigator.locks) {
+      return navigator.locks.request(REFRESH_LOCK_NAME, request);
+    }
+    return request();
+  }
+
+  private async requestRefreshWithReplayConfirmation(): Promise<Response> {
+    const response = await this.requestRefresh();
+    if (!(await isRejectedRefreshToken(response))) return response;
+
+    await delay(REFRESH_REPLAY_CONFIRM_DELAY_MS);
+    return this.requestRefresh();
   }
 
   private scheduleRefresh(): void {
@@ -154,23 +210,33 @@ export class AuthManager {
     // JWT lifetime is 15 minutes — refresh at 12 minutes
     this.refreshTimer = setTimeout(async () => {
       try {
-        const resp = await fetch('/api/auth/refresh', {
-          method: 'POST',
-          credentials: 'include',
-        });
+        const resp = await this.requestRefreshWithReplayConfirmation();
         if (resp.ok) {
           const data: AuthResponse = await resp.json();
-          this._token = data.token;
-          this._user = data.user;
-          this.scheduleRefresh();
+          // Notify the signaling layer so it reconnects with the rotated JWT
+          // before the server closes the old authenticated WebSocket at exp.
+          this.setSession(data, true);
         } else {
-          this.logout();
+          this.clearSession();
         }
       } catch {
-        this.logout();
+        this.clearSession();
       }
     }, 12 * 60 * 1000);
   }
+}
+
+async function isRejectedRefreshToken(response: Response): Promise<boolean> {
+  if (response.status !== 401) return false;
+  const body: unknown = await response.clone().json().catch(() => null);
+  return typeof body === 'object'
+    && body !== null
+    && 'error' in body
+    && body.error === 'Invalid token';
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 // --- WebAuthn serialization helpers ---

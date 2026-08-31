@@ -1,0 +1,555 @@
+#include "common.hpp"
+#include "MediaSoupErrors.hpp"
+#include "RTC/SCTP/packet/Chunk.hpp"
+#include "RTC/SCTP/packet/Parameter.hpp"
+#include "RTC/SCTP/packet/chunks/HeartbeatRequestChunk.hpp"
+#include "RTC/SCTP/packet/parameters/HeartbeatInfoParameter.hpp"
+#include "RTC/SCTP/packet/parameters/UnknownParameter.hpp"
+#include "test/include/RTC/SCTP/sctpCommon.hpp"
+#include <catch2/catch_test_macros.hpp>
+#include <cstring> // std::memset()
+
+SCENARIO("SCTP Hearbeat Request Chunk (4)", "[serializable][sctp][chunk]")
+{
+	sctpCommon::ResetBuffers();
+
+	SECTION("HeartbeatRequestChunk::Parse() succeeds")
+	{
+		// clang-format off
+		alignas(4) uint8_t buffer[] =
+		{
+			// Type:4 (HEARTBEAT-REQUEST), Flags:0b00000000, Length: 22
+			// NOTE: Length field must exclude the padding of the last parameter.
+			0x04, 0b00000000, 0x00, 0x16,
+			// Parameter 1: Type:1 (HEARBEAT_INFO), Length: 11
+			0x00, 0x01, 0x00, 0x0B,
+			// Heartbeat Information (7 bytes): 0x11223344556677
+			0x11, 0x22, 0x33, 0x44,
+			// 1 byte of padding
+			0x55, 0x66, 0x77, 0x00,
+			// Parameter 2: Type:49159 (UNKNOWN), Length: 6
+			0xC0, 0x07, 0x00, 0x06,
+			// Unknown data: 0xABCD, 2 bytes of padding
+			0xAB, 0xCD, 0x00, 0x00,
+			// Extra bytes that should be ignored
+			0xAA, 0xBB, 0xCC, 0xDD,
+			0xAA, 0xBB, 0xCC, 0xDD,
+			0xAA, 0xBB, 0xCC, 0xDD,
+		};
+		// clang-format on
+
+		auto* chunk = RTC::SCTP::HeartbeatRequestChunk::Parse(buffer, sizeof(buffer));
+
+		CHECK_SCTP_CHUNK(
+		  /*chunk*/ chunk,
+		  /*buffer*/ buffer,
+		  /*bufferLength*/ sizeof(buffer),
+		  /*length*/ 24,
+		  /*chunkType*/ RTC::SCTP::Chunk::ChunkType::HEARTBEAT_REQUEST,
+		  /*unknownType*/ false,
+		  /*actionForUnknownChunkType*/ RTC::SCTP::Chunk::ActionForUnknownChunkType::STOP,
+		  /*flags*/ 0b00000000,
+		  /*canHaveParameters*/ true,
+		  /*parametersCount*/ 2,
+		  /*canHaveErrorCauses*/ false,
+		  /*errorCausesCount*/ 0);
+
+		const auto* parameter1 =
+		  reinterpret_cast<const RTC::SCTP::HeartbeatInfoParameter*>(chunk->GetParameterAt(0));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parameter1,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 12,
+		  /*length*/ 12,
+		  /*parameterType*/ RTC::SCTP::Parameter::ParameterType::HEARTBEAT_INFO,
+		  /*unknownType*/ false,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::STOP);
+
+		REQUIRE(parameter1->HasInfo() == true);
+		REQUIRE(parameter1->GetInfoLength() == 7);
+		REQUIRE(parameter1->GetInfo()[0] == 0x11);
+		REQUIRE(parameter1->GetInfo()[1] == 0x22);
+		REQUIRE(parameter1->GetInfo()[2] == 0x33);
+		REQUIRE(parameter1->GetInfo()[3] == 0x44);
+		REQUIRE(parameter1->GetInfo()[4] == 0x55);
+		REQUIRE(parameter1->GetInfo()[5] == 0x66);
+		REQUIRE(parameter1->GetInfo()[6] == 0x77);
+		// This should be padding.
+		REQUIRE(parameter1->GetInfo()[7] == 0x00);
+
+		const auto* parameter2 =
+		  reinterpret_cast<const RTC::SCTP::UnknownParameter*>(chunk->GetParameterAt(1));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parameter2,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 8,
+		  /*length*/ 8,
+		  // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+		  /*parameterType*/ static_cast<RTC::SCTP::Parameter::ParameterType>(49159),
+		  /*unknownType*/ true,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::SKIP_AND_REPORT);
+
+		REQUIRE(parameter2->HasUnknownValue() == true);
+		REQUIRE(parameter2->GetUnknownValueLength() == 2);
+		REQUIRE(parameter2->GetUnknownValue()[0] == 0xAB);
+		REQUIRE(parameter2->GetUnknownValue()[1] == 0xCD);
+		// These should be padding.
+		REQUIRE(parameter2->GetUnknownValue()[2] == 0x00);
+		REQUIRE(parameter2->GetUnknownValue()[3] == 0x00);
+
+		/* Serialize it. */
+
+		chunk->Serialize(sctpCommon::SerializeBuffer, sizeof(sctpCommon::SerializeBuffer));
+
+		std::memset(buffer, 0x00, sizeof(buffer));
+
+		CHECK_SCTP_CHUNK(
+		  /*chunk*/ chunk,
+		  /*buffer*/ sctpCommon::SerializeBuffer,
+		  /*bufferLength*/ sizeof(sctpCommon::SerializeBuffer),
+		  /*length*/ 24,
+		  /*chunkType*/ RTC::SCTP::Chunk::ChunkType::HEARTBEAT_REQUEST,
+		  /*unknownType*/ false,
+		  /*actionForUnknownChunkType*/ RTC::SCTP::Chunk::ActionForUnknownChunkType::STOP,
+		  /*flags*/ 0b00000000,
+		  /*canHaveParameters*/ true,
+		  /*parametersCount*/ 2,
+		  /*canHaveErrorCauses*/ false,
+		  /*errorCausesCount*/ 0);
+
+		parameter1 = reinterpret_cast<const RTC::SCTP::HeartbeatInfoParameter*>(chunk->GetParameterAt(0));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parameter1,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 12,
+		  /*length*/ 12,
+		  /*parameterType*/ RTC::SCTP::Parameter::ParameterType::HEARTBEAT_INFO,
+		  /*unknownType*/ false,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::STOP);
+
+		REQUIRE(parameter1->HasInfo() == true);
+		REQUIRE(parameter1->GetInfoLength() == 7);
+		REQUIRE(parameter1->GetInfo()[0] == 0x11);
+		REQUIRE(parameter1->GetInfo()[1] == 0x22);
+		REQUIRE(parameter1->GetInfo()[2] == 0x33);
+		REQUIRE(parameter1->GetInfo()[3] == 0x44);
+		REQUIRE(parameter1->GetInfo()[4] == 0x55);
+		REQUIRE(parameter1->GetInfo()[5] == 0x66);
+		REQUIRE(parameter1->GetInfo()[6] == 0x77);
+		// This should be padding.
+		REQUIRE(parameter1->GetInfo()[7] == 0x00);
+
+		parameter2 = reinterpret_cast<const RTC::SCTP::UnknownParameter*>(chunk->GetParameterAt(1));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parameter2,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 8,
+		  /*length*/ 8,
+		  // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+		  /*parameterType*/ static_cast<RTC::SCTP::Parameter::ParameterType>(49159),
+		  /*unknownType*/ true,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::SKIP_AND_REPORT);
+
+		REQUIRE(parameter2->HasUnknownValue() == true);
+		REQUIRE(parameter2->GetUnknownValueLength() == 2);
+		REQUIRE(parameter2->GetUnknownValue()[0] == 0xAB);
+		REQUIRE(parameter2->GetUnknownValue()[1] == 0xCD);
+		// These should be padding.
+		REQUIRE(parameter2->GetUnknownValue()[2] == 0x00);
+		REQUIRE(parameter2->GetUnknownValue()[3] == 0x00);
+
+		/* Clone it. */
+
+		auto* clonedChunk = chunk->Clone(sctpCommon::CloneBuffer, sizeof(sctpCommon::CloneBuffer));
+
+		std::memset(sctpCommon::SerializeBuffer, 0x00, sizeof(sctpCommon::SerializeBuffer));
+
+		delete chunk;
+
+		CHECK_SCTP_CHUNK(
+		  /*chunk*/ clonedChunk,
+		  /*buffer*/ sctpCommon::CloneBuffer,
+		  /*bufferLength*/ sizeof(sctpCommon::CloneBuffer),
+		  /*length*/ 24,
+		  /*chunkType*/ RTC::SCTP::Chunk::ChunkType::HEARTBEAT_REQUEST,
+		  /*unknownType*/ false,
+		  /*actionForUnknownChunkType*/ RTC::SCTP::Chunk::ActionForUnknownChunkType::STOP,
+		  /*flags*/ 0b00000000,
+		  /*canHaveParameters*/ true,
+		  /*parametersCount*/ 2,
+		  /*canHaveErrorCauses*/ false,
+		  /*errorCausesCount*/ 0);
+
+		parameter1 =
+		  reinterpret_cast<const RTC::SCTP::HeartbeatInfoParameter*>(clonedChunk->GetParameterAt(0));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parameter1,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 12,
+		  /*length*/ 12,
+		  /*parameterType*/ RTC::SCTP::Parameter::ParameterType::HEARTBEAT_INFO,
+		  /*unknownType*/ false,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::STOP);
+
+		REQUIRE(parameter1->HasInfo() == true);
+		REQUIRE(parameter1->GetInfoLength() == 7);
+		REQUIRE(parameter1->GetInfo()[0] == 0x11);
+		REQUIRE(parameter1->GetInfo()[1] == 0x22);
+		REQUIRE(parameter1->GetInfo()[2] == 0x33);
+		REQUIRE(parameter1->GetInfo()[3] == 0x44);
+		REQUIRE(parameter1->GetInfo()[4] == 0x55);
+		REQUIRE(parameter1->GetInfo()[5] == 0x66);
+		REQUIRE(parameter1->GetInfo()[6] == 0x77);
+		// This should be padding.
+		REQUIRE(parameter1->GetInfo()[7] == 0x00);
+
+		parameter2 = reinterpret_cast<const RTC::SCTP::UnknownParameter*>(clonedChunk->GetParameterAt(1));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parameter2,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 8,
+		  /*length*/ 8,
+		  // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+		  /*parameterType*/ static_cast<RTC::SCTP::Parameter::ParameterType>(49159),
+		  /*unknownType*/ true,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::SKIP_AND_REPORT);
+
+		REQUIRE(parameter2->HasUnknownValue() == true);
+		REQUIRE(parameter2->GetUnknownValueLength() == 2);
+		REQUIRE(parameter2->GetUnknownValue()[0] == 0xAB);
+		REQUIRE(parameter2->GetUnknownValue()[1] == 0xCD);
+		// These should be padding.
+		REQUIRE(parameter2->GetUnknownValue()[2] == 0x00);
+		REQUIRE(parameter2->GetUnknownValue()[3] == 0x00);
+
+		delete clonedChunk;
+	}
+
+	SECTION("HeartbeatRequestChunk::Parse() with incorrect but valid Chunk Length field succeeds")
+	{
+		// Here the chunk has incorrect chunk length field with value 24 instead of
+		// 22. It's incorrect because, as per RFC 9260:
+		//
+		// > The chunk length field does not count any chunk padding. However, it
+		// > does include any padding of variable-length parameters other than the
+		// > last parameter in the chunk. A robust implementation is expected to
+		// > accept the chunk whether or not the final padding has been included in
+		// > the chunk length.
+
+		// clang-format off
+		alignas(4) uint8_t buffer[] =
+		{
+			// Type:4 (HEARTBEAT-REQUEST), Flags:0b00000000, Length: 24
+			// NOTE: Length field must exclude the padding of the last parameter so
+			// length field should be 22 rather than 24. But anyway it's ok.
+			0x04, 0b00000000, 0x00, 0x18,
+			// Parameter 1: Type:1 (HEARBEAT_INFO), Length: 11
+			0x00, 0x01, 0x00, 0x0B,
+			// Heartbeat Information (7 bytes): 0x11223344556677
+			0x11, 0x22, 0x33, 0x44,
+			// 1 byte of padding
+			0x55, 0x66, 0x77, 0x00,
+			// Parameter 2: Type:49159 (UNKNOWN), Length: 6
+			0xC0, 0x07, 0x00, 0x06,
+			// Unknown data: 0xABCD, 2 bytes of padding
+			0xAB, 0xCD, 0x00, 0x00,
+			// Extra bytes that should be ignored
+			0xAA, 0xBB, 0xCC
+		};
+		// clang-format on
+
+		auto* chunk = RTC::SCTP::HeartbeatRequestChunk::Parse(buffer, sizeof(buffer));
+
+		CHECK_SCTP_CHUNK(
+		  /*chunk*/ chunk,
+		  /*buffer*/ buffer,
+		  /*bufferLength*/ sizeof(buffer),
+		  /*length*/ 24,
+		  /*chunkType*/ RTC::SCTP::Chunk::ChunkType::HEARTBEAT_REQUEST,
+		  /*unknownType*/ false,
+		  /*actionForUnknownChunkType*/ RTC::SCTP::Chunk::ActionForUnknownChunkType::STOP,
+		  /*flags*/ 0b00000000,
+		  /*canHaveParameters*/ true,
+		  /*parametersCount*/ 2,
+		  /*canHaveErrorCauses*/ false,
+		  /*errorCausesCount*/ 0);
+
+		const auto* parameter1 =
+		  reinterpret_cast<const RTC::SCTP::HeartbeatInfoParameter*>(chunk->GetParameterAt(0));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parameter1,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 12,
+		  /*length*/ 12,
+		  /*parameterType*/ RTC::SCTP::Parameter::ParameterType::HEARTBEAT_INFO,
+		  /*unknownType*/ false,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::STOP);
+
+		REQUIRE(parameter1->HasInfo() == true);
+		REQUIRE(parameter1->GetInfoLength() == 7);
+		REQUIRE(parameter1->GetInfo()[0] == 0x11);
+		REQUIRE(parameter1->GetInfo()[1] == 0x22);
+		REQUIRE(parameter1->GetInfo()[2] == 0x33);
+		REQUIRE(parameter1->GetInfo()[3] == 0x44);
+		REQUIRE(parameter1->GetInfo()[4] == 0x55);
+		REQUIRE(parameter1->GetInfo()[5] == 0x66);
+		REQUIRE(parameter1->GetInfo()[6] == 0x77);
+		// This should be padding.
+		REQUIRE(parameter1->GetInfo()[7] == 0x00);
+
+		const auto* parameter2 =
+		  reinterpret_cast<const RTC::SCTP::UnknownParameter*>(chunk->GetParameterAt(1));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parameter2,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 8,
+		  /*length*/ 8,
+		  // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+		  /*parameterType*/ static_cast<RTC::SCTP::Parameter::ParameterType>(49159),
+		  /*unknownType*/ true,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::SKIP_AND_REPORT);
+
+		REQUIRE(parameter2->HasUnknownValue() == true);
+		REQUIRE(parameter2->GetUnknownValueLength() == 2);
+		REQUIRE(parameter2->GetUnknownValue()[0] == 0xAB);
+		REQUIRE(parameter2->GetUnknownValue()[1] == 0xCD);
+		// These should be padding.
+		REQUIRE(parameter2->GetUnknownValue()[2] == 0x00);
+		REQUIRE(parameter2->GetUnknownValue()[3] == 0x00);
+
+		/* Clone it. */
+
+		auto* clonedChunk = chunk->Clone(sctpCommon::CloneBuffer, sizeof(sctpCommon::CloneBuffer));
+
+		std::memset(sctpCommon::SerializeBuffer, 0x00, sizeof(sctpCommon::SerializeBuffer));
+
+		delete chunk;
+
+		CHECK_SCTP_CHUNK(
+		  /*chunk*/ clonedChunk,
+		  /*buffer*/ sctpCommon::CloneBuffer,
+		  /*bufferLength*/ sizeof(sctpCommon::CloneBuffer),
+		  /*length*/ 24,
+		  /*chunkType*/ RTC::SCTP::Chunk::ChunkType::HEARTBEAT_REQUEST,
+		  /*unknownType*/ false,
+		  /*actionForUnknownChunkType*/ RTC::SCTP::Chunk::ActionForUnknownChunkType::STOP,
+		  /*flags*/ 0b00000000,
+		  /*canHaveParameters*/ true,
+		  /*parametersCount*/ 2,
+		  /*canHaveErrorCauses*/ false,
+		  /*errorCausesCount*/ 0);
+
+		parameter1 =
+		  reinterpret_cast<const RTC::SCTP::HeartbeatInfoParameter*>(clonedChunk->GetParameterAt(0));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parameter1,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 12,
+		  /*length*/ 12,
+		  /*parameterType*/ RTC::SCTP::Parameter::ParameterType::HEARTBEAT_INFO,
+		  /*unknownType*/ false,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::STOP);
+
+		REQUIRE(parameter1->HasInfo() == true);
+		REQUIRE(parameter1->GetInfoLength() == 7);
+		REQUIRE(parameter1->GetInfo()[0] == 0x11);
+		REQUIRE(parameter1->GetInfo()[1] == 0x22);
+		REQUIRE(parameter1->GetInfo()[2] == 0x33);
+		REQUIRE(parameter1->GetInfo()[3] == 0x44);
+		REQUIRE(parameter1->GetInfo()[4] == 0x55);
+		REQUIRE(parameter1->GetInfo()[5] == 0x66);
+		REQUIRE(parameter1->GetInfo()[6] == 0x77);
+		// This should be padding.
+		REQUIRE(parameter1->GetInfo()[7] == 0x00);
+
+		parameter2 = reinterpret_cast<const RTC::SCTP::UnknownParameter*>(clonedChunk->GetParameterAt(1));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parameter2,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 8,
+		  /*length*/ 8,
+		  // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+		  /*parameterType*/ static_cast<RTC::SCTP::Parameter::ParameterType>(49159),
+		  /*unknownType*/ true,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::SKIP_AND_REPORT);
+
+		REQUIRE(parameter2->HasUnknownValue() == true);
+		REQUIRE(parameter2->GetUnknownValueLength() == 2);
+		REQUIRE(parameter2->GetUnknownValue()[0] == 0xAB);
+		REQUIRE(parameter2->GetUnknownValue()[1] == 0xCD);
+		// These should be padding.
+		REQUIRE(parameter2->GetUnknownValue()[2] == 0x00);
+		REQUIRE(parameter2->GetUnknownValue()[3] == 0x00);
+
+		delete clonedChunk;
+	}
+
+	SECTION("HeartbeatRequestChunk::Factory() succeeds")
+	{
+		auto* chunk = RTC::SCTP::HeartbeatRequestChunk::Factory(
+		  sctpCommon::FactoryBuffer, sizeof(sctpCommon::FactoryBuffer));
+
+		CHECK_SCTP_CHUNK(
+		  /*chunk*/ chunk,
+		  /*buffer*/ sctpCommon::FactoryBuffer,
+		  /*bufferLength*/ sizeof(sctpCommon::FactoryBuffer),
+		  /*length*/ 4,
+		  /*chunkType*/ RTC::SCTP::Chunk::ChunkType::HEARTBEAT_REQUEST,
+		  /*unknownType*/ false,
+		  /*actionForUnknownChunkType*/ RTC::SCTP::Chunk::ActionForUnknownChunkType::STOP,
+		  /*flags*/ 0b00000000,
+		  /*canHaveParameters*/ true,
+		  /*parametersCount*/ 0,
+		  /*canHaveErrorCauses*/ false,
+		  /*errorCausesCount*/ 0);
+
+		/* Modify it by adding parameters. */
+
+		auto* parameter1 = chunk->BuildParameterInPlace<RTC::SCTP::HeartbeatInfoParameter>();
+
+		// Info length is 5 so 3 bytes of padding will be added.
+		parameter1->SetInfo(sctpCommon::DataBuffer, 5);
+		parameter1->Consolidate();
+
+		// Let's add another HeartbeatInfoParameter (it doesn't make sense but
+		// anyway).
+		auto* parameter2 = chunk->BuildParameterInPlace<RTC::SCTP::HeartbeatInfoParameter>();
+
+		// Info length is 2 so 2 bytes of padding will be added.
+		parameter2->SetInfo(sctpCommon::DataBuffer, 2);
+		parameter2->Consolidate();
+
+		CHECK_SCTP_CHUNK(
+		  /*chunk*/ chunk,
+		  /*buffer*/ sctpCommon::FactoryBuffer,
+		  /*bufferLength*/ sizeof(sctpCommon::FactoryBuffer),
+		  /*length*/ 4 + (4 + 5 + 3) + (4 + 2 + 2),
+		  /*chunkType*/ RTC::SCTP::Chunk::ChunkType::HEARTBEAT_REQUEST,
+		  /*unknownType*/ false,
+		  /*actionForUnknownChunkType*/ RTC::SCTP::Chunk::ActionForUnknownChunkType::STOP,
+		  /*flags*/ 0b00000000,
+		  /*canHaveParameters*/ true,
+		  /*parametersCount*/ 2,
+		  /*canHaveErrorCauses*/ false,
+		  /*errorCausesCount*/ 0);
+
+		const auto* addedParameter1 =
+		  reinterpret_cast<const RTC::SCTP::HeartbeatInfoParameter*>(chunk->GetParameterAt(0));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ addedParameter1,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 12,
+		  /*length*/ 12,
+		  /*parameterType*/ RTC::SCTP::Parameter::ParameterType::HEARTBEAT_INFO,
+		  /*unknownType*/ false,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::STOP);
+
+		REQUIRE(addedParameter1->HasInfo() == true);
+		REQUIRE(addedParameter1->GetInfoLength() == 5);
+		REQUIRE(addedParameter1->GetInfo()[0] == 0x00);
+		REQUIRE(addedParameter1->GetInfo()[1] == 0x01);
+		REQUIRE(addedParameter1->GetInfo()[2] == 0x02);
+		REQUIRE(addedParameter1->GetInfo()[3] == 0x03);
+		REQUIRE(addedParameter1->GetInfo()[4] == 0x04);
+		// These should be padding.
+		REQUIRE(addedParameter1->GetInfo()[5] == 0x00);
+		REQUIRE(addedParameter1->GetInfo()[6] == 0x00);
+
+		const auto* addedParameter2 =
+		  reinterpret_cast<const RTC::SCTP::HeartbeatInfoParameter*>(chunk->GetParameterAt(1));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ addedParameter2,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 8,
+		  /*length*/ 8,
+		  /*parameterType*/ RTC::SCTP::Parameter::ParameterType::HEARTBEAT_INFO,
+		  /*unknownType*/ false,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::STOP);
+
+		REQUIRE(addedParameter2->HasInfo() == true);
+		REQUIRE(addedParameter2->GetInfoLength() == 2);
+		REQUIRE(addedParameter2->GetInfo()[0] == 0x00);
+		REQUIRE(addedParameter2->GetInfo()[1] == 0x01);
+		// These should be padding.
+		REQUIRE(addedParameter2->GetInfo()[2] == 0x00);
+		REQUIRE(addedParameter2->GetInfo()[3] == 0x00);
+
+		/* Parse itself and compare. */
+
+		auto* parsedChunk =
+		  RTC::SCTP::HeartbeatRequestChunk::Parse(chunk->GetBuffer(), chunk->GetLength());
+
+		delete chunk;
+
+		CHECK_SCTP_CHUNK(
+		  /*chunk*/ parsedChunk,
+		  /*buffer*/ sctpCommon::FactoryBuffer,
+		  /*bufferLength*/ 4 + (4 + 5 + 3) + (4 + 2 + 2),
+		  /*length*/ 4 + (4 + 5 + 3) + (4 + 2 + 2),
+		  /*chunkType*/ RTC::SCTP::Chunk::ChunkType::HEARTBEAT_REQUEST,
+		  /*unknownType*/ false,
+		  /*actionForUnknownChunkType*/ RTC::SCTP::Chunk::ActionForUnknownChunkType::STOP,
+		  /*flags*/ 0b00000000,
+		  /*canHaveParameters*/ true,
+		  /*parametersCount*/ 2,
+		  /*canHaveErrorCauses*/ false,
+		  /*errorCausesCount*/ 0);
+
+		const auto* parsedParameter1 =
+		  reinterpret_cast<const RTC::SCTP::HeartbeatInfoParameter*>(parsedChunk->GetParameterAt(0));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parsedParameter1,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 12,
+		  /*length*/ 12,
+		  /*parameterType*/ RTC::SCTP::Parameter::ParameterType::HEARTBEAT_INFO,
+		  /*unknownType*/ false,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::STOP);
+
+		REQUIRE(parsedParameter1->HasInfo() == true);
+		REQUIRE(parsedParameter1->GetInfoLength() == 5);
+		REQUIRE(parsedParameter1->GetInfo()[0] == 0x00);
+		REQUIRE(parsedParameter1->GetInfo()[1] == 0x01);
+		REQUIRE(parsedParameter1->GetInfo()[2] == 0x02);
+		REQUIRE(parsedParameter1->GetInfo()[3] == 0x03);
+		REQUIRE(parsedParameter1->GetInfo()[4] == 0x04);
+		// These should be padding.
+		REQUIRE(parsedParameter1->GetInfo()[5] == 0x00);
+		REQUIRE(parsedParameter1->GetInfo()[6] == 0x00);
+
+		const auto* parsedParameter2 =
+		  reinterpret_cast<const RTC::SCTP::HeartbeatInfoParameter*>(parsedChunk->GetParameterAt(1));
+
+		CHECK_SCTP_PARAMETER(
+		  /*parameter*/ parsedParameter2,
+		  /*buffer*/ nullptr,
+		  /*bufferLength*/ 8,
+		  /*length*/ 8,
+		  /*parameterType*/ RTC::SCTP::Parameter::ParameterType::HEARTBEAT_INFO,
+		  /*unknownType*/ false,
+		  /*actionForUnknownParameterType*/ RTC::SCTP::Parameter::ActionForUnknownParameterType::STOP);
+
+		REQUIRE(parsedParameter2->HasInfo() == true);
+		REQUIRE(parsedParameter2->GetInfoLength() == 2);
+		REQUIRE(parsedParameter2->GetInfo()[0] == 0x00);
+		REQUIRE(parsedParameter2->GetInfo()[1] == 0x01);
+		// These should be padding.
+		REQUIRE(parsedParameter2->GetInfo()[2] == 0x00);
+		REQUIRE(parsedParameter2->GetInfo()[3] == 0x00);
+
+		delete parsedChunk;
+	}
+}

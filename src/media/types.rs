@@ -12,37 +12,37 @@ use thiserror::Error;
 pub enum MediaError {
     #[error("Worker error: {0}")]
     WorkerError(String),
-    
+
     #[error("Router error: {0}")]
     RouterError(String),
-    
+
     #[error("Transport error: {0}")]
     TransportError(String),
-    
+
     #[error("Producer error: {0}")]
     ProducerError(String),
-    
+
     #[error("Consumer error: {0}")]
     ConsumerError(String),
-    
+
     #[error("Room not found: {0}")]
     RoomNotFound(String),
-    
+
     #[error("Participant not found: {0}")]
     ParticipantNotFound(String),
-    
+
     #[error("Resource not found: {0}")]
     ResourceNotFound(String),
-    
+
     #[error("Invalid state: {0}")]
     InvalidState(String),
-    
+
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
-    
+
     #[error("Mediasoup error: {0}")]
     MediasoupError(#[from] mediasoup::worker::RequestError),
-    
+
     #[error("Other error: {0}")]
     Other(#[from] anyhow::Error),
 }
@@ -121,6 +121,9 @@ impl ConsumerInfo {
 #[derive(Debug, Clone)]
 pub struct ParticipantMedia {
     pub id: String,
+    /// Unique lifetime identifier. The public participant ID can be reused
+    /// after disconnect, so asynchronous cleanup must not key solely on it.
+    pub generation: uuid::Uuid,
     pub send_transport: Option<WebRtcTransport>,
     pub recv_transport: Option<WebRtcTransport>,
     pub producers: HashMap<String, Producer>,
@@ -131,34 +134,41 @@ impl ParticipantMedia {
     pub fn new(id: String) -> Self {
         Self {
             id,
+            generation: uuid::Uuid::new_v4(),
             send_transport: None,
             recv_transport: None,
             producers: HashMap::new(),
             consumers: HashMap::new(),
         }
     }
-    
+
     /// Closes all media resources for this participant.
     /// Consumers and producers are closed in parallel for faster cleanup at scale.
     pub async fn close_all(&mut self) {
         // Close all consumers in parallel (they depend on transports, so close first)
         let consumers: Vec<_> = self.consumers.drain().collect();
-        let consumer_futures: Vec<_> = consumers.into_iter().map(|(id, consumer)| {
-            tokio::spawn(async move {
-                drop(consumer);
-                tracing::debug!("Closed consumer {}", id);
+        let consumer_futures: Vec<_> = consumers
+            .into_iter()
+            .map(|(id, consumer)| {
+                tokio::spawn(async move {
+                    drop(consumer);
+                    tracing::debug!("Closed consumer {}", id);
+                })
             })
-        }).collect();
+            .collect();
         futures_util::future::join_all(consumer_futures).await;
 
         // Close all producers in parallel
         let producers: Vec<_> = self.producers.drain().collect();
-        let producer_futures: Vec<_> = producers.into_iter().map(|(id, producer)| {
-            tokio::spawn(async move {
-                drop(producer);
-                tracing::debug!("Closed producer {}", id);
+        let producer_futures: Vec<_> = producers
+            .into_iter()
+            .map(|(id, producer)| {
+                tokio::spawn(async move {
+                    drop(producer);
+                    tracing::debug!("Closed producer {}", id);
+                })
             })
-        }).collect();
+            .collect();
         futures_util::future::join_all(producer_futures).await;
 
         // Close transports last (after consumers/producers are gone)

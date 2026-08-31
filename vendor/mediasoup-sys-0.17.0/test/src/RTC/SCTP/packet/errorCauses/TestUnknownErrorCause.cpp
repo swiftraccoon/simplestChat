@@ -1,0 +1,147 @@
+#include "common.hpp"
+#include "RTC/SCTP/packet/ErrorCause.hpp"
+#include "RTC/SCTP/packet/errorCauses/UnknownErrorCause.hpp"
+#include "test/include/RTC/SCTP/sctpCommon.hpp"
+#include <catch2/catch_test_macros.hpp>
+#include <cstring> // std::memset()
+
+SCENARIO("Unknown Error Cause", "[serializable][sctp][errorcause]")
+{
+	sctpCommon::ResetBuffers();
+
+	SECTION("UnknownErrorCause::Parse() succeeds")
+	{
+		// clang-format off
+		alignas(4) uint8_t buffer[] =
+		{
+			// Code:999 (UNKNOWN), Length: 11
+			0x03, 0xE7, 0x00, 0x0B,
+			// Unknown value: 0x0123456789ABCD
+			0x01, 0x23, 0x45, 0x67,
+			// 1 byte of padding
+			0x89, 0xAB, 0xCD, 0x00,
+			// Extra bytes that should be ignored
+			0xAA, 0xBB, 0xCC, 0xDD,
+			0xEE
+		};
+		// clang-format on
+
+		auto* errorCause = RTC::SCTP::UnknownErrorCause::Parse(buffer, sizeof(buffer));
+
+		CHECK_SCTP_ERROR_CAUSE(
+		  /*errorCause*/ errorCause,
+		  /*buffer*/ buffer,
+		  /*bufferLength*/ sizeof(buffer),
+		  /*length*/ 12,
+		  // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+		  /*causeCode*/ static_cast<RTC::SCTP::ErrorCause::ErrorCauseCode>(999),
+		  /*unknownCode*/ true);
+
+		REQUIRE(errorCause->HasUnknownValue() == true);
+		REQUIRE(errorCause->GetUnknownValueLength() == 7);
+		REQUIRE(errorCause->GetUnknownValue()[1] == 0x23);
+		REQUIRE(errorCause->GetUnknownValue()[0] == 0x01);
+		REQUIRE(errorCause->GetUnknownValue()[1] == 0x23);
+		REQUIRE(errorCause->GetUnknownValue()[2] == 0x45);
+		REQUIRE(errorCause->GetUnknownValue()[3] == 0x67);
+		REQUIRE(errorCause->GetUnknownValue()[4] == 0x89);
+		REQUIRE(errorCause->GetUnknownValue()[5] == 0xAB);
+		REQUIRE(errorCause->GetUnknownValue()[6] == 0xCD);
+		// This should be padding.
+		REQUIRE(errorCause->GetUnknownValue()[7] == 0x00);
+
+		/* Serialize it. */
+
+		errorCause->Serialize(sctpCommon::SerializeBuffer, sizeof(sctpCommon::SerializeBuffer));
+
+		std::memset(buffer, 0x00, sizeof(buffer));
+
+		CHECK_SCTP_ERROR_CAUSE(
+		  /*errorCause*/ errorCause,
+		  /*buffer*/ sctpCommon::SerializeBuffer,
+		  /*bufferLength*/ sizeof(sctpCommon::SerializeBuffer),
+		  /*length*/ 12,
+		  // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+		  /*causeCode*/ static_cast<RTC::SCTP::ErrorCause::ErrorCauseCode>(999),
+		  /*unknownCode*/ true);
+
+		REQUIRE(errorCause->HasUnknownValue() == true);
+		REQUIRE(errorCause->GetUnknownValueLength() == 7);
+		REQUIRE(errorCause->GetUnknownValue()[1] == 0x23);
+		REQUIRE(errorCause->GetUnknownValue()[0] == 0x01);
+		REQUIRE(errorCause->GetUnknownValue()[1] == 0x23);
+		REQUIRE(errorCause->GetUnknownValue()[2] == 0x45);
+		REQUIRE(errorCause->GetUnknownValue()[3] == 0x67);
+		REQUIRE(errorCause->GetUnknownValue()[4] == 0x89);
+		REQUIRE(errorCause->GetUnknownValue()[5] == 0xAB);
+		REQUIRE(errorCause->GetUnknownValue()[6] == 0xCD);
+		// This should be padding.
+		REQUIRE(errorCause->GetUnknownValue()[7] == 0x00);
+
+		/* Clone it. */
+
+		auto* clonedErrorCause =
+		  errorCause->Clone(sctpCommon::CloneBuffer, sizeof(sctpCommon::CloneBuffer));
+
+		std::memset(sctpCommon::SerializeBuffer, 0x00, sizeof(sctpCommon::SerializeBuffer));
+
+		delete errorCause;
+
+		CHECK_SCTP_ERROR_CAUSE(
+		  /*errorCause*/ clonedErrorCause,
+		  /*buffer*/ sctpCommon::CloneBuffer,
+		  /*bufferLength*/ sizeof(sctpCommon::CloneBuffer),
+		  /*length*/ 12,
+		  // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+		  /*causeCode*/ static_cast<RTC::SCTP::ErrorCause::ErrorCauseCode>(999),
+		  /*unknownCode*/ true);
+
+		REQUIRE(clonedErrorCause->HasUnknownValue() == true);
+		REQUIRE(clonedErrorCause->GetUnknownValueLength() == 7);
+		REQUIRE(clonedErrorCause->GetUnknownValue()[1] == 0x23);
+		REQUIRE(clonedErrorCause->GetUnknownValue()[0] == 0x01);
+		REQUIRE(clonedErrorCause->GetUnknownValue()[1] == 0x23);
+		REQUIRE(clonedErrorCause->GetUnknownValue()[2] == 0x45);
+		REQUIRE(clonedErrorCause->GetUnknownValue()[3] == 0x67);
+		REQUIRE(clonedErrorCause->GetUnknownValue()[4] == 0x89);
+		REQUIRE(clonedErrorCause->GetUnknownValue()[5] == 0xAB);
+		REQUIRE(clonedErrorCause->GetUnknownValue()[6] == 0xCD);
+		// This should be padding.
+		REQUIRE(clonedErrorCause->GetUnknownValue()[7] == 0x00);
+
+		delete clonedErrorCause;
+	}
+
+	SECTION("UnknownErrorCause::Parse() fails")
+	{
+		// Wrong length field.
+		// clang-format off
+		alignas(4) uint8_t buffer1[] =
+		{
+			// Code:49159 (UNKNOWN), Length: 3
+			0xC0, 0x07, 0x00, 0x03,
+			// Unknown value: 0x0123456789ABCD
+			0x01, 0x23, 0x45, 0x67,
+			// 1 byte of padding
+			0x89, 0xAB, 0xCD, 0x00,
+		};
+		// clang-format on
+
+		REQUIRE(!RTC::SCTP::UnknownErrorCause::Parse(buffer1, sizeof(buffer1)));
+
+		// Wrong buffer length.
+		// clang-format off
+		alignas(4) uint8_t buffer2[] =
+		{
+			// Code:49159 (UNKNOWN), Length: 11
+			0xC0, 0x07, 0x00, 0x0B,
+			// Unknown value: 0x0123456789ABCD
+			0x01, 0x23, 0x45, 0x67,
+			// 1 byte of padding (missing)
+			0x89, 0xAB, 0xCD
+		};
+		// clang-format on
+
+		REQUIRE(!RTC::SCTP::UnknownErrorCause::Parse(buffer2, sizeof(buffer2)));
+	}
+}

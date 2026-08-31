@@ -1,0 +1,53 @@
+#ifndef MS_RTC_UDP_SOCKET_HPP
+#define MS_RTC_UDP_SOCKET_HPP
+
+#include "common.hpp"
+#include "handles/UdpSocketHandle.hpp"
+#include "RTC/PortManager.hpp"
+#include "RTC/Transport.hpp"
+#include <string>
+
+namespace RTC
+{
+	class UdpSocket : public ::UdpSocketHandle
+	{
+	public:
+		class Listener
+		{
+		public:
+			virtual ~Listener() = default;
+
+		public:
+			virtual void OnUdpSocketPacketReceived(
+			  RTC::UdpSocket* socket,
+			  const uint8_t* data,
+			  size_t len,
+			  size_t bufferLen,
+			  const struct sockaddr* remoteAddr) = 0;
+		};
+
+	public:
+		UdpSocket(Listener* listener, std::string& ip, uint16_t port, RTC::Transport::SocketFlags& flags);
+		UdpSocket(
+		  Listener* listener,
+		  std::string& ip,
+		  uint16_t minPort,
+		  uint16_t maxPort,
+		  RTC::Transport::SocketFlags& flags,
+		  RTC::PortManager::PortRangeKey& portRangeKey);
+		~UdpSocket() override;
+
+		/* Pure virtual methods inherited from ::UdpSocketHandle. */
+	public:
+		void UserOnUdpDatagramReceived(
+		  const uint8_t* data, size_t len, size_t bufferLen, const struct sockaddr* addr) override;
+
+	private:
+		// Passed by argument.
+		Listener* listener{ nullptr };
+		bool fixedPort{ false };
+		RTC::PortManager::PortRangeKey portRangeKey{};
+	};
+} // namespace RTC
+
+#endif

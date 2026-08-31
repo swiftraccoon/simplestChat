@@ -11,6 +11,13 @@ web/e2e/artifacts
 web/e2e/package*.json
 
 # Local config
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
 /scripts/
 /CLAUDE.md
 /.cargo/

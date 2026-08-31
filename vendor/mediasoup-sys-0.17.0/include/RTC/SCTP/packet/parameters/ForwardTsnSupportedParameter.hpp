@@ -1,0 +1,77 @@
+#ifndef MS_RTC_SCTP_FORWARD_TSN_SUPPORTED_PARAMETER_HPP
+#define MS_RTC_SCTP_FORWARD_TSN_SUPPORTED_PARAMETER_HPP
+
+#include "common.hpp"
+#include "RTC/SCTP/packet/Parameter.hpp"
+
+namespace RTC
+{
+	namespace SCTP
+	{
+		/**
+		 * SCTP Forward-TSN-Supported Parameter (FORWARD-TSN-SUPPORTED) (49152).
+		 *
+		 * @see RFC 3758.
+		 *
+		 *  0                   1                   2                   3
+		 *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |    Parameter Type = 49152     |  Parameter Length = 4         |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 */
+
+		// Forward declaration.
+		class Chunk;
+
+		class ForwardTsnSupportedParameter : public Parameter
+		{
+			// We need that chunk calls protected and private methods in this class.
+			friend class Chunk;
+
+		public:
+			/**
+			 * Parse a ForwardTsnSupportedParameter.
+			 *
+			 * @remarks
+			 * `bufferLength` may exceed the exact length of the parameter.
+			 */
+			static ForwardTsnSupportedParameter* Parse(const uint8_t* buffer, size_t bufferLength);
+
+			/**
+			 * Create a ForwardTsnSupportedParameter.
+			 *
+			 * @remarks
+			 * `bufferLength` could be greater than the parameter real length.
+			 */
+			static ForwardTsnSupportedParameter* Factory(uint8_t* buffer, size_t bufferLength);
+
+		private:
+			/**
+			 * Parse a ForwardTsnSupportedParameter.
+			 *
+			 * @remarks
+			 * To be used only by `Chunk::ParseParameters()`.
+			 */
+			static ForwardTsnSupportedParameter* ParseStrict(
+			  const uint8_t* buffer, size_t bufferLength, uint16_t parameterLength, uint8_t padding);
+
+		private:
+			/**
+			 * Only used by Parse(), ParseStrict() and Factory() static methods.
+			 */
+			ForwardTsnSupportedParameter(uint8_t* buffer, size_t bufferLength);
+
+		public:
+			~ForwardTsnSupportedParameter() override;
+
+			void Dump(int indentation = 0) const final;
+
+			ForwardTsnSupportedParameter* Clone(uint8_t* buffer, size_t bufferLength) const final;
+
+		protected:
+			ForwardTsnSupportedParameter* SoftClone(const uint8_t* buffer) const final;
+		};
+	} // namespace SCTP
+} // namespace RTC
+
+#endif

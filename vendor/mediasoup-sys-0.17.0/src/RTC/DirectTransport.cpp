@@ -1,0 +1,278 @@
+#define MS_CLASS "RTC::DirectTransport"
+// #define MS_LOG_DEV_LEVEL 3
+
+#include "RTC/DirectTransport.hpp"
+#include "Logger.hpp"
+#include "RTC/Consts.hpp"
+
+namespace RTC
+{
+	/* Instance methods. */
+
+	// NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
+	DirectTransport::DirectTransport(
+	  SharedInterface* shared,
+	  const std::string& id,
+	  RTC::Transport::Listener* listener,
+	  const FBS::DirectTransport::DirectTransportOptions* options)
+	  // DirectTransport doesn't support SCTP, so State Cookie authentication is
+	  // irrelevant here.
+	  : RTC::Transport::Transport(
+	      shared, id, listener, options->base(), /*requireSctpStateCookieAuthentication*/ false)
+	{
+		MS_TRACE();
+
+		// NOTE: This may throw.
+		this->shared->GetChannelMessageRegistrator()->RegisterHandler(
+		  this->id,
+		  /*channelRequestHandler*/ this,
+		  /*channelNotificationHandler*/ this);
+	}
+
+	DirectTransport::~DirectTransport()
+	{
+		MS_TRACE();
+
+		// Tell the Transport parent class that we are about to destroy
+		// the class instance.
+		SetDestroying();
+
+		this->shared->GetChannelMessageRegistrator()->UnregisterHandler(this->id);
+	}
+
+	flatbuffers::Offset<FBS::DirectTransport::DumpResponse> DirectTransport::FillBuffer(
+	  flatbuffers::FlatBufferBuilder& builder) const
+	{
+		MS_TRACE();
+
+		// Add base transport dump.
+		auto base = Transport::FillBuffer(builder);
+
+		return FBS::DirectTransport::CreateDumpResponse(builder, base);
+	}
+
+	flatbuffers::Offset<FBS::DirectTransport::GetStatsResponse> DirectTransport::FillBufferStats(
+	  flatbuffers::FlatBufferBuilder& builder)
+	{
+		MS_TRACE();
+
+		// Base Transport stats.
+		auto base = Transport::FillBufferStats(builder);
+
+		return FBS::DirectTransport::CreateGetStatsResponse(builder, base);
+	}
+
+	void DirectTransport::HandleRequest(Channel::ChannelRequest* request)
+	{
+		MS_TRACE();
+
+		switch (request->method)
+		{
+			case Channel::ChannelRequest::Method::TRANSPORT_GET_STATS:
+			{
+				auto responseOffset = FillBufferStats(request->GetBufferBuilder());
+
+				request->Accept(FBS::Response::Body::DirectTransport_GetStatsResponse, responseOffset);
+
+				break;
+			}
+
+			case Channel::ChannelRequest::Method::TRANSPORT_DUMP:
+			{
+				auto dumpOffset = FillBuffer(request->GetBufferBuilder());
+
+				request->Accept(FBS::Response::Body::DirectTransport_DumpResponse, dumpOffset);
+
+				break;
+			}
+
+			default:
+			{
+				// Pass it to the parent class.
+				RTC::Transport::HandleRequest(request);
+			}
+		}
+	}
+
+	void DirectTransport::HandleNotification(Channel::ChannelNotification* notification)
+	{
+		MS_TRACE();
+
+		switch (notification->event)
+		{
+			case Channel::ChannelNotification::Event::TRANSPORT_SEND_RTCP:
+			{
+				const auto* body = notification->data->body_as<FBS::Transport::SendRtcpNotification>();
+				auto len         = body->data()->size();
+
+				// Increase receive transmission.
+				RTC::Transport::DataReceived(len);
+
+				if (len > RTC::Consts::MtuSize + 100)
+				{
+					MS_WARN_TAG(rtp, "given RTCP packet exceeds maximum size [len:%i]", len);
+
+					return;
+				}
+
+				auto* packet = RTC::RTCP::Packet::Parse(body->data()->data(), len);
+
+				if (!packet)
+				{
+					MS_WARN_TAG(rtcp, "received data is not a valid RTCP compound or single packet");
+
+					return;
+				}
+
+				// Pass the packet to the parent transport.
+				RTC::Transport::ReceiveRtcpPacket(packet);
+
+				break;
+			}
+
+			default:
+			{
+				// Pass it to the parent class.
+				RTC::Transport::HandleNotification(notification);
+			}
+		}
+	}
+
+	inline bool DirectTransport::IsConnected() const
+	{
+		MS_TRACE();
+
+		return true;
+	}
+
+	void DirectTransport::SendRtpPacket(
+	  RTC::Consumer* consumer, RTC::RTP::Packet* packet, const RTC::Transport::onSendCallback* cb)
+	{
+		MS_TRACE();
+
+		if (!consumer)
+		{
+			MS_WARN_TAG(rtp, "cannot send RTP packet not associated to a Consumer");
+
+			if (cb)
+			{
+				(*cb)(false);
+				delete cb;
+			}
+
+			return;
+		}
+
+		const auto data = this->shared->GetChannelNotifier()->GetBufferBuilder().CreateVector(
+		  packet->GetBuffer(), packet->GetLength());
+
+		auto notification = FBS::Consumer::CreateRtpNotification(
+		  this->shared->GetChannelNotifier()->GetBufferBuilder(), data);
+
+		this->shared->GetChannelNotifier()->Emit(
+		  consumer->id,
+		  FBS::Notification::Event::CONSUMER_RTP,
+		  FBS::Notification::Body::Consumer_RtpNotification,
+		  notification);
+
+		if (cb)
+		{
+			(*cb)(true);
+			delete cb;
+		}
+
+		// Increase send transmission.
+		RTC::Transport::DataSent(packet->GetLength());
+	}
+
+	void DirectTransport::SendRtcpPacket(RTC::RTCP::Packet* packet)
+	{
+		MS_TRACE();
+
+		// Notify the Node DirectTransport.
+		const auto data = this->shared->GetChannelNotifier()->GetBufferBuilder().CreateVector(
+		  packet->GetData(), packet->GetSize());
+
+		auto notification = FBS::DirectTransport::CreateRtcpNotification(
+		  this->shared->GetChannelNotifier()->GetBufferBuilder(), data);
+
+		this->shared->GetChannelNotifier()->Emit(
+		  this->id,
+		  FBS::Notification::Event::DIRECTTRANSPORT_RTCP,
+		  FBS::Notification::Body::DirectTransport_RtcpNotification,
+		  notification);
+
+		// Increase send transmission.
+		RTC::Transport::DataSent(packet->GetSize());
+	}
+
+	void DirectTransport::SendRtcpCompoundPacket(RTC::RTCP::CompoundPacket* packet)
+	{
+		MS_TRACE();
+
+		packet->Serialize(RTC::RTCP::SerializationBuffer);
+
+		const auto data = this->shared->GetChannelNotifier()->GetBufferBuilder().CreateVector(
+		  packet->GetData(), packet->GetSize());
+
+		auto notification = FBS::DirectTransport::CreateRtcpNotification(
+		  this->shared->GetChannelNotifier()->GetBufferBuilder(), data);
+
+		this->shared->GetChannelNotifier()->Emit(
+		  this->id,
+		  FBS::Notification::Event::DIRECTTRANSPORT_RTCP,
+		  FBS::Notification::Body::DirectTransport_RtcpNotification,
+		  notification);
+	}
+
+	void DirectTransport::SendMessage(
+	  RTC::DataConsumer* dataConsumer, RTC::SCTP::Message message, onQueuedCallback* cb)
+	{
+		MS_TRACE();
+
+		// Notify the Node DirectTransport.
+		auto data = this->shared->GetChannelNotifier()->GetBufferBuilder().CreateVector(
+		  message.GetPayload().data(), message.GetPayloadLength());
+
+		auto notification = FBS::DataConsumer::CreateMessageNotification(
+		  this->shared->GetChannelNotifier()->GetBufferBuilder(), message.GetPayloadProtocolId(), data);
+
+		this->shared->GetChannelNotifier()->Emit(
+		  dataConsumer->id,
+		  FBS::Notification::Event::DATACONSUMER_MESSAGE,
+		  FBS::Notification::Body::DataConsumer_MessageNotification,
+		  notification);
+
+		if (cb)
+		{
+			(*cb)(true, false);
+			delete cb;
+		}
+
+		// Increase send transmission.
+		RTC::Transport::DataSent(message.GetPayloadLength());
+	}
+
+	bool DirectTransport::SendData(const uint8_t* /*data*/, size_t /*len*/)
+	{
+		MS_TRACE();
+
+		// Do nothing.
+
+		return false;
+	}
+
+	void DirectTransport::RecvStreamClosed(uint32_t /*ssrc*/)
+	{
+		MS_TRACE();
+
+		// Do nothing.
+	}
+
+	void DirectTransport::SendStreamClosed(uint32_t /*ssrc*/)
+	{
+		MS_TRACE();
+
+		// Do nothing.
+	}
+} // namespace RTC

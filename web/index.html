@@ -41,7 +41,7 @@
         <div id="room-browser" hidden>
           <div class="room-browser-header">
             <div class="room-search-row">
-              <input type="text" id="room-search-input" placeholder="Search rooms..." autocomplete="off" />
+              <input type="text" id="room-search-input" placeholder="Search rooms (3+ consecutive letters/numbers)..." minlength="3" maxlength="128" autocomplete="off" />
             </div>
             <button id="create-room-btn" class="btn-primary" title="Create Room">+ Create Room</button>
           </div>
@@ -126,8 +126,8 @@
             </div>
             <div class="setting-group">
               <label for="rs-password">Password</label>
-              <input type="password" id="rs-password" placeholder="Leave blank to remove" autocomplete="off" />
-              <span class="setting-hint">Set or change the room password</span>
+              <input type="password" id="rs-password" minlength="8" maxlength="256" placeholder="Leave blank to remove" autocomplete="off" />
+              <span class="setting-hint">Use 8-256 bytes, or leave blank to remove</span>
             </div>
           </div>
           <div class="settings-section">
@@ -149,7 +149,7 @@
               <input type="checkbox" id="rs-invite-only" />
             </div>
             <div class="setting-group setting-toggle">
-              <label for="rs-secret">Secret</label>
+              <label for="rs-secret">Unlisted</label>
               <input type="checkbox" id="rs-secret" />
             </div>
             <div class="setting-group setting-toggle">
@@ -279,8 +279,8 @@
             <input type="text" id="cr-topic" placeholder="What's this room about?" autocomplete="off" />
           </div>
           <div class="setting-group">
-            <label for="cr-password">Password (optional)</label>
-            <input type="password" id="cr-password" placeholder="Leave blank for open access" autocomplete="off" />
+              <label for="cr-password">Password (optional)</label>
+              <input type="password" id="cr-password" minlength="8" maxlength="256" placeholder="At least 8 bytes, or leave blank" autocomplete="off" />
           </div>
           <div class="setting-group setting-toggle">
             <label for="cr-moderated">Moderated</label>
@@ -291,7 +291,7 @@
             <input type="checkbox" id="cr-lobby" />
           </div>
           <div class="setting-group setting-toggle">
-            <label for="cr-secret">Secret (hidden from browser)</label>
+            <label for="cr-secret">Unlisted (hidden from room browser)</label>
             <input type="checkbox" id="cr-secret" />
           </div>
           <div class="setting-group setting-toggle">

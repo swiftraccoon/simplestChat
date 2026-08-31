@@ -40,7 +40,7 @@ pub enum ClientMessage {
         kind: MediaKind,
         rtp_parameters: RtpParameters,
         #[serde(default)]
-        source: Option<String>,  // "camera", "microphone", "screen", "screen-audio"
+        source: Option<String>, // "camera", "microphone", "screen", "screen-audio"
     },
     /// Consume media from another participant
     #[serde(rename_all = "camelCase")]
@@ -50,29 +50,19 @@ pub enum ClientMessage {
     },
     /// Resume a consumer
     #[serde(rename_all = "camelCase")]
-    ResumeConsumer {
-        consumer_id: String,
-    },
+    ResumeConsumer { consumer_id: String },
     /// Pause a consumer
     #[serde(rename_all = "camelCase")]
-    PauseConsumer {
-        consumer_id: String,
-    },
+    PauseConsumer { consumer_id: String },
     /// Close a producer
     #[serde(rename_all = "camelCase")]
-    CloseProducer {
-        producer_id: String,
-    },
+    CloseProducer { producer_id: String },
     /// Pause a producer (mute)
     #[serde(rename_all = "camelCase")]
-    PauseProducer {
-        producer_id: String,
-    },
+    PauseProducer { producer_id: String },
     /// Resume a producer (unmute)
     #[serde(rename_all = "camelCase")]
-    ResumeProducer {
-        producer_id: String,
-    },
+    ResumeProducer { producer_id: String },
     /// Reconnect to an existing session after WS disconnect
     #[serde(rename_all = "camelCase")]
     Reconnect {
@@ -82,9 +72,7 @@ pub enum ClientMessage {
     },
     /// Request ICE restart on a transport
     #[serde(rename_all = "camelCase")]
-    RestartIce {
-        transport_id: String,
-    },
+    RestartIce { transport_id: String },
     /// Set preferred simulcast layers for a consumer
     #[serde(rename_all = "camelCase")]
     SetConsumerPreferredLayers {
@@ -93,9 +81,7 @@ pub enum ClientMessage {
         temporal_layer: Option<u8>,
     },
     /// Send a chat message to the room
-    ChatMessage {
-        content: String,
-    },
+    ChatMessage { content: String },
 
     // === Moderation ===
     /// Force-close a participant's camera/screen producer
@@ -103,7 +89,10 @@ pub enum ClientMessage {
     CloseCam { target_participant_id: String },
     /// Ban a participant from producing video/screen
     #[serde(rename_all = "camelCase")]
-    CamBan { target_participant_id: String, reason: Option<String> },
+    CamBan {
+        target_participant_id: String,
+        reason: Option<String>,
+    },
     /// Unban a participant from producing video/screen
     #[serde(rename_all = "camelCase")]
     CamUnban { target_participant_id: String },
@@ -115,16 +104,26 @@ pub enum ClientMessage {
     TextUnmute { target_participant_id: String },
     /// Kick a participant from the room
     #[serde(rename_all = "camelCase")]
-    Kick { target_participant_id: String, reason: Option<String> },
+    Kick {
+        target_participant_id: String,
+        reason: Option<String>,
+    },
     /// Ban a participant from the room
     #[serde(rename_all = "camelCase")]
-    Ban { target_participant_id: String, reason: Option<String>, duration: Option<u64> },
+    Ban {
+        target_participant_id: String,
+        reason: Option<String>,
+        duration: Option<u64>,
+    },
     /// Unban a user (stub — no persistent ban list yet)
     #[serde(rename_all = "camelCase")]
     Unban { target_user_id: String },
     /// Set a participant's role
     #[serde(rename_all = "camelCase")]
-    SetRole { target_participant_id: String, role: u8 },
+    SetRole {
+        target_participant_id: String,
+        role: u8,
+    },
     /// Request voice in a moderated room (sent by User/Guest)
     RequestVoice,
 
@@ -174,9 +173,7 @@ pub enum ServerMessage {
         room_settings: Option<serde_json::Value>,
     },
     /// Error response
-    Error {
-        message: String,
-    },
+    Error { message: String },
     /// Router RTP capabilities
     #[serde(rename_all = "camelCase")]
     RouterRtpCapabilities {
@@ -194,14 +191,10 @@ pub enum ServerMessage {
     },
     /// Transport connected
     #[serde(rename_all = "camelCase")]
-    TransportConnected {
-        transport_id: String,
-    },
+    TransportConnected { transport_id: String },
     /// Producer created
     #[serde(rename_all = "camelCase")]
-    ProducerCreated {
-        producer_id: String,
-    },
+    ProducerCreated { producer_id: String },
     /// Consumer created
     #[serde(rename_all = "camelCase")]
     ConsumerCreated {
@@ -220,9 +213,7 @@ pub enum ServerMessage {
     },
     /// Participant left the room
     #[serde(rename_all = "camelCase")]
-    ParticipantLeft {
-        participant_id: String,
-    },
+    ParticipantLeft { participant_id: String },
     /// New producer available from another participant
     #[serde(rename_all = "camelCase")]
     NewProducer {
@@ -234,34 +225,26 @@ pub enum ServerMessage {
     },
     /// Producer closed by another participant
     #[serde(rename_all = "camelCase")]
-    ProducerClosed {
-        producer_id: String,
-    },
+    ProducerClosed { producer_id: String },
     /// Producer paused (muted) by its owner
     #[serde(rename_all = "camelCase")]
-    ProducerPaused {
-        producer_id: String,
-    },
+    ProducerPaused { producer_id: String },
     /// Producer resumed (unmuted) by its owner
     #[serde(rename_all = "camelCase")]
-    ProducerResumed {
-        producer_id: String,
-    },
+    ProducerResumed { producer_id: String },
     /// Consumer resumed
     #[serde(rename_all = "camelCase")]
-    ConsumerResumed {
-        consumer_id: String,
-    },
+    ConsumerResumed { consumer_id: String },
     /// Consumer paused
     #[serde(rename_all = "camelCase")]
-    ConsumerPaused {
-        consumer_id: String,
-    },
+    ConsumerPaused { consumer_id: String },
     /// Result of reconnection attempt
     #[serde(rename_all = "camelCase")]
     ReconnectResult {
         success: bool,
         participant_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reconnect_token: Option<String>,
     },
     /// ICE restarted — new ICE parameters
     #[serde(rename_all = "camelCase")]
@@ -291,14 +274,10 @@ pub enum ServerMessage {
     },
     /// Active/dominant speaker changed
     #[serde(rename_all = "camelCase")]
-    ActiveSpeaker {
-        participant_id: String,
-    },
+    ActiveSpeaker { participant_id: String },
     /// Audio levels for all speaking participants
     #[serde(rename_all = "camelCase")]
-    AudioLevels {
-        levels: Vec<AudioLevelEntry>,
-    },
+    AudioLevels { levels: Vec<AudioLevelEntry> },
 
     // === Moderation broadcasts ===
     /// A producer was force-closed by a moderator
@@ -318,16 +297,29 @@ pub enum ServerMessage {
     TextUnmuted { participant_id: String },
     /// Participant was kicked from the room
     #[serde(rename_all = "camelCase")]
-    ParticipantKicked { participant_id: String, reason: Option<String> },
+    ParticipantKicked {
+        participant_id: String,
+        reason: Option<String>,
+    },
     /// Participant was banned from the room
     #[serde(rename_all = "camelCase")]
-    ParticipantBanned { participant_id: String, reason: Option<String> },
+    ParticipantBanned {
+        participant_id: String,
+        reason: Option<String>,
+    },
     /// Participant's role was changed
     #[serde(rename_all = "camelCase")]
-    RoleChanged { participant_id: String, new_role: String, granted_by: String },
+    RoleChanged {
+        participant_id: String,
+        new_role: String,
+        granted_by: String,
+    },
     /// A participant requested voice (sent to Moderator+)
     #[serde(rename_all = "camelCase")]
-    VoiceRequested { participant_id: String, display_name: String },
+    VoiceRequested {
+        participant_id: String,
+        display_name: String,
+    },
 
     // === Room state ===
     /// Room settings were changed
@@ -340,10 +332,18 @@ pub enum ServerMessage {
     // === Lobby ===
     /// Client is waiting in the lobby
     #[serde(rename_all = "camelCase")]
-    LobbyWaiting { room_name: String, topic: Option<String>, participant_count: u32 },
+    LobbyWaiting {
+        room_name: String,
+        topic: Option<String>,
+        participant_count: u32,
+    },
     /// A participant joined the lobby (sent to Moderator+)
     #[serde(rename_all = "camelCase")]
-    LobbyJoin { participant_id: String, display_name: String, authenticated: bool },
+    LobbyJoin {
+        participant_id: String,
+        display_name: String,
+        authenticated: bool,
+    },
     /// Lobby admission was denied
     #[serde(rename_all = "camelCase")]
     LobbyDenied { reason: Option<String> },

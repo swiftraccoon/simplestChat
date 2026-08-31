@@ -1,0 +1,7 @@
+# mediasoup-sys invokes pip from its Cargo build script. Constrain every package
+# that script installs so a later PyPI release cannot silently enter the build.
+invoke==3.0.3
+pip==26.2.1
+setuptools==84.0.0
+meson==1.11.2
+ninja==1.10.2.4

@@ -1,0 +1,860 @@
+#define MS_CLASS "PortManager"
+// #define MS_LOG_DEV_LEVEL 3
+
+#include "RTC/PortManager.hpp"
+#include "DepLibUV.hpp"
+#include "Logger.hpp"
+#include "MediaSoupErrors.hpp"
+#include "Utils.hpp"
+#include <cstring> // std::memcmp(), std::memset()
+#include <tuple>   // std::make_tuple()
+
+/* Static methods for UV callbacks. */
+
+// NOTE: We have different onCloseXxx() callbacks to avoid an ASAN warning by
+// ensuring that we call `delete xxx` with same type as `new xxx` before.
+static inline void onCloseUdp(uv_handle_t* handle)
+{
+	MS_TRACE();
+
+	delete reinterpret_cast<uv_udp_t*>(handle);
+}
+
+static inline void onCloseTcp(uv_handle_t* handle)
+{
+	MS_TRACE();
+
+	delete reinterpret_cast<uv_tcp_t*>(handle);
+}
+
+inline static void onFakeConnection(uv_stream_t* /*handle*/, int /*status*/)
+{
+	MS_TRACE();
+
+	// Do nothing.
+}
+
+namespace RTC
+{
+	/* Class variables. */
+
+	thread_local ankerl::unordered_dense::
+	  map<PortManager::PortRangeKey, PortManager::PortRange, PortManager::PortRangeKeyHash>
+	    PortManager::mapPortRanges;
+
+	/* PortManager class methods. */
+
+	uv_handle_t* PortManager::Bind(
+	  Protocol protocol, std::string& ip, uint16_t port, RTC::Transport::SocketFlags& flags)
+	{
+		MS_TRACE();
+
+		// First normalize the IP. This may throw if invalid IP.
+		Utils::IP::NormalizeIp(ip);
+
+		int err;
+		const int family = Utils::IP::GetFamily(ip);
+		struct sockaddr_storage bindAddr{};
+		uv_handle_t* uvHandle{ nullptr };
+		std::string protocolStr;
+		const uint8_t bitFlags = ConvertSocketFlags(flags, protocol, family);
+
+		switch (protocol)
+		{
+			case Protocol::UDP:
+			{
+				protocolStr.assign("udp");
+
+				break;
+			}
+
+			case Protocol::TCP:
+			{
+				protocolStr.assign("tcp");
+
+				break;
+			}
+		}
+
+		switch (family)
+		{
+			case AF_INET:
+			{
+				err = uv_ip4_addr(
+				  ip.c_str(), 0, reinterpret_cast<struct sockaddr_in*>(std::addressof(bindAddr)));
+
+				if (err != 0)
+				{
+					MS_THROW_ERROR("uv_ip4_addr() failed: %s", uv_strerror(err));
+				}
+
+				break;
+			}
+
+			case AF_INET6:
+			{
+				err = uv_ip6_addr(
+				  ip.c_str(), 0, reinterpret_cast<struct sockaddr_in6*>(std::addressof(bindAddr)));
+
+				if (err != 0)
+				{
+					MS_THROW_ERROR("uv_ip6_addr() failed: %s", uv_strerror(err));
+				}
+
+				break;
+			}
+
+			// This cannot happen.
+			default:
+			{
+				MS_THROW_ERROR("unknown IP family");
+			}
+		}
+
+		// Set the port into the sockaddr struct.
+		switch (family)
+		{
+			case AF_INET:
+			{
+				(reinterpret_cast<struct sockaddr_in*>(std::addressof(bindAddr)))->sin_port = htons(port);
+
+				break;
+			}
+
+			case AF_INET6:
+			{
+				(reinterpret_cast<struct sockaddr_in6*>(std::addressof(bindAddr)))->sin6_port = htons(port);
+
+				break;
+			}
+
+			// This cannot happen.
+			default:
+			{
+				MS_THROW_ERROR("unknown IP family");
+			}
+		}
+
+		// Try to bind on it.
+		switch (protocol)
+		{
+			case Protocol::UDP:
+			{
+				uvHandle = reinterpret_cast<uv_handle_t*>(new uv_udp_t());
+				err      = uv_udp_init_ex(
+				  DepLibUV::GetLoop(), reinterpret_cast<uv_udp_t*>(uvHandle), UV_UDP_RECVMMSG);
+
+				break;
+			}
+
+			case Protocol::TCP:
+			{
+				uvHandle = reinterpret_cast<uv_handle_t*>(new uv_tcp_t());
+				err      = uv_tcp_init(DepLibUV::GetLoop(), reinterpret_cast<uv_tcp_t*>(uvHandle));
+
+				break;
+			}
+		}
+
+		if (err != 0)
+		{
+			switch (protocol)
+			{
+				case Protocol::UDP:
+				{
+					delete reinterpret_cast<uv_udp_t*>(uvHandle);
+
+					MS_THROW_ERROR("uv_udp_init_ex() failed: %s", uv_strerror(err));
+
+					break;
+				}
+
+				case Protocol::TCP:
+				{
+					delete reinterpret_cast<uv_tcp_t*>(uvHandle);
+
+					MS_THROW_ERROR("uv_tcp_init() failed: %s", uv_strerror(err));
+
+					break;
+				}
+			}
+		}
+
+		switch (protocol)
+		{
+			case Protocol::UDP:
+			{
+				err = uv_udp_bind(
+				  reinterpret_cast<uv_udp_t*>(uvHandle),
+				  reinterpret_cast<const struct sockaddr*>(std::addressof(bindAddr)),
+				  bitFlags);
+
+				if (err != 0)
+				{
+					// If it failed, close the handle and check the reason.
+					uv_close(uvHandle, static_cast<uv_close_cb>(onCloseUdp));
+
+					MS_THROW_ERROR(
+					  "uv_udp_bind() failed [protocol:%s, ip:'%s', port:%" PRIu16 "]: %s",
+					  protocolStr.c_str(),
+					  ip.c_str(),
+					  port,
+					  uv_strerror(err));
+				}
+
+				break;
+			}
+
+			case Protocol::TCP:
+			{
+				err = uv_tcp_bind(
+				  reinterpret_cast<uv_tcp_t*>(uvHandle),
+				  reinterpret_cast<const struct sockaddr*>(std::addressof(bindAddr)),
+				  bitFlags);
+
+				if (err != 0)
+				{
+					// If it failed, close the handle and check the reason.
+					uv_close(uvHandle, static_cast<uv_close_cb>(onCloseTcp));
+
+					MS_THROW_ERROR(
+					  "uv_tcp_bind() failed [protocol:%s, ip:'%s', port:%" PRIu16 "]: %s",
+					  protocolStr.c_str(),
+					  ip.c_str(),
+					  port,
+					  uv_strerror(err));
+				}
+
+				// uv_tcp_bind() may succeed even if later uv_listen() fails, so
+				// double check it.
+				err = uv_listen(
+				  reinterpret_cast<uv_stream_t*>(uvHandle),
+				  256,
+				  static_cast<uv_connection_cb>(onFakeConnection));
+
+				if (err != 0)
+				{
+					// If it failed, close the handle and check the reason.
+					uv_close(uvHandle, static_cast<uv_close_cb>(onCloseTcp));
+
+					MS_THROW_ERROR(
+					  "uv_listen() failed [protocol:%s, ip:'%s', port:%" PRIu16 "]: %s",
+					  protocolStr.c_str(),
+					  ip.c_str(),
+					  port,
+					  uv_strerror(err));
+				}
+
+				break;
+			}
+		}
+
+		MS_DEBUG_DEV(
+		  "bind succeeded [protocol:%s, ip:'%s', port:%" PRIu16 "]", protocolStr.c_str(), ip.c_str(), port);
+
+		return uvHandle;
+	}
+
+	uv_handle_t* PortManager::Bind(
+	  Protocol protocol,
+	  std::string& ip,
+	  uint16_t minPort,
+	  uint16_t maxPort,
+	  RTC::Transport::SocketFlags& flags,
+	  PortRangeKey& key)
+	{
+		MS_TRACE();
+
+		if (maxPort < minPort)
+		{
+			MS_THROW_TYPE_ERROR("maxPort cannot be less than minPort");
+		}
+
+		// First normalize the IP. This may throw if invalid IP.
+		Utils::IP::NormalizeIp(ip);
+
+		int err;
+		const int family = Utils::IP::GetFamily(ip);
+		struct sockaddr_storage bindAddr{};
+		std::string protocolStr;
+
+		switch (protocol)
+		{
+			case Protocol::UDP:
+			{
+				protocolStr.assign("udp");
+
+				break;
+			}
+
+			case Protocol::TCP:
+			{
+				protocolStr.assign("tcp");
+
+				break;
+			}
+		}
+
+		switch (family)
+		{
+			case AF_INET:
+			{
+				err = uv_ip4_addr(
+				  ip.c_str(), 0, reinterpret_cast<struct sockaddr_in*>(std::addressof(bindAddr)));
+
+				if (err != 0)
+				{
+					MS_THROW_ERROR("uv_ip4_addr() failed: %s", uv_strerror(err));
+				}
+
+				break;
+			}
+
+			case AF_INET6:
+			{
+				err = uv_ip6_addr(
+				  ip.c_str(), 0, reinterpret_cast<struct sockaddr_in6*>(std::addressof(bindAddr)));
+
+				if (err != 0)
+				{
+					MS_THROW_ERROR("uv_ip6_addr() failed: %s", uv_strerror(err));
+				}
+
+				break;
+			}
+
+			// This cannot happen.
+			default:
+			{
+				MS_THROW_ERROR("unknown IP family");
+			}
+		}
+
+		key = PortRangeKey(protocol, bindAddr, minPort, maxPort);
+
+		auto& portRange          = PortManager::GetOrCreatePortRange(key, minPort, maxPort);
+		const size_t numPorts    = portRange.ports.size();
+		const size_t numAttempts = numPorts;
+		size_t attempt{ 0u };
+		size_t portIdx;
+		uint16_t port;
+		uv_handle_t* uvHandle{ nullptr };
+		const uint8_t bitFlags = ConvertSocketFlags(flags, protocol, family);
+
+		// Choose a random port index to start from.
+		portIdx = Utils::Crypto::GetRandomUInt<size_t>(
+		  static_cast<uint32_t>(0), static_cast<uint32_t>(numPorts - 1));
+
+		// Iterate all ports until getting one available. Fail if none found and also
+		// if bind() fails N times in theoretically available ports.
+		while (true)
+		{
+			// Increase attempt number.
+			++attempt;
+
+			// If we have tried all the ports in the range throw.
+			if (attempt > numAttempts)
+			{
+				MS_THROW_ERROR(
+				  "no more available ports [protocol:%s, ip:'%s', numAttempt:%zu]",
+				  protocolStr.c_str(),
+				  ip.c_str(),
+				  numAttempts);
+			}
+
+			// Increase current port index.
+			portIdx = (portIdx + 1) % numPorts;
+
+			// So the corresponding port is the vector position plus the RTC minimum port.
+			port = static_cast<uint16_t>(portIdx + minPort);
+
+			MS_DEBUG_DEV(
+			  "testing port [protocol:%s, ip:'%s', port:%" PRIu16 ", attempt:%zu/%zu]",
+			  protocolStr.c_str(),
+			  ip.c_str(),
+			  port,
+			  attempt,
+			  numAttempts);
+
+			// Check whether this port is not available.
+			if (portRange.ports[portIdx])
+			{
+				MS_DEBUG_DEV(
+				  "port in use, trying again [protocol:%s, ip:'%s', port:%" PRIu16 ", attempt:%zu/%zu]",
+				  protocolStr.c_str(),
+				  ip.c_str(),
+				  port,
+				  attempt,
+				  numAttempts);
+
+				continue;
+			}
+
+			// Here we already have a theoretically available port. Now let's check
+			// whether no other process is binding into it.
+
+			// Set the chosen port into the sockaddr struct.
+			switch (family)
+			{
+				case AF_INET:
+				{
+					(reinterpret_cast<struct sockaddr_in*>(std::addressof(bindAddr)))->sin_port = htons(port);
+
+					break;
+				}
+
+				case AF_INET6:
+				{
+					(reinterpret_cast<struct sockaddr_in6*>(std::addressof(bindAddr)))->sin6_port = htons(port);
+
+					break;
+				}
+
+				// This cannot happen.
+				default:
+				{
+					MS_THROW_ERROR("unknown IP family");
+				}
+			}
+
+			// Try to bind on it.
+			switch (protocol)
+			{
+				case Protocol::UDP:
+				{
+					uvHandle = reinterpret_cast<uv_handle_t*>(new uv_udp_t());
+					err      = uv_udp_init_ex(
+					  DepLibUV::GetLoop(), reinterpret_cast<uv_udp_t*>(uvHandle), UV_UDP_RECVMMSG);
+
+					break;
+				}
+
+				case Protocol::TCP:
+				{
+					uvHandle = reinterpret_cast<uv_handle_t*>(new uv_tcp_t());
+					err      = uv_tcp_init(DepLibUV::GetLoop(), reinterpret_cast<uv_tcp_t*>(uvHandle));
+
+					break;
+				}
+			}
+
+			if (err != 0)
+			{
+				switch (protocol)
+				{
+					case Protocol::UDP:
+					{
+						delete reinterpret_cast<uv_udp_t*>(uvHandle);
+
+						MS_THROW_ERROR("uv_udp_init_ex() failed: %s", uv_strerror(err));
+
+						break;
+					}
+
+					case Protocol::TCP:
+					{
+						delete reinterpret_cast<uv_tcp_t*>(uvHandle);
+
+						MS_THROW_ERROR("uv_tcp_init() failed: %s", uv_strerror(err));
+
+						break;
+					}
+				}
+			}
+
+			switch (protocol)
+			{
+				case Protocol::UDP:
+				{
+					err = uv_udp_bind(
+					  reinterpret_cast<uv_udp_t*>(uvHandle),
+					  reinterpret_cast<const struct sockaddr*>(std::addressof(bindAddr)),
+					  bitFlags);
+
+					if (err != 0)
+					{
+						MS_WARN_DEV(
+						  "uv_udp_bind() failed [protocol:%s, ip:'%s', port:%" PRIu16 ", attempt:%zu/%zu]: %s",
+						  protocolStr.c_str(),
+						  ip.c_str(),
+						  port,
+						  attempt,
+						  numAttempts,
+						  uv_strerror(err));
+					}
+
+					break;
+				}
+
+				case Protocol::TCP:
+				{
+					err = uv_tcp_bind(
+					  reinterpret_cast<uv_tcp_t*>(uvHandle),
+					  reinterpret_cast<const struct sockaddr*>(std::addressof(bindAddr)),
+					  bitFlags);
+
+					if (err != 0)
+					{
+						MS_WARN_DEV(
+						  "uv_tcp_bind() failed [protocol:%s, ip:'%s', port:%" PRIu16 ", attempt:%zu/%zu]: %s",
+						  protocolStr.c_str(),
+						  ip.c_str(),
+						  port,
+						  attempt,
+						  numAttempts,
+						  uv_strerror(err));
+					}
+
+					// uv_tcp_bind() may succeed even if later uv_listen() fails, so
+					// double check it.
+					if (err == 0)
+					{
+						err = uv_listen(
+						  reinterpret_cast<uv_stream_t*>(uvHandle),
+						  256,
+						  static_cast<uv_connection_cb>(onFakeConnection));
+
+						MS_WARN_DEV(
+						  "uv_listen() failed [protocol:%s, ip:'%s', port:%" PRIu16 ", attempt:%zu/%zu]: %s",
+						  protocolStr.c_str(),
+						  ip.c_str(),
+						  port,
+						  attempt,
+						  numAttempts,
+						  uv_strerror(err));
+					}
+
+					break;
+				}
+			}
+
+			// If it succeeded, exit the loop here.
+			if (err == 0)
+			{
+				break;
+			}
+
+			// If it failed, close the handle and check the reason.
+			switch (protocol)
+			{
+				case Protocol::UDP:
+				{
+					uv_close(uvHandle, static_cast<uv_close_cb>(onCloseUdp));
+
+					break;
+				};
+
+				case Protocol::TCP:
+				{
+					uv_close(uvHandle, static_cast<uv_close_cb>(onCloseTcp));
+
+					break;
+				}
+			}
+
+			switch (err)
+			{
+				// If bind() fails due to "too many open files" just throw.
+				case UV_EMFILE:
+				{
+					MS_THROW_ERROR(
+					  "port bind failed due to too many open files [protocol:%s, ip:'%s', port:%" PRIu16
+					  ", attempt:%zu/%zu]",
+					  protocolStr.c_str(),
+					  ip.c_str(),
+					  port,
+					  attempt,
+					  numAttempts);
+
+					break;
+				}
+
+				// If cannot bind in the given IP, throw.
+				case UV_EADDRNOTAVAIL:
+				{
+					MS_THROW_ERROR(
+					  "port bind failed due to address not available [protocol:%s, ip:'%s', port:%" PRIu16
+					  ", attempt:%zu/%zu]",
+					  protocolStr.c_str(),
+					  ip.c_str(),
+					  port,
+					  attempt,
+					  numAttempts);
+
+					break;
+				}
+
+				default:
+				{
+					// Otherwise continue in the loop to try again with next port.
+				}
+			}
+		}
+
+		// If here, we got an available port. Mark it as unavailable.
+		portRange.ports[portIdx] = true;
+
+		// Increase number of used ports in the range.
+		portRange.numUsedPorts++;
+
+		MS_DEBUG_DEV(
+		  "bind succeeded [protocol:%s, ip:'%s', port:%" PRIu16 ", attempt:%zu/%zu]",
+		  protocolStr.c_str(),
+		  ip.c_str(),
+		  port,
+		  attempt,
+		  numAttempts);
+
+		return uvHandle;
+	}
+
+	void PortManager::Unbind(const PortRangeKey& key, uint16_t port)
+	{
+		MS_TRACE();
+
+		auto it = PortManager::mapPortRanges.find(key);
+
+		// This should not happen.
+		if (it == PortManager::mapPortRanges.end())
+		{
+			MS_ERROR(
+			  "port range key [minPort:%" PRIu16 ", maxPort:%" PRIu16 "] doesn't exist in the map",
+			  key.minPort,
+			  key.maxPort);
+
+			return;
+		}
+
+		auto& portRange    = it->second;
+		const auto portIdx = static_cast<size_t>(port - portRange.minPort);
+
+		// This should not happen.
+		MS_ASSERT(portRange.ports.at(portIdx) == true, "port %" PRIu16 " is not used", port);
+		MS_ASSERT(portRange.numUsedPorts > 0u, "number of used ports is 0");
+
+		// Mark the port as available.
+		portRange.ports[portIdx] = false;
+
+		// Decrease number of used ports in the range.
+		portRange.numUsedPorts--;
+
+		// Remove vector if there are no used ports.
+		if (portRange.numUsedPorts == 0u)
+		{
+			PortManager::mapPortRanges.erase(it);
+		}
+	}
+
+	void PortManager::Dump(int indentation) const
+	{
+		MS_TRACE();
+
+		MS_DUMP_CLEAN(indentation, "<PortManager>");
+
+		for (const auto& kv : PortManager::mapPortRanges)
+		{
+			const auto& key         = kv.first;
+			const auto& portRange   = kv.second;
+			const char* protocolStr = (key.protocol == Protocol::UDP) ? "udp" : "tcp";
+
+			MS_DUMP_CLEAN(indentation + 1, "<PortRange>");
+			MS_DUMP_CLEAN(indentation + 1, "  protocol: %s", protocolStr);
+			MS_DUMP_CLEAN(indentation + 1, "  family: %d", key.bindAddr.ss_family);
+			MS_DUMP_CLEAN(indentation + 1, "  minPort: %" PRIu16, portRange.minPort);
+			MS_DUMP_CLEAN(indentation + 1, "  maxPort: %zu", portRange.minPort + portRange.ports.size() - 1);
+			MS_DUMP_CLEAN(indentation + 1, "  numUsedPorts: %" PRIu16, portRange.numUsedPorts);
+			MS_DUMP_CLEAN(indentation + 1, "</PortRange>");
+		}
+
+		MS_DUMP_CLEAN(indentation, "</PortManager>");
+	}
+
+	PortManager::PortRange& PortManager::GetOrCreatePortRange(
+	  const PortRangeKey& key, uint16_t minPort, uint16_t maxPort)
+	{
+		MS_TRACE();
+
+		const auto it = PortManager::mapPortRanges.find(key);
+
+		// If the key is already handled, return its port range.
+		if (it != PortManager::mapPortRanges.end())
+		{
+			auto& portRange = it->second;
+
+			return portRange;
+		}
+
+		const uint16_t numPorts = maxPort - minPort + 1;
+
+		// Emplace a new vector filled with `numPorts` false values, meaning that
+		// all ports are available.
+		const auto pair = PortManager::mapPortRanges.emplace(
+		  std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple(numPorts, minPort));
+
+		// pair.first is an iterator to the inserted value.
+		auto& portRange = pair.first->second;
+
+		return portRange;
+	}
+
+	uint8_t PortManager::ConvertSocketFlags(RTC::Transport::SocketFlags& flags, Protocol protocol, int family)
+	{
+		MS_TRACE();
+
+		uint8_t bitFlags{ 0b00000000 };
+
+		// Ignore `ipv6Only` in IPv4, otherwise libuv will throw.
+		if (flags.ipv6Only && family == AF_INET6)
+		{
+			switch (protocol)
+			{
+				case Protocol::UDP:
+				{
+					bitFlags |= UV_UDP_IPV6ONLY;
+
+					break;
+				}
+
+				case Protocol::TCP:
+				{
+					bitFlags |= UV_TCP_IPV6ONLY;
+
+					break;
+				}
+			}
+		}
+
+		// Ignore `udpReusePort` in TCP, otherwise libuv will throw.
+		if (flags.udpReusePort && protocol == Protocol::UDP)
+		{
+			bitFlags |= UV_UDP_REUSEADDR;
+		}
+
+		return bitFlags;
+	}
+
+	/* PortRangeKey instance methods. */
+
+	PortManager::PortRangeKey::PortRangeKey(
+	  Protocol protocol, const sockaddr_storage& bindAddr, uint16_t minPort, uint16_t maxPort)
+	  : protocol(protocol), bindAddr(bindAddr), minPort(minPort), maxPort(maxPort)
+	{
+		MS_TRACE();
+
+		// `sockaddr_storage` is padded; the unused tail bytes are caller-controlled.
+		// `operator==` inspects only the meaningful address bytes (`sin_addr` /
+		// `sin6_addr`) so padding does not affect equality, and the hash function
+		// hashes the same exact fields, so two structurally-equal keys always
+		// produce the same hash regardless of how the caller zero-initialized.
+	}
+
+	bool PortManager::PortRangeKey::operator==(const PortRangeKey& other) const noexcept
+	{
+		MS_TRACE();
+
+		if (this->protocol != other.protocol)
+		{
+			return false;
+		}
+		else if (this->minPort != other.minPort)
+		{
+			return false;
+		}
+		else if (this->maxPort != other.maxPort)
+		{
+			return false;
+		}
+		else if (this->bindAddr.ss_family != other.bindAddr.ss_family)
+		{
+			return false;
+		}
+
+		switch (this->bindAddr.ss_family)
+		{
+			case AF_INET:
+			{
+				const auto* a = reinterpret_cast<const sockaddr_in*>(std::addressof(this->bindAddr));
+				const auto* b = reinterpret_cast<const sockaddr_in*>(std::addressof(other.bindAddr));
+
+				return a->sin_addr.s_addr == b->sin_addr.s_addr;
+			}
+
+			case AF_INET6:
+			{
+				const auto* a = reinterpret_cast<const sockaddr_in6*>(std::addressof(this->bindAddr));
+				const auto* b = reinterpret_cast<const sockaddr_in6*>(std::addressof(other.bindAddr));
+
+				return std::memcmp(
+				         std::addressof(a->sin6_addr), std::addressof(b->sin6_addr), sizeof(in6_addr)) == 0;
+			}
+
+			default:
+			{
+				// Unknown family; treat as not equal to avoid accidental merge.
+				return false;
+			}
+		}
+	}
+
+	/* PortRangeKeyHash instance methods. */
+
+	size_t PortManager::PortRangeKeyHash::operator()(const PortRangeKey& key) const noexcept
+	{
+		MS_TRACE();
+
+		const auto protocolBits = static_cast<uint8_t>(key.protocol);
+		const auto familyBits   = static_cast<uint16_t>(key.bindAddr.ss_family);
+
+		size_t seed = 0;
+
+		switch (key.bindAddr.ss_family)
+		{
+			case AF_INET:
+			{
+				const auto* in = reinterpret_cast<const sockaddr_in*>(std::addressof(key.bindAddr));
+
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint8_t>{}(protocolBits));
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint16_t>{}(familyBits));
+				Utils::Crypto::HashCombine(
+				  seed, ankerl::unordered_dense::hash<uint32_t>{}(in->sin_addr.s_addr));
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint16_t>{}(key.minPort));
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint16_t>{}(key.maxPort));
+
+				break;
+			}
+
+			case AF_INET6:
+			{
+				const auto* in6  = reinterpret_cast<const sockaddr_in6*>(std::addressof(key.bindAddr));
+				const auto* addr = in6->sin6_addr.s6_addr;
+
+				uint64_t hi;
+				uint64_t lo;
+
+				std::memcpy(std::addressof(hi), addr, sizeof(uint64_t));
+				std::memcpy(std::addressof(lo), addr + sizeof(uint64_t), sizeof(uint64_t));
+
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint8_t>{}(protocolBits));
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint16_t>{}(familyBits));
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint64_t>{}(hi));
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint64_t>{}(lo));
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint16_t>{}(key.minPort));
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint16_t>{}(key.maxPort));
+
+				break;
+			}
+
+			default:
+			{
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint8_t>{}(protocolBits));
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint16_t>{}(familyBits));
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint16_t>{}(key.minPort));
+				Utils::Crypto::HashCombine(seed, ankerl::unordered_dense::hash<uint16_t>{}(key.maxPort));
+
+				break;
+			}
+		}
+
+		return seed;
+	}
+} // namespace RTC

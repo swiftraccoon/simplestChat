@@ -1,0 +1,118 @@
+#define MS_CLASS "RTC::SCTP::ErrorCause"
+// #define MS_LOG_DEV_LEVEL 3
+
+#include "RTC/SCTP/packet/ErrorCause.hpp"
+#include "Logger.hpp"
+#include "Utils.hpp"
+
+namespace RTC
+{
+	namespace SCTP
+	{
+		/* Class variables. */
+
+		// clang-format off
+		const ankerl::unordered_dense::map<ErrorCause::ErrorCauseCode, std::string> ErrorCause::ErrorCauseCode2String =
+		{
+			{ ErrorCause::ErrorCauseCode::INVALID_STREAM_IDENTIFIER,                    "INVALID-STREAM-IDENTIFIER"                    },
+			{ ErrorCause::ErrorCauseCode::MISSING_MANDATORY_PARAMETER,                  "MISSING-MANDATORY-PARAMETER"                  },
+			{ ErrorCause::ErrorCauseCode::STALE_COOKIE,                                 "STALE-COOKIE"                                 },
+			{ ErrorCause::ErrorCauseCode::OUT_OF_RESOURCE,                              "OUT-OF-RESOURCE"                              },
+			{ ErrorCause::ErrorCauseCode::UNRESOLVABLE_ADDRESS,                         "UNRESOLVABLE-ADDRESS"                         },
+			{ ErrorCause::ErrorCauseCode::UNRECOGNIZED_CHUNK_TYPE,                      "UNRECOGNIZED-CHUNK-TYPE"                      },
+			{ ErrorCause::ErrorCauseCode::INVALID_MANDATORY_PARAMETER,                  "INVALID-MANDATORY-PARAMETER"                  },
+			{ ErrorCause::ErrorCauseCode::UNRECOGNIZED_PARAMETERS,                      "UNRECOGNIZED-PARAMETERS"                      },
+			{ ErrorCause::ErrorCauseCode::NO_USER_DATA,                                 "NO-USER-DATA"                                 },
+			{ ErrorCause::ErrorCauseCode::COOKIE_RECEIVED_WHILE_SHUTTING_DOWN,          "COOKIE-RECEIVED-WHILE-SHUTTING-DOWN"          },
+			{ ErrorCause::ErrorCauseCode::RESTART_OF_AN_ASSOCIATION_WITH_NEW_ADDRESSES, "RESTART-OF-AN-ASSOCIATION-WITH-NEW-ADDRESSES" },
+			{ ErrorCause::ErrorCauseCode::USER_INITIATED_ABORT,                         "USER-INITIATED-ABORT"                         },
+			{ ErrorCause::ErrorCauseCode::PROTOCOL_VIOLATION,                           "PROTOCOL-VIOLATION"                           },
+		};
+		// clang-format on
+
+		/* Class methods. */
+
+		const std::string& ErrorCause::ErrorCauseCodeToString(ErrorCauseCode causeCode)
+		{
+			MS_TRACE();
+
+			static const std::string Unknown("UNKNOWN");
+
+			auto it = ErrorCause::ErrorCauseCode2String.find(causeCode);
+
+			if (it == ErrorCause::ErrorCauseCode2String.end())
+			{
+				return Unknown;
+			}
+
+			return it->second;
+		}
+
+		bool ErrorCause::IsErrorCause(
+		  const uint8_t* buffer,
+		  size_t bufferLength,
+		  ErrorCause::ErrorCauseCode& causeCode,
+		  uint16_t& causeLength,
+		  uint8_t& padding)
+		{
+			MS_TRACE();
+
+			if (!TLV::IsTLV(buffer, bufferLength, causeLength, padding))
+			{
+				return false;
+			}
+
+			causeCode = static_cast<ErrorCause::ErrorCauseCode>(Utils::Byte::Get2Bytes(buffer, 0));
+
+			return true;
+		}
+
+		/* Instance methods. */
+
+		ErrorCause::ErrorCause(uint8_t* buffer, size_t bufferLength) : TLV(buffer, bufferLength)
+		{
+			MS_TRACE();
+		}
+
+		ErrorCause::~ErrorCause()
+		{
+			MS_TRACE();
+		}
+
+		void ErrorCause::SoftCloneInto(ErrorCause* errorCause) const
+		{
+			MS_TRACE();
+
+			// Need to manually set Serializable length.
+			errorCause->SetLength(GetLength());
+		}
+
+		void ErrorCause::DumpCommon(int indentation) const
+		{
+			MS_TRACE();
+
+			MS_DUMP_CLEAN(
+			  indentation,
+			  "  code: %" PRIu16 " (%s) (unknown: %s)",
+			  static_cast<uint16_t>(GetCode()),
+			  ErrorCause::ErrorCauseCodeToString(GetCode()).c_str(),
+			  HasUnknownCode() ? "yes" : "no");
+			TLV::DumpCommon(indentation);
+		}
+
+		void ErrorCause::SoftSerialize(const uint8_t* buffer)
+		{
+			MS_TRACE();
+
+			SetBuffer(const_cast<uint8_t*>(buffer));
+		}
+
+		void ErrorCause::InitializeHeader(ErrorCauseCode causeCode, uint16_t length)
+		{
+			MS_TRACE();
+
+			SetCode(causeCode);
+			InitializeTLVHeader(length);
+		}
+	} // namespace SCTP
+} // namespace RTC

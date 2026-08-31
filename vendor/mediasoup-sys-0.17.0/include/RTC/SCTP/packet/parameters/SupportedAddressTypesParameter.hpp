@@ -1,0 +1,94 @@
+#ifndef MS_RTC_SCTP_SUPPORTED_ADDRESS_TYPES_PARAMETER_HPP
+#define MS_RTC_SCTP_SUPPORTED_ADDRESS_TYPES_PARAMETER_HPP
+
+#include "common.hpp"
+#include "RTC/SCTP/packet/Parameter.hpp"
+#include "Utils.hpp"
+
+namespace RTC
+{
+	namespace SCTP
+	{
+		/**
+		 * SCTP Supported Address Types Parameter (SUPPORTED-ADDRESS-TYPES) (12).
+		 *
+		 * @see RFC 9260.
+		 *
+		 *  0                   1                   2                   3
+		 *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |           Type = 12           |            Length             |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |        Address Type #1        |        Address Type #2        |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |                            ......                             |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-++-+-+-+-+-+-+-+-+-+-+-+-+-+-++-+-+-+
+		 */
+
+		// Forward declaration.
+		class Chunk;
+
+		class SupportedAddressTypesParameter : public Parameter
+		{
+			// We need that chunk calls protected and private methods in this class.
+			friend class Chunk;
+
+		public:
+			/**
+			 * Parse a SupportedAddressTypesParameter.
+			 *
+			 * @remarks
+			 * `bufferLength` may exceed the exact length of the parameter.
+			 */
+			static SupportedAddressTypesParameter* Parse(const uint8_t* buffer, size_t bufferLength);
+
+			/**
+			 * Create a SupportedAddressTypesParameter.
+			 *
+			 * @remarks
+			 * `bufferLength` could be greater than the parameter real length.
+			 */
+			static SupportedAddressTypesParameter* Factory(uint8_t* buffer, size_t bufferLength);
+
+		private:
+			/**
+			 * Parse a SupportedAddressTypesParameter.
+			 *
+			 * @remarks
+			 * To be used only by `Chunk::ParseParameters()`.
+			 */
+			static SupportedAddressTypesParameter* ParseStrict(
+			  const uint8_t* buffer, size_t bufferLength, uint16_t parameterLength, uint8_t padding);
+
+		private:
+			/**
+			 * Only used by Parse(), ParseStrict() and Factory() static methods.
+			 */
+			SupportedAddressTypesParameter(uint8_t* buffer, size_t bufferLength);
+
+		public:
+			~SupportedAddressTypesParameter() override;
+
+			void Dump(int indentation = 0) const final;
+
+			SupportedAddressTypesParameter* Clone(uint8_t* buffer, size_t bufferLength) const final;
+
+			uint16_t GetNumberOfAddressTypes() const
+			{
+				return GetVariableLengthValueLength() / 2;
+			}
+
+			uint16_t GetAddressTypeAt(uint16_t idx) const
+			{
+				return Utils::Byte::Get2Bytes(GetVariableLengthValuePointer(), (idx * 2));
+			}
+
+			void AddAddressType(uint16_t addressType);
+
+		protected:
+			SupportedAddressTypesParameter* SoftClone(const uint8_t* buffer) const final;
+		};
+	} // namespace SCTP
+} // namespace RTC
+
+#endif

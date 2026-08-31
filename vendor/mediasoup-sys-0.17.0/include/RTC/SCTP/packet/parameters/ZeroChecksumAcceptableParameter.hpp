@@ -1,0 +1,131 @@
+#ifndef MS_RTC_SCTP_ZERO_CHECKSUM_ACCEPTABLE_PARAMETER_HPP
+#define MS_RTC_SCTP_ZERO_CHECKSUM_ACCEPTABLE_PARAMETER_HPP
+
+#include "common.hpp"
+#include "RTC/SCTP/packet/Parameter.hpp"
+#include "Utils.hpp"
+#include <ankerl/unordered_dense.h>
+#include <string>
+
+namespace RTC
+{
+	namespace SCTP
+	{
+		/**
+		 * SCTP Zero Checksum Acceptable Parameter (ZERO-CHECKSUM-ACCEPTABLE)
+		 * (32769).
+		 *
+		 * @see RFC 9653.
+		 *
+		 *  0                   1                   2                   3
+		 *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |          Type = 0x8001        |          Length = 8           |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |           Error Detection Method Identifier (EDMID)           |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 */
+
+		// Forward declaration.
+		class Chunk;
+
+		class ZeroChecksumAcceptableParameter : public Parameter
+		{
+			// We need that chunk calls protected and private methods in this class.
+			friend class Chunk;
+
+		public:
+			/**
+			 * Zero Checksum Alternate Error Detection Method.
+			 */
+			// NOLINTNEXTLINE(performance-enum-size)
+			enum class AlternateErrorDetectionMethod : uint32_t
+			{
+				NONE           = 0x0000,
+				SCTP_OVER_DTLS = 0x0001,
+			};
+
+		public:
+			static constexpr size_t ZeroChecksumAcceptableParameterHeaderLength{ 8 };
+
+		public:
+			/**
+			 * Parse a ZeroChecksumAcceptableParameter.
+			 *
+			 * @remarks
+			 * `bufferLength` may exceed the exact length of the parameter.
+			 */
+			static ZeroChecksumAcceptableParameter* Parse(const uint8_t* buffer, size_t bufferLength);
+
+			/**
+			 * Create a ZeroChecksumAcceptableParameter.
+			 *
+			 * @remarks
+			 * `bufferLength` could be greater than the parameter real length.
+			 */
+			static ZeroChecksumAcceptableParameter* Factory(uint8_t* buffer, size_t bufferLength);
+
+			static const std::string& AlternateErrorDetectionMethodToString(
+			  AlternateErrorDetectionMethod alternateErrorDetectionMethod);
+
+		private:
+			/**
+			 * Parse a ZeroChecksumAcceptableParameter.
+			 *
+			 * @remarks
+			 * To be used only by `Chunk::ParseParameters()`.
+			 */
+			static ZeroChecksumAcceptableParameter* ParseStrict(
+			  const uint8_t* buffer, size_t bufferLength, uint16_t parameterLength, uint8_t padding);
+
+			static const ankerl::unordered_dense::map<AlternateErrorDetectionMethod, std::string>
+			  AlternateErrorDetectionMethod2String;
+
+		private:
+			/**
+			 * Only used by Parse(), ParseStrict() and Factory() static methods.
+			 */
+			ZeroChecksumAcceptableParameter(uint8_t* buffer, size_t bufferLength);
+
+		public:
+			~ZeroChecksumAcceptableParameter() override;
+
+			void Dump(int indentation = 0) const final;
+
+			ZeroChecksumAcceptableParameter* Clone(uint8_t* buffer, size_t bufferLength) const final;
+
+			AlternateErrorDetectionMethod GetAlternateErrorDetectionMethod() const
+			{
+				const auto method = Utils::Byte::Get4Bytes(GetBuffer(), 4);
+
+				if (
+				  method == static_cast<uint32_t>(AlternateErrorDetectionMethod::NONE) ||
+				  method == static_cast<uint32_t>(AlternateErrorDetectionMethod::SCTP_OVER_DTLS))
+				{
+					return static_cast<AlternateErrorDetectionMethod>(method);
+				}
+				else
+				{
+					return AlternateErrorDetectionMethod::NONE;
+				}
+			}
+
+			void SetAlternateErrorDetectionMethod(AlternateErrorDetectionMethod alternateErrorDetectionMethod);
+
+		protected:
+			ZeroChecksumAcceptableParameter* SoftClone(const uint8_t* buffer) const final;
+
+			/**
+			 * We don't really need to override this method since this parameter
+			 * doesn't have variable-length value (despite the fixed header doesn't
+			 * have default length).
+			 */
+			size_t GetHeaderLength() const final
+			{
+				return ZeroChecksumAcceptableParameter::ZeroChecksumAcceptableParameterHeaderLength;
+			}
+		};
+	} // namespace SCTP
+} // namespace RTC
+
+#endif

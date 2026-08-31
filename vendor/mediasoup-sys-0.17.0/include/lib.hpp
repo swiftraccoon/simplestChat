@@ -1,0 +1,13 @@
+#include "common.hpp"
+
+// NOLINTNEXTLINE(readability-identifier-naming)
+extern "C" int mediasoup_worker_run(
+  int argc,
+  char* argv[],
+  const char* version,
+  int consumerChannelFd,
+  int producerChannelFd,
+  ChannelReadFn channelReadFn,
+  ChannelReadCtx channelReadCtx,
+  ChannelWriteFn channelWriteFn,
+  ChannelWriteCtx channelWriteCtx);

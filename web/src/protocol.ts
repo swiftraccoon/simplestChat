@@ -57,7 +57,7 @@ export type ServerMessage =
   | { type: 'producerResumed'; producerId: string }
   | { type: 'consumerResumed'; consumerId: string }
   | { type: 'consumerPaused'; consumerId: string }
-  | { type: 'reconnectResult'; success: boolean; participantId: string }
+  | { type: 'reconnectResult'; success: boolean; participantId: string; reconnectToken?: string }
   | { type: 'iceRestarted'; transportId: string; iceParameters: IceParameters }
   | { type: 'connectionStats'; availableBitrate: number | null; rtt: number | null }
   | { type: 'consumerLayersChanged'; consumerId: string; spatialLayer: number | null; temporalLayer: number | null }

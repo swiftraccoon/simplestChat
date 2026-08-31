@@ -1,0 +1,180 @@
+#define MS_CLASS "RTC::SCTP::TLV"
+// #define MS_LOG_DEV_LEVEL 3
+
+#include "RTC/SCTP/packet/TLV.hpp"
+#include "Logger.hpp"
+#include "MediaSoupErrors.hpp"
+#include <cstring> // std::memmove()
+#include <limits>  // std::numeric_limits
+
+namespace RTC
+{
+	namespace SCTP
+	{
+		/* Class methods. */
+
+		bool TLV::IsTLV(const uint8_t* buffer, size_t bufferLength, uint16_t& itemLength, uint8_t& padding)
+		{
+			MS_TRACE();
+
+			if (bufferLength < TLV::TLVHeaderLength)
+			{
+				MS_WARN_TAG(sctp, "no space for header [bufferLength:%zu]", bufferLength);
+
+				return false;
+			}
+
+			itemLength = Utils::Byte::Get2Bytes(buffer, 2);
+
+			if (itemLength < TLV::TLVHeaderLength)
+			{
+				MS_WARN_TAG(
+				  sctp, "length field must have value greater or equal than %zu", TLV::TLVHeaderLength);
+
+				return false;
+			}
+
+			// Item total length must be multiple of 4 bytes and must include padding
+			// bytes despite item length field does not include padding.
+			// NOTE: We must cast to size_t, otherwise a maximum item length value of
+			// 65535 would generate a padded length of 0 bytes!
+			const size_t paddedItemLength = Utils::Byte::PadTo4Bytes(size_t{ itemLength });
+
+			if (bufferLength < paddedItemLength)
+			{
+				MS_WARN_TAG(
+				  sctp,
+				  "no space for 4-byte padded announced length [paddedItemLength:%zu, bufferLength:%zu]",
+				  paddedItemLength,
+				  bufferLength);
+
+				return false;
+			}
+
+			padding = paddedItemLength - itemLength;
+
+			return true;
+		}
+
+		/* Instance methods. */
+
+		TLV::TLV(uint8_t* buffer, size_t bufferLength) : Serializable(buffer, bufferLength)
+		{
+			MS_TRACE();
+		}
+
+		TLV::~TLV()
+		{
+			MS_TRACE();
+		}
+
+		void TLV::DumpCommon(int indentation) const
+		{
+			MS_TRACE();
+
+			MS_DUMP_CLEAN(
+			  indentation,
+			  "  length field: %" PRIu16 " (padding: %zu, buffer length: %zu)",
+			  GetLengthField(),
+			  GetLength() - GetLengthField(),
+			  GetBufferLength());
+		}
+
+		void TLV::InitializeTLVHeader(uint16_t length)
+		{
+			MS_TRACE();
+
+			SetLengthField(length);
+		}
+
+		void TLV::SetVariableLengthValue(const uint8_t* value, size_t valueLength)
+		{
+			MS_TRACE();
+
+			if (value == nullptr && valueLength > 0)
+			{
+				MS_THROW_TYPE_ERROR("value cannot be nullptr if valueLength is > 0");
+			}
+
+			// NOTE: This can throw.
+			SetVariableLengthValueLength(valueLength);
+
+			if (value)
+			{
+				std::memmove(GetVariableLengthValuePointer(), value, valueLength);
+			}
+		}
+
+		void TLV::SetVariableLengthValueLength(size_t valueLength)
+		{
+			MS_TRACE();
+
+			const size_t previousLength        = GetLength();
+			const uint16_t previousLengthField = GetLengthField();
+			const uint16_t previousValueLength = GetVariableLengthValueLength();
+			const size_t newNotPaddedLength =
+			  size_t{ previousLengthField } - size_t{ previousValueLength } + valueLength;
+			const size_t newPaddedLength = Utils::Byte::PadTo4Bytes(newNotPaddedLength);
+
+			try
+			{
+				// Let's call SetLength() on parent with the new computed length.
+				// NOTE: If there is no space in the buffer for it, it will throw.
+				SetLength(newPaddedLength);
+
+				// Update length field.
+				// NOTE: This will throw if computed value is too big.
+				SetLengthField(newNotPaddedLength);
+
+				// Fill padding bytes with zero.
+				// NOTE: This may throw.
+				FillPadding(newPaddedLength - newNotPaddedLength);
+			}
+			catch (const MediaSoupError& error)
+			{
+				// Rollback.
+				SetLength(previousLength);
+				SetLengthField(previousLengthField);
+
+				throw;
+			}
+		}
+
+		void TLV::AddItem(const TLV* item)
+		{
+			MS_TRACE();
+
+			const size_t previousLength = GetLength();
+
+			try
+			{
+				// Update length.
+				// NOTE: This will throw if there is no enough space in the buffer.
+				SetLength(previousLength + item->GetLength());
+
+				// Update length field.
+				// NOTE: This will throw if computed length field value is too big.
+				SetLengthField(previousLength + item->GetLengthField());
+			}
+			catch (const MediaSoupError& error)
+			{
+				// Rollback.
+				SetLength(previousLength);
+
+				throw;
+			}
+		}
+
+		void TLV::SetLengthField(size_t length)
+		{
+			MS_TRACE();
+
+			if (length > std::numeric_limits<uint16_t>::max())
+			{
+				MS_THROW_TYPE_ERROR("length (%zu bytes) cannot be greater than 65535", length);
+			}
+
+			Utils::Byte::Set2Bytes(const_cast<uint8_t*>(GetBuffer()), 2, length);
+		}
+	} // namespace SCTP
+} // namespace RTC

@@ -3,22 +3,22 @@
 // Server metrics — lock-free AtomicU64 counters and Prometheus-compatible histogram.
 
 use std::fmt::Write;
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::Duration;
 
 /// Fixed histogram bucket boundaries (in microseconds for internal storage).
 const BUCKET_BOUNDS_US: [u64; 10] = [
-    1_000,      // 1ms
-    5_000,      // 5ms
-    10_000,     // 10ms
-    25_000,     // 25ms
-    50_000,     // 50ms
-    100_000,    // 100ms
-    250_000,    // 250ms
-    500_000,    // 500ms
-    1_000_000,  // 1s
-    5_000_000,  // 5s
+    1_000,     // 1ms
+    5_000,     // 5ms
+    10_000,    // 10ms
+    25_000,    // 25ms
+    50_000,    // 50ms
+    100_000,   // 100ms
+    250_000,   // 250ms
+    500_000,   // 500ms
+    1_000_000, // 1s
+    5_000_000, // 5s
 ];
 
 /// Prometheus-compatible cumulative histogram with fixed buckets.
@@ -58,8 +58,7 @@ impl Histogram {
         let _ = writeln!(out, "# TYPE {name} histogram");
 
         let labels = [
-            "0.001", "0.005", "0.01", "0.025", "0.05",
-            "0.1", "0.25", "0.5", "1", "5",
+            "0.001", "0.005", "0.01", "0.025", "0.05", "0.1", "0.25", "0.5", "1", "5",
         ];
         for (i, label) in labels.iter().enumerate() {
             let val = self.buckets[i].load(Relaxed);
@@ -69,7 +68,12 @@ impl Histogram {
         let _ = writeln!(out, "{name}_bucket{{le=\"+Inf\"}} {count}");
         let sum_us = self.sum_us.load(Relaxed);
         // Convert microseconds to seconds with 6 decimal places
-        let _ = writeln!(out, "{name}_sum {}.{:06}", sum_us / 1_000_000, sum_us % 1_000_000);
+        let _ = writeln!(
+            out,
+            "{name}_sum {}.{:06}",
+            sum_us / 1_000_000,
+            sum_us % 1_000_000
+        );
         let _ = writeln!(out, "{name}_count {count}");
     }
 }
@@ -162,7 +166,9 @@ impl ServerMetrics {
     /// This guarantees the gauge is decremented even if the caller panics.
     pub fn connection_active_guard(&self) -> ConnectionGuard {
         self.inner.connections_active.fetch_add(1, Relaxed);
-        ConnectionGuard { inner: self.inner.clone() }
+        ConnectionGuard {
+            inner: self.inner.clone(),
+        }
     }
 
     // --- Histogram ---
@@ -181,20 +187,80 @@ impl ServerMetrics {
         let i = &self.inner;
 
         // Counters
-        render_counter(&mut out, "simplestchat_connections_total", "Total WebSocket connections", i.connections_total.load(Relaxed));
-        render_counter(&mut out, "simplestchat_messages_received_total", "Total messages received from clients", i.messages_received_total.load(Relaxed));
-        render_counter(&mut out, "simplestchat_messages_sent_total", "Total messages sent to clients", i.messages_sent_total.load(Relaxed));
-        render_counter(&mut out, "simplestchat_errors_total", "Total errors", i.errors_total.load(Relaxed));
-        render_counter(&mut out, "simplestchat_rooms_created_total", "Total rooms created", i.rooms_created_total.load(Relaxed));
-        render_counter(&mut out, "simplestchat_joins_total", "Total room joins", i.joins_total.load(Relaxed));
-        render_counter(&mut out, "simplestchat_leaves_total", "Total room leaves", i.leaves_total.load(Relaxed));
-        render_counter(&mut out, "simplestchat_producers_created_total", "Total producers created", i.producers_created_total.load(Relaxed));
-        render_counter(&mut out, "simplestchat_consumers_created_total", "Total consumers created", i.consumers_created_total.load(Relaxed));
+        render_counter(
+            &mut out,
+            "simplestchat_connections_total",
+            "Total WebSocket connections",
+            i.connections_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
+            "simplestchat_messages_received_total",
+            "Total messages received from clients",
+            i.messages_received_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
+            "simplestchat_messages_sent_total",
+            "Total messages sent to clients",
+            i.messages_sent_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
+            "simplestchat_errors_total",
+            "Total errors",
+            i.errors_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
+            "simplestchat_rooms_created_total",
+            "Total rooms created",
+            i.rooms_created_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
+            "simplestchat_joins_total",
+            "Total room joins",
+            i.joins_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
+            "simplestchat_leaves_total",
+            "Total room leaves",
+            i.leaves_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
+            "simplestchat_producers_created_total",
+            "Total producers created",
+            i.producers_created_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
+            "simplestchat_consumers_created_total",
+            "Total consumers created",
+            i.consumers_created_total.load(Relaxed),
+        );
 
         // Gauges
-        render_gauge(&mut out, "simplestchat_connections_active", "Currently active WebSocket connections", i.connections_active.load(Relaxed));
-        render_gauge(&mut out, "simplestchat_rooms_active", "Currently active rooms", rooms_active as u64);
-        render_gauge(&mut out, "simplestchat_participants_active", "Currently active participants", participants_active as u64);
+        render_gauge(
+            &mut out,
+            "simplestchat_connections_active",
+            "Currently active WebSocket connections",
+            i.connections_active.load(Relaxed),
+        );
+        render_gauge(
+            &mut out,
+            "simplestchat_rooms_active",
+            "Currently active rooms",
+            rooms_active as u64,
+        );
+        render_gauge(
+            &mut out,
+            "simplestchat_participants_active",
+            "Currently active participants",
+            participants_active as u64,
+        );
 
         // Histogram
         i.message_handling.render(

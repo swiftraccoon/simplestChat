@@ -149,8 +149,14 @@ function updateAuthUI(): void {
   updateJoinBtn();
 }
 
-auth.setOnChange((loggedIn) => {
+auth.setOnChange((loggedIn, tokenRefresh) => {
   updateAuthUI();
+  if (loggedIn && tokenRefresh) {
+    // Keep the current room session alive; the server will close the old
+    // socket at JWT expiry and automatic reconnect will use this new token.
+    signaling.setToken(auth.jwt ?? undefined);
+    return;
+  }
   // Reconnect WS with new/cleared token
   signaling.disconnect();
   signaling.connect(loggedIn ? (auth.jwt ?? undefined) : undefined);
@@ -161,6 +167,9 @@ let room: RoomClient | null = null;
 const remoteTiles = new Map<string, HTMLDivElement>();
 let unreadCount = 0;
 let isAtBottom = true;
+const MAX_CHAT_HISTORY_MESSAGES = 300;
+const MAX_CHAT_HISTORY_CHARACTERS = 256 * 1024;
+let chatHistoryCharacters = 0;
 const lobbyWaiters = new Map<string, string>(); // participantId → displayName
 
 // Active speaker / audio level tracking — avoids querySelectorAll on every event
@@ -588,6 +597,31 @@ roomInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.cl
 let roomBrowserPage = 1;
 let roomBrowserQuery = '';
 let roomBrowserHasMore = false;
+const MIN_ROOM_SEARCH_TRIGRAM_LEN = 3;
+
+function hasIndexableRoomSearchTrigram(query: string): boolean {
+  let runLength = 0;
+  for (const character of query) {
+    if (/^[A-Za-z0-9]$/.test(character)) {
+      runLength++;
+      if (runLength >= MIN_ROOM_SEARCH_TRIGRAM_LEN) return true;
+    } else {
+      runLength = 0;
+    }
+  }
+  return false;
+}
+
+function showRoomSearchMinimum(): void {
+  roomBrowserPage = 1;
+  roomBrowserHasMore = false;
+  roomLoadMore.hidden = true;
+  clearChildren(roomList);
+  const message = document.createElement('div');
+  message.className = 'room-list-empty';
+  message.textContent = 'Enter at least 3 consecutive letters or numbers';
+  roomList.appendChild(message);
+}
 
 async function loadRoomBrowser(append = false): Promise<void> {
   if (!append) {
@@ -672,7 +706,13 @@ let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 roomSearchInput.addEventListener('input', () => {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
   searchDebounceTimer = setTimeout(() => {
-    roomBrowserQuery = roomSearchInput.value.trim();
+    const query = roomSearchInput.value.trim();
+    if (query && !hasIndexableRoomSearchTrigram(query)) {
+      roomBrowserQuery = '';
+      showRoomSearchMinimum();
+      return;
+    }
+    roomBrowserQuery = query;
     loadRoomBrowser();
   }, 300);
 });
@@ -684,7 +724,11 @@ roomLoadMore.addEventListener('click', () => {
 
 // --- Auth Events ---
 signInBtn.addEventListener('click', () => { loginModal.hidden = false; });
-logoutBtn.addEventListener('click', () => { auth.logout(); });
+logoutBtn.addEventListener('click', () => {
+  void auth.logout().catch((error) => {
+    showToast(error instanceof Error ? error.message : 'Sign out failed');
+  });
+});
 
 // Login
 loginClose.addEventListener('click', () => { loginModal.hidden = true; });
@@ -723,7 +767,7 @@ loginPasskeyBtn.addEventListener('click', async () => {
     const options = await auth.passkeyLoginStart(email);
     const credential = await navigator.credentials.get(options);
     if (!credential) throw new Error('Passkey cancelled');
-    await auth.passkeyLoginFinish(email, credential);
+    await auth.passkeyLoginFinish(credential);
     loginModal.hidden = true;
     loginEmail.value = '';
     loginPassword.value = '';
@@ -785,7 +829,7 @@ registerPasskeyBtn.addEventListener('click', async () => {
     const options = await auth.passkeyRegisterStart(email, displayName);
     const credential = await navigator.credentials.create(options);
     if (!credential) throw new Error('Passkey registration cancelled');
-    await auth.passkeyRegisterFinish(email, credential);
+    await auth.passkeyRegisterFinish(credential);
     registerModal.hidden = true;
     registerEmail.value = '';
     registerName.value = '';
@@ -813,6 +857,12 @@ createRoomSubmit.addEventListener('click', async () => {
   const displayName = crName.value.trim();
   if (!id || !displayName) {
     createRoomError.textContent = 'Room ID and Display Name are required';
+    createRoomError.hidden = false;
+    return;
+  }
+  const roomPasswordBytes = new TextEncoder().encode(crPassword.value).length;
+  if (crPassword.value && (roomPasswordBytes < 8 || roomPasswordBytes > 256)) {
+    createRoomError.textContent = 'Room password must be 8-256 bytes';
     createRoomError.hidden = false;
     return;
   }
@@ -1134,6 +1184,11 @@ leaveBtn.addEventListener('click', async () => {
   clearChildren(videoGrid);
   clearChildren(participantList);
   clearChildren(chatMessages);
+  chatHistoryCharacters = 0;
+  unreadCount = 0;
+  isAtBottom = true;
+  unreadBadge.hidden = true;
+  scrollBottomBtn.hidden = true;
   remoteTiles.clear();
   lobbyWaiters.clear();
 
@@ -1428,7 +1483,13 @@ rsTopic.addEventListener('change', () => {
 
 rsPassword.addEventListener('change', () => {
   const password = rsPassword.value;
-  room?.updateRoomSettings({ password: password || undefined } as any);
+  const passwordBytes = new TextEncoder().encode(password).length;
+  if (password && (passwordBytes < 8 || passwordBytes > 256)) {
+    showToast('Room password must be 8-256 bytes');
+    rsPassword.focus();
+    return;
+  }
+  room?.updateRoomSettings({ password: password || null } as any);
 });
 
 rsMaxBroadcasters.addEventListener('change', () => {
@@ -1876,12 +1937,12 @@ function appendChatMessage(participantId: string, participantName: string, conte
   div.appendChild(sender);
   div.appendChild(msgText);
   div.appendChild(msgTime);
-  chatMessages.appendChild(div);
+  appendBoundedChatNode(div, participantName.length + content.length);
 
   if (isAtBottom) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   } else {
-    unreadCount++;
+    unreadCount = Math.min(unreadCount + 1, MAX_CHAT_HISTORY_MESSAGES);
     unreadBadge.textContent = String(unreadCount);
     unreadBadge.hidden = false;
     scrollBottomBtn.hidden = false;
@@ -1897,10 +1958,30 @@ function appendSystemMessage(text: string): void {
   msgText.textContent = text;
 
   div.appendChild(msgText);
-  chatMessages.appendChild(div);
+  appendBoundedChatNode(div, text.length);
 
   if (isAtBottom) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+}
+
+function appendBoundedChatNode(node: HTMLDivElement, characterCount: number): void {
+  node.dataset['historyCharacters'] = String(characterCount);
+  chatHistoryCharacters += characterCount;
+  chatMessages.appendChild(node);
+
+  while (
+    chatMessages.childElementCount > MAX_CHAT_HISTORY_MESSAGES
+    || chatHistoryCharacters > MAX_CHAT_HISTORY_CHARACTERS
+  ) {
+    const oldest = chatMessages.firstElementChild as HTMLElement | null;
+    if (!oldest) {
+      chatHistoryCharacters = 0;
+      break;
+    }
+    const removedCharacters = Number(oldest.dataset['historyCharacters'] ?? 0);
+    chatHistoryCharacters = Math.max(0, chatHistoryCharacters - removedCharacters);
+    oldest.remove();
   }
 }
 

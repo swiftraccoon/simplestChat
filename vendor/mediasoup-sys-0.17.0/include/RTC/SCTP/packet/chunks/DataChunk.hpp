@@ -1,0 +1,257 @@
+#ifndef MS_RTC_SCTP_DATA_CHUNK_HPP
+#define MS_RTC_SCTP_DATA_CHUNK_HPP
+
+#include "common.hpp"
+#include "RTC/SCTP/packet/UserData.hpp"
+#include "RTC/SCTP/packet/chunks/AnyDataChunk.hpp"
+#include "Utils.hpp"
+#include <vector>
+
+namespace RTC
+{
+	namespace SCTP
+	{
+		/**
+		 * SCTP Payload Data Chunk (DATA) (0).
+		 *
+		 * @see RFC 9260.
+		 *
+		 *  0                   1                   2                   3
+		 *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |   Type = 0    |  Res  |I|U|B|E|       Length = Variable       |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |                              TSN                              |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |      Stream Identifier S      |   Stream Sequence Number n    |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |                  Payload Protocol Identifier                  |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * \                                                               \
+		 * /                 User Data (seq n of Stream S)                 /
+		 * \                                                               \
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 *
+		 * - Chunk type (8 bits): 0.
+		 * - Res (4 bits): All set to 0.
+		 * - I bit (1 bit): The (I)mmediate bit MAY be set by the sender whenever
+		 *   the sender of a DATA chunk can benefit from the corresponding SACK
+		 *   chunk being sent back without delay.
+		 * - U bit (1 bit): The (U)nordered bit, if set to 1, indicates that this
+		 *   is an unordered DATA chunk, and there is no Stream Sequence Number
+		 *   assigned to this DATA chunk.
+		 * - B bit (1 bit): The (B)eginning fragment bit, if set, indicates the
+		 *   first fragment of a user message.
+		 * - E bit (1 bit): The (E)nding fragment bit, if set, indicates the last
+		 *   fragment of a user message.
+		 * - Length (16 bits): This field indicates the length of the DATA chunk in
+		 *   bytes from the beginning of the type field to the end of the User Data
+		 *   field excluding any padding. A DATA chunk with one byte of user data
+		 *   will have the length field set to 17 (indicating 17 bytes). A DATA
+		 *   chunk with a User Data field of length L will have the length field
+		 *   set to (16 + L) (indicating 16 + L bytes) where L MUST be greater than
+		 *   0.
+		 * - TSN (32 bits): This value represents the TSN for this DATA chunk. The
+		 *   valid range of TSN is from 0 to 4294967295 (232 - 1). TSN wraps back
+		 *   to 0 after reaching 4294967295.
+		 * - Stream Identifier S (16 bits): Identifies the stream to which the
+		 *   following user data belongs.
+		 * - Stream Sequence Number n (16 bits): This value represents the stream
+		 *   Sequence Number of the following user data within the stream S. Valid
+		 *   range is 0 to 65535. When a user message is fragmented by SCTP for
+		 *   transport, the same Stream Sequence Number MUST be carried in each of
+		 *   the fragments of the message.
+		 * - Payload Protocol Identifier (PPID) (32 bits): This value represents an
+		 *   application (or upper layer) specified protocol identifier.
+		 * - User Data (variable length): This is the payload user data. The
+		 *   implementation MUST pad the end of the data to a 4-byte boundary with
+		 *   all zero bytes. Any padding MUST NOT be included in the length field.
+		 */
+
+		// Forward declaration.
+		class Packet;
+
+		class DataChunk : public AnyDataChunk
+		{
+			// We need that packet calls protected and private methods in this class.
+			friend class Packet;
+
+		public:
+			static constexpr size_t DataChunkHeaderLength{ 16 };
+
+		public:
+			/**
+			 * Parse a DataChunk.
+			 *
+			 * @remarks
+			 * `bufferLength` may exceed the exact length of the chunk.
+			 */
+			static DataChunk* Parse(const uint8_t* buffer, size_t bufferLength);
+
+			/**
+			 * Create a DataChunk.
+			 *
+			 * @remarks
+			 * `bufferLength` could be greater than the chunk real length.
+			 */
+			static DataChunk* Factory(uint8_t* buffer, size_t bufferLength);
+
+		private:
+			/**
+			 * Parse a DataChunk.
+			 *
+			 * @remarks
+			 * To be used only by `Packet::Parse()`.
+			 */
+			static DataChunk* ParseStrict(
+			  const uint8_t* buffer, size_t bufferLength, uint16_t chunkLength, uint8_t padding);
+
+		private:
+			/**
+			 * Only used by Parse(), ParseStrict() and Factory() static methods.
+			 */
+			DataChunk(uint8_t* buffer, size_t bufferLength);
+
+		public:
+			~DataChunk() override;
+
+			void Dump(int indentation = 0) const final;
+
+			DataChunk* Clone(uint8_t* buffer, size_t bufferLength) const final;
+
+			bool CanHaveParameters() const final
+			{
+				return false;
+			}
+
+			bool CanHaveErrorCauses() const final
+			{
+				return false;
+			}
+
+			bool GetI() const final
+			{
+				return GetBit3();
+			}
+
+			void SetI(bool flag);
+
+			bool GetU() const final
+			{
+				return GetBit2();
+			}
+
+			void SetU(bool flag);
+
+			bool GetB() const final
+			{
+				return GetBit1();
+			}
+
+			void SetB(bool flag);
+
+			bool GetE() const final
+			{
+				return GetBit0();
+			}
+
+			void SetE(bool flag);
+
+			uint32_t GetTsn() const final
+			{
+				return Utils::Byte::Get4Bytes(GetBuffer(), 4);
+			}
+
+			void SetTsn(uint32_t value);
+
+			uint16_t GetStreamId() const final
+			{
+				return Utils::Byte::Get2Bytes(const_cast<uint8_t*>(GetBuffer()), 8);
+			}
+
+			void SetStreamId(uint16_t value);
+
+			uint16_t GetStreamSequenceNumber() const final
+			{
+				return Utils::Byte::Get2Bytes(const_cast<uint8_t*>(GetBuffer()), 10);
+			}
+
+			void SetStreamSequenceNumber(uint16_t value);
+
+			/**
+			 * @remarks Only in I-DATA chunks.
+			 */
+			uint32_t GetMessageId() const final
+			{
+				return 0;
+			}
+
+			uint32_t GetPayloadProtocolId() const final
+			{
+				return Utils::Byte::Get4Bytes(GetBuffer(), 12);
+			}
+
+			/**
+			 * @remarks Only in I-DATA chunks.
+			 */
+			uint32_t GetFragmentSequenceNumber() const final
+			{
+				return 0;
+			}
+
+			void SetPayloadProtocolId(uint32_t value);
+
+			bool HasUserDataPayload() const final
+			{
+				return HasVariableLengthValue();
+			}
+
+			const uint8_t* GetUserDataPayload() const final
+			{
+				return GetVariableLengthValue();
+			}
+
+			uint16_t GetUserDataPayloadLength() const final
+			{
+				return GetVariableLengthValueLength();
+			}
+
+			void SetUserDataPayload(const uint8_t* userDataPayload, uint16_t userDataPayloadLength);
+
+			UserData MakeUserData() const final
+			{
+				const auto* userData       = GetUserDataPayload();
+				const uint16_t userDataLen = GetUserDataPayloadLength();
+
+				std::vector<uint8_t> payload(userData, userData + userDataLen);
+
+				return UserData(
+				  GetStreamId(),
+				  GetStreamSequenceNumber(),
+				  GetMessageId(),
+				  GetFragmentSequenceNumber(),
+				  GetPayloadProtocolId(),
+				  std::move(payload),
+				  GetB(),
+				  GetE(),
+				  GetU());
+			}
+
+			void SetUserData(UserData userData);
+
+		protected:
+			DataChunk* SoftClone(const uint8_t* buffer) const final;
+
+			/**
+			 * We need to override this method since this chunk has a variable-length
+			 * value and the fixed header doesn't have default length.
+			 */
+			size_t GetHeaderLength() const final
+			{
+				return DataChunk::DataChunkHeaderLength;
+			}
+		};
+	} // namespace SCTP
+} // namespace RTC
+
+#endif

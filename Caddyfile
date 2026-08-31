@@ -1,25 +1,41 @@
-# SimplestChat reverse proxy
-# Caddy auto-provisions Let's Encrypt TLS certificates.
-#
-# Usage:
-#   1. Set your domain below (replace simplestchat.example.com)
-#   2. Point DNS A record to this server's public IP
-#   3. sudo caddy start
-#
-# Caddy handles: HTTPS termination, auto-renew, HTTP→HTTPS redirect
-#
-# Security note: the server trusts X-Forwarded-For only from loopback peers
-# and reads the RIGHTMOST entry (the one Caddy appends). Client-supplied
-# X-Forwarded-For values are ignored for guest ban enforcement.
+# SimplestChat reverse proxy. Replace the example hostname and point its DNS
+# record at this server. Caddy provisions and renews the TLS certificate.
+{
+	servers {
+		# Bound slow request setup and unused keep-alive connections. The idle
+		# timeout applies between HTTP requests, not to upgraded WebSockets.
+		timeouts {
+			read_header 10s
+			read_body 30s
+			idle 2m
+		}
+		max_header_size 16KB
+	}
+}
 
 simplestchat.example.com {
-	# WebSocket endpoint
-	handle /ws {
-		reverse_proxy localhost:3000
+	# Metrics are intentionally absent from the public HTTPS surface. Scrape the
+	# loopback backend directly with its bearer token instead.
+	@metrics path /metrics
+	respond @metrics "Not Found" 404
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; upgrade-insecure-requests"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(self), microphone=(self), display-capture=(self), geolocation=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		-Server
 	}
 
-	# All other paths (static files, API)
-	handle {
-		reverse_proxy localhost:3000
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000 {
+		# Authenticates this proxy across Docker's bridge. Caddy's header_up
+		# replaces any client-supplied value. Set the same >=32-byte secret on
+		# Caddy and the application; never write it into this file.
+		header_up X-SimplestChat-Proxy {$TRUSTED_PROXY_SECRET}
 	}
 }

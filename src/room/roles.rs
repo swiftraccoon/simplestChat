@@ -71,12 +71,7 @@ impl Role {
     }
 
     pub fn can_set_role(&self, target: Role, new_role: Role) -> bool {
-        match new_role {
-            Role::Member => *self >= Role::Moderator && *self > target,
-            Role::Moderator => *self >= Role::Admin && *self > target,
-            Role::Admin => *self >= Role::Owner,
-            _ => false,
-        }
+        *self >= Role::Moderator && *self > target && *self > new_role && new_role != Role::Owner
     }
 
     pub fn can_broadcast(&self, moderated: bool) -> bool {
@@ -110,29 +105,29 @@ pub async fn resolve_role(
     user_id: Option<&Uuid>,
     owner_id: &Uuid,
     is_authenticated: bool,
-) -> Role {
+) -> Result<Role, sqlx::Error> {
     if let Some(uid) = user_id {
         if uid == owner_id {
-            return Role::Owner;
+            return Ok(Role::Owner);
         }
 
-        if let Ok(Some(row)) = sqlx::query_as::<_, (i16,)>(
-            "SELECT role FROM room_roles WHERE room_id = $1 AND user_id = $2"
+        if let Some(row) = sqlx::query_as::<_, (i16,)>(
+            "SELECT role FROM room_roles WHERE room_id = $1 AND user_id = $2",
         )
         .bind(room_id)
         .bind(uid)
         .fetch_optional(pool)
-        .await
+        .await?
         {
-            return Role::from_db(row.0);
+            return Ok(Role::from_db(row.0));
         }
 
         if is_authenticated {
-            return Role::User;
+            return Ok(Role::User);
         }
     }
 
-    Role::Guest
+    Ok(Role::Guest)
 }
 
 pub async fn set_role(
@@ -153,7 +148,7 @@ pub async fn set_role(
         sqlx::query(
             "INSERT INTO room_roles (room_id, user_id, role, granted_by)
              VALUES ($1, $2, $3, $4)
-             ON CONFLICT (room_id, user_id) DO UPDATE SET role = $3, granted_by = $4"
+             ON CONFLICT (room_id, user_id) DO UPDATE SET role = $3, granted_by = $4",
         )
         .bind(room_id)
         .bind(user_id)
@@ -206,6 +201,11 @@ mod tests {
         assert!(Role::Admin.can_set_role(Role::User, Role::Moderator));
         assert!(!Role::Admin.can_set_role(Role::User, Role::Admin));
         assert!(Role::Moderator.can_set_role(Role::User, Role::Member));
+        assert!(Role::Moderator.can_set_role(Role::Member, Role::User));
+        assert!(Role::Admin.can_set_role(Role::Moderator, Role::User));
+        assert!(Role::Owner.can_set_role(Role::Admin, Role::User));
         assert!(!Role::Moderator.can_set_role(Role::User, Role::Moderator));
+        assert!(!Role::Admin.can_set_role(Role::Owner, Role::User));
+        assert!(!Role::Owner.can_set_role(Role::Admin, Role::Owner));
     }
 }

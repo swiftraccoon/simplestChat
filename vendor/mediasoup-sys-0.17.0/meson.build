@@ -1,0 +1,704 @@
+project(
+  'mediasoup-worker',
+  ['c', 'cpp'],
+  default_options : [
+    'cpp_std=c++20',
+    'warning_level=1',
+    'default_library=static',
+  ],
+  meson_version: '>= 1.1.0',
+)
+
+cpp_args = [
+  host_machine.endian() == 'little' ? '-DMS_LITTLE_ENDIAN' : '-DMS_BIG_ENDIAN',
+]
+
+if host_machine.system() == 'windows'
+  cpp_args += [
+    '-DNOMINMAX', # Don't define min and max macros (windows.h)
+    # Don't bloat namespace with incompatible winsock versions.
+    '-DWIN32_LEAN_AND_MEAN',
+    # Don't warn about usage of insecure C functions.
+    '-D_CRT_SECURE_NO_WARNINGS',
+    '-D_SCL_SECURE_NO_WARNINGS',
+    # Introduced in VS 2017 15.8, allow overaligned types in aligned_storage.
+    '-D_ENABLE_EXTENDED_ALIGNED_STORAGE',
+  ]
+endif
+
+if get_option('ms_build_tests')
+  cpp_args += [
+    '-DMS_TEST',
+    '-DMS_LOG_STD'
+  ]
+endif
+
+if get_option('ms_build_fuzzer')
+  cpp_args += [
+    '-DMS_FUZZER',
+    '-DMS_LOG_STD'
+  ]
+endif
+
+if get_option('ms_log_trace')
+  cpp_args += [
+    '-DMS_LOG_TRACE',
+  ]
+endif
+
+if get_option('ms_log_file_line')
+  cpp_args += [
+    '-DMS_LOG_FILE_LINE',
+  ]
+endif
+
+if get_option('ms_rtc_logger_rtp')
+  cpp_args += [
+    '-DMS_RTC_LOGGER_RTP',
+  ]
+endif
+
+if get_option('ms_dump_rtp_payload_descriptor')
+  cpp_args += [
+    '-DMS_DUMP_RTP_PAYLOAD_DESCRIPTOR',
+  ]
+endif
+
+if get_option('ms_dump_rtp_shared_packet_memory_usage')
+  cpp_args += [
+    '-DMS_DUMP_RTP_SHARED_PACKET_MEMORY_USAGE',
+  ]
+endif
+
+cpp = meson.get_compiler('cpp')
+
+# This is a workaround to define FLATBUFFERS_LOCALE_INDEPENDENT=0 outside
+# flatbuffers project, which is needed in case the current arch doesn't support
+# strtoll_l or strtoull_l (such as musl in Alpine Linux). Problem is that
+# flatbuffers build system not only defines it for its own usage but also relies
+# on it in its include/flatbuffers/util.h file, and if such a file is included
+# by mediasoup source files (and it is included) build fails with "error:
+# 'strtoull_l' was not declared in this scope".
+# See issue: https://github.com/versatica/mediasoup/issues/1223
+add_project_arguments('-DFLATBUFFERS_LOCALE_INDEPENDENT=@0@'.format(cpp.has_function('strtoull_l')), language: 'cpp')
+
+common_sources = [
+  'src/lib.cpp',
+  'src/DepLibSRTP.cpp',
+  'src/DepLibUV.cpp',
+  'src/DepLibWebRTC.cpp',
+  'src/DepOpenSSL.cpp',
+  'src/Logger.cpp',
+  'src/MediaSoupErrors.cpp',
+  'src/Settings.cpp',
+  'src/Shared.cpp',
+  'src/Worker.cpp',
+  'src/Utils/BitStream.cpp',
+  'src/Utils/Crypto.cpp',
+  'src/Utils/File.cpp',
+  'src/Utils/IP.cpp',
+  'src/Utils/String.cpp',
+  'src/handles/BackoffTimerHandle.cpp',
+  'src/handles/SignalHandle.cpp',
+  'src/handles/TcpConnectionHandle.cpp',
+  'src/handles/TcpServerHandle.cpp',
+  'src/handles/TimerHandle.cpp',
+  'src/handles/UdpSocketHandle.cpp',
+  'src/handles/UnixStreamSocketHandle.cpp',
+  'src/Channel/ChannelNotifier.cpp',
+  'src/Channel/ChannelRequest.cpp',
+  'src/Channel/ChannelMessageRegistrator.cpp',
+  'src/Channel/ChannelNotification.cpp',
+  'src/Channel/ChannelSocket.cpp',
+  'src/RTC/ActiveSpeakerObserver.cpp',
+  'src/RTC/AudioLevelObserver.cpp',
+  'src/RTC/Consumer.cpp',
+  'src/RTC/DataConsumer.cpp',
+  'src/RTC/DataProducer.cpp',
+  'src/RTC/DirectTransport.cpp',
+  'src/RTC/DtlsTransport.cpp',
+  'src/RTC/KeyFrameRequestManager.cpp',
+  'src/RTC/NackGenerator.cpp',
+  'src/RTC/PipeTransport.cpp',
+  'src/RTC/PlainTransport.cpp',
+  'src/RTC/PortManager.cpp',
+  'src/RTC/Producer.cpp',
+  'src/RTC/RateCalculator.cpp',
+  'src/RTC/RemoteCaptureTimeEstimator.cpp',
+  'src/RTC/RemoteClockOffsetEstimator.cpp',
+  'src/RTC/Router.cpp',
+  'src/RTC/RtcLogger.cpp',
+  'src/RTC/RtpListener.cpp',
+  'src/RTC/RtpObserver.cpp',
+  'src/RTC/SctpListener.cpp',
+  'src/RTC/SenderBandwidthEstimator.cpp',
+  'src/RTC/SeqManager.cpp',
+  'src/RTC/Serializable.cpp',
+  'src/RTC/PipeProducerStreamManager.cpp',
+  'src/RTC/SimpleProducerStreamManager.cpp',
+  'src/RTC/SimulcastProducerStreamManager.cpp',
+  'src/RTC/SrtpSession.cpp',
+  'src/RTC/SubchannelsCodec.cpp',
+  'src/RTC/SvcProducerStreamManager.cpp',
+  'src/RTC/TcpConnection.cpp',
+  'src/RTC/TcpServer.cpp',
+  'src/RTC/Transport.cpp',
+  'src/RTC/TransportCongestionControlClient.cpp',
+  'src/RTC/TransportCongestionControlServer.cpp',
+  'src/RTC/TransportTuple.cpp',
+  'src/RTC/TrendCalculator.cpp',
+  'src/RTC/UdpSocket.cpp',
+  'src/RTC/WebRtcServer.cpp',
+  'src/RTC/WebRtcTransport.cpp',
+  'src/RTC/RtpDictionaries/Parameters.cpp',
+  'src/RTC/RtpDictionaries/RtcpFeedback.cpp',
+  'src/RTC/RtpDictionaries/RtcpParameters.cpp',
+  'src/RTC/RtpDictionaries/RtpCodecMimeType.cpp',
+  'src/RTC/RtpDictionaries/RtpCodecParameters.cpp',
+  'src/RTC/RtpDictionaries/RtpEncodingParameters.cpp',
+  'src/RTC/RtpDictionaries/RtpHeaderExtensionParameters.cpp',
+  'src/RTC/RtpDictionaries/RtpHeaderExtensionUri.cpp',
+  'src/RTC/RtpDictionaries/RtpParameters.cpp',
+  'src/RTC/RtpDictionaries/RtpRtxParameters.cpp',
+  'src/RTC/SctpDictionaries/SctpStreamParameters.cpp',
+  'src/RTC/ICE/IceCandidate.cpp',
+  'src/RTC/ICE/IceServer.cpp',
+  'src/RTC/ICE/StunPacket.cpp',
+  'src/RTC/RTP/Packet.cpp',
+  'src/RTC/RTP/ProbationGenerator.cpp',
+  'src/RTC/RTP/RetransmissionBuffer.cpp',
+  'src/RTC/RTP/RtpStream.cpp',
+  'src/RTC/RTP/RtpStreamRecv.cpp',
+  'src/RTC/RTP/RtpStreamSend.cpp',
+  'src/RTC/RTP/RtxStream.cpp',
+  'src/RTC/RTP/SharedPacket.cpp',
+  'src/RTC/RTP/Codecs/AV1.cpp',
+  'src/RTC/RTP/Codecs/H264.cpp',
+  'src/RTC/RTP/Codecs/Opus.cpp',
+  'src/RTC/RTP/Codecs/VP8.cpp',
+  'src/RTC/RTP/Codecs/VP9.cpp',
+  'src/RTC/RTP/Codecs/DependencyDescriptor.cpp',
+  'src/RTC/RTCP/Packet.cpp',
+  'src/RTC/RTCP/CompoundPacket.cpp',
+  'src/RTC/RTCP/SenderReport.cpp',
+  'src/RTC/RTCP/ReceiverReport.cpp',
+  'src/RTC/RTCP/Sdes.cpp',
+  'src/RTC/RTCP/Bye.cpp',
+  'src/RTC/RTCP/Feedback.cpp',
+  'src/RTC/RTCP/FeedbackPs.cpp',
+  'src/RTC/RTCP/FeedbackRtp.cpp',
+  'src/RTC/RTCP/FeedbackRtpNack.cpp',
+  'src/RTC/RTCP/FeedbackRtpTmmb.cpp',
+  'src/RTC/RTCP/FeedbackRtpSrReq.cpp',
+  'src/RTC/RTCP/FeedbackRtpTllei.cpp',
+  'src/RTC/RTCP/FeedbackRtpEcn.cpp',
+  'src/RTC/RTCP/FeedbackRtpTransport.cpp',
+  'src/RTC/RTCP/FeedbackPsPli.cpp',
+  'src/RTC/RTCP/FeedbackPsSli.cpp',
+  'src/RTC/RTCP/FeedbackPsRpsi.cpp',
+  'src/RTC/RTCP/FeedbackPsFir.cpp',
+  'src/RTC/RTCP/FeedbackPsTst.cpp',
+  'src/RTC/RTCP/FeedbackPsVbcm.cpp',
+  'src/RTC/RTCP/FeedbackPsLei.cpp',
+  'src/RTC/RTCP/FeedbackPsAfb.cpp',
+  'src/RTC/RTCP/FeedbackPsRemb.cpp',
+  'src/RTC/RTCP/XR.cpp',
+  'src/RTC/RTCP/XrDelaySinceLastRr.cpp',
+  'src/RTC/RTCP/XrReceiverReferenceTime.cpp',
+  'src/RTC/NEW_RTCP/packet/CompoundPacket.cpp',
+  'src/RTC/NEW_RTCP/packet/Packet.cpp',
+  'src/RTC/NEW_RTCP/packet/ByePacket.cpp',
+  'src/RTC/SCTP/association/Association.cpp',
+  'src/RTC/SCTP/association/AssociationListenerDeferrer.cpp',
+  'src/RTC/SCTP/association/Capabilities.cpp',
+  'src/RTC/SCTP/association/HeartbeatHandler.cpp',
+  'src/RTC/SCTP/association/NegotiatedCapabilities.cpp',
+  'src/RTC/SCTP/association/PacketSender.cpp',
+  'src/RTC/SCTP/association/StateCookie.cpp',
+  'src/RTC/SCTP/association/StreamResetHandler.cpp',
+  'src/RTC/SCTP/association/TransmissionControlBlock.cpp',
+  'src/RTC/SCTP/rx/DataTracker.cpp',
+  'src/RTC/SCTP/rx/InterleavedReassemblyStreams.cpp',
+  'src/RTC/SCTP/rx/ReassemblyQueue.cpp',
+  'src/RTC/SCTP/rx/TraditionalReassemblyStreams.cpp',
+  'src/RTC/SCTP/tx/OutstandingData.cpp',
+  'src/RTC/SCTP/tx/RetransmissionErrorCounter.cpp',
+  'src/RTC/SCTP/tx/RetransmissionQueue.cpp',
+  'src/RTC/SCTP/tx/RetransmissionTimeout.cpp',
+  'src/RTC/SCTP/tx/RoundRobinSendQueue.cpp',
+  'src/RTC/SCTP/tx/StreamScheduler.cpp',
+  'src/RTC/SCTP/packet/Packet.cpp',
+  'src/RTC/SCTP/packet/TLV.cpp',
+  'src/RTC/SCTP/packet/UserData.cpp',
+  'src/RTC/SCTP/packet/Chunk.cpp',
+  'src/RTC/SCTP/packet/chunks/DataChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/InitChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/InitAckChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/SackChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/HeartbeatRequestChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/HeartbeatAckChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/AbortAssociationChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/ShutdownChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/ShutdownAckChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/OperationErrorChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/CookieEchoChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/CookieAckChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/ShutdownCompleteChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/ForwardTsnChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/ReConfigChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/IDataChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/IForwardTsnChunk.cpp',
+  'src/RTC/SCTP/packet/chunks/UnknownChunk.cpp',
+  'src/RTC/SCTP/packet/Parameter.cpp',
+  'src/RTC/SCTP/packet/parameters/HeartbeatInfoParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/IPv4AddressParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/IPv6AddressParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/StateCookieParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/UnrecognizedParameterParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/CookiePreservativeParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/SupportedAddressTypesParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/ForwardTsnSupportedParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/SupportedExtensionsParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/OutgoingSsnResetRequestParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/IncomingSsnResetRequestParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/SsnTsnResetRequestParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/ReconfigurationResponseParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/AddOutgoingStreamsRequestParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/AddIncomingStreamsRequestParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/ZeroChecksumAcceptableParameter.cpp',
+  'src/RTC/SCTP/packet/parameters/UnknownParameter.cpp',
+  'src/RTC/SCTP/packet/ErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/InvalidStreamIdentifierErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/MissingMandatoryParameterErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/StaleCookieErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/OutOfResourceErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/UnresolvableAddressErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/UnrecognizedChunkTypeErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/InvalidMandatoryParameterErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/UnrecognizedParametersErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/NoUserDataErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/CookieReceivedWhileShuttingDownErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/RestartOfAnAssociationWithNewAddressesErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/UserInitiatedAbortErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/ProtocolViolationErrorCause.cpp',
+  'src/RTC/SCTP/packet/errorCauses/UnknownErrorCause.cpp',
+  'src/RTC/SCTP/public/AssociationMetrics.cpp',
+  'src/RTC/SCTP/public/SctpOptions.cpp',
+  'src/RTC/SCTP/public/Message.cpp',
+]
+
+libuv_proj = subproject(
+  'libuv',
+  default_options: [
+    'warning_level=0',
+    'build_tests=false',
+    'build_benchmarks=false',
+  ],
+)
+
+openssl_dep = dependency(
+  'openssl',
+  # A bare >=3.5.8 would admit vulnerable 3.6.0-3.6.3 and 4.0.0-4.0.1.
+  version: ['>=3.5.8', '<3.6.0'],
+  method: 'pkg-config',
+  static: true,
+  required: true,
+  allow_fallback: false,
+)
+
+# libsrtp resolves `dependency('openssl')` inside its own subproject. Force it
+# to reuse the exact version-checked static dependency selected above.
+meson.override_dependency('openssl', openssl_dep)
+
+libsrtp3_proj = subproject(
+  'libsrtp3',
+  default_options: [
+    'warning_level=0',
+    'crypto-library=openssl',
+    'crypto-library-kdf=disabled',
+    'tests=disabled',
+  ],
+)
+
+abseil_cpp_proj = subproject(
+  'abseil-cpp',
+  default_options: [
+    'warning_level=0',
+    'cpp_std=c++17',
+  ],
+)
+
+ankerl_unordered_dense_dep = dependency('unordered_dense')
+
+flatbuffers_proj = subproject(
+  'flatbuffers',
+  default_options: [
+    'warning_level=0',
+  ],
+)
+
+# flatbuffers schemas subdirectory.
+subdir('fbs')
+
+# Add current build directory so libwebrtc has access to FBS folder.
+libwebrtc_include_directories = include_directories('include', 'fbs')
+
+subdir('deps/libwebrtc')
+
+dependencies = [
+  libuv_proj.get_variable('libuv_dep'),
+  openssl_dep,
+  libsrtp3_proj.get_variable('libsrtp3_dep'),
+  abseil_cpp_proj.get_variable('absl_container_dep'),
+  ankerl_unordered_dense_dep,
+  flatbuffers_proj.get_variable('flatbuffers_dep'),
+  flatbuffers_generator_dep,
+  libwebrtc_dep,
+]
+
+link_whole = [
+  libuv_proj.get_variable('libuv'),
+  libsrtp3_proj.get_variable('libsrtp3'),
+  abseil_cpp_proj.get_variable('absl_container_lib'),
+  flatbuffers_proj.get_variable('flatbuffers_lib'),
+  libwebrtc,
+]
+
+if host_machine.system() == 'windows'
+  wingetopt_proj = subproject(
+    'wingetopt',
+    default_options: [
+      'warning_level=0',
+    ],
+  )
+
+  dependencies += [
+    wingetopt_proj.get_variable('wingetopt_dep'),
+  ]
+  link_whole += [
+    wingetopt_proj.get_variable('wingetopt_lib'),
+  ]
+endif
+
+if get_option('ms_build_tests')
+  catch2_proj = subproject(
+    'catch2',
+    default_options: [
+      'warning_level=0',
+    ],
+  )
+
+  dependencies += [
+    catch2_proj.get_variable('catch2_dep'),
+  ]
+endif
+
+libmediasoup_worker = library(
+  'libmediasoup-worker',
+  name_prefix: '',
+  build_by_default: false,
+  install: true,
+  install_tag: 'libmediasoup-worker',
+  dependencies: dependencies,
+  sources: common_sources,
+  include_directories: include_directories('include'),
+  cpp_args: cpp_args,
+  link_whole: link_whole,
+)
+
+executable(
+  'mediasoup-worker',
+  build_by_default: true,
+  install: true,
+  install_tag: 'mediasoup-worker',
+  dependencies: dependencies,
+  sources: common_sources + ['src/main.cpp'],
+  include_directories: include_directories('include'),
+  cpp_args: cpp_args + ['-DMS_EXECUTABLE'],
+)
+
+mock_sources = [
+  'mocks/src/MockShared.cpp',
+  'mocks/src/handles/MockBackoffTimerHandle.cpp',
+  'mocks/src/Channel/MockChannelMessageRegistrator.cpp',
+  'mocks/src/RTC/SCTP/association/MockTransmissionControlBlockContext.cpp',
+]
+
+test_sources = [
+  'test/src/tests.cpp',
+  'test/src/testHelpers.cpp',
+  'test/src/RTC/TestConsumer.cpp',
+  'test/src/RTC/TestPipeProducerStreamManager.cpp',
+  'test/src/RTC/TestSimpleProducerStreamManager.cpp',
+  'test/src/RTC/TestSimulcastProducerStreamManager.cpp',
+  'test/src/RTC/TestSvcProducerStreamManager.cpp',
+  'test/src/RTC/TestKeyFrameRequestManager.cpp',
+  'test/src/RTC/TestNackGenerator.cpp',
+  'test/src/RTC/TestPortManager.cpp',
+  'test/src/RTC/TestRateCalculator.cpp',
+  'test/src/RTC/TestRemoteCaptureTimeEstimator.cpp',
+  'test/src/RTC/TestRemoteClockOffsetEstimator.cpp',
+  'test/src/RTC/TestRtpEncodingParameters.cpp',
+  'test/src/RTC/TestSeqManager.cpp',
+  'test/src/RTC/TestSubchannelsCodec.cpp',
+  'test/src/RTC/TestTransportCongestionControlServer.cpp',
+  'test/src/RTC/TestTransportTuple.cpp',
+  'test/src/RTC/TestTrendCalculator.cpp',
+  'test/src/RTC/ICE/iceCommon.cpp',
+  'test/src/RTC/ICE/TestStunPacket.cpp',
+  'test/src/RTC/RTP/rtpCommon.cpp',
+  'test/src/RTC/RTP/TestPacket.cpp',
+  'test/src/RTC/RTP/TestProbationGenerator.cpp',
+  'test/src/RTC/RTP/TestRetransmissionBuffer.cpp',
+  'test/src/RTC/RTP/TestRtpStreamSend.cpp',
+  'test/src/RTC/RTP/TestRtpStreamRecv.cpp',
+  'test/src/RTC/RTP/TestSharedPacket.cpp',
+  'test/src/RTC/RTP/Codecs/TestH264.cpp',
+  'test/src/RTC/RTP/Codecs/TestVP8.cpp',
+  'test/src/RTC/RTP/Codecs/TestVP9.cpp',
+  'test/src/RTC/RTP/Codecs/TestDependencyDescriptor.cpp',
+  'test/src/RTC/RTCP/TestFeedbackPsAfb.cpp',
+  'test/src/RTC/RTCP/TestFeedbackPsFir.cpp',
+  'test/src/RTC/RTCP/TestFeedbackPsLei.cpp',
+  'test/src/RTC/RTCP/TestFeedbackPsPli.cpp',
+  'test/src/RTC/RTCP/TestFeedbackPsRemb.cpp',
+  'test/src/RTC/RTCP/TestFeedbackPsRpsi.cpp',
+  'test/src/RTC/RTCP/TestFeedbackPsSli.cpp',
+  'test/src/RTC/RTCP/TestFeedbackPsTst.cpp',
+  'test/src/RTC/RTCP/TestFeedbackPsVbcm.cpp',
+  'test/src/RTC/RTCP/TestFeedbackRtpEcn.cpp',
+  'test/src/RTC/RTCP/TestFeedbackRtpNack.cpp',
+  'test/src/RTC/RTCP/TestFeedbackRtpSrReq.cpp',
+  'test/src/RTC/RTCP/TestFeedbackRtpTllei.cpp',
+  'test/src/RTC/RTCP/TestFeedbackRtpTmmb.cpp',
+  'test/src/RTC/RTCP/TestFeedbackRtpTransport.cpp',
+  'test/src/RTC/RTCP/TestBye.cpp',
+  'test/src/RTC/RTCP/TestReceiverReport.cpp',
+  'test/src/RTC/RTCP/TestSdes.cpp',
+  'test/src/RTC/RTCP/TestSenderReport.cpp',
+  'test/src/RTC/RTCP/TestPacket.cpp',
+  'test/src/RTC/RTCP/TestXr.cpp',
+  'test/src/RTC/NEW_RTCP/rtcpCommon.cpp',
+  'test/src/RTC/NEW_RTCP/packet/TestByePacket.cpp',
+  'test/src/RTC/SCTP/sctpCommon.cpp',
+  'test/src/RTC/SCTP/association/TestAssociation.cpp',
+  'test/src/RTC/SCTP/association/TestCapabilities.cpp',
+  'test/src/RTC/SCTP/association/TestHeartbeatHandler.cpp',
+  'test/src/RTC/SCTP/association/TestNegotiatedCapabilities.cpp',
+  'test/src/RTC/SCTP/association/TestPacketSender.cpp',
+  'test/src/RTC/SCTP/association/TestStateCookie.cpp',
+  'test/src/RTC/SCTP/association/TestStreamResetHandler.cpp',
+  'test/src/RTC/SCTP/association/TestTransmissionControlBlock.cpp',
+  'test/src/RTC/SCTP/rx/TestDataTracker.cpp',
+  'test/src/RTC/SCTP/rx/TestInterleavedReassemblyStreams.cpp',
+  'test/src/RTC/SCTP/rx/TestReassemblyQueue.cpp',
+  'test/src/RTC/SCTP/rx/TestTraditionalReassemblyStreams.cpp',
+  'test/src/RTC/SCTP/tx/TestOutstandingData.cpp',
+  'test/src/RTC/SCTP/tx/TestRetransmissionErrorCounter.cpp',
+  'test/src/RTC/SCTP/tx/TestRetransmissionQueue.cpp',
+  'test/src/RTC/SCTP/tx/TestRetransmissionTimeout.cpp',
+  'test/src/RTC/SCTP/tx/TestRoundRobinSendQueue.cpp',
+  'test/src/RTC/SCTP/tx/TestOutstandingData.cpp',
+  'test/src/RTC/SCTP/tx/TestStreamScheduler.cpp',
+  'test/src/RTC/SCTP/packet/TestPacket.cpp',
+  'test/src/RTC/SCTP/packet/TestChunk.cpp',
+  'test/src/RTC/SCTP/packet/TestParameter.cpp',
+  'test/src/RTC/SCTP/packet/TestErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestDataChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestInitChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestInitAckChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestSackChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestHeartbeatRequestChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestHeartbeatAckChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestAbortAssociationChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestShutdownChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestShutdownAckChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestOperationErrorChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestCookieEchoChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestCookieAckChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestShutdownCompleteChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestForwardTsnChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestReConfigChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestIDataChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestIForwardTsnChunk.cpp',
+  'test/src/RTC/SCTP/packet/chunks/TestUnknownChunk.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestHeartbeatInfoParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestIPv4AddressParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestIPv6AddressParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestStateCookieParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestUnrecognizedParameterParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestCookiePreservativeParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestSupportedAddressTypesParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestForwardTsnSupportedParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestSupportedExtensionsParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestOutgoingSsnResetRequestParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestIncomingSsnResetRequestParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestSsnTsnResetRequestParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestReconfigurationResponseParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestAddOutgoingStreamsRequestParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestAddIncomingStreamsRequestParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestZeroChecksumAcceptableParameter.cpp',
+  'test/src/RTC/SCTP/packet/parameters/TestUnknownParameter.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestInvalidStreamIdentifierErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestMissingMandatoryParameterErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestStaleCookieErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestOutOfResourceErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestUnresolvableAddressErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestUnrecognizedChunkTypeErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestInvalidMandatoryParameterErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestUnrecognizedParametersErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestNoUserDataErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestCookieReceivedWhileShuttingDownErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestRestartOfAnAssociationWithNewAddressesErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestUserInitiatedAbortErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestProtocolViolationErrorCause.cpp',
+  'test/src/RTC/SCTP/packet/errorCauses/TestUnknownErrorCause.cpp',
+  'test/src/Utils/TestBits.cpp',
+  'test/src/Utils/TestByte.cpp',
+  'test/src/Utils/TestCrypto.cpp',
+  'test/src/Utils/TestIP.cpp',
+  'test/src/Utils/TestNumber.cpp',
+  'test/src/Utils/TestString.cpp',
+  'test/src/Utils/TestTime.cpp',
+  'test/src/Utils/TestUnwrappedSequenceNumber.cpp',
+]
+
+mediasoup_worker_test = executable(
+  'mediasoup-worker-test',
+  build_by_default: false,
+  install: true,
+  install_tag: 'mediasoup-worker-test',
+  dependencies: dependencies,
+  sources: common_sources + test_sources + mock_sources,
+  include_directories: include_directories(
+    'include',
+  ),
+  cpp_args: cpp_args,
+)
+
+test(
+  'mediasoup-worker-test',
+  mediasoup_worker_test,
+  workdir: meson.project_source_root(),
+)
+
+mediasoup_worker_test_asan_address = executable(
+  'mediasoup-worker-test-asan-address',
+  build_by_default: false,
+  install: true,
+  install_tag: 'mediasoup-worker-test-asan-address',
+  dependencies: dependencies,
+  sources: common_sources + test_sources + mock_sources,
+  include_directories: include_directories(
+    'include',
+  ),
+  cpp_args: cpp_args + [
+    '-g',
+    '-O3',
+    '-fno-omit-frame-pointer',
+    '-fsanitize=address',
+  ],
+  link_args: [
+    '-fsanitize=address',
+  ],
+)
+
+test(
+  'mediasoup-worker-test-asan-address',
+  mediasoup_worker_test_asan_address,
+  workdir: meson.project_source_root(),
+)
+
+mediasoup_worker_test_asan_undefined = executable(
+  'mediasoup-worker-test-asan-undefined',
+  build_by_default: false,
+  install: true,
+  install_tag: 'mediasoup-worker-test-asan-undefined',
+  dependencies: dependencies,
+  sources: common_sources + test_sources + mock_sources,
+  include_directories: include_directories(
+    'include',
+  ),
+  cpp_args: cpp_args + [
+    '-g',
+    '-O3',
+    '-fno-omit-frame-pointer',
+    '-fsanitize=undefined',
+  ],
+  link_args: [
+    '-fsanitize=undefined',
+  ],
+)
+
+test(
+  'mediasoup-worker-test-asan-undefined',
+  mediasoup_worker_test_asan_undefined,
+  workdir: meson.project_source_root(),
+)
+
+fuzzer_sources = [
+  'fuzzer/src/fuzzer.cpp',
+  'fuzzer/src/FuzzerUtils.cpp',
+  'fuzzer/src/RTC/FuzzerDtlsTransport.cpp',
+  'fuzzer/src/RTC/FuzzerRateCalculator.cpp',
+  'fuzzer/src/RTC/FuzzerSeqManager.cpp',
+  'fuzzer/src/RTC/FuzzerTrendCalculator.cpp',
+  'fuzzer/src/RTC/ICE/FuzzerStunPacket.cpp',
+  'fuzzer/src/RTC/RTP/FuzzerPacket.cpp',
+  'fuzzer/src/RTC/RTP/FuzzerProbationGenerator.cpp',
+  'fuzzer/src/RTC/RTP/FuzzerRetransmissionBuffer.cpp',
+  'fuzzer/src/RTC/RTP/FuzzerRtpStreamSend.cpp',
+  'fuzzer/src/RTC/RTP/Codecs/FuzzerOpus.cpp',
+  'fuzzer/src/RTC/RTP/Codecs/FuzzerAV1.cpp',
+  'fuzzer/src/RTC/RTP/Codecs/FuzzerH264.cpp',
+  'fuzzer/src/RTC/RTP/Codecs/FuzzerVP8.cpp',
+  'fuzzer/src/RTC/RTP/Codecs/FuzzerVP9.cpp',
+  'fuzzer/src/RTC/RTP/Codecs/FuzzerDependencyDescriptor.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerBye.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackPs.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackPsAfb.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackPsFir.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackPsLei.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackPsPli.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackPsRemb.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackPsRpsi.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackPsSli.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackPsTst.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackPsVbcm.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackRtp.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackRtpEcn.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackRtpNack.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackRtpSrReq.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackRtpTllei.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackRtpTmmb.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerFeedbackRtpTransport.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerPacket.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerReceiverReport.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerSdes.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerSenderReport.cpp',
+  'fuzzer/src/RTC/RTCP/FuzzerXr.cpp',
+  'fuzzer/src/RTC/SCTP/association/FuzzerStateCookie.cpp',
+  'fuzzer/src/RTC/SCTP/packet/FuzzerPacket.cpp',
+]
+
+executable(
+  'mediasoup-worker-fuzzer',
+  build_by_default: false,
+  install: true,
+  install_tag: 'mediasoup-worker-fuzzer',
+  dependencies: dependencies,
+  sources: common_sources + fuzzer_sources + mock_sources,
+  include_directories: include_directories(
+    'include',
+    'fuzzer/include'
+  ),
+  cpp_args: cpp_args + [
+    '-g',
+    '-O3',
+    '-fno-omit-frame-pointer',
+    '-fsanitize=address,undefined,fuzzer',
+  ],
+  link_args: [
+    '-fsanitize=address,undefined,fuzzer',
+  ],
+)

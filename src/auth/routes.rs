@@ -1,20 +1,250 @@
 #![forbid(unsafe_code)]
 
-use crate::auth::{password, jwt, session, types::*};
-use crate::signaling::SignalingServer;
-use axum::{extract::State, http::{header, HeaderMap}, Json};
+use crate::auth::{jwt, password, session, types::*};
+use crate::signaling::{ClientIp, SignalingServer};
+use axum::{
+    Extension, Json,
+    extract::State,
+    http::{HeaderMap, HeaderValue, StatusCode, header},
+};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use serde::Deserialize;
 use serde_json::Value;
-use webauthn_rs::prelude::*;
 use tracing::{info, warn};
+use uuid::Uuid;
+use webauthn_rs::prelude::*;
+
+const REFRESH_COOKIE_NAME: &str = "__Host-refresh_token";
+const MAX_EMAIL_LEN: usize = 255;
+const MAX_DISPLAY_NAME_LEN: usize = 64;
+const MAX_PASSWORD_LEN: usize = 128;
+const GLOBAL_USER_REGISTRATION_LOCK: i64 = 7_349_872_340_911;
+// A valid Argon2id hash using the same default work factors as real account
+// hashes. Unknown and passwordless accounts verify against this value so the
+// login path does not disclose account state through an obvious timing gap.
+const DUMMY_PASSWORD_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$Zml4ZWQtYXV0aC1zYWx0IQ$56/mxjo1tyWyHRqsMxTLQs/Zunrj6km+QS8vLNAMeFo";
+
+#[derive(Debug, Deserialize)]
+pub struct PasskeyRegisterStartRequest {
+    email: String,
+    display_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PasskeyLoginStartRequest {
+    email: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PasskeyRegisterFinishRequest {
+    ceremony_id: String,
+    credential: RegisterPublicKeyCredential,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PasskeyLoginFinishRequest {
+    ceremony_id: String,
+    credential: PublicKeyCredential,
+}
 
 fn refresh_cookie_headers(raw_token: &str) -> HeaderMap {
-    let mut headers = HeaderMap::new();
+    let mut headers = no_store_headers();
     let cookie = format!(
-        "refresh_token={}; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh; Max-Age=604800",
-        raw_token
+        "{REFRESH_COOKIE_NAME}={raw_token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800"
     );
-    headers.insert(header::SET_COOKIE, cookie.parse().unwrap());
+    headers.append(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&cookie).expect("server-generated refresh cookie is valid"),
+    );
+    // Best-effort cleanup for old host-only cookies. A Domain-scoped legacy
+    // cookie cannot be cleared here, so authentication deliberately ignores
+    // the legacy name entirely (see refresh_token_from_headers).
+    headers.append(
+        header::SET_COOKIE,
+        HeaderValue::from_static(
+            "refresh_token=; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh; Max-Age=0",
+        ),
+    );
     headers
+}
+
+fn clear_refresh_cookie_headers() -> HeaderMap {
+    let mut headers = no_store_headers();
+    headers.append(
+        header::SET_COOKIE,
+        HeaderValue::from_static(
+            "__Host-refresh_token=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
+        ),
+    );
+    headers.append(
+        header::SET_COOKIE,
+        HeaderValue::from_static(
+            "refresh_token=; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh; Max-Age=0",
+        ),
+    );
+    headers
+}
+
+fn no_store_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store, max-age=0"),
+    );
+    headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+    headers
+}
+
+fn refresh_token_from_headers(headers: &HeaderMap) -> Option<&str> {
+    cookie_value(headers, REFRESH_COOKIE_NAME).filter(|token| {
+        !token.is_empty()
+            && token.len() <= 128
+            && token
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    })
+}
+
+fn cookie_value<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
+    headers
+        .get_all(header::COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(';'))
+        .filter_map(|cookie| cookie.trim().split_once('='))
+        .find_map(|(cookie_name, value)| (cookie_name == name).then_some(value))
+}
+
+fn validate_email(email: &str) -> Result<(), AuthError> {
+    let valid_length = !email.is_empty() && email.len() <= MAX_EMAIL_LEN;
+    let valid_characters = email.is_ascii()
+        && !email
+            .chars()
+            .any(|character| character.is_control() || character.is_whitespace());
+    let valid_shape = email.split_once('@').is_some_and(|(local, domain)| {
+        !local.is_empty() && !domain.is_empty() && !domain.contains('@')
+    });
+
+    if valid_length && valid_characters && valid_shape {
+        Ok(())
+    } else {
+        Err(AuthError::InvalidCredentials)
+    }
+}
+
+fn canonicalize_email(email: &str) -> Result<String, AuthError> {
+    let canonical = email.trim().to_ascii_lowercase();
+    validate_email(&canonical)?;
+    Ok(canonical)
+}
+
+fn validate_display_name(display_name: &str) -> Result<(), AuthError> {
+    if !display_name.trim().is_empty()
+        && display_name.len() <= MAX_DISPLAY_NAME_LEN
+        && !display_name.chars().any(char::is_control)
+    {
+        Ok(())
+    } else {
+        Err(AuthError::InvalidCredentials)
+    }
+}
+
+fn validate_ceremony_id(ceremony_id: &str) -> Result<(), AuthError> {
+    Uuid::parse_str(ceremony_id)
+        .map(|_| ())
+        .map_err(|_| AuthError::WebAuthnError("Invalid ceremony".into()))
+}
+
+fn add_ceremony_id(mut response: Value, ceremony_id: String) -> Result<Value, AuthError> {
+    response
+        .as_object_mut()
+        .ok_or_else(|| AuthError::WebAuthnError("Invalid challenge response".into()))?
+        .insert("ceremony_id".into(), Value::String(ceremony_id));
+    Ok(response)
+}
+
+fn credential_id(passkey: &Passkey) -> String {
+    URL_SAFE_NO_PAD.encode(passkey.cred_id().as_ref())
+}
+
+fn authentication_credential_id(result: &AuthenticationResult) -> String {
+    URL_SAFE_NO_PAD.encode(result.cred_id().as_ref())
+}
+
+fn database_error(error: sqlx::Error) -> AuthError {
+    AuthError::DatabaseError(error.to_string())
+}
+
+fn user_insert_error(error: sqlx::Error) -> AuthError {
+    if let sqlx::Error::Database(database_error) = &error
+        && database_error.code().as_deref() == Some("23505")
+    {
+        return AuthError::EmailAlreadyExists;
+    }
+    database_error(error)
+}
+
+fn credential_insert_error(error: sqlx::Error) -> AuthError {
+    if let sqlx::Error::Database(database_error) = &error
+        && database_error.code().as_deref() == Some("23505")
+    {
+        return AuthError::WebAuthnError("Credential already registered".into());
+    }
+    database_error(error)
+}
+
+async fn enforce_user_capacity(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    max_users: i64,
+) -> Result<(), AuthError> {
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(GLOBAL_USER_REGISTRATION_LOCK)
+        .execute(&mut **transaction)
+        .await
+        .map_err(database_error)?;
+    let user_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+        .fetch_one(&mut **transaction)
+        .await
+        .map_err(database_error)?;
+    if user_count >= max_users {
+        return Err(AuthError::RegistrationDisabled);
+    }
+    Ok(())
+}
+
+async fn hash_password_async(
+    password_value: String,
+    permit: tokio::sync::OwnedSemaphorePermit,
+) -> Result<String, AuthError> {
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        password::hash_password(&password_value)
+    })
+    .await
+    .map_err(|error| AuthError::DatabaseError(format!("Password worker failed: {error}")))?
+    .map_err(|error| AuthError::DatabaseError(format!("Hash error: {error}")))
+}
+
+async fn verify_password_async(
+    password_value: String,
+    password_hash: String,
+    permit: tokio::sync::OwnedSemaphorePermit,
+) -> Result<bool, AuthError> {
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        password::verify_password(&password_value, &password_hash)
+    })
+    .await
+    .map_err(|error| AuthError::DatabaseError(format!("Password worker failed: {error}")))?
+    .map_err(|error| AuthError::DatabaseError(format!("Verify error: {error}")))
+}
+
+fn acquire_auth_request(
+    server: &SignalingServer,
+) -> Result<tokio::sync::OwnedSemaphorePermit, AuthError> {
+    server
+        .try_acquire_auth_request()
+        .ok_or(AuthError::ServiceBusy)
 }
 
 /// POST /api/auth/register
@@ -22,72 +252,66 @@ pub async fn register(
     State(server): State<SignalingServer>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
+    if !server.registration_enabled() {
+        return Err(AuthError::RegistrationDisabled);
+    }
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
-
-    // Validate input
-    if req.email.is_empty() || !req.email.contains('@') || req.email.len() > 255 {
-        return Err(AuthError::InvalidCredentials);
-    }
-    if req.password.len() < 8 || req.password.len() > 128 {
-        return Err(AuthError::InvalidCredentials);
-    }
-    if req.display_name.is_empty() || req.display_name.len() > 64 {
-        return Err(AuthError::InvalidCredentials);
+    if !jwt::secret_is_strong(secret) {
+        return Err(AuthError::NotConfigured);
     }
 
-    // Check if email already exists
-    let exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)"
-    )
-    .bind(&req.email)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+    let email = canonicalize_email(&req.email)?;
+    validate_display_name(&req.display_name)?;
+    if req.password.len() < 8 || req.password.len() > MAX_PASSWORD_LEN {
+        return Err(AuthError::InvalidCredentials);
+    }
+    let _request_permit = acquire_auth_request(&server)?;
 
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")
+        .bind(&email)
+        .fetch_one(pool)
+        .await
+        .map_err(database_error)?;
     if exists {
         return Err(AuthError::EmailAlreadyExists);
     }
 
-    // Hash password
-    let hash = password::hash_password(&req.password)
-        .map_err(|e| AuthError::DatabaseError(format!("Hash error: {e}")))?;
+    let password_permit = server
+        .try_acquire_password_work()
+        .ok_or(AuthError::RateLimited)?;
+    let password_hash = hash_password_async(req.password, password_permit).await?;
+    let refresh_token = session::generate_refresh_token()?;
+    let mut transaction = pool.begin().await.map_err(database_error)?;
+    enforce_user_capacity(&mut transaction, server.max_users()).await?;
 
-    // Insert user
-    let row = sqlx::query_as::<_, (uuid::Uuid, String, String)>(
-        "INSERT INTO users (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, display_name"
+    let row = sqlx::query_as::<_, (Uuid, String, String)>(
+        "INSERT INTO users (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, display_name",
     )
-    .bind(&req.email)
+    .bind(&email)
     .bind(&req.display_name)
-    .bind(&hash)
-    .fetch_one(pool)
+    .bind(&password_hash)
+    .fetch_one(&mut *transaction)
     .await
-    .map_err(|e| {
-        if let sqlx::Error::Database(ref db_err) = e {
-            if db_err.code().as_deref() == Some("23505") {
-                return AuthError::EmailAlreadyExists;
-            }
-        }
-        AuthError::DatabaseError(e.to_string())
-    })?;
+    .map_err(user_insert_error)?;
 
     let user_id = row.0.to_string();
     let token = jwt::create_token(&user_id, &row.2, secret)?;
+    session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
+    transaction.commit().await.map_err(database_error)?;
 
-    let (raw_refresh, hash_refresh) = session::generate_refresh_token();
-    session::create_session(pool, &row.0, &hash_refresh).await?;
-    let headers = refresh_cookie_headers(&raw_refresh);
-
-    info!("User registered: {} ({})", req.email, user_id);
-
-    Ok((headers, Json(AuthResponse {
-        token,
-        user: UserInfo {
-            id: user_id,
-            email: row.1,
-            display_name: row.2,
-        },
-    })))
+    info!(user_id, "User registered");
+    Ok((
+        refresh_cookie_headers(&refresh_token.raw),
+        Json(AuthResponse {
+            token,
+            user: UserInfo {
+                id: user_id,
+                email: row.1,
+                display_name: row.2,
+            },
+        }),
+    ))
 }
 
 /// POST /api/auth/login
@@ -97,49 +321,66 @@ pub async fn login(
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
+    if !jwt::secret_is_strong(secret) {
+        return Err(AuthError::NotConfigured);
+    }
+    let email = canonicalize_email(&req.email)?;
+    if !server.allow_auth_principal(&email) {
+        return Err(AuthError::RateLimited);
+    }
+    if req.password.len() > MAX_PASSWORD_LEN {
+        return Err(AuthError::InvalidCredentials);
+    }
+    let _request_permit = acquire_auth_request(&server)?;
 
-    // Look up user by email
-    let row = sqlx::query_as::<_, (uuid::Uuid, String, String, Option<String>)>(
-        "SELECT id, email, display_name, password_hash FROM users WHERE email = $1"
+    let row = sqlx::query_as::<_, (Uuid, String, String, Option<String>)>(
+        "SELECT id, email, display_name, password_hash FROM users WHERE email = $1",
     )
-    .bind(&req.email)
+    .bind(&email)
     .fetch_optional(pool)
     .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))?
-    .ok_or(AuthError::InvalidCredentials)?;
+    .map_err(database_error)?;
 
-    // Reject excessively long passwords before bcrypt (DoS prevention)
-    if req.password.len() > 128 {
+    let has_password = row.as_ref().and_then(|record| record.3.as_ref()).is_some();
+    let password_hash = row
+        .as_ref()
+        .and_then(|record| record.3.as_deref())
+        .unwrap_or(DUMMY_PASSWORD_HASH)
+        .to_owned();
+    let password_permit = server
+        .try_acquire_password_work()
+        .ok_or(AuthError::RateLimited)?;
+    let password_matches =
+        match verify_password_async(req.password, password_hash, password_permit).await {
+            Ok(matches) => matches,
+            Err(error) => {
+                warn!(?error, "Stored password hash could not be verified");
+                false
+            }
+        };
+    if !has_password || !password_matches {
+        warn!("Failed login attempt");
         return Err(AuthError::InvalidCredentials);
     }
-
-    // Verify password
-    let password_hash = row.3.as_deref().ok_or(AuthError::InvalidCredentials)?;
-    let valid = password::verify_password(&req.password, password_hash)
-        .map_err(|e| AuthError::DatabaseError(format!("Verify error: {e}")))?;
-
-    if !valid {
-        warn!("Failed login attempt for {}", req.email);
-        return Err(AuthError::InvalidCredentials);
-    }
+    let row = row.ok_or(AuthError::InvalidCredentials)?;
 
     let user_id = row.0.to_string();
     let token = jwt::create_token(&user_id, &row.2, secret)?;
+    let refresh_token = session::generate_refresh_token()?;
+    session::create_session(pool, &row.0, &refresh_token).await?;
 
-    let (raw_refresh, hash_refresh) = session::generate_refresh_token();
-    session::create_session(pool, &row.0, &hash_refresh).await?;
-    let headers = refresh_cookie_headers(&raw_refresh);
-
-    info!("User logged in: {} ({})", req.email, user_id);
-
-    Ok((headers, Json(AuthResponse {
-        token,
-        user: UserInfo {
-            id: user_id,
-            email: row.1,
-            display_name: row.2,
-        },
-    })))
+    info!(user_id, "User logged in");
+    Ok((
+        refresh_cookie_headers(&refresh_token.raw),
+        Json(AuthResponse {
+            token,
+            user: UserInfo {
+                id: user_id,
+                email: row.1,
+                display_name: row.2,
+            },
+        }),
+    ))
 }
 
 /// POST /api/auth/refresh
@@ -149,249 +390,449 @@ pub async fn refresh(
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
+    if !jwt::secret_is_strong(secret) {
+        return Err(AuthError::NotConfigured);
+    }
+    let raw_token = refresh_token_from_headers(&headers).ok_or(AuthError::MissingToken)?;
+    let _request_permit = acquire_auth_request(&server)?;
+    let mut transaction = pool.begin().await.map_err(database_error)?;
 
-    let cookie_header = headers.get(header::COOKIE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-
-    let raw_token = cookie_header
-        .split(';')
-        .find_map(|c| {
-            let c = c.trim();
-            c.strip_prefix("refresh_token=")
-        })
-        .ok_or(AuthError::MissingToken)?;
-
-    let user_id = session::consume_refresh_token(pool, raw_token).await?;
-
+    let (user_id, refresh_token) =
+        match session::rotate_refresh_token_with(&mut transaction, raw_token).await? {
+            session::RefreshRotation::Rotated {
+                user_id,
+                refresh_token,
+            } => (user_id, refresh_token),
+            session::RefreshRotation::ConcurrentRequest => {
+                // The winning response will install the successor cookie. Do
+                // not authenticate this consumed bearer, but also do not let a
+                // near-simultaneous browser request revoke that successor.
+                transaction.commit().await.map_err(database_error)?;
+                return Err(AuthError::InvalidToken);
+            }
+            session::RefreshRotation::ReuseDetected => {
+                // Reuse revocation is a durable security action. Commit it
+                // before returning the same non-oracular error as any invalid
+                // token.
+                transaction.commit().await.map_err(database_error)?;
+                warn!("Refresh-token reuse detected; revoked session family");
+                return Err(AuthError::InvalidToken);
+            }
+        };
     let row = sqlx::query_as::<_, (String, String)>(
-        "SELECT email, display_name FROM users WHERE id = $1"
+        "SELECT email, display_name FROM users WHERE id = $1",
     )
-    .bind(&user_id)
-    .fetch_optional(pool)
+    .bind(user_id)
+    .fetch_optional(&mut *transaction)
     .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))?
+    .map_err(database_error)?
     .ok_or(AuthError::UserNotFound)?;
 
-    let user_id_str = user_id.to_string();
-    let token = jwt::create_token(&user_id_str, &row.1, secret)?;
+    let user_id_string = user_id.to_string();
+    let token = jwt::create_token(&user_id_string, &row.1, secret)?;
+    transaction.commit().await.map_err(database_error)?;
+    session::spawn_expired_cleanup(pool);
 
-    let (raw_refresh, hash_refresh) = session::generate_refresh_token();
-    session::create_session(pool, &user_id, &hash_refresh).await?;
+    Ok((
+        refresh_cookie_headers(&refresh_token.raw),
+        Json(AuthResponse {
+            token,
+            user: UserInfo {
+                id: user_id_string,
+                email: row.0,
+                display_name: row.1,
+            },
+        }),
+    ))
+}
 
-    let resp_headers = refresh_cookie_headers(&raw_refresh);
+/// POST /api/auth/logout
+pub async fn logout(
+    State(server): State<SignalingServer>,
+    headers: HeaderMap,
+) -> (HeaderMap, StatusCode) {
+    let response_headers = clear_refresh_cookie_headers();
+    let Some(raw_token) = refresh_token_from_headers(&headers) else {
+        return (response_headers, StatusCode::NO_CONTENT);
+    };
+    let Some(pool) = server.db_pool() else {
+        return (response_headers, StatusCode::NO_CONTENT);
+    };
+    let Some(_request_permit) = server.try_acquire_auth_request() else {
+        let mut headers = no_store_headers();
+        headers.insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
+        return (headers, StatusCode::SERVICE_UNAVAILABLE);
+    };
 
-    Ok((resp_headers, Json(AuthResponse {
-        token,
-        user: UserInfo {
-            id: user_id_str,
-            email: row.0,
-            display_name: row.1,
-        },
-    })))
+    match session::delete_session_by_token(pool, raw_token).await {
+        Ok(_) => (response_headers, StatusCode::NO_CONTENT),
+        Err(error) => {
+            warn!(?error, "Failed to revoke refresh session during logout");
+            // Retain the HttpOnly cookie so the caller can retry revocation;
+            // clearing it here would discard the only handle to a still-live
+            // stolen server-side session.
+            (no_store_headers(), StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 /// POST /api/auth/passkey/register/start
-pub async fn passkey_register_start(
+pub(crate) async fn passkey_register_start(
     State(server): State<SignalingServer>,
-    Json(req): Json<RegisterRequest>,
+    Extension(ClientIp(source_ip)): Extension<ClientIp>,
+    Json(req): Json<PasskeyRegisterStartRequest>,
 ) -> Result<Json<Value>, AuthError> {
+    if !server.registration_enabled() {
+        return Err(AuthError::RegistrationDisabled);
+    }
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
-
-    if req.email.is_empty() || !req.email.contains('@') {
-        return Err(AuthError::InvalidCredentials);
+    let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
+    if !jwt::secret_is_strong(secret) {
+        return Err(AuthError::NotConfigured);
     }
-    if req.display_name.is_empty() || req.display_name.len() > 64 {
-        return Err(AuthError::InvalidCredentials);
-    }
+    let email = canonicalize_email(&req.email)?;
+    validate_display_name(&req.display_name)?;
+    let _request_permit = acquire_auth_request(&server)?;
 
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")
-        .bind(&req.email)
+        .bind(&email)
         .fetch_one(pool)
         .await
-        .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
-
+        .map_err(database_error)?;
     if exists {
         return Err(AuthError::EmailAlreadyExists);
     }
 
     let user_id = Uuid::new_v4();
-
-    let (ccr, reg_state) = webauthn
-        .start_passkey_registration(user_id, &req.email, &req.display_name, None)
-        .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
-
-    if !store.store_registration(&req.email, reg_state, user_id, req.email.clone(), req.display_name.clone()) {
-        return Err(AuthError::WebAuthnError("Too many pending registrations, try again later".into()));
-    }
-
-    let response = serde_json::to_value(&ccr)
-        .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
-
-    Ok(Json(response))
+    let (challenge, state) = webauthn
+        .start_passkey_registration(user_id, &email, &req.display_name, None)
+        .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
+    let ceremony_id = store
+        .store_registration(state, user_id, email, req.display_name.clone(), source_ip)
+        .ok_or_else(|| {
+            AuthError::WebAuthnError("Too many pending registrations, try again later".into())
+        })?;
+    let response = serde_json::to_value(challenge)
+        .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
+    Ok(Json(add_ceremony_id(response, ceremony_id)?))
 }
 
 /// POST /api/auth/passkey/register/finish
 pub async fn passkey_register_finish(
     State(server): State<SignalingServer>,
-    Json(body): Json<Value>,
+    Json(body): Json<PasskeyRegisterFinishRequest>,
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
+    if !server.registration_enabled() {
+        return Err(AuthError::RegistrationDisabled);
+    }
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
+    if !jwt::secret_is_strong(secret) {
+        return Err(AuthError::NotConfigured);
+    }
+    validate_ceremony_id(&body.ceremony_id)?;
+    let _request_permit = acquire_auth_request(&server)?;
 
-    let email_key = body["email"].as_str().ok_or(AuthError::WebAuthnError("Missing email".into()))?;
-    let credential: RegisterPublicKeyCredential = serde_json::from_value(body["credential"].clone())
-        .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
-
-    let reg_data = store.take_registration(email_key)
-        .ok_or(AuthError::WebAuthnError("No pending registration or challenge expired".into()))?;
-
+    let registration = store.take_registration(&body.ceremony_id).ok_or_else(|| {
+        AuthError::WebAuthnError("No pending registration or challenge expired".into())
+    })?;
     let passkey = webauthn
-        .finish_passkey_registration(&credential, &reg_data.state)
-        .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
-
-    let user_id = reg_data.user_id;
-    let email = &reg_data.email;
-    let display_name = &reg_data.display_name;
-
-    sqlx::query(
-        "INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3)"
-    )
-    .bind(&user_id)
-    .bind(email)
-    .bind(display_name)
-    .execute(pool)
-    .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
-
+        .finish_passkey_registration(&body.credential, &registration.state)
+        .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
+    let passkey_id = credential_id(&passkey);
     let credential_json = serde_json::to_value(&passkey)
-        .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
+        .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
+    let refresh_token = session::generate_refresh_token()?;
+    let mut transaction = pool.begin().await.map_err(database_error)?;
+    enforce_user_capacity(&mut transaction, server.max_users()).await?;
 
+    sqlx::query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3)")
+        .bind(registration.user_id)
+        .bind(&registration.email)
+        .bind(&registration.display_name)
+        .execute(&mut *transaction)
+        .await
+        .map_err(user_insert_error)?;
     sqlx::query(
-        "INSERT INTO webauthn_credentials (user_id, credential_json) VALUES ($1, $2)"
+        "INSERT INTO webauthn_credentials (user_id, credential_id, credential_json) VALUES ($1, $2, $3)",
     )
-    .bind(&user_id)
+    .bind(registration.user_id)
+    .bind(&passkey_id)
     .bind(&credential_json)
-    .execute(pool)
+    .execute(&mut *transaction)
     .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+    .map_err(credential_insert_error)?;
+    session::create_session_with(&mut transaction, &registration.user_id, &refresh_token).await?;
 
-    let user_id_str = user_id.to_string();
-    let token = jwt::create_token(&user_id_str, display_name, secret)?;
+    let user_id = registration.user_id.to_string();
+    let token = jwt::create_token(&user_id, &registration.display_name, secret)?;
+    transaction.commit().await.map_err(database_error)?;
+    info!(user_id, "User registered via passkey");
 
-    let (raw_refresh, hash_refresh) = session::generate_refresh_token();
-    session::create_session(pool, &user_id, &hash_refresh).await?;
-
-    info!("User registered via passkey: {} ({})", email, user_id_str);
-
-    Ok((refresh_cookie_headers(&raw_refresh), Json(AuthResponse {
-        token,
-        user: UserInfo {
-            id: user_id_str,
-            email: email.to_string(),
-            display_name: display_name.to_string(),
-        },
-    })))
+    Ok((
+        refresh_cookie_headers(&refresh_token.raw),
+        Json(AuthResponse {
+            token,
+            user: UserInfo {
+                id: user_id,
+                email: registration.email,
+                display_name: registration.display_name,
+            },
+        }),
+    ))
 }
 
 /// POST /api/auth/passkey/login/start
-pub async fn passkey_login_start(
+pub(crate) async fn passkey_login_start(
     State(server): State<SignalingServer>,
-    Json(body): Json<Value>,
+    Extension(ClientIp(source_ip)): Extension<ClientIp>,
+    Json(body): Json<PasskeyLoginStartRequest>,
 ) -> Result<Json<Value>, AuthError> {
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
-
-    let email = body["email"].as_str().ok_or(AuthError::InvalidCredentials)?;
-
-    let user_row = sqlx::query_as::<_, (uuid::Uuid,)>(
-        "SELECT id FROM users WHERE email = $1"
-    )
-    .bind(email)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))?
-    .ok_or(AuthError::UserNotFound)?;
-
-    let cred_rows = sqlx::query_as::<_, (serde_json::Value,)>(
-        "SELECT credential_json FROM webauthn_credentials WHERE user_id = $1"
-    )
-    .bind(&user_row.0)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
-
-    if cred_rows.is_empty() {
-        return Err(AuthError::WebAuthnError("No passkeys registered".into()));
+    let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
+    if !jwt::secret_is_strong(secret) {
+        return Err(AuthError::NotConfigured);
     }
+    let email = canonicalize_email(&body.email)?;
+    if !server.allow_auth_principal(&email) {
+        return Err(AuthError::RateLimited);
+    }
+    let _request_permit = acquire_auth_request(&server)?;
 
-    let passkeys: Vec<Passkey> = cred_rows
-        .iter()
-        .filter_map(|r| serde_json::from_value(r.0.clone()).ok())
-        .collect();
+    let user_id: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
+        .bind(&email)
+        .fetch_optional(pool)
+        .await
+        .map_err(database_error)?
+        .ok_or(AuthError::InvalidCredentials)?;
+    let credential_rows: Vec<Value> =
+        sqlx::query_scalar("SELECT credential_json FROM webauthn_credentials WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_all(pool)
+            .await
+            .map_err(database_error)?;
+    if credential_rows.is_empty() {
+        return Err(AuthError::InvalidCredentials);
+    }
+    let passkeys = credential_rows
+        .into_iter()
+        .map(|value| {
+            serde_json::from_value(value)
+                .map_err(|error| AuthError::DatabaseError(format!("Invalid credential: {error}")))
+        })
+        .collect::<Result<Vec<Passkey>, AuthError>>()?;
 
-    let (rcr, auth_state) = webauthn
+    let (challenge, state) = webauthn
         .start_passkey_authentication(&passkeys)
-        .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
-
-    if !store.store_authentication(email, auth_state) {
-        return Err(AuthError::WebAuthnError("Too many pending authentications, try again later".into()));
-    }
-
-    let response = serde_json::to_value(&rcr)
-        .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
-
-    Ok(Json(response))
+        .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
+    let ceremony_id = store
+        .store_authentication(state, user_id, source_ip)
+        .ok_or_else(|| {
+            AuthError::WebAuthnError("Too many pending authentications, try again later".into())
+        })?;
+    let response = serde_json::to_value(challenge)
+        .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
+    Ok(Json(add_ceremony_id(response, ceremony_id)?))
 }
 
 /// POST /api/auth/passkey/login/finish
 pub async fn passkey_login_finish(
     State(server): State<SignalingServer>,
-    Json(body): Json<Value>,
+    Json(body): Json<PasskeyLoginFinishRequest>,
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
+    if !jwt::secret_is_strong(secret) {
+        return Err(AuthError::NotConfigured);
+    }
+    validate_ceremony_id(&body.ceremony_id)?;
+    let _request_permit = acquire_auth_request(&server)?;
 
-    let email = body["email"].as_str().ok_or(AuthError::InvalidCredentials)?;
-    let credential: PublicKeyCredential = serde_json::from_value(body["credential"].clone())
-        .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
+    let authentication = store
+        .take_authentication(&body.ceremony_id)
+        .ok_or_else(|| {
+            AuthError::WebAuthnError("No pending authentication or challenge expired".into())
+        })?;
+    let result = webauthn
+        .finish_passkey_authentication(&body.credential, &authentication.state)
+        .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
+    let passkey_id = authentication_credential_id(&result);
+    let refresh_token = session::generate_refresh_token()?;
+    let mut transaction = pool.begin().await.map_err(database_error)?;
 
-    let auth_state = store.take_authentication(email)
-        .ok_or(AuthError::WebAuthnError("No pending authentication or challenge expired".into()))?;
-
-    let _auth_result = webauthn
-        .finish_passkey_authentication(&credential, &auth_state)
-        .map_err(|e| AuthError::WebAuthnError(e.to_string()))?;
-
-    let row = sqlx::query_as::<_, (uuid::Uuid, String, String)>(
-        "SELECT id, email, display_name FROM users WHERE email = $1"
+    let user = sqlx::query_as::<_, (String, String)>(
+        "SELECT email, display_name FROM users WHERE id = $1",
     )
-    .bind(email)
-    .fetch_one(pool)
+    .bind(authentication.user_id)
+    .fetch_optional(&mut *transaction)
     .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+    .map_err(database_error)?
+    .ok_or(AuthError::UserNotFound)?;
+    let credential_json: Value = sqlx::query_scalar(
+        "SELECT credential_json FROM webauthn_credentials WHERE user_id = $1 AND credential_id = $2 FOR UPDATE",
+    )
+    .bind(authentication.user_id)
+    .bind(&passkey_id)
+    .fetch_optional(&mut *transaction)
+    .await
+    .map_err(database_error)?
+    .ok_or_else(|| AuthError::WebAuthnError("Credential not registered to user".into()))?;
 
-    let user_id_str = row.0.to_string();
-    let token = jwt::create_token(&user_id_str, &row.2, secret)?;
+    // The WebAuthn state contains the counter observed at ceremony start. Check
+    // the locked, current row too so concurrent ceremonies cannot accept a
+    // stale or rolled-back counter.
+    let stored_counter = credential_json
+        .pointer("/cred/counter")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let presented_counter = u64::from(result.counter());
+    if (stored_counter > 0 || presented_counter > 0) && presented_counter <= stored_counter {
+        return Err(AuthError::WebAuthnError(
+            "Credential counter indicates possible cloning".into(),
+        ));
+    }
 
-    let (raw_refresh, hash_refresh) = session::generate_refresh_token();
-    session::create_session(pool, &row.0, &hash_refresh).await?;
+    let mut passkey: Passkey = serde_json::from_value(credential_json)
+        .map_err(|error| AuthError::DatabaseError(format!("Invalid credential: {error}")))?;
+    passkey
+        .update_credential(&result)
+        .ok_or_else(|| AuthError::WebAuthnError("Credential mismatch".into()))?;
+    let updated_credential = serde_json::to_value(passkey)
+        .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
+    sqlx::query(
+        "UPDATE webauthn_credentials SET credential_json = $3 WHERE user_id = $1 AND credential_id = $2",
+    )
+    .bind(authentication.user_id)
+    .bind(&passkey_id)
+    .bind(updated_credential)
+    .execute(&mut *transaction)
+    .await
+    .map_err(database_error)?;
+    session::create_session_with(&mut transaction, &authentication.user_id, &refresh_token).await?;
 
-    info!("User logged in via passkey: {} ({})", email, user_id_str);
+    let user_id = authentication.user_id.to_string();
+    let token = jwt::create_token(&user_id, &user.1, secret)?;
+    transaction.commit().await.map_err(database_error)?;
+    info!(user_id, "User logged in via passkey");
 
-    Ok((refresh_cookie_headers(&raw_refresh), Json(AuthResponse {
-        token,
-        user: UserInfo {
-            id: user_id_str,
-            email: row.1,
-            display_name: row.2,
-        },
-    })))
+    Ok((
+        refresh_cookie_headers(&refresh_token.raw),
+        Json(AuthResponse {
+            token,
+            user: UserInfo {
+                id: user_id,
+                email: user.0,
+                display_name: user.1,
+            },
+        }),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validates_bounded_email_addresses() {
+        assert!(validate_email("alice@example.com").is_ok());
+        assert!(validate_email("aliceexample.com").is_err());
+        assert!(validate_email("alice@@example.com").is_err());
+        assert!(validate_email(" alice@example.com").is_err());
+        assert!(validate_email("alice@exam\nple.com").is_err());
+        let oversized = format!("{}@example.com", "a".repeat(MAX_EMAIL_LEN));
+        assert!(validate_email(&oversized).is_err());
+    }
+
+    #[test]
+    fn canonicalizes_email_addresses_before_identity_lookup() {
+        assert_eq!(
+            canonicalize_email("  Alice@Example.COM  ").unwrap(),
+            "alice@example.com"
+        );
+        assert!(canonicalize_email("álîce@example.com").is_err());
+    }
+
+    #[test]
+    fn dummy_password_hash_is_valid_and_never_matches_an_arbitrary_password() {
+        assert_eq!(
+            password::verify_password("not-the-dummy-password", DUMMY_PASSWORD_HASH).unwrap(),
+            false
+        );
+    }
+
+    #[test]
+    fn prefers_host_prefixed_refresh_cookie() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static(
+                "refresh_token=legacy-token; __Host-refresh_token=current-token",
+            ),
+        );
+        assert_eq!(refresh_token_from_headers(&headers), Some("current-token"));
+    }
+
+    #[test]
+    fn rejects_legacy_refresh_cookie_even_when_it_is_the_only_cookie() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("refresh_token=attacker-controlled-token"),
+        );
+        assert_eq!(refresh_token_from_headers(&headers), None);
+    }
+
+    #[test]
+    fn accepts_the_versioned_opaque_refresh_token_format() {
+        let token = session::generate_refresh_token().unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_str(&format!("__Host-refresh_token={}", token.raw)).unwrap(),
+        );
+        assert_eq!(
+            refresh_token_from_headers(&headers),
+            Some(token.raw.as_str())
+        );
+    }
+
+    #[test]
+    fn rejects_delimiter_characters_not_accepted_by_previous_servers() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("__Host-refresh_token=v1.invalid.invalid"),
+        );
+        assert_eq!(refresh_token_from_headers(&headers), None);
+    }
+
+    #[test]
+    fn refresh_response_sets_host_cookie_and_expires_legacy_cookie() {
+        let headers = refresh_cookie_headers("safe-token");
+        let cookies = headers
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| value.to_str().expect("valid cookie"))
+            .collect::<Vec<_>>();
+        assert!(cookies.iter().any(|cookie| {
+            cookie.starts_with("__Host-refresh_token=safe-token;") && cookie.contains("Path=/;")
+        }));
+        assert!(cookies.iter().any(|cookie| {
+            cookie.starts_with("refresh_token=;") && cookie.contains("Max-Age=0")
+        }));
+        assert_eq!(
+            headers
+                .get(header::CACHE_CONTROL)
+                .and_then(|v| v.to_str().ok()),
+            Some("no-store, max-age=0")
+        );
+    }
 }

@@ -1,0 +1,18 @@
+namespace FBS.SctpParameters;
+
+table SctpParameters {
+    port: uint16;
+    max_send_message_size: uint32;
+    max_receive_message_size: uint32;
+    send_buffer_size: uint32;
+    per_stream_send_queue_limit: uint32;
+    max_receiver_window_buffer_size: uint32;
+    is_data_channel: bool;
+}
+
+table SctpStreamParameters {
+    stream_id: uint16;
+    ordered: bool = null;
+    max_packet_life_time: uint16 = null;
+    max_retransmits: uint16 = null;
+}

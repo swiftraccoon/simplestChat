@@ -1,0 +1,215 @@
+#define MS_CLASS "RTC::SCTP::MissingMandatoryParameterErrorCause"
+// #define MS_LOG_DEV_LEVEL 3
+
+#include "RTC/SCTP/packet/errorCauses/MissingMandatoryParameterErrorCause.hpp"
+#include "Logger.hpp"
+#include "MediaSoupErrors.hpp"
+#include <sstream> // std::ostringstream
+#include <string>
+
+namespace RTC
+{
+	namespace SCTP
+	{
+		/* Class methods. */
+
+		MissingMandatoryParameterErrorCause* MissingMandatoryParameterErrorCause::Parse(
+		  const uint8_t* buffer, size_t bufferLength)
+		{
+			MS_TRACE();
+
+			ErrorCause::ErrorCauseCode causeCode;
+			uint16_t causeLength;
+			uint8_t padding;
+
+			if (!ErrorCause::IsErrorCause(buffer, bufferLength, causeCode, causeLength, padding))
+			{
+				return nullptr;
+			}
+
+			if (causeCode != ErrorCause::ErrorCauseCode::MISSING_MANDATORY_PARAMETER)
+			{
+				MS_WARN_DEV("invalid error cause code");
+
+				return nullptr;
+			}
+
+			return MissingMandatoryParameterErrorCause::ParseStrict(
+			  buffer, bufferLength, causeLength, padding);
+		}
+
+		MissingMandatoryParameterErrorCause* MissingMandatoryParameterErrorCause::Factory(
+		  uint8_t* buffer, size_t bufferLength)
+		{
+			MS_TRACE();
+
+			if (bufferLength < MissingMandatoryParameterErrorCause::MissingMandatoryParameterErrorCauseHeaderLength)
+			{
+				MS_THROW_TYPE_ERROR("buffer too small");
+			}
+
+			auto* errorCause = new MissingMandatoryParameterErrorCause(buffer, bufferLength);
+
+			errorCause->InitializeHeader(
+			  ErrorCause::ErrorCauseCode::MISSING_MANDATORY_PARAMETER,
+			  MissingMandatoryParameterErrorCause::MissingMandatoryParameterErrorCauseHeaderLength);
+
+			// Initialize extra fields.
+			errorCause->SetNumberOfMissingParameters(0);
+
+			// No need to invoke SetLength() since parent constructor invoked it.
+
+			return errorCause;
+		}
+
+		MissingMandatoryParameterErrorCause* MissingMandatoryParameterErrorCause::ParseStrict(
+		  const uint8_t* buffer, size_t bufferLength, uint16_t causeLength, uint8_t padding)
+		{
+			MS_TRACE();
+
+			if (causeLength < MissingMandatoryParameterErrorCause::MissingMandatoryParameterErrorCauseHeaderLength)
+			{
+				MS_WARN_TAG(
+				  sctp,
+				  "MissingMandatoryParameterErrorCause length field must be equal or greater than %zu",
+				  MissingMandatoryParameterErrorCause::MissingMandatoryParameterErrorCauseHeaderLength);
+
+				return nullptr;
+			}
+
+			auto* errorCause =
+			  new MissingMandatoryParameterErrorCause(const_cast<uint8_t*>(buffer), bufferLength);
+
+			// In this chunk we must validate that some fields have correct values.
+			//
+			// NOTE: Must cast result to uint64_t to avoid integer overflow.
+			// See https://github.com/versatica/mediasoup/security/advisories/GHSA-p9cq-fqxc-987w
+			if (
+			  (static_cast<uint64_t>(errorCause->GetNumberOfMissingParameters()) * 2) !=
+			  causeLength -
+			    MissingMandatoryParameterErrorCause::MissingMandatoryParameterErrorCauseHeaderLength)
+			{
+				MS_WARN_TAG(sctp, "wrong values in Number of Missing parameters field");
+
+				delete errorCause;
+				return nullptr;
+			}
+
+			// Must always invoke SetLength() after constructing a Serializable with
+			// not fixed length.
+			errorCause->SetLength(causeLength + padding);
+
+			return errorCause;
+		}
+
+		/* Instance methods. */
+
+		MissingMandatoryParameterErrorCause::MissingMandatoryParameterErrorCause(
+		  uint8_t* buffer, size_t bufferLength)
+		  : ErrorCause(buffer, bufferLength)
+		{
+			MS_TRACE();
+
+			SetLength(MissingMandatoryParameterErrorCause::MissingMandatoryParameterErrorCauseHeaderLength);
+		}
+
+		MissingMandatoryParameterErrorCause::~MissingMandatoryParameterErrorCause()
+		{
+			MS_TRACE();
+		}
+
+		void MissingMandatoryParameterErrorCause::Dump(int indentation) const
+		{
+			MS_TRACE();
+
+			MS_DUMP_CLEAN(indentation, "<SCTP::MissingMandatoryParameterErrorCause>");
+			DumpCommon(indentation);
+			MS_DUMP_CLEAN(
+			  indentation, "  number of missing parameters: %" PRIu32, GetNumberOfMissingParameters());
+			for (uint32_t idx{ 0 }; idx < GetNumberOfMissingParameters(); ++idx)
+			{
+				const auto parameterType = GetMissingParameterTypeAt(idx);
+
+				MS_DUMP_CLEAN(
+				  indentation,
+				  "  - idx: %" PRIu32 ", parameter type: %s (%" PRIu16 ")",
+				  idx,
+				  Parameter::ParameterTypeToString(parameterType).c_str(),
+				  static_cast<uint16_t>(parameterType));
+			}
+			MS_DUMP_CLEAN(indentation, "</SCTP::MissingMandatoryParameterErrorCause>");
+		}
+
+		MissingMandatoryParameterErrorCause* MissingMandatoryParameterErrorCause::Clone(
+		  uint8_t* buffer, size_t bufferLength) const
+		{
+			MS_TRACE();
+
+			auto* clonedErrorCause = new MissingMandatoryParameterErrorCause(buffer, bufferLength);
+
+			CloneInto(clonedErrorCause);
+
+			return clonedErrorCause;
+		}
+
+		void MissingMandatoryParameterErrorCause::AddMissingParameterType(
+		  Parameter::ParameterType parameterType)
+		{
+			MS_TRACE();
+
+			// NOTE: This may throw.
+			SetVariableLengthValueLength(GetVariableLengthValueLength() + 2);
+
+			// Add the new missing mandatory parameter type.
+			Utils::Byte::Set2Bytes(
+			  GetVariableLengthValuePointer(),
+			  GetNumberOfMissingParameters() * 2,
+			  static_cast<uint16_t>(parameterType));
+
+			// Update the counter field.
+			SetNumberOfMissingParameters(GetNumberOfMissingParameters() + 1);
+		}
+
+		MissingMandatoryParameterErrorCause* MissingMandatoryParameterErrorCause::SoftClone(
+		  const uint8_t* buffer) const
+		{
+			MS_TRACE();
+
+			auto* softClonedErrorCause =
+			  new MissingMandatoryParameterErrorCause(const_cast<uint8_t*>(buffer), GetLength());
+
+			SoftCloneInto(softClonedErrorCause);
+
+			return softClonedErrorCause;
+		}
+
+		const std::string MissingMandatoryParameterErrorCause::ContentToString() const
+		{
+			MS_TRACE();
+
+			std::ostringstream missingParameterTypesOss;
+			bool firstParameterType = true;
+
+			for (uint32_t idx{ 0 }; idx < GetNumberOfMissingParameters(); ++idx)
+			{
+				const auto parameterType = GetMissingParameterTypeAt(idx);
+
+				missingParameterTypesOss << (firstParameterType ? "" : ", ")
+				                         << RTC::SCTP::Parameter::ParameterTypeToString(parameterType).c_str()
+				                         << " (" << std::to_string(static_cast<uint16_t>(parameterType))
+				                         << ")";
+
+				firstParameterType = false;
+			}
+
+			return "types:[" + missingParameterTypesOss.str() + "]";
+		}
+
+		void MissingMandatoryParameterErrorCause::SetNumberOfMissingParameters(uint32_t value)
+		{
+			MS_TRACE();
+
+			Utils::Byte::Set4Bytes(const_cast<uint8_t*>(GetBuffer()), 4, value);
+		}
+	} // namespace SCTP
+} // namespace RTC

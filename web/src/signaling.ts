@@ -39,14 +39,22 @@ export class SignalingClient {
   }
 
   connect(token?: string): void {
-    if (this.ws?.readyState === WebSocket.OPEN) return;
+    if (
+      this.ws?.readyState === WebSocket.OPEN ||
+      this.ws?.readyState === WebSocket.CONNECTING
+    ) return;
 
     this.shouldReconnect = true;
     this.currentToken = token ?? this.currentToken;
     this.onStatusChange?.('connecting');
 
-    const url = this.currentToken ? `${this.url}?token=${encodeURIComponent(this.currentToken)}` : this.url;
-    this.ws = new WebSocket(url);
+    // Keep bearer credentials out of the request URL, where proxies and APM
+    // products commonly record them. The server selects only `simplestchat`;
+    // the auth-prefixed protocol is transport for the handshake credential.
+    const protocols = this.currentToken
+      ? ['simplestchat', `auth.${this.currentToken}`]
+      : ['simplestchat'];
+    this.ws = new WebSocket(this.url, protocols);
 
     this.ws.onopen = () => {
       console.log('[ws] connected');

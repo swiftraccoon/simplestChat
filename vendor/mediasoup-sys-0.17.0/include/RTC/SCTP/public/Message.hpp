@@ -1,0 +1,118 @@
+#ifndef MS_RTC_SCTP_MESSAGE_HPP
+#define MS_RTC_SCTP_MESSAGE_HPP
+
+#include "common.hpp"
+#include <span>
+#include <vector>
+
+namespace RTC
+{
+	namespace SCTP
+	{
+		/**
+		 * An SCTP message is a group of bytes sent or received as a whole on a
+		 * specified stream identifier (`streamId`) and with a payload protocol
+		 * identifier (`ppid`).
+		 */
+		class Message
+		{
+		public:
+			Message(uint16_t streamId, uint32_t ppid, std::vector<uint8_t> payload);
+
+			/**
+			 * Move constructor. No need to do anything special since std::vector
+			 * already implements move.
+			 */
+			Message(Message&& other) = default;
+
+			/**
+			 * Move assignment. No need to do anything special since std::vector
+			 * already implements move.
+			 */
+			Message& operator=(Message&& other) = default;
+
+			/**
+			 * Copy constructor disabled.
+			 */
+			Message(const Message&) = delete;
+
+			/**
+			 * Copy assignment disabled.
+			 */
+			Message& operator=(const Message&) = delete;
+
+			~Message();
+
+		public:
+			void Dump(int indentation = 0) const;
+
+			uint16_t GetStreamId() const
+			{
+				return this->streamId;
+			}
+
+			void SetStreamId(uint16_t streamId);
+
+			uint32_t GetPayloadProtocolId() const
+			{
+				return this->ppid;
+			}
+
+			std::span<const uint8_t> GetPayload() const
+			{
+				return this->payload;
+			}
+
+			size_t GetPayloadLength() const
+			{
+				return this->payload.size();
+			}
+
+			/**
+			 * Replace the whole payload of the message.
+			 */
+			void SetPayload(std::vector<uint8_t> payload)
+			{
+				this->payload = std::move(payload);
+			}
+
+			/**
+			 * Remove the first `len` bytes from the beginning of the payload.
+			 */
+			void RemovePayloadFront(size_t len)
+			{
+				this->payload.erase(this->payload.begin(), this->payload.begin() + len);
+			}
+
+			/**
+			 * Useful to extract the payload and its ownership when destructing the
+			 * message.
+			 *
+			 * @remarks
+			 * - && at the end means that it can only be called from a rvalue.
+			 *
+			 * @usage
+			 * ```c++
+			 * const auto payload = std::move(message).ReleasePayload();
+			 * ```
+			 */
+			std::vector<uint8_t> ReleasePayload() &&
+			{
+				// NOLINTNEXTLINE(clang-analyzer-cplusplus.Move)
+				return std::move(this->payload);
+			}
+
+			Message Clone() const
+			{
+				return Message(this->streamId, this->ppid, this->payload);
+			}
+
+		private:
+			uint16_t streamId;
+			uint32_t ppid;
+			std::vector<uint8_t> payload;
+		};
+	} // namespace SCTP
+} // namespace RTC
+
+#endif

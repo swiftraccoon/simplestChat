@@ -1,0 +1,124 @@
+# mediasoup v3
+
+[![][mediasoup-banner]][mediasoup-website]
+
+[![][npm-shield-mediasoup]][npm-mediasoup]
+[![][crates-shield-mediasoup]][crates-mediasoup]
+[![][opencollective-shield-mediasoup]][opencollective-mediasoup]
+
+---
+
+[![][github-actions-shield-mediasoup-node]][github-actions-mediasoup-node]
+[![][github-actions-shield-mediasoup-worker]][github-actions-mediasoup-worker]
+[![][github-actions-shield-mediasoup-rust]][github-actions-mediasoup-rust]
+[![][github-actions-shield-mediasoup-worker-fuzzer]][github-actions-mediasoup-worker-fuzzer]
+[![][github-actions-shield-mediasoup-npm-publish]][github-actions-mediasoup-npm-publish]
+[![][github-actions-shield-mediasoup-crate-publish]][github-actions-mediasoup-crate-publish]
+[![][github-actions-shield-mediasoup-worker-prebuild]][github-actions-mediasoup-worker-prebuild]
+[![][github-actions-shield-mediasoup-website-update]][github-actions-mediasoup-website-update]
+[![][github-actions-shield-mediasoup-demo-update]][github-actions-mediasoup-demo-update]
+[![][github-actions-mediasoup-codeql-shield-mediasoup]][github-actions-mediasoup-codeql-mediasoup]
+
+## Website and Documentation
+
+- [mediasoup.org][mediasoup-website]
+
+## Support Forum
+
+- [mediasoup.discourse.group][mediasoup-discourse]
+
+## Design Goals
+
+mediasoup and its client side libraries are designed to accomplish with the following goals:
+
+- Be a SFU (Selective Forwarding Unit).
+- Support both WebRTC and plain RTP input and output.
+- Be a Node.js module or Rust crate in server side.
+- Be a tiny TypeScript and C++ libraries in client side.
+- Be minimalist: just handle the media layer.
+- Be signaling agnostic: do not mandate any signaling protocol.
+- Be super low level API.
+- Support all existing WebRTC endpoints.
+- Enable integration with well known multimedia libraries/tools.
+
+## Architecture
+
+![][mediasoup-architecture]
+
+## Use Cases
+
+mediasoup and its client side libraries provide a super low level API. They are intended to enable different use cases and scenarios, without any constraint or assumption. Some of these use cases are:
+
+- Group video chat applications.
+- One-to-many (or few-to-many) broadcasting applications in real-time.
+- RTP streaming.
+
+## Features
+
+- ECMAScript 6/Idiomatic Rust low level API.
+- Multi-stream: multiple audio/video streams over a single ICE + DTLS transport.
+- IPv6 ready.
+- ICE / DTLS / RTP / RTCP over UDP and TCP.
+- Simulcast and SVC support.
+- Congestion control.
+- Sender and receiver bandwidth estimation with spatial/temporal layers distribution algorithm.
+- Data message exchange (via WebRTC DataChannels, SCTP over plain UDP, and direct termination in Node.js/Rust).
+- Extremely powerful (media worker thread/subprocess coded in C++ on top of [libuv](https://libuv.org)).
+
+## Demo Online
+
+[![][mediasoup-demo-screenshot]][mediasoup-demo]
+
+Try it at [v3demo.mediasoup.org](https://v3demo.mediasoup.org) ([source code](https://github.com/versatica/mediasoup-demo)).
+
+## Authors
+
+- Iñaki Baz Castillo [[website](https://inakibaz.me)|[github](https://github.com/ibc/)]
+- José Luis Millán [[github](https://github.com/jmillan/)]
+- Nazar Mokynskyi [[github](https://github.com/nazar-pc/)]
+
+## Social
+
+- Bluesky: [@mediasoup-sfu.bsky.social](https://bsky.app/profile/mediasoup-sfu.bsky.social)
+
+## Sponsor
+
+You can support mediasoup by [sponsoring][sponsor] it. Thanks!
+
+## License
+
+[ISC](./LICENSE)
+
+[mediasoup-banner]: /art/mediasoup-banner.png
+[mediasoup-website]: https://mediasoup.org
+[mediasoup-discourse]: https://mediasoup.discourse.group
+[npm-shield-mediasoup]: https://img.shields.io/npm/v/mediasoup.svg
+[npm-mediasoup]: https://npmjs.org/package/mediasoup
+[crates-shield-mediasoup]: https://img.shields.io/crates/v/mediasoup.svg
+[crates-mediasoup]: https://crates.io/crates/mediasoup
+[opencollective-shield-mediasoup]: https://img.shields.io/opencollective/all/mediasoup.svg
+[opencollective-mediasoup]: https://opencollective.com/mediasoup
+[github-actions-shield-mediasoup-node]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-node.yaml/badge.svg?branch=v3
+[github-actions-mediasoup-node]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-node.yaml?query=branch%3Av3
+[github-actions-shield-mediasoup-worker]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-worker.yaml/badge.svg?branch=v3
+[github-actions-mediasoup-worker]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-worker.yaml?query=branch%3Av3
+[github-actions-shield-mediasoup-rust]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-rust.yaml/badge.svg?branch=v3
+[github-actions-mediasoup-rust]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-rust.yaml?query=branch%3Av3
+[github-actions-shield-mediasoup-worker-fuzzer]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-worker-fuzzer.yaml/badge.svg?branch=v3
+[github-actions-mediasoup-worker-fuzzer]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-worker-fuzzer.yaml?query=branch%3Av3
+[github-actions-shield-mediasoup-worker-prebuild]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-worker-prebuild.yaml/badge.svg?event=workflow_run
+[github-actions-mediasoup-worker-prebuild]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-worker-prebuild.yaml?query=event%3Aworkflow_run
+[github-actions-shield-mediasoup-npm-publish]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-npm-publish.yaml/badge.svg?event=push
+[github-actions-mediasoup-npm-publish]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-npm-publish.yaml?query=event%3Apush
+[github-actions-shield-mediasoup-crate-publish]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-crate-publish.yaml/badge.svg?event=push
+[github-actions-mediasoup-crate-publish]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-crate-publish.yaml?query=event%3Apush
+[github-actions-shield-mediasoup-website-update]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-website-update.yaml/badge.svg?event=workflow_run
+[github-actions-mediasoup-website-update]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-website-update.yaml?query=event%3Aworkflow_run
+[github-actions-shield-mediasoup-demo-update]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-demo-update.yaml/badge.svg?event=workflow_run
+[github-actions-mediasoup-demo-update]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-demo-update.yaml?query=event%3Aworkflow_run
+[github-actions-mediasoup-codeql-shield-mediasoup]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-codeql.yaml/badge.svg?branch=v3
+[github-actions-mediasoup-codeql-mediasoup]: https://github.com/versatica/mediasoup/actions/workflows/mediasoup-codeql.yaml?query=branch%3Av3
+[sponsor]: https://mediasoup.org/sponsor
+[mediasoup-architecture]: /art/mediasoup-v3-architecture-02.png
+[mediasoup-demo-screenshot]: /art/mediasoup-v3.png
+[mediasoup-demo]: https://v3demo.mediasoup.org

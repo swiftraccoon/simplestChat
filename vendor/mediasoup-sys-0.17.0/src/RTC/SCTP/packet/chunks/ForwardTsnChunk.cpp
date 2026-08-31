@@ -1,0 +1,191 @@
+#define MS_CLASS "RTC::SCTP::ForwardTsnChunk"
+// #define MS_LOG_DEV_LEVEL 3
+
+#include "RTC/SCTP/packet/chunks/ForwardTsnChunk.hpp"
+#include "Logger.hpp"
+#include "MediaSoupErrors.hpp"
+#include "RTC/SCTP/packet/Chunk.hpp"
+
+namespace RTC
+{
+	namespace SCTP
+	{
+		/* Class methods. */
+
+		ForwardTsnChunk* ForwardTsnChunk::Parse(const uint8_t* buffer, size_t bufferLength)
+		{
+			MS_TRACE();
+
+			Chunk::ChunkType chunkType;
+			uint16_t chunkLength;
+			uint8_t padding;
+
+			if (!Chunk::IsChunk(buffer, bufferLength, chunkType, chunkLength, padding))
+			{
+				return nullptr;
+			}
+
+			if (chunkType != Chunk::ChunkType::FORWARD_TSN)
+			{
+				MS_WARN_DEV("invalid chunk type");
+
+				return nullptr;
+			}
+
+			return ForwardTsnChunk::ParseStrict(buffer, bufferLength, chunkLength, padding);
+		}
+
+		ForwardTsnChunk* ForwardTsnChunk::Factory(uint8_t* buffer, size_t bufferLength)
+		{
+			MS_TRACE();
+
+			if (bufferLength < ForwardTsnChunk::ForwardTsnChunkHeaderLength)
+			{
+				MS_THROW_TYPE_ERROR("buffer too small");
+			}
+
+			auto* chunk = new ForwardTsnChunk(buffer, bufferLength);
+
+			chunk->InitializeHeader(
+			  Chunk::ChunkType::FORWARD_TSN, 0, ForwardTsnChunk::ForwardTsnChunkHeaderLength);
+
+			// Must also initialize extra fields in the header.
+			chunk->SetNewCumulativeTsn(0);
+
+			// No need to invoke SetLength() since constructor invoked it with
+			// minimum ForwardTsnChunk length.
+
+			return chunk;
+		}
+
+		ForwardTsnChunk* ForwardTsnChunk::ParseStrict(
+		  const uint8_t* buffer, size_t bufferLength, uint16_t chunkLength, uint8_t padding)
+		{
+			MS_TRACE();
+
+			if (chunkLength < ForwardTsnChunk::ForwardTsnChunkHeaderLength)
+			{
+				MS_WARN_TAG(
+				  sctp,
+				  "ForwardTsnChunk length field must be equal or greater than %zu",
+				  ForwardTsnChunk::ForwardTsnChunkHeaderLength);
+
+				return nullptr;
+			}
+
+			// Here we must validate that length is multiple of 4.
+			if (chunkLength % 4 != 0)
+			{
+				MS_WARN_TAG(sctp, "wrong length (not multiple of 4)");
+
+				return nullptr;
+			}
+
+			auto* chunk = new ForwardTsnChunk(const_cast<uint8_t*>(buffer), bufferLength);
+
+			// Must always invoke SetLength() after constructing a Serializable with
+			// not fixed length.
+			chunk->SetLength(chunkLength + padding);
+
+			return chunk;
+		}
+
+		/* Instance methods. */
+
+		ForwardTsnChunk::ForwardTsnChunk(uint8_t* buffer, size_t bufferLength)
+		  : AnyForwardTsnChunk(buffer, bufferLength)
+		{
+			MS_TRACE();
+
+			SetLength(ForwardTsnChunk::ForwardTsnChunkHeaderLength);
+		}
+
+		ForwardTsnChunk::~ForwardTsnChunk()
+		{
+			MS_TRACE();
+		}
+
+		void ForwardTsnChunk::Dump(int indentation) const
+		{
+			MS_TRACE();
+
+			MS_DUMP_CLEAN(indentation, "<SCTP::ForwardTsnChunk>");
+			DumpCommon(indentation);
+			MS_DUMP_CLEAN(indentation, "  new cumulative tsn: %" PRIu32, GetNewCumulativeTsn());
+			MS_DUMP_CLEAN(indentation, "  number of skipped streams: %" PRIu16, GetNumberOfSkippedStreams());
+			MS_DUMP_CLEAN(indentation, "  skipped streams:");
+			for (const auto& skippedStream : GetSkippedStreams())
+			{
+				MS_DUMP_CLEAN(
+				  indentation,
+				  "  - stream id: %" PRIu16 ", ssn:%" PRIu16,
+				  skippedStream.streamId,
+				  skippedStream.ssn);
+			}
+			MS_DUMP_CLEAN(indentation, "</SCTP::ForwardTsnChunk>");
+		}
+
+		ForwardTsnChunk* ForwardTsnChunk::Clone(uint8_t* buffer, size_t bufferLength) const
+		{
+			MS_TRACE();
+
+			auto* clonedChunk = new ForwardTsnChunk(buffer, bufferLength);
+
+			CloneInto(clonedChunk);
+			SoftCloneInto(clonedChunk);
+
+			return clonedChunk;
+		}
+
+		void ForwardTsnChunk::SetNewCumulativeTsn(uint32_t value)
+		{
+			MS_TRACE();
+
+			Utils::Byte::Set4Bytes(const_cast<uint8_t*>(GetBuffer()), 4, value);
+		}
+
+		std::vector<AnyForwardTsnChunk::SkippedStream> ForwardTsnChunk::GetSkippedStreams() const
+		{
+			MS_TRACE();
+
+			std::vector<AnyForwardTsnChunk::SkippedStream> skippedStreams;
+			const uint16_t numSkippedStreams = GetNumberOfSkippedStreams();
+
+			skippedStreams.reserve(numSkippedStreams);
+
+			for (uint16_t idx{ 0 }; idx < numSkippedStreams; ++idx)
+			{
+				skippedStreams.emplace_back(GetSkippedStreamIdAt(idx), GetStreamSequenceAt(idx));
+			}
+
+			return skippedStreams;
+		}
+
+		void ForwardTsnChunk::AddSkippedStream(const AnyForwardTsnChunk::SkippedStream& skippedStream)
+		{
+			MS_TRACE();
+
+			auto previousVariableLengthValueLength = GetVariableLengthValueLength();
+
+			// NOTE: This may throw.
+			SetVariableLengthValueLength(previousVariableLengthValueLength + 4);
+
+			// Add the new stream and stream sequence.
+			Utils::Byte::Set2Bytes(
+			  GetVariableLengthValuePointer(), previousVariableLengthValueLength, skippedStream.streamId);
+			Utils::Byte::Set2Bytes(
+			  GetVariableLengthValuePointer(), previousVariableLengthValueLength + 2, skippedStream.ssn);
+		}
+
+		ForwardTsnChunk* ForwardTsnChunk::SoftClone(const uint8_t* buffer) const
+		{
+			MS_TRACE();
+
+			auto* softClonedChunk = new ForwardTsnChunk(const_cast<uint8_t*>(buffer), GetLength());
+
+			SoftCloneInto(softClonedChunk);
+
+			return softClonedChunk;
+		}
+	} // namespace SCTP
+} // namespace RTC

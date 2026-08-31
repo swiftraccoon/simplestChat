@@ -1,12 +1,65 @@
-version: '3.8'
-
 services:
   simplestchat:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
+      pull: true
+    # Caddy reaches this loopback publication. Do not publish the application
+    # port on all host interfaces; expose only HTTPS from the reverse proxy.
     ports:
-      - "3000:3000"
+      # Keep this aligned with the supplied Caddyfile upstream.
+      - "127.0.0.1:3000:3000"
+      # mediasoup assigns one UDP WebRtcServer port per worker, starting at
+      # 40000. Keep this range aligned with the maximum deployed worker count.
+      - "40000-${RTC_PORT_END:-40063}:40000-${RTC_PORT_END:-40063}/udp"
     environment:
-      - RUST_LOG=simplestChat=debug,mediasoup=info
+      RUST_LOG: "${RUST_LOG:-simplestChat=info,mediasoup=warn}"
+      # The process binds inside its own network namespace; the host-side port
+      # remains loopback-only above.
+      BIND_ADDR: "0.0.0.0"
+      PORT: "3000"
+      ANNOUNCE_IP: "${ANNOUNCE_IP:-127.0.0.1}"
+      RUN_MIGRATIONS: "${RUN_MIGRATIONS:-false}"
+      MAX_CONNECTIONS: "${MAX_CONNECTIONS:-10000}"
+      MAX_CONNECTIONS_PER_IP: "${MAX_CONNECTIONS_PER_IP:-50}"
+      WS_HANDSHAKES_PER_MINUTE: "${WS_HANDSHAKES_PER_MINUTE:-120}"
+      AUTH_REQUESTS_PER_MINUTE: "${AUTH_REQUESTS_PER_MINUTE:-60}"
+      AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE: "${AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE:-20}"
+      AUTH_MAX_CONCURRENCY: "${AUTH_MAX_CONCURRENCY:-16}"
+      # Keep public account and anonymous room creation closed unless the
+      # deployment deliberately opts in.
+      REGISTRATION_ENABLED: "${REGISTRATION_ENABLED:-false}"
+      ALLOW_AD_HOC_ROOMS: "${ALLOW_AD_HOC_ROOMS:-false}"
+      MAX_USERS: "${MAX_USERS:-100000}"
+      ROOM_API_REQUESTS_PER_MINUTE: "${ROOM_API_REQUESTS_PER_MINUTE:-120}"
+      ROOM_API_MAX_CONCURRENCY: "${ROOM_API_MAX_CONCURRENCY:-32}"
+      ROOM_CREATIONS_PER_ACCOUNT_PER_MINUTE: "${ROOM_CREATIONS_PER_ACCOUNT_PER_MINUTE:-10}"
+      # Match the default CPU quota; ports 40000-40003 are used at this count.
+      MEDIA_WORKERS: "${MEDIA_WORKERS:-4}"
+      MAX_ROOMS: "${MAX_ROOMS:-1000}"
+      MAX_PERSISTED_ROOMS: "${MAX_PERSISTED_ROOMS:-10000}"
+      MAX_PASSWORD_WORKERS: "${MAX_PASSWORD_WORKERS:-2}"
+      MAX_PRODUCERS_PER_PARTICIPANT: "${MAX_PRODUCERS_PER_PARTICIPANT:-8}"
+      MAX_CONSUMERS_PER_PARTICIPANT: "${MAX_CONSUMERS_PER_PARTICIPANT:-16}"
+      # Secrets and deployment-specific origins should be injected through the
+      # host environment or a Compose secrets overlay, not committed here.
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:?set ALLOWED_ORIGINS to the external HTTPS origin}"
+      TRUSTED_PROXY_SECRET: "${TRUSTED_PROXY_SECRET:?set TRUSTED_PROXY_SECRET to at least 32 bytes}"
     restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 1024
+    mem_limit: "${SIMPLESTCHAT_MEMORY_LIMIT:-4g}"
+    cpus: "${SIMPLESTCHAT_CPUS:-4.0}"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    stop_grace_period: 30s

@@ -313,6 +313,10 @@ export class RoomClient {
       );
 
       if (result.success) {
+        if (!result.reconnectToken) {
+          throw new Error('Reconnect response did not rotate its credential');
+        }
+        this.reconnectToken = result.reconnectToken;
         console.log('[room] session reconnected successfully');
         // Media transports survive independently — only signaling needed reconnection
       } else {
@@ -404,7 +408,7 @@ export class RoomClient {
         this.events.onRemoteTrack(participantId, name, track, kind, source);
       }
     } catch (e) {
-      console.error(`Failed to consume producer ${producerId}:`, e);
+      console.error('Failed to consume producer:', producerId, e);
     }
   }
 

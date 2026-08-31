@@ -1,0 +1,8 @@
+{
+  "rust-analyzer.cargo.extraEnv": {
+    "OPENSSL_DIR": "${workspaceFolder}/target/openssl-3.5.8",
+    "OPENSSL_STATIC": "1",
+    "PKG_CONFIG_PATH": "${workspaceFolder}/target/openssl-3.5.8/lib/pkgconfig",
+    "PIP_CONSTRAINT": "${workspaceFolder}/build/pip-constraints.txt"
+  }
+}

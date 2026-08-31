@@ -1,0 +1,12 @@
+#ifndef MS_FUZZER_RTC_RTCP_FEEDBACK_PS_VBCM
+#define MS_FUZZER_RTC_RTCP_FEEDBACK_PS_VBCM
+
+#include "common.hpp"
+#include "RTC/RTCP/FeedbackPsVbcm.hpp"
+
+namespace FuzzerRtcRtcpFeedbackPsVbcm
+{
+	void Fuzz(RTC::RTCP::FeedbackPsVbcmPacket* packet);
+}
+
+#endif

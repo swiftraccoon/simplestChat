@@ -3,20 +3,20 @@
 //! Load test binary - Spawn multiple synthetic clients to test server scalability
 //!
 //! Usage:
-//!   cargo run --bin load_test -- --clients 10 --duration 30
-//!   cargo run --bin load_test -- --clients 1000 --rooms 16 --duration 30
-//!   cargo run --bin load_test -- --clients 1000 --mode webinar --duration 60
-//!   cargo run --bin load_test -- --clients 100 --churn-rate 5 --duration 60
+//!   cargo run --features load-test --bin load_test -- --clients 10 --duration 30
+//!   cargo run --features load-test --bin load_test -- --clients 1000 --rooms 16 --duration 30
+//!   cargo run --features load-test --bin load_test -- --clients 1000 --mode webinar --duration 60
+//!   cargo run --features load-test --bin load_test -- --clients 100 --churn-rate 5 --duration 60
 
+use anyhow::Result;
+use futures_util::{SinkExt, StreamExt};
+use mediasoup::prelude::*;
+use rand;
+use serde_json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
-use anyhow::Result;
-use rand;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use futures_util::{SinkExt, StreamExt};
-use mediasoup::prelude::*;
-use serde_json;
 
 use simplestChat::signaling::protocol::{ClientMessage, ServerMessage};
 
@@ -33,12 +33,12 @@ mod webrtc_client {
     include!("../clients/webrtc_client.rs");
 }
 
-use media_generator::{MediaGenerator, MediaConfig};
+use media_generator::{MediaConfig, MediaGenerator};
 use metrics::{MetricsCollector, TestSummary};
-use webrtc_client::WebRtcSession;
-use webrtc::track::track_local::TrackLocalWriter;
+use std::num::{NonZeroU8, NonZeroU32};
 use tokio::sync::Mutex;
-use std::num::{NonZeroU32, NonZeroU8};
+use webrtc::track::track_local::TrackLocalWriter;
+use webrtc_client::WebRtcSession;
 
 #[derive(Debug, Clone)]
 struct ClientConfig {
@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"))
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
         .init();
 
@@ -161,7 +161,8 @@ async fn main() -> Result<()> {
             }
             "--publish-ratio" => {
                 if i + 1 < args.len() {
-                    config.publish_ratio = args[i + 1].parse::<f64>().unwrap_or(1.0).clamp(0.0, 1.0);
+                    config.publish_ratio =
+                        args[i + 1].parse::<f64>().unwrap_or(1.0).clamp(0.0, 1.0);
                     i += 2;
                 } else {
                     i += 1;
@@ -194,7 +195,8 @@ async fn main() -> Result<()> {
             }
             "--max-audio" => {
                 if i + 1 < args.len() {
-                    config.max_audio_consumers = args[i + 1].parse().unwrap_or(DEFAULT_MAX_AUDIO_CONSUMERS);
+                    config.max_audio_consumers =
+                        args[i + 1].parse().unwrap_or(DEFAULT_MAX_AUDIO_CONSUMERS);
                     i += 2;
                 } else {
                     i += 1;
@@ -202,7 +204,8 @@ async fn main() -> Result<()> {
             }
             "--max-video" => {
                 if i + 1 < args.len() {
-                    config.max_video_consumers = args[i + 1].parse().unwrap_or(DEFAULT_MAX_VIDEO_CONSUMERS);
+                    config.max_video_consumers =
+                        args[i + 1].parse().unwrap_or(DEFAULT_MAX_VIDEO_CONSUMERS);
                     i += 2;
                 } else {
                     i += 1;
@@ -247,16 +250,26 @@ async fn main() -> Result<()> {
         let fps = fps_override.unwrap_or(30);
         let fps = match fps {
             15 | 30 | 60 => fps,
-            _ => { eprintln!("Invalid FPS '{}', using 30", fps); 30 }
+            _ => {
+                eprintln!("Invalid FPS '{}', using 30", fps);
+                30
+            }
         };
         config.media_config = MediaConfig::from_preset(quality, fps);
     } else if let Some(fps) = fps_override {
         let fps = match fps {
             15 | 30 | 60 => fps,
-            _ => { eprintln!("Invalid FPS '{}', using 30", fps); 30 }
+            _ => {
+                eprintln!("Invalid FPS '{}', using 30", fps);
+                30
+            }
         };
         config.media_config.video_fps = fps;
-        let multiplier = match fps { 15 => 0.6, 60 => 1.5, _ => 1.0 };
+        let multiplier = match fps {
+            15 => 0.6,
+            60 => 1.5,
+            _ => 1.0,
+        };
         config.media_config.video_bitrate_kbps =
             (config.media_config.video_bitrate_kbps as f64 * multiplier) as u32;
     }
@@ -283,23 +296,33 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
     println!("Duration: {}s", config.duration_secs);
     println!("Ramp-up: {}s", config.ramp_up_secs);
     println!("Server: {}", config.server_url);
-    println!("Rooms: {} ({} clients/room avg)", config.num_rooms, clients_per_room);
-    println!("Publishers: {}/{} ({:.0}% publish ratio)",
-        num_publishers, config.num_clients, config.publish_ratio * 100.0);
+    println!(
+        "Rooms: {} ({} clients/room avg)",
+        config.num_rooms, clients_per_room
+    );
+    println!(
+        "Publishers: {}/{} ({:.0}% publish ratio)",
+        num_publishers,
+        config.num_clients,
+        config.publish_ratio * 100.0
+    );
     if num_churners > 0 {
         println!("Churners: {} (rate: {}/s)", num_churners, config.churn_rate);
     }
-    println!("Media: Audio={}, Video={}",
-        config.media_config.audio_enabled,
-        config.media_config.video_enabled
+    println!(
+        "Media: Audio={}, Video={}",
+        config.media_config.audio_enabled, config.media_config.video_enabled
     );
-    println!("Quality: {} ({} kbps video, {} kbps audio)",
+    println!(
+        "Quality: {} ({} kbps video, {} kbps audio)",
         config.media_config.quality_label(),
         config.media_config.video_bitrate_kbps,
         config.media_config.audio_bitrate_kbps,
     );
-    println!("Max consumers: audio={}, video={}",
-        config.max_audio_consumers, config.max_video_consumers);
+    println!(
+        "Max consumers: audio={}, video={}",
+        config.max_audio_consumers, config.max_video_consumers
+    );
     println!("========================\n");
 
     let session_duration = Duration::from_secs(config.duration_secs);
@@ -349,7 +372,10 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         handles.push(handle);
 
         if i > 0 && i < config.num_clients - 1 {
-            tracing::info!("Waiting {}ms before spawning next client...", ramp_up_delay.as_millis());
+            tracing::info!(
+                "Waiting {}ms before spawning next client...",
+                ramp_up_delay.as_millis()
+            );
             sleep(ramp_up_delay).await;
         }
     }
@@ -361,8 +387,10 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
     // generates reports synchronously (MetricsCollector uses std::sync::Mutex)
     // and calls process::exit(0) to bypass the stuck runtime.
     let deadline_secs = config.ramp_up_secs + config.duration_secs + 120;
-    println!("All clients spawned. Running test for {}s (deadline: {}s)...\n",
-        config.duration_secs, deadline_secs);
+    println!(
+        "All clients spawned. Running test for {}s (deadline: {}s)...\n",
+        config.duration_secs, deadline_secs
+    );
 
     // Clone collectors for the OS deadline thread
     let collectors_for_deadline: Vec<Arc<MetricsCollector>> =
@@ -371,7 +399,9 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
     // OS deadline thread — completely independent of tokio runtime
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(deadline_secs));
-        eprintln!("\n=== DEADLINE REACHED ({deadline_secs}s) — generating results from OS thread ===");
+        eprintln!(
+            "\n=== DEADLINE REACHED ({deadline_secs}s) — generating results from OS thread ==="
+        );
         write_results_sync(&collectors_for_deadline);
         std::process::exit(0);
     });
@@ -422,11 +452,7 @@ fn write_results_sync(collectors: &[Arc<MetricsCollector>]) {
     }
 }
 
-async fn run_client(
-    config: ClientConfig,
-    client_id: String,
-    metrics: Arc<MetricsCollector>,
-) {
+async fn run_client(config: ClientConfig, client_id: String, metrics: Arc<MetricsCollector>) {
     if config.is_churner {
         run_churner_client(config, client_id, metrics).await;
     } else {
@@ -452,8 +478,9 @@ async fn run_churner_client(
         tracing::info!("{}: Churn iteration {} starting", client_id, iteration);
 
         // Random session duration between min and max
-        let session_secs = config.churn_session_min_secs +
-            (rand::random::<u64>() % (config.churn_session_max_secs - config.churn_session_min_secs + 1));
+        let session_secs = config.churn_session_min_secs
+            + (rand::random::<u64>()
+                % (config.churn_session_max_secs - config.churn_session_min_secs + 1));
         let remaining = total_duration.saturating_sub(total_start.elapsed());
         let this_session = Duration::from_secs(session_secs).min(remaining);
 
@@ -467,7 +494,12 @@ async fn run_churner_client(
         match run_client_inner(churn_config, client_id.clone(), metrics.clone()).await {
             Ok(_) => {
                 metrics.record_reconnection();
-                tracing::info!("{}: Churn iteration {} completed ({}s)", client_id, iteration, this_session.as_secs());
+                tracing::info!(
+                    "{}: Churn iteration {} completed ({}s)",
+                    client_id,
+                    iteration,
+                    this_session.as_secs()
+                );
             }
             Err(e) => {
                 metrics.record_reconnection_failure();
@@ -489,18 +521,20 @@ async fn run_client_inner(
     client_id: String,
     metrics: Arc<MetricsCollector>,
 ) -> Result<()> {
-    tracing::info!("{}: Starting synthetic client (publisher={}, room={})",
-        client_id, config.is_publisher, config.room_id);
+    tracing::info!(
+        "{}: Starting synthetic client (publisher={}, room={})",
+        client_id,
+        config.is_publisher,
+        config.room_id
+    );
 
     metrics.set_room_id(&config.room_id);
 
     // Connect to WebSocket signaling server
-    let (ws_stream, _) = connect_async(&config.server_url)
-        .await
-        .map_err(|e| {
-            tracing::error!("{}: Failed to connect: {}", client_id, e);
-            e
-        })?;
+    let (ws_stream, _) = connect_async(&config.server_url).await.map_err(|e| {
+        tracing::error!("{}: Failed to connect: {}", client_id, e);
+        e
+    })?;
 
     tracing::info!("{}: WebSocket connected", client_id);
 
@@ -522,10 +556,18 @@ async fn run_client_inner(
 
     // Wait for room joined response
     let _participant_id = match receive_response(&mut read, &mut buffered_events).await? {
-        ServerMessage::RoomJoined { participant_id, participants, .. } => {
+        ServerMessage::RoomJoined {
+            participant_id,
+            participants,
+            ..
+        } => {
             metrics.record_signaling_latency("join_room", t.elapsed().as_millis() as u64);
-            tracing::info!("{}: Joined room as {}, {} other participants",
-                client_id, participant_id, participants.len());
+            tracing::info!(
+                "{}: Joined room as {}, {} other participants",
+                client_id,
+                participant_id,
+                participants.len()
+            );
             metrics.mark_connection_successful();
 
             // In webinar/panel mode (publish_ratio < 1.0), viewers need to discover
@@ -533,12 +575,15 @@ async fn run_client_inner(
             // NewProducer events handle this naturally (everyone publishes, so late
             // joiners discover producers via broadcast events).
             if config.consume_existing_producers {
-                let existing_producer_count: usize = participants.iter()
-                    .map(|p| p.producers.len())
-                    .sum();
+                let existing_producer_count: usize =
+                    participants.iter().map(|p| p.producers.len()).sum();
                 if existing_producer_count > 0 {
-                    tracing::info!("{}: Room has {} existing producers from {} participants (consuming deferred)",
-                        client_id, existing_producer_count, participants.len());
+                    tracing::info!(
+                        "{}: Room has {} existing producers from {} participants (consuming deferred)",
+                        client_id,
+                        existing_producer_count,
+                        participants.len()
+                    );
                 }
 
                 for p in &participants {
@@ -552,12 +597,14 @@ async fn run_client_inner(
                     }
                 }
             } else {
-                let existing_producer_count: usize = participants.iter()
-                    .map(|p| p.producers.len())
-                    .sum();
+                let existing_producer_count: usize =
+                    participants.iter().map(|p| p.producers.len()).sum();
                 if existing_producer_count > 0 {
-                    tracing::debug!("{}: Skipping {} existing producers (conference mode — NewProducer events will handle)",
-                        client_id, existing_producer_count);
+                    tracing::debug!(
+                        "{}: Skipping {} existing producers (conference mode — NewProducer events will handle)",
+                        client_id,
+                        existing_producer_count
+                    );
                 }
             }
 
@@ -592,8 +639,9 @@ async fn run_client_inner(
 
     // Pre-compute RtpCapabilities from RtpCapabilitiesFinalized once (avoids serde round-trip per consumer)
     let rtp_capabilities: RtpCapabilities = serde_json::from_value(
-        serde_json::to_value(&router_caps).expect("Failed to serialize router caps")
-    ).expect("Failed to deserialize as RtpCapabilities");
+        serde_json::to_value(&router_caps).expect("Failed to serialize router caps"),
+    )
+    .expect("Failed to deserialize as RtpCapabilities");
 
     // Create WebRTC session (metrics are passed to recv transport's on_track handler)
     let webrtc_session = WebRtcSession::new(client_id.clone(), metrics.clone());
@@ -605,26 +653,49 @@ async fn run_client_inner(
         // Create send transport (timed)
         let t = Instant::now();
         send_message(&mut write, ClientMessage::CreateSendTransport).await?;
-        let (st_id, send_ice_params, send_ice_cands, send_dtls_params) = match receive_response(&mut read, &mut buffered_events).await? {
-            ServerMessage::TransportCreated { transport_id, ice_parameters, ice_candidates, dtls_parameters, .. } => {
-                metrics.record_signaling_latency("create_send_transport", t.elapsed().as_millis() as u64);
-                tracing::debug!("{}: Send transport created: {}", client_id, transport_id);
-                (transport_id, ice_parameters, ice_candidates, dtls_parameters)
-            }
-            ServerMessage::Error { message } => {
-                metrics.record_error(format!("Failed to create send transport: {}", message));
-                return Err(anyhow::anyhow!("Failed to create send transport: {}", message));
-            }
-            msg => {
-                return Err(anyhow::anyhow!("Unexpected message: {:?}", msg));
-            }
-        };
+        let (st_id, send_ice_params, send_ice_cands, send_dtls_params) =
+            match receive_response(&mut read, &mut buffered_events).await? {
+                ServerMessage::TransportCreated {
+                    transport_id,
+                    ice_parameters,
+                    ice_candidates,
+                    dtls_parameters,
+                    ..
+                } => {
+                    metrics.record_signaling_latency(
+                        "create_send_transport",
+                        t.elapsed().as_millis() as u64,
+                    );
+                    tracing::debug!("{}: Send transport created: {}", client_id, transport_id);
+                    (
+                        transport_id,
+                        ice_parameters,
+                        ice_candidates,
+                        dtls_parameters,
+                    )
+                }
+                ServerMessage::Error { message } => {
+                    metrics.record_error(format!("Failed to create send transport: {}", message));
+                    return Err(anyhow::anyhow!(
+                        "Failed to create send transport: {}",
+                        message
+                    ));
+                }
+                msg => {
+                    return Err(anyhow::anyhow!("Unexpected message: {:?}", msg));
+                }
+            };
 
         // Create REAL WebRTC send transport
         let local_send_dtls = webrtc_session
             .lock()
             .await
-            .create_send_transport(st_id.clone(), send_ice_params, send_ice_cands, send_dtls_params)
+            .create_send_transport(
+                st_id.clone(),
+                send_ice_params,
+                send_ice_cands,
+                send_dtls_params,
+            )
             .await?;
 
         // Connect send transport with REAL DTLS parameters (timed)
@@ -636,12 +707,18 @@ async fn run_client_inner(
         send_message(&mut write, connect_send_msg).await?;
         match receive_response(&mut read, &mut buffered_events).await? {
             ServerMessage::TransportConnected { .. } => {
-                metrics.record_signaling_latency("connect_send_transport", t.elapsed().as_millis() as u64);
+                metrics.record_signaling_latency(
+                    "connect_send_transport",
+                    t.elapsed().as_millis() as u64,
+                );
                 tracing::info!("{}: Send transport connected (REAL ICE/DTLS!)", client_id);
             }
             ServerMessage::Error { message } => {
                 metrics.record_error(format!("Send transport connect failed: {}", message));
-                return Err(anyhow::anyhow!("Send transport connect failed: {}", message));
+                return Err(anyhow::anyhow!(
+                    "Send transport connect failed: {}",
+                    message
+                ));
             }
             _ => {}
         }
@@ -652,26 +729,49 @@ async fn run_client_inner(
     // Create receive transport (timed) — all clients need this
     let t = Instant::now();
     send_message(&mut write, ClientMessage::CreateRecvTransport).await?;
-    let (recv_transport_id, recv_ice_params, recv_ice_cands, recv_dtls_params) = match receive_response(&mut read, &mut buffered_events).await? {
-        ServerMessage::TransportCreated { transport_id, ice_parameters, ice_candidates, dtls_parameters, .. } => {
-            metrics.record_signaling_latency("create_recv_transport", t.elapsed().as_millis() as u64);
-            tracing::debug!("{}: Receive transport created: {}", client_id, transport_id);
-            (transport_id, ice_parameters, ice_candidates, dtls_parameters)
-        }
-        ServerMessage::Error { message } => {
-            metrics.record_error(format!("Failed to create recv transport: {}", message));
-            return Err(anyhow::anyhow!("Failed to create recv transport: {}", message));
-        }
-        msg => {
-            return Err(anyhow::anyhow!("Unexpected message: {:?}", msg));
-        }
-    };
+    let (recv_transport_id, recv_ice_params, recv_ice_cands, recv_dtls_params) =
+        match receive_response(&mut read, &mut buffered_events).await? {
+            ServerMessage::TransportCreated {
+                transport_id,
+                ice_parameters,
+                ice_candidates,
+                dtls_parameters,
+                ..
+            } => {
+                metrics.record_signaling_latency(
+                    "create_recv_transport",
+                    t.elapsed().as_millis() as u64,
+                );
+                tracing::debug!("{}: Receive transport created: {}", client_id, transport_id);
+                (
+                    transport_id,
+                    ice_parameters,
+                    ice_candidates,
+                    dtls_parameters,
+                )
+            }
+            ServerMessage::Error { message } => {
+                metrics.record_error(format!("Failed to create recv transport: {}", message));
+                return Err(anyhow::anyhow!(
+                    "Failed to create recv transport: {}",
+                    message
+                ));
+            }
+            msg => {
+                return Err(anyhow::anyhow!("Unexpected message: {:?}", msg));
+            }
+        };
 
     // Create REAL WebRTC receive transport
     let local_recv_dtls = webrtc_session
         .lock()
         .await
-        .create_recv_transport(recv_transport_id.clone(), recv_ice_params, recv_ice_cands, recv_dtls_params)
+        .create_recv_transport(
+            recv_transport_id.clone(),
+            recv_ice_params,
+            recv_ice_cands,
+            recv_dtls_params,
+        )
         .await?;
 
     // Connect receive transport with REAL DTLS parameters (timed)
@@ -683,12 +783,19 @@ async fn run_client_inner(
     send_message(&mut write, connect_recv_msg).await?;
     match receive_response(&mut read, &mut buffered_events).await? {
         ServerMessage::TransportConnected { .. } => {
-            metrics.record_signaling_latency("connect_recv_transport", t.elapsed().as_millis() as u64);
-            tracing::info!("{}: Receive transport connected (REAL ICE/DTLS!)", client_id);
+            metrics
+                .record_signaling_latency("connect_recv_transport", t.elapsed().as_millis() as u64);
+            tracing::info!(
+                "{}: Receive transport connected (REAL ICE/DTLS!)",
+                client_id
+            );
         }
         ServerMessage::Error { message } => {
             metrics.record_error(format!("Receive transport connect failed: {}", message));
-            return Err(anyhow::anyhow!("Receive transport connect failed: {}", message));
+            return Err(anyhow::anyhow!(
+                "Receive transport connect failed: {}",
+                message
+            ));
         }
         _ => {}
     }
@@ -699,12 +806,21 @@ async fn run_client_inner(
 
         // Get actual SSRCs from webrtc-rs (tracks were bound during send transport SDP negotiation)
         let (audio_ssrc, video_ssrc) = webrtc_session.lock().await.send_ssrcs().await?;
-        tracing::info!("{}: Send transport SSRCs - audio: {}, video: {}", client_id, audio_ssrc, video_ssrc);
+        tracing::info!(
+            "{}: Send transport SSRCs - audio: {}, video: {}",
+            client_id,
+            audio_ssrc,
+            video_ssrc
+        );
 
         // Produce audio if enabled (timed)
         if config.media_config.audio_enabled {
             let t = Instant::now();
-            let audio_params = extract_rtp_parameters(MediaKind::Audio, audio_ssrc, config.media_config.video_bitrate_kbps);
+            let audio_params = extract_rtp_parameters(
+                MediaKind::Audio,
+                audio_ssrc,
+                config.media_config.video_bitrate_kbps,
+            );
             let produce_msg = ClientMessage::Produce {
                 transport_id: st_id.clone(),
                 kind: MediaKind::Audio,
@@ -714,7 +830,8 @@ async fn run_client_inner(
             send_message(&mut write, produce_msg).await?;
             match receive_response(&mut read, &mut buffered_events).await? {
                 ServerMessage::ProducerCreated { producer_id } => {
-                    metrics.record_signaling_latency("produce_audio", t.elapsed().as_millis() as u64);
+                    metrics
+                        .record_signaling_latency("produce_audio", t.elapsed().as_millis() as u64);
                     tracing::info!("{}: Audio producer created: {}", client_id, producer_id);
                     metrics.record_producer_created();
                 }
@@ -728,7 +845,11 @@ async fn run_client_inner(
         // Produce video if enabled (timed)
         if config.media_config.video_enabled {
             let t = Instant::now();
-            let video_params = extract_rtp_parameters(MediaKind::Video, video_ssrc, config.media_config.video_bitrate_kbps);
+            let video_params = extract_rtp_parameters(
+                MediaKind::Video,
+                video_ssrc,
+                config.media_config.video_bitrate_kbps,
+            );
             let produce_msg = ClientMessage::Produce {
                 transport_id: st_id.clone(),
                 kind: MediaKind::Video,
@@ -738,7 +859,8 @@ async fn run_client_inner(
             send_message(&mut write, produce_msg).await?;
             match receive_response(&mut read, &mut buffered_events).await? {
                 ServerMessage::ProducerCreated { producer_id } => {
-                    metrics.record_signaling_latency("produce_video", t.elapsed().as_millis() as u64);
+                    metrics
+                        .record_signaling_latency("produce_video", t.elapsed().as_millis() as u64);
                     tracing::info!("{}: Video producer created: {}", client_id, producer_id);
                     metrics.record_producer_created();
                 }
@@ -765,10 +887,14 @@ async fn run_client_inner(
             if let ServerMessage::NewProducer { kind, .. } = e {
                 match kind {
                     MediaKind::Audio => {
-                        if audio_count < config.max_audio_consumers { audio_count += 1; }
+                        if audio_count < config.max_audio_consumers {
+                            audio_count += 1;
+                        }
                     }
                     MediaKind::Video => {
-                        if video_count < config.max_video_consumers { video_count += 1; }
+                        if video_count < config.max_video_consumers {
+                            video_count += 1;
+                        }
                     }
                 }
             }
@@ -777,8 +903,12 @@ async fn run_client_inner(
     };
 
     if !buffered_events.is_empty() {
-        tracing::info!("{}: Replaying {} buffered events, expecting {} consumers",
-            client_id, buffered_events.len(), expected_consumers);
+        tracing::info!(
+            "{}: Replaying {} buffered events, expecting {} consumers",
+            client_id,
+            buffered_events.len(),
+            expected_consumers
+        );
         for event in buffered_events {
             handle_server_message(
                 event,
@@ -793,7 +923,8 @@ async fn run_client_inner(
                 &mut video_consumes_sent,
                 config.max_audio_consumers,
                 config.max_video_consumers,
-            ).await;
+            )
+            .await;
         }
     }
 
@@ -801,16 +932,24 @@ async fn run_client_inner(
     // Cap at 5s to avoid blocking setup. Any remaining consumers are handled by
     // receive_messages_loop which has its own batching.
     if expected_consumers > 0 {
-        let overall_timeout = Duration::from_millis(
-            std::cmp::min(5000, std::cmp::max(1000, (expected_consumers as u64) * 10))
-        );
+        let overall_timeout = Duration::from_millis(std::cmp::min(
+            5000,
+            std::cmp::max(1000, (expected_consumers as u64) * 10),
+        ));
         let consumer_deadline = tokio::time::Instant::now() + overall_timeout;
         let mut received_consumers = pending_resumes.len();
 
-        tracing::debug!("{}: Waiting for {} consumers (have {}), timeout {}ms",
-            client_id, expected_consumers, received_consumers, overall_timeout.as_millis());
+        tracing::debug!(
+            "{}: Waiting for {} consumers (have {}), timeout {}ms",
+            client_id,
+            expected_consumers,
+            received_consumers,
+            overall_timeout.as_millis()
+        );
 
-        while tokio::time::Instant::now() < consumer_deadline && received_consumers < expected_consumers {
+        while tokio::time::Instant::now() < consumer_deadline
+            && received_consumers < expected_consumers
+        {
             tokio::select! {
                 msg = read.next() => {
                     match msg {
@@ -847,7 +986,12 @@ async fn run_client_inner(
                 }
             }
         }
-        tracing::info!("{}: Collected {}/{} consumers", client_id, received_consumers, expected_consumers);
+        tracing::info!(
+            "{}: Collected {}/{} consumers",
+            client_id,
+            received_consumers,
+            expected_consumers
+        );
     }
 
     // Renegotiate SDP once for ALL consumers recorded during setup.
@@ -873,10 +1017,18 @@ async fn run_client_inner(
     }
     if resume_count > 0 {
         write.flush().await?;
-        tracing::info!("{}: Resumed {} consumers after initial SDP renegotiation", client_id, resume_count);
+        tracing::info!(
+            "{}: Resumed {} consumers after initial SDP renegotiation",
+            client_id,
+            resume_count
+        );
     }
 
-    tracing::info!("{}: Setup complete, starting media session for {}s", client_id, config.session_duration.as_secs());
+    tracing::info!(
+        "{}: Setup complete, starting media session for {}s",
+        client_id,
+        config.session_duration.as_secs()
+    );
 
     // Start media sending task (publishers only)
     let media_task = if config.is_publisher {
@@ -886,7 +1038,14 @@ async fn run_client_inner(
         let client_id_send = client_id.clone();
         let webrtc_session_send = Arc::clone(&webrtc_session);
         Some(tokio::spawn(async move {
-            send_real_media_loop(webrtc_session_send, media_gen, media_config, metrics_send, client_id_send).await;
+            send_real_media_loop(
+                webrtc_session_send,
+                media_gen,
+                media_config,
+                metrics_send,
+                client_id_send,
+            )
+            .await;
         }))
     } else {
         None
@@ -917,7 +1076,8 @@ async fn run_client_inner(
             max_audio,
             max_video,
             existing_producer_events,
-        ).await;
+        )
+        .await;
     });
 
     // Session timer starts AFTER setup — late-joining clients get full media time
@@ -1012,8 +1172,17 @@ async fn send_real_media_loop(
 }
 
 async fn receive_messages_loop(
-    mut read: futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>,
-    mut write: futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, Message>,
+    mut read: futures_util::stream::SplitStream<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+    >,
+    mut write: futures_util::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        Message,
+    >,
     metrics: Arc<MetricsCollector>,
     client_id: String,
     timeout: Duration,
@@ -1034,7 +1203,8 @@ async fn receive_messages_loop(
     // Process existing producers with throttling — send one Consume request per
     // iteration of the main loop, interleaved with real-time events. This avoids
     // the burst that kills ratio when many producers already exist.
-    let mut deferred_events: std::collections::VecDeque<ServerMessage> = existing_producer_events.into();
+    let mut deferred_events: std::collections::VecDeque<ServerMessage> =
+        existing_producer_events.into();
     let mut deferred_batch_size: usize = 0;
 
     while tokio::time::Instant::now() < deadline {
@@ -1110,13 +1280,17 @@ async fn receive_messages_loop(
                         &mut video_consumes_sent,
                         max_audio,
                         max_video,
-                    ).await;
+                    )
+                    .await;
                     deferred_batch_size += 1;
                 }
             }
             if deferred_events.is_empty() && deferred_batch_size > 0 {
-                tracing::debug!("{}: Finished processing {} deferred existing-producer events",
-                    client_id, deferred_batch_size);
+                tracing::debug!(
+                    "{}: Finished processing {} deferred existing-producer events",
+                    client_id,
+                    deferred_batch_size
+                );
             }
         }
 
@@ -1193,7 +1367,9 @@ async fn receive_messages_loop(
                     _ = tokio::time::sleep_until(ssrc_deadline) => break,
                 }
             }
-            if ws_dead { break; }
+            if ws_dead {
+                break;
+            }
 
             // Only resume consumers from the CURRENT batch
             let to_resume: Vec<String> = pending_resumes.drain(..batch_size).collect();
@@ -1204,7 +1380,12 @@ async fn receive_messages_loop(
                 };
                 let json = serde_json::to_string(&resume_msg).unwrap();
                 if let Err(e) = write.feed(Message::Text(json.into())).await {
-                    tracing::error!("{}: Failed to feed resume for {}: {}", client_id, consumer_id, e);
+                    tracing::error!(
+                        "{}: Failed to feed resume for {}: {}",
+                        client_id,
+                        consumer_id,
+                        e
+                    );
                 }
             }
             if resume_count > 0 {
@@ -1212,8 +1393,13 @@ async fn receive_messages_loop(
                     tracing::error!("{}: Failed to flush resumes: {}", client_id, e);
                 }
                 total_resumed += resume_count;
-                tracing::debug!("{}: Renegotiated + resumed {} consumers (total: {}, timer: {}ms)",
-                    client_id, resume_count, total_resumed, max_timer_ms);
+                tracing::debug!(
+                    "{}: Renegotiated + resumed {} consumers (total: {}, timer: {}ms)",
+                    client_id,
+                    resume_count,
+                    total_resumed,
+                    max_timer_ms
+                );
             }
 
             if pending_resumes.is_empty() {
@@ -1236,7 +1422,9 @@ async fn handle_server_message(
     metrics: &Arc<MetricsCollector>,
     client_id: &str,
     write: &mut futures_util::stream::SplitSink<
-        tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
         Message,
     >,
     rtp_capabilities: &RtpCapabilities,
@@ -1249,7 +1437,12 @@ async fn handle_server_message(
     max_video: usize,
 ) {
     match msg {
-        ServerMessage::NewProducer { participant_id: _, producer_id, kind, .. } => {
+        ServerMessage::NewProducer {
+            participant_id: _,
+            producer_id,
+            kind,
+            ..
+        } => {
             // Smart subscription: separate caps for audio and video
             let at_cap = match kind {
                 MediaKind::Audio => *audio_consumes_sent >= max_audio,
@@ -1260,8 +1453,12 @@ async fn handle_server_message(
                 return;
             }
 
-            tracing::debug!("{}: New producer available: {} ({:?}), creating consumer...",
-                client_id, producer_id, kind);
+            tracing::debug!(
+                "{}: New producer available: {} ({:?}), creating consumer...",
+                client_id,
+                producer_id,
+                kind
+            );
 
             let consume_msg = ClientMessage::Consume {
                 producer_id: producer_id.clone(),
@@ -1279,15 +1476,31 @@ async fn handle_server_message(
             }
 
             let total = *audio_consumes_sent + *video_consumes_sent;
-            tracing::debug!("{}: Sent Consume request (audio:{}/{}, video:{}/{}, total:{}) for producer {}",
-                client_id, audio_consumes_sent, max_audio,
-                video_consumes_sent, max_video, total, producer_id);
+            tracing::debug!(
+                "{}: Sent Consume request (audio:{}/{}, video:{}/{}, total:{}) for producer {}",
+                client_id,
+                audio_consumes_sent,
+                max_audio,
+                video_consumes_sent,
+                max_video,
+                total,
+                producer_id
+            );
         }
-        ServerMessage::ConsumerCreated { consumer_id, producer_id, kind, rtp_parameters } => {
+        ServerMessage::ConsumerCreated {
+            consumer_id,
+            producer_id,
+            kind,
+            rtp_parameters,
+        } => {
             metrics.record_consumer_created();
 
             // Record consumer info WITHOUT renegotiating SDP yet.
-            if let Err(e) = webrtc_session.lock().await.record_consumer(producer_id.clone(), kind, &rtp_parameters) {
+            if let Err(e) = webrtc_session.lock().await.record_consumer(
+                producer_id.clone(),
+                kind,
+                &rtp_parameters,
+            ) {
                 tracing::error!("{}: Failed to record consumer: {}", client_id, e);
                 return;
             }
@@ -1295,9 +1508,17 @@ async fn handle_server_message(
             pending_resumes.push(consumer_id.clone());
             *needs_renegotiation = true;
         }
-        ServerMessage::ParticipantJoined { participant_id, participant_name, .. } => {
-            tracing::debug!("{}: Participant joined: {} ({})",
-                client_id, participant_name, participant_id);
+        ServerMessage::ParticipantJoined {
+            participant_id,
+            participant_name,
+            ..
+        } => {
+            tracing::debug!(
+                "{}: Participant joined: {} ({})",
+                client_id,
+                participant_name,
+                participant_id
+            );
         }
         ServerMessage::ParticipantLeft { participant_id } => {
             tracing::debug!("{}: Participant left: {}", client_id, participant_id);
@@ -1327,7 +1548,9 @@ async fn handle_server_message(
 
 async fn send_message(
     write: &mut futures_util::stream::SplitSink<
-        tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
         Message,
     >,
     msg: ClientMessage,
@@ -1339,7 +1562,9 @@ async fn send_message(
 
 async fn receive_message(
     read: &mut futures_util::stream::SplitStream<
-        tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
     >,
 ) -> Result<ServerMessage> {
     match read.next().await {
@@ -1356,7 +1581,9 @@ async fn receive_message(
 /// Receive next response message, buffering async event notifications.
 async fn receive_response(
     read: &mut futures_util::stream::SplitStream<
-        tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
     >,
     buffered_events: &mut Vec<ServerMessage>,
 ) -> Result<ServerMessage> {
@@ -1415,6 +1642,7 @@ fn extract_rtp_parameters(kind: MediaKind, ssrc: u32, video_bitrate_kbps: u32) -
     match kind {
         MediaKind::Audio => RtpParameters {
             mid: None,
+            msid: None,
             codecs: vec![RtpCodecParameters::Audio {
                 mime_type: MimeTypeAudio::Opus,
                 payload_type: 111,
@@ -1423,13 +1651,11 @@ fn extract_rtp_parameters(kind: MediaKind, ssrc: u32, video_bitrate_kbps: u32) -
                 parameters: RtpCodecParametersParameters::default(),
                 rtcp_feedback: vec![],
             }],
-            header_extensions: vec![
-                RtpHeaderExtensionParameters {
-                    uri: RtpHeaderExtensionUri::Mid,
-                    id: 1,
-                    encrypt: false,
-                },
-            ],
+            header_extensions: vec![RtpHeaderExtensionParameters {
+                uri: RtpHeaderExtensionUri::Mid,
+                id: 1,
+                encrypt: false,
+            }],
             encodings: vec![RtpEncodingParameters {
                 ssrc: Some(ssrc),
                 ..Default::default()
@@ -1438,6 +1664,7 @@ fn extract_rtp_parameters(kind: MediaKind, ssrc: u32, video_bitrate_kbps: u32) -
         },
         MediaKind::Video => RtpParameters {
             mid: None,
+            msid: None,
             codecs: vec![RtpCodecParameters::Video {
                 mime_type: MimeTypeVideo::Vp8,
                 payload_type: 96,
@@ -1445,13 +1672,11 @@ fn extract_rtp_parameters(kind: MediaKind, ssrc: u32, video_bitrate_kbps: u32) -
                 parameters: RtpCodecParametersParameters::default(),
                 rtcp_feedback: vec![],
             }],
-            header_extensions: vec![
-                RtpHeaderExtensionParameters {
-                    uri: RtpHeaderExtensionUri::Mid,
-                    id: 1,
-                    encrypt: false,
-                },
-            ],
+            header_extensions: vec![RtpHeaderExtensionParameters {
+                uri: RtpHeaderExtensionUri::Mid,
+                id: 1,
+                encrypt: false,
+            }],
             encodings: vec![RtpEncodingParameters {
                 ssrc: Some(ssrc),
                 max_bitrate: Some(video_bitrate_kbps * 1000),
@@ -1465,18 +1690,22 @@ fn extract_rtp_parameters(kind: MediaKind, ssrc: u32, video_bitrate_kbps: u32) -
 fn print_usage() {
     println!("Load Test for SimplestChat");
     println!("\nUsage:");
-    println!("  cargo run --bin load_test [OPTIONS]");
+    println!("  cargo run --features load-test --bin load_test -- [OPTIONS]");
     println!("\nOptions:");
     println!("  -c, --clients <N>          Number of concurrent clients (default: 5)");
     println!("  -d, --duration <SECS>      Test duration in seconds (default: 30)");
     println!("  -r, --ramp-up <SECS>       Ramp-up period in seconds (default: 5)");
     println!("  -s, --server <URL>         Server WebSocket URL (default: ws://localhost:3000/ws)");
     println!("  --room <ID>                Room ID to join (default: load-test-room)");
-    println!("  --rooms <N>                Number of rooms to distribute clients across (default: 1)");
+    println!(
+        "  --rooms <N>                Number of rooms to distribute clients across (default: 1)"
+    );
     println!("  --publish-ratio <0.0-1.0>  Fraction of clients that publish media (default: 1.0)");
     println!("  --mode <MODE>              Preset publish ratios: webinar (1%), panel (10%),");
     println!("                             classroom (20%), conference (100%)");
-    println!("  --churn-rate <N>           Clients churning (disconnect/reconnect) per second (default: 0)");
+    println!(
+        "  --churn-rate <N>           Clients churning (disconnect/reconnect) per second (default: 0)"
+    );
     println!("  --audio-only               Send only audio (no video)");
     println!("  --video-only               Send only video (no audio)");
     println!("  -q, --quality <PRESET>     Video quality: 480p (default), 720p, 1080p");
@@ -1486,19 +1715,27 @@ fn print_usage() {
     println!("  -h, --help                 Print this help message");
     println!("\nExamples:");
     println!("  # Basic load test");
-    println!("  cargo run --bin load_test -- --clients 10 --duration 60");
+    println!("  cargo run --features load-test --bin load_test -- --clients 10 --duration 60");
     println!("");
     println!("  # Multi-room: 1000 clients across 16 rooms (one per worker)");
-    println!("  cargo run --bin load_test -- --clients 1000 --rooms 16 --duration 30");
+    println!(
+        "  cargo run --features load-test --bin load_test -- --clients 1000 --rooms 16 --duration 30"
+    );
     println!("");
     println!("  # Webinar: 10 presenters, 990 viewers");
-    println!("  cargo run --bin load_test -- --clients 1000 --mode webinar --duration 60");
+    println!(
+        "  cargo run --features load-test --bin load_test -- --clients 1000 --mode webinar --duration 60"
+    );
     println!("");
     println!("  # Churn test: 5 clients reconnecting per second");
-    println!("  cargo run --bin load_test -- --clients 100 --churn-rate 5 --duration 60");
+    println!(
+        "  cargo run --features load-test --bin load_test -- --clients 100 --churn-rate 5 --duration 60"
+    );
     println!("");
     println!("  # Panel discussions: 10% publish, 16 rooms");
-    println!("  cargo run --bin load_test -- --clients 1000 --rooms 16 --mode panel");
+    println!(
+        "  cargo run --features load-test --bin load_test -- --clients 1000 --rooms 16 --mode panel"
+    );
     println!("\nEnvironment Variables:");
     println!("  RUST_LOG=debug          Enable debug logging");
     println!("  RUST_LOG=info           Enable info logging (default)");

@@ -1,0 +1,111 @@
+#ifndef MS_RTC_SCTP_SUPPORTED_EXTENSIONS_PARAMETER_HPP
+#define MS_RTC_SCTP_SUPPORTED_EXTENSIONS_PARAMETER_HPP
+
+#include "common.hpp"
+#include "RTC/SCTP/packet/Chunk.hpp"
+#include "RTC/SCTP/packet/Parameter.hpp"
+#include "Utils.hpp"
+
+namespace RTC
+{
+	namespace SCTP
+	{
+		/**
+		 * SCTP Supported Extensions Parameter (SUPPORTED-EXTENSIONS) (32776).
+		 *
+		 * @see RFC 5061.
+		 *
+		 *  0                   1                   2                   3
+		 *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |     Parameter Type = 0x8008   |      Parameter Length         |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * | CHUNK TYPE 1  |  CHUNK TYPE 2 |  CHUNK TYPE 3 |  CHUNK TYPE 4 |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * |                             ....                              |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 * | CHUNK TYPE N  |      PAD      |      PAD      |      PAD      |
+		 * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 */
+
+		// Forward declaration.
+		class Chunk;
+
+		class SupportedExtensionsParameter : public Parameter
+		{
+			// We need that chunk calls protected and private methods in this class.
+			friend class Chunk;
+
+		public:
+			/**
+			 * Parse a SupportedExtensionsParameter.
+			 *
+			 * @remarks
+			 * `bufferLength` may exceed the exact length of the parameter.
+			 */
+			static SupportedExtensionsParameter* Parse(const uint8_t* buffer, size_t bufferLength);
+
+			/**
+			 * Create a SupportedExtensionsParameter.
+			 *
+			 * @remarks
+			 * `bufferLength` could be greater than the parameter real length.
+			 */
+			static SupportedExtensionsParameter* Factory(uint8_t* buffer, size_t bufferLength);
+
+		private:
+			/**
+			 * Parse a SupportedExtensionsParameter.
+			 *
+			 * @remarks
+			 * To be used only by `Chunk::ParseParameters()`.
+			 */
+			static SupportedExtensionsParameter* ParseStrict(
+			  const uint8_t* buffer, size_t bufferLength, uint16_t parameterLength, uint8_t padding);
+
+		private:
+			/**
+			 * Only used by Parse(), ParseStrict() and Factory() static methods.
+			 */
+			SupportedExtensionsParameter(uint8_t* buffer, size_t bufferLength);
+
+		public:
+			~SupportedExtensionsParameter() override;
+
+			void Dump(int indentation = 0) const final;
+
+			SupportedExtensionsParameter* Clone(uint8_t* buffer, size_t bufferLength) const final;
+
+			uint16_t GetNumberOfChunkTypes() const
+			{
+				return GetVariableLengthValueLength();
+			}
+
+			Chunk::ChunkType GetChunkTypeAt(uint16_t idx) const
+			{
+				return static_cast<Chunk::ChunkType>(
+				  Utils::Byte::Get1Byte(GetVariableLengthValuePointer(), idx));
+			}
+
+			bool IncludesChunkType(Chunk::ChunkType chunkType) const
+			{
+				for (size_t idx{ 0 }; idx < GetNumberOfChunkTypes(); ++idx)
+				{
+					if (chunkType == GetChunkTypeAt(idx))
+					{
+						return true;
+					}
+				}
+
+				return false;
+			}
+
+			void AddChunkType(Chunk::ChunkType chunkType);
+
+		protected:
+			SupportedExtensionsParameter* SoftClone(const uint8_t* buffer) const final;
+		};
+	} // namespace SCTP
+} // namespace RTC
+
+#endif
