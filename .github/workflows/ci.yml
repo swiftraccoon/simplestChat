@@ -154,10 +154,14 @@ jobs:
         env:
           TRUSTED_PROXY_SECRET: ci-only-proxy-secret-00000000000000000000000000000000
         run: |
+          # The official image marks /usr/bin/caddy with NET_BIND_SERVICE.
+          # Retain only that capability so Linux can execute the binary while
+          # the validation container remains otherwise isolated.
           docker run --rm \
             --network none \
             --read-only \
             --cap-drop ALL \
+            --cap-add NET_BIND_SERVICE \
             --security-opt no-new-privileges \
             --tmpfs /config:rw,nosuid,nodev,noexec,size=16m \
             --tmpfs /data:rw,nosuid,nodev,noexec,size=16m \
