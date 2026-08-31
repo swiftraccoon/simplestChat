@@ -53,7 +53,8 @@ jobs:
       - name: Verify native security patches
         run: |
           cargo tree --locked -i lru | grep -F 'lru v0.18.3'
-          cargo tree --locked -i mediasoup-sys | grep -F '(vendor/mediasoup-sys-0.17.0)'
+          cargo tree --locked -i mediasoup-sys \
+            | grep -Eq 'mediasoup-sys v0\.17\.0 \(.*/vendor/mediasoup-sys-0\.17\.0\)$'
           grep -Fq 'source_filename = abseil-cpp-20240722.2.tar.gz' \
             vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp.wrap
           grep -Fq 'source_hash = ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8' \
