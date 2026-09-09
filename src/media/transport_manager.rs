@@ -405,7 +405,8 @@ impl TransportManager {
         Ok(producer)
     }
 
-    /// Creates a consumer on the participant's receive transport
+    /// Creates a paused consumer on the participant's receive transport.
+    /// The client must configure its local consumer before acknowledging with resume_consumer.
     pub async fn create_consumer(
         &self,
         participant_id: &str,
@@ -413,7 +414,6 @@ impl TransportManager {
         rtp_capabilities: RtpCapabilities,
         app_data: AppData,
         sender: Option<mpsc::Sender<Arc<String>>>,
-        paused: bool,
         consumer_counter: Option<Arc<AtomicUsize>>,
     ) -> MediaResult<Consumer> {
         let participant_lock = self.get_participant_lock(participant_id)?;
@@ -436,7 +436,9 @@ impl TransportManager {
 
         let mut consumer_options = ConsumerOptions::new(producer_id, rtp_capabilities);
         consumer_options.app_data = app_data;
-        consumer_options.paused = paused;
+        // RTP must not reach the browser before its SDP is ready, even when
+        // the producer is active. Producer pause state is tracked separately.
+        consumer_options.paused = true;
 
         let consumer = transport
             .consume(consumer_options)
@@ -1093,6 +1095,7 @@ mod tests {
     use crate::media::config::{MediaConfig, RouterConfig};
     use crate::media::router_manager::RouterManager;
     use crate::media::worker_manager::WorkerManager;
+    use std::num::{NonZeroU8, NonZeroU32};
 
     struct DropCounter(Arc<AtomicUsize>);
 
@@ -1181,7 +1184,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_transport_creation() {
-        let config = Arc::new(MediaConfig::default());
+        // Keep this test isolated from a running local application and other
+        // media tests by asking the OS for an available UDP port first.
+        let reservation = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 1;
+        config.webrtc_server_port_base = reservation.local_addr().unwrap().port();
+        drop(reservation);
+        let config = Arc::new(config);
         let worker_manager = Arc::new(WorkerManager::new(config.clone()).await.unwrap());
         let router_manager = RouterManager::new(worker_manager.clone());
         let transport_manager = TransportManager::new();
@@ -1221,5 +1231,73 @@ mod tests {
             .await;
 
         assert!(recv_transport.is_ok());
+
+        let producer = transport_manager
+            .create_producer(
+                &participant_id,
+                MediaKind::Audio,
+                RtpParameters {
+                    mid: Some("audio".to_string()),
+                    codecs: vec![RtpCodecParameters::Audio {
+                        mime_type: MimeTypeAudio::Opus,
+                        payload_type: 111,
+                        clock_rate: NonZeroU32::new(48_000).unwrap(),
+                        channels: NonZeroU8::new(2).unwrap(),
+                        parameters: RtpCodecParametersParameters::default(),
+                        rtcp_feedback: vec![],
+                    }],
+                    ..RtpParameters::default()
+                },
+                AppData::default(),
+            )
+            .await
+            .unwrap();
+
+        // Both active and paused producers require the same browser-ready
+        // acknowledgment. Producer pause must remain independent of it.
+        for producer_paused in [false, true] {
+            if producer_paused {
+                transport_manager
+                    .pause_producer(&participant_id, &producer.id().to_string())
+                    .await
+                    .unwrap();
+            }
+            let consumer = transport_manager
+                .create_consumer(
+                    &participant_id,
+                    producer.id(),
+                    RtpCapabilities {
+                        codecs: config.router_config.media_codecs.clone(),
+                        ..RtpCapabilities::default()
+                    },
+                    AppData::default(),
+                    None,
+                    None,
+                )
+                .await
+                .unwrap();
+            let info = crate::media::types::ConsumerInfo::from_consumer(&consumer);
+            assert!(info.paused, "new consumers must wait for browser readiness");
+            assert_eq!(info.producer_paused, producer_paused);
+            assert!(consumer.dump().await.unwrap().paused);
+
+            assert!(
+                transport_manager
+                    .resume_consumer(&participant_id, &info.id)
+                    .await
+                    .unwrap(),
+                "the first browser acknowledgment must resume the worker consumer"
+            );
+            let resumed = consumer.dump().await.unwrap();
+            assert!(!resumed.paused);
+            assert_eq!(resumed.producer_paused, producer_paused);
+            assert!(
+                !transport_manager
+                    .resume_consumer(&participant_id, &info.id)
+                    .await
+                    .unwrap(),
+                "repeated acknowledgments remain idempotent"
+            );
+        }
     }
 }

@@ -105,14 +105,14 @@ pub struct ConsumerInfo {
 }
 
 impl ConsumerInfo {
-    pub fn from_consumer(consumer: &Consumer, producer_paused: bool) -> Self {
+    pub fn from_consumer(consumer: &Consumer) -> Self {
         Self {
             id: consumer.id().to_string(),
             producer_id: consumer.producer_id().to_string(),
             kind: consumer.kind(),
             rtp_parameters: consumer.rtp_parameters().clone(),
             paused: consumer.paused(),
-            producer_paused,
+            producer_paused: consumer.producer_paused(),
         }
     }
 }

@@ -1476,12 +1476,6 @@ async fn handle_client_message(
             rtp_capabilities,
         } => {
             if let Some(room_id) = current_room_id.as_ref() {
-                let producer_paused = room_manager
-                    .media_server()
-                    .transport_manager()
-                    .find_producer_paused(producer_id)
-                    .unwrap_or(false);
-
                 let consumer_info = room_manager
                     .create_consumer(
                         room_id,
@@ -1490,7 +1484,6 @@ async fn handle_client_message(
                         producer_id.parse()?,
                         rtp_capabilities.clone(),
                         Some(sender.clone()),
-                        producer_paused,
                     )
                     .await?;
 
@@ -1507,7 +1500,7 @@ async fn handle_client_message(
 
                 // If the producer is already paused, immediately notify the consuming client
                 // so it can hide the video tile instead of showing a black square.
-                if producer_paused {
+                if consumer_info.producer_paused {
                     send_json(
                         sender,
                         &ServerMessage::ProducerPaused {

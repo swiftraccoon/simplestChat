@@ -2665,7 +2665,6 @@ impl RoomManager {
         producer_id: ProducerId,
         rtp_capabilities: RtpCapabilities,
         notification_sender: Option<mpsc::Sender<Arc<String>>>,
-        paused: bool,
     ) -> MediaResult<crate::media::types::ConsumerInfo> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
@@ -2709,7 +2708,6 @@ impl RoomManager {
                 rtp_capabilities,
                 AppData::default(),
                 notification_sender,
-                paused,
                 consumer_counter,
             )
             .await?;
@@ -2728,7 +2726,7 @@ impl RoomManager {
             ));
         }
 
-        let consumer_info = crate::media::types::ConsumerInfo::from_consumer(&consumer, paused);
+        let consumer_info = crate::media::types::ConsumerInfo::from_consumer(&consumer);
 
         debug!(
             "Created consumer {} for participant {} in room {}",

@@ -49,6 +49,14 @@ impl MediaConfig {
             }
         }
 
+        match std::env::var("WEBRTC_SERVER_PORT_BASE") {
+            Ok(value) => config.webrtc_server_port_base = parse_webrtc_port_base(&value)?,
+            Err(std::env::VarError::NotPresent) => {}
+            Err(std::env::VarError::NotUnicode(_)) => {
+                anyhow::bail!("WEBRTC_SERVER_PORT_BASE must be valid UTF-8")
+            }
+        }
+
         config.validate()?;
         Ok(config)
     }
@@ -69,6 +77,17 @@ impl MediaConfig {
             worker_index,
         )
     }
+}
+
+fn parse_webrtc_port_base(value: &str) -> anyhow::Result<u16> {
+    value
+        .trim()
+        .parse::<u16>()
+        .ok()
+        .filter(|port| *port > 0)
+        .ok_or_else(|| {
+            anyhow::anyhow!("WEBRTC_SERVER_PORT_BASE must be an integer from 1 through 65535")
+        })
 }
 
 fn parse_media_workers(value: &str) -> anyhow::Result<usize> {
@@ -332,6 +351,14 @@ mod tests {
         assert!(parse_media_workers("65").is_err());
         assert!(parse_media_workers("many").is_err());
         assert!((1..=MAX_MEDIA_WORKERS).contains(&WorkerConfig::default().num_workers));
+    }
+
+    #[test]
+    fn media_port_base_is_explicit_and_bounded() {
+        assert_eq!(parse_webrtc_port_base("41000").unwrap(), 41000);
+        assert!(parse_webrtc_port_base("0").is_err());
+        assert!(parse_webrtc_port_base("65536").is_err());
+        assert!(parse_webrtc_port_base("ports").is_err());
     }
 
     #[test]

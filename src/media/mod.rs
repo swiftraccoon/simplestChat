@@ -135,7 +135,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_media_server_creation() {
-        let config = MediaConfig::default();
+        let reservation = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 1;
+        config.webrtc_server_port_base = reservation.local_addr().unwrap().port();
+        drop(reservation);
         let server = MediaServer::new(config).await;
         assert!(server.is_ok());
     }

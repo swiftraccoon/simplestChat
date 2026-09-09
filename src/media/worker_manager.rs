@@ -15,6 +15,18 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
+/// Unavailable workers have no load entry and must not win against live ones.
+fn select_worker_by_load(
+    loads: impl IntoIterator<Item = Option<usize>>,
+) -> MediaResult<(usize, usize)> {
+    loads
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, count)| count.map(|count| (index, count)))
+        .min_by_key(|(_, count)| *count)
+        .ok_or_else(|| MediaError::WorkerError("No live media workers available".to_string()))
+}
+
 /// Manages a pool of mediasoup Workers
 pub struct WorkerManager {
     workers: Arc<RwLock<Vec<Worker>>>,
@@ -127,9 +139,12 @@ impl WorkerManager {
         // .detach() — dropping the HandlerId would unregister the callback immediately
         worker
             .on_dead({
-                move |_reason| {
-                    error!("Worker {} (index {}) died!", worker_id, worker_index);
-                    // In production, you'd want to recreate the worker here
+                move |reason| {
+                    error!(
+                        ?reason,
+                        "Worker {} (index {}) died; excluded from new room allocation. Restart the server to restore worker capacity",
+                        worker_id, worker_index
+                    );
                 }
             })
             .detach();
@@ -156,33 +171,25 @@ impl WorkerManager {
     /// Returns both the Worker and its WorkerId (needed to look up the WebRtcServer).
     ///
     /// # Errors
-    /// Returns `MediaError::WorkerError` if no workers are available
+    /// Returns `MediaError::WorkerError` if no live workers are available
     pub async fn get_least_loaded_worker(&self) -> MediaResult<(Worker, WorkerId)> {
         let workers = self.workers.read().await;
 
-        if workers.is_empty() {
-            return Err(MediaError::WorkerError("No workers available".to_string()));
-        }
-
-        // Select worker with the lowest consumer count
+        // A dead worker's consumers close and its count falls to zero, so
+        // exclude closed workers before comparing live-worker load.
         let (best_idx, best_count) = {
             let consumer_counts = self
                 .worker_consumer_counts
                 .read()
                 .unwrap_or_else(|e| e.into_inner());
-            let mut best_idx = 0;
-            let mut best_count = usize::MAX;
-            for (idx, worker) in workers.iter().enumerate() {
-                let count = consumer_counts
-                    .get(&worker.id())
-                    .map(|c| c.load(Ordering::Relaxed))
-                    .unwrap_or(0);
-                if count < best_count {
-                    best_count = count;
-                    best_idx = idx;
-                }
-            }
-            (best_idx, best_count)
+            select_worker_by_load(workers.iter().map(|worker| {
+                (!worker.closed()).then(|| {
+                    consumer_counts
+                        .get(&worker.id())
+                        .map(|count| count.load(Ordering::Relaxed))
+                        .unwrap_or(0)
+                })
+            }))?
         }; // consumer_counts guard dropped here
 
         let worker = workers[best_idx].clone();
@@ -491,9 +498,41 @@ impl Drop for WorkerManager {
 mod tests {
     use super::*;
 
+    #[test]
+    fn worker_selection_skips_unavailable_workers() {
+        assert_eq!(
+            select_worker_by_load([None, Some(8), Some(3), None]).unwrap(),
+            (2, 3),
+            "dead workers must not outrank live workers carrying calls"
+        );
+        assert_eq!(
+            select_worker_by_load([None, Some(usize::MAX)]).unwrap(),
+            (1, usize::MAX),
+            "a live worker remains selectable at any load"
+        );
+    }
+
+    #[test]
+    fn worker_selection_reports_no_live_capacity() {
+        for loads in [vec![], vec![None], vec![None, None]] {
+            assert!(matches!(
+                select_worker_by_load(loads),
+                Err(MediaError::WorkerError(message))
+                    if message == "No live media workers available"
+            ));
+        }
+    }
+
     #[tokio::test]
     async fn test_worker_creation() {
-        let config = Arc::new(MediaConfig::default());
+        // Do not compete with an application already listening on the default
+        // media ports. Release an OS-selected port immediately before startup.
+        let reservation = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 1;
+        config.webrtc_server_port_base = reservation.local_addr().unwrap().port();
+        drop(reservation);
+        let config = Arc::new(config);
         let manager = WorkerManager::new(config).await;
         assert!(manager.is_ok());
 
