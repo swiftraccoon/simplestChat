@@ -2,6 +2,7 @@
 
 // Room module - Room state management and participant tracking
 pub mod api;
+pub mod community;
 pub mod moderation;
 pub mod roles;
 pub mod settings;

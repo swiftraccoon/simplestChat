@@ -29,6 +29,7 @@ const SEND_TIMEOUT: Duration = Duration::from_secs(10);
 /// Idle timeout — close connection if no message received within this duration.
 /// Prevents Slowloris-style attacks that hold semaphore permits indefinitely.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(300); // 5 minutes
+const AUTH_REVALIDATE_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Token bucket rate limiter: max tokens (burst capacity).
 const RATE_LIMIT_MAX_TOKENS: u64 = 100;
@@ -242,6 +243,7 @@ fn is_admin_mutation(message: &ClientMessage) -> bool {
 struct GraceEntry {
     reconnect_token: String,
     authenticated_subject: Option<String>,
+    authenticated_version: Option<i64>,
     /// Media limiter state for this exact room-session incarnation.
     media_rate_state: MediaSessionRateState,
     /// Sender channel that owned the participant session when it disconnected.
@@ -267,6 +269,36 @@ impl GracePeriodMap {
             inner: Arc::new(StdRwLock::new(HashMap::new())),
             max_entries: max_entries.max(1),
         }
+    }
+
+    pub(crate) fn take_revoked(
+        &self,
+        user_id: &str,
+        minimum_version: i64,
+    ) -> Vec<(String, String, mpsc::Sender<Arc<String>>)> {
+        let mut map = self
+            .inner
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
+        let mut removed = Vec::new();
+        map.retain(|(room_id, participant_id, _), entry| {
+            if entry.authenticated_subject.as_deref() == Some(user_id)
+                && entry
+                    .authenticated_version
+                    .is_none_or(|version| version < minimum_version)
+            {
+                entry.timer.abort();
+                removed.push((
+                    room_id.clone(),
+                    participant_id.clone(),
+                    entry.sender.clone(),
+                ));
+                false
+            } else {
+                true
+            }
+        });
+        removed
     }
 
     /// Retain a disconnected session without evicting another reconnectable
@@ -330,6 +362,20 @@ fn reconnect_attempt_allowed(current_room_id: Option<&str>, in_lobby: bool) -> b
     current_room_id.is_none() && !in_lobby
 }
 
+async fn account_credentials_current(pool: Option<&sqlx::PgPool>, claims: &Claims) -> bool {
+    let Some(pool) = pool else {
+        return false;
+    };
+    matches!(
+        tokio::time::timeout(
+            AUTH_REVALIDATE_INTERVAL,
+            crate::auth::jwt::validate_current_claims(pool, claims)
+        )
+        .await,
+        Ok(Ok(()))
+    )
+}
+
 /// Handles a single WebSocket connection
 pub async fn handle_connection(
     socket: WebSocket,
@@ -340,6 +386,8 @@ pub async fn handle_connection(
     _permit: OwnedSemaphorePermit,
     authenticated_user: Option<Claims>,
     client_ip: Option<std::net::IpAddr>,
+    db_pool: Option<sqlx::PgPool>,
+    mut auth_revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
 ) {
     // Use authenticated user ID if available, otherwise generate anonymous UUID
     let mut participant_id = authenticated_user
@@ -425,6 +473,9 @@ pub async fn handle_connection(
     let mut last_room_password_hash: Option<Instant> = None;
     let mut last_join_attempt: Option<Instant> = None;
     let mut last_voice_request: Option<Instant> = None;
+    let mut credentials_invalidated = false;
+    let mut next_auth_check = Instant::now();
+    let mut last_frame_received = Instant::now();
 
     loop {
         // The JWT is a connection credential, not only a handshake credential.
@@ -435,14 +486,39 @@ pub async fn handle_connection(
             .map_or(u64::MAX, |duration| duration.as_secs());
         if auth_exp.is_some_and(|exp| exp <= now_unix) {
             info!(participant_id, "JWT expired; closing WebSocket");
+            credentials_invalidated = true;
             break;
         }
+        let idle_remaining = IDLE_TIMEOUT.saturating_sub(last_frame_received.elapsed());
         let receive_timeout = auth_exp
             .map(|exp| Duration::from_secs(exp.saturating_sub(now_unix)))
-            .map_or(IDLE_TIMEOUT, |remaining| remaining.min(IDLE_TIMEOUT));
+            .map_or(idle_remaining, |remaining| remaining.min(idle_remaining));
 
         let receive_result = tokio::select! {
+            biased;
             _ = tx.closed() => break,
+            notice = auth_revocations.recv(), if is_authenticated => {
+                match notice {
+                    Ok((subject, minimum_version)) if authenticated_user.as_ref().is_some_and(|claims| claims.sub == subject && claims.auth_version < minimum_version) => {
+                        credentials_invalidated = true;
+                        break;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => next_auth_check = Instant::now(),
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => { credentials_invalidated = true; break; }
+                    _ => {}
+                }
+                continue;
+            }
+            _ = tokio::time::sleep_until(next_auth_check.into()), if is_authenticated => {
+                if let Some(claims) = authenticated_user.as_ref() {
+                    if !account_credentials_current(db_pool.as_ref(), claims).await {
+                        credentials_invalidated = true;
+                        break;
+                    }
+                }
+                next_auth_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
+                continue;
+            }
             result = tokio::time::timeout(receive_timeout, ws_receiver.next()) => result,
         };
         let msg = match receive_result {
@@ -453,12 +529,14 @@ pub async fn handle_connection(
                     .is_some_and(|exp| exp <= now_unix.saturating_add(receive_timeout.as_secs()))
                 {
                     info!(participant_id, "JWT expired; closing WebSocket");
+                    credentials_invalidated = true;
                 } else {
                     warn!("Idle timeout for participant {}", participant_id);
                 }
                 break;
             }
         };
+        last_frame_received = Instant::now();
 
         // Every inbound frame consumes rate-limit capacity. Limiting only text
         // frames lets binary/control-frame floods bypass connection accounting.
@@ -888,9 +966,13 @@ pub async fn handle_connection(
         task.abort();
     }
 
+    if !credentials_invalidated && let Some(claims) = authenticated_user.as_ref() {
+        credentials_invalidated = !account_credentials_current(db_pool.as_ref(), claims).await;
+    }
+
     // On disconnect: lobby participants clean up immediately, room participants get grace period
     if let Some(room_id) = current_room_id.take() {
-        if in_lobby.load(Ordering::Acquire) {
+        if in_lobby.load(Ordering::Acquire) || credentials_invalidated {
             // Lobby participants have no transports/media — clean up immediately
             info!(
                 "Lobby participant {} disconnected from room {}, cleaning up immediately",
@@ -917,9 +999,24 @@ pub async fn handle_connection(
                 authenticated_user.as_ref().map(|claims| claims.sub.clone());
             let timer_subject = authenticated_subject.clone();
             let timer_sender = tx.clone();
+            let timer_claims = authenticated_user.clone();
+            let timer_pool = db_pool.clone();
 
             let timer = tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+                let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+                loop {
+                    let next =
+                        (tokio::time::Instant::now() + AUTH_REVALIDATE_INTERVAL).min(deadline);
+                    tokio::time::sleep_until(next).await;
+                    if tokio::time::Instant::now() >= deadline {
+                        break;
+                    }
+                    if let Some(claims) = timer_claims.as_ref() {
+                        if !account_credentials_current(timer_pool.as_ref(), claims).await {
+                            break;
+                        }
+                    }
+                }
                 // Only the timer that still owns this exact grace entry may
                 // remove the participant. A reconnect or replacement timer can
                 // win the race at the deadline without being torn down by an
@@ -947,6 +1044,9 @@ pub async fn handle_connection(
                 GraceEntry {
                     reconnect_token,
                     authenticated_subject,
+                    authenticated_version: authenticated_user
+                        .as_ref()
+                        .map(|claims| claims.auth_version),
                     media_rate_state,
                     sender: tx.clone(),
                     timer,
@@ -2122,9 +2222,39 @@ mod security_tests {
         GraceEntry {
             reconnect_token: token.to_string(),
             authenticated_subject: None,
+            authenticated_version: None,
             media_rate_state: MediaSessionRateState::new(),
             sender,
             timer: tokio::spawn(std::future::pending()),
+        }
+    }
+
+    #[tokio::test]
+    async fn credential_revocation_only_removes_older_account_grace_entries() {
+        let map = GracePeriodMap::new();
+        for (token, subject, version) in [
+            ("old", Some("alice"), Some(0)),
+            ("new", Some("alice"), Some(1)),
+            ("other", Some("bob"), Some(0)),
+            ("guest", None, None),
+        ] {
+            let mut entry = grace_entry(token);
+            entry.authenticated_subject = subject.map(str::to_owned);
+            entry.authenticated_version = version;
+            assert!(map.insert("room".into(), token.into(), entry));
+        }
+        let removed = map.take_revoked("alice", 1);
+        assert_eq!(removed.len(), 1);
+        assert_eq!(removed[0].1, "old");
+        for (token, subject) in [
+            ("new", Some("alice")),
+            ("other", Some("bob")),
+            ("guest", None),
+        ] {
+            map.remove_if_token_matches("room", token, token, subject)
+                .expect("unaffected session retained")
+                .timer
+                .abort();
         }
     }
 

@@ -288,6 +288,7 @@ pub struct SignalingServer {
     challenge_store: Option<Arc<ChallengeStore>>,
     registration_enabled: bool,
     max_users: i64,
+    auth_revocations: tokio::sync::broadcast::Sender<(String, i64)>,
 }
 
 impl SignalingServer {
@@ -423,6 +424,7 @@ impl SignalingServer {
             challenge_store,
             registration_enabled,
             max_users,
+            auth_revocations: tokio::sync::broadcast::channel(128).0,
         })
     }
 
@@ -474,15 +476,51 @@ impl SignalingServer {
         self.password_work.clone().try_acquire_owned().ok()
     }
 
+    /// Notify active sockets and release media retained for reconnect. Version
+    /// matching leaves a newer login intact if a notification is delivered late.
+    pub(crate) fn revoke_account_sessions(&self, user_id: String, minimum_version: i64) {
+        let _ = self
+            .auth_revocations
+            .send((user_id.clone(), minimum_version));
+        let entries = self.grace_periods.take_revoked(&user_id, minimum_version);
+        let manager = self.room_manager.clone();
+        tokio::spawn(async move {
+            for (room_id, participant_id, sender) in entries {
+                if let Err(error) = manager
+                    .remove_participant_for_sender(&room_id, &participant_id, &sender)
+                    .await
+                {
+                    warn!(%error, "Failed to remove a revoked reconnect session");
+                }
+            }
+        });
+    }
+
     /// Creates the Axum router for the signaling server
     pub fn router(self) -> Router {
-        use axum::routing::{delete, post};
+        use axum::routing::{delete, patch, post};
 
         let auth_routes = Router::new()
             .route("/register", post(crate::auth::routes::register))
             .route("/login", post(crate::auth::routes::login))
             .route("/refresh", post(crate::auth::routes::refresh))
             .route("/logout", post(crate::auth::routes::logout))
+            .route(
+                "/profile",
+                get(crate::auth::account::get_profile)
+                    .patch(crate::auth::account::update_profile)
+                    .layer(DefaultBodyLimit::max(256 * 1024)),
+            )
+            .route("/profiles/{id}", get(crate::auth::account::public_profile))
+            .route("/password", post(crate::auth::account::change_password))
+            .route(
+                "/recovery/key",
+                post(crate::auth::account::create_recovery_key),
+            )
+            .route(
+                "/recovery/redeem",
+                post(crate::auth::account::redeem_recovery),
+            )
             .route(
                 "/passkey/register/start",
                 post(crate::auth::routes::passkey_register_start),
@@ -513,6 +551,12 @@ impl SignalingServer {
         let room_routes = Router::new()
             .route("/", get(crate::room::api::list_rooms))
             .route("/", post(crate::room::api::create_room))
+            .route("/mine", get(crate::room::api::owned_rooms))
+            .route(
+                "/{id}/identity",
+                patch(crate::room::api::update_room_identity)
+                    .layer(DefaultBodyLimit::max(256 * 1024)),
+            )
             .route("/{id}", delete(crate::room::api::delete_room))
             .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT))
             .layer(middleware::from_fn_with_state(
@@ -667,6 +711,7 @@ async fn ws_handler(
 
     // A supplied token must validate. Silently treating a bad token as a guest
     // creates dangerous client/server authorization state confusion.
+    let auth_revocations = server.auth_revocations.subscribe();
     let authenticated_user = match auth_token.as_deref() {
         None => None,
         Some(token) => {
@@ -674,7 +719,21 @@ async fn ws_handler(
                 return (StatusCode::UNAUTHORIZED, "Authentication unavailable").into_response();
             };
             match crate::auth::jwt::validate_token(token, secret) {
-                Ok(claims) => Some(claims),
+                Ok(claims) => {
+                    let Some(pool) = server.db_pool() else {
+                        return (StatusCode::UNAUTHORIZED, "Authentication unavailable")
+                            .into_response();
+                    };
+                    let Some(_auth_permit) = server.try_acquire_auth_request() else {
+                        return crate::auth::types::AuthError::ServiceBusy.into_response();
+                    };
+                    if let Err(error) =
+                        crate::auth::jwt::validate_current_claims(pool, &claims).await
+                    {
+                        return error.into_response();
+                    }
+                    Some(claims)
+                }
                 Err(_) => {
                     return (StatusCode::UNAUTHORIZED, "Invalid or expired token").into_response();
                 }
@@ -699,6 +758,8 @@ async fn ws_handler(
                 permit,
                 authenticated_user,
                 Some(client_ip),
+                server.db_pool,
+                auth_revocations,
             )
             .await;
         })

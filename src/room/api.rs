@@ -1,13 +1,14 @@
 #![forbid(unsafe_code)]
 
-use crate::auth::{jwt, types::AuthError};
+use crate::auth::{account, types::AuthError};
 use crate::room::DeleteRoomResult;
+use crate::room::community::RoomIdentityUpdate;
 use crate::room::settings::{self, CreateRoomRequest, RoomSettings};
 use crate::signaling::SignalingServer;
 use axum::{
     Json,
     extract::{Path, Query, State},
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,36 @@ pub struct RoomListItem {
     pub participant_count: usize,
     pub password_protected: bool,
     pub moderated: bool,
+    pub broadcaster_count: usize,
+    pub description: String,
+    pub image_url: Option<String>,
+    pub secret: bool,
+}
+
+type RoomListRow = (
+    String,
+    String,
+    Option<String>,
+    bool,
+    bool,
+    String,
+    Option<String>,
+    bool,
+);
+
+fn room_list_item(server: &SignalingServer, row: RoomListRow) -> RoomListItem {
+    RoomListItem {
+        participant_count: server.room_manager().participant_count_for_room(&row.0),
+        broadcaster_count: server.room_manager().broadcaster_count_for_room(&row.0),
+        id: row.0,
+        display_name: row.1,
+        topic: row.2,
+        password_protected: row.3,
+        moderated: row.4,
+        description: row.5,
+        image_url: row.6,
+        secret: row.7,
+    }
 }
 
 #[derive(Deserialize)]
@@ -126,17 +157,17 @@ pub async fn list_rooms(
     let rooms = if let Some(pattern) = search_pattern {
         // The materialized search stage prevents ORDER BY/LIMIT from making
         // PostgreSQL walk the created_at index and test every row on a miss.
-        sqlx::query_as::<_, (String, String, Option<String>, bool, bool)>(
+        sqlx::query_as::<_, RoomListRow>(
             r#"WITH matching_rooms AS MATERIALIZED (
                  SELECT id, display_name, topic,
                         password_hash IS NOT NULL AS password_protected,
-                        moderated, created_at
+                        moderated, description, image_url, secret, created_at
                  FROM rooms
                  WHERE secret = false
                    AND (display_name || E'\n' || COALESCE(topic, ''))
                        ILIKE $1 ESCAPE E'\\'
              )
-             SELECT id, display_name, topic, password_protected, moderated
+             SELECT id, display_name, topic, password_protected, moderated, description, image_url, secret
              FROM matching_rooms
              ORDER BY created_at DESC LIMIT $2 OFFSET $3"#,
         )
@@ -146,8 +177,8 @@ pub async fn list_rooms(
         .fetch_all(pool)
         .await
     } else {
-        sqlx::query_as::<_, (String, String, Option<String>, bool, bool)>(
-            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated
+        sqlx::query_as::<_, RoomListRow>(
+            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret
              FROM rooms WHERE secret = false
              ORDER BY created_at DESC LIMIT $1 OFFSET $2",
         )
@@ -163,17 +194,7 @@ pub async fn list_rooms(
 
     let items: Vec<RoomListItem> = rooms
         .into_iter()
-        .map(|r| {
-            let count = server.room_manager().participant_count_for_room(&r.0);
-            RoomListItem {
-                id: r.0,
-                display_name: r.1,
-                topic: r.2,
-                participant_count: count,
-                password_protected: r.3,
-                moderated: r.4,
-            }
-        })
+        .map(|row| room_list_item(&server, row))
         .collect();
 
     Ok(Json(items))
@@ -185,23 +206,10 @@ pub async fn create_room(
     headers: HeaderMap,
     Json(req): Json<CreateRoomRequest>,
 ) -> Result<Json<RoomSettings>, Response> {
-    let _pool = server
-        .db_pool()
-        .ok_or(AuthError::NotConfigured)
+    let _request_permit = acquire_room_api_request(&server)?;
+    let claims = account::authenticated_claims(&server, &headers)
+        .await
         .map_err(IntoResponse::into_response)?;
-    let secret = server
-        .jwt_secret()
-        .ok_or(AuthError::NotConfigured)
-        .map_err(IntoResponse::into_response)?;
-
-    let token = headers
-        .get("authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|h| h.strip_prefix("Bearer "))
-        .ok_or(AuthError::MissingToken)
-        .map_err(IntoResponse::into_response)?;
-
-    let claims = jwt::validate_token(token, secret).map_err(IntoResponse::into_response)?;
     let owner_id: uuid::Uuid = claims
         .sub
         .parse()
@@ -217,8 +225,6 @@ pub async fn create_room(
     if let Err(message) = settings::validate_create_request(&req) {
         return Err((StatusCode::BAD_REQUEST, message).into_response());
     }
-    let _request_permit = acquire_room_api_request(&server)?;
-
     let password_hash = match req.password.clone() {
         Some(password) => Some(
             server
@@ -281,25 +287,14 @@ pub async fn delete_room(
     if server.db_pool().is_none() {
         return Err(AuthError::NotConfigured.into_response());
     }
-    let secret = server
-        .jwt_secret()
-        .ok_or(AuthError::NotConfigured)
+    let _request_permit = acquire_room_api_request(&server)?;
+    let claims = account::authenticated_claims(&server, &headers)
+        .await
         .map_err(IntoResponse::into_response)?;
-
-    let token = headers
-        .get("authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|h| h.strip_prefix("Bearer "))
-        .ok_or(AuthError::MissingToken)
-        .map_err(IntoResponse::into_response)?;
-
-    let claims = jwt::validate_token(token, secret).map_err(IntoResponse::into_response)?;
     let user_id: uuid::Uuid = claims
         .sub
         .parse()
         .map_err(|_| AuthError::InvalidToken.into_response())?;
-    let _request_permit = acquire_room_api_request(&server)?;
-
     let result = server
         .room_manager()
         .delete_persisted_room(&room_id, &user_id)
@@ -315,6 +310,69 @@ pub async fn delete_room(
             Err((StatusCode::NOT_FOUND, "Room not found").into_response())
         }
     }
+}
+
+/// GET /api/rooms/mine — includes the owner's private rooms, capped by their quota.
+pub async fn owned_rooms(
+    State(server): State<SignalingServer>,
+    headers: HeaderMap,
+) -> Result<(HeaderMap, Json<Vec<RoomListItem>>), Response> {
+    let _permit = acquire_room_api_request(&server)?;
+    let claims = account::authenticated_claims(&server, &headers)
+        .await
+        .map_err(IntoResponse::into_response)?;
+    let owner: uuid::Uuid = claims
+        .sub
+        .parse()
+        .map_err(|_| AuthError::InvalidToken.into_response())?;
+    let rows = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret FROM rooms WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2")
+        .bind(owner).bind(settings::MAX_PERSISTED_ROOMS_PER_OWNER).fetch_all(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?)
+        .await.map_err(|error| AuthError::DatabaseError(error.to_string()).into_response())?;
+    let mut response_headers = HeaderMap::new();
+    response_headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("private, no-store"),
+    );
+    Ok((
+        response_headers,
+        Json(
+            rows.into_iter()
+                .map(|row| room_list_item(&server, row))
+                .collect(),
+        ),
+    ))
+}
+
+/// PATCH /api/rooms/:id/identity — ownership is rechecked by the database mutation.
+pub async fn update_room_identity(
+    State(server): State<SignalingServer>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(request): Json<RoomIdentityUpdate>,
+) -> Result<Json<RoomListItem>, Response> {
+    if !settings::valid_room_id(&id) {
+        return Err((StatusCode::NOT_FOUND, "Room not found").into_response());
+    }
+    let _permit = acquire_room_api_request(&server)?;
+    let claims = account::authenticated_claims(&server, &headers)
+        .await
+        .map_err(IntoResponse::into_response)?;
+    request.validate().map_err(IntoResponse::into_response)?;
+    let owner =
+        uuid::Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken.into_response())?;
+    if !server
+        .room_manager()
+        .update_room_identity(&id, owner, request)
+        .await
+        .map_err(|error| AuthError::DatabaseError(error.to_string()).into_response())?
+    {
+        return Err((StatusCode::NOT_FOUND, "Room not found").into_response());
+    }
+    let row = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret FROM rooms WHERE id = $1 AND owner_id = $2")
+        .bind(&id).bind(owner).fetch_optional(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?).await
+        .map_err(|error| AuthError::DatabaseError(error.to_string()).into_response())?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Room not found").into_response())?;
+    Ok(Json(room_list_item(&server, row)))
 }
 
 #[cfg(test)]

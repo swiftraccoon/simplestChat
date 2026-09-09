@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 pub enum AuthError {
+    InvalidInput(&'static str),
     InvalidCredentials,
     EmailAlreadyExists,
     UserNotFound,
@@ -27,6 +28,7 @@ impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let service_busy = matches!(&self, AuthError::ServiceBusy);
         let (status, message) = match self {
+            AuthError::InvalidInput(message) => (StatusCode::BAD_REQUEST, message),
             AuthError::InvalidCredentials => {
                 (StatusCode::UNAUTHORIZED, "Invalid email or password")
             }
@@ -88,4 +90,6 @@ pub struct Claims {
     pub iss: String,
     pub aud: String,
     pub exp: usize,
+    #[serde(default)]
+    pub auth_version: i64,
 }

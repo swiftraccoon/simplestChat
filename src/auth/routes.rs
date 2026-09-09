@@ -68,7 +68,7 @@ fn refresh_cookie_headers(raw_token: &str) -> HeaderMap {
     headers
 }
 
-fn clear_refresh_cookie_headers() -> HeaderMap {
+pub(super) fn clear_refresh_cookie_headers() -> HeaderMap {
     let mut headers = no_store_headers();
     headers.append(
         header::SET_COOKIE,
@@ -85,7 +85,7 @@ fn clear_refresh_cookie_headers() -> HeaderMap {
     headers
 }
 
-fn no_store_headers() -> HeaderMap {
+pub(super) fn no_store_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert(
         header::CACHE_CONTROL,
@@ -132,13 +132,13 @@ fn validate_email(email: &str) -> Result<(), AuthError> {
     }
 }
 
-fn canonicalize_email(email: &str) -> Result<String, AuthError> {
+pub(super) fn canonicalize_email(email: &str) -> Result<String, AuthError> {
     let canonical = email.trim().to_ascii_lowercase();
     validate_email(&canonical)?;
     Ok(canonical)
 }
 
-fn validate_display_name(display_name: &str) -> Result<(), AuthError> {
+pub(super) fn validate_display_name(display_name: &str) -> Result<(), AuthError> {
     if !display_name.trim().is_empty()
         && display_name.len() <= MAX_DISPLAY_NAME_LEN
         && !display_name.chars().any(char::is_control)
@@ -171,7 +171,7 @@ fn authentication_credential_id(result: &AuthenticationResult) -> String {
     URL_SAFE_NO_PAD.encode(result.cred_id().as_ref())
 }
 
-fn database_error(error: sqlx::Error) -> AuthError {
+pub(super) fn database_error(error: sqlx::Error) -> AuthError {
     AuthError::DatabaseError(error.to_string())
 }
 
@@ -212,7 +212,7 @@ async fn enforce_user_capacity(
     Ok(())
 }
 
-async fn hash_password_async(
+pub(super) async fn hash_password_async(
     password_value: String,
     permit: tokio::sync::OwnedSemaphorePermit,
 ) -> Result<String, AuthError> {
@@ -225,7 +225,7 @@ async fn hash_password_async(
     .map_err(|error| AuthError::DatabaseError(format!("Hash error: {error}")))
 }
 
-async fn verify_password_async(
+pub(super) async fn verify_password_async(
     password_value: String,
     password_hash: String,
     permit: tokio::sync::OwnedSemaphorePermit,
@@ -239,7 +239,7 @@ async fn verify_password_async(
     .map_err(|error| AuthError::DatabaseError(format!("Verify error: {error}")))
 }
 
-fn acquire_auth_request(
+pub(super) fn acquire_auth_request(
     server: &SignalingServer,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, AuthError> {
     server
@@ -333,8 +333,8 @@ pub async fn login(
     }
     let _request_permit = acquire_auth_request(&server)?;
 
-    let row = sqlx::query_as::<_, (Uuid, String, String, Option<String>)>(
-        "SELECT id, email, display_name, password_hash FROM users WHERE email = $1",
+    let row = sqlx::query_as::<_, (Uuid, String, String, Option<String>, i64)>(
+        "SELECT id, email, display_name, password_hash, auth_version FROM users WHERE email = $1",
     )
     .bind(&email)
     .fetch_optional(pool)
@@ -365,9 +365,21 @@ pub async fn login(
     let row = row.ok_or(AuthError::InvalidCredentials)?;
 
     let user_id = row.0.to_string();
-    let token = jwt::create_token(&user_id, &row.2, secret)?;
     let refresh_token = session::generate_refresh_token()?;
-    session::create_session(pool, &row.0, &refresh_token).await?;
+    let mut transaction = pool.begin().await.map_err(database_error)?;
+    let current = sqlx::query_as::<_, (Option<String>, i64)>(
+        "SELECT password_hash, auth_version FROM users WHERE id = $1 FOR NO KEY UPDATE",
+    )
+    .bind(row.0)
+    .fetch_optional(&mut *transaction)
+    .await
+    .map_err(database_error)?;
+    if current != Some((row.3.clone(), row.4)) {
+        return Err(AuthError::InvalidCredentials);
+    }
+    let token = jwt::create_token_with_version(&user_id, &row.2, secret, row.4)?;
+    session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
+    transaction.commit().await.map_err(database_error)?;
 
     info!(user_id, "User logged in");
     Ok((
@@ -419,8 +431,8 @@ pub async fn refresh(
                 return Err(AuthError::InvalidToken);
             }
         };
-    let row = sqlx::query_as::<_, (String, String)>(
-        "SELECT email, display_name FROM users WHERE id = $1",
+    let row = sqlx::query_as::<_, (String, String, i64)>(
+        "SELECT email, display_name, auth_version FROM users WHERE id = $1",
     )
     .bind(user_id)
     .fetch_optional(&mut *transaction)
@@ -429,7 +441,7 @@ pub async fn refresh(
     .ok_or(AuthError::UserNotFound)?;
 
     let user_id_string = user_id.to_string();
-    let token = jwt::create_token(&user_id_string, &row.1, secret)?;
+    let token = jwt::create_token_with_version(&user_id_string, &row.1, secret, row.2)?;
     transaction.commit().await.map_err(database_error)?;
     session::spawn_expired_cleanup(pool);
 
@@ -668,8 +680,8 @@ pub async fn passkey_login_finish(
     let refresh_token = session::generate_refresh_token()?;
     let mut transaction = pool.begin().await.map_err(database_error)?;
 
-    let user = sqlx::query_as::<_, (String, String)>(
-        "SELECT email, display_name FROM users WHERE id = $1",
+    let user = sqlx::query_as::<_, (String, String, i64)>(
+        "SELECT email, display_name, auth_version FROM users WHERE id = $1 FOR NO KEY UPDATE",
     )
     .bind(authentication.user_id)
     .fetch_optional(&mut *transaction)
@@ -719,7 +731,7 @@ pub async fn passkey_login_finish(
     session::create_session_with(&mut transaction, &authentication.user_id, &refresh_token).await?;
 
     let user_id = authentication.user_id.to_string();
-    let token = jwt::create_token(&user_id, &user.1, secret)?;
+    let token = jwt::create_token_with_version(&user_id, &user.1, secret, user.2)?;
     transaction.commit().await.map_err(database_error)?;
     info!(user_id, "User logged in via passkey");
 

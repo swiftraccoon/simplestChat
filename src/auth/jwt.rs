@@ -14,6 +14,15 @@ pub fn secret_is_strong(secret: &str) -> bool {
 }
 
 pub fn create_token(user_id: &str, display_name: &str, secret: &str) -> Result<String, AuthError> {
+    create_token_with_version(user_id, display_name, secret, 0)
+}
+
+pub fn create_token_with_version(
+    user_id: &str,
+    display_name: &str,
+    secret: &str,
+    auth_version: i64,
+) -> Result<String, AuthError> {
     if !secret_is_strong(secret) {
         return Err(AuthError::NotConfigured);
     }
@@ -28,6 +37,7 @@ pub fn create_token(user_id: &str, display_name: &str, secret: &str) -> Result<S
         iss: JWT_ISSUER.to_string(),
         aud: JWT_AUDIENCE.to_string(),
         exp: (now.as_secs() + TOKEN_LIFETIME_SECS) as usize,
+        auth_version,
     };
 
     encode(
@@ -65,6 +75,24 @@ pub fn validate_token(token: &str, secret: &str) -> Result<Claims, AuthError> {
     Ok(data.claims)
 }
 
+/// Access tokens are invalidated immediately when account credentials change.
+pub async fn validate_current_claims(
+    pool: &sqlx::PgPool,
+    claims: &Claims,
+) -> Result<(), AuthError> {
+    let user_id = uuid::Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
+    let version: Option<i64> = sqlx::query_scalar("SELECT auth_version FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+    if version == Some(claims.auth_version) {
+        Ok(())
+    } else {
+        Err(AuthError::InvalidToken)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,6 +104,8 @@ mod tests {
         let claims = validate_token(&token, secret).unwrap();
         assert_eq!(claims.sub, "user-123");
         assert_eq!(claims.name, "Alice");
+        let token = create_token_with_version("user-123", "Alice", secret, 7).unwrap();
+        assert_eq!(validate_token(&token, secret).unwrap().auth_version, 7);
     }
 
     #[test]
@@ -113,6 +143,7 @@ mod tests {
             iss: JWT_ISSUER.to_string(),
             aud: JWT_AUDIENCE.to_string(),
             exp: now.saturating_sub(1),
+            auth_version: 0,
         };
         let token = encode(
             &Header::new(Algorithm::HS256),
