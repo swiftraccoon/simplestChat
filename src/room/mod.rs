@@ -6,6 +6,7 @@ pub mod community;
 pub mod moderation;
 pub mod roles;
 pub mod settings;
+pub mod social;
 
 use crate::media::types::{MediaResult, TransportInfo};
 use crate::media::{MediaConfig, MediaServer};
@@ -45,6 +46,7 @@ struct RevokedProducer {
 /// Participant in a room
 #[derive(Clone)]
 pub struct Participant {
+    pub(crate) social: social::ParticipantSocial,
     pub id: String,
     pub name: String,
     pub sender: mpsc::Sender<Arc<String>>,
@@ -115,6 +117,11 @@ pub enum JoinResult {
     /// Placed in the lobby awaiting moderator approval
     Lobbied,
 }
+
+/// A public join challenge, kept distinct from internal room failures.
+#[derive(Debug, thiserror::Error)]
+#[error("This room requires a password")]
+pub(crate) struct RoomPasswordRequired;
 
 pub(crate) enum DeleteRoomResult {
     Deleted,
@@ -332,6 +339,7 @@ fn policy_snapshot_matches(room: &Room, revision: u64) -> bool {
 
 /// Room state
 pub struct Room {
+    pub(crate) social: social::RoomSocial,
     pub id: String,
     pub router_id: String,
     pub participants: HashMap<String, Participant>,
@@ -417,6 +425,7 @@ impl Room {
         Self {
             id,
             router_id,
+            social: social::RoomSocial::default(),
             participants: HashMap::new(),
             settings,
             persisted,
@@ -453,6 +462,7 @@ impl Room {
         Self {
             id,
             router_id,
+            social: social::RoomSocial::default(),
             participants: HashMap::new(),
             settings,
             persisted,
@@ -1379,11 +1389,11 @@ impl RoomManager {
                             return Ok(DeleteRoomResult::Deleted);
                         }
                     };
-                room.broadcast_all(&ServerMessage::Error {
-                    message: "Room was deleted by its owner".to_string(),
+                room.broadcast_all(&ServerMessage::RoomClosed {
+                    reason: "Room was deleted by its owner".to_string(),
                 });
-                if let Ok(message) = serde_json::to_string(&ServerMessage::Error {
-                    message: "Room was deleted by its owner".to_string(),
+                if let Ok(message) = serde_json::to_string(&ServerMessage::RoomClosed {
+                    reason: "Room was deleted by its owner".to_string(),
                 }) {
                     let message = Arc::new(message);
                     for entry in room.lobby.values() {
@@ -1918,9 +1928,7 @@ impl RoomManager {
         if password_protected && !resolved_role.map_or(false, |r| r >= roles::Role::Admin) {
             let hash =
                 password_hash.ok_or_else(|| anyhow::anyhow!("Room password is unavailable"))?;
-            let supplied = password
-                .ok_or_else(|| anyhow::anyhow!("This room requires a password"))?
-                .to_owned();
+            let supplied = password.ok_or(RoomPasswordRequired)?.to_owned();
             let permit = tokio::time::timeout(
                 PASSWORD_VERIFY_QUEUE_TIMEOUT,
                 self.password_verify_work.clone().acquire_owned(),
@@ -2064,6 +2072,7 @@ impl RoomManager {
 
         let participant = Participant {
             id: participant_id.clone(),
+            social: social::ParticipantSocial::new(room.social.next_sequence),
             name: participant_name.clone(),
             sender,
             media_session_id,
@@ -2112,6 +2121,7 @@ impl RoomManager {
                     })
                     .collect(),
                 role: p.role.name().to_string(),
+                authenticated: p.authenticated,
             })
             .collect();
 
@@ -3908,8 +3918,10 @@ impl RoomManager {
             let moderator_authenticated = moderator.authenticated;
             let target_authenticated = target.authenticated;
             let target_ip = target.ip;
+            let target_name = target.name.clone();
             let target_lobby_ids =
                 guest_ip_lobby_cohort(&room, target_authenticated, target_ip, moderator.role)?;
+            room.social.reserve_ban()?;
             if !room.reserve_admin_mutation(std::time::Instant::now()) {
                 anyhow::bail!("Room administration changes are rate limited");
             }
@@ -3962,6 +3974,14 @@ impl RoomManager {
                 target_authenticated,
                 target_ip,
                 runtime_expiry,
+            );
+            room.social.record_ban(
+                target_name,
+                target_authenticated,
+                banned_ids.clone(),
+                target_ip,
+                reason,
+                duration,
             );
             room.policy_revision = room.policy_revision.wrapping_add(1);
 
@@ -4090,6 +4110,7 @@ impl RoomManager {
         if !in_memory && !persisted_removed {
             anyhow::bail!("Participant is not banned");
         }
+        room.social.forget_user_ban(target_participant_id);
 
         info!(
             "unban: {} unbanned {} from room {}",
@@ -4297,6 +4318,7 @@ impl RoomManager {
                     })
                     .collect(),
                 role: p.role.name().to_string(),
+                authenticated: p.authenticated,
             })
             .collect();
 
@@ -4305,6 +4327,7 @@ impl RoomManager {
         // Insert into participants
         let participant = Participant {
             id: entry.participant_id.clone(),
+            social: social::ParticipantSocial::new(room.social.next_sequence),
             name: entry.name.clone(),
             sender: entry.sender.clone(),
             media_session_id: entry.media_session_id,
@@ -4842,36 +4865,8 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<Arc<String>>,
         content: String,
     ) -> Result<()> {
-        let room_lock = self.get_room(room_id)?;
-        let mut room = room_lock.write().await;
-        let sender = Self::participant_for_sender(&room, sender_id, expected_sender)?;
-        let sender_name = sender.name.clone();
-        let moderated = room
-            .settings
-            .as_ref()
-            .is_some_and(|settings| settings.moderated);
-        if room
-            .settings
-            .as_ref()
-            .is_some_and(|settings| !settings.allow_chat)
-            || !moderation::can_chat(&sender.punitive, sender.role, moderated)
-        {
-            anyhow::bail!("You are not allowed to chat");
-        }
-        if !room.reserve_chat_broadcast(std::time::Instant::now()) {
-            anyhow::bail!("Room chat rate limit exceeded");
-        }
-
-        room.broadcast_except(
-            sender_id,
-            &ServerMessage::ChatReceived {
-                participant_id: sender_id.to_string(),
-                participant_name: sender_name,
-                content,
-            },
-        );
-
-        Ok(())
+        self.send_social_chat(room_id, sender_id, expected_sender, content, None, None)
+            .await
     }
 
     /// Gets the router for a room (from media server)
@@ -5174,6 +5169,7 @@ mod security_tests {
         let (sender, _receiver) = mpsc::channel(4);
         Participant {
             id: id.to_string(),
+            social: social::ParticipantSocial::new(0),
             name: id.to_string(),
             sender,
             media_session_id: uuid::Uuid::new_v4(),
@@ -5690,6 +5686,7 @@ mod security_tests {
         let (sender, _receiver) = mpsc::channel(1);
         let participant = Participant {
             id: uuid::Uuid::new_v4().to_string(),
+            social: social::ParticipantSocial::new(0),
             name: "test".to_string(),
             sender,
             media_session_id: uuid::Uuid::new_v4(),
@@ -5722,6 +5719,7 @@ mod security_tests {
         let (sender, _receiver) = mpsc::channel(1);
         let participant = Participant {
             id: uuid::Uuid::new_v4().to_string(),
+            social: social::ParticipantSocial::new(0),
             name: "guest".to_string(),
             sender,
             media_session_id: uuid::Uuid::new_v4(),

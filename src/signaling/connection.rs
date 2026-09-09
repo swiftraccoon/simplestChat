@@ -5,7 +5,7 @@
 use super::protocol::{ClientMessage, ServerMessage};
 use crate::auth::types::Claims;
 use crate::metrics::ServerMetrics;
-use crate::room::{JoinResult, RoomManager, settings};
+use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, settings};
 use crate::turn::TurnConfig;
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
@@ -90,6 +90,43 @@ const VOICE_REQUEST_COOLDOWN: Duration = Duration::from_secs(5);
 /// request it only occasionally, even if it recreates ad-hoc rooms to evade a
 /// per-room cooldown.
 const ROOM_PASSWORD_HASH_COOLDOWN: Duration = Duration::from_secs(30);
+
+#[derive(Default)]
+struct JoinAttemptState {
+    last_attempt: Option<Instant>,
+    password_challenge_room: Option<String>,
+}
+
+impl JoinAttemptState {
+    fn allow(&mut self, room_id: &str, has_password: bool, now: Instant) -> bool {
+        // One response to an issued password challenge belongs to the same
+        // interaction, even when a password manager answers immediately.
+        // RoomManager's shared IP and room/IP budgets still count both requests.
+        let answering_challenge = self
+            .password_challenge_room
+            .take()
+            .is_some_and(|pending| pending == room_id && has_password);
+        if !answering_challenge
+            && self
+                .last_attempt
+                .is_some_and(|previous| now.duration_since(previous) < Duration::from_secs(1))
+        {
+            return false;
+        }
+        self.last_attempt = Some(now);
+        true
+    }
+}
+
+fn client_error_response(error: &anyhow::Error) -> ServerMessage {
+    if error.is::<RoomPasswordRequired>() {
+        ServerMessage::RoomPasswordRequired
+    } else {
+        ServerMessage::Error {
+            message: "Request could not be completed".to_string(),
+        }
+    }
+}
 
 fn consume_rate_token(
     tokens_us: &mut u64,
@@ -221,22 +258,23 @@ impl MediaSessionRateState {
 }
 
 fn is_admin_mutation(message: &ClientMessage) -> bool {
-    matches!(
-        message,
-        ClientMessage::CloseCam { .. }
-            | ClientMessage::CamBan { .. }
-            | ClientMessage::CamUnban { .. }
-            | ClientMessage::TextMute { .. }
-            | ClientMessage::TextUnmute { .. }
-            | ClientMessage::Kick { .. }
-            | ClientMessage::Ban { .. }
-            | ClientMessage::Unban { .. }
-            | ClientMessage::SetRole { .. }
-            | ClientMessage::UpdateRoomSettings { .. }
-            | ClientMessage::SetTopic { .. }
-            | ClientMessage::AdmitFromLobby { .. }
-            | ClientMessage::DenyFromLobby { .. }
-    )
+    message.social_request().is_some()
+        || matches!(
+            message,
+            ClientMessage::CloseCam { .. }
+                | ClientMessage::CamBan { .. }
+                | ClientMessage::CamUnban { .. }
+                | ClientMessage::TextMute { .. }
+                | ClientMessage::TextUnmute { .. }
+                | ClientMessage::Kick { .. }
+                | ClientMessage::Ban { .. }
+                | ClientMessage::Unban { .. }
+                | ClientMessage::SetRole { .. }
+                | ClientMessage::UpdateRoomSettings { .. }
+                | ClientMessage::SetTopic { .. }
+                | ClientMessage::AdmitFromLobby { .. }
+                | ClientMessage::DenyFromLobby { .. }
+        )
 }
 
 /// Grace period entry for a disconnected participant
@@ -471,7 +509,7 @@ pub async fn handle_connection(
     let mut admin_mutation_violation_window_started: Option<Instant> = None;
     let mut admin_mutation_violations = 0_u32;
     let mut last_room_password_hash: Option<Instant> = None;
-    let mut last_join_attempt: Option<Instant> = None;
+    let mut join_attempts = JoinAttemptState::default();
     let mut last_voice_request: Option<Instant> = None;
     let mut credentials_invalidated = false;
     let mut next_auth_check = Instant::now();
@@ -634,10 +672,12 @@ pub async fn handle_connection(
                             admin_mutation_violations = admin_mutation_violations.saturating_add(1);
                             let _ = send_json(
                                 &tx,
-                                &ServerMessage::Error {
-                                    message: "Room administration changes are rate limited"
-                                        .to_string(),
-                                },
+                                &client_msg
+                                    .social_error("Room administration changes are rate limited")
+                                    .unwrap_or(ServerMessage::Error {
+                                        message: "Room administration changes are rate limited"
+                                            .to_string(),
+                                    }),
                             );
                             if admin_mutation_violations >= ADMIN_MUTATION_MAX_VIOLATIONS {
                                 warn!(
@@ -650,21 +690,25 @@ pub async fn handle_connection(
                             continue;
                         }
 
-                        if matches!(&client_msg, ClientMessage::ChatMessage { .. })
-                            && !consume_rate_token(
-                                &mut chat_tokens_us,
-                                &mut chat_last_refill,
-                                Instant::now(),
-                                CHAT_RATE_LIMIT_REFILL_RATE,
-                                MAX_CHAT_TOKENS_US,
-                            )
-                        {
+                        if matches!(
+                            &client_msg,
+                            ClientMessage::ChatMessage { .. }
+                                | ClientMessage::PrivateMessage { .. }
+                        ) && !consume_rate_token(
+                            &mut chat_tokens_us,
+                            &mut chat_last_refill,
+                            Instant::now(),
+                            CHAT_RATE_LIMIT_REFILL_RATE,
+                            MAX_CHAT_TOKENS_US,
+                        ) {
                             warn!(participant_id, "Closing WebSocket for chat flooding");
                             let _ = send_json(
                                 &tx,
-                                &ServerMessage::Error {
-                                    message: "Chat rate limit exceeded".to_string(),
-                                },
+                                &client_msg
+                                    .social_error("Chat rate limit exceeded")
+                                    .unwrap_or(ServerMessage::Error {
+                                        message: "Chat rate limit exceeded".to_string(),
+                                    }),
                             );
                             break;
                         }
@@ -692,11 +736,11 @@ pub async fn handle_connection(
                             last_room_password_hash = Some(now);
                         }
 
-                        if matches!(&client_msg, ClientMessage::JoinRoom { .. }) {
-                            let now = Instant::now();
-                            if last_join_attempt.is_some_and(|previous| {
-                                now.duration_since(previous) < Duration::from_secs(1)
-                            }) {
+                        if let ClientMessage::JoinRoom {
+                            room_id, password, ..
+                        } = &client_msg
+                        {
+                            if !join_attempts.allow(room_id, password.is_some(), Instant::now()) {
                                 let _ = send_json(
                                     &tx,
                                     &ServerMessage::Error {
@@ -705,7 +749,6 @@ pub async fn handle_connection(
                                 );
                                 continue;
                             }
-                            last_join_attempt = Some(now);
                         }
 
                         if matches!(&client_msg, ClientMessage::RequestVoice) {
@@ -863,6 +906,11 @@ pub async fn handle_connection(
                         }
 
                         if let Err(e) = result {
+                            if e.is::<RoomPasswordRequired>()
+                                && let ClientMessage::JoinRoom { room_id, .. } = &client_msg
+                            {
+                                join_attempts.password_challenge_room = Some(room_id.clone());
+                            }
                             // Invalid IDs, stale media state, and authorization
                             // failures are routine client-controlled outcomes.
                             // Keep them observable without allowing a socket to
@@ -877,14 +925,13 @@ pub async fn handle_connection(
                             if tx.is_closed() {
                                 break;
                             }
-                            if send_json(
-                                &tx,
-                                &ServerMessage::Error {
-                                    message: "Request could not be completed".to_string(),
-                                },
-                            )
-                            .is_err()
-                            {
+                            let public_message = e
+                                .downcast_ref::<crate::room::social::SocialFailure>()
+                                .map_or("Request could not be completed", |error| error.0.as_str());
+                            let response = client_msg
+                                .social_error(public_message)
+                                .unwrap_or_else(|| client_error_response(&e));
+                            if send_json(&tx, &response).is_err() {
                                 break;
                             }
                         }
@@ -1268,7 +1315,6 @@ fn make_ice_servers(turn_config: &Option<Arc<TurnConfig>>) -> Vec<crate::turn::I
 
 const MAX_PARTICIPANT_NAME_LEN: usize = 64;
 const MAX_TARGET_ID_LEN: usize = 128;
-const MAX_CHAT_LEN: usize = 4096;
 
 fn validate_target_id(id: &str) -> anyhow::Result<()> {
     if id.is_empty() || id.len() > MAX_TARGET_ID_LEN || id.parse::<Uuid>().is_err() {
@@ -1733,25 +1779,62 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::ChatMessage { content } => {
-            if content.is_empty() || content.len() > MAX_CHAT_LEN {
-                anyhow::bail!("Invalid chat message: must be 1-{MAX_CHAT_LEN} characters");
-            }
+        ClientMessage::ChatMessage {
+            content,
+            client_message_id,
+        } => {
             if let Some(room_id) = current_room_id.as_ref() {
-                // Check if participant can chat
-                if !room_manager
-                    .can_participant_chat(room_id, participant_id, sender)
-                    .await?
-                {
-                    anyhow::bail!("You are not allowed to chat");
-                }
-
                 room_manager
-                    .broadcast_chat(room_id, participant_id, sender, content.clone())
+                    .send_social_chat(
+                        room_id,
+                        participant_id,
+                        sender,
+                        content.clone(),
+                        client_message_id.clone(),
+                        None,
+                    )
                     .await?;
             } else {
                 anyhow::bail!("Not in a room");
             }
+        }
+
+        ClientMessage::PrivateMessage {
+            target_participant_id,
+            content,
+            client_message_id,
+        } => {
+            let room_id = current_room_id
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            validate_target_id(target_participant_id)?;
+            room_manager
+                .send_social_chat(
+                    room_id,
+                    participant_id,
+                    sender,
+                    content.clone(),
+                    Some(client_message_id.clone()),
+                    Some(target_participant_id),
+                )
+                .await?;
+        }
+        ClientMessage::SetChatPreferences { .. }
+        | ClientMessage::ChangeNickname { .. }
+        | ClientMessage::GetRoomSnapshot { .. }
+        | ClientMessage::ListRoomBans { .. }
+        | ClientMessage::RemoveRoomBan { .. }
+        | ClientMessage::ListRoomMembers { .. }
+        | ClientMessage::SetMemberRole { .. }
+        | ClientMessage::ReportParticipant { .. }
+        | ClientMessage::ListRoomReports { .. }
+        | ClientMessage::ResolveRoomReport { .. } => {
+            let room_id = current_room_id
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            room_manager
+                .handle_social_request(room_id, participant_id, sender, message)
+                .await?;
         }
 
         // === Moderation ===
@@ -1991,6 +2074,50 @@ mod security_tests {
     use super::*;
 
     #[test]
+    fn password_challenge_is_typed_and_internal_errors_stay_generic() {
+        let error = anyhow::Error::new(RoomPasswordRequired).context("joining a room");
+        assert_eq!(
+            serde_json::to_value(client_error_response(&error)).unwrap(),
+            serde_json::json!({ "type": "roomPasswordRequired" }),
+        );
+        for error in [
+            anyhow::anyhow!("database connection details"),
+            anyhow::anyhow!("This room requires a password"),
+        ] {
+            assert_eq!(
+                serde_json::to_value(client_error_response(&error)).unwrap(),
+                serde_json::json!({
+                    "type": "error",
+                    "message": "Request could not be completed",
+                }),
+            );
+        }
+    }
+
+    #[test]
+    fn password_challenge_allows_one_immediate_answer_for_the_same_room() {
+        let now = Instant::now();
+        let mut attempts = JoinAttemptState::default();
+        assert!(attempts.allow("private-room", false, now));
+        attempts.password_challenge_room = Some("private-room".to_string());
+        assert!(attempts.allow("private-room", true, now));
+        assert!(!attempts.allow("private-room", true, now));
+        assert!(attempts.allow("private-room", true, now + Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn unrelated_joins_do_not_use_the_password_challenge_allowance() {
+        let now = Instant::now();
+        for (room_id, has_password) in [("another-room", true), ("private-room", false)] {
+            let mut attempts = JoinAttemptState::default();
+            assert!(attempts.allow("private-room", false, now));
+            attempts.password_challenge_room = Some("private-room".to_string());
+            assert!(!attempts.allow(room_id, has_password, now));
+            assert!(!attempts.allow("private-room", true, now));
+        }
+    }
+
+    #[test]
     fn token_bucket_refills_and_remains_bounded() {
         let start = Instant::now();
         let mut tokens = TOKEN_US;
@@ -2081,6 +2208,7 @@ mod security_tests {
         assert!(!is_consumer_mutation(&ClientMessage::RequestVoice));
         assert!(!is_media_mutation(&ClientMessage::ChatMessage {
             content: "hello".to_string(),
+            client_message_id: None,
         }));
     }
 
@@ -2214,6 +2342,7 @@ mod security_tests {
         assert!(!is_admin_mutation(&ClientMessage::RequestVoice));
         assert!(!is_admin_mutation(&ClientMessage::ChatMessage {
             content: "hello".to_string(),
+            client_message_id: None,
         }));
     }
 

@@ -81,7 +81,69 @@ pub enum ClientMessage {
         temporal_layer: Option<u8>,
     },
     /// Send a chat message to the room
-    ChatMessage { content: String },
+    #[serde(rename_all = "camelCase")]
+    ChatMessage {
+        content: String,
+        #[serde(default)]
+        client_message_id: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    PrivateMessage {
+        target_participant_id: String,
+        content: String,
+        client_message_id: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    SetChatPreferences {
+        request_id: String,
+        allow_private_messages: bool,
+        ignored_participant_ids: Vec<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    ChangeNickname {
+        request_id: String,
+        nickname: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    GetRoomSnapshot { request_id: String },
+    #[serde(rename_all = "camelCase")]
+    ListRoomBans {
+        request_id: String,
+        #[serde(default)]
+        offset: Option<u32>,
+    },
+    #[serde(rename_all = "camelCase")]
+    RemoveRoomBan { request_id: String, ban_id: String },
+    #[serde(rename_all = "camelCase")]
+    ListRoomMembers {
+        request_id: String,
+        #[serde(default)]
+        offset: Option<u32>,
+    },
+    #[serde(rename_all = "camelCase")]
+    SetMemberRole {
+        request_id: String,
+        target_user_id: String,
+        role: u8,
+    },
+    #[serde(rename_all = "camelCase")]
+    ReportParticipant {
+        request_id: String,
+        target_participant_id: String,
+        reason: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    ListRoomReports {
+        request_id: String,
+        #[serde(default)]
+        offset: Option<u32>,
+    },
+    #[serde(rename_all = "camelCase")]
+    ResolveRoomReport {
+        request_id: String,
+        report_id: String,
+        status: String,
+    },
 
     // === Moderation ===
     /// Force-close a participant's camera/screen producer
@@ -174,6 +236,10 @@ pub enum ServerMessage {
     },
     /// Error response
     Error { message: String },
+    /// The client should prompt for a password and retry this room join.
+    RoomPasswordRequired,
+    /// Terminal room lifecycle event, distinct from recoverable request errors.
+    RoomClosed { reason: String },
     /// Router RTP capabilities
     #[serde(rename_all = "camelCase")]
     RouterRtpCapabilities {
@@ -271,6 +337,35 @@ pub enum ServerMessage {
         participant_id: String,
         participant_name: String,
         content: String,
+        message_id: String,
+        client_message_id: String,
+        sent_at: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    MessageAck {
+        client_message_id: String,
+        message: ChatEntry,
+    },
+    #[serde(rename_all = "camelCase")]
+    PrivateMessageReceived { message: ChatEntry },
+    #[serde(rename_all = "camelCase")]
+    SocialResponse {
+        request_id: String,
+        action: String,
+        data: serde_json::Value,
+    },
+    #[serde(rename_all = "camelCase")]
+    SocialError {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        client_message_id: Option<String>,
+        message: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    NicknameChanged {
+        participant_id: String,
+        nickname: String,
     },
     /// Active/dominant speaker changed
     #[serde(rename_all = "camelCase")]
@@ -367,6 +462,23 @@ pub struct ParticipantInfo {
     pub name: String,
     pub producers: Vec<ProducerMetadata>,
     pub role: String,
+    #[serde(default)]
+    pub authenticated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatEntry {
+    pub message_id: String,
+    pub client_message_id: String,
+    pub participant_id: String,
+    pub participant_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recipient_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recipient_name: Option<String>,
+    pub content: String,
+    pub sent_at: String,
 }
 
 /// Producer metadata
