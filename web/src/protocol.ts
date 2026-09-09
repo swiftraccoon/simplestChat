@@ -20,7 +20,9 @@ export type ClientMessage =
   | { type: 'reconnect'; participantId: string; roomId: string; reconnectToken: string }
   | { type: 'restartIce'; transportId: string }
   | { type: 'setConsumerPreferredLayers'; consumerId: string; spatialLayer: number; temporalLayer?: number }
-  | { type: 'chatMessage'; content: string }
+  | { type: 'chatMessage'; content: string; clientMessageId?: string }
+  | { type: 'privateMessage'; targetParticipantId: string; content: string; clientMessageId: string }
+  | ({ type: SocialAction; requestId: string } & Record<string, unknown>)
   // Moderation
   | { type: 'closeCam'; targetParticipantId: string }
   | { type: 'camBan'; targetParticipantId: string; reason?: string }
@@ -44,6 +46,8 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: 'roomJoined'; participantId: string; participants: ParticipantInfo[]; reconnectToken: string; yourRole: string; roomSettings?: RoomSettings }
   | { type: 'error'; message: string }
+  | { type: 'roomPasswordRequired' }
+  | { type: 'roomClosed'; reason: string }
   | { type: 'routerRtpCapabilities'; rtpCapabilities: RtpCapabilitiesFinalized }
   | { type: 'transportCreated'; transportId: string; iceParameters: IceParameters; iceCandidates: IceCandidate[]; dtlsParameters: DtlsParameters; iceServers?: IceServerEntry[] }
   | { type: 'transportConnected'; transportId: string }
@@ -61,7 +65,12 @@ export type ServerMessage =
   | { type: 'iceRestarted'; transportId: string; iceParameters: IceParameters }
   | { type: 'connectionStats'; availableBitrate: number | null; rtt: number | null }
   | { type: 'consumerLayersChanged'; consumerId: string; spatialLayer: number | null; temporalLayer: number | null }
-  | { type: 'chatReceived'; participantId: string; participantName: string; content: string }
+  | ({ type: 'chatReceived' } & ChatEntry)
+  | { type: 'privateMessageReceived'; message: ChatEntry }
+  | { type: 'messageAck'; clientMessageId: string; message: ChatEntry }
+  | { type: 'socialResponse'; requestId: string; action: SocialAction; data: Record<string, unknown> }
+  | { type: 'socialError'; requestId?: string; clientMessageId?: string; message: string }
+  | { type: 'nicknameChanged'; participantId: string; nickname: string }
   | { type: 'activeSpeaker'; participantId: string }
   | { type: 'audioLevels'; levels: { participantId: string; volume: number }[] }
   // Moderation broadcasts
@@ -90,6 +99,71 @@ export interface ParticipantInfo {
   name: string;
   producers: ProducerMetadata[];
   role: string;
+  authenticated?: boolean;
+}
+
+export type SocialAction = 'setChatPreferences' | 'changeNickname' | 'getRoomSnapshot'
+  | 'listRoomBans' | 'removeRoomBan' | 'listRoomMembers' | 'setMemberRole'
+  | 'reportParticipant' | 'listRoomReports' | 'resolveRoomReport';
+
+export interface ChatEntry {
+  messageId: string;
+  clientMessageId: string;
+  participantId: string;
+  participantName: string;
+  recipientId?: string;
+  recipientName?: string;
+  content: string;
+  sentAt: string;
+}
+
+export interface RoomSnapshot {
+  participants: ParticipantInfo[];
+  messages: ChatEntry[];
+  yourRole: string;
+  roomSettings?: RoomSettings | null;
+  nickname?: string;
+  textMuted?: boolean;
+  camBanned?: boolean;
+  canChat?: boolean;
+  canBroadcast?: boolean;
+  pausedProducerIds?: string[];
+  localProducerIds?: string[];
+  allowPrivateMessages: boolean;
+  ignoredParticipantIds: string[];
+  lobby?: { participantId: string; displayName: string; authenticated: boolean }[];
+}
+
+export interface RoomBansPage { bans: BanEntry[]; hasMore: boolean }
+export interface RoomMembersPage { members: MemberEntry[]; hasMore: boolean }
+export interface RoomReportsPage { reports: ReportEntry[]; hasMore: boolean }
+
+export interface BanEntry {
+  banId: string;
+  displayName: string;
+  reason?: string;
+  expiresAt?: string;
+  authenticated: boolean;
+}
+
+export interface MemberEntry {
+  userId: string;
+  displayName: string;
+  role: string;
+  online: boolean;
+  authenticated: boolean;
+}
+
+export interface ReportEntry {
+  reportId: string;
+  reporterId: string;
+  reporterName: string;
+  targetParticipantId: string;
+  targetName: string;
+  reason: string;
+  status: 'open' | 'resolved' | 'dismissed';
+  createdAt: string;
+  resolvedAt?: string;
 }
 
 export interface RoomSettings {
@@ -164,6 +238,22 @@ export interface RoomListItem {
   participant_count: number;
   password_protected: boolean;
   moderated: boolean;
+  broadcaster_count?: number;
+  description?: string;
+  image_url?: string | null;
+  secret?: boolean;
+}
+
+export interface PublicProfile {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+  bio: string;
+}
+
+export interface AccountProfile extends PublicProfile {
+  email: string;
+  recovery_enabled: boolean;
 }
 
 export interface CreateRoomRequest {

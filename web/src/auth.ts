@@ -33,6 +33,15 @@ export class AuthManager {
     return this._token;
   }
 
+  updateDisplayName(displayName: string): void {
+    if (!this._user) return;
+    this._user.display_name = displayName;
+    this.onChange?.(true, true);
+  }
+
+  /** Clear local identity after a server-side password change revoked all sessions. */
+  forgetSession(): void { this.clearSession(); }
+
   setOnChange(handler: AuthChangeHandler): void {
     this.onChange = handler;
   }

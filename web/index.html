@@ -15,10 +15,20 @@
         <span id="room-topic" class="room-topic" hidden></span>
       </div>
       <div class="header-right">
+        <div id="community-actions"></div>
         <span id="quality-indicator" class="quality-dot" hidden title="Connection quality"></span>
         <span id="connection-status" class="status disconnected">Disconnected</span>
       </div>
     </header>
+
+    <div id="room-tools" hidden>
+      <div class="room-navigation">
+        <button id="copy-room-link" type="button">Copy room link</button>
+        <button id="toggle-roster" type="button" aria-controls="classic-users-panel users-panel" aria-expanded="true">People</button>
+        <button id="toggle-chat" type="button" aria-controls="sidebar" aria-expanded="true">Chat</button>
+        <button id="mic-setup-btn" type="button">Mic setup</button>
+      </div>
+    </div>
 
     <div id="join-screen">
       <div class="join-card">
@@ -37,13 +47,13 @@
           </div>
         </div>
 
-        <!-- Room browser (shown when logged in) -->
-        <div id="room-browser" hidden>
+        <!-- Public rooms are discoverable without signing in. -->
+        <div id="room-browser">
           <div class="room-browser-header">
             <div class="room-search-row">
               <input type="text" id="room-search-input" placeholder="Search rooms (3+ consecutive letters/numbers)..." minlength="3" maxlength="128" autocomplete="off" />
             </div>
-            <button id="create-room-btn" class="btn-primary" title="Create Room">+ Create Room</button>
+            <button id="create-room-btn" class="btn-primary" title="Create Room" hidden>+ Create Room</button>
           </div>
           <div id="room-list" class="room-list"></div>
           <button id="room-load-more" class="btn-secondary" hidden>Load more</button>
@@ -59,7 +69,7 @@
       </div>
     </div>
 
-    <div id="room-screen" class="layout-modern" hidden>
+    <div id="room-screen" class="layout-classic" hidden>
       <div id="main-area">
         <div id="video-grid"></div>
       </div>

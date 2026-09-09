@@ -1556,3 +1556,68 @@ header h1 {
 .room-topic:hover {
   color: var(--text-primary, #e0e0e0);
 }
+
+/* Room tools remain reachable when either desktop panel is collapsed. */
+#room-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.room-navigation,
+#community-actions { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.room-navigation button,
+.participant-actions-button {
+  font: inherit;
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+}
+.room-navigation button:hover,
+.participant-actions-button:hover { background: var(--surface-3); border-color: var(--text-dim); }
+.room-navigation button:focus-visible,
+.participant-actions-button:focus-visible,
+.panel-resize-handle:focus-visible,
+.room-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#room-screen { min-height: 0; }
+#room-screen.layout-classic { grid-template-columns: var(--roster-width, 220px) minmax(0, 1fr) var(--chat-width, 320px); }
+#room-screen.layout-modern { grid-template-columns: minmax(0, 1fr) var(--chat-width, 320px); }
+#sidebar { position: relative; min-width: 0; }
+#classic-users-panel { position: relative; overflow: hidden; min-width: 0; }
+#room-screen.layout-classic #classic-users-panel { display: flex; flex-direction: column; }
+#classic-users-panel .classic-user-list { flex: 1; min-height: 0; overflow-y: auto; }
+.classic-participant-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.participant-actions-button { flex-shrink: 0; padding: 0; width: 30px; height: 30px; font-size: 1.25rem; line-height: 1; }
+.panel-resize-handle { position: absolute; top: 0; bottom: 0; width: 8px; z-index: 4; cursor: col-resize; touch-action: none; }
+.panel-resize-handle::after { content: ''; position: absolute; height: 30px; width: 3px; top: calc(50% - 15px); left: 2px; border-radius: 2px; background: var(--text-dim); opacity: 0.5; }
+.panel-resize-handle:hover,
+.panel-resize-handle:focus-visible { background: var(--accent-glow); }
+.resize-roster { right: 0; }
+.resize-chat { left: 0; }
+#room-screen.roster-collapsed #classic-users-panel,
+#room-screen.chat-collapsed #sidebar { visibility: hidden; padding: 0; border: 0; overflow: hidden; }
+#room-tools .media-controls-toolbar { padding: 0; }
+.room-card[role="button"] { cursor: pointer; }
+.directory-status { line-height: 1.5; }
+@media (max-width: 768px) {
+  header { flex-wrap: wrap; gap: 0.45rem; flex-shrink: 0; }
+  .header-left { min-width: 0; flex-wrap: wrap; gap: 0.45rem; }
+  .header-right { flex-wrap: wrap; }
+  #room-tools { justify-content: center; padding: 0.4rem; }
+  .room-navigation { justify-content: center; }
+  .room-navigation button { min-height: 36px; }
+  #room-screen.layout-classic #main-area { grid-column: 1; }
+  #room-screen, #room-screen.layout-classic { grid-template-rows: minmax(100px, 1fr) minmax(180px, 32dvh) auto; }
+  #sidebar { max-height: none; min-height: 180px; }
+  .panel-resize-handle { display: none; }
+  .participant-actions-button { width: 40px; height: 40px; }
+}

@@ -1,8 +1,13 @@
 import './style.css';
 import { SignalingClient } from './signaling';
-import { RoomClient, type Participant, type ConnectionQuality } from './room';
+import { RoomClient, RoomPasswordRequiredError, type Participant, type ConnectionQuality } from './room';
 import * as icons from './icons';
 import { AuthManager } from './auth';
+import { MediaControls } from './media-controls';
+import { SocialChat } from './social-chat';
+import { CommunityUI } from './community-ui';
+import { safeRasterUrl } from './ui';
+import './community.css';
 import type { RoomListItem, CreateRoomRequest } from './protocol';
 
 // --- DOM refs ---
@@ -29,6 +34,9 @@ const scrollBottomBtn = document.getElementById('scroll-bottom-btn')!;
 const unreadBadge = document.getElementById('unread-badge')!;
 const handBtn = document.getElementById('hand-btn')!;
 const roomSettingsBtn = document.getElementById('room-settings-btn')!;
+const roomTools = document.getElementById('room-tools')!;
+const rosterToggleBtn = document.getElementById('toggle-roster') as HTMLButtonElement;
+const chatToggleBtn = document.getElementById('toggle-chat') as HTMLButtonElement;
 
 // Lobby screen
 const lobbyScreen = document.getElementById('lobby-screen')!;
@@ -129,24 +137,24 @@ const micSelect = document.getElementById('mic-select') as HTMLSelectElement;
 const auth = new AuthManager();
 
 function updateAuthUI(): void {
+  roomBrowser.hidden = false;
+  joinFormDivider.hidden = false;
+  createRoomBtn.hidden = !auth.isLoggedIn;
   if (auth.isLoggedIn) {
     authBarGuest.hidden = true;
     authBarUser.hidden = false;
     authDisplayName.textContent = auth.displayName ?? '';
-    roomBrowser.hidden = false;
-    joinFormDivider.hidden = false;
     // Pre-fill name input with auth display name
     if (auth.displayName && !nameInput.value.trim()) {
       nameInput.value = auth.displayName;
     }
-    loadRoomBrowser();
   } else {
     authBarGuest.hidden = false;
     authBarUser.hidden = true;
-    roomBrowser.hidden = true;
-    joinFormDivider.hidden = true;
   }
+  void loadRoomBrowser();
   updateJoinBtn();
+  community.refresh();
 }
 
 auth.setOnChange((loggedIn, tokenRefresh) => {
@@ -157,19 +165,21 @@ auth.setOnChange((loggedIn, tokenRefresh) => {
     signaling.setToken(auth.jwt ?? undefined);
     return;
   }
-  // Reconnect WS with new/cleared token
+  // Identity changes leave the old membership before reconnecting.
+  if (room) void leaveCurrentRoom();
   signaling.disconnect();
   signaling.connect(loggedIn ? (auth.jwt ?? undefined) : undefined);
 });
 
 // --- State ---
 let room: RoomClient | null = null;
+const mediaControls = new MediaControls({ getRoom: () => room, notify: message => showToast(message) });
+mediaControls.mountToolbar(roomTools);
+let localTextMuted = false;
+let roomRecovering = false;
+let cameraTogglePending = false;
+let microphoneTogglePending = false;
 const remoteTiles = new Map<string, HTMLDivElement>();
-let unreadCount = 0;
-let isAtBottom = true;
-const MAX_CHAT_HISTORY_MESSAGES = 300;
-const MAX_CHAT_HISTORY_CHARACTERS = 256 * 1024;
-let chatHistoryCharacters = 0;
 const lobbyWaiters = new Map<string, string>(); // participantId → displayName
 
 // Active speaker / audio level tracking — avoids querySelectorAll on every event
@@ -179,8 +189,10 @@ const currentlySpeaking = new Set<HTMLElement>(); // tiles + list items with .sp
 
 // Push-to-Talk state
 type MicMode = 'open' | 'ptt';
-let micMode: MicMode = (localStorage.getItem('micMode') as MicMode) || 'open';
+let personalMicMode: MicMode = localStorage.getItem('micMode') === 'ptt' ? 'ptt' : 'open';
+let micMode: MicMode = personalMicMode;
 let pttHeld = false;
+let pttActivation = 0;
 
 // Restore display name from localStorage
 const savedName = localStorage.getItem('displayName');
@@ -203,31 +215,6 @@ function nameColor(name: string): string {
   }
   const hue = Math.abs(hash) % 360;
   return `hsl(${hue}, 65%, 55%)`;
-}
-
-/**
- * Auto-link URLs in text.
- * HTML-escapes all user content first to prevent XSS, then wraps URLs in anchor tags.
- * The only HTML produced is the <a> tags with escaped href values.
- */
-function linkify(text: string): string {
-  // First: escape ALL user content to prevent XSS
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;');
-  // Then: wrap URLs (which are now safe escaped text) in anchor tags
-  return escaped.replace(
-    /(https?:\/\/[^\s<&]+)/g,
-    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
-  );
-}
-
-/** Format time as HH:MM */
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 // --- Toast Notifications ---
@@ -262,29 +249,40 @@ function showActionToast(message: string, actions: { label: string; action: () =
 }
 
 // --- Moderation Context Menu ---
-function showModerationMenu(targetId: string, _targetName: string, x: number, y: number): void {
+function showModerationMenu(targetId: string, targetName: string, x: number, y: number): void {
   document.getElementById('mod-menu')?.remove();
 
   const role = room?.role ?? 'user';
   const isMod = role === 'owner' || role === 'admin' || role === 'moderator';
   const isAdmin = role === 'owner' || role === 'admin';
 
-  if (!isMod) return;
-
   const items: { label: string; action: () => void; danger?: boolean }[] = [];
 
+  const isSelf = targetId === room?.localParticipantId;
+  const authenticated = isSelf ? auth.isLoggedIn : room?.getParticipants().get(targetId)?.authenticated === true;
+  if (authenticated) items.push({ label: 'View profile', action: () => { void community.showProfile(targetId); } });
+  if (!isSelf) {
+    items.push({ label: 'Private message', action: () => socialChat.openPrivate(targetId, targetName) });
+    items.push({ label: socialChat.isIgnored(targetId) ? 'Unignore messages' : 'Ignore messages', action: () => {
+      void socialChat.toggleIgnore(targetId, targetName, authenticated).catch(error => showToast(error instanceof Error ? error.message : 'Ignore update failed'));
+    } });
+    items.push({ label: 'Report to moderators', action: () => community.report(targetId, targetName) });
+  }
+
   // Mod+ actions
+  if (isMod && !isSelf) {
   items.push({ label: 'Close Camera', action: () => room?.closeCam(targetId) });
   items.push({ label: 'Cam Unban', action: () => room?.camUnban(targetId) });
   items.push({ label: 'Mute Text', action: () => room?.textMute(targetId) });
   items.push({ label: 'Text Unmute', action: () => room?.textUnmute(targetId) });
   items.push({ label: 'Kick', action: () => room?.kick(targetId), danger: true });
 
+  }
+
   // Admin+ actions
-  if (isAdmin) {
+  if (isAdmin && !isSelf) {
     items.push({ label: 'Cam Ban', action: () => room?.camBan(targetId), danger: true });
-    items.push({ label: 'Ban', action: () => room?.ban(targetId), danger: true });
-    items.push({ label: 'Unban', action: () => room?.unban(targetId), danger: false });
+    items.push({ label: 'Ban…', action: () => community.ban(targetId, targetName), danger: true });
   }
 
   const menu = document.createElement('div');
@@ -301,14 +299,14 @@ function showModerationMenu(targetId: string, _targetName: string, x: number, y:
 
   // Set Role sub-menu
   const roleOptions: { label: string; value: number }[] = [];
-  if (isMod) {
+  if (isMod && !isSelf) {
     roleOptions.push({ label: 'User', value: 1 });
     roleOptions.push({ label: 'Member', value: 2 });
   }
-  if (isAdmin) {
+  if (isAdmin && !isSelf) {
     roleOptions.push({ label: 'Moderator', value: 3 });
   }
-  if (role === 'owner') {
+  if (role === 'owner' && !isSelf) {
     roleOptions.push({ label: 'Admin', value: 4 });
   }
 
@@ -331,6 +329,9 @@ function showModerationMenu(targetId: string, _targetName: string, x: number, y:
 
   menu.style.left = `${Math.min(x, window.innerWidth - 180)}px`;
   menu.style.top = `${Math.min(y, window.innerHeight - (items.length + roleOptions.length + 2) * 36 - 16)}px`;
+  menu.style.top = `${Math.max(8, parseInt(menu.style.top, 10))}px`;
+  menu.style.maxHeight = `${window.innerHeight - 16}px`;
+  menu.style.overflowY = 'auto';
   document.body.appendChild(menu);
 
   const close = (e: MouseEvent) => {
@@ -376,31 +377,41 @@ function updateRoomModeUI(): void {
 
 function applyRoomSettingsToUI(): void {
   const settings = room?.roomSettings;
-  if (!settings) return;
+  const privileged = ['member', 'moderator', 'admin', 'owner'].includes(room?.role ?? 'guest');
+  const needsVoice = settings?.moderated && !privileged;
+  const chatDisabled = localTextMuted || settings?.allowChat === false || needsVoice || roomRecovering;
+  chatInput.disabled = Boolean(chatDisabled);
+  chatInput.placeholder = roomRecovering ? 'Reconnecting…'
+    : localTextMuted ? 'You are muted in this room'
+    : settings?.allowChat === false ? 'Chat is disabled'
+    : needsVoice ? 'Raise your hand to request voice' : 'Type a message...';
+  (chatSendBtn as HTMLButtonElement).disabled = Boolean(chatDisabled);
+  chatSendBtn.classList.toggle('disabled', Boolean(chatDisabled));
 
-  // Chat: disable input when chat is off
-  chatInput.disabled = !settings.allowChat;
-  chatInput.placeholder = settings.allowChat ? 'Type a message...' : 'Chat is disabled';
-  chatSendBtn.classList.toggle('disabled', !settings.allowChat);
+  setMicMode(settings?.pushToTalk ? 'ptt' : personalMicMode, false);
+  micModeSelect.disabled = settings?.pushToTalk === true;
+  micModeSelect.title = micModeSelect.disabled ? 'This room requires push to talk' : 'Your preferred microphone mode';
 
   // Screen sharing: hide button when disabled
-  if (!settings.allowScreenSharing) {
+  if (settings?.allowScreenSharing === false) {
     screenBtn.hidden = true;
   } else {
     screenBtn.hidden = !navigator.mediaDevices?.getDisplayMedia;
   }
 
   // Video: hide cam button when disabled
-  camBtn.hidden = !settings.allowVideo;
+  camBtn.hidden = settings?.allowVideo === false;
+  socialChat.participantsChanged();
 }
 
 function renderLobbyPanel(): void {
   const role = room?.role ?? 'user';
-  const lobbyEnabled = room?.roomSettings?.lobbyEnabled ?? false;
+  const lobbyEnabled = room?.roomSettings?.lobbyEnabled || room?.roomSettings?.inviteOnly || lobbyWaiters.size > 0;
   const canAdmit = role === 'owner' || role === 'admin' || role === 'moderator';
 
   // Show/hide lobby tab
   lobbyTab.hidden = !(canAdmit && lobbyEnabled);
+  if (lobbyTab.hidden && lobbyTab.classList.contains('active')) selectSidebarTab('chat');
 
   clearChildren(lobbyListEl);
   lobbyEmpty.hidden = lobbyWaiters.size > 0;
@@ -465,21 +476,20 @@ function populateRoomSettingsModal(): void {
 
 // --- Layout Management ---
 function getLayout(): 'modern' | 'classic' {
-  return (localStorage.getItem('layout') as 'modern' | 'classic') || 'modern';
+  return localStorage.getItem('layout') === 'modern' ? 'modern' : 'classic';
 }
 
 function setLayout(layout: 'modern' | 'classic'): void {
   localStorage.setItem('layout', layout);
-  roomScreen.className = `layout-${layout}`;
+  roomScreen.classList.remove('layout-modern', 'layout-classic');
+  roomScreen.classList.add(`layout-${layout}`);
   layoutSelect.value = layout;
 
   // In classic mode, hide the Users tab from the sidebar (users are in the left panel)
   // and force the Chat tab active
-  if (usersTab) usersTab.hidden = layout === 'classic';
-  if (layout === 'classic') {
-    sidebarTabs.forEach((t) => t.classList.toggle('active', t.dataset['tab'] === 'chat'));
-    tabContents.forEach((c) => c.classList.toggle('active', c.id === 'chat-panel'));
-  }
+  if (usersTab) usersTab.hidden = layout === 'classic' && window.innerWidth > 768;
+  if (usersTab?.hidden && usersTab.classList.contains('active')) selectSidebarTab('chat');
+  applyPanelPreferences();
 
   // Re-render participants for classic mode
   if (room) renderParticipants(room.getParticipants());
@@ -517,6 +527,128 @@ if (usersTab) {
   usersTab.append(' Users');
 }
 
+interface PanelPreferences {
+  rosterWidth: number;
+  chatWidth: number;
+  rosterCollapsed: boolean;
+  chatCollapsed: boolean;
+}
+
+const panelPreferences: PanelPreferences = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem('panelPreferences') ?? '{}');
+    return {
+      rosterWidth: Math.max(160, Math.min(360, Number(saved.rosterWidth) || 220)),
+      chatWidth: Math.max(240, Math.min(520, Number(saved.chatWidth) || 320)),
+      rosterCollapsed: saved.rosterCollapsed === true,
+      chatCollapsed: saved.chatCollapsed === true,
+    };
+  } catch { return { rosterWidth: 220, chatWidth: 320, rosterCollapsed: false, chatCollapsed: false }; }
+})();
+
+function selectSidebarTab(tab: 'chat' | 'users' | 'lobby'): void {
+  sidebarTabs.forEach(button => button.classList.toggle('active', button.dataset['tab'] === tab));
+  tabContents.forEach(content => content.classList.toggle('active', content.id === `${tab}-panel`));
+}
+
+function applyPanelPreferences(): void {
+  const desktop = window.innerWidth > 768;
+  const rosterCollapsed = desktop && panelPreferences.rosterCollapsed && getLayout() === 'classic';
+  const chatCollapsed = desktop && panelPreferences.chatCollapsed;
+  roomScreen.style.setProperty('--roster-width', `${rosterCollapsed ? 0 : Math.min(panelPreferences.rosterWidth, window.innerWidth * 0.3)}px`);
+  roomScreen.style.setProperty('--chat-width', `${chatCollapsed ? 0 : Math.min(panelPreferences.chatWidth, window.innerWidth * 0.4)}px`);
+  roomScreen.classList.toggle('roster-collapsed', rosterCollapsed);
+  roomScreen.classList.toggle('chat-collapsed', chatCollapsed);
+  rosterToggleBtn.textContent = rosterCollapsed ? 'Show people' : 'People';
+  chatToggleBtn.textContent = chatCollapsed ? 'Show chat' : 'Chat';
+  rosterToggleBtn.setAttribute('aria-expanded', String(!rosterCollapsed));
+  chatToggleBtn.setAttribute('aria-expanded', String(!chatCollapsed));
+  const roster = document.getElementById('classic-users-panel');
+  if (roster) roster.inert = rosterCollapsed;
+  document.getElementById('sidebar')!.inert = chatCollapsed;
+  if (usersTab) usersTab.hidden = desktop && getLayout() === 'classic';
+  if (usersTab?.hidden && usersTab.classList.contains('active')) selectSidebarTab('chat');
+}
+
+function savePanelPreferences(): void {
+  try { localStorage.setItem('panelPreferences', JSON.stringify(panelPreferences)); } catch { /* Retain session preferences. */ }
+  applyPanelPreferences();
+}
+
+function attachPanelResize(panel: HTMLElement, side: 'roster' | 'chat'): void {
+  if (panel.querySelector('.panel-resize-handle')) return;
+  const handle = document.createElement('div');
+  handle.className = `panel-resize-handle resize-${side}`;
+  handle.tabIndex = 0;
+  handle.setAttribute('role', 'separator');
+  handle.setAttribute('aria-orientation', 'vertical');
+  handle.setAttribute('aria-label', `Resize ${side === 'roster' ? 'people' : 'chat'} panel`);
+  const key = side === 'roster' ? 'rosterWidth' : 'chatWidth';
+  const setWidth = (width: number) => {
+    panelPreferences[key] = Math.max(side === 'roster' ? 160 : 240, Math.min(side === 'roster' ? 360 : 520, width));
+    handle.setAttribute('aria-valuenow', String(Math.round(panelPreferences[key])));
+    applyPanelPreferences();
+  };
+  handle.setAttribute('aria-valuemin', side === 'roster' ? '160' : '240');
+  handle.setAttribute('aria-valuemax', side === 'roster' ? '360' : '520');
+  handle.setAttribute('aria-valuenow', String(panelPreferences[key]));
+  handle.addEventListener('pointerdown', event => {
+    if (window.innerWidth <= 768 || event.button !== 0) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = panelPreferences[key];
+    const move = (next: PointerEvent) => {
+      if (next.pointerId !== event.pointerId) return;
+      setWidth(startWidth + (next.clientX - startX) * (side === 'roster' ? 1 : -1));
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+      window.removeEventListener('blur', stop);
+      savePanelPreferences();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+    window.addEventListener('blur', stop);
+  });
+  handle.addEventListener('keydown', event => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    setWidth(panelPreferences[key] + (event.key === 'ArrowRight' ? 20 : -20) * (side === 'roster' ? 1 : -1));
+    savePanelPreferences();
+  });
+  panel.append(handle);
+}
+
+rosterToggleBtn.addEventListener('click', () => {
+  if (getLayout() === 'classic' && window.innerWidth > 768) {
+    panelPreferences.rosterCollapsed = !panelPreferences.rosterCollapsed;
+  } else {
+    panelPreferences.chatCollapsed = false;
+    selectSidebarTab('users');
+  }
+  savePanelPreferences();
+});
+chatToggleBtn.addEventListener('click', () => {
+  if (window.innerWidth > 768) panelPreferences.chatCollapsed = !panelPreferences.chatCollapsed;
+  selectSidebarTab('chat');
+  savePanelPreferences();
+});
+attachPanelResize(document.getElementById('sidebar')!, 'chat');
+window.addEventListener('resize', applyPanelPreferences);
+document.getElementById('mic-setup-btn')!.addEventListener('click', () => { void mediaControls.openSetup('microphone'); });
+document.getElementById('copy-room-link')!.addEventListener('click', async () => {
+  if (!room?.currentRoomId) return;
+  const url = new URL(window.location.href);
+  url.hash = room.currentRoomId;
+  try {
+    await navigator.clipboard.writeText(url.toString());
+    showToast('Room link copied');
+  } catch { prompt('Copy this room link:', url.toString()); }
+});
+
 // --- Set button icons (static SVG from our icons module, no user content) ---
 function setButtonContent(btn: HTMLElement, iconHtml: string, tooltip?: string): void {
   btn.textContent = '';
@@ -545,30 +677,25 @@ setButtonContent(leaveBtn, icons.leave(), 'Leave');
 // --- Scroll-to-bottom for chat ---
 scrollBottomBtn.textContent = '';
 scrollBottomBtn.insertAdjacentHTML('afterbegin', icons.scrollDown());
-
-chatMessages.addEventListener('scroll', () => {
-  const threshold = 40;
-  isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < threshold;
-  if (isAtBottom) {
-    unreadCount = 0;
-    scrollBottomBtn.hidden = true;
-    unreadBadge.hidden = true;
-  } else {
-    scrollBottomBtn.hidden = false;
-  }
-});
-
-scrollBottomBtn.addEventListener('click', () => {
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-  unreadCount = 0;
-  scrollBottomBtn.hidden = true;
-  unreadBadge.hidden = true;
-});
+scrollBottomBtn.appendChild(unreadBadge);
 
 // --- Signaling setup ---
 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
 const signaling = new SignalingClient(wsUrl);
+const socialChat = new SocialChat({
+  getRoom: () => room,
+  getViewerKey: () => auth.userId ?? 'guest',
+  notify: message => showToast(message),
+  participantAction: showModerationMenu,
+});
+const community = new CommunityUI({
+  auth, getRoom: () => room, notify: message => showToast(message),
+  onProfileChanged: profile => { auth.updateDisplayName(profile.display_name); if (room) renderParticipants(room.getParticipants()); },
+  onRoomsChanged: () => { void loadRoomBrowser(); },
+  onRoomDeleted: async id => { if (room?.currentRoomId === id) await leaveCurrentRoom(); },
+  onSignedOut: async () => { await leaveCurrentRoom(); auth.forgetSession(); },
+});
 
 signaling.setOnStatusChange((status) => {
   connectionStatus.textContent = status.charAt(0).toUpperCase() + status.slice(1);
@@ -597,6 +724,7 @@ roomInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.cl
 let roomBrowserPage = 1;
 let roomBrowserQuery = '';
 let roomBrowserHasMore = false;
+let roomBrowserRequest = 0;
 const MIN_ROOM_SEARCH_TRIGRAM_LEN = 3;
 
 function hasIndexableRoomSearchTrigram(query: string): boolean {
@@ -613,6 +741,7 @@ function hasIndexableRoomSearchTrigram(query: string): boolean {
 }
 
 function showRoomSearchMinimum(): void {
+  roomBrowserRequest++;
   roomBrowserPage = 1;
   roomBrowserHasMore = false;
   roomLoadMore.hidden = true;
@@ -624,25 +753,38 @@ function showRoomSearchMinimum(): void {
 }
 
 async function loadRoomBrowser(append = false): Promise<void> {
+  const request = ++roomBrowserRequest;
   if (!append) {
     roomBrowserPage = 1;
     clearChildren(roomList);
+    roomLoadMore.hidden = true;
   }
+  roomLoadMore.disabled = true;
   try {
     const params = new URLSearchParams({ page: String(roomBrowserPage), limit: '20' });
     if (roomBrowserQuery) params.set('q', roomBrowserQuery);
     const resp = await fetch(`/api/rooms?${params}`, {
       headers: auth.jwt ? { Authorization: `Bearer ${auth.jwt}` } : {},
     });
-    if (!resp.ok) return;
+    if (request !== roomBrowserRequest) return;
+    if (!resp.ok) {
+      const explanation = resp.status === 404 || resp.status === 503
+        ? 'The room directory is unavailable on this server. Local guest rooms can still be joined by name below; browsing saved rooms requires a configured database.'
+        : resp.status === 429 ? 'Too many room searches. Wait a moment and try again.'
+        : 'Could not load the room directory. You can still join directly by room name below.';
+      throw new Error(explanation);
+    }
     const rooms: RoomListItem[] = await resp.json();
+    if (request !== roomBrowserRequest) return;
     roomBrowserHasMore = rooms.length === 20;
     roomLoadMore.hidden = !roomBrowserHasMore;
 
     if (rooms.length === 0 && !append) {
       const empty = document.createElement('div');
       empty.className = 'room-list-empty';
-      empty.textContent = roomBrowserQuery ? 'No rooms match your search' : 'No rooms yet — create one!';
+      empty.textContent = roomBrowserQuery ? 'No rooms match your search'
+        : auth.isLoggedIn ? 'No public rooms yet — create one or join by name below.'
+        : 'No public rooms are listed. Join by room name below, or sign in to create a saved room.';
       roomList.appendChild(empty);
       return;
     }
@@ -650,17 +792,29 @@ async function loadRoomBrowser(append = false): Promise<void> {
     for (const r of rooms) {
       const card = document.createElement('div');
       card.className = 'room-card';
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.setAttribute('aria-label', `Join ${r.display_name}`);
+      card.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); card.click(); }
+      });
       card.addEventListener('click', () => {
         roomInput.value = r.id;
         if (auth.displayName && !nameInput.value.trim()) {
           nameInput.value = auth.displayName;
         }
         updateJoinBtn();
-        joinBtn.focus();
+        if (nameInput.value.trim()) joinBtn.focus();
+        else nameInput.focus();
       });
 
       const info = document.createElement('div');
       info.className = 'room-card-info';
+      if (safeRasterUrl(r.image_url)) {
+        const image = document.createElement('img');
+        image.src = r.image_url; image.alt = ''; image.className = 'room-card-image';
+        card.append(image);
+      }
 
       const nameRow = document.createElement('div');
       nameRow.className = 'room-card-name';
@@ -674,17 +828,24 @@ async function loadRoomBrowser(append = false): Promise<void> {
       }
       info.appendChild(nameRow);
 
-      if (r.topic) {
+      if (r.topic || r.description) {
         const topic = document.createElement('div');
         topic.className = 'room-card-topic';
-        topic.textContent = r.topic;
+        topic.textContent = r.topic || r.description || '';
         info.appendChild(topic);
+      }
+      if (r.topic && r.description) {
+        const description = document.createElement('p');
+        description.className = 'room-card-topic';
+        description.textContent = r.description;
+        description.title = r.description;
+        info.appendChild(description);
       }
 
       const meta = document.createElement('div');
       meta.className = 'room-card-meta';
       const count = document.createElement('span');
-      count.textContent = `${r.participant_count} online`;
+      count.textContent = `${r.participant_count} online · ${r.broadcaster_count ?? 0} broadcasting`;
       meta.appendChild(count);
       if (r.moderated) {
         const badge = document.createElement('span');
@@ -698,7 +859,24 @@ async function loadRoomBrowser(append = false): Promise<void> {
       roomList.appendChild(card);
     }
   } catch (e) {
-    console.error('Failed to load rooms:', e);
+    if (request !== roomBrowserRequest) return;
+    roomBrowserHasMore = false;
+    roomLoadMore.hidden = true;
+    roomList.querySelector('.directory-status')?.remove();
+    const message = document.createElement('div');
+    message.className = 'room-list-empty directory-status';
+    message.setAttribute('role', 'status');
+    message.textContent = e instanceof Error && !(e instanceof TypeError) ? e.message
+      : 'The room directory could not be reached. You can still try joining directly below.';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'auth-link-btn';
+    retry.textContent = 'Retry directory';
+    retry.addEventListener('click', () => { void loadRoomBrowser(); });
+    message.append(document.createElement('br'), retry);
+    roomList.append(message);
+  } finally {
+    if (request === roomBrowserRequest) roomLoadMore.disabled = false;
   }
 }
 
@@ -847,7 +1025,7 @@ registerToLogin.addEventListener('click', () => {
 });
 
 // --- Create Room ---
-createRoomBtn.addEventListener('click', () => { createRoomModal.hidden = false; });
+createRoomBtn.addEventListener('click', () => { if (auth.isLoggedIn) createRoomModal.hidden = false; });
 createRoomClose.addEventListener('click', () => { createRoomModal.hidden = true; });
 createRoomModal.addEventListener('click', (e) => { if (e.target === createRoomModal) createRoomModal.hidden = true; });
 
@@ -929,15 +1107,40 @@ joinBtn.addEventListener('click', async () => {
 
   joinBtn.disabled = true;
   joinBtn.textContent = 'Joining...';
+  localTextMuted = false;
+  roomRecovering = false;
 
   try {
     room = new RoomClient(signaling, {
-      onParticipantsChanged: renderParticipants,
+      onParticipantsChanged: participants => { void socialChat.activate(); renderParticipants(participants); socialChat.participantsChanged(); community.refresh(); },
       onLocalStream: () => {}, // Unused — local tile managed by updateLocalTile on user action
+      onLocalMediaChanged: () => {
+        if (!room) return;
+        updateMicButton(room.audioEnabled);
+        updateCamButton(room.videoEnabled);
+        updateScreenButton(room.isScreenSharing);
+        updateLocalTile();
+      },
       onRemoteTrack: renderRemoteTrack,
       onRemoteTrackRemoved: removeRemoteTrack,
       onParticipantLeft: handleParticipantLeft,
-      onChatMessage: appendChatMessage,
+      onChatMessage: () => {}, // Typed entries and delivery state handled by session inbox.
+      onSocialEvent: message => {
+        socialChat.handleEvent(message);
+        if (message.type === 'nicknameChanged') {
+          if (message.participantId === room?.localParticipantId) nameInput.value = message.nickname;
+          for (const [key, tile] of remoteTiles) {
+            if (tile.dataset['participantId'] !== message.participantId) continue;
+            const tag = tile.querySelector('.name-tag');
+            if (tag) tag.textContent = message.nickname + (key.endsWith(':screen') ? ' (Screen)' : '');
+          }
+        } else if (message.type === 'socialResponse' && message.action === 'getRoomSnapshot') {
+          const lobby = message.data['lobby'] as { participantId: string; displayName: string }[] | undefined;
+          lobbyWaiters.clear();
+          for (const waiter of lobby ?? []) lobbyWaiters.set(waiter.participantId, waiter.displayName);
+          renderLobbyPanel();
+        }
+      },
       onConnectionQuality: renderConnectionQuality,
       onParticipantJoined: handleParticipantJoined,
       onActiveSpeaker: (participantId) => {
@@ -983,9 +1186,14 @@ joinBtn.addEventListener('click', async () => {
       onModeration: (action, participantId, reason) => {
         const isLocal = participantId === room?.localParticipantId;
         if (isLocal && (action === 'kicked' || action === 'banned')) {
+          void leaveCurrentRoom();
           const reasonText = reason ? `\nReason: ${reason}` : '';
           alert(`You have been ${action} from this room.${reasonText}`);
           return;
+        }
+        if (isLocal && (action === 'textMuted' || action === 'textUnmuted')) {
+          localTextMuted = action === 'textMuted';
+          applyRoomSettingsToUI();
         }
         // For other participants, show toast as before
         const participants = room?.getParticipants();
@@ -1002,20 +1210,24 @@ joinBtn.addEventListener('click', async () => {
         showToast(messages[action] ?? `${action} on ${targetName}`);
       },
       onRoleChanged: (participantId, newRole) => {
+        community.refresh();
+        socialChat.participantsChanged();
         const participants = room?.getParticipants();
         const targetName = participants?.get(participantId)?.name
-          ?? (participantId === room?.localParticipantId ? nameInput.value.trim() : participantId.slice(0, 8));
+          ?? (participantId === room?.localParticipantId ? room.nickname : participantId.slice(0, 8));
         if (participantId === room?.localParticipantId) {
           showToast(`Your role has been changed to ${newRole}`);
         } else {
           showToast(`${targetName} is now ${newRole}`);
         }
         updateRoomModeUI();
+        applyRoomSettingsToUI();
         // Re-render participants to update role badges
         if (room) renderParticipants(room.getParticipants());
       },
       onRoomSettingsChanged: (settings) => {
-        showToast('Room settings have been updated');
+        roomLabel.textContent = settings.displayName;
+        socialChat.participantsChanged();
         updateRoomModeUI();
         applyRoomSettingsToUI();
         roomTopic.textContent = settings.topic ?? '';
@@ -1039,6 +1251,8 @@ joinBtn.addEventListener('click', async () => {
         }
       },
       onLobbyWaiting: (roomName, topic, count) => {
+        mediaControls.reset();
+        roomTools.hidden = true;
         joinScreen.hidden = true;
         roomScreen.hidden = true;
         lobbyScreen.hidden = false;
@@ -1064,12 +1278,29 @@ joinBtn.addEventListener('click', async () => {
         applyJoinedRoomUI();
       },
       onLobbyDenied: (reason) => {
-        lobbyScreen.hidden = true;
-        joinScreen.hidden = false;
-        joinBtn.disabled = false;
-        joinBtn.textContent = 'Join Room';
+        void leaveCurrentRoom();
         alert(`Lobby access denied${reason ? `: ${reason}` : ''}`);
       },
+      onRecoveryState: (state, message) => {
+        roomRecovering = state !== 'connected';
+        if (state === 'connected') {
+          connectionStatus.textContent = 'Connected';
+          connectionStatus.className = 'status connected';
+          applyJoinedRoomUI();
+          updateLocalTile();
+          showToast('Room connection restored');
+        } else {
+          connectionStatus.textContent = state === 'reconnecting' ? 'Rejoining room…' : 'Room recovery failed';
+          connectionStatus.className = `status ${state === 'reconnecting' ? 'connecting' : 'disconnected'}`;
+          pttDeactivate();
+          applyRoomSettingsToUI();
+          if (state === 'failed') showActionToast(message ?? 'Unable to rejoin the room', [
+            { label: 'Leave room', action: () => { void leaveCurrentRoom(); } },
+          ], 15000);
+        }
+      },
+      onPasswordRequired: async () => prompt('The room password is required to reconnect:'),
+      onRoomClosed: reason => { void leaveCurrentRoom(); showToast(reason, 8000); },
     });
 
     let status: 'joined' | 'lobby';
@@ -1077,7 +1308,7 @@ joinBtn.addEventListener('click', async () => {
       status = await room.join(roomId, name);
     } catch (e) {
       // Password-protected room: ask once and retry
-      if (e instanceof Error && /requires a password/i.test(e.message)) {
+      if (e instanceof RoomPasswordRequiredError) {
         const pw = prompt('This room requires a password:');
         if (pw === null) {
           room = null;
@@ -1117,22 +1348,23 @@ function applyJoinedRoomUI(): void {
   if (!room) return;
   setLayout(getLayout());
 
-  roomLabel.textContent = room.currentRoomId ?? '';
+  roomLabel.textContent = room.roomSettings?.displayName ?? room.currentRoomId ?? '';
   roomLabel.hidden = false;
+  roomTools.hidden = false;
 
   const topic = room.roomSettings?.topic;
   roomTopic.textContent = topic ?? '';
   roomTopic.hidden = !topic;
 
-  // Control buttons — always start muted + cam off (privacy)
+  // Reflect retained media on reconnect; fresh room sessions start without capture.
   if (room.hasMedia) {
     micBtn.style.opacity = '';
     camBtn.style.opacity = '';
     micBtn.classList.remove('muted');
     camBtn.classList.remove('muted');
-    updateMicButton(false);
-    updateCamButton(false);
-    updateScreenButton(false);
+    updateMicButton(room.audioEnabled);
+    updateCamButton(room.videoEnabled);
+    updateScreenButton(room.isScreenSharing);
     // Register callback so UI updates when browser's "Stop sharing" button is clicked
     room.onScreenShareStopped = () => {
       updateScreenButton(false);
@@ -1151,6 +1383,8 @@ function applyJoinedRoomUI(): void {
   qualityIndicator.hidden = false;
   updateRoomModeUI();
   applyRoomSettingsToUI();
+  void socialChat.activate();
+  community.refresh();
 }
 
 // Topic click-to-edit for Admin+ — registered once at module level.
@@ -1166,27 +1400,25 @@ roomTopic.addEventListener('click', () => {
 });
 
 // --- Lobby Cancel ---
-lobbyCancelBtn.addEventListener('click', async () => {
-  await room?.leave();
-  room = null;
-  lobbyScreen.hidden = true;
-  joinScreen.hidden = false;
-  joinBtn.disabled = false;
-  joinBtn.textContent = 'Join Room';
-  updateJoinBtn();
-});
+lobbyCancelBtn.addEventListener('click', () => { void leaveCurrentRoom(); });
 
 // --- Leave ---
-leaveBtn.addEventListener('click', async () => {
-  await room?.leave();
+async function leaveCurrentRoom(): Promise<void> {
+  pttDeactivate();
+  mediaControls.reset();
+  const leavingRoom = room;
   room = null;
+  socialChat.reset();
+  community.refresh();
+  await leavingRoom?.leave();
+  localTextMuted = false;
+  roomRecovering = false;
+  setMicMode(personalMicMode, false);
+  micModeSelect.disabled = false;
 
   clearChildren(videoGrid);
   clearChildren(participantList);
   clearChildren(chatMessages);
-  chatHistoryCharacters = 0;
-  unreadCount = 0;
-  isAtBottom = true;
   unreadBadge.hidden = true;
   scrollBottomBtn.hidden = true;
   remoteTiles.clear();
@@ -1201,6 +1433,7 @@ leaveBtn.addEventListener('click', async () => {
 
   // Reset PTT state
   pttHeld = false;
+  pttActivation++;
 
   // Reset mic/cam button states (clear inline opacity from no-media mode)
   micBtn.style.opacity = '';
@@ -1219,12 +1452,14 @@ leaveBtn.addEventListener('click', async () => {
 
   // Reset settings-driven UI
   chatInput.disabled = false;
+  (chatSendBtn as HTMLButtonElement).disabled = false;
   chatInput.placeholder = 'Type a message...';
   chatSendBtn.classList.remove('disabled');
   screenBtn.hidden = !navigator.mediaDevices?.getDisplayMedia;
   camBtn.hidden = false;
 
   roomScreen.hidden = true;
+  roomTools.hidden = true;
   lobbyScreen.hidden = true;
   joinScreen.hidden = false;
   roomLabel.hidden = true;
@@ -1233,8 +1468,14 @@ leaveBtn.addEventListener('click', async () => {
   joinBtn.textContent = 'Join Room';
   qualityIndicator.hidden = true;
   qualityIndicator.className = 'quality-dot';
+  settingsModal.hidden = true;
+  roomSettingsModal.hidden = true;
+  document.getElementById('mod-menu')?.remove();
   updateJoinBtn();
-});
+  void loadRoomBrowser();
+}
+
+leaveBtn.addEventListener('click', () => { void leaveCurrentRoom(); });
 
 // --- Control buttons ---
 function updateMicButton(enabled: boolean): void {
@@ -1280,7 +1521,7 @@ function updateLocalTile(): void {
   const camOn = room.videoEnabled;
   const micOn = room.audioEnabled;
   const tile = document.getElementById('local-tile');
-  const localName = nameInput.value.trim();
+  const localName = room.nickname || nameInput.value.trim();
 
   if (!camOn && !micOn) {
     // Both off — remove tile entirely
@@ -1363,14 +1604,27 @@ function addLocalAvatar(tile: HTMLElement, name: string): void {
 
 async function pttActivate(): Promise<void> {
   if (!room || !room.hasMedia || pttHeld) return;
+  const activeRoom = room;
+  const activation = ++pttActivation;
   pttHeld = true;
-  await room.unmuteAudio();
-  updateMicButton(true);
-  updateLocalTile();
+  try {
+    await activeRoom.unmuteAudio();
+    if (activation !== pttActivation || room !== activeRoom || !pttHeld) return;
+    updateMicButton(activeRoom.audioEnabled);
+    updateLocalTile();
+  } catch (error) {
+    if (activation !== pttActivation || room !== activeRoom || !pttHeld) return;
+    pttHeld = false;
+    activeRoom.muteAudio();
+    updateMicButton(false);
+    updateLocalTile();
+    showToast(error instanceof Error ? error.message : 'Could not enable microphone');
+  }
 }
 
 function pttDeactivate(): void {
   if (!room || !pttHeld) return;
+  pttActivation++;
   pttHeld = false;
   room.muteAudio();
   updateMicButton(false);
@@ -1379,7 +1633,7 @@ function pttDeactivate(): void {
 
 micBtn.addEventListener('mousedown', (e) => {
   if (!room || !room.hasMedia) return;
-  if (micMode === 'ptt') {
+  if (micMode === 'ptt' && canStartBroadcast('microphone')) {
     e.preventDefault(); // prevent focus loss
     pttActivate();
   }
@@ -1394,44 +1648,87 @@ micBtn.addEventListener('mouseleave', () => {
 });
 
 micBtn.addEventListener('click', async () => {
-  if (!room || !room.hasMedia) return;
-  if (micMode === 'open') {
-    try {
-      const enabled = await room.toggleAudio();
-      updateMicButton(enabled);
-      updateLocalTile();
-    } catch (e) {
-      updateMicButton(false);
-      showToast(e instanceof Error ? e.message : 'Could not enable microphone');
-    }
-  }
+  if (micMode === 'open') await toggleMicrophone();
   // In PTT mode, click is handled by mousedown/mouseup above
 });
 
-camBtn.addEventListener('click', async () => {
-  if (!room) return;
-  if (!room.hasMedia) return;
+function canStartBroadcast(kind: 'microphone' | 'camera' | 'screen'): boolean {
+  if (!room?.hasMedia || roomRecovering) return false;
+  const settings = room.roomSettings;
+  const hasVoice = ['member', 'moderator', 'admin', 'owner'].includes(room.role);
+  if (settings?.moderated && !hasVoice) {
+    showToast('Raise your hand to request broadcasting permission');
+    return false;
+  }
+  if (settings?.guestsCanBroadcast === false && room.role === 'guest') {
+    showToast('Guests cannot broadcast in this room');
+    return false;
+  }
+  if (kind === 'camera' && settings?.allowVideo === false) return false;
+  if (kind === 'screen' && (settings?.allowScreenSharing === false || !navigator.mediaDevices?.getDisplayMedia)) return false;
+  return true;
+}
+
+async function toggleMicrophone(): Promise<void> {
+  const activeRoom = room;
+  if (!activeRoom?.hasMedia || microphoneTogglePending || micMode !== 'open') return;
+  if (!activeRoom.audioEnabled && !canStartBroadcast('microphone')) return;
+  microphoneTogglePending = true;
   try {
-    const enabled = await room.toggleVideo();
+    const enabled = await activeRoom.toggleAudio();
+    if (room !== activeRoom) return;
+    updateMicButton(enabled);
+    updateLocalTile();
+  } catch (error) {
+    if (room !== activeRoom) return;
+    updateMicButton(activeRoom.audioEnabled);
+    showToast(error instanceof Error ? error.message : 'Could not enable microphone');
+  } finally { microphoneTogglePending = false; }
+}
+
+async function toggleCamera(): Promise<void> {
+  const activeRoom = room;
+  if (!activeRoom?.hasMedia || cameraTogglePending) return;
+  if (!activeRoom.videoEnabled && !canStartBroadcast('camera')) return;
+  cameraTogglePending = true;
+  try {
+    if (!activeRoom.videoEnabled && !mediaControls.hasConfiguredSetup) {
+      if (!await mediaControls.openSetup('camera')) return;
+      if (room !== activeRoom || !canStartBroadcast('camera')) return;
+    }
+    const enabled = await activeRoom.toggleVideo();
+    if (room !== activeRoom) return;
     updateCamButton(enabled);
     updateLocalTile();
-  } catch (e) {
-    // e.g. server rejects produce for non-voiced users in moderated rooms
-    updateCamButton(false);
-    showToast(e instanceof Error ? e.message : 'Could not enable camera');
-  }
-});
+  } catch (error) {
+    if (room !== activeRoom) return;
+    updateCamButton(activeRoom.videoEnabled);
+    showToast(error instanceof Error ? error.message : 'Could not enable camera');
+  } finally { cameraTogglePending = false; }
+}
 
-screenBtn.addEventListener('click', async () => {
-  if (!room || !room.hasMedia) return;
-  if (room.isScreenSharing) {
-    room.stopScreenShare();
+async function toggleScreenShare(): Promise<void> {
+  const activeRoom = room;
+  if (!activeRoom?.hasMedia) return;
+  if (activeRoom.isScreenSharing) {
+    activeRoom.stopScreenShare();
     updateScreenButton(false);
-  } else {
-    const success = await room.startScreenShare();
-    updateScreenButton(success);
+  } else if (canStartBroadcast('screen')) {
+    const success = await activeRoom.startScreenShare();
+    if (room === activeRoom) updateScreenButton(success);
   }
-});
+}
+
+camBtn.addEventListener('click', () => { void toggleCamera(); });
+screenBtn.addEventListener('click', () => { void toggleScreenShare(); });
+
+micBtn.addEventListener('touchstart', event => {
+  if (micMode !== 'ptt') return;
+  event.preventDefault();
+  if (canStartBroadcast('microphone')) void pttActivate();
+}, { passive: false });
+micBtn.addEventListener('touchend', () => pttDeactivate());
+micBtn.addEventListener('touchcancel', () => pttDeactivate());
 
 // --- Hand raise ---
 handBtn.addEventListener('click', () => {
@@ -1525,23 +1822,36 @@ layoutSelect.addEventListener('change', () => {
 // Mic mode setting
 micModeSelect.value = micMode;
 
-function setMicMode(mode: MicMode): void {
-  micMode = mode;
-  localStorage.setItem('micMode', mode);
-  micModeSelect.value = mode;
+function setMicMode(mode: MicMode, remember = true): void {
+  if (remember && room?.roomSettings?.pushToTalk && mode !== 'ptt') {
+    micModeSelect.value = 'ptt';
+    showToast('This room requires push to talk');
+    return;
+  }
+  if (remember) {
+    personalMicMode = mode;
+    localStorage.setItem('micMode', mode);
+  }
+  const effectiveMode = room?.roomSettings?.pushToTalk ? 'ptt' : mode;
+  const changed = micMode !== effectiveMode;
+  micMode = effectiveMode;
+  micModeSelect.value = effectiveMode;
 
   if (room && room.hasMedia) {
-    if (mode === 'ptt') {
+    if (effectiveMode === 'ptt' && (changed || (!pttHeld && room.audioEnabled))) {
       // Entering PTT mode — mute immediately
       pttHeld = false;
+      pttActivation++;
       room.muteAudio();
       updateMicButton(false);
       updateLocalTile();
-    } else {
+    } else if (changed) {
       // Entering open mic mode — reset PTT state, leave mic as-is (muted)
       pttHeld = false;
+      pttActivation++;
       updateMicButton(room.audioEnabled);
     }
+    updateMicButton(room.audioEnabled);
   }
 }
 
@@ -1599,21 +1909,6 @@ async function populateDeviceSelectors(): Promise<void> {
   }
 }
 
-// --- Chat ---
-function sendChatMessage(): void {
-  const content = chatInput.value.trim();
-  if (!content || !room) return;
-  room.sendChat(content);
-  const name = nameInput.value.trim();
-  appendChatMessage(room.localParticipantId ?? '', name, content);
-  chatInput.value = '';
-}
-
-chatSendBtn.addEventListener('click', sendChatMessage);
-chatInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendChatMessage();
-});
-
 // --- Update video grid count for adaptive sizing ---
 function updateVideoGridCount(): void {
   const count = videoGrid.children.length;
@@ -1637,7 +1932,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
     if (room.videoEnabled) localProducers.set('local-video', { kind: 'video', source: 'camera' });
     allParticipants.push({
       id: room.localParticipantId,
-      name: nameInput.value.trim(),
+      name: room.nickname || nameInput.value.trim(),
       role: room.role,
       producers: localProducers,
     });
@@ -1645,6 +1940,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
   for (const p of participants.values()) {
     allParticipants.push(p);
   }
+  sortParticipantRoster(allParticipants);
 
   for (const p of allParticipants) {
     const li = document.createElement('li');
@@ -1663,6 +1959,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
     avatar.className = 'participant-avatar';
     avatar.style.background = nameColor(p.name);
     avatar.textContent = p.name.charAt(0).toUpperCase();
+    community.decorateAvatar(avatar, p.id, p.id === room?.localParticipantId ? auth.isLoggedIn : p.authenticated === true);
 
     // Info
     const info = document.createElement('div');
@@ -1712,6 +2009,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
     li.appendChild(avatar);
     li.appendChild(info);
     li.appendChild(mediaIcons);
+    if (p.id !== room?.localParticipantId) li.appendChild(participantActionButton(p.id, p.name));
     participantList.appendChild(li);
   }
 
@@ -1742,6 +2040,8 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
     panel.appendChild(list);
 
     roomScreen.insertBefore(panel, roomScreen.firstChild);
+    attachPanelResize(panel, 'roster');
+    applyPanelPreferences();
   }
 
   const list = panel.querySelector('.classic-user-list') as HTMLElement;
@@ -1755,7 +2055,7 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
     if (room.videoEnabled) localProducers.set('local-video', { kind: 'video', source: 'camera' });
     allParticipants.push({
       id: room.localParticipantId,
-      name: nameInput.value.trim(),
+      name: room.nickname || nameInput.value.trim(),
       role: room.role,
       producers: localProducers,
     });
@@ -1763,6 +2063,8 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
   for (const p of participants.values()) {
     allParticipants.push(p);
   }
+  sortParticipantRoster(allParticipants);
+  panel.querySelector('.panel-title')!.textContent = `People (${allParticipants.length})`;
 
   for (const p of allParticipants) {
     const li = document.createElement('li');
@@ -1783,8 +2085,10 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
     avatar.style.height = '24px';
     avatar.style.fontSize = '0.65rem';
     avatar.textContent = p.name.charAt(0).toUpperCase();
+    community.decorateAvatar(avatar, p.id, p.id === room?.localParticipantId ? auth.isLoggedIn : p.authenticated === true);
 
     const nameSpan = document.createElement('span');
+    nameSpan.className = 'classic-participant-name';
     // Role badge in classic panel
     const classicBadge = getRoleBadgeSpan(p.role);
     if (classicBadge) nameSpan.appendChild(classicBadge);
@@ -1795,8 +2099,29 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
 
     li.appendChild(avatar);
     li.appendChild(nameSpan);
+    if (p.id !== room?.localParticipantId) li.appendChild(participantActionButton(p.id, p.name));
     list.appendChild(li);
   }
+}
+
+function participantActionButton(participantId: string, name: string): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'participant-actions-button';
+  button.textContent = '⋯';
+  button.title = `Actions for ${name}`;
+  button.setAttribute('aria-label', `Actions for ${name}`);
+  button.addEventListener('click', event => {
+    event.stopPropagation();
+    const bounds = button.getBoundingClientRect();
+    showModerationMenu(participantId, name, bounds.left, bounds.bottom);
+  });
+  return button;
+}
+
+function sortParticipantRoster(participants: Participant[]): void {
+  const ranks: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member: 2, user: 1, guest: 0 };
+  participants.sort((left, right) => (ranks[right.role] ?? 0) - (ranks[left.role] ?? 0) || left.name.localeCompare(right.name));
 }
 
 
@@ -1858,6 +2183,7 @@ function renderRemoteTrack(participantId: string, participantName: string, track
     }
     audio.srcObject = new MediaStream([track]);
   }
+  mediaControls.attachTile(tile, participantId, participantName);
 }
 
 function removeRemoteTrack(participantId: string, _producerId: string, kind: 'audio' | 'video', source?: string): void {
@@ -1891,6 +2217,7 @@ function removeRemoteTrack(participantId: string, _producerId: string, kind: 'au
 }
 
 function handleParticipantLeft(participantId: string): void {
+  mediaControls.detachParticipant(participantId);
   lobbyWaiters.delete(participantId);
   const tile = remoteTiles.get(participantId);
   const name = tile?.querySelector('.name-tag')?.textContent;
@@ -1914,75 +2241,8 @@ function handleParticipantJoined(participantId: string, participantName: string)
   appendSystemMessage(`${participantName} joined`);
 }
 
-function appendChatMessage(participantId: string, participantName: string, content: string): void {
-  const div = document.createElement('div');
-  div.className = 'chat-msg';
-
-  const isLocal = participantId === room?.localParticipantId;
-
-  const sender = document.createElement('span');
-  sender.className = 'sender';
-  sender.textContent = isLocal ? 'You' : participantName;
-  sender.style.color = isLocal ? 'var(--accent)' : nameColor(participantName);
-
-  const msgText = document.createElement('div');
-  msgText.className = 'msg-text';
-  // linkify() escapes all HTML entities before wrapping URLs in anchor tags
-  msgText.insertAdjacentHTML('afterbegin', linkify(content));
-
-  const msgTime = document.createElement('div');
-  msgTime.className = 'msg-time';
-  msgTime.textContent = formatTime(new Date());
-
-  div.appendChild(sender);
-  div.appendChild(msgText);
-  div.appendChild(msgTime);
-  appendBoundedChatNode(div, participantName.length + content.length);
-
-  if (isAtBottom) {
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  } else {
-    unreadCount = Math.min(unreadCount + 1, MAX_CHAT_HISTORY_MESSAGES);
-    unreadBadge.textContent = String(unreadCount);
-    unreadBadge.hidden = false;
-    scrollBottomBtn.hidden = false;
-  }
-}
-
 function appendSystemMessage(text: string): void {
-  const div = document.createElement('div');
-  div.className = 'chat-msg system';
-
-  const msgText = document.createElement('div');
-  msgText.className = 'msg-text';
-  msgText.textContent = text;
-
-  div.appendChild(msgText);
-  appendBoundedChatNode(div, text.length);
-
-  if (isAtBottom) {
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-}
-
-function appendBoundedChatNode(node: HTMLDivElement, characterCount: number): void {
-  node.dataset['historyCharacters'] = String(characterCount);
-  chatHistoryCharacters += characterCount;
-  chatMessages.appendChild(node);
-
-  while (
-    chatMessages.childElementCount > MAX_CHAT_HISTORY_MESSAGES
-    || chatHistoryCharacters > MAX_CHAT_HISTORY_CHARACTERS
-  ) {
-    const oldest = chatMessages.firstElementChild as HTMLElement | null;
-    if (!oldest) {
-      chatHistoryCharacters = 0;
-      break;
-    }
-    const removedCharacters = Number(oldest.dataset['historyCharacters'] ?? 0);
-    chatHistoryCharacters = Math.max(0, chatHistoryCharacters - removedCharacters);
-    oldest.remove();
-  }
+  socialChat.system(text);
 }
 
 function renderConnectionQuality(quality: ConnectionQuality): void {
@@ -1997,67 +2257,49 @@ function renderConnectionQuality(quality: ConnectionQuality): void {
 }
 
 // --- Keyboard Shortcuts ---
-document.addEventListener('keydown', (e) => {
-  // Don't trigger shortcuts when typing in inputs
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+function shortcutsBlocked(event: KeyboardEvent): boolean {
+  if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return true;
+  if (!room || roomScreen.hidden || roomRecovering) return true;
+  if (document.querySelector('dialog[open], .modal-overlay:not([hidden]), #mod-menu')) return true;
+  return event.target instanceof Element && Boolean(event.target.closest('input, textarea, select, button, a, summary, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="separator"]'));
+}
 
+document.addEventListener('keydown', (e) => {
   const key = e.key.toLowerCase();
+  if (key === 'escape') {
+    // Native dialogs handle Escape themselves, including preview cleanup and focus restoration.
+    if (document.querySelector('dialog[open]')) return;
+    settingsModal.hidden = true;
+    roomSettingsModal.hidden = true;
+    loginModal.hidden = true;
+    registerModal.hidden = true;
+    createRoomModal.hidden = true;
+    document.getElementById('mod-menu')?.remove();
+    return;
+  }
+  if (shortcutsBlocked(e)) return;
 
   // PTT keys: Space and T (only in PTT mode)
   if (micMode === 'ptt' && (key === ' ' || key === 't') && !e.repeat) {
     e.preventDefault();
-    pttActivate();
+    if (canStartBroadcast('microphone')) void pttActivate();
     return;
   }
 
   switch (key) {
     case 'm':
-      if (micMode === 'open' && room && room.hasMedia) {
-        room.toggleAudio().then(enabled => {
-          updateMicButton(enabled);
-          updateLocalTile();
-        }).catch(e => {
-          updateMicButton(false);
-          showToast(e instanceof Error ? e.message : 'Could not enable microphone');
-        });
-      }
+      void toggleMicrophone();
       break;
     case 'v':
-      if (room && room.hasMedia) {
-        room.toggleVideo().then(enabled => {
-          updateCamButton(enabled);
-          updateLocalTile();
-        }).catch(e => {
-          updateCamButton(false);
-          showToast(e instanceof Error ? e.message : 'Could not enable camera');
-        });
-      }
+      void toggleCamera();
       break;
     case 's':
-      if (room && room.hasMedia) {
-        if (room.isScreenSharing) {
-          room.stopScreenShare();
-          updateScreenButton(false);
-        } else {
-          room.startScreenShare().then(success => {
-            updateScreenButton(success);
-          });
-        }
-      }
-      break;
-    case 'escape':
-      settingsModal.hidden = true;
-      roomSettingsModal.hidden = true;
-      loginModal.hidden = true;
-      registerModal.hidden = true;
-      createRoomModal.hidden = true;
-      document.getElementById('mod-menu')?.remove();
+      void toggleScreenShare();
       break;
   }
 });
 
 document.addEventListener('keyup', (e) => {
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   const key = e.key.toLowerCase();
   if (micMode === 'ptt' && (key === ' ' || key === 't')) {
     pttDeactivate();
