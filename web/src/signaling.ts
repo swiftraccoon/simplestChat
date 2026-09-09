@@ -132,13 +132,7 @@ export class SignalingClient {
     timeoutMs = 5000,
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const idx = this.pendingResolvers.findIndex((p) => p.resolve === (resolve as any)); // eslint-disable-line @typescript-eslint/no-explicit-any
-        if (idx !== -1) this.pendingResolvers.splice(idx, 1);
-        reject(new Error(`Timeout waiting for ${responseType}`));
-      }, timeoutMs);
-
-      this.pendingResolvers.push({
+      const pending = {
         match: (m: ServerMessage) => m.type === responseType || m.type === 'error',
         resolve: (m: ServerMessage) => {
           clearTimeout(timer);
@@ -148,7 +142,13 @@ export class SignalingClient {
           clearTimeout(timer);
           reject(err);
         },
-      });
+      };
+      const timer = setTimeout(() => {
+        const idx = this.pendingResolvers.indexOf(pending);
+        if (idx !== -1) this.pendingResolvers.splice(idx, 1);
+        pending.reject(new Error(`Timeout waiting for ${responseType}`));
+      }, timeoutMs);
+      this.pendingResolvers.push(pending);
 
       this.send(msg);
     });
