@@ -88,7 +88,7 @@ jobs:
       - name: Build load-test client
         run: cargo build --locked --features load-test --bin load_test
 
-      # Media tests bind fixed UDP ports (40000+): must run single-threaded
+      # Serialize native media-worker and room-session integration tests.
       - name: Test
         run: cargo test --locked --all-features -- --test-threads=1
 
@@ -108,7 +108,7 @@ jobs:
             --ignore RUSTSEC-2026-0097
 
   web:
-    name: Web client typecheck + build
+    name: Web client tests + typecheck + build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
@@ -124,6 +124,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --ignore-scripts
+      - run: npm test
       - run: npm run build
       - name: Audit web dependencies
         # Build-time packages execute against trusted source and are part of the

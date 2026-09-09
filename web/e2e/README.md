@@ -1,5 +1,33 @@
 # E2E Verification Suite
 
+## Community and media controls
+
+`community.cjs` exercises the new room-session PMs, ignore/opt-out, nickname,
+mentions/emoji, reports, roles, bans, profiles/images, owned-room editing/deletion,
+and recovery-key/password flows in Chromium. It also checks a mobile viewport.
+
+Use a **disposable local server and PostgreSQL database**, with migrations through
+`014` applied and `REGISTRATION_ENABLED=true`. The script creates test accounts
+and deletes its own test room; accounts can remain after the run. It refuses a
+non-loopback URL and requires explicit opt-in. It never targets your production
+server.
+
+With Playwright and Chromium installed in a separate test-tools directory:
+
+```bash
+COMMUNITY_E2E=1 BASE_URL=http://127.0.0.1:3109 PLAYWRIGHT_MODULE=/absolute/path/to/test-tools/node_modules/playwright node web/e2e/community.cjs
+```
+
+Run from the repository root. If Chromium is installed outside its default cache,
+also set `PLAYWRIGHT_BROWSERS_PATH`. The script uses fake devices and the Chromium
+loopback peer-connection flag for local media. Build the frontend before starting
+the run; rebuilding `web/dist` during a run can invalidate in-flight asset URLs.
+Screenshots/logs go to a newly created temporary directory, or `E2E_ARTIFACTS`.
+
+The fast dependency-free browser-source regressions run with `npm --prefix web test`.
+
+## Existing room verification
+
 `checklist.cjs` verifies the full client feature set against a deployed server by driving
 two Chromium instances (a registered room owner and a guest) through 27 checks:
 
