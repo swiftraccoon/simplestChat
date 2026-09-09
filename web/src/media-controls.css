@@ -1,0 +1,85 @@
+.media-controls-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.8rem;
+}
+.media-controls-toolbar label { display: flex; align-items: center; gap: 0.45rem; }
+.media-controls-toolbar input { width: 6rem; }
+.media-controls-toolbar button,
+.personal-media-controls button,
+.personal-media-hidden-notice button,
+.media-setup-dialog button {
+  background: #263447;
+  color: #edf3fa;
+  border: 1px solid #536275;
+  border-radius: 6px;
+  padding: 0.45rem 0.65rem;
+  cursor: pointer;
+  font: inherit;
+}
+.media-controls-toolbar button:hover,
+.personal-media-controls button:hover,
+.personal-media-hidden-notice button:hover,
+.media-setup-dialog button:hover { background: #354964; }
+.media-setup-dialog :focus-visible,
+.personal-media-controls :focus-visible,
+.media-controls-toolbar :focus-visible,
+.personal-media-hidden-notice :focus-visible { outline: 2px solid #80c4ff; outline-offset: 3px; }
+.media-setup-dialog {
+  width: min(35rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  padding: 1.2rem;
+  overflow-y: auto;
+  color: #edf3fa;
+  background: #17212e;
+  border: 1px solid #536275;
+  border-radius: 14px;
+  box-shadow: 0 20px 70px #0008;
+}
+.media-setup-dialog::backdrop { background: #080f1bb8; }
+.media-setup-form { display: flex; flex-direction: column; gap: 0.9rem; }
+.media-setup-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.media-setup-heading h2 { font-size: 1.25rem; margin: 0; }
+.media-preview-video { width: 100%; max-height: 14rem; object-fit: contain; background: #080f1b; border-radius: 8px; }
+.media-preview-options,
+.media-setup-actions { display: flex; flex-wrap: wrap; gap: 0.7rem; }
+.media-preview-status { min-height: 2.2em; margin: 0; font-size: 0.85rem; }
+.media-preview-options label,
+.media-audio-options label { display: flex; gap: 0.45rem; align-items: center; font-size: 0.85rem; }
+.media-meter-label { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; }
+.media-meter-label meter { flex: 1; height: 1.3rem; }
+.media-setup-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
+.media-setup-fields label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; min-width: 0; }
+.media-setup-fields select,
+.personal-media-controls select { background: #101925; border: 1px solid #536275; border-radius: 5px; color: #edf3fa; padding: 0.5rem; max-width: 100%; }
+.media-audio-options { display: flex; flex-wrap: wrap; gap: 0.7rem; border: 1px solid #536275; border-radius: 6px; padding: 0.7rem; }
+.media-audio-options legend { font-size: 0.85rem; padding: 0 0.25rem; }
+.media-setup-hint { color: #b4c2d3; font-size: 0.8rem; margin: 0; }
+.media-setup-actions { justify-content: flex-end; }
+.media-setup-dialog button:disabled { opacity: 0.6; cursor: wait; }
+.personal-media-controls { position: absolute; z-index: 5; top: 0.4rem; right: 0.4rem; color: #edf3fa; font-size: 0.75rem; text-align: left; }
+.personal-media-controls summary { padding: 0.35rem 0.55rem; background: #101925e8; border: 1px solid #536275; border-radius: 6px; cursor: pointer; }
+.personal-media-panel { display: flex; flex-direction: column; gap: 0.45rem; background: #17212ef7; border: 1px solid #536275; border-radius: 6px; padding: 0.6rem; width: 10.5rem; max-height: min(21rem, 65vh); overflow-y: auto; }
+.personal-media-panel label { display: flex; flex-direction: column; gap: 0.3rem; }
+.personal-media-panel input { width: 100%; }
+.personal-media-panel button { font-size: 0.75rem; }
+.personal-media-panel button:disabled,
+.personal-media-panel select:disabled { opacity: 0.5; cursor: default; }
+.personal-media-hidden > video,
+.personal-media-hidden > audio,
+.personal-media-hidden > .no-video-avatar { visibility: hidden; }
+.personal-media-hidden-notice { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.65rem; background: #15202c; color: #dbe8f7; padding: 2.4rem 0.6rem 1.7rem; font-size: 0.8rem; text-align: center; }
+.personal-media-hidden-notice[hidden],
+.media-preview-video[hidden],
+.personal-media-controls button[hidden] { display: none; }
+.video-tile:has(.personal-media-controls[open]) { z-index: 6; overflow: visible; }
+@media (max-width: 480px) {
+  .media-setup-fields { grid-template-columns: minmax(0, 1fr); }
+  .media-controls-toolbar { justify-content: center; }
+  .media-setup-dialog { padding: 0.8rem; }
+}

@@ -2,15 +2,90 @@ import * as mediasoupClient from 'mediasoup-client';
 import type { ServerMessage } from './protocol';
 import type { SignalingClient } from './signaling';
 
+export interface CapturePreferences {
+  cameraDeviceId: string;
+  microphoneDeviceId: string;
+  resolution: '360p' | '720p' | '1080p';
+  frameRate: 15 | 30 | 60;
+  echoCancellation: boolean;
+  autoGainControl: boolean;
+  noiseSuppression: boolean;
+}
+
+export type RemoteVideoQuality = 'auto' | 'low' | 'medium' | 'high';
+
+export const DEFAULT_CAPTURE_PREFERENCES: CapturePreferences = {
+  cameraDeviceId: '', microphoneDeviceId: '', resolution: '720p', frameRate: 30,
+  echoCancellation: true, autoGainControl: true, noiseSuppression: true,
+};
+
+const CAPTURE_STORAGE_KEY = 'simplestchat.capturePreferences';
+
+export function normalizeCapturePreferences(value: unknown): CapturePreferences {
+  const preferences = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return {
+    cameraDeviceId: typeof preferences.cameraDeviceId === 'string' ? preferences.cameraDeviceId : '',
+    microphoneDeviceId: typeof preferences.microphoneDeviceId === 'string' ? preferences.microphoneDeviceId : '',
+    resolution: preferences.resolution === '360p' || preferences.resolution === '1080p' ? preferences.resolution : '720p',
+    frameRate: preferences.frameRate === 15 || preferences.frameRate === 60 ? preferences.frameRate : 30,
+    echoCancellation: preferences.echoCancellation !== false,
+    autoGainControl: preferences.autoGainControl !== false,
+    noiseSuppression: preferences.noiseSuppression !== false,
+  };
+}
+
+export function loadCapturePreferences(): CapturePreferences {
+  try {
+    return normalizeCapturePreferences(JSON.parse(localStorage.getItem(CAPTURE_STORAGE_KEY) ?? 'null'));
+  } catch {
+    return { ...DEFAULT_CAPTURE_PREFERENCES };
+  }
+}
+
+export function saveCapturePreferences(preferences: CapturePreferences): void {
+  try { localStorage.setItem(CAPTURE_STORAGE_KEY, JSON.stringify(normalizeCapturePreferences(preferences))); } catch { /* Storage may be unavailable. */ }
+}
+
+/** The preview and publisher use the same requested capture settings. */
+export function captureConstraints(preferences: CapturePreferences, kind: 'audio' | 'video'): MediaTrackConstraints {
+  if (kind === 'audio') {
+    return {
+      ...(preferences.microphoneDeviceId && { deviceId: { exact: preferences.microphoneDeviceId } }),
+      echoCancellation: preferences.echoCancellation,
+      autoGainControl: preferences.autoGainControl,
+      noiseSuppression: preferences.noiseSuppression,
+    };
+  }
+  const [width, height] = preferences.resolution === '360p' ? [640, 360]
+    : preferences.resolution === '1080p' ? [1920, 1080] : [1280, 720];
+  return {
+    ...(preferences.cameraDeviceId && { deviceId: { exact: preferences.cameraDeviceId } }),
+    width: { ideal: width }, height: { ideal: height }, frameRate: { ideal: preferences.frameRate },
+  };
+}
+
 export class MediaManager {
   private signaling: SignalingClient;
+  private lifecycle = 0;
+  private closed = false;
   private device: mediasoupClient.Device | null = null;
   private sendTransport: mediasoupClient.types.Transport | null = null;
   private recvTransport: mediasoupClient.types.Transport | null = null;
   private audioProducer: mediasoupClient.types.Producer | null = null;
+  private audioVersion = 0;
+  private audioRequested = false;
+  private audioActivation: Promise<void> = Promise.resolve();
+  private pendingAudioTrack: MediaStreamTrack | null = null;
+  private capturePreferences = loadCapturePreferences();
   private videoProducer: mediasoupClient.types.Producer | null = null;
+  private videoVersion = 0;
+  private videoStarting = false;
+  private pendingVideoTrack: MediaStreamTrack | null = null;
   private screenProducer: mediasoupClient.types.Producer | null = null;
   private screenAudioProducer: mediasoupClient.types.Producer | null = null;
+  private screenVersion = 0;
+  private screenStarting = false;
+  private pendingScreenStream: MediaStream | null = null;
   private consumers = new Map<string, mediasoupClient.types.Consumer>();
   // Map producerId → consumerId for cleanup when producer closes
   private producerToConsumer = new Map<string, string>();
@@ -37,49 +112,68 @@ export class MediaManager {
     return this.videoProducer?.paused === false;
   }
 
+  /** Configure future capture without starting a camera or microphone. */
+  setCapturePreferences(preferences: CapturePreferences): void {
+    this.capturePreferences = normalizeCapturePreferences(preferences);
+    saveCapturePreferences(this.capturePreferences);
+  }
+
   /** Load device, create transports */
   async setup(): Promise<void> {
+    const generation = this.lifecycle;
+    const assertCurrent = () => {
+      if (this.closed || generation !== this.lifecycle) throw new Error('Media session closed');
+    };
+    assertCurrent();
     // 1. Get router RTP capabilities
     const capsResponse = await this.signaling.request<
       Extract<ServerMessage, { type: 'routerRtpCapabilities' }>
     >({ type: 'getRouterRtpCapabilities' }, 'routerRtpCapabilities');
+    assertCurrent();
 
     // 2. Load device
-    this.device = new mediasoupClient.Device();
-    await this.device.load({ routerRtpCapabilities: capsResponse.rtpCapabilities });
+    const device = new mediasoupClient.Device();
+    this.device = device;
+    await device.load({ routerRtpCapabilities: capsResponse.rtpCapabilities });
+    assertCurrent();
     console.log('[media] device loaded');
 
     // 3. Create send transport
     const sendResponse = await this.signaling.request<
       Extract<ServerMessage, { type: 'transportCreated' }>
     >({ type: 'createSendTransport' }, 'transportCreated');
+    assertCurrent();
 
-    this.sendTransport = this.device.createSendTransport({
+    const sendTransport = device.createSendTransport({
       id: sendResponse.transportId,
       iceParameters: sendResponse.iceParameters,
       iceCandidates: sendResponse.iceCandidates,
       dtlsParameters: sendResponse.dtlsParameters,
       iceServers: sendResponse.iceServers,
     });
+    this.sendTransport = sendTransport;
 
-    this.sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+    sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+      try { assertCurrent(); } catch (error) { errback(error as Error); return; }
       this.signaling
         .request(
-          { type: 'connectTransport', transportId: this.sendTransport!.id, dtlsParameters },
+          { type: 'connectTransport', transportId: sendTransport.id, dtlsParameters },
           'transportConnected',
         )
-        .then(() => callback())
+        .then(() => { assertCurrent(); callback(); })
         .catch(errback);
     });
 
-    this.sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
+    sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
       try {
+        assertCurrent();
         const resp = await this.signaling.request<
           Extract<ServerMessage, { type: 'producerCreated' }>
         >(
-          { type: 'produce', transportId: this.sendTransport!.id, kind, rtpParameters, source: appData?.source as string | undefined },
+          { type: 'produce', transportId: sendTransport.id, kind, rtpParameters, source: appData?.source as string | undefined },
           'producerCreated',
         );
+        assertCurrent();
         callback({ id: resp.producerId });
       } catch (e) {
         errback(e as Error);
@@ -94,22 +188,25 @@ export class MediaManager {
     const recvResponse = await this.signaling.request<
       Extract<ServerMessage, { type: 'transportCreated' }>
     >({ type: 'createRecvTransport' }, 'transportCreated');
+    assertCurrent();
 
-    this.recvTransport = this.device.createRecvTransport({
+    const recvTransport = device.createRecvTransport({
       id: recvResponse.transportId,
       iceParameters: recvResponse.iceParameters,
       iceCandidates: recvResponse.iceCandidates,
       dtlsParameters: recvResponse.dtlsParameters,
       iceServers: recvResponse.iceServers,
     });
+    this.recvTransport = recvTransport;
 
-    this.recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+    recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+      try { assertCurrent(); } catch (error) { errback(error as Error); return; }
       this.signaling
         .request(
-          { type: 'connectTransport', transportId: this.recvTransport!.id, dtlsParameters },
+          { type: 'connectTransport', transportId: recvTransport.id, dtlsParameters },
           'transportConnected',
         )
-        .then(() => callback())
+        .then(() => { assertCurrent(); callback(); })
         .catch(errback);
     });
 
@@ -121,6 +218,7 @@ export class MediaManager {
   /** Monitor transport connection state and request ICE restart on failure */
   private setupIceRecovery(transport: mediasoupClient.types.Transport): void {
     transport.on('connectionstatechange', (state: string) => {
+      if (this.closed || (this.sendTransport !== transport && this.recvTransport !== transport)) return;
       console.log(`[media] transport ${transport.id} connection state: ${state}`);
 
       if (state === 'disconnected') {
@@ -128,6 +226,7 @@ export class MediaManager {
         if (!this.iceRestartTimers.has(transport.id)) {
           const timer = setTimeout(() => {
             this.iceRestartTimers.delete(transport.id);
+            if (this.closed || (this.sendTransport !== transport && this.recvTransport !== transport)) return;
             console.log(`[media] requesting ICE restart for transport ${transport.id}`);
             this.signaling.send({ type: 'restartIce', transportId: transport.id });
           }, 3000);
@@ -168,82 +267,145 @@ export class MediaManager {
     }
   }
 
-  /** Lazily capture mic and create audio producer */
-  private async ensureAudioProducer(): Promise<boolean> {
-    if (this.audioProducer) return true;
-    if (!this.sendTransport) return false;
+  /** Serialize capture and discard results after mute, leave, or producer revocation. */
+  private async activateAudio(version: number): Promise<void> {
+    const transport = this.sendTransport;
+    const isCurrent = () => version === this.audioVersion && transport === this.sendTransport;
+    if (!transport || !isCurrent() || this.audioEnabled) return;
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioTrack = stream.getAudioTracks()[0];
-    if (!audioTrack) return false;
+    let track: MediaStreamTrack | undefined;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: captureConstraints(this.capturePreferences, 'audio'),
+      });
+      track = stream.getAudioTracks()[0];
+      if (!track) throw new Error('No microphone track was available');
+      // A produce/replaceTrack operation can outlive a PTT release. Keep its
+      // track silent until the operation completes and the intent is rechecked.
+      track.enabled = false;
+      if (!isCurrent()) return;
+      this.pendingAudioTrack = track;
 
-    if (!this.localStream) this.localStream = new MediaStream();
-    this.localStream.addTrack(audioTrack);
+      const existing = this.audioProducer;
+      if (existing) {
+        await existing.replaceTrack({ track });
+        if (!isCurrent() || this.audioProducer !== existing) return;
+        existing.resume();
+        this.signaling.send({ type: 'resumeProducer', producerId: existing.id });
+      } else {
+        const producer = await transport.produce({ track, appData: { source: 'microphone' } });
+        if (!isCurrent()) {
+          producer.close();
+          this.signaling.send({ type: 'closeProducer', producerId: producer.id });
+          return;
+        }
+        producer.resume();
+        this.audioProducer = producer;
+      }
 
-    this.audioProducer = await this.sendTransport.produce({ track: audioTrack, appData: { source: 'microphone' } });
-    console.log('[media] audio producer created:', this.audioProducer.id);
-    return true;
+      this.stopLocalAudioTrack();
+      if (!this.localStream) this.localStream = new MediaStream();
+      this.localStream.addTrack(track);
+      track.enabled = true;
+      track = undefined; // Ownership transferred to the producer/local stream.
+    } catch (error) {
+      if (isCurrent()) this.audioRequested = false;
+      throw error;
+    } finally {
+      track?.stop();
+      this.pendingAudioTrack = null;
+    }
   }
 
   /** Lazily capture camera and create video producer with simulcast */
   private async ensureVideoProducer(): Promise<boolean> {
     if (this.videoProducer) return true;
-    if (!this.sendTransport) return false;
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-    });
-    const videoTrack = stream.getVideoTracks()[0];
-    if (!videoTrack) return false;
-
-    if (!this.localStream) this.localStream = new MediaStream();
-    this.localStream.addTrack(videoTrack);
-
-    this.videoProducer = await this.sendTransport.produce({
-      track: videoTrack,
-      encodings: [
-        { rid: 'r0', maxBitrate: 100_000, scaleResolutionDownBy: 4 },
-        { rid: 'r1', maxBitrate: 300_000, scaleResolutionDownBy: 2 },
-        { rid: 'r2', maxBitrate: 900_000 },
-      ],
-      codecOptions: { videoGoogleStartBitrate: 1000 },
-      appData: { source: 'camera' },
-    });
-    console.log('[media] video producer created (simulcast):', this.videoProducer.id);
-    return true;
+    const transport = this.sendTransport;
+    if (!transport || this.videoStarting) return false;
+    const version = ++this.videoVersion;
+    this.videoStarting = true;
+    const isCurrent = () => version === this.videoVersion && transport === this.sendTransport;
+    let videoTrack: MediaStreamTrack | undefined;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: captureConstraints(this.capturePreferences, 'video'),
+      });
+      videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack || !isCurrent()) return false;
+      this.pendingVideoTrack = videoTrack;
+      const producer = await transport.produce({
+        track: videoTrack,
+        encodings: [
+          { rid: 'r0', maxBitrate: 100_000, scaleResolutionDownBy: 4 },
+          { rid: 'r1', maxBitrate: 300_000, scaleResolutionDownBy: 2 },
+          { rid: 'r2', maxBitrate: this.capturePreferences.resolution === '1080p' ? 2_500_000 : 900_000 },
+        ],
+        codecOptions: { videoGoogleStartBitrate: 1000 },
+        appData: { source: 'camera' },
+      });
+      if (!isCurrent()) {
+        producer.close();
+        this.signaling.send({ type: 'closeProducer', producerId: producer.id });
+        return false;
+      }
+      this.videoProducer = producer;
+      if (!this.localStream) this.localStream = new MediaStream();
+      this.localStream.addTrack(videoTrack);
+      videoTrack = undefined;
+      return true;
+    } finally {
+      videoTrack?.stop();
+      if (isCurrent()) {
+        this.videoStarting = false;
+        this.pendingVideoTrack = null;
+      }
+    }
   }
 
   /** Consume a remote producer, returns the track */
   async consume(producerId: string): Promise<MediaStreamTrack> {
-    if (!this.device || !this.recvTransport) {
+    const device = this.device;
+    const transport = this.recvTransport;
+    const generation = this.lifecycle;
+    if (this.closed || !device || !transport) {
       throw new Error('Device/transport not ready');
     }
+    const isCurrent = () => !this.closed && generation === this.lifecycle && this.device === device && this.recvTransport === transport;
+    const assertCurrent = () => { if (!isCurrent()) throw new Error('Media session closed'); };
 
     const response = await this.signaling.request<
       Extract<ServerMessage, { type: 'consumerCreated' }>
     >(
-      { type: 'consume', producerId, rtpCapabilities: this.device.rtpCapabilities },
+      { type: 'consume', producerId, rtpCapabilities: device.rtpCapabilities },
       'consumerCreated',
     );
+    assertCurrent();
 
-    const consumer = await this.recvTransport.consume({
+    const consumer = await transport.consume({
       id: response.consumerId,
       producerId: response.producerId,
       kind: response.kind,
       rtpParameters: response.rtpParameters,
     });
-
-    this.consumers.set(response.consumerId, consumer);
-    this.producerToConsumer.set(producerId, response.consumerId);
-
-    // Resume the consumer on the server (created paused)
-    await this.signaling.request(
-      { type: 'resumeConsumer', consumerId: response.consumerId },
-      'consumerResumed',
-    );
-
-    console.log(`[media] consuming ${response.kind} from producer ${producerId}`);
-    return consumer.track;
+    try {
+      assertCurrent();
+      this.consumers.set(response.consumerId, consumer);
+      this.producerToConsumer.set(producerId, response.consumerId);
+      // Resume only after the receiver exists and this session is still active.
+      await this.signaling.request(
+        { type: 'resumeConsumer', consumerId: response.consumerId },
+        'consumerResumed',
+      );
+      assertCurrent();
+      console.log(`[media] consuming ${response.kind} from producer ${producerId}`);
+      return consumer.track;
+    } catch (error) {
+      consumer.close();
+      if (this.consumers.get(response.consumerId) === consumer) this.consumers.delete(response.consumerId);
+      if (this.producerToConsumer.get(producerId) === response.consumerId) this.producerToConsumer.delete(producerId);
+      if (isCurrent()) this.signaling.send({ type: 'pauseConsumer', consumerId: response.consumerId });
+      throw error;
+    }
   }
 
   /** Set preferred simulcast layers for a consumer */
@@ -254,6 +416,31 @@ export class MediaManager {
       spatialLayer,
       ...(temporalLayer !== undefined && { temporalLayer }),
     });
+  }
+
+  /** Pause only this viewer's consumer; the publisher and other viewers are unaffected. */
+  setConsumerHiddenByProducer(producerId: string, hidden: boolean): void {
+    const consumerId = this.producerToConsumer.get(producerId);
+    const consumer = consumerId ? this.consumers.get(consumerId) : undefined;
+    if (!consumer || consumer.closed || consumer.paused === hidden) return;
+    if (hidden) consumer.pause();
+    else consumer.resume();
+    this.signaling.send({ type: hidden ? 'pauseConsumer' : 'resumeConsumer', consumerId: consumer.id });
+  }
+
+  /** Cap simulcast quality when layers exist. Auto restores the highest available cap. */
+  setConsumerQualityByProducer(producerId: string, quality: RemoteVideoQuality): boolean {
+    const consumerId = this.producerToConsumer.get(producerId);
+    const consumer = consumerId ? this.consumers.get(consumerId) : undefined;
+    if (!consumer || consumer.closed || consumer.kind !== 'video') return false;
+    const spatialLayers = Math.max(1, ...(consumer.rtpParameters.encodings ?? []).map(encoding => {
+      const match = /^[LS](\d+)T/.exec(encoding.scalabilityMode ?? '');
+      return match ? Number(match[1]) : 1;
+    }));
+    if (spatialLayers <= 1) return false;
+    const requested = quality === 'low' ? 0 : quality === 'medium' ? 1 : spatialLayers - 1;
+    this.setPreferredLayers(consumer.id, Math.min(requested, spatialLayers - 1));
+    return true;
   }
 
   /** Get a consumer's track by its associated producer ID */
@@ -274,6 +461,46 @@ export class MediaManager {
       this.consumers.delete(consumerId);
     }
     this.producerToConsumer.delete(producerId);
+  }
+
+  /** Release a producer revoked by the server so it can be created again later. */
+  closeLocalProducer(producerId: string): boolean {
+    if (this.audioProducer?.id === producerId) {
+      this.cancelAudioActivation();
+      const producer = this.audioProducer;
+      this.audioProducer = null;
+      producer.track?.stop();
+      producer.close();
+      this.stopLocalAudioTrack();
+      return true;
+    }
+    if (this.videoProducer?.id === producerId) {
+      this.videoVersion++;
+      const producer = this.videoProducer;
+      this.videoProducer = null;
+      this.pendingVideoTrack?.stop();
+      producer.track?.stop();
+      producer.close();
+      this.stopLocalVideoTrack();
+      return true;
+    }
+    if (this.screenProducer?.id === producerId || this.screenAudioProducer?.id === producerId) {
+      // Screen video and its optional audio share one capture session/control.
+      this.stopScreenShare(producerId);
+      return true;
+    }
+    return false;
+  }
+
+  /** Release local capture for server-side closures missed during a disconnected interval. */
+  reconcileLocalProducers(producerIds: readonly string[]): boolean {
+    const active = new Set(producerIds);
+    const localIds = [this.audioProducer?.id, this.videoProducer?.id, this.screenProducer?.id, this.screenAudioProducer?.id];
+    let changed = false;
+    for (const id of localIds) {
+      if (id && !active.has(id)) changed = this.closeLocalProducer(id) || changed;
+    }
+    return changed;
   }
 
   getLocalStream(): MediaStream | null {
@@ -298,74 +525,76 @@ export class MediaManager {
     }
   }
 
-  /** Re-capture mic and replace track on existing producer */
-  private async recaptureAudio(): Promise<void> {
-    if (!this.audioProducer) return;
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const newTrack = stream.getAudioTracks()[0];
-    if (!newTrack) return;
-    await this.audioProducer.replaceTrack({ track: newTrack });
-    this.stopLocalAudioTrack();
-    if (!this.localStream) this.localStream = new MediaStream();
-    this.localStream.addTrack(newTrack);
-  }
-
   /** Re-capture camera and replace track on existing producer */
-  private async recaptureVideo(): Promise<void> {
-    if (!this.videoProducer) return;
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-    });
-    const newTrack = stream.getVideoTracks()[0];
-    if (!newTrack) return;
-    await this.videoProducer.replaceTrack({ track: newTrack });
-    this.stopLocalVideoTrack();
-    if (!this.localStream) this.localStream = new MediaStream();
-    this.localStream.addTrack(newTrack);
+  private async recaptureVideo(deviceId?: string): Promise<boolean> {
+    const producer = this.videoProducer;
+    if (!producer) return false;
+    const version = ++this.videoVersion;
+    const isCurrent = () => this.videoProducer === producer && version === this.videoVersion;
+    let track: MediaStreamTrack | undefined;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          ...captureConstraints(this.capturePreferences, 'video'),
+          ...(deviceId && { deviceId: { exact: deviceId } }),
+        },
+      });
+      track = stream.getVideoTracks()[0];
+      if (!track || !isCurrent()) return false;
+      this.pendingVideoTrack = track;
+      await producer.replaceTrack({ track });
+      if (!isCurrent()) return false;
+      this.stopLocalVideoTrack();
+      if (!this.localStream) this.localStream = new MediaStream();
+      this.localStream.addTrack(track);
+      track = undefined;
+      return true;
+    } finally {
+      track?.stop();
+      this.pendingVideoTrack = null;
+    }
   }
 
   /** Toggle local audio — lazily captures mic on first call */
   async toggleAudio(): Promise<boolean> {
-    if (!this.audioProducer) {
-      if (!(await this.ensureAudioProducer())) return false;
-      return true;
-    }
-    if (this.audioProducer.paused) {
-      await this.recaptureAudio();
-      this.audioProducer.resume();
-      this.signaling.send({ type: 'resumeProducer', producerId: this.audioProducer.id });
+    if (this.audioRequested || this.audioEnabled) {
+      this.muteAudio();
     } else {
-      this.audioProducer.pause();
-      this.signaling.send({ type: 'pauseProducer', producerId: this.audioProducer.id });
-      this.stopLocalAudioTrack();
+      await this.unmuteAudio();
     }
-    return !this.audioProducer.paused;
+    return this.audioEnabled;
   }
 
   /** Explicitly mute audio — stops mic track */
   muteAudio(): void {
+    this.cancelAudioActivation();
     if (this.audioProducer && !this.audioProducer.paused) {
       this.audioProducer.pause();
       this.signaling.send({ type: 'pauseProducer', producerId: this.audioProducer.id });
-      this.stopLocalAudioTrack();
     }
+    this.stopLocalAudioTrack();
   }
 
   /** Explicitly unmute audio — re-captures mic, lazily creates producer on first call */
-  async unmuteAudio(): Promise<void> {
-    if (!this.audioProducer) {
-      await this.ensureAudioProducer();
-      return;
-    }
-    if (this.audioProducer.paused) {
-      await this.recaptureAudio();
-      this.audioProducer.resume();
-      this.signaling.send({ type: 'resumeProducer', producerId: this.audioProducer.id });
-    }
+  unmuteAudio(): Promise<void> {
+    this.audioRequested = true;
+    const version = ++this.audioVersion;
+    const activation = this.audioActivation.catch(() => {}).then(() => this.activateAudio(version));
+    this.audioActivation = activation;
+    return activation;
+  }
+
+  private cancelAudioActivation(): void {
+    this.audioVersion++;
+    this.audioRequested = false;
+    this.pendingAudioTrack?.stop();
   }
 
   /** Explicitly pause video — stops camera track */
   pauseVideo(): void {
+    this.videoVersion++;
+    this.videoStarting = false;
+    this.pendingVideoTrack?.stop();
     if (this.videoProducer && !this.videoProducer.paused) {
       this.videoProducer.pause();
       this.signaling.send({ type: 'pauseProducer', producerId: this.videoProducer.id });
@@ -380,7 +609,7 @@ export class MediaManager {
       return;
     }
     if (this.videoProducer.paused) {
-      await this.recaptureVideo();
+      if (!(await this.recaptureVideo())) return;
       this.videoProducer.resume();
       this.signaling.send({ type: 'resumeProducer', producerId: this.videoProducer.id });
     }
@@ -393,114 +622,96 @@ export class MediaManager {
       return true;
     }
     if (this.videoProducer.paused) {
-      await this.recaptureVideo();
+      if (!(await this.recaptureVideo())) return false;
       this.videoProducer.resume();
       this.signaling.send({ type: 'resumeProducer', producerId: this.videoProducer.id });
     } else {
-      this.videoProducer.pause();
-      this.signaling.send({ type: 'pauseProducer', producerId: this.videoProducer.id });
-      this.stopLocalVideoTrack();
+      this.pauseVideo();
     }
     return !this.videoProducer.paused;
   }
 
   /** Switch to a different camera device */
   async switchCamera(deviceId: string): Promise<void> {
-    if (!this.videoProducer) return;
-
-    const newStream = await navigator.mediaDevices.getUserMedia({
-      video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-    });
-    const newTrack = newStream.getVideoTracks()[0];
-    if (!newTrack) return;
-
-    // Replace track on producer
-    await this.videoProducer.replaceTrack({ track: newTrack });
-
-    // Stop old track and update local stream
-    const oldTrack = this.localStream?.getVideoTracks()[0];
-    if (oldTrack) {
-      oldTrack.stop();
-      this.localStream?.removeTrack(oldTrack);
-    }
-    this.localStream?.addTrack(newTrack);
-    console.log('[media] camera switched to:', deviceId);
+    this.setCapturePreferences({ ...this.capturePreferences, cameraDeviceId: deviceId });
+    if (this.videoEnabled) await this.recaptureVideo(deviceId);
   }
 
   /** Switch to a different microphone device */
   async switchMic(deviceId: string): Promise<void> {
-    if (!this.audioProducer) return;
-
-    const newStream = await navigator.mediaDevices.getUserMedia({
-      audio: { deviceId: { exact: deviceId } },
-    });
-    const newTrack = newStream.getAudioTracks()[0];
-    if (!newTrack) return;
-
-    // Replace track on producer
-    await this.audioProducer.replaceTrack({ track: newTrack });
-
-    // Stop old track and update local stream
-    const oldTrack = this.localStream?.getAudioTracks()[0];
-    if (oldTrack) {
-      oldTrack.stop();
-      this.localStream?.removeTrack(oldTrack);
-    }
-    this.localStream?.addTrack(newTrack);
-    console.log('[media] microphone switched to:', deviceId);
+    this.setCapturePreferences({ ...this.capturePreferences, microphoneDeviceId: deviceId });
+    if (!this.audioRequested && !this.audioEnabled) return;
+    this.muteAudio();
+    await this.unmuteAudio();
   }
 
   /** Start screen sharing — creates screen video producer (and optional audio) */
   async startScreenShare(): Promise<{ videoTrack: MediaStreamTrack; audioTrack?: MediaStreamTrack } | null> {
-    if (!this.sendTransport) return null;
-    if (this.screenProducer) return null; // Already sharing
-
-    let stream: MediaStream;
+    const transport = this.sendTransport;
+    if (!transport || this.screenProducer || this.screenStarting) return null;
+    const version = ++this.screenVersion;
+    this.screenStarting = true;
+    const isCurrent = () => version === this.screenVersion && transport === this.sendTransport;
+    let stream: MediaStream | undefined;
+    let started = false;
     try {
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,  // Chrome-only tab audio; gracefully absent on FF/Safari
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      } catch {
+        return null; // Picker cancellation or permission denial.
+      }
+      if (!isCurrent()) return null;
+      this.pendingScreenStream = stream;
+      const videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack) return null;
+
+      const videoProducer = await transport.produce({
+        track: videoTrack,
+        appData: { source: 'screen' },
       });
-    } catch {
-      // User cancelled the picker or permission denied — not an error
-      console.log('[media] screen share cancelled or denied');
-      return null;
-    }
+      if (!isCurrent()) {
+        videoProducer.close();
+        this.signaling.send({ type: 'closeProducer', producerId: videoProducer.id });
+        return null;
+      }
+      this.screenProducer = videoProducer;
+      videoTrack.addEventListener('ended', () => {
+        if (this.screenProducer === videoProducer) this.stopScreenShare();
+      });
 
-    const videoTrack = stream.getVideoTracks()[0];
-    if (!videoTrack) return null;
-
-    // Produce screen video
-    this.screenProducer = await this.sendTransport.produce({
-      track: videoTrack,
-      appData: { source: 'screen' },
-    });
-    console.log('[media] screen producer created:', this.screenProducer.id);
-
-    // Handle browser "Stop sharing" button
-    videoTrack.addEventListener('ended', () => {
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        const audioProducer = await transport.produce({
+          track: audioTrack,
+          appData: { source: 'screen-audio' },
+        });
+        if (!isCurrent()) {
+          audioProducer.close();
+          this.signaling.send({ type: 'closeProducer', producerId: audioProducer.id });
+          return null;
+        }
+        this.screenAudioProducer = audioProducer;
+      }
+      started = true;
+      return { videoTrack, audioTrack };
+    } catch (error) {
+      if (!isCurrent()) return null;
       this.stopScreenShare();
-    });
-
-    // Produce screen audio if available (Chrome-only)
-    let audioTrack: MediaStreamTrack | undefined;
-    const audioTracks = stream.getAudioTracks();
-    if (audioTracks.length > 0) {
-      audioTrack = audioTracks[0];
-      this.screenAudioProducer = await this.sendTransport.produce({
-        track: audioTrack,
-        appData: { source: 'screen-audio' },
-      });
-      console.log('[media] screen audio producer created:', this.screenAudioProducer.id);
+      throw error;
+    } finally {
+      if (!started) stream?.getTracks().forEach(track => track.stop());
+      if (isCurrent()) {
+        this.screenStarting = false;
+        this.pendingScreenStream = null;
+      }
     }
-
-    return { videoTrack, audioTrack };
   }
 
   /** Stop screen sharing — closes producers and notifies server.
    *  Uses null-then-act pattern to prevent duplicate closeProducer messages
    *  when browser "Stop sharing" and user click race. */
-  stopScreenShare(): void {
+  stopScreenShare(revokedProducerId?: string): void {
+    this.cancelScreenStart();
     const sp = this.screenProducer;
     const sap = this.screenAudioProducer;
     this.screenProducer = null;
@@ -510,15 +721,26 @@ export class MediaManager {
       const track = sp.track;
       if (track) track.stop();
       sp.close();
-      this.signaling.send({ type: 'closeProducer', producerId: sp.id });
+      if (sp.id !== revokedProducerId) {
+        this.signaling.send({ type: 'closeProducer', producerId: sp.id });
+      }
     }
     if (sap) {
       const track = sap.track;
       if (track) track.stop();
       sap.close();
-      this.signaling.send({ type: 'closeProducer', producerId: sap.id });
+      if (sap.id !== revokedProducerId) {
+        this.signaling.send({ type: 'closeProducer', producerId: sap.id });
+      }
     }
     this.onScreenShareStoppedCb?.();
+  }
+
+  private cancelScreenStart(): void {
+    this.screenVersion++;
+    this.screenStarting = false;
+    this.pendingScreenStream?.getTracks().forEach(track => track.stop());
+    this.pendingScreenStream = null;
   }
 
   get isScreenSharing(): boolean {
@@ -526,6 +748,13 @@ export class MediaManager {
   }
 
   close(): void {
+    this.closed = true;
+    this.lifecycle++;
+    this.cancelAudioActivation();
+    this.videoVersion++;
+    this.videoStarting = false;
+    this.pendingVideoTrack?.stop();
+    this.cancelScreenStart();
     // Clear ICE restart timers
     for (const timer of this.iceRestartTimers.values()) {
       clearTimeout(timer);
