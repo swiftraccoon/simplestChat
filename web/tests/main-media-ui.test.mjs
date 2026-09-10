@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import ts from 'typescript';
+import ts from '@typescript/typescript6';
 import { evaluateTypeScript } from './source-loader.mjs';
 import { createDOM } from './ui-fixture.mjs';
 

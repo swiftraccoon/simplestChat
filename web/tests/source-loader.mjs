@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { compileFunction } from 'node:vm';
-import ts from 'typescript';
+// TypeScript 7 supplies tsc; Microsoft's compatibility package retains the
+// synchronous compiler API needed by these isolated source-level tests.
+import ts from '@typescript/typescript6';
 
 /** Load the current browser source without emitting files or requiring a browser. */
 export async function loadTypeScript(relativePath, options = {}) {

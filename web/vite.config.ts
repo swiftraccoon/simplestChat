@@ -11,5 +11,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // Preserve the previous Vite 6 output target across the Vite 8 upgrade.
+    target: ['chrome87', 'edge88', 'firefox78', 'safari14'],
   },
 });
