@@ -8,7 +8,7 @@
 //!   cargo run --features load-test --bin load_test -- --clients 1000 --mode webinar --duration 60
 //!   cargo run --features load-test --bin load_test -- --clients 100 --churn-rate 5 --duration 60
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use mediasoup::prelude::*;
 use rand;
@@ -34,7 +34,7 @@ mod webrtc_client {
 }
 
 use media_generator::{MediaConfig, MediaGenerator};
-use metrics::{MetricsCollector, TestSummary};
+use metrics::{MeasurementWindow, MetricsCollector, TestSummary};
 use rtc::shared::marshal::Unmarshal;
 use std::num::{NonZeroU8, NonZeroU32};
 use tokio::sync::Mutex;
@@ -48,6 +48,8 @@ struct ClientConfig {
     participant_name: String,
     media_config: MediaConfig,
     session_duration: Duration,
+    measurement_start: Instant,
+    deadline: Instant,
     is_publisher: bool,
     is_churner: bool,
     churn_session_min_secs: u64,
@@ -60,7 +62,8 @@ struct ClientConfig {
     consume_existing_producers: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct TestConfig {
     num_clients: usize,
     duration_secs: u64,
@@ -73,6 +76,113 @@ struct TestConfig {
     churn_rate: f64,
     max_audio_consumers: usize,
     max_video_consumers: usize,
+    warmup_secs: u64,
+    deadline_grace_secs: u64,
+    output_dir: std::path::PathBuf,
+    run_label: String,
+    server_revision: String,
+    generator_revision: String,
+    diagnostics: bool,
+}
+
+const WATCHDOG_RUNNING: u8 = 0;
+const WATCHDOG_FINISHED: u8 = 1;
+const WATCHDOG_EXPIRED: u8 = 2;
+
+/// The deadline thread never takes a collector lock or performs logging/file IO.
+/// Reporting gets a separate thread and a bounded grace before process exit.
+struct RunWatchdog {
+    deadline: Instant,
+    state: Arc<std::sync::atomic::AtomicU8>,
+    stop: std::sync::mpsc::Sender<()>,
+}
+
+impl RunWatchdog {
+    fn start(deadline: Instant, report: impl FnOnce() + Send + 'static) -> Self {
+        let state = Arc::new(std::sync::atomic::AtomicU8::new(WATCHDOG_RUNNING));
+        let (stop, receiver) = std::sync::mpsc::channel();
+        let worker_state = state.clone();
+        std::thread::spawn(move || {
+            watchdog_wait(
+                deadline,
+                Duration::from_secs(2),
+                worker_state,
+                receiver,
+                report,
+                |code| std::process::exit(code),
+            );
+        });
+        Self {
+            deadline,
+            state,
+            stop,
+        }
+    }
+
+    /// Call only after all normal report IO succeeds. Once expired, a late
+    /// normal completion must not turn the process exit back into success.
+    fn finish(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        if Instant::now() >= self.deadline
+            || self
+                .state
+                .compare_exchange(
+                    WATCHDOG_RUNNING,
+                    WATCHDOG_FINISHED,
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                )
+                .is_err()
+        {
+            return false;
+        }
+        if Instant::now() >= self.deadline {
+            self.state.store(WATCHDOG_EXPIRED, Ordering::SeqCst);
+            return false;
+        }
+        let _ = self.stop.send(());
+        true
+    }
+}
+
+fn watchdog_wait(
+    deadline: Instant,
+    report_grace: Duration,
+    state: Arc<std::sync::atomic::AtomicU8>,
+    stop: std::sync::mpsc::Receiver<()>,
+    report: impl FnOnce() + Send + 'static,
+    exit: impl FnOnce(i32),
+) {
+    use std::sync::atomic::Ordering;
+    match stop.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+        Ok(()) => return,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+        // An early return/panic is already unsuccessful, but runtime teardown
+        // must still be bounded. Do not mislabel it as deadline expiry early.
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            std::thread::sleep(deadline.saturating_duration_since(Instant::now()));
+        }
+    }
+    if state
+        .compare_exchange(
+            WATCHDOG_RUNNING,
+            WATCHDOG_EXPIRED,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        )
+        .is_err()
+    {
+        return;
+    }
+    // A held collector mutex, blocked filesystem, or full stderr/stdout pipe
+    // cannot prevent the independent deadline thread from reaching exit(124).
+    let _ = std::thread::Builder::new()
+        .name("load-test-timeout-report".into())
+        .spawn(move || {
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(report));
+        });
+    std::thread::sleep(report_grace);
+    exit(124);
 }
 
 impl Default for TestConfig {
@@ -89,6 +199,13 @@ impl Default for TestConfig {
             churn_rate: 0.0,
             max_audio_consumers: DEFAULT_MAX_AUDIO_CONSUMERS,
             max_video_consumers: DEFAULT_MAX_VIDEO_CONSUMERS,
+            warmup_secs: 10,
+            deadline_grace_secs: 30,
+            output_dir: ".".into(),
+            run_label: String::new(),
+            server_revision: "unknown".to_string(),
+            generator_revision: "unknown".to_string(),
+            diagnostics: false,
         }
     }
 }
@@ -111,7 +228,32 @@ async fn main() -> Result<()> {
 
     let mut i = 1;
     while i < args.len() {
+        validate_cli_value(&args, i)?;
         match args[i].as_str() {
+            "--diagnostics" => {
+                config.diagnostics = true;
+                i += 1;
+            }
+            "--warmup"
+            | "--deadline-grace"
+            | "--output-dir"
+            | "--run-label"
+            | "--server-revision"
+            | "--generator-revision" => {
+                let value = args
+                    .get(i + 1)
+                    .ok_or_else(|| anyhow::anyhow!("Missing value for {}", args[i]))?;
+                match args[i].as_str() {
+                    "--warmup" => config.warmup_secs = value.parse()?,
+                    "--deadline-grace" => config.deadline_grace_secs = value.parse()?,
+                    "--output-dir" => config.output_dir = value.into(),
+                    "--run-label" => config.run_label = value.clone(),
+                    "--server-revision" => config.server_revision = value.clone(),
+                    "--generator-revision" => config.generator_revision = value.clone(),
+                    _ => unreachable!(),
+                }
+                i += 2;
+            }
             "--clients" | "-c" => {
                 if i + 1 < args.len() {
                     config.num_clients = args[i + 1].parse().unwrap_or(config.num_clients);
@@ -241,11 +383,13 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
             _ => {
-                i += 1;
+                anyhow::bail!("Unknown option: {} (see --help)", args[i]);
             }
         }
     }
 
+    let audio_enabled = config.media_config.audio_enabled;
+    let video_enabled = config.media_config.video_enabled;
     // Apply quality preset (after all args parsed so order doesn't matter)
     if let Some(ref quality) = quality_override {
         let fps = fps_override.unwrap_or(30);
@@ -275,10 +419,128 @@ async fn main() -> Result<()> {
             (config.media_config.video_bitrate_kbps as f64 * multiplier) as u32;
     }
 
+    config.media_config.audio_enabled = audio_enabled;
+    config.media_config.video_enabled = video_enabled;
     run_load_test(config).await
 }
 
+fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
+    let option = args[index].as_str();
+    if matches!(
+        option,
+        "--audio-only" | "--video-only" | "--diagnostics" | "--help" | "-h"
+    ) {
+        return Ok(());
+    }
+    let value = args
+        .get(index + 1)
+        .ok_or_else(|| anyhow::anyhow!("Missing value for {option}"))?;
+    anyhow::ensure!(!value.starts_with("--"), "Missing value for {option}");
+    match option {
+        "--clients" | "-c" | "--duration" | "-d" | "--ramp-up" | "-r" | "--rooms"
+        | "--max-audio" | "--max-video" | "--warmup" | "--deadline-grace" => {
+            value
+                .parse::<u64>()
+                .map_err(|_| anyhow::anyhow!("Invalid integer for {option}: {value}"))?;
+        }
+        "--publish-ratio" => {
+            let ratio: f64 = value.parse()?;
+            anyhow::ensure!(
+                ratio.is_finite() && (0.0..=1.0).contains(&ratio),
+                "--publish-ratio must be between 0 and 1"
+            );
+        }
+        "--churn-rate" => {
+            let rate: f64 = value.parse()?;
+            anyhow::ensure!(
+                rate.is_finite() && rate >= 0.0,
+                "--churn-rate must be nonnegative and finite"
+            );
+        }
+        "--mode" => anyhow::ensure!(
+            matches!(
+                value.as_str(),
+                "conference" | "webinar" | "panel" | "classroom"
+            ),
+            "Unknown mode: {value}"
+        ),
+        "--quality" | "-q" => anyhow::ensure!(
+            matches!(value.as_str(), "480p" | "720p" | "1080p"),
+            "Unknown quality: {value}"
+        ),
+        "--fps" => anyhow::ensure!(
+            matches!(value.as_str(), "15" | "30" | "60"),
+            "FPS must be 15, 30 or 60"
+        ),
+        "--server" | "-s" => {
+            let url = url::Url::parse(value)?;
+            anyhow::ensure!(
+                matches!(url.scheme(), "ws" | "wss")
+                    && url.username().is_empty()
+                    && url.password().is_none()
+                    && url.query().is_none(),
+                "Use a ws/wss URL without credentials or query parameters"
+            );
+        }
+        "--room"
+        | "--output-dir"
+        | "--run-label"
+        | "--server-revision"
+        | "--generator-revision" => {}
+        _ => anyhow::bail!("Unknown option: {option}"),
+    }
+    Ok(())
+}
+
 async fn run_load_test(config: TestConfig) -> Result<()> {
+    anyhow::ensure!(
+        config.num_clients > 0 && config.num_clients <= 10_000,
+        "--clients must be between 1 and 10000"
+    );
+    anyhow::ensure!(
+        (3..=3600).contains(&config.duration_secs),
+        "--duration must be between 3 and 3600 seconds"
+    );
+    anyhow::ensure!(
+        config.warmup_secs <= 600 && config.ramp_up_secs <= 3600,
+        "Warmup/ramp are too long"
+    );
+    anyhow::ensure!(
+        (1..=300).contains(&config.deadline_grace_secs),
+        "--deadline-grace must be between 1 and 300 seconds"
+    );
+    anyhow::ensure!(
+        config.publish_ratio.is_finite() && config.churn_rate.is_finite(),
+        "Ratios must be finite"
+    );
+    std::fs::create_dir_all(&config.output_dir)?;
+    let started_at = chrono::Utc::now().to_rfc3339();
+    let provenance = generator_provenance(&config)?;
+    let run_start = Instant::now();
+    let measurement_start =
+        run_start + Duration::from_secs(config.ramp_up_secs + config.warmup_secs);
+    let window = Arc::new(MeasurementWindow::new(
+        measurement_start,
+        Duration::from_secs(config.duration_secs),
+    ));
+
+    // Arm before workload logging, allocation, or ramp-up: even a blocked output
+    // pipe must not prevent this run's independent deadline from firing.
+    let deadline_secs = config.ramp_up_secs
+        + config.warmup_secs
+        + config.duration_secs
+        + config.deadline_grace_secs;
+    let deadline_config = config.clone();
+    let deadline_started_at = started_at.clone();
+    let deadline_provenance = provenance.clone();
+    let watchdog = RunWatchdog::start(run_start + Duration::from_secs(deadline_secs), move || {
+        // Deliberately no collector access: the data itself may be locked by
+        // the stalled work that caused expiry. Exit status remains authoritative
+        // even if the filesystem prevents these best-effort artifacts.
+        let _ = write_timeout_results(&deadline_config, &deadline_started_at, &deadline_provenance);
+        eprintln!("Load test hard deadline reached after {deadline_secs}s; run is INCOMPLETE");
+    });
+
     let num_publishers = ((config.num_clients as f64) * config.publish_ratio).ceil() as usize;
     let num_publishers = num_publishers.max(1).min(config.num_clients);
     let num_churners = if config.churn_rate > 0.0 {
@@ -326,7 +588,7 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
     );
     println!("========================\n");
 
-    let session_duration = Duration::from_secs(config.duration_secs);
+    let session_duration = window.end.duration_since(run_start);
     let ramp_up_delay = if config.num_clients > 1 {
         Duration::from_secs(config.ramp_up_secs) / config.num_clients as u32
     } else {
@@ -334,7 +596,18 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
     };
 
     let mut handles = Vec::new();
-    let mut metrics_collectors = Vec::new();
+    let metrics_collectors: Vec<_> = (0..config.num_clients)
+        .map(|i| {
+            let metrics = Arc::new(MetricsCollector::with_window(
+                format!("client-{i}"),
+                window.clone(),
+            ));
+            if config.diagnostics {
+                metrics.enable_diagnostics();
+            }
+            metrics
+        })
+        .collect();
 
     // Churner clients are the LAST N clients
     let churner_start_idx = config.num_clients.saturating_sub(num_churners);
@@ -357,6 +630,8 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
             participant_name,
             media_config: config.media_config.clone(),
             session_duration,
+            measurement_start,
+            deadline: window.end,
             is_publisher,
             is_churner,
             churn_session_min_secs: 5,
@@ -366,13 +641,12 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
             consume_existing_producers: true,
         };
 
-        let metrics = Arc::new(MetricsCollector::new(client_id.clone()));
-        metrics_collectors.push(metrics.clone());
+        let metrics = metrics_collectors[i].clone();
 
         let handle = tokio::spawn(run_client(client_config, client_id, metrics));
         handles.push(handle);
 
-        if i > 0 && i < config.num_clients - 1 {
+        if i < config.num_clients - 1 {
             tracing::info!(
                 "Waiting {}ms before spawning next client...",
                 ramp_up_delay.as_millis()
@@ -381,47 +655,70 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         }
     }
 
-    // Hard deadline: at 1000 clients, all tokio worker threads get saturated with
-    // CPU-bound webrtc-rs SDP processing. No async operations (timers, channels,
-    // select, even .await on spawn_blocking) can complete because no worker is free
-    // to poll them. Solution: OS thread that sleeps independently of tokio, then
-    // generates reports synchronously (MetricsCollector uses std::sync::Mutex)
-    // and calls process::exit(0) to bypass the stuck runtime.
-    let deadline_secs = config.ramp_up_secs + config.duration_secs + 120;
     println!(
-        "All clients spawned. Running test for {}s (deadline: {}s)...\n",
-        config.duration_secs, deadline_secs
+        "All clients spawned. Shared window: {}s warmup, {}s measurement.\n",
+        config.warmup_secs, config.duration_secs
     );
-
-    // Clone collectors for the OS deadline thread
-    let collectors_for_deadline: Vec<Arc<MetricsCollector>> =
-        metrics_collectors.iter().cloned().collect();
-
-    // OS deadline thread — completely independent of tokio runtime
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(deadline_secs));
-        eprintln!(
-            "\n=== DEADLINE REACHED ({deadline_secs}s) — generating results from OS thread ==="
-        );
-        write_results_sync(&collectors_for_deadline);
-        std::process::exit(0);
-    });
-
-    // Normal path: wait for all client tasks to complete.
-    // For small tests (2-100 clients), this finishes well before the deadline.
-    for handle in handles {
-        let _ = handle.await;
+    let mut failures = Vec::new();
+    for (index, handle) in handles.into_iter().enumerate() {
+        if let Err(error) = handle.await {
+            metrics_collectors[index].record_error(format!("Client task failed: {error}"));
+            metrics_collectors[index].end_session();
+            failures.push(format!("client-{index}: task failed: {error}"));
+        }
     }
 
     // If we get here, the runtime isn't stuck — generate results normally
     println!("All clients completed.");
-    write_results_sync(&metrics_collectors);
+    let passed = write_results_sync(
+        &metrics_collectors,
+        &config,
+        &started_at,
+        &provenance,
+        true,
+        failures,
+    )?;
+    if !watchdog.finish() {
+        std::process::exit(124);
+    }
+    anyhow::ensure!(
+        passed,
+        "Load test failed; inspect load_test_summary.json and load_test_results.json"
+    );
+    Ok(())
+}
 
+/// Immutable metadata only. The separate marker cannot be overwritten by a
+/// racing normal summary write; its presence always invalidates that run.
+fn write_timeout_results(
+    config: &TestConfig,
+    started_at: &str,
+    provenance: &serde_json::Value,
+) -> Result<()> {
+    let report = serde_json::json!({
+        "schemaVersion": 2,
+        "run": {
+            "completed": false, "passed": false,
+            "failureReasons": ["Hard deadline exceeded; detailed metrics unavailable"],
+            "startedAt": started_at, "finishedAt": chrono::Utc::now().to_rfc3339(),
+            "configuration": config, "provenance": provenance,
+        },
+    });
+    let json = serde_json::to_vec_pretty(&report)?;
+    std::fs::write(config.output_dir.join("load_test_timeout.json"), &json)?;
+    std::fs::write(config.output_dir.join("load_test_summary.json"), &json)?;
     Ok(())
 }
 
 /// Write results to JSON files. Fully synchronous — safe to call from OS thread.
-fn write_results_sync(collectors: &[Arc<MetricsCollector>]) {
+fn write_results_sync(
+    collectors: &[Arc<MetricsCollector>],
+    config: &TestConfig,
+    started_at: &str,
+    provenance: &serde_json::Value,
+    completed: bool,
+    mut failures: Vec<String>,
+) -> Result<bool> {
     let mut all_metrics = Vec::new();
     for collector in collectors {
         all_metrics.push(collector.generate_report());
@@ -429,38 +726,116 @@ fn write_results_sync(collectors: &[Arc<MetricsCollector>]) {
 
     let summary = TestSummary::from_metrics(&all_metrics);
     summary.print_summary();
-
-    match serde_json::to_string_pretty(&all_metrics) {
-        Ok(json) => {
-            if let Err(e) = std::fs::write("load_test_results.json", json) {
-                eprintln!("Failed to write results: {}", e);
-            } else {
-                println!("Detailed results saved to: load_test_results.json");
-            }
-        }
-        Err(e) => eprintln!("Failed to serialize results: {}", e),
+    if summary.failed_connections > 0 || summary.failed_connection_attempts > 0 {
+        failures.push("One or more WebSocket/room connection attempts failed".into());
     }
-
-    match serde_json::to_string_pretty(&summary) {
-        Ok(json) => {
-            if let Err(e) = std::fs::write("load_test_summary.json", json) {
-                eprintln!("Failed to write summary: {}", e);
-            } else {
-                println!("Summary saved to: load_test_summary.json");
-            }
-        }
-        Err(e) => eprintln!("Failed to serialize summary: {}", e),
+    if summary.total_errors > 0 || summary.total_reconnection_failures > 0 {
+        failures.push("Client, signaling or media errors were recorded".into());
     }
+    if summary.failed_consumers > 0 {
+        failures.push(format!(
+            "{} consumers failed sustained media delivery",
+            summary.failed_consumers
+        ));
+    }
+    let publishers = ((config.num_clients as f64 * config.publish_ratio).ceil() as usize)
+        .max(1)
+        .min(config.num_clients);
+    for (i, metrics) in all_metrics.iter().enumerate() {
+        let other_publishers = (0..publishers)
+            .filter(|publisher| {
+                *publisher != i && publisher % config.num_rooms == i % config.num_rooms
+            })
+            .count();
+        let expected = if config.media_config.audio_enabled {
+            other_publishers.min(config.max_audio_consumers)
+        } else {
+            0
+        } + if config.media_config.video_enabled {
+            other_publishers.min(config.max_video_consumers)
+        } else {
+            0
+        };
+        if metrics.consumers_created < expected as u32 {
+            failures.push(format!(
+                "{}: expected at least {expected} consumers, created {}",
+                metrics.client_id, metrics.consumers_created
+            ));
+        }
+        let validated = metrics
+            .consumer_delivery
+            .iter()
+            .filter(|consumer| consumer.passed)
+            .count();
+        if validated < expected {
+            failures.push(format!(
+                "{}: expected at least {expected} validated consumers, observed {validated}",
+                metrics.client_id,
+            ));
+        }
+        if i < publishers && metrics.measurement.packets_queued == 0 {
+            failures.push(format!(
+                "{}: publisher queued no media in the shared measurement window",
+                metrics.client_id
+            ));
+        }
+    }
+    let passed = completed && failures.is_empty();
+    let mut report = serde_json::to_value(&summary)?;
+    report["schemaVersion"] = serde_json::json!(2);
+    report["run"] = serde_json::json!({
+        "completed": completed, "passed": passed, "failureReasons": failures,
+        "startedAt": started_at, "finishedAt": chrono::Utc::now().to_rfc3339(),
+        "configuration": config, "provenance": provenance,
+    });
+    std::fs::write(
+        config.output_dir.join("load_test_results.json"),
+        serde_json::to_vec_pretty(&all_metrics)?,
+    )?;
+    std::fs::write(
+        config.output_dir.join("load_test_summary.json"),
+        serde_json::to_vec_pretty(&report)?,
+    )?;
+    println!(
+        "Run {}. Results: {}",
+        if passed { "PASSED" } else { "FAILED" },
+        config.output_dir.display()
+    );
+    Ok(passed)
+}
+
+fn generator_provenance(config: &TestConfig) -> Result<serde_json::Value> {
+    use sha2::Digest;
+    let binary = std::env::current_exe()?;
+    Ok(serde_json::json!({
+        "generatorRevision": config.generator_revision,
+        "serverRevision": config.server_revision,
+        "generatorBinarySha256": hex::encode(sha2::Sha256::digest(std::fs::read(&binary)?)),
+        "generatorVersion": env!("CARGO_PKG_VERSION"),
+        "os": std::env::consts::OS, "architecture": std::env::consts::ARCH,
+        "logicalCpus": std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
+        "profile": if cfg!(debug_assertions) { "debug" } else { "release" },
+        "payload": "synthetic Opus/VP8-shaped RTP; not a browser decode/encode quality test",
+        "sentCounters": "packets accepted by the local RTP writer, not confirmed network egress",
+        "byteCounters": "queued RTP packet bytes; received RTP payload bytes (not comparable wire-byte totals)",
+        "latencyPercentiles": "nearest-rank exact millisecond histograms merged across every operation",
+        "window": "shared steady-state interval after ramp-up plus warmup",
+    }))
 }
 
 async fn run_client(config: ClientConfig, client_id: String, metrics: Arc<MetricsCollector>) {
     if config.is_churner {
         run_churner_client(config, client_id, metrics).await;
     } else {
-        match run_client_inner(config, client_id.clone(), metrics).await {
+        match run_client_inner(config, client_id.clone(), metrics.clone()).await {
             Ok(_) => tracing::info!("{}: Client completed successfully", client_id),
-            Err(e) => tracing::error!("{}: Client failed: {}", client_id, e),
+            Err(e) => {
+                metrics.record_error(format!("Client failed: {e:#}"));
+                metrics.diagnostic_failure("Client attempt failed before pre-close capture");
+                tracing::error!("{}: Client failed: {}", client_id, e);
+            }
         }
+        metrics.end_session();
     }
 }
 
@@ -470,11 +845,9 @@ async fn run_churner_client(
     client_id: String,
     metrics: Arc<MetricsCollector>,
 ) {
-    let total_start = Instant::now();
-    let total_duration = config.session_duration;
     let mut iteration = 0u32;
 
-    while total_start.elapsed() < total_duration {
+    while Instant::now() < config.deadline {
         iteration += 1;
         tracing::info!("{}: Churn iteration {} starting", client_id, iteration);
 
@@ -482,7 +855,7 @@ async fn run_churner_client(
         let session_secs = config.churn_session_min_secs
             + (rand::random::<u64>()
                 % (config.churn_session_max_secs - config.churn_session_min_secs + 1));
-        let remaining = total_duration.saturating_sub(total_start.elapsed());
+        let remaining = config.deadline.saturating_duration_since(Instant::now());
         let this_session = Duration::from_secs(session_secs).min(remaining);
 
         if this_session.as_secs() < 3 {
@@ -491,10 +864,22 @@ async fn run_churner_client(
 
         let mut churn_config = config.clone();
         churn_config.session_duration = this_session;
+        churn_config.deadline = (Instant::now() + this_session).min(config.deadline);
+        // Every client participates in the same initial measured cohort before
+        // intentional churn begins; otherwise short sessions could all expire
+        // during warmup and a no-media run could appear to pass.
+        if iteration == 1 {
+            churn_config.deadline = churn_config
+                .deadline
+                .max(config.measurement_start + Duration::from_secs(5))
+                .min(config.deadline);
+        }
 
         match run_client_inner(churn_config, client_id.clone(), metrics.clone()).await {
             Ok(_) => {
-                metrics.record_reconnection();
+                if iteration > 1 {
+                    metrics.record_reconnection();
+                }
                 tracing::info!(
                     "{}: Churn iteration {} completed ({}s)",
                     client_id,
@@ -504,12 +889,15 @@ async fn run_churner_client(
             }
             Err(e) => {
                 metrics.record_reconnection_failure();
+                metrics.record_error(format!("Churn attempt {iteration} failed: {e:#}"));
+                metrics.diagnostic_failure("Client attempt failed before pre-close capture");
                 tracing::warn!("{}: Churn iteration {} failed: {}", client_id, iteration, e);
             }
         }
+        metrics.end_session();
 
         // Cooldown before reconnecting
-        let remaining = total_duration.saturating_sub(total_start.elapsed());
+        let remaining = config.deadline.saturating_duration_since(Instant::now());
         if remaining.as_secs() < 5 {
             break;
         }
@@ -530,6 +918,7 @@ async fn run_client_inner(
     );
 
     metrics.set_room_id(&config.room_id);
+    metrics.begin_connection_attempt();
 
     // Connect to WebSocket signaling server
     let (ws_stream, _) = connect_async(&config.server_url).await.map_err(|e| {
@@ -835,6 +1224,7 @@ async fn run_client_inner(
                         .record_signaling_latency("produce_audio", t.elapsed().as_millis() as u64);
                     tracing::info!("{}: Audio producer created: {}", client_id, producer_id);
                     metrics.record_producer_created();
+                    metrics.record_publisher(&producer_id);
                 }
                 ServerMessage::Error { message } => {
                     metrics.record_error(format!("Audio producer failed: {}", message));
@@ -864,6 +1254,7 @@ async fn run_client_inner(
                         .record_signaling_latency("produce_video", t.elapsed().as_millis() as u64);
                     tracing::info!("{}: Video producer created: {}", client_id, producer_id);
                     metrics.record_producer_created();
+                    metrics.record_publisher(&producer_id);
                 }
                 ServerMessage::Error { message } => {
                     metrics.record_error(format!("Video producer failed: {}", message));
@@ -997,19 +1388,32 @@ async fn run_client_inner(
 
     // Renegotiate SDP once for ALL consumers recorded during setup.
     if needs_renegotiation {
-        if let Err(e) = webrtc_session.lock().await.renegotiate_consumers().await {
-            tracing::error!("{}: Failed to renegotiate consumers: {}", client_id, e);
+        webrtc_session.lock().await.renegotiate_consumers().await?;
+        if metrics.diagnostics_enabled() {
+            metrics.diagnostic_event(
+                "renegotiation-applied",
+                serde_json::json!({"consumerCount": pending_resumes.len()}),
+            );
         }
 
-        // CRITICAL: webrtc-rs's set_remote_description ENQUEUES the start_rtp operation
-        // asynchronously — it does NOT register SSRCs before returning.
+        // Preserve the existing settling interval. In webrtc 0.20 core SSRC
+        // registration is synchronous; driver IO/event delivery remains async.
         tokio::time::sleep(Duration::from_millis(100)).await;
-        tracing::debug!("{}: Yielded for SSRC registration to complete", client_id);
+        tracing::debug!(
+            "{}: Consumer renegotiation settling interval completed",
+            client_id
+        );
     }
 
-    // NOW resume consumers — renegotiation's queued operation has had time to register SSRCs.
+    // Resume consumers only after applying the complete SDP batch.
     let resume_count = pending_resumes.len();
     for consumer_id in pending_resumes.drain(..) {
+        if metrics.diagnostics_enabled() {
+            metrics.diagnostic_event(
+                "resume-requested",
+                serde_json::json!({"consumerId": consumer_id}),
+            );
+        }
         let resume_msg = ClientMessage::ResumeConsumer {
             consumer_id: consumer_id.clone(),
         };
@@ -1029,6 +1433,9 @@ async fn run_client_inner(
     // the first keyframe and packet counters start after the SRTP handshake.
     if config.is_publisher {
         webrtc_session.lock().await.wait_send_connected().await?;
+    }
+    if !config.is_churner && Instant::now() > config.measurement_start {
+        metrics.record_error("Setup exceeded shared ramp-up/warmup window; increase warmup before comparing performance".into());
     }
 
     tracing::info!(
@@ -1061,7 +1468,8 @@ async fn run_client_inner(
     let metrics_recv = metrics.clone();
     let client_id_recv = client_id.clone();
     // Receive loop gets extra time so the abort (not timeout) controls shutdown
-    let recv_timeout = config.session_duration + Duration::from_secs(5);
+    let recv_timeout =
+        config.deadline.saturating_duration_since(Instant::now()) + Duration::from_secs(5);
 
     // Clone caps and webrtc_session for consumer creation
     let rtp_caps_for_consume = rtp_capabilities.clone();
@@ -1087,22 +1495,56 @@ async fn run_client_inner(
         .await;
     });
 
-    // Session timer starts AFTER setup — late-joining clients get full media time
-    sleep(config.session_duration).await;
+    // Every client ends at the same instant; setup/ramp no longer inflate rates.
+    tokio::time::sleep_until(config.deadline.into()).await;
 
+    // Publish the intentional lifetime boundary before dropping signaling or
+    // closing peers. Other clients may observe ProducerClosed immediately.
+    metrics.end_session();
+    if metrics.diagnostics_enabled() {
+        match bounded_diagnostic_snapshot(Duration::from_secs(2), async {
+            webrtc_session.lock().await.diagnostic_snapshot().await
+        })
+        .await
+        {
+            Ok(snapshot) => metrics.diagnostic_snapshot(snapshot),
+            Err(error) => metrics.diagnostic_failure(&error.to_string()),
+        }
+    }
     // Clean shutdown — explicitly close PeerConnections to avoid slow async drop.
     tracing::info!("{}: Session duration completed, shutting down", client_id);
     if let Some(task) = media_task {
         task.abort();
+        if let Err(error) = task.await {
+            if !error.is_cancelled() {
+                metrics.record_error(format!("Media task failed: {error}"));
+            }
+        }
     }
     receive_task.abort();
+    if let Err(error) = receive_task.await {
+        if !error.is_cancelled() {
+            metrics.record_error(format!("Receive task failed: {error}"));
+        }
+    }
 
     // Close PeerConnections synchronously before returning
     if let Err(e) = webrtc_session.lock().await.close().await {
-        tracing::debug!("{}: Close error (non-fatal): {}", client_id, e);
+        metrics.record_error(format!("PeerConnection cleanup failed: {e}"));
     }
 
     Ok(())
+}
+
+/// Include lock acquisition and both peers in the diagnostic timeout. This
+/// opt-in snapshot never substitutes for measured consumer-delivery checks.
+async fn bounded_diagnostic_snapshot(
+    limit: Duration,
+    snapshot: impl std::future::Future<Output = Result<serde_json::Value>>,
+) -> Result<serde_json::Value> {
+    tokio::time::timeout(limit, snapshot)
+        .await
+        .context("Pre-close diagnostic snapshot timed out; evidence is incomplete")?
 }
 
 async fn send_real_media_loop(
@@ -1160,6 +1602,7 @@ async fn send_real_media_loop(
                             }
                         }
                         Err(e) => {
+                            metrics.record_error(format!("RTP write failed: {e}"));
                             tracing::error!("{}: Failed to send RTP: {}", client_id, e);
                             break;
                         }
@@ -1186,6 +1629,7 @@ async fn send_real_media_loop(
                                 }
                             }
                             Err(e) => {
+                                metrics.record_error(format!("RTP write failed: {e}"));
                                 tracing::error!("{}: Failed to send RTP: {}", client_id, e);
                                 send_error = true;
                                 break;
@@ -1216,6 +1660,48 @@ mod packet_migration_tests {
     use super::*;
 
     #[test]
+    fn cli_rejects_malformed_and_unknown_workload_options() {
+        for args in [
+            vec!["load_test", "--clients", "nope"],
+            vec!["load_test", "--duration"],
+            vec!["load_test", "--clients", "--duration"],
+            vec!["load_test", "--mode", "confernece"],
+            vec!["load_test", "--publish-ratio", "NaN"],
+            vec!["load_test", "--fps", "999"],
+            vec!["load_test", "--unknown", "1"],
+            vec!["load_test", "--server", "ws://user:password@localhost/ws"],
+        ] {
+            let args = args.into_iter().map(str::to_string).collect::<Vec<_>>();
+            assert!(validate_cli_value(&args, 1).is_err(), "{args:?}");
+        }
+        assert!(validate_cli_value(&["load_test".into(), "--audio-only".into()], 1).is_ok());
+        assert!(validate_cli_value(&["load_test".into(), "--diagnostics".into()], 1).is_ok());
+        assert!(!TestConfig::default().diagnostics);
+    }
+
+    #[tokio::test]
+    async fn diagnostic_snapshot_timeout_cancels_capture_and_releases_locks() {
+        let lock = Arc::new(Mutex::new(()));
+        let start = Instant::now();
+        let result = bounded_diagnostic_snapshot(Duration::from_millis(10), async {
+            let _guard = lock.lock().await;
+            std::future::pending::<Result<serde_json::Value>>().await
+        })
+        .await;
+        assert!(result.unwrap_err().to_string().contains("timed out"));
+        assert!(start.elapsed() < Duration::from_secs(1));
+        assert!(lock.try_lock().is_ok());
+        assert_eq!(
+            bounded_diagnostic_snapshot(Duration::from_secs(1), async {
+                Ok(serde_json::json!({"captured": true}))
+            })
+            .await
+            .unwrap()["captured"],
+            true
+        );
+    }
+
+    #[test]
     fn generated_packets_use_negotiated_ssrc_without_altering_media_payload() {
         let mut generator = MediaGenerator::new(MediaConfig::default());
         let audio = generator.generate_audio_packet();
@@ -1231,6 +1717,88 @@ mod packet_migration_tests {
             assert_eq!(after.payload, before.payload);
         }
         assert!(negotiated_rtp_packet(&[0], 12_345).is_err());
+    }
+}
+
+#[cfg(test)]
+mod watchdog_tests {
+    use super::*;
+    use std::sync::{Mutex as StdMutex, atomic::AtomicU8, mpsc};
+
+    #[test]
+    fn blocked_reporter_cannot_block_deadline_exit() {
+        let collector_lock = Arc::new(StdMutex::new(()));
+        let held = collector_lock.lock().unwrap();
+        let reporter_lock = collector_lock.clone();
+        let (_stop, receiver) = mpsc::channel();
+        let (report_started, report_started_rx) = mpsc::channel();
+        let (exited, exited_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            watchdog_wait(
+                Instant::now() + Duration::from_millis(10),
+                Duration::from_millis(20),
+                Arc::new(AtomicU8::new(WATCHDOG_RUNNING)),
+                receiver,
+                move || {
+                    let _ = report_started.send(());
+                    let _blocked = reporter_lock.lock().unwrap();
+                },
+                move |code| {
+                    let _ = exited.send(code);
+                },
+            );
+        });
+        assert!(
+            report_started_rx
+                .recv_timeout(Duration::from_secs(1))
+                .is_ok()
+        );
+        let status = exited_rx.recv_timeout(Duration::from_secs(1));
+        drop(held);
+        assert_eq!(status.unwrap(), 124);
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn expired_deadline_cannot_be_completed_successfully() {
+        let (stop, _receiver) = mpsc::channel();
+        let expired = RunWatchdog {
+            deadline: Instant::now() - Duration::from_millis(1),
+            state: Arc::new(AtomicU8::new(WATCHDOG_RUNNING)),
+            stop,
+        };
+        assert!(!expired.finish());
+        let (stop, _receiver) = mpsc::channel();
+        let already_expired = RunWatchdog {
+            deadline: Instant::now() + Duration::from_secs(1),
+            state: Arc::new(AtomicU8::new(WATCHDOG_EXPIRED)),
+            stop,
+        };
+        assert!(!already_expired.finish());
+    }
+
+    #[test]
+    fn timeout_artifacts_fail_closed_without_collectors() {
+        let directory = std::env::temp_dir().join(format!(
+            "simplestchat-timeout-unit-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let config = TestConfig {
+            output_dir: directory.clone(),
+            ..Default::default()
+        };
+        write_timeout_results(&config, "test-start", &serde_json::json!({ "test": true })).unwrap();
+        for name in ["load_test_timeout.json", "load_test_summary.json"] {
+            let path = directory.join(name);
+            let report: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            assert_eq!(report["run"]["completed"], false);
+            assert_eq!(report["run"]["passed"], false);
+            assert_eq!(report["run"]["configuration"]["numClients"], 5);
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(directory).unwrap();
     }
 }
 
@@ -1299,7 +1867,7 @@ async fn receive_messages_loop(
                         true
                     }
                     Some(Ok(Message::Binary(data))) => {
-                        metrics.record_packet_received(data.len());
+                        metrics.record_error(format!("Unexpected signaling binary frame ({} bytes), not RTP", data.len()));
                         true
                     }
                     Some(Err(e)) => {
@@ -1308,10 +1876,12 @@ async fn receive_messages_loop(
                         break;
                     }
                     None => {
+                        metrics.record_error("WebSocket closed before the session deadline".into());
                         tracing::info!("{}: WebSocket closed", client_id);
                         break;
                     }
                     Some(Ok(Message::Close(_))) => {
+                        metrics.record_error("Server closed WebSocket before the session deadline".into());
                         tracing::info!("{}: Server sent close frame", client_id);
                         break;
                     }
@@ -1379,7 +1949,13 @@ async fn receive_messages_loop(
         if needs_renegotiation && (!got_message || max_timer_expired) {
             // Single renegotiation for ALL consumers collected in this window
             if let Err(e) = webrtc_session.lock().await.renegotiate_consumers().await {
+                metrics.record_error(format!("Consumer renegotiation failed: {e}"));
                 tracing::error!("{}: Failed to renegotiate consumers: {}", client_id, e);
+            } else if metrics.diagnostics_enabled() {
+                metrics.diagnostic_event(
+                    "renegotiation-applied",
+                    serde_json::json!({"consumerCount": pending_resumes.len()}),
+                );
             }
 
             let batch_size = pending_resumes.len();
@@ -1411,7 +1987,7 @@ async fn receive_messages_loop(
                                 }
                             }
                             Some(Ok(Message::Binary(data))) => {
-                                metrics.record_packet_received(data.len());
+                                metrics.record_error(format!("Unexpected signaling binary frame ({} bytes), not RTP", data.len()));
                             }
                             Some(Err(e)) => {
                                 tracing::error!("{}: WebSocket error during SSRC wait: {}", client_id, e);
@@ -1420,6 +1996,7 @@ async fn receive_messages_loop(
                                 break;
                             }
                             None => {
+                                metrics.record_error("WebSocket closed during consumer setup".into());
                                 tracing::info!("{}: WebSocket closed during SSRC wait", client_id);
                                 ws_dead = true;
                                 break;
@@ -1438,11 +2015,18 @@ async fn receive_messages_loop(
             let to_resume: Vec<String> = pending_resumes.drain(..batch_size).collect();
             let resume_count = to_resume.len();
             for consumer_id in to_resume {
+                if metrics.diagnostics_enabled() {
+                    metrics.diagnostic_event(
+                        "resume-requested",
+                        serde_json::json!({"consumerId": consumer_id}),
+                    );
+                }
                 let resume_msg = ClientMessage::ResumeConsumer {
                     consumer_id: consumer_id.clone(),
                 };
                 let json = serde_json::to_string(&resume_msg).unwrap();
                 if let Err(e) = write.feed(Message::Text(json.into())).await {
+                    metrics.record_error(format!("Consumer resume write failed: {e}"));
                     tracing::error!(
                         "{}: Failed to feed resume for {}: {}",
                         client_id,
@@ -1453,6 +2037,7 @@ async fn receive_messages_loop(
             }
             if resume_count > 0 {
                 if let Err(e) = write.flush().await {
+                    metrics.record_error(format!("Consumer resume flush failed: {e}"));
                     tracing::error!("{}: Failed to flush resumes: {}", client_id, e);
                 }
                 total_resumed += resume_count;
@@ -1515,6 +2100,9 @@ async fn handle_server_message(
             if at_cap {
                 return;
             }
+            if !metrics.subscribe(&producer_id, kind == MediaKind::Audio) {
+                return;
+            }
 
             tracing::debug!(
                 "{}: New producer available: {} ({:?}), creating consumer...",
@@ -1529,6 +2117,7 @@ async fn handle_server_message(
             };
 
             if let Err(e) = send_message(write, consume_msg).await {
+                metrics.record_error(format!("Consume request failed: {e}"));
                 tracing::error!("{}: Failed to send Consume message: {}", client_id, e);
                 return;
             }
@@ -1557,6 +2146,20 @@ async fn handle_server_message(
             rtp_parameters,
         } => {
             metrics.record_consumer_created();
+            let ssrc = rtp_parameters
+                .encodings
+                .first()
+                .and_then(|encoding| encoding.ssrc);
+            if let Some(ssrc) = ssrc {
+                metrics.record_consumer(&consumer_id, &producer_id, ssrc);
+                if metrics.diagnostics_enabled() {
+                    metrics.diagnostic_event("consumer-created", serde_json::json!({
+                        "consumerId": consumer_id, "producerId": producer_id, "kind": kind, "ssrc": ssrc,
+                    }));
+                }
+            } else {
+                metrics.record_error(format!("Consumer {consumer_id} has no SSRC"));
+            }
 
             // Record consumer info WITHOUT renegotiating SDP yet.
             if let Err(e) = webrtc_session.lock().await.record_consumer(
@@ -1564,6 +2167,7 @@ async fn handle_server_message(
                 kind,
                 &rtp_parameters,
             ) {
+                metrics.record_error(format!("Consumer setup failed: {e}"));
                 tracing::error!("{}: Failed to record consumer: {}", client_id, e);
                 return;
             }
@@ -1587,6 +2191,15 @@ async fn handle_server_message(
             tracing::debug!("{}: Participant left: {}", client_id, participant_id);
         }
         ServerMessage::ProducerClosed { producer_id } => {
+            let (kind, unexpected) = metrics.close_producer(&producer_id);
+            if unexpected {
+                metrics.record_error(format!("Server closed active generated producer {producer_id} before its planned lifetime ended"));
+            }
+            match kind {
+                Some(true) => *audio_consumes_sent = audio_consumes_sent.saturating_sub(1),
+                Some(false) => *video_consumes_sent = video_consumes_sent.saturating_sub(1),
+                None => {}
+            }
             tracing::debug!("{}: Producer closed: {}", client_id, producer_id);
         }
         ServerMessage::ProducerPaused { producer_id } => {
@@ -1596,6 +2209,10 @@ async fn handle_server_message(
             tracing::debug!("{}: Producer resumed: {}", client_id, producer_id);
         }
         ServerMessage::ConsumerResumed { consumer_id } => {
+            if metrics.diagnostics_enabled() {
+                metrics
+                    .diagnostic_event("resume-ack", serde_json::json!({"consumerId": consumer_id}));
+            }
             tracing::debug!("{}: Consumer resumed: {}", client_id, consumer_id);
         }
         ServerMessage::ConsumerPaused { consumer_id } => {
@@ -1756,8 +2373,21 @@ fn print_usage() {
     println!("  cargo run --features load-test --bin load_test -- [OPTIONS]");
     println!("\nOptions:");
     println!("  -c, --clients <N>          Number of concurrent clients (default: 5)");
-    println!("  -d, --duration <SECS>      Test duration in seconds (default: 30)");
+    println!("  -d, --duration <SECS>      Shared measurement duration, 3–3600s (default: 30)");
     println!("  -r, --ramp-up <SECS>       Ramp-up period in seconds (default: 5)");
+    println!(
+        "  --warmup <SECS>            Warmup after ramp, before shared counters (default: 10)"
+    );
+    println!(
+        "  --deadline-grace <SECS>    Watchdog grace after measurement (default: 30; expiry exits 124)"
+    );
+    println!("  --output-dir <PATH>        Directory for both JSON reports (default: .)");
+    println!(
+        "  --diagnostics              Bounded pre-close RTC stats, sanitized SDP and lifecycle events"
+    );
+    println!("  --run-label <LABEL>        Human-readable run identifier");
+    println!("  --server-revision <SHA>    Server source revision supplied by the runner");
+    println!("  --generator-revision <SHA> Generator source revision supplied by the runner");
     println!("  -s, --server <URL>         Server WebSocket URL (default: ws://localhost:3000/ws)");
     println!("  --room <ID>                Room ID to join (default: load-test-room)");
     println!(

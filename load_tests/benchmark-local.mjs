@@ -1,0 +1,362 @@
+#!/usr/bin/env node
+// Bounded A/B measurements of two owned local server processes, never a remote URL.
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { createHash, randomBytes } from 'node:crypto';
+import { readFile, writeFile, mkdir, stat, open } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import os from 'node:os';
+import net from 'node:net';
+import dgram from 'node:dgram';
+import { setTimeout as delay } from 'node:timers/promises';
+
+const exec = promisify(execFile);
+const hash = value => createHash('sha256').update(value).digest('hex');
+const median = values => { const sorted = [...values].sort((a, b) => a - b); const m = Math.floor(sorted.length / 2); return sorted.length % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2; };
+const children = new Set();
+const cleanEnv = () => Object.fromEntries(['PATH', 'TMPDIR', 'LANG', 'SYSTEMROOT'].filter(k => process.env[k]).map(k => [k, process.env[k]]));
+const json = (path, value) => writeFile(path, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx' });
+
+export function cpuSeconds(value) {
+  const [days, clock] = value.includes('-') ? value.split('-') : ['0', value];
+  const parts = clock.split(':').map(Number);
+  if (parts.length < 2 || parts.length > 3 || parts.some(v => !Number.isFinite(v))) throw new Error(`Invalid ps CPU time: ${value}`);
+  return Number(days) * 86400 + parts.reverse().reduce((sum, part, i) => sum + part * 60 ** i, 0);
+}
+
+export function resourceSummary(samples, role, start, end) {
+  const window = samples.filter(s => s.elapsedMs >= start && s.elapsedMs <= end && s[role]);
+  if (window.length < 2) throw new Error(`Insufficient ${role} resource samples in measurement window`);
+  const first = window[0], last = window.at(-1);
+  const cpu = last[role].cpuSeconds - first[role].cpuSeconds;
+  const seconds = (last.elapsedMs - first.elapsedMs) / 1000;
+  return { samples: window.length, sampledDurationSeconds: seconds, cpuSeconds: cpu,
+    cpuPercentOfOneCore: cpu / seconds * 100,
+    peakRssMiB: Math.max(...window.map(s => s[role].rssKiB)) / 1024,
+    medianRssMiB: median(window.map(s => s[role].rssKiB)) / 1024 };
+}
+
+export function comparison(rows) {
+  if (rows.some(row => row.purpose === 'diagnostic')) throw new Error('Diagnostic runs are not performance comparisons');
+  const fields = ['joinP99Ms', 'sendReadyP99Ms', 'receiveReadyP99Ms', 'receivedPacketsPerSecond', 'serverCpuPercent', 'serverPeakRssMiB', 'generatorCpuPercent', 'generatorPeakRssMiB'];
+  const result = {};
+  for (const scenario of new Set(rows.map(r => r.scenario))) {
+    result[scenario] = {};
+    for (const field of fields) {
+      const baseline = rows.filter(r => r.scenario === scenario && r.variant === 'baseline').map(r => r[field]);
+      const candidate = rows.filter(r => r.scenario === scenario && r.variant === 'candidate').map(r => r[field]);
+      if (!baseline.length || baseline.length !== candidate.length || [...baseline, ...candidate].some(v => !Number.isFinite(v))) throw new Error(`Incomplete comparison: ${scenario}/${field}`);
+      const before = median(baseline), after = median(candidate);
+      result[scenario][field] = { baselineMedian: before, candidateMedian: after, delta: after - before,
+        deltaPercent: before ? (after - before) / before * 100 : null,
+        baselineRange: [Math.min(...baseline), Math.max(...baseline)], candidateRange: [Math.min(...candidate), Math.max(...candidate)] };
+    }
+  }
+  return result;
+}
+
+async function availablePorts(port, udpPort, workers) {
+  const tcp = net.createServer();
+  await new Promise((yes, no) => { tcp.once('error', no); tcp.listen(port, '127.0.0.1', yes); });
+  await new Promise(yes => tcp.close(yes));
+  for (let i = 0; i < workers; i++) {
+    const udp = dgram.createSocket('udp4');
+    // Match the server worker's wildcard UDP bind, not just the loopback target.
+    try { await new Promise((yes, no) => { udp.once('error', no); udp.bind(udpPort + i, '0.0.0.0', yes); }); }
+    finally { udp.close(); }
+  }
+}
+
+export async function command(binary, args, cwd, env, logPath) {
+  const log = await open(logPath, 'wx', 0o600);
+  let child;
+  try {
+    child = spawn(binary, args, { cwd, env, stdio: ['ignore', log.fd, log.fd] });
+    children.add(child);
+    // No await before attaching listeners: ENOENT/fast exit can arrive immediately.
+    child.completion = new Promise(resolve => {
+      child.once('error', error => resolve({ code: null, error: error.message }));
+      child.once('exit', (code, signal) => resolve({ code, signal }));
+    }).then(result => { children.delete(child); child.result = result; return result; });
+  } finally { await log.close(); }
+  return child;
+}
+
+async function stop(child) {
+  if (!child || child.result) return;
+  child.kill('SIGTERM');
+  await Promise.race([child.completion, delay(5000, undefined, { ref: false })]);
+  if (!child.result) { child.kill('SIGKILL'); await child.completion; }
+}
+
+export async function finishCapture(capture, drain = () => delay(2000)) {
+  if (!capture) return;
+  // Let buffered packet headers reach tcpdump after the generator exits. TERM
+  // flushes tcpdump's output, but does not drain unread kernel capture buffers.
+  // This bounded grace is outside the measurement window; timestamps still
+  // determine actual coverage, especially when the packet cap was reached.
+  if (!capture.result) await drain();
+  await stop(capture);
+  // tcpdump handles TERM by flushing and exiting zero. A signal-only exit or
+  // forced KILL does not establish a successfully finalized capture.
+  if (capture.result?.code !== 0) throw new Error(`Packet capture did not finish cleanly: ${JSON.stringify(capture.result)}`);
+}
+
+async function metrics(url, token) {
+  const response = await fetch(`${url}/metrics`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(2000) });
+  if (!response.ok) throw new Error(`Metrics HTTP ${response.status}`);
+  const raw = await response.text();
+  const values = Object.fromEntries(raw.split('\n').filter(l => /^simplestchat_\w+ \d/.test(l)).map(l => { const [key, value] = l.split(' '); return [key, Number(value)]; }));
+  return { raw, values };
+}
+
+async function sample(child) {
+  if (!child || child.result) return null;
+  try {
+    const { stdout } = await exec('ps', ['-p', String(child.pid), '-o', 'rss=,time='], { timeout: 2000, env: { ...cleanEnv(), LC_ALL: 'C' } });
+    const [rss, cpu] = stdout.trim().split(/\s+/);
+    if (!rss || !cpu) return null;
+    return { rssKiB: Number(rss), cpuSeconds: cpuSeconds(cpu) };
+  } catch { return null; }
+}
+
+export function captureArguments(options, directory) {
+  if (options.purpose !== 'diagnostic' || !['lo', 'lo0'].includes(options.captureInterface)) {
+    throw new Error('Packet capture requires diagnostic mode and a loopback interface (lo/lo0)');
+  }
+  const lastPort = options.udpPort + options.workers - 1;
+  const packetLimit = options.diagnosticDetail === 'capture-only' ? '2000000' : '500000';
+  return ['-i', options.captureInterface, '-p', '-nn', '-s', '64', '-B', '4096', '-U', '-c', packetLimit,
+    '-w', join(directory, 'media-headers.pcap'),
+    `udp and host 127.0.0.1 and portrange ${options.udpPort}-${lastPort}`];
+}
+
+export function diagnosticPolicy(options) {
+  const full = options.purpose === 'diagnostic' && options.diagnosticDetail !== 'capture-only';
+  return { generatorArgs: full ? ['--diagnostics'] : [], requireSnapshots: full,
+    serverLog: full ? 'warn,simplestChat::media::transport_manager=info' : 'error',
+    generatorLog: full ? 'warn,load_test=info' : 'error' };
+}
+
+export async function verifyExecutable(binary, expectedSha256, role) {
+  if (hash(await readFile(binary)) !== expectedSha256) {
+    throw new Error(`${role} binary changed after the comparison started`);
+  }
+}
+
+async function identity(root, binary) {
+  const git = async args => (await exec('git', ['-C', root, ...args])).stdout.trim();
+  return { root, binary, revision: await git(['rev-parse', 'HEAD']),
+    trackedDiffSha256: hash(await git(['diff', 'HEAD', '--', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'src', 'vendor', 'build/pip-constraints.txt'])),
+    cargoLockSha256: hash(await readFile(join(root, 'Cargo.lock'))),
+    binarySha256: hash(await readFile(binary)), binaryBytes: (await stat(binary)).size };
+}
+
+async function runOne(options, variant, scenario, repetition, manifest) {
+  const name = `${scenario.name}-${repetition}-${variant}`;
+  const directory = join(options.output, name); await mkdir(directory, { mode: 0o700 });
+  const identity = manifest.servers[variant];
+  const origin = `http://127.0.0.1:${options.port}`;
+  const token = randomBytes(32).toString('hex');
+  const diagnostics = diagnosticPolicy(options);
+  const env = { ...cleanEnv(), BIND_ADDR: '127.0.0.1', PORT: String(options.port), ANNOUNCE_IP: '127.0.0.1',
+    MEDIA_WORKERS: String(options.workers), WEBRTC_SERVER_PORT_BASE: String(options.udpPort),
+    ALLOW_AD_HOC_ROOMS: 'true', ALLOWED_ORIGINS: origin, REGISTRATION_ENABLED: 'false',
+    MAX_CONNECTIONS_PER_IP: '128', WS_HANDSHAKES_PER_MINUTE: '600', METRICS_TOKEN: token,
+    RUST_LOG: diagnostics.serverLog };
+  let server, generator, capture;
+  const samples = [];
+  const startedAt = new Date().toISOString();
+  try {
+    await Promise.all([
+      verifyExecutable(options.generator, manifest.generator.binarySha256, 'Generator'),
+      verifyExecutable(identity.binary, identity.binarySha256, `${variant} server`),
+    ]);
+    await availablePorts(options.port, options.udpPort, options.workers);
+    server = await command(identity.binary, [], identity.root, env, join(directory, 'server.log'));
+    let ready = false;
+    for (let i = 0; i < 100 && !server.result; i++) {
+      try { const response = await fetch(`${origin}/health`, { signal: AbortSignal.timeout(500) }); ready = response.ok; } catch {}
+      if (ready) break;
+      await delay(100);
+    }
+    if (!ready || server.result) throw new Error('Owned server did not become ready');
+    const before = await metrics(origin, token); await writeFile(join(directory, 'metrics-before.txt'), before.raw, { flag: 'wx' });
+    if (options.captureInterface) {
+      const captureLog = join(directory, 'capture.log');
+      const captureArgs = captureArguments(options, directory);
+      await json(join(directory, 'capture-invocation.json'), { command: 'tcpdump', args: captureArgs,
+        limitations: `First ${captureArgs[captureArgs.indexOf('-c') + 1]} matching packets only; 64-byte snapshots, not full payloads. Check capture.log for kernel drops.` });
+      // Start only after our server owns the selected media port. Never elevate.
+      capture = await command('tcpdump', captureArgs, options.candidateRoot, cleanEnv(), captureLog);
+      let listening = false;
+      for (let i = 0; i < 100 && !capture.result; i++) {
+        listening = /listening on /.test(await readFile(captureLog, 'utf8'));
+        if (listening) break;
+        await delay(20);
+      }
+      if (!listening || capture.result) throw new Error('Loopback capture unavailable; see capture.log (no privileges were requested)');
+    }
+    const args = ['--server', origin.replace('http:', 'ws:') + '/ws', '--clients', String(scenario.clients),
+      '--rooms', String(scenario.rooms), '--room', `benchmark-${randomBytes(6).toString('hex')}`,
+      '--duration', String(options.duration), '--ramp-up', String(options.rampUp), '--warmup', String(options.warmup),
+      '--mode', scenario.mode, '--quality', '480p', '--fps', '30', '--max-audio', '4', '--max-video', '4',
+      '--output-dir', directory, '--run-label', name, '--server-revision', identity.revision,
+      '--generator-revision', manifest.generator.sourceIdentity, ...scenario.extra,
+      ...diagnostics.generatorArgs];
+    await json(join(directory, 'invocation.json'), { startedAt, variant, scenario, repetition, args, serverConfiguration: Object.fromEntries(Object.entries(env).filter(([k]) => !['METRICS_TOKEN', 'PATH', 'TMPDIR'].includes(k))) });
+    const start = performance.now();
+    generator = await command(options.generator, args, options.candidateRoot,
+      { ...cleanEnv(), RUST_LOG: diagnostics.generatorLog }, join(directory, 'generator.log'));
+    const deadline = (options.rampUp + options.warmup + options.duration + 135) * 1000;
+    while (!generator.result) {
+      if (server.result) throw new Error('Server exited during load');
+      if (capture?.result && capture.result.code !== 0) throw new Error(`Packet capture failed: ${JSON.stringify(capture.result)}`);
+      if (options.purpose !== 'diagnostic') {
+        const [serverSample, generatorSample] = await Promise.all([sample(server), sample(generator)]);
+        samples.push({ elapsedMs: performance.now() - start, server: serverSample, generator: generatorSample });
+      }
+      if (performance.now() - start > deadline) throw new Error('Outer generator deadline exceeded');
+      await delay(500);
+    }
+    await finishCapture(capture);
+    if (generator.result.code !== 0) throw new Error(`Generator failed: ${JSON.stringify(generator.result)}`);
+    const summary = JSON.parse(await readFile(join(directory, 'load_test_summary.json'), 'utf8'));
+    const timeoutMarker = await stat(join(directory, 'load_test_timeout.json')).then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; });
+    if (timeoutMarker || summary.schemaVersion !== 2 || !summary.run?.completed || !summary.run?.passed || summary.totalErrors || summary.failedConnections || summary.failedConsumers) throw new Error('Incomplete or failing generator report');
+    if (diagnostics.requireSnapshots && (summary.run.configuration?.diagnostics !== true || summary.diagnosticFailures !== 0)) throw new Error('Missing or failing generator diagnostics');
+    if (summary.run.provenance?.generatorBinarySha256 !== manifest.generator.binarySha256) throw new Error('Generator report does not match the frozen executable');
+    const finish = await metrics(origin, token); await writeFile(join(directory, 'metrics-finish.txt'), finish.raw, { flag: 'wx' });
+    let cleaned = false;
+    let final;
+    const cleanupStart = performance.now();
+    for (let i = 0; i < 80 && !server.result; i++) {
+      final = await metrics(origin, token);
+      cleaned = ['connections', 'rooms', 'participants'].every(k => final.values[`simplestchat_${k}_active`] === 0);
+      if (cleaned) break;
+      await delay(500);
+    }
+    if (!cleaned || server.result) throw new Error('Server room/session cleanup did not complete within40 seconds');
+    await writeFile(join(directory, 'metrics-cleanup.txt'), final.raw, { flag: 'wx' });
+    if (options.purpose === 'diagnostic') {
+      const row = { purpose: 'diagnostic', diagnosticDetail: options.diagnosticDetail, scenario: scenario.name, variant, repetition, startedAt,
+        completedAt: new Date().toISOString(), cleanupMs: performance.now() - cleanupStart,
+        media: { validatedConsumers: summary.validatedConsumers, failedConsumers: summary.failedConsumers,
+          skippedShortLivedConsumers: summary.skippedShortLivedConsumers } };
+      await json(join(directory, 'result.json'), row);
+      console.log(`PASS diagnostic ${name}: ${summary.validatedConsumers} validated consumers; no performance comparison`);
+      return row;
+    }
+    const windowStart = (options.rampUp + options.warmup) * 1000;
+    const windowEnd = windowStart + options.duration * 1000;
+    const serverResources = resourceSummary(samples, 'server', windowStart, windowEnd);
+    const generatorResources = resourceSummary(samples, 'generator', windowStart, windowEnd);
+    const row = { scenario: scenario.name, variant, repetition, startedAt, completedAt: new Date().toISOString(),
+      joinP99Ms: summary.p99ConnectionTimeMs, sendReadyP99Ms: summary.sendMediaReady.p99Ms,
+      receiveReadyP99Ms: summary.receiveMediaReady.p99Ms,
+      receivedPacketsPerSecond: summary.measurement.packetsReceived / (summary.measurement.durationMs / 1000),
+      serverCpuPercent: serverResources.cpuPercentOfOneCore, serverPeakRssMiB: serverResources.peakRssMiB,
+      generatorCpuPercent: generatorResources.cpuPercentOfOneCore, generatorPeakRssMiB: generatorResources.peakRssMiB,
+      cleanupMs: performance.now() - cleanupStart, serverResources, generatorResources,
+      media: { validatedConsumers: summary.validatedConsumers, failedConsumers: summary.failedConsumers, skippedShortLivedConsumers: summary.skippedShortLivedConsumers } };
+    await json(join(directory, 'result.json'), row);
+    console.log(`PASS ${name}: joinP99=${row.joinP99Ms}ms serverCPU=${row.serverCpuPercent.toFixed(1)}% RSS=${row.serverPeakRssMiB.toFixed(1)}MiB`);
+    return row;
+  } catch (error) {
+    await json(join(directory, 'failure.json'), { startedAt, error: error.stack, server: server?.result, generator: generator?.result });
+    throw error;
+  } finally {
+    // Failure must not discard the owned server's last observable state.
+    if (server && !server.result) {
+      try {
+        const last = await metrics(origin, token);
+        await writeFile(join(directory, 'metrics-stop.txt'), last.raw, { flag: 'wx' });
+      } catch (error) {
+        console.error(`Final metrics unavailable for ${name}: ${error.message}`);
+      }
+    }
+    await stop(generator); await stop(capture); await stop(server);
+    if (capture) await json(join(directory, 'capture-exit.json'), capture.result);
+    await json(join(directory, 'resources.json'), samples);
+  }
+}
+
+export function parseOptions(args) {
+  const raw = {};
+  const keys = new Set(['baseline-root', 'baseline-bin', 'candidate-root', 'candidate-bin', 'generator', 'generator-source-root', 'output', 'clients', 'duration', 'warmup', 'ramp-up', 'repetitions', 'workers', 'port', 'udp-port', 'scenarios', 'purpose', 'capture-interface', 'diagnostic-detail']);
+  for (let i = 0; i < args.length; i += 2) {
+    const key = args[i]?.replace(/^--/, '');
+    if (!args[i]?.startsWith('--') || !keys.has(key) || !args[i + 1] || args[i + 1].startsWith('--') || raw[key]) throw new Error(`Unknown, duplicate or incomplete option: ${args[i]}`);
+    raw[key] = args[i + 1];
+  }
+  const options = {};
+  for (const key of ['baseline-root', 'baseline-bin', 'candidate-root', 'candidate-bin', 'generator', 'output']) {
+    if (!raw[key]) throw new Error(`Required: --${key}`);
+    options[key.replace(/-([a-z])/g, (_, l) => l.toUpperCase())] = resolve(raw[key]);
+  }
+  options.generatorSourceRoot = resolve(raw['generator-source-root'] ?? options.candidateRoot);
+  options.purpose = raw.purpose ?? 'performance';
+  if (!['performance', 'diagnostic'].includes(options.purpose)) throw new Error('--purpose must be performance or diagnostic');
+  options.captureInterface = raw['capture-interface'];
+  if (options.captureInterface && (options.purpose !== 'diagnostic' || !['lo', 'lo0'].includes(options.captureInterface))) {
+    throw new Error('--capture-interface requires --purpose diagnostic and lo/lo0');
+  }
+  options.diagnosticDetail = raw['diagnostic-detail'] ?? 'full';
+  if (!['full', 'capture-only'].includes(options.diagnosticDetail) ||
+      (raw['diagnostic-detail'] && options.purpose !== 'diagnostic') ||
+      (options.diagnosticDetail === 'capture-only' && !options.captureInterface)) {
+    throw new Error('--diagnostic-detail must be full or capture-only in diagnostic mode; capture-only requires --capture-interface');
+  }
+  for (const [key, fallback, minimum, maximum] of [['duration', 60, 3, 180], ['warmup', 10, 2, 60], ['ramp-up', 5, 1, 600], ['repetitions', 3, 1, 5], ['workers', 1, 1, 4], ['port', 3129, 1024, 65535], ['udp-port', 41100, 1024, 65531]]) {
+    const value = Number(raw[key] ?? fallback);
+    if (!Number.isInteger(value) || value < minimum || value > maximum) throw new Error(`--${key} must be ${minimum}–${maximum}`);
+    options[key.replace(/-([a-z])/g, (_, l) => l.toUpperCase())] = value;
+  }
+  options.clients = (raw.clients ?? '10').split(',').map(Number);
+  if (!options.clients.length || options.clients.some(v => !Number.isInteger(v) || v < 2 || v > 100) || new Set(options.clients).size !== options.clients.length) throw new Error('--clients must be unique counts between2 and100');
+  const scenarios = (raw.scenarios ?? 'conference').split(',');
+  if (scenarios.some(s => !['conference', 'multi-room', 'webinar', 'audio', 'churn'].includes(s)) || new Set(scenarios).size !== scenarios.length) throw new Error('Unknown/duplicate scenario');
+  options.scenarios = options.clients.flatMap(clients => scenarios.map(name => ({ name: `${name}-${clients}`, clients,
+    rooms: name === 'multi-room' ? Math.min(4, Math.floor(clients / 2)) : 1,
+    mode: name === 'webinar' ? 'webinar' : 'conference', extra: name === 'audio' ? ['--audio-only'] : name === 'churn' ? ['--churn-rate', String(Math.ceil(clients / 5) / options.duration)] : [] })));
+  for (const scenario of options.scenarios) {
+    // Preserve server admission safeguards: at most30 joins/IP and10 joins/room/IP
+    // in each60-second window. Raising WS upgrade limits does not raise these.
+    const spacing = Math.max(scenario.clients > 30 ? 60.5 / 30 : 0,
+      Math.ceil(scenario.clients / scenario.rooms) > 10 ? 60.5 / (10 * scenario.rooms) : 0);
+    const minimumRamp = Math.ceil(spacing * scenario.clients);
+    if (options.rampUp < minimumRamp) throw new Error(`${scenario.name} exceeds loopback join admission limits; use --ramp-up ${minimumRamp} or a smaller/multi-room workload`);
+    if (scenario.extra.includes('--churn-rate') && scenario.clients >= 10) throw new Error('Use fewer than10 local clients for churn; reconnects also consume the room/IP join budget');
+  }
+  return options;
+}
+
+async function main() {
+  const options = parseOptions(process.argv.slice(2));
+  await mkdir(options.output, { recursive: false, mode: 0o700 });
+  const generatorSources = await Promise.all(['load_tests/bin/load_test.rs', 'load_tests/clients/metrics.rs', 'load_tests/clients/measurement.rs', 'load_tests/clients/media_generator.rs', 'load_tests/clients/webrtc_client.rs'].map(file => readFile(join(options.generatorSourceRoot, file))));
+  const manifest = { schemaVersion: 1, startedAt: new Date().toISOString(), options,
+    environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, memoryBytes: os.totalmem(), node: process.version, loadAverageBefore: os.loadavg() },
+    servers: { baseline: await identity(options.baselineRoot, options.baselineBin), candidate: await identity(options.candidateRoot, options.candidateBin) },
+    generator: { binary: options.generator, binarySha256: hash(await readFile(options.generator)), sourceRoot: options.generatorSourceRoot, sourceIdentity: `sha256:${hash(Buffer.concat(generatorSources))}` },
+    orchestratorSha256: hash(await readFile(new URL(import.meta.url))),
+    limitations: ['Co-located server/generator: not production capacity.', 'Diagnostic runs skip resource sampling and never produce performance comparisons; full diagnostics change logging, while capture-only retains error-only logs.', 'ps sampled every~500ms in performance mode; RSS is sampled peak and CPU is total user+system for each process, including in-process media workers.', 'CPU window excludes first/last partial sampling intervals. Process launch/hash overhead causes a small offset from the generator clock; no child-process resource attribution.', 'Synthetic queued RTP is not confirmed egress; receive counts do not measure loss without expected fan-out.', 'Latency/CPU differences are descriptive, not an established regression budget.'] };
+  await json(join(options.output, 'manifest.json'), manifest);
+  const rows = [];
+  try {
+    for (const scenario of options.scenarios) for (let rep = 1; rep <= options.repetitions; rep++) {
+      for (const variant of rep % 2 ? ['baseline', 'candidate'] : ['candidate', 'baseline']) rows.push(await runOne(options, variant, scenario, rep, manifest));
+    }
+    await json(join(options.output, 'comparison.json'), { purpose: options.purpose, completed: true, passed: true, rows,
+      comparison: options.purpose === 'diagnostic' ? null : comparison(rows) });
+  } catch (error) {
+    await json(join(options.output, 'comparison.json'), { purpose: options.purpose, completed: false, passed: false, rows, error: error.stack });
+    throw error;
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { for (const child of children) await stop(child); process.exit(signal === 'SIGINT' ? 130 : 143); });
+  main().catch(error => { console.error(error.message); process.exitCode = 1; });
+}

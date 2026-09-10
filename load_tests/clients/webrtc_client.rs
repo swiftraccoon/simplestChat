@@ -16,7 +16,8 @@ use webrtc::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
     RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceConnectionState, RTCPeerConnectionState,
-    RTCSessionDescription, Registry, register_default_interceptors,
+    RTCSessionDescription, RTCStatsReportEntry, Registry, StatsSelector,
+    register_default_interceptors,
 };
 use webrtc::rtp_transceiver::{RTCRtpTransceiverDirection, RTCRtpTransceiverInit};
 
@@ -26,6 +27,8 @@ struct TransportEvents {
     metrics: Option<Arc<super::metrics::MetricsCollector>>,
     cancellation: tokio::sync::watch::Receiver<bool>,
     connection_state: tokio::sync::watch::Sender<RTCPeerConnectionState>,
+    is_send: bool,
+    diagnostic_attempt: usize,
 }
 
 async fn wait_for_connected(
@@ -41,7 +44,10 @@ async fn wait_for_connected(
                 }
                 _ => {}
             }
-            state.changed().await.context("Media transport state channel closed")?;
+            state
+                .changed()
+                .await
+                .context("Media transport state channel closed")?;
         }
     })
     .await
@@ -66,6 +72,26 @@ async fn next_track_event<T>(
 impl PeerConnectionEventHandler for TransportEvents {
     async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
         self.connection_state.send_replace(state);
+        if let Some(metrics) = &self.metrics {
+            if metrics.diagnostics_enabled() {
+                metrics.diagnostic_event_for_attempt(
+                    self.diagnostic_attempt,
+                    "peer-state",
+                    serde_json::json!({
+                        "transportId": self.transport_id,
+                        "direction": if self.is_send { "send" } else { "receive" },
+                        "state": state.to_string(),
+                        "intentionalClose": *self.cancellation.borrow(),
+                    }),
+                );
+            }
+            if state == RTCPeerConnectionState::Connected {
+                metrics.mark_media_ready(self.is_send);
+            }
+            if state == RTCPeerConnectionState::Failed && !*self.cancellation.borrow() {
+                metrics.record_error(format!("Media transport {} failed", self.transport_id));
+            }
+        }
         match state {
             RTCPeerConnectionState::Connected => info!(
                 "{}: Transport {} connected",
@@ -86,6 +112,18 @@ impl PeerConnectionEventHandler for TransportEvents {
     }
 
     async fn on_ice_connection_state_change(&self, state: RTCIceConnectionState) {
+        if let Some(metrics) = &self.metrics {
+            if metrics.diagnostics_enabled() {
+                metrics.diagnostic_event_for_attempt(
+                    self.diagnostic_attempt,
+                    "ice-state",
+                    serde_json::json!({
+                        "transportId": self.transport_id,
+                        "state": state.to_string(),
+                    }),
+                );
+            }
+        }
         debug!(
             "{}: Transport {} ICE state: {:?}",
             self.client_id, self.transport_id, state
@@ -95,6 +133,17 @@ impl PeerConnectionEventHandler for TransportEvents {
     async fn on_track(&self, track: Arc<dyn TrackRemote>) {
         let client_id = self.client_id.clone();
         let metrics = self.metrics.clone();
+        let transport_id = self.transport_id.clone();
+        let diagnostic_attempt = self.diagnostic_attempt;
+        if let Some(metrics) = &metrics {
+            if metrics.diagnostics_enabled() {
+                metrics.diagnostic_event_for_attempt(
+                    diagnostic_attempt,
+                    "track-callback",
+                    serde_json::json!({"transportId": transport_id}),
+                );
+            }
+        }
         let mut cancellation = self.cancellation.clone();
         // Return promptly: event dispatch must not wait for a track's lifetime.
         tokio::spawn(async move {
@@ -106,8 +155,19 @@ impl PeerConnectionEventHandler for TransportEvents {
                         if let Some(metrics) = &metrics {
                             if count == 1 {
                                 metrics.mark_first_media_received();
+                                if metrics.diagnostics_enabled() {
+                                    metrics.diagnostic_event_for_attempt(
+                                        diagnostic_attempt,
+                                        "track-first-rtp",
+                                        serde_json::json!({
+                                            "transportId": transport_id,
+                                            "ssrc": packet.header.ssrc,
+                                            "payloadType": packet.header.payload_type,
+                                        }),
+                                    );
+                                }
                             }
-                            metrics.record_packet_received(packet.payload.len());
+                            metrics.record_rtp_received(packet.header.ssrc, packet.payload.len());
                         }
                         if count % 500 == 0 {
                             debug!(
@@ -116,7 +176,15 @@ impl PeerConnectionEventHandler for TransportEvents {
                             );
                         }
                     }
-                    TrackRemoteEvent::OnEnded | TrackRemoteEvent::OnError => break,
+                    TrackRemoteEvent::OnError => {
+                        if !*cancellation.borrow() {
+                            if let Some(metrics) = &metrics {
+                                metrics.record_error("Remote RTP track error".into());
+                            }
+                        }
+                        break;
+                    }
+                    TrackRemoteEvent::OnEnded => break,
                     _ => {}
                 }
             }
@@ -166,6 +234,7 @@ struct ConsumerInfo {
     ssrc: u32,
     mid_ext_id: Option<u16>,
     mid: usize,
+    server_mid: Option<u32>,
 }
 
 fn audio_codec() -> RTCRtpCodec {
@@ -290,9 +359,15 @@ impl WebRtcTransport {
         let handler = Arc::new(TransportEvents {
             client_id: client_id.clone(),
             transport_id: transport_id.clone(),
+            diagnostic_attempt: metrics
+                .as_ref()
+                .filter(|m| m.diagnostics_enabled())
+                .map(|m| m.diagnostic_attempt())
+                .unwrap_or(0),
             metrics,
             cancellation: cancellation_rx,
             connection_state: connection_state_tx,
+            is_send,
         });
         let peer_connection: Arc<dyn PeerConnection> = Arc::new(
             PeerConnectionBuilder::new()
@@ -549,6 +624,10 @@ impl WebRtcTransport {
             ssrc,
             mid_ext_id,
             mid,
+            server_mid: consumer_rtp_parameters
+                .mid
+                .as_ref()
+                .and_then(|mid| mid.parse().ok()),
         });
     }
 
@@ -647,6 +726,74 @@ impl WebRtcTransport {
         Arc::clone(&self.peer_connection)
     }
 
+    /// Lifetime RTC counters are diagnostic evidence, not steady-window metrics.
+    /// The caller bounds this entire operation, including peer/session locks.
+    async fn diagnostic_snapshot(&self) -> Result<serde_json::Value> {
+        let report = self
+            .peer_connection
+            .get_stats(std::time::Instant::now(), StatsSelector::None)
+            .await;
+        let mut stats = Vec::new();
+        let mut has_transport_stats = false;
+        for entry in report.iter() {
+            let value = match entry {
+                RTCStatsReportEntry::Transport(s) => {
+                    has_transport_stats = true;
+                    serde_json::to_value(s)?
+                }
+                RTCStatsReportEntry::IceCandidatePair(s) => serde_json::to_value(s)?,
+                RTCStatsReportEntry::LocalCandidate(s) => serde_json::to_value(s)?,
+                RTCStatsReportEntry::RemoteCandidate(s) => serde_json::to_value(s)?,
+                RTCStatsReportEntry::InboundRtp(s) => serde_json::to_value(s)?,
+                RTCStatsReportEntry::OutboundRtp(s) => serde_json::to_value(s)?,
+                RTCStatsReportEntry::RemoteInboundRtp(s) => serde_json::to_value(s)?,
+                RTCStatsReportEntry::RemoteOutboundRtp(s) => serde_json::to_value(s)?,
+                // Certificates are never serialized. Candidate addresses and
+                // credentials are removed by the explicit field allowlist.
+                _ => continue,
+            };
+            anyhow::ensure!(stats.len() < 512, "RTC diagnostic stats limit exceeded");
+            stats.push(sanitize_rtc_stat(&value));
+        }
+        anyhow::ensure!(
+            has_transport_stats,
+            "RTC diagnostic report omitted transport stats"
+        );
+        stats.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+        let local = self
+            .peer_connection
+            .local_description()
+            .await
+            .context("Diagnostic local SDP missing")?;
+        let remote = self
+            .peer_connection
+            .remote_description()
+            .await
+            .context("Diagnostic remote SDP missing")?;
+        let local_media = sanitize_sdp_media(&local.sdp);
+        let remote_media = sanitize_sdp_media(&remote.sdp);
+        anyhow::ensure!(
+            local_media.len() <= 256 && remote_media.len() <= 256 && self.consumers.len() <= 256,
+            "SDP diagnostic mapping limit exceeded"
+        );
+        Ok(serde_json::json!({
+            "transportId": self.transport_id,
+            "direction": if self.is_send { "send" } else { "receive" },
+            "connectionState": self.connection_state.borrow().to_string(),
+            "statsSource": "webrtc-rs-0.20/get_stats; lifetime, not measurement-window counters",
+            "stats": stats,
+            "localMedia": local_media,
+            "remoteMedia": remote_media,
+            "consumerMappings": self.consumers.iter().map(|c| serde_json::json!({
+                "kind": c.kind,
+                "ssrc": c.ssrc,
+                "localMid": c.mid,
+                "serverMid": c.server_mid,
+                "midExtensionId": c.mid_ext_id,
+            })).collect::<Vec<_>>(),
+        }))
+    }
+
     /// Get the SSRCs assigned by webrtc-rs for send tracks from the local SDP
     pub async fn get_send_ssrcs(&self) -> Result<(u32, u32)> {
         let local_desc = self
@@ -738,7 +885,7 @@ impl WebRtcSession {
             ice_candidates.clone(),
             dtls_parameters.clone(),
             true,
-            None, // send transport doesn't need metrics
+            self.metrics.clone(),
         )
         .await?;
 
@@ -854,6 +1001,21 @@ impl WebRtcSession {
         self.video_track.clone()
     }
 
+    pub async fn diagnostic_snapshot(&self) -> Result<serde_json::Value> {
+        let mut transports = Vec::new();
+        if let Some(transport) = &self.send_transport {
+            transports.push(transport.diagnostic_snapshot().await?);
+        }
+        if let Some(transport) = &self.recv_transport {
+            transports.push(transport.diagnostic_snapshot().await?);
+        }
+        anyhow::ensure!(
+            !transports.is_empty(),
+            "No transports for diagnostic snapshot"
+        );
+        Ok(serde_json::json!({"transports": transports}))
+    }
+
     /// Close all transports
     pub async fn close(&self) -> Result<()> {
         let mut result = Ok(());
@@ -868,6 +1030,127 @@ impl WebRtcSession {
         }
         result
     }
+}
+
+/// Explicit allowlist, rather than deleting today's known credential fields.
+/// Omit certificate entries at the call site as well. Candidate ports allow a
+/// loopback packet capture to be joined to a peer without exposing IP addresses.
+fn sanitize_rtc_stat(value: &serde_json::Value) -> serde_json::Value {
+    const FIELDS: &[&str] = &[
+        "id",
+        "type",
+        "timestamp",
+        "transportId",
+        "ssrc",
+        "kind",
+        "mid",
+        "packetsSent",
+        "packetsReceived",
+        "bytesSent",
+        "bytesReceived",
+        "headerBytesSent",
+        "headerBytesReceived",
+        "packetsLost",
+        "packetsDiscarded",
+        "jitter",
+        "lastPacketReceivedTimestamp",
+        "lastPacketSentTimestamp",
+        "iceRole",
+        "iceState",
+        "dtlsState",
+        "dtlsRole",
+        "selectedCandidatePairId",
+        "selectedCandidatePairChanges",
+        "state",
+        "nominated",
+        "localCandidateId",
+        "remoteCandidateId",
+        "currentRoundTripTime",
+        "totalRoundTripTime",
+        "roundTripTime",
+        "requestsReceived",
+        "requestsSent",
+        "responsesReceived",
+        "responsesSent",
+        "consentRequestsSent",
+        "packetsDiscardedOnSend",
+        "bytesDiscardedOnSend",
+        "nackCount",
+        "pliCount",
+        "firCount",
+        "port",
+        "protocol",
+        "candidateType",
+    ];
+    let mut fields: serde_json::Map<String, serde_json::Value> = FIELDS
+        .iter()
+        .filter_map(|field| {
+            value
+                .get(*field)
+                .map(|value| ((*field).to_string(), value.clone()))
+        })
+        .collect();
+    if let Some(loopback) = value
+        .get("address")
+        .and_then(|address| address.as_str())
+        .and_then(|address| address.parse::<std::net::IpAddr>().ok())
+        .map(|address| address.is_loopback())
+    {
+        fields.insert("isLoopback".into(), loopback.into());
+    }
+    serde_json::Value::Object(fields)
+}
+
+#[derive(Debug, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SdpMediaDiagnostic {
+    kind: String,
+    mid: Option<u32>,
+    direction: Option<String>,
+    payload_types: Vec<u8>,
+    ssrcs: Vec<u32>,
+}
+
+/// Never retain raw SDP lines: only numeric mappings and fixed media labels.
+fn sanitize_sdp_media(sdp: &str) -> Vec<SdpMediaDiagnostic> {
+    let mut media: Vec<SdpMediaDiagnostic> = Vec::new();
+    for line in sdp.lines() {
+        if let Some(mline) = line.strip_prefix("m=") {
+            let fields: Vec<_> = mline.split_whitespace().collect();
+            media.push(SdpMediaDiagnostic {
+                kind: match fields.first().copied() {
+                    Some("audio") => "audio",
+                    Some("video") => "video",
+                    _ => "other",
+                }
+                .to_string(),
+                payload_types: fields
+                    .iter()
+                    .skip(3)
+                    .filter_map(|pt| pt.parse::<u8>().ok())
+                    .collect(),
+                ..Default::default()
+            });
+        } else if let Some(section) = media.last_mut() {
+            if let Some(mid) = line.strip_prefix("a=mid:") {
+                section.mid = mid.parse().ok();
+            } else if matches!(
+                line,
+                "a=sendonly" | "a=recvonly" | "a=sendrecv" | "a=inactive"
+            ) {
+                section.direction = Some(line[2..].to_string());
+            } else if let Some(ssrc) = line
+                .strip_prefix("a=ssrc:")
+                .and_then(|value| value.split_whitespace().next())
+                .and_then(|value| value.parse::<u32>().ok())
+            {
+                if !section.ssrcs.contains(&ssrc) {
+                    section.ssrcs.push(ssrc);
+                }
+            }
+        }
+    }
+    media
 }
 
 /// Extract DTLS fingerprint from SDP
@@ -1024,22 +1307,434 @@ fn hex_encode(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod migration_tests {
     use super::*;
+    use futures_util::FutureExt;
     use std::time::Duration;
     use webrtc::media_stream::Track;
+
+    struct LoopbackSenderEvents {
+        state: tokio::sync::watch::Sender<RTCPeerConnectionState>,
+        gathered: tokio::sync::watch::Sender<bool>,
+    }
+
+    #[async_trait::async_trait]
+    impl PeerConnectionEventHandler for LoopbackSenderEvents {
+        async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+            self.state.send_replace(state);
+        }
+
+        async fn on_ice_gathering_state_change(
+            &self,
+            state: webrtc::peer_connection::RTCIceGatheringState,
+        ) {
+            if state == webrtc::peer_connection::RTCIceGatheringState::Complete {
+                self.gathered.send_replace(true);
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct LoopbackTrack {
+        track: Arc<TrackLocalStaticRTP>,
+        kind: MediaKind,
+        ssrc: u32,
+        queued: Arc<std::sync::atomic::AtomicU64>,
+    }
+
+    async fn add_loopback_track(
+        peer: &Arc<dyn PeerConnection>,
+        index: usize,
+    ) -> Result<LoopbackTrack> {
+        let (kind, codec_kind, codec) = if index % 2 == 0 {
+            (MediaKind::Audio, RtpCodecKind::Audio, audio_codec())
+        } else {
+            (MediaKind::Video, RtpCodecKind::Video, video_codec())
+        };
+        let ssrc = 10_000 + index as u32;
+        let track = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
+            format!("loopback-stream-{index}"),
+            format!("loopback-track-{index}"),
+            "test RTP".into(),
+            codec_kind,
+            vec![RTCRtpEncodingParameters {
+                rtp_coding_parameters: RTCRtpCodingParameters {
+                    ssrc: Some(ssrc),
+                    ..Default::default()
+                },
+                codec,
+                ..Default::default()
+            }],
+        )));
+        peer.add_track(track.clone() as Arc<dyn TrackLocal>).await?;
+        anyhow::ensure!(track.ssrcs().await == vec![ssrc], "fixture SSRC changed");
+        Ok(LoopbackTrack {
+            track,
+            kind,
+            ssrc,
+            queued: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        })
+    }
+
+    fn loopback_ice_parameters(sdp: &str, ice_lite: bool) -> Result<IceParameters> {
+        let attribute = |prefix: &str| -> Result<String> {
+            Ok(sdp
+                .lines()
+                .find_map(|line| line.strip_prefix(prefix))
+                .context("fixture SDP omitted ICE parameters")?
+                .to_string())
+        };
+        Ok(IceParameters {
+            username_fragment: attribute("a=ice-ufrag:")?,
+            password: attribute("a=ice-pwd:")?,
+            ice_lite: Some(ice_lite),
+        })
+    }
+
+    fn loopback_packet_counts(
+        metrics: &super::super::metrics::MetricsCollector,
+    ) -> std::collections::HashMap<u32, u64> {
+        metrics
+            .generate_report()
+            .consumer_delivery
+            .into_iter()
+            .map(|consumer| (consumer.ssrc, consumer.packets_by_second.iter().sum()))
+            .collect()
+    }
+
+    async fn require_fresh_loopback_rtp(
+        metrics: &super::super::metrics::MetricsCollector,
+        tracks: &[LoopbackTrack],
+    ) -> Result<()> {
+        // Snapshot successful writer queues after renegotiation, not receiver
+        // counts: packets still in flight from before the update cannot satisfy
+        // this watermark. The fixture does not retransmit or reuse sequences.
+        let watermarks: Vec<_> = tracks
+            .iter()
+            .map(|track| {
+                (
+                    track.ssrc,
+                    track.queued.load(std::sync::atomic::Ordering::SeqCst),
+                )
+            })
+            .collect();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            let mut check = tokio::time::interval(Duration::from_millis(10));
+            loop {
+                check.tick().await;
+                let after = loopback_packet_counts(metrics);
+                if watermarks
+                    .iter()
+                    .all(|(ssrc, queued)| after.get(ssrc).copied().unwrap_or(0) >= queued + 5)
+                {
+                    return;
+                }
+            }
+        })
+        .await
+        .context("fresh RTP did not arrive on every negotiated SSRC")
+    }
+
+    /// Two real loopback peers check the generator's receive delivery, not
+    /// mediasoup interoperability, decoding quality, or server capacity.
+    #[tokio::test]
+    async fn receive_delivery_survives_incremental_consumer_renegotiation() {
+        let metrics = Arc::new(super::super::metrics::MetricsCollector::new(
+            "live-receiver".into(),
+        ));
+        metrics.begin_connection_attempt();
+        let mut source: Option<Arc<dyn PeerConnection>> = None;
+        let mut receiver: Option<WebRtcTransport> = None;
+        let mut writer: Option<tokio::task::JoinHandle<Result<()>>> = None;
+
+        // The sending fixture behaves as an ICE-lite/passive-DTLS endpoint,
+        // allowing the real parameter-to-SDP receive path to be used unchanged.
+        // Cleanup below runs after every Result error or elapsed deadline.
+        let outcome =
+            std::panic::AssertUnwindSafe(tokio::time::timeout(Duration::from_secs(20), async {
+                let mut engine = MediaEngine::default();
+                for (kind, codec, payload_type) in [
+                    (RtpCodecKind::Audio, audio_codec(), 111),
+                    (RtpCodecKind::Video, video_codec(), 96),
+                ] {
+                    engine.register_codec(
+                        RTCRtpCodecParameters {
+                            rtp_codec: codec,
+                            payload_type,
+                            ..Default::default()
+                        },
+                        kind,
+                    )?;
+                }
+                let mut settings =
+                    rtc::peer_connection::configuration::setting_engine::SettingEngine::default();
+                settings.set_lite(true);
+                let (source_state_tx, source_state) =
+                    tokio::sync::watch::channel(RTCPeerConnectionState::New);
+                let (gathered_tx, mut gathered) = tokio::sync::watch::channel(false);
+                let peer: Arc<dyn PeerConnection> = Arc::new(
+                    PeerConnectionBuilder::new()
+                        .with_media_engine(engine)
+                        .with_setting_engine(settings)
+                        .with_handler(Arc::new(LoopbackSenderEvents {
+                            state: source_state_tx,
+                            gathered: gathered_tx,
+                        }))
+                        .with_udp_addrs(vec!["127.0.0.1:0"])
+                        .build()
+                        .await?,
+                );
+                source = Some(peer.clone());
+                let mut tracks = vec![
+                    add_loopback_track(&peer, 0).await?,
+                    add_loopback_track(&peer, 1).await?,
+                ];
+                peer.set_local_description(peer.create_offer(None).await?)
+                    .await?;
+                while !*gathered.borrow_and_update() {
+                    gathered
+                        .changed()
+                        .await
+                        .context("fixture gathering stopped")?;
+                }
+                let description = peer
+                    .local_description()
+                    .await
+                    .context("fixture local SDP missing")?;
+                let source_ice = loopback_ice_parameters(&description.sdp, true)?;
+                let source_dtls = DtlsParameters {
+                    role: DtlsRole::Server,
+                    fingerprints: vec![extract_fingerprint_from_sdp(&description.sdp)?],
+                };
+                let stats = peer
+                    .get_stats(std::time::Instant::now(), StatsSelector::None)
+                    .await;
+                let candidate_port = stats
+                    .iter()
+                    .find_map(|entry| {
+                        if let RTCStatsReportEntry::LocalCandidate(candidate) = entry {
+                            (candidate.address.as_deref() == Some("127.0.0.1"))
+                                .then_some(candidate.port)
+                        } else {
+                            None
+                        }
+                    })
+                    .context("fixture did not gather its loopback candidate")?;
+                anyhow::ensure!(candidate_port > 0, "fixture candidate has no port");
+                let mut source_candidate = candidate("127.0.0.1");
+                source_candidate.port = candidate_port;
+
+                let (recv, recv_dtls) = WebRtcTransport::new(
+                    "live-receiver".into(),
+                    "live-recv-transport".into(),
+                    source_ice.clone(),
+                    vec![source_candidate],
+                    source_dtls.clone(),
+                    false,
+                    Some(metrics.clone()),
+                )
+                .await?;
+                receiver = Some(recv);
+                let recv = receiver.as_mut().unwrap();
+                let recv_description = recv
+                    .peer_connection
+                    .local_description()
+                    .await
+                    .context("receiver local SDP missing")?;
+                let recv_ice = loopback_ice_parameters(&recv_description.sdp, false)?;
+                peer.set_remote_description(RTCSessionDescription::answer(generate_remote_sdp(
+                    &recv_ice,
+                    &recv_dtls,
+                    true,
+                    &[],
+                )?)?)
+                .await?;
+                recv.set_remote_description(&source_ice, &source_dtls)
+                    .await?;
+                wait_for_connected(source_state.clone(), Duration::from_secs(5)).await?;
+                wait_for_connected(recv.connection_state.clone(), Duration::from_secs(5)).await?;
+
+                let (active_tx, active_rx) =
+                    tokio::sync::watch::channel(Vec::<LoopbackTrack>::new());
+                writer = Some(tokio::spawn(async move {
+                    let mut pace = tokio::time::interval(Duration::from_millis(10));
+                    pace.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                    let mut sequence = 0_u16;
+                    loop {
+                        pace.tick().await;
+                        sequence = sequence.wrapping_add(1);
+                        let active = active_rx.borrow().clone();
+                        for track in active {
+                            track
+                                .track
+                                .write_rtp(rtc::rtp::Packet {
+                                    header: rtc::rtp::Header {
+                                        version: 2,
+                                        payload_type: if track.kind == MediaKind::Audio {
+                                            111
+                                        } else {
+                                            96
+                                        },
+                                        sequence_number: sequence,
+                                        timestamp: u32::from(sequence) * 480,
+                                        ssrc: track.ssrc,
+                                        ..Default::default()
+                                    },
+                                    payload: vec![0x10, 0x00, 0x01].into(),
+                                })
+                                .await?;
+                            track
+                                .queued
+                                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        }
+                    }
+                }));
+
+                for target in [2, 4, 6, 8] {
+                    let previous = recv.consumers.len();
+                    while tracks.len() < target {
+                        tracks.push(add_loopback_track(&peer, tracks.len()).await?);
+                    }
+                    for track in &tracks[previous..] {
+                        metrics.record_consumer(
+                            &format!("consumer-{}", track.ssrc),
+                            &format!("producer-{}", track.ssrc),
+                            track.ssrc,
+                        );
+                        recv.add_consumer_info(
+                            track.kind,
+                            &RtpParameters {
+                                encodings: vec![RtpEncodingParameters {
+                                    ssrc: Some(track.ssrc),
+                                    ..Default::default()
+                                }],
+                                ..Default::default()
+                            },
+                        );
+                    }
+                    if target > 2 {
+                        // Previously active tracks keep sending throughout both
+                        // peers' incremental offer/answer updates.
+                        peer.set_local_description(peer.create_offer(None).await?)
+                            .await?;
+                        peer.set_remote_description(RTCSessionDescription::answer(
+                            generate_remote_sdp(&recv_ice, &recv_dtls, true, &recv.consumers)?,
+                        )?)
+                        .await?;
+                    }
+                    recv.renegotiate_consumers().await?;
+                    active_tx.send_replace(tracks.clone());
+                    require_fresh_loopback_rtp(&metrics, &tracks).await?;
+                    anyhow::ensure!(
+                        *source_state.borrow() == RTCPeerConnectionState::Connected
+                            && *recv.connection_state.borrow() == RTCPeerConnectionState::Connected,
+                        "renegotiation changed the connected transport state"
+                    );
+                }
+                // Reapplying unchanged mappings must preserve existing track readers.
+                recv.renegotiate_consumers().await?;
+                require_fresh_loopback_rtp(&metrics, &tracks).await?;
+                anyhow::ensure!(
+                    metrics.generate_report().errors.is_empty(),
+                    "receive path recorded an error"
+                );
+                Ok::<(), anyhow::Error>(())
+            }))
+            .catch_unwind()
+            .await;
+
+        let writer_result = if let Some(task) = writer {
+            task.abort();
+            Some(tokio::time::timeout(Duration::from_secs(2), task).await)
+        } else {
+            None
+        };
+        let receiver_closed = tokio::time::timeout(Duration::from_secs(2), async {
+            if let Some(peer) = &receiver {
+                peer.close().await?;
+            }
+            Ok::<(), anyhow::Error>(())
+        })
+        .await;
+        let source_closed = tokio::time::timeout(Duration::from_secs(2), async {
+            if let Some(peer) = &source {
+                peer.close().await?;
+            }
+            Ok::<(), anyhow::Error>(())
+        })
+        .await;
+
+        receiver_closed
+            .expect("receiver cleanup deadline")
+            .expect("receiver cleanup failed");
+        source_closed
+            .expect("sender cleanup deadline")
+            .expect("sender cleanup failed");
+        if let Some(result) = writer_result {
+            match result.expect("writer cleanup deadline") {
+                Ok(result) => result.expect("RTP writer failed"),
+                Err(error) => assert!(error.is_cancelled(), "RTP writer panicked: {error}"),
+            }
+        }
+        let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+        outcome
+            .expect("live renegotiation test deadline")
+            .expect("live renegotiation failed");
+    }
+
+    #[test]
+    fn diagnostics_sanitize_sdp_and_stats_using_allowlists() {
+        let sdp = "v=0\r\na=ice-ufrag:secret-ufrag\r\na=ice-pwd:secret-password\r\na=fingerprint:sha-256 secret-fingerprint\r\n\
+            m=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=mid:0\r\na=recvonly\r\na=ssrc:123 cname:secret-cname\r\na=ssrc:123 msid:secret-msid\r\n\
+            a=candidate:secret-candidate\r\nm=video 9 UDP/TLS/RTP/SAVPF 96 97\r\na=mid:1\r\na=sendonly\r\na=ssrc:456 cname:secret-cname\r\n";
+        let media = serde_json::to_value(sanitize_sdp_media(sdp)).unwrap();
+        assert_eq!(media[0]["mid"], 0);
+        assert_eq!(media[0]["ssrcs"], serde_json::json!([123]));
+        assert_eq!(media[1]["payloadTypes"], serde_json::json!([96, 97]));
+        assert!(!media.to_string().contains("secret"));
+        let stats = sanitize_rtc_stat(&serde_json::json!({
+            "id": "transport", "type": "transport", "packetsReceived": 42,
+            "dtlsState": "connected", "iceLocalUsernameFragment": "secret-ufrag",
+            "password": "secret-password", "localCertificateId": "secret-fingerprint",
+            "address": "secret-address", "futureCredentialField": "secret-future",
+        }));
+        assert_eq!(stats["packetsReceived"], 42);
+        assert_eq!(stats["dtlsState"], "connected");
+        assert_eq!(stats.as_object().unwrap().len(), 4);
+        assert!(!stats.to_string().contains("secret"));
+        let candidate = sanitize_rtc_stat(&serde_json::json!({
+            "id": "candidate-1", "type": "local-candidate", "address": "127.0.0.1",
+            "port": 45678, "protocol": "udp", "candidateType": "host",
+            "usernameFragment": "secret-ufrag", "url": "secret-url",
+        }));
+        assert_eq!(candidate["port"], 45678);
+        assert_eq!(candidate["isLoopback"], true);
+        assert!(!candidate.to_string().contains("127.0.0.1"));
+        assert!(!candidate.to_string().contains("secret"));
+    }
 
     #[tokio::test]
     async fn media_readiness_requires_connected_and_rejects_timeout_or_failure() {
         let (state, receiver) = tokio::sync::watch::channel(RTCPeerConnectionState::New);
-        assert!(wait_for_connected(receiver.clone(), Duration::from_millis(5)).await.is_err());
+        assert!(
+            wait_for_connected(receiver.clone(), Duration::from_millis(5))
+                .await
+                .is_err()
+        );
         let pending = tokio::spawn(wait_for_connected(receiver.clone(), Duration::from_secs(1)));
         state.send_replace(RTCPeerConnectionState::Connecting);
         tokio::task::yield_now().await;
         assert!(!pending.is_finished());
         state.send_replace(RTCPeerConnectionState::Connected);
         pending.await.unwrap().unwrap();
-        for terminal in [RTCPeerConnectionState::Failed, RTCPeerConnectionState::Closed] {
+        for terminal in [
+            RTCPeerConnectionState::Failed,
+            RTCPeerConnectionState::Closed,
+        ] {
             state.send_replace(terminal);
-            assert!(wait_for_connected(receiver.clone(), Duration::from_secs(1)).await.is_err());
+            assert!(
+                wait_for_connected(receiver.clone(), Duration::from_secs(1))
+                    .await
+                    .is_err()
+            );
         }
     }
 
@@ -1168,6 +1863,19 @@ mod migration_tests {
             transport.add_consumer_info(MediaKind::Video, &rtp(4444));
             transport.renegotiate_consumers().await.unwrap();
             assert_eq!(transport.recv_transceiver_count, 4);
+            let snapshot = transport.diagnostic_snapshot().await.unwrap();
+            assert_eq!(snapshot["transportId"], "receive-transport");
+            assert_eq!(snapshot["consumerMappings"].as_array().unwrap().len(), 4);
+            assert_eq!(snapshot["remoteMedia"].as_array().unwrap().len(), 4);
+            assert!(
+                snapshot["stats"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|s| s["type"] == "transport")
+            );
+            assert!(!snapshot.to_string().contains("testufrag"));
+            assert!(!snapshot.to_string().contains("test-password"));
             let answer = generate_remote_sdp(&ice, &dtls, false, &transport.consumers).unwrap();
             assert_eq!(answer.matches("m=audio ").count(), 2);
             assert_eq!(answer.matches("m=video ").count(), 2);

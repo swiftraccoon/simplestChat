@@ -1,21 +1,22 @@
-use std::time::Duration;
-use std::num::{NonZeroU32, NonZeroU8};
 use mediasoup::prelude::*;
+use std::num::{NonZeroU8, NonZeroU32};
+use std::time::Duration;
 
 /// Configuration for synthetic media generation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MediaConfig {
     pub audio_enabled: bool,
     pub video_enabled: bool,
-    pub audio_codec: String,      // "opus"
-    pub video_codec: String,      // "VP8" or "H264"
-    pub audio_sample_rate: u32,   // 48000 Hz
-    pub audio_channels: u8,       // 1 or 2
-    pub audio_bitrate_kbps: u32,  // 128 (high-quality Opus)
-    pub video_width: u32,         // 640, 1280, etc.
-    pub video_height: u32,        // 480, 720, etc.
-    pub video_fps: u8,            // 30
-    pub video_bitrate_kbps: u32,  // 500, 1000, etc.
+    pub audio_codec: String,     // "opus"
+    pub video_codec: String,     // "VP8" or "H264"
+    pub audio_sample_rate: u32,  // 48000 Hz
+    pub audio_channels: u8,      // 1 or 2
+    pub audio_bitrate_kbps: u32, // 128 (high-quality Opus)
+    pub video_width: u32,        // 640, 1280, etc.
+    pub video_height: u32,       // 480, 720, etc.
+    pub video_fps: u8,           // 30
+    pub video_bitrate_kbps: u32, // 500, 1000, etc.
 }
 
 impl Default for MediaConfig {
@@ -119,7 +120,10 @@ impl MediaGenerator {
     }
 
     /// Generate RTP parameters for audio producer
-    pub fn generate_audio_rtp_parameters(&self, _router_caps: &RtpCapabilitiesFinalized) -> RtpParameters {
+    pub fn generate_audio_rtp_parameters(
+        &self,
+        _router_caps: &RtpCapabilitiesFinalized,
+    ) -> RtpParameters {
         // Use standard Opus parameters
         RtpParameters {
             mid: None,
@@ -142,7 +146,10 @@ impl MediaGenerator {
     }
 
     /// Generate RTP parameters for video producer
-    pub fn generate_video_rtp_parameters(&self, _router_caps: &RtpCapabilitiesFinalized) -> RtpParameters {
+    pub fn generate_video_rtp_parameters(
+        &self,
+        _router_caps: &RtpCapabilitiesFinalized,
+    ) -> RtpParameters {
         // Use standard VP8/H264 parameters
         let codec_params = if self.config.video_codec == "VP8" {
             RtpCodecParameters::Video {
@@ -208,7 +215,7 @@ impl MediaGenerator {
         packet.extend_from_slice(&[0xBE, 0xDE, 0x00, 0x01]);
         // MID extension: ID=1, L=0 (1 byte value), value='0' (audio mid)
         packet.push(0x10); // (ID=1 << 4) | (length-1=0)
-        packet.push(b'0');  // mid value "0" for audio m-section
+        packet.push(b'0'); // mid value "0" for audio m-section
         packet.push(0x00); // padding
         packet.push(0x00); // padding
 
