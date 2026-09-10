@@ -2,7 +2,14 @@
 /target
 /reference/
 /results
-/docs/
+# Publish only shared guides; existing local plans stay private.
+/docs/*
+!/docs/development.md
+!/docs/deployment.md
+!/docs/configuration.md
+!/docs/testing.md
+!/docs/performance.md
+!/docs/performance-results.md
 /build.log
 web/node_modules
 web/dist
@@ -18,6 +25,8 @@ web/e2e/artifacts
 *.p12
 *.pfx
 /scripts/
-/CLAUDE.md
+# Agent instructions are intentionally local at every directory level.
+CLAUDE.md
+CLAUDE.local.md
 /.cargo/
 /.claude/

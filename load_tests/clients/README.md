@@ -9,6 +9,7 @@ Real WebRTC client using webrtc-rs 0.20's async Sans-I/O driver that establishes
 | `webrtc_client.rs` | `WebRtcTransport` + `WebRtcSession` - PeerConnection management |
 | `media_generator.rs` | RTP packet generation (Opus audio, VP8 video) |
 | `metrics.rs` | Thread-safe atomic metrics collection |
+| `measurement.rs` | Shared measurement interval, per-attempt readiness, consumer delivery |
 | `mod.rs` | Module exports |
 
 ## How It Works
@@ -47,9 +48,21 @@ unmatched SSRC automatically.
 
 **Send readiness**: `write_rtp` queues work instead of waiting for the network
 handshake. Publishers wait for the connection's `Connected` event before
-generating media or starting the session timer. A failed/closed transport or a
+generating media. All clients share one ramp/warmup/measurement clock, rather than
+starting independent session timers after setup. A failed/closed transport or a
 ten-second setup timeout is an error; an ICE/DTLS setup failure is not counted
 as a successful media run.
+
+**Measurements**: Room admission and actual send/receive ICE/DTLS readiness are
+separate, per-attempt observations. Exact millisecond histograms preserve every
+operation when computing aggregate percentiles. The shared window excludes ramp
+and warmup from throughput counters; lifetime `Sent` counters mean accepted by
+the local RTP writer, not confirmed egress. Received media counts only real RTP
+events, never signaling binary frames. Per-consumer SSRC buckets detect sustained
+stalls while respecting caps and the generated publishers' intentional lifetimes.
+
+**Synthetic media**: The payload exercises forwarding, not a real browser encoder
+or decoder. Packet delivery cannot establish visual quality or browser capacity.
 
 **Local testing**: Loopback ICE candidates select an explicit same-family
 loopback UDP bind. Other candidates use a wildcard bind of the matching family.
@@ -82,6 +95,15 @@ session.renegotiate_consumers().await?;
 ```
 
 ## Debugging
+
+Prefer `--diagnostics` on a small, owned correctness run. It records bounded
+per-attempt pre-close RTC stats, sanitized SDP/SSRC mappings, candidate ports,
+connection-state history and consumer resume acknowledgments in the per-client
+JSON. No raw ICE credentials, candidate IPs or certificate fingerprints are
+retained. Capture failure is explicit and fails the run. See the
+[diagnostic report contract](../README.md#diagnosing-missing-media).
+This opt-in instrumentation is not a performance baseline. Broad debug logging
+below can include raw SDP/credentials; do not share those logs unredacted.
 
 ```bash
 # Run from the repository root after installing the pinned OpenSSL build as in
