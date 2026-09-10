@@ -10,13 +10,31 @@ permissions:
 
 jobs:
   rust:
-    name: Rust build + tests
+    name: Rust + PostgreSQL + browser integration
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
+    services:
+      postgres:
+        # Official image, pinned to the verified PostgreSQL 18.6 manifest.
+        image: docker.io/library/postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_USER: test_owner
+          POSTGRES_PASSWORD: disposable-ci-password
+          POSTGRES_DB: simplestchat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_owner -d simplestchat_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     env:
       # mediasoup-sys invokes pip from its Cargo build script.
       PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
       OPENSSL_STATIC: "1"
+      DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
+      DISPOSABLE_TEST_DATABASE: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,6 +55,23 @@ jobs:
           components: rustfmt
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check portable test helper syntax
+        run: bash -n build/with-test-server.sh build/test-container.sh
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/e2e/package-lock.json
+
+      - name: Test helper safety and cleanup
+        run: node --test build/tests/*.test.mjs load_tests/benchmark-local.test.mjs
 
       - name: Configure native dependency paths
         run: |
@@ -104,9 +139,57 @@ jobs:
       - name: Build load-test client
         run: cargo build --locked --features load-test --bin load_test
 
+      - name: Migrate disposable test database with the real server
+        run: build/with-test-server.sh true
+
+      # Include all three PostgreSQL tests, not only the default unit suite.
       # Serialize native media-worker and room-session integration tests.
-      - name: Test
-        run: cargo test --locked --all-features -- --test-threads=1
+      - name: Test (including PostgreSQL recovery, refresh and moderation)
+        run: cargo test --locked --all-features -- --include-ignored --test-threads=1
+
+      - name: Synthetic media delivery correctness smoke
+        timeout-minutes: 2
+        env:
+          RUST_LOG: warn
+          E2E_ARTIFACTS: ${{ runner.temp }}/media-smoke
+        run: |
+          build/with-test-server.sh target/debug/load_test \
+            --server ws://127.0.0.1:3119/ws --clients 4 --rooms 1 --mode conference \
+            --ramp-up 2 --warmup 10 --duration 8 --deadline-grace 20 \
+            --output-dir "${E2E_ARTIFACTS}" --run-label ci-media-smoke \
+            --server-revision "${GITHUB_SHA}" --generator-revision "${GITHUB_SHA}"
+
+      - name: Preserve media smoke diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: media-smoke
+          path: ${{ runner.temp }}/media-smoke
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Build UI and install pinned browser tooling
+        run: |
+          npm --prefix web ci --ignore-scripts
+          npm --prefix web run build
+          npm --prefix web/e2e ci --ignore-scripts
+          npm --prefix web/e2e exec -- playwright install --with-deps chromium
+          npm --prefix web/e2e audit --audit-level=moderate
+
+      - name: Community and real-media browser regressions
+        timeout-minutes: 8
+        env:
+          E2E_ARTIFACTS: ${{ runner.temp }}/community-e2e
+        run: build/with-test-server.sh npm --prefix web/e2e test
+
+      - name: Preserve browser diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: community-e2e
+          path: ${{ runner.temp }}/community-e2e
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Audit Rust dependencies
         run: |
@@ -229,3 +312,18 @@ jobs:
                 test -s "/app/migrations/${migration}"
               done
             ' verify-image "${migration_names[@]}"
+
+      - name: Production startup, migration and database-backed API smoke
+        timeout-minutes: 5
+        env:
+          CONTAINER_TEST_ARTIFACTS: ${{ runner.temp }}/container-smoke
+        run: build/test-container.sh
+
+      - name: Preserve container diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: container-smoke
+          path: ${{ runner.temp }}/container-smoke
+          if-no-files-found: ignore
+          retention-days: 7
