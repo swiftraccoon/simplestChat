@@ -1,6 +1,6 @@
 # Load Testing Infrastructure
 
-Real WebRTC load testing for the SimplestChat mediasoup server. Each synthetic client establishes genuine ICE/DTLS/RTP connections using webrtc-rs 0.17.
+Real WebRTC load testing for the SimplestChat mediasoup server. Each synthetic client establishes genuine ICE/DTLS/RTP connections using webrtc-rs 0.20.
 
 ## Components
 
@@ -119,7 +119,7 @@ This automatically:
 8. Produce (audio + video) → ProducerCreated
 9. Start sending RTP packets through webrtc-rs
 10. Handle ConsumerCreated events → SDP renegotiation → ResumeConsumer
-11. Receive RTP packets via on_track handler
+11. Receive RTP packet events via the async on_track handler
 12. Run for session duration, then disconnect
 ```
 

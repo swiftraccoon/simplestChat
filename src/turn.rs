@@ -4,7 +4,7 @@
 // Uses HMAC-SHA1 per the TURN REST API spec (coturn --use-auth-secret).
 
 use base64::Engine;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -106,6 +106,55 @@ impl TurnConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn turn_hmac_sha1_and_padded_base64_match_known_vector() {
+        // RFC 2202 section 3, HMAC-SHA1 test case 1. Keep a fixed expected
+        // value so changing hmac/sha1/base64 cannot silently alter credentials.
+        let mut mac = HmacSha1::new_from_slice(&[0x0b; 20]).unwrap();
+        mac.update(b"Hi There");
+        let digest = mac.finalize().into_bytes();
+        assert_eq!(
+            hex::encode(&digest),
+            "b617318655057264e28bc0b6fb378c8ef146be00"
+        );
+        assert_eq!(
+            base64::engine::general_purpose::STANDARD.encode(digest),
+            "thcxhlUFcmTii8C2+zeMjvFGvgA="
+        );
+    }
+
+    #[test]
+    fn generated_turn_credential_signs_the_exact_expiring_username() {
+        let config = TurnConfig {
+            urls: vec!["turn:turn.example:3478".to_string()],
+            secret: "a-secure-random-secret-with-32-bytes".to_string(),
+            ttl_secs: 600,
+        };
+        let before = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let credentials = config.generate_credentials();
+        let after = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let username = credentials.username.as_deref().unwrap();
+        let expiry: u64 = username.split_once(':').unwrap().0.parse().unwrap();
+        assert!((before + config.ttl_secs..=after + config.ttl_secs).contains(&expiry));
+        assert_eq!(credentials.urls, config.urls);
+        let encoded = credentials.credential.as_deref().unwrap();
+        assert_eq!(encoded.len(), 28);
+        assert!(encoded.ends_with('='), "coturn uses padded standard Base64");
+        let signature = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .unwrap();
+        assert_eq!(signature.len(), 20);
+        let mut verifier = HmacSha1::new_from_slice(config.secret.as_bytes()).unwrap();
+        verifier.update(username.as_bytes());
+        verifier.verify_slice(&signature).unwrap();
+    }
 
     #[test]
     fn generated_turn_credential_does_not_expose_secret() {

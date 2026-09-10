@@ -1,9 +1,10 @@
-# Official multi-architecture image digests verified 2026-08-30. Refresh the
+# Official multi-architecture image digests verified 2026-09-09. Refresh the
 # digest pins and this package-cache epoch together on the documented cadence.
-ARG FEDORA_REFRESH_EPOCH=2026-08-30
+ARG FEDORA_REFRESH_EPOCH=2026-09-09
 
-# Build the browser client with a supported Node.js LTS release.
-FROM docker.io/library/node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS web-builder
+# Node is only a frontend build tool, never part of the deployed Rust image.
+# Pin the latest stable Current release and its verified multi-arch manifest.
+FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e AS web-builder
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --ignore-scripts
@@ -55,20 +56,20 @@ RUN set -eu; \
     case "${build_arch}" in \
         amd64|x86_64) \
             rust_arch="x86_64-unknown-linux-gnu"; \
-            rustup_sha256="20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c" \
+            rustup_sha256="dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71" \
             ;; \
         arm64|aarch64) \
             rust_arch="aarch64-unknown-linux-gnu"; \
-            rustup_sha256="e3853c5a252fca15252d07cb23a1bdd9377a8c6f3efa01531109281ae47f841c" \
+            rustup_sha256="15f6e4ce9f583b929c996c91562bad6d4454f3281de858b02cdfdef615fac433" \
             ;; \
         *) echo "unsupported build architecture: ${build_arch}" >&2; exit 1 ;; \
     esac; \
     curl --fail --show-error --location --proto '=https' --tlsv1.2 \
-        "https://static.rust-lang.org/rustup/archive/1.28.2/${rust_arch}/rustup-init" \
+        "https://static.rust-lang.org/rustup/archive/1.29.1/${rust_arch}/rustup-init" \
         --output /tmp/rustup-init; \
     echo "${rustup_sha256}  /tmp/rustup-init" | sha256sum --check --strict; \
     chmod +x /tmp/rustup-init; \
-    /tmp/rustup-init -y --default-toolchain 1.98.0 --profile minimal \
+    /tmp/rustup-init -y --default-toolchain 1.98.1 --profile minimal \
         --component rustfmt; \
     rm /tmp/rustup-init
 ENV PATH="/root/.cargo/bin:${PATH}"

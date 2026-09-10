@@ -42,7 +42,7 @@ thiserror = "1.0.37"
 
 [dependencies.lru]
 default-features = false
-version = "0.18.3"
+version = "0.18.4"
 
 [dependencies.mediasoup-sys]
 path = "../worker"

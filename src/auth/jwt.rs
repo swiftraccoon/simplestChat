@@ -98,6 +98,78 @@ mod tests {
     use super::*;
 
     #[test]
+    fn legacy_hs256_fixture_without_auth_version_remains_compatible() {
+        // Frozen pre-auth-version claims, signed independently using Node's
+        // HMAC-SHA256 implementation. Expiry is 2100-01-01 UTC; this fixture
+        // deliberately avoids the current JWT encoder's round-trip behavior.
+        const SECRET: &str = "legacy-jwt-test-secret-at-least-32-bytes";
+        const TOKEN: &str = concat!(
+            "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.",
+            "eyJzdWIiOiJsZWdhY3ktdXNlciIsIm5hbWUiOiJBbGljZSIsImlzcyI6InNpbXBsZXN0Y2hhdCIsImF1ZCI6InNpbXBsZXN0Y2hhdCIsImV4cCI6NDEwMjQ0NDgwMH0.",
+            "p02jEpzdoVDcxs2deBDIs4FG0Qo8pyQyldeflBP2QaE"
+        );
+        let claims = validate_token(TOKEN, SECRET).unwrap();
+        assert_eq!(claims.sub, "legacy-user");
+        assert_eq!(claims.name, "Alice");
+        assert_eq!(claims.iss, JWT_ISSUER);
+        assert_eq!(claims.aud, JWT_AUDIENCE);
+        assert_eq!(claims.auth_version, 0);
+        assert_eq!(claims.exp, 4_102_444_800);
+        let tampered = TOKEN.replacen("p02jEpz", "q02jEpz", 1);
+        assert!(matches!(
+            validate_token(&tampered, SECRET),
+            Err(AuthError::InvalidToken)
+        ));
+    }
+
+    #[test]
+    fn signed_tokens_still_require_issuer_audience_subject_and_expiry() {
+        let secret = "claim-validation-test-secret-at-least-32-bytes";
+        let claims = serde_json::json!({
+            "sub": "user-123", "name": "Alice", "iss": JWT_ISSUER,
+            "aud": JWT_AUDIENCE, "exp": 4_102_444_800_u64, "auth_version": 7
+        });
+        for field in ["iss", "aud", "sub", "exp"] {
+            let mut missing = claims.clone();
+            missing.as_object_mut().unwrap().remove(field);
+            let token = encode(
+                &Header::new(Algorithm::HS256),
+                &missing,
+                &EncodingKey::from_secret(secret.as_bytes()),
+            )
+            .unwrap();
+            assert!(
+                matches!(validate_token(&token, secret), Err(AuthError::InvalidToken)),
+                "missing {field}"
+            );
+        }
+        for field in ["iss", "aud"] {
+            let mut wrong = claims.clone();
+            wrong[field] = serde_json::json!("another-application");
+            let token = encode(
+                &Header::new(Algorithm::HS256),
+                &wrong,
+                &EncodingKey::from_secret(secret.as_bytes()),
+            )
+            .unwrap();
+            assert!(
+                matches!(validate_token(&token, secret), Err(AuthError::InvalidToken)),
+                "wrong {field}"
+            );
+        }
+        let token = encode(
+            &Header::new(Algorithm::HS512),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .unwrap();
+        assert!(
+            matches!(validate_token(&token, secret), Err(AuthError::InvalidToken)),
+            "only HS256 is accepted"
+        );
+    }
+
+    #[test]
     fn test_create_and_validate_token() {
         let secret = "test-secret-at-least-32-bytes-long!!";
         let token = create_token("user-123", "Alice", secret).unwrap();

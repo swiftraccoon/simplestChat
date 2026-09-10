@@ -18,7 +18,7 @@ jobs:
       PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
       OPENSSL_STATIC: "1"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -30,9 +30,9 @@ jobs:
           sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config
 
       - name: Install pinned Rust toolchain
-        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-09)
         with:
-          toolchain: 1.98.0
+          toolchain: 1.98.1
           # mediasoup-sys formats generated bindings during its build script.
           components: rustfmt
 
@@ -52,7 +52,7 @@ jobs:
 
       - name: Verify native security patches
         run: |
-          cargo tree --locked -i lru | grep -F 'lru v0.18.3'
+          cargo tree --locked -i lru | grep -F 'lru v0.18.4'
           cargo tree --locked -i mediasoup-sys \
             | grep -Eq 'mediasoup-sys v0\.17\.0 \(.*/vendor/mediasoup-sys-0\.17\.0\)$'
           grep -Fq 'source_filename = abseil-cpp-20240722.2.tar.gz' \
@@ -75,6 +75,22 @@ jobs:
             echo 'Abseil source fallback must remain disabled' >&2
             exit 1
           fi
+          grep -Fq 'source_hash = 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7' \
+            vendor/mediasoup-sys-0.17.0/subprojects/libuv.wrap
+          grep -Fq 'source_hash = a232f7433b45872d43e4dc74a25cbd58effc0be76e3d704b34e5de3c637eed77' \
+            vendor/mediasoup-sys-0.17.0/subprojects/unordered-dense.wrap
+          grep -Fq 'source_hash = 0957cae5821b17ce07f0833aaa52b5137643a8382203221f363a8303c109af34' \
+            vendor/mediasoup-sys-0.17.0/subprojects/catch2.wrap
+          echo '3eada92dfde42ed1148b17712bd363d28d73a74bf374484acd45e1faf27f487f  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/libuv/meson.build' \
+            | sha256sum --check --strict
+          echo 'dc02dc5b7d5bd069782529f59012e7ac25b53325b7783609c77a3b36ca819a7c  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/libuv/meson_options.txt' \
+            | sha256sum --check --strict
+          echo 'cba566c9f026b7c23c2460c4262ddd420e4da63986a892653d4c15a0f9e6943d  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/libuv/link_file_in_build_dir.py' \
+            | sha256sum --check --strict
+          echo '7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/libuv/LICENSE.build' \
+            | sha256sum --check --strict
+          echo '8f535a2932f7074ed3c52c01de988b8e2881d94a3e2a169945c42d64ac0f3e77  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/ankerl-unordered-dense/meson.build' \
+            | sha256sum --check --strict
           strings target/debug/simplestChat | grep -Fq 'OpenSSL 3.5.8 25 Aug 2026'
           if strings target/debug/simplestChat | grep -Fq 'OpenSSL 3.0.8'; then
             echo 'vulnerable bundled OpenSSL 3.0.8 found in server binary' >&2
@@ -94,16 +110,11 @@ jobs:
 
       - name: Audit Rust dependencies
         run: |
-          cargo install cargo-audit --locked --version 0.22.1
-          # jsonwebtoken uses aws-lc, and SQLx is PostgreSQL-only. Cargo-audit
-          # still sees rsa in SQLx's disabled optional MySQL lock metadata, so
-          # first fail if rsa ever becomes active and then suppress that single
-          # feature-unaware lockfile report.
-          rsa_tree="$(cargo tree --locked -i rsa 2>/dev/null)"
-          test -z "${rsa_tree}"
+          cargo install cargo-audit --locked --version 0.22.2
+          # SQLx 0.9 removes the old optional rsa lockfile entry. Keep its
+          # advisory unsuppressed so a future reintroduction is audited.
           # The atty and rand advisories occur only in mediasoup-sys build tools.
           cargo audit --deny unsound \
-            --ignore RUSTSEC-2023-0071 \
             --ignore RUSTSEC-2021-0145 \
             --ignore RUSTSEC-2026-0097
 
@@ -115,12 +126,13 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          # Node is build/test-only; deployment runs Rust, not Node.
+          node-version: 26.8.1
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --ignore-scripts
@@ -141,7 +153,7 @@ jobs:
       # manifest digest published by Docker Official Images.
       CADDY_IMAGE: docker.io/library/caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 

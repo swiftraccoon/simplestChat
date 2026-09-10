@@ -405,7 +405,9 @@ pub async fn update_room_settings(
     }
 
     let sql = format!("UPDATE rooms SET {} WHERE id = $1", set_parts.join(", "));
-    let mut query = sqlx::query(&sql).bind(room_id);
+    // Only fixed column names and placeholder numbers enter this SQL string;
+    // every caller-supplied value remains a separate bound parameter.
+    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql)).bind(room_id);
 
     // Bind values in the same order as the SET parts
     if let Some(v) = moderated {

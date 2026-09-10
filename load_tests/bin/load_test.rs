@@ -35,9 +35,10 @@ mod webrtc_client {
 
 use media_generator::{MediaConfig, MediaGenerator};
 use metrics::{MetricsCollector, TestSummary};
+use rtc::shared::marshal::Unmarshal;
 use std::num::{NonZeroU8, NonZeroU32};
 use tokio::sync::Mutex;
-use webrtc::track::track_local::TrackLocalWriter;
+use webrtc::media_stream::track_local::TrackLocal;
 use webrtc_client::WebRtcSession;
 
 #[derive(Debug, Clone)]
@@ -1024,6 +1025,12 @@ async fn run_client_inner(
         );
     }
 
+    // write_rtp in webrtc 0.20 only enqueues. Wait before generating media so
+    // the first keyframe and packet counters start after the SRTP handshake.
+    if config.is_publisher {
+        webrtc_session.lock().await.wait_send_connected().await?;
+    }
+
     tracing::info!(
         "{}: Setup complete, starting media session for {}s",
         client_id,
@@ -1108,9 +1115,20 @@ async fn send_real_media_loop(
     tracing::debug!("{}: Starting REAL media send loop", client_id);
 
     // Get tracks from WebRTC session
-    let (audio_track, video_track) = {
+    let (audio_track, video_track, ssrcs) = {
         let session = webrtc_session.lock().await;
-        (session.audio_track(), session.video_track())
+        (
+            session.audio_track(),
+            session.video_track(),
+            session.send_ssrcs().await,
+        )
+    };
+    let (audio_ssrc, video_ssrc) = match ssrcs {
+        Ok(ssrcs) => ssrcs,
+        Err(error) => {
+            metrics.record_error(format!("Cannot send without negotiated SSRCs: {error}"));
+            return;
+        }
     };
 
     let mut audio_interval = tokio::time::interval(media_gen.audio_packet_interval());
@@ -1127,7 +1145,12 @@ async fn send_real_media_loop(
                 if let Some(track) = &audio_track {
                     let packet_bytes = media_gen.generate_audio_packet();
 
-                    match track.write(&packet_bytes).await {
+                    let packet = negotiated_rtp_packet(&packet_bytes, audio_ssrc);
+                    let result = match packet {
+                        Ok(packet) => track.write_rtp(packet).await,
+                        Err(error) => Err(error),
+                    };
+                    match result {
                         Ok(_) => {
                             metrics.record_packet_sent(packet_bytes.len());
                             if first_packet {
@@ -1148,7 +1171,12 @@ async fn send_real_media_loop(
                     let frame_packets = media_gen.generate_video_frame();
                     let mut send_error = false;
                     for packet_bytes in frame_packets {
-                        match track.write(&packet_bytes).await {
+                        let packet = negotiated_rtp_packet(&packet_bytes, video_ssrc);
+                        let result = match packet {
+                            Ok(packet) => track.write_rtp(packet).await,
+                            Err(error) => Err(error),
+                        };
+                        match result {
                             Ok(_) => {
                                 metrics.record_packet_sent(packet_bytes.len());
                                 if first_packet {
@@ -1168,6 +1196,41 @@ async fn send_real_media_loop(
                 }
             }
         }
+    }
+}
+
+/// The 0.20 track API requires packets to carry the negotiated SSRC. Unlike
+/// the old raw-byte writer, it does not rewrite the generator's random SSRC.
+fn negotiated_rtp_packet(
+    packet_bytes: &[u8],
+    ssrc: u32,
+) -> webrtc::error::Result<rtc::rtp::Packet> {
+    let mut source = packet_bytes;
+    let mut packet = rtc::rtp::Packet::unmarshal(&mut source)?;
+    packet.header.ssrc = ssrc;
+    Ok(packet)
+}
+
+#[cfg(test)]
+mod packet_migration_tests {
+    use super::*;
+
+    #[test]
+    fn generated_packets_use_negotiated_ssrc_without_altering_media_payload() {
+        let mut generator = MediaGenerator::new(MediaConfig::default());
+        let audio = generator.generate_audio_packet();
+        let mut video = generator.generate_video_frame();
+        assert!(!video.is_empty());
+        for (bytes, ssrc, payload_type) in [(audio, 12_345, 111), (video.remove(0), 54_321, 96)] {
+            let before = rtc::rtp::Packet::unmarshal(&mut bytes.as_slice()).unwrap();
+            let after = negotiated_rtp_packet(&bytes, ssrc).unwrap();
+            assert_eq!(after.header.ssrc, ssrc);
+            assert_eq!(after.header.payload_type, payload_type);
+            assert_eq!(after.header.sequence_number, before.header.sequence_number);
+            assert_eq!(after.header.timestamp, before.header.timestamp);
+            assert_eq!(after.payload, before.payload);
+        }
+        assert!(negotiated_rtp_packet(&[0], 12_345).is_err());
     }
 }
 

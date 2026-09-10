@@ -14,7 +14,7 @@ use base64::{
     Engine as _,
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
 };
-use rand::{TryRngCore, rngs::OsRng};
+use rand::{TryRng, rngs::SysRng};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
@@ -353,7 +353,7 @@ pub async fn change_password(
 
 fn generate_recovery_key() -> Result<String, AuthError> {
     let mut secret = [0u8; 32];
-    OsRng.try_fill_bytes(&mut secret).map_err(|error| {
+    SysRng.try_fill_bytes(&mut secret).map_err(|error| {
         AuthError::DatabaseError(format!("Recovery generation failed: {error}"))
     })?;
     Ok(format!(

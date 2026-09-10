@@ -1,51 +1,163 @@
-// Production-grade WebRTC client implementation using webrtc-rs 0.17
-//
-// This implementation establishes real ICE/DTLS/RTP connections with mediasoup.
-// It converts mediasoup's parameter-based signaling to webrtc-rs's SDP-based API.
+// Real ICE/DTLS/RTP client using the webrtc-rs 0.20 async Sans-I/O driver.
+// Mediasoup's parameter-based signaling is adapted to the peer's SDP API.
 
 use anyhow::{Context, Result};
 use mediasoup::prelude::*;
 use mediasoup_types::data_structures::{DtlsFingerprint, DtlsRole, IceCandidateType};
+use rtc::rtp_transceiver::rtp_sender::{
+    RTCRtpCodec, RTCRtpCodecParameters, RTCRtpCodingParameters, RTCRtpEncodingParameters,
+    RTCRtpHeaderExtensionCapability, RtpCodecKind,
+};
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
-use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::MediaEngine;
-use webrtc::api::APIBuilder;
-use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
-use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
-use webrtc::ice_transport::ice_gatherer_state::RTCIceGathererState;
-use webrtc::peer_connection::configuration::RTCConfiguration;
-use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer_connection::sdp::sdp_type::RTCSdpType;
-use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::peer_connection::RTCPeerConnection;
-use webrtc::rtp_transceiver::rtp_codec::{
-    RTCRtpCodecCapability, RTCRtpCodecParameters, RTCRtpHeaderExtensionCapability, RTPCodecType,
+use webrtc::media_stream::MediaStreamTrack;
+use webrtc::media_stream::track_local::{TrackLocal, static_rtp::TrackLocalStaticRTP};
+use webrtc::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
+use webrtc::peer_connection::{
+    MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
+    RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceConnectionState, RTCPeerConnectionState,
+    RTCSessionDescription, Registry, register_default_interceptors,
 };
-use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
-use webrtc::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
-use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
-use webrtc::track::track_local::TrackLocal;
+use webrtc::rtp_transceiver::{RTCRtpTransceiverDirection, RTCRtpTransceiverInit};
 
-/// WebRTC transport for mediasoup integration
-///
-/// This handles a single mediasoup transport (send or recv) using webrtc-rs.
-/// The key challenge is that webrtc-rs uses SDP while mediasoup uses parameter-based signaling.
+struct TransportEvents {
+    client_id: String,
+    transport_id: String,
+    metrics: Option<Arc<super::metrics::MetricsCollector>>,
+    cancellation: tokio::sync::watch::Receiver<bool>,
+    connection_state: tokio::sync::watch::Sender<RTCPeerConnectionState>,
+}
+
+async fn wait_for_connected(
+    mut state: tokio::sync::watch::Receiver<RTCPeerConnectionState>,
+    timeout: std::time::Duration,
+) -> Result<()> {
+    tokio::time::timeout(timeout, async {
+        loop {
+            match *state.borrow_and_update() {
+                RTCPeerConnectionState::Connected => return Ok(()),
+                RTCPeerConnectionState::Failed | RTCPeerConnectionState::Closed => {
+                    anyhow::bail!("Media transport failed or closed before connecting");
+                }
+                _ => {}
+            }
+            state.changed().await.context("Media transport state channel closed")?;
+        }
+    })
+    .await
+    .context("Timed out waiting for media ICE/DTLS connection")?
+}
+
+async fn next_track_event<T>(
+    cancellation: &mut tokio::sync::watch::Receiver<bool>,
+    event: impl std::future::Future<Output = Option<T>>,
+) -> Option<T> {
+    if *cancellation.borrow() {
+        return None;
+    }
+    tokio::select! {
+        biased;
+        _ = cancellation.changed() => None,
+        value = event => value,
+    }
+}
+
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for TransportEvents {
+    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+        self.connection_state.send_replace(state);
+        match state {
+            RTCPeerConnectionState::Connected => info!(
+                "{}: Transport {} connected",
+                self.client_id, self.transport_id
+            ),
+            RTCPeerConnectionState::Disconnected => warn!(
+                "{}: Transport {} disconnected",
+                self.client_id, self.transport_id
+            ),
+            RTCPeerConnectionState::Failed => {
+                error!("{}: Transport {} failed", self.client_id, self.transport_id)
+            }
+            RTCPeerConnectionState::Closed => {
+                debug!("{}: Transport {} closed", self.client_id, self.transport_id)
+            }
+            _ => {}
+        }
+    }
+
+    async fn on_ice_connection_state_change(&self, state: RTCIceConnectionState) {
+        debug!(
+            "{}: Transport {} ICE state: {:?}",
+            self.client_id, self.transport_id, state
+        );
+    }
+
+    async fn on_track(&self, track: Arc<dyn TrackRemote>) {
+        let client_id = self.client_id.clone();
+        let metrics = self.metrics.clone();
+        let mut cancellation = self.cancellation.clone();
+        // Return promptly: event dispatch must not wait for a track's lifetime.
+        tokio::spawn(async move {
+            let mut count = 0_u64;
+            while let Some(event) = next_track_event(&mut cancellation, track.poll()).await {
+                match event {
+                    TrackRemoteEvent::OnRtpPacket(packet) => {
+                        count += 1;
+                        if let Some(metrics) = &metrics {
+                            if count == 1 {
+                                metrics.mark_first_media_received();
+                            }
+                            metrics.record_packet_received(packet.payload.len());
+                        }
+                        if count % 500 == 0 {
+                            debug!(
+                                "{}: Received {} RTP packets (ssrc={})",
+                                client_id, count, packet.header.ssrc
+                            );
+                        }
+                    }
+                    TrackRemoteEvent::OnEnded | TrackRemoteEvent::OnError => break,
+                    _ => {}
+                }
+            }
+            debug!(
+                "{}: Remote track stopped after {} packets",
+                client_id, count
+            );
+        });
+    }
+}
+
+/// Owns one mediasoup send/receive transport and its async WebRTC peer.
 pub struct WebRtcTransport {
-    peer_connection: Arc<RTCPeerConnection>,
+    peer_connection: Arc<dyn PeerConnection>,
     transport_id: String,
     client_id: String,
     is_send: bool,
-    /// ICE candidates from mediasoup (kept for renegotiation)
     ice_candidate_inits: Vec<RTCIceCandidateInit>,
-    /// Stored for recv transport SDP renegotiation
     ice_parameters: IceParameters,
     dtls_parameters: DtlsParameters,
-    /// Consumer SSRCs tracked for SDP renegotiation
     consumers: Vec<ConsumerInfo>,
-    /// Send transport tracks (created before SDP negotiation so they get bound)
+    recv_transceiver_count: usize,
+    cancellation: tokio::sync::watch::Sender<bool>,
+    connection_state: tokio::sync::watch::Receiver<RTCPeerConnectionState>,
     send_audio_track: Option<Arc<TrackLocalStaticRTP>>,
     send_video_track: Option<Arc<TrackLocalStaticRTP>>,
+}
+
+impl Drop for WebRtcTransport {
+    fn drop(&mut self) {
+        if !self.cancellation.send_replace(true) {
+            // The default 0.20 peer driver does not close when its handle drops.
+            // Setup errors or a cancelled client task must still release it.
+            if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+                let peer = self.peer_connection.clone();
+                runtime.spawn(async move {
+                    let _ = peer.close().await;
+                });
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -53,13 +165,89 @@ struct ConsumerInfo {
     kind: MediaKind,
     ssrc: u32,
     mid_ext_id: Option<u16>,
+    mid: usize,
+}
+
+fn audio_codec() -> RTCRtpCodec {
+    RTCRtpCodec {
+        mime_type: "audio/opus".to_owned(),
+        clock_rate: 48000,
+        channels: 2,
+        sdp_fmtp_line: "minptime=10;useinbandfec=1".to_owned(),
+        rtcp_feedback: vec![],
+    }
+}
+
+fn video_codec() -> RTCRtpCodec {
+    RTCRtpCodec {
+        mime_type: "video/VP8".to_owned(),
+        clock_rate: 90000,
+        channels: 0,
+        sdp_fmtp_line: String::new(),
+        rtcp_feedback: vec![],
+    }
+}
+
+async fn attach_local_track(
+    peer: &Arc<dyn PeerConnection>,
+    client_id: &str,
+    kind: RtpCodecKind,
+    codec: RTCRtpCodec,
+    mut cancellation: tokio::sync::watch::Receiver<bool>,
+) -> Result<Arc<TrackLocalStaticRTP>> {
+    let track = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
+        format!("stream-{client_id}"),
+        format!("{kind}-{client_id}"),
+        format!("{kind} load test"),
+        kind,
+        vec![RTCRtpEncodingParameters {
+            rtp_coding_parameters: RTCRtpCodingParameters {
+                ssrc: Some(rand::random::<u32>()),
+                ..Default::default()
+            },
+            codec,
+            ..Default::default()
+        }],
+    )));
+    peer.add_track(track.clone() as Arc<dyn TrackLocal>)
+        .await
+        .context("Failed to add local RTP track")?;
+    // In 0.20 feedback is delivered on the local track, not on RtpSender.
+    let feedback_track = track.clone();
+    tokio::spawn(async move {
+        while next_track_event(&mut cancellation, feedback_track.poll())
+            .await
+            .is_some()
+        {}
+    });
+    Ok(track)
+}
+
+/// Bind loopback explicitly for local tests; wildcard expansion excludes it in 0.20.
+fn local_udp_addresses(candidates: &[IceCandidate]) -> Vec<&'static str> {
+    let addresses: Vec<std::net::IpAddr> = candidates
+        .iter()
+        .filter_map(|candidate| candidate.address.parse().ok())
+        .collect();
+    if !addresses.is_empty() && addresses.iter().all(std::net::IpAddr::is_loopback) {
+        let mut result = Vec::new();
+        if addresses.iter().any(std::net::IpAddr::is_ipv4) {
+            result.push("127.0.0.1:0");
+        }
+        if addresses.iter().any(std::net::IpAddr::is_ipv6) {
+            result.push("[::1]:0");
+        }
+        result
+    } else {
+        let mut result = vec!["0.0.0.0:0"];
+        if addresses.iter().any(std::net::IpAddr::is_ipv6) {
+            result.push("[::]:0");
+        }
+        result
+    }
 }
 
 impl WebRtcTransport {
-    /// Creates a new WebRTC transport for mediasoup
-    ///
-    /// For recv transports, pass `Some(metrics)` to directly increment packet
-    /// counters from the on_track handler (no intermediate channel).
     pub async fn new(
         client_id: String,
         transport_id: String,
@@ -69,330 +257,151 @@ impl WebRtcTransport {
         is_send: bool,
         metrics: Option<Arc<super::metrics::MetricsCollector>>,
     ) -> Result<(Self, DtlsParameters)> {
-        debug!(
-            "{}: Creating WebRTC transport {} (send={})",
-            client_id, transport_id, is_send
-        );
-
-        // Create MediaEngine with codecs matching mediasoup
         let mut media_engine = MediaEngine::default();
-
-        // Register Opus codec for audio (standard mediasoup config)
-        media_engine
-            .register_codec(
-                RTCRtpCodecParameters {
-                    capability: RTCRtpCodecCapability {
-                        mime_type: "audio/opus".to_string(),
-                        clock_rate: 48000,
-                        channels: 2,
-                        sdp_fmtp_line: "minptime=10;useinbandfec=1".to_string(),
-                        rtcp_feedback: vec![],
-                    },
-                    payload_type: 111,
-                    ..Default::default()
-                },
-                RTPCodecType::Audio,
-            )
-            .context("Failed to register Opus codec")?;
-
-        // Register VP8 codec for video (standard mediasoup config)
-        media_engine
-            .register_codec(
-                RTCRtpCodecParameters {
-                    capability: RTCRtpCodecCapability {
-                        mime_type: "video/VP8".to_string(),
-                        clock_rate: 90000,
-                        channels: 0,
-                        sdp_fmtp_line: String::new(),
-                        rtcp_feedback: vec![],
-                    },
-                    payload_type: 96,
-                    ..Default::default()
-                },
-                RTPCodecType::Video,
-            )
-            .context("Failed to register VP8 codec")?;
-
-        // Register mid header extension so webrtc-rs can route incoming RTP
-        // packets to the correct transceiver. Without this, on_track never fires.
-        media_engine
-            .register_header_extension(
-                RTCRtpHeaderExtensionCapability {
-                    uri: "urn:ietf:params:rtp-hdrext:sdes:mid".to_owned(),
-                },
-                RTPCodecType::Audio,
-                None,
-            )
-            .context("Failed to register mid extension for audio")?;
-
-        media_engine
-            .register_header_extension(
-                RTCRtpHeaderExtensionCapability {
-                    uri: "urn:ietf:params:rtp-hdrext:sdes:mid".to_owned(),
-                },
-                RTPCodecType::Video,
-                None,
-            )
-            .context("Failed to register mid extension for video")?;
-
-        // Create interceptor registry for RTCP handling using default
-        let registry = register_default_interceptors(
-            Default::default(),
-            &mut media_engine,
+        media_engine.register_codec(
+            RTCRtpCodecParameters {
+                rtp_codec: audio_codec(),
+                payload_type: 111,
+                ..Default::default()
+            },
+            RtpCodecKind::Audio,
         )?;
-
-        // Build WebRTC API
-        let api = APIBuilder::new()
-            .with_media_engine(media_engine)
-            .with_interceptor_registry(registry)
-            .build();
-
-        // Create peer connection (no STUN needed for direct LAN)
-        let config = RTCConfiguration {
-            ice_servers: vec![],
-            ..Default::default()
-        };
-
-        let peer_connection = Arc::new(
-            api.new_peer_connection(config)
+        media_engine.register_codec(
+            RTCRtpCodecParameters {
+                rtp_codec: video_codec(),
+                payload_type: 96,
+                ..Default::default()
+            },
+            RtpCodecKind::Video,
+        )?;
+        for kind in [RtpCodecKind::Audio, RtpCodecKind::Video] {
+            media_engine.register_header_extension(
+                RTCRtpHeaderExtensionCapability {
+                    uri: "urn:ietf:params:rtp-hdrext:sdes:mid".to_owned(),
+                },
+                kind,
+                None,
+            )?;
+        }
+        let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
+        let (cancellation, cancellation_rx) = tokio::sync::watch::channel(false);
+        let (connection_state_tx, connection_state) =
+            tokio::sync::watch::channel(RTCPeerConnectionState::New);
+        let handler = Arc::new(TransportEvents {
+            client_id: client_id.clone(),
+            transport_id: transport_id.clone(),
+            metrics,
+            cancellation: cancellation_rx,
+            connection_state: connection_state_tx,
+        });
+        let peer_connection: Arc<dyn PeerConnection> = Arc::new(
+            PeerConnectionBuilder::new()
+                .with_configuration(RTCConfigurationBuilder::default().build())
+                .with_media_engine(media_engine)
+                .with_interceptor_registry(registry)
+                .with_handler(handler)
+                .with_udp_addrs(local_udp_addresses(&ice_candidates))
+                .build()
                 .await
                 .context("Failed to create peer connection")?,
         );
 
-        // Set up connection state monitoring
-        let client_id_clone = client_id.clone();
-        let transport_id_clone = transport_id.clone();
-        peer_connection.on_peer_connection_state_change(Box::new(
-            move |state: RTCPeerConnectionState| {
-                let cid = client_id_clone.clone();
-                let tid = transport_id_clone.clone();
-                Box::pin(async move {
-                    match state {
-                        RTCPeerConnectionState::Connected => {
-                            info!("{}: Transport {} connected", cid, tid);
-                        }
-                        RTCPeerConnectionState::Disconnected => {
-                            warn!("{}: Transport {} disconnected", cid, tid);
-                        }
-                        RTCPeerConnectionState::Failed => {
-                            error!("{}: Transport {} failed", cid, tid);
-                        }
-                        RTCPeerConnectionState::Closed => {
-                            debug!("{}: Transport {} closed", cid, tid);
-                        }
-                        _ => {}
-                    }
-                })
-            },
-        ));
+        let pending_ice_candidates = ice_candidates
+            .iter()
+            .map(|candidate| {
+                let protocol = match candidate.protocol {
+                    Protocol::Udp => "udp",
+                    Protocol::Tcp => "tcp",
+                };
+                let candidate_type = match candidate.r#type {
+                    IceCandidateType::Host => "host",
+                    IceCandidateType::Srflx => "srflx",
+                    IceCandidateType::Prflx => "prflx",
+                    IceCandidateType::Relay => "relay",
+                };
+                let tcp_type = if candidate.tcp_type.is_some() {
+                    " tcptype passive"
+                } else {
+                    ""
+                };
+                RTCIceCandidateInit {
+                    candidate: format!(
+                        "candidate:{} 1 {} {} {} {} typ {}{}",
+                        candidate.foundation,
+                        protocol,
+                        candidate.priority,
+                        candidate.address,
+                        candidate.port,
+                        candidate_type,
+                        tcp_type
+                    ),
+                    ..Default::default()
+                }
+            })
+            .collect();
 
-        // Set up ICE connection state monitoring
-        let client_id_clone = client_id.clone();
-        let transport_id_clone = transport_id.clone();
-        peer_connection.on_ice_connection_state_change(Box::new(
-            move |state: RTCIceConnectionState| {
-                let cid = client_id_clone.clone();
-                let tid = transport_id_clone.clone();
-                Box::pin(async move {
-                    debug!("{}: Transport {} ICE state: {:?}", cid, tid, state);
-                })
-            },
-        ));
-
-        // Build ICE candidate inits to add later (after remote description is set)
-        let mut pending_ice_candidates = Vec::new();
-        for candidate in ice_candidates {
-            let protocol_str = match candidate.protocol {
-                Protocol::Udp => "udp",
-                Protocol::Tcp => "tcp",
+        let setup = async {
+            let (send_audio_track, send_video_track) = if is_send {
+                (
+                    Some(
+                        attach_local_track(
+                            &peer_connection,
+                            &client_id,
+                            RtpCodecKind::Audio,
+                            audio_codec(),
+                            cancellation.subscribe(),
+                        )
+                        .await?,
+                    ),
+                    Some(
+                        attach_local_track(
+                            &peer_connection,
+                            &client_id,
+                            RtpCodecKind::Video,
+                            video_codec(),
+                            cancellation.subscribe(),
+                        )
+                        .await?,
+                    ),
+                )
+            } else {
+                for kind in [RtpCodecKind::Audio, RtpCodecKind::Video] {
+                    peer_connection
+                        .add_transceiver_from_kind(
+                            kind,
+                            Some(RTCRtpTransceiverInit {
+                                direction: RTCRtpTransceiverDirection::Recvonly,
+                                ..Default::default()
+                            }),
+                        )
+                        .await
+                        .context("Failed to add receive transceiver")?;
+                }
+                (None, None)
             };
-            let type_str = match candidate.r#type {
-                IceCandidateType::Host => "host",
-                IceCandidateType::Srflx => "srflx",
-                IceCandidateType::Prflx => "prflx",
-                IceCandidateType::Relay => "relay",
+            let transport = Self {
+                peer_connection: peer_connection.clone(),
+                transport_id,
+                client_id,
+                is_send,
+                ice_candidate_inits: pending_ice_candidates,
+                ice_parameters,
+                dtls_parameters,
+                consumers: Vec::new(),
+                recv_transceiver_count: if is_send { 0 } else { 2 },
+                cancellation: cancellation.clone(),
+                connection_state,
+                send_audio_track,
+                send_video_track,
             };
-            let tcp_type_str = candidate
-                .tcp_type
-                .as_ref()
-                .map(|_| " tcptype passive".to_string())
-                .unwrap_or_default();
-
-            let candidate_string = format!(
-                "candidate:{} 1 {} {} {} {} typ {}{}",
-                candidate.foundation,
-                protocol_str,
-                candidate.priority,
-                candidate.address,
-                candidate.port,
-                type_str,
-                tcp_type_str,
-            );
-
-            pending_ice_candidates.push(RTCIceCandidateInit {
-                candidate: candidate_string,
-                ..Default::default()
-            });
+            let local_dtls = transport.generate_dtls_parameters().await?;
+            Ok::<_, anyhow::Error>((transport, local_dtls))
         }
-
-        // For recv transport: add recvonly transceivers and set up on_track handler
-        // BEFORE creating the initial offer, so the offer has m-lines for audio + video.
-        if !is_send {
-            let init = webrtc::rtp_transceiver::RTCRtpTransceiverInit {
-                direction: RTCRtpTransceiverDirection::Recvonly,
-                send_encodings: vec![],
-            };
-            peer_connection
-                .add_transceiver_from_kind(RTPCodecType::Audio, Some(init))
-                .await
-                .context("Failed to add audio recv transceiver")?;
-
-            let init = webrtc::rtp_transceiver::RTCRtpTransceiverInit {
-                direction: RTCRtpTransceiverDirection::Recvonly,
-                send_encodings: vec![],
-            };
-            peer_connection
-                .add_transceiver_from_kind(RTPCodecType::Video, Some(init))
-                .await
-                .context("Failed to add video recv transceiver")?;
-
-            // Set up a single on_track handler for ALL incoming tracks.
-            // This fires when webrtc-rs detects an incoming SSRC that matches the remote SDP.
-            //
-            // CRITICAL: webrtc-rs's do_track() holds a Mutex on the handler while awaiting
-            // the returned future. If this future blocks (e.g. infinite read loop), the mutex
-            // is held forever and subsequent tracks can never fire on_track. We MUST spawn a
-            // separate task for the read loop and return immediately to release the mutex.
-            let client_id_clone = client_id.clone();
-            let metrics_clone = metrics.clone();
-            peer_connection.on_track(Box::new(
-                move |track, _receiver, _transceiver| {
-                    let cid = client_id_clone.clone();
-                    let m = metrics_clone.clone();
-                    Box::pin(async move {
-                        let ssrc = track.ssrc();
-                        info!(
-                            "{}: on_track fired: kind={}, codec={}, ssrc={}",
-                            cid,
-                            track.kind(),
-                            track.codec().capability.mime_type,
-                            ssrc
-                        );
-                        // Spawn the read loop in a separate task so this future returns
-                        // immediately, releasing the on_track_handler mutex for the next track.
-                        tokio::spawn(async move {
-                            let mut buf = vec![0u8; 1500];
-                            let mut count = 0u64;
-                            loop {
-                                match track.read(&mut buf).await {
-                                    Ok((packet, _attrs)) => {
-                                        count += 1;
-                                        // Directly increment metrics atomics — no channel overhead
-                                        if let Some(ref metrics) = m {
-                                            if count == 1 {
-                                                metrics.mark_first_media_received();
-                                            }
-                                            metrics.record_packet_received(packet.payload.len());
-                                        }
-                                        if count % 500 == 0 {
-                                            debug!(
-                                                "{}: Received {} RTP packets (ssrc={})",
-                                                cid, count, ssrc
-                                            );
-                                        }
-                                    }
-                                    Err(e) => {
-                                        debug!("{}: Track read error: {}", cid, e);
-                                        break;
-                                    }
-                                }
-                            }
-                            info!(
-                                "{}: Track stopped (ssrc={}), received {} packets total",
-                                cid, ssrc, count
-                            );
-                        });
-                    })
-                },
-            ));
+        .await;
+        if setup.is_err() && !cancellation.send_replace(true) {
+            let _ = peer_connection.close().await;
         }
-
-        // For send transport: add tracks BEFORE SDP negotiation so they appear in the
-        // initial offer and get properly bound. Without this, TrackLocalStaticRTP::write()
-        // silently drops all packets because there are no bindings.
-        let mut send_audio_track = None;
-        let mut send_video_track = None;
-        if is_send {
-            let audio_track = Arc::new(TrackLocalStaticRTP::new(
-                RTCRtpCodecCapability {
-                    mime_type: "audio/opus".to_string(),
-                    clock_rate: 48000,
-                    channels: 2,
-                    sdp_fmtp_line: "minptime=10;useinbandfec=1".to_string(),
-                    rtcp_feedback: vec![],
-                },
-                format!("audio-{}", client_id),
-                format!("stream-{}", client_id),
-            ));
-
-            let rtp_sender = peer_connection
-                .add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>)
-                .await
-                .context("Failed to add audio track to send transport")?;
-
-            let client_id_clone = client_id.clone();
-            tokio::spawn(async move {
-                let mut rtcp_buf = vec![0u8; 1500];
-                while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
-                debug!("{}: Audio RTCP handler stopped", client_id_clone);
-            });
-
-            let video_track = Arc::new(TrackLocalStaticRTP::new(
-                RTCRtpCodecCapability {
-                    mime_type: "video/VP8".to_string(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: String::new(),
-                    rtcp_feedback: vec![],
-                },
-                format!("video-{}", client_id),
-                format!("stream-{}", client_id),
-            ));
-
-            let rtp_sender = peer_connection
-                .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>)
-                .await
-                .context("Failed to add video track to send transport")?;
-
-            let client_id_clone = client_id.clone();
-            tokio::spawn(async move {
-                let mut rtcp_buf = vec![0u8; 1500];
-                while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
-                debug!("{}: Video RTCP handler stopped", client_id_clone);
-            });
-
-            send_audio_track = Some(audio_track);
-            send_video_track = Some(video_track);
-            info!("{}: Audio and video tracks added to send transport before SDP", client_id);
-        }
-
-        let transport = Self {
-            peer_connection,
-            transport_id,
-            client_id,
-            is_send,
-            ice_candidate_inits: pending_ice_candidates,
-            ice_parameters,
-            dtls_parameters,
-            consumers: Vec::new(),
-            send_audio_track,
-            send_video_track,
-        };
-
-        // Generate local DTLS parameters by creating an offer/answer
-        let local_dtls = transport.generate_dtls_parameters().await?;
-
-        Ok((transport, local_dtls))
+        setup
     }
 
     /// Generate local DTLS parameters from the peer connection
@@ -466,72 +475,28 @@ impl WebRtcTransport {
         Ok(())
     }
 
-    /// Add an audio track for sending RTP
+    /// Add an audio track for sending RTP.
     pub async fn add_audio_track(&self) -> Result<Arc<TrackLocalStaticRTP>> {
-        let track = Arc::new(TrackLocalStaticRTP::new(
-            RTCRtpCodecCapability {
-                mime_type: "audio/opus".to_string(),
-                clock_rate: 48000,
-                channels: 2,
-                sdp_fmtp_line: "minptime=10;useinbandfec=1".to_string(),
-                rtcp_feedback: vec![],
-            },
-            format!("audio-{}", self.client_id),
-            format!("stream-{}", self.client_id),
-        ));
-
-        let rtp_sender = self
-            .peer_connection
-            .add_track(Arc::clone(&track) as Arc<dyn TrackLocal + Send + Sync>)
-            .await
-            .context("Failed to add audio track")?;
-
-        // Spawn RTCP handler
-        let client_id = self.client_id.clone();
-        tokio::spawn(async move {
-            let mut rtcp_buf = vec![0u8; 1500];
-            while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {
-                // Handle RTCP feedback
-            }
-            debug!("{}: Audio RTCP handler stopped", client_id);
-        });
-
-        info!("{}: Audio track added", self.client_id);
-        Ok(track)
+        attach_local_track(
+            &self.peer_connection,
+            &self.client_id,
+            RtpCodecKind::Audio,
+            audio_codec(),
+            self.cancellation.subscribe(),
+        )
+        .await
     }
 
-    /// Add a video track for sending RTP
+    /// Add a video track for sending RTP.
     pub async fn add_video_track(&self) -> Result<Arc<TrackLocalStaticRTP>> {
-        let track = Arc::new(TrackLocalStaticRTP::new(
-            RTCRtpCodecCapability {
-                mime_type: "video/VP8".to_string(),
-                clock_rate: 90000,
-                channels: 0,
-                sdp_fmtp_line: String::new(),
-                rtcp_feedback: vec![],
-            },
-            format!("video-{}", self.client_id),
-            format!("stream-{}", self.client_id),
-        ));
-
-        let rtp_sender = self
-            .peer_connection
-            .add_track(Arc::clone(&track) as Arc<dyn TrackLocal + Send + Sync>)
-            .await
-            .context("Failed to add video track")?;
-
-        // Spawn RTCP handler
-        let client_id = self.client_id.clone();
-        tokio::spawn(async move {
-            let mut rtcp_buf = vec![0u8; 1500];
-            while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {
-                // Handle RTCP feedback
-            }
-            debug!("{}: Video RTCP handler stopped", client_id);
-        });
-
-        info!("{}: Video track added", self.client_id);
-        Ok(track)
+        attach_local_track(
+            &self.peer_connection,
+            &self.client_id,
+            RtpCodecKind::Video,
+            video_codec(),
+            self.cancellation.subscribe(),
+        )
+        .await
     }
 
     /// Record a consumer for later SDP renegotiation (does NOT renegotiate yet).
@@ -540,11 +505,7 @@ impl WebRtcTransport {
     /// single SDP renegotiation that registers ALL SSRCs at once. This avoids
     /// a webrtc-rs bug where the second `set_remote_description` during rapid
     /// renegotiation doesn't properly register new SSRCs.
-    pub fn add_consumer_info(
-        &mut self,
-        kind: MediaKind,
-        consumer_rtp_parameters: &RtpParameters,
-    ) {
+    pub fn add_consumer_info(&mut self, kind: MediaKind, consumer_rtp_parameters: &RtpParameters) {
         let ssrc = consumer_rtp_parameters
             .encodings
             .first()
@@ -559,14 +520,35 @@ impl WebRtcTransport {
 
         debug!(
             "{}: Recording consumer: kind={:?}, ssrc={}, mid_ext_id={:?}, consumer_mid={:?}",
-            self.client_id, kind, ssrc, mid_ext_id,
-            consumer_rtp_parameters.mid,
+            self.client_id, kind, ssrc, mid_ext_id, consumer_rtp_parameters.mid,
         );
 
+        if self
+            .consumers
+            .iter()
+            .any(|consumer| consumer.ssrc == ssrc && consumer.kind == kind)
+        {
+            return;
+        }
+        // A 0.20 receiver owns one track, so every producer needs its own
+        // transceiver/m-line. Reuse the initial audio and video negotiation slots.
+        let mid = if !self.consumers.iter().any(|consumer| consumer.kind == kind) {
+            match kind {
+                MediaKind::Audio => 0,
+                MediaKind::Video => 1,
+            }
+        } else {
+            2 + self
+                .consumers
+                .iter()
+                .filter(|consumer| consumer.mid >= 2)
+                .count()
+        };
         self.consumers.push(ConsumerInfo {
             kind,
             ssrc,
             mid_ext_id,
+            mid,
         });
     }
 
@@ -585,6 +567,30 @@ impl WebRtcTransport {
             self.client_id,
             self.consumers.len()
         );
+
+        let mut additional: Vec<&ConsumerInfo> = self
+            .consumers
+            .iter()
+            .filter(|consumer| consumer.mid >= self.recv_transceiver_count)
+            .collect();
+        additional.sort_by_key(|consumer| consumer.mid);
+        for consumer in additional {
+            let kind = match consumer.kind {
+                MediaKind::Audio => RtpCodecKind::Audio,
+                MediaKind::Video => RtpCodecKind::Video,
+            };
+            self.peer_connection
+                .add_transceiver_from_kind(
+                    kind,
+                    Some(RTCRtpTransceiverInit {
+                        direction: RTCRtpTransceiverDirection::Recvonly,
+                        ..Default::default()
+                    }),
+                )
+                .await
+                .context("Failed to add consumer receive transceiver")?;
+            self.recv_transceiver_count += 1;
+        }
 
         let offer = self
             .peer_connection
@@ -637,7 +643,7 @@ impl WebRtcTransport {
     }
 
     /// Get the peer connection for direct access
-    pub fn peer_connection(&self) -> Arc<RTCPeerConnection> {
+    pub fn peer_connection(&self) -> Arc<dyn PeerConnection> {
         Arc::clone(&self.peer_connection)
     }
 
@@ -682,6 +688,9 @@ impl WebRtcTransport {
 
     /// Close the transport
     pub async fn close(&self) -> Result<()> {
+        if self.cancellation.send_replace(true) {
+            return Ok(());
+        }
         self.peer_connection
             .close()
             .await
@@ -733,9 +742,13 @@ impl WebRtcSession {
         )
         .await?;
 
-        transport
+        if let Err(error) = transport
             .set_remote_description(&ice_parameters, &dtls_parameters)
-            .await?;
+            .await
+        {
+            let _ = transport.close().await;
+            return Err(error);
+        }
 
         // Store tracks created by send transport (added before SDP negotiation)
         self.audio_track = transport.send_audio_track.clone();
@@ -764,9 +777,13 @@ impl WebRtcSession {
         )
         .await?;
 
-        transport
+        if let Err(error) = transport
             .set_remote_description(&ice_parameters, &dtls_parameters)
-            .await?;
+            .await
+        {
+            let _ = transport.close().await;
+            return Err(error);
+        }
 
         self.recv_transport = Some(transport);
         Ok(local_dtls)
@@ -788,11 +805,19 @@ impl WebRtcSession {
 
     /// Get the actual SSRCs assigned by webrtc-rs for the send transport
     pub async fn send_ssrcs(&self) -> Result<(u32, u32)> {
-        let transport = self
-            .send_transport
-            .as_ref()
-            .context("No send transport")?;
+        let transport = self.send_transport.as_ref().context("No send transport")?;
         transport.get_send_ssrcs().await
+    }
+
+    /// The async writer queues packets; it does not wait for ICE/DTLS itself.
+    /// Gate generation so initial media/keyframes aren't dropped before SRTP exists.
+    pub async fn wait_send_connected(&self) -> Result<()> {
+        let transport = self.send_transport.as_ref().context("No send transport")?;
+        wait_for_connected(
+            transport.connection_state.clone(),
+            std::time::Duration::from_secs(10),
+        )
+        .await
     }
 
     /// Record a consumer for later batched SDP renegotiation
@@ -831,13 +856,17 @@ impl WebRtcSession {
 
     /// Close all transports
     pub async fn close(&self) -> Result<()> {
+        let mut result = Ok(());
         if let Some(t) = &self.send_transport {
-            t.close().await?;
+            result = t.close().await;
         }
         if let Some(t) = &self.recv_transport {
-            t.close().await?;
+            let closed = t.close().await;
+            if result.is_ok() {
+                result = closed;
+            }
         }
-        Ok(())
+        result
     }
 }
 
@@ -884,7 +913,9 @@ fn extract_fingerprint_from_sdp(sdp: &str) -> Result<DtlsFingerprint> {
                         value.copy_from_slice(&bytes);
                         Ok(DtlsFingerprint::Sha512 { value })
                     }
-                    _ => Err(anyhow::anyhow!("Unsupported fingerprint algorithm or length")),
+                    _ => Err(anyhow::anyhow!(
+                        "Unsupported fingerprint algorithm or length"
+                    )),
                 };
             }
         }
@@ -927,63 +958,57 @@ fn generate_remote_sdp(
         DtlsRole::Auto => "passive",
     };
 
-    // Media direction from the remote (answerer/mediasoup) perspective
-    let direction = if is_send { "recvonly" } else { "sendonly" };
-
-    let mut sdp = String::new();
-
-    // Session-level attributes
-    sdp.push_str(&format!(
-        "v=0\r\n\
-         o=- 0 0 IN IP4 0.0.0.0\r\n\
-         s=-\r\n\
-         t=0 0\r\n\
-         a=group:BUNDLE 0 1\r\n\
-         a=ice-ufrag:{}\r\n\
-         a=ice-pwd:{}\r\n",
-        ice_parameters.username_fragment,
-        ice_parameters.password,
-    ));
-
-    // Audio m-section
-    sdp.push_str(&format!(
-        "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\n\
-         c=IN IP4 0.0.0.0\r\n\
-         a=rtcp:9 IN IP4 0.0.0.0\r\n\
-         a=rtcp-mux\r\n\
-         a=mid:0\r\n\
-         a={direction}\r\n\
-         a=rtpmap:111 opus/48000/2\r\n\
-         a=fmtp:111 minptime=10;useinbandfec=1\r\n\
-         a=extmap:1 urn:ietf:params:rtp-hdrext:sdes:mid\r\n\
-         a=fingerprint:{fp_algorithm} {fp_value}\r\n\
-         a=setup:{setup}\r\n",
-    ));
-
-    // Add ALL audio consumer SSRCs
-    for consumer in consumers.iter().filter(|c| c.kind == MediaKind::Audio) {
-        sdp.push_str(&format!("a=ssrc:{} cname:mediasoup\r\n", consumer.ssrc));
+    // Each received producer owns an m-line; putting several independent
+    // SSRCs in one section loses tracks in the 0.20 Sans-I/O receiver model.
+    let mut sections = vec![(0, MediaKind::Audio), (1, MediaKind::Video)];
+    sections.extend(
+        consumers
+            .iter()
+            .filter(|consumer| consumer.mid >= 2)
+            .map(|consumer| (consumer.mid, consumer.kind)),
+    );
+    sections.sort_by_key(|(mid, _)| *mid);
+    let mids = sections
+        .iter()
+        .map(|(mid, _)| mid.to_string())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut sdp = format!(
+        "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=group:BUNDLE {mids}\r\n\
+         a=ice-ufrag:{}\r\na=ice-pwd:{}\r\n",
+        ice_parameters.username_fragment, ice_parameters.password,
+    );
+    if ice_parameters.ice_lite == Some(true) {
+        sdp.push_str("a=ice-lite\r\n");
     }
-
-    // Video m-section
-    sdp.push_str(&format!(
-        "m=video 9 UDP/TLS/RTP/SAVPF 96\r\n\
-         c=IN IP4 0.0.0.0\r\n\
-         a=rtcp:9 IN IP4 0.0.0.0\r\n\
-         a=rtcp-mux\r\n\
-         a=mid:1\r\n\
-         a={direction}\r\n\
-         a=rtpmap:96 VP8/90000\r\n\
-         a=extmap:1 urn:ietf:params:rtp-hdrext:sdes:mid\r\n\
-         a=fingerprint:{fp_algorithm} {fp_value}\r\n\
-         a=setup:{setup}\r\n",
-    ));
-
-    // Add ALL video consumer SSRCs
-    for consumer in consumers.iter().filter(|c| c.kind == MediaKind::Video) {
-        sdp.push_str(&format!("a=ssrc:{} cname:mediasoup\r\n", consumer.ssrc));
+    for (mid, kind) in sections {
+        let consumer = consumers.iter().find(|consumer| consumer.mid == mid);
+        let (media, payload_type, codec) = match kind {
+            MediaKind::Audio => ("audio", 111, "opus/48000/2"),
+            MediaKind::Video => ("video", 96, "VP8/90000"),
+        };
+        let direction = if is_send { "recvonly" } else { "sendonly" };
+        let extension = consumer
+            .and_then(|consumer| consumer.mid_ext_id)
+            .unwrap_or(1);
+        sdp.push_str(&format!(
+            "m={media} 9 UDP/TLS/RTP/SAVPF {payload_type}\r\n\
+             c=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=rtcp-mux\r\n\
+             a=mid:{mid}\r\na={direction}\r\na=rtpmap:{payload_type} {codec}\r\n\
+             a=extmap:{extension} urn:ietf:params:rtp-hdrext:sdes:mid\r\n\
+             a=fingerprint:{fp_algorithm} {fp_value}\r\na=setup:{setup}\r\n",
+        ));
+        if kind == MediaKind::Audio {
+            sdp.push_str("a=fmtp:111 minptime=10;useinbandfec=1\r\n");
+        }
+        if let Some(consumer) = consumer {
+            let ssrc = consumer.ssrc;
+            sdp.push_str(&format!(
+                "a=msid:mediasoup-{ssrc} consumer-{ssrc}\r\n\
+                 a=ssrc:{ssrc} cname:mediasoup\r\na=ssrc:{ssrc} msid:mediasoup-{ssrc} consumer-{ssrc}\r\n"
+            ));
+        }
     }
-
     Ok(sdp)
 }
 
@@ -994,4 +1019,203 @@ fn hex_encode(bytes: &[u8]) -> String {
         .map(|b| format!("{:02X}", b))
         .collect::<Vec<_>>()
         .join(":")
+}
+
+#[cfg(test)]
+mod migration_tests {
+    use super::*;
+    use std::time::Duration;
+    use webrtc::media_stream::Track;
+
+    #[tokio::test]
+    async fn media_readiness_requires_connected_and_rejects_timeout_or_failure() {
+        let (state, receiver) = tokio::sync::watch::channel(RTCPeerConnectionState::New);
+        assert!(wait_for_connected(receiver.clone(), Duration::from_millis(5)).await.is_err());
+        let pending = tokio::spawn(wait_for_connected(receiver.clone(), Duration::from_secs(1)));
+        state.send_replace(RTCPeerConnectionState::Connecting);
+        tokio::task::yield_now().await;
+        assert!(!pending.is_finished());
+        state.send_replace(RTCPeerConnectionState::Connected);
+        pending.await.unwrap().unwrap();
+        for terminal in [RTCPeerConnectionState::Failed, RTCPeerConnectionState::Closed] {
+            state.send_replace(terminal);
+            assert!(wait_for_connected(receiver.clone(), Duration::from_secs(1)).await.is_err());
+        }
+    }
+
+    fn candidate(address: &str) -> IceCandidate {
+        IceCandidate {
+            foundation: "test".into(),
+            priority: 2_130_706_431,
+            address: address.into(),
+            protocol: Protocol::Udp,
+            port: 9,
+            r#type: IceCandidateType::Host,
+            tcp_type: None,
+        }
+    }
+
+    fn parameters() -> (IceParameters, DtlsParameters) {
+        (
+            IceParameters {
+                username_fragment: "testufrag".into(),
+                password: "test-password-at-least-twenty-two-bytes".into(),
+                ice_lite: Some(true),
+            },
+            DtlsParameters {
+                role: DtlsRole::Server,
+                fingerprints: vec![DtlsFingerprint::Sha256 { value: [0x42; 32] }],
+            },
+        )
+    }
+
+    #[test]
+    fn local_candidate_addresses_preserve_loopback_and_ip_families() {
+        assert_eq!(
+            local_udp_addresses(&[candidate("127.0.0.1")]),
+            vec!["127.0.0.1:0"]
+        );
+        assert_eq!(local_udp_addresses(&[candidate("::1")]), vec!["[::1]:0"]);
+        assert_eq!(
+            local_udp_addresses(&[candidate("127.0.0.1"), candidate("::1")]),
+            vec!["127.0.0.1:0", "[::1]:0"]
+        );
+        assert_eq!(
+            local_udp_addresses(&[candidate("192.0.2.1")]),
+            vec!["0.0.0.0:0"]
+        );
+        assert_eq!(
+            local_udp_addresses(&[candidate("2001:db8::1")]),
+            vec!["0.0.0.0:0", "[::]:0"]
+        );
+    }
+
+    #[tokio::test]
+    async fn sender_offer_has_distinct_tracks_real_ssrcs_and_dtls_fingerprint() {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            let (ice, dtls) = parameters();
+            let (mut transport, local) = WebRtcTransport::new(
+                "sender-test".into(),
+                "send-transport".into(),
+                ice.clone(),
+                vec![candidate("127.0.0.1")],
+                dtls.clone(),
+                true,
+                None,
+            )
+            .await
+            .unwrap();
+            assert!(matches!(
+                local.fingerprints.as_slice(),
+                [DtlsFingerprint::Sha256 { .. }]
+            ));
+            assert_eq!(local.role, DtlsRole::Client);
+            let audio = transport.send_audio_track.as_ref().unwrap();
+            let video = transport.send_video_track.as_ref().unwrap();
+            assert_ne!(audio.track_id().await, video.track_id().await);
+            assert_eq!(audio.stream_id().await, video.stream_id().await);
+            let (audio_ssrc, video_ssrc) = transport.get_send_ssrcs().await.unwrap();
+            assert_eq!(audio.ssrcs().await, vec![audio_ssrc]);
+            assert_eq!(video.ssrcs().await, vec![video_ssrc]);
+            transport.set_remote_description(&ice, &dtls).await.unwrap();
+            transport.close().await.unwrap();
+        })
+        .await
+        .expect("sender setup and cleanup must finish");
+    }
+
+    #[tokio::test]
+    async fn receive_transport_accepts_batched_audio_video_consumers_and_renegotiation() {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            let (ice, dtls) = parameters();
+            let (mut transport, _) = WebRtcTransport::new(
+                "receiver-test".into(),
+                "receive-transport".into(),
+                ice.clone(),
+                vec![candidate("127.0.0.1")],
+                dtls.clone(),
+                false,
+                None,
+            )
+            .await
+            .unwrap();
+            transport.set_remote_description(&ice, &dtls).await.unwrap();
+            let rtp = |ssrc| RtpParameters {
+                encodings: vec![RtpEncodingParameters {
+                    ssrc: Some(ssrc),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            transport.add_consumer_info(MediaKind::Audio, &rtp(1111));
+            transport.add_consumer_info(MediaKind::Audio, &rtp(2222));
+            transport.add_consumer_info(MediaKind::Video, &rtp(3333));
+            transport.add_consumer_info(MediaKind::Audio, &rtp(1111));
+            assert_eq!(
+                transport.consumers.len(),
+                3,
+                "consumer replay must not allocate another transceiver"
+            );
+            assert_eq!(
+                transport
+                    .consumers
+                    .iter()
+                    .map(|consumer| consumer.mid)
+                    .collect::<Vec<_>>(),
+                vec![0, 2, 1]
+            );
+            transport.renegotiate_consumers().await.unwrap();
+            transport.add_consumer_info(MediaKind::Video, &rtp(4444));
+            transport.renegotiate_consumers().await.unwrap();
+            assert_eq!(transport.recv_transceiver_count, 4);
+            let answer = generate_remote_sdp(&ice, &dtls, false, &transport.consumers).unwrap();
+            assert_eq!(answer.matches("m=audio ").count(), 2);
+            assert_eq!(answer.matches("m=video ").count(), 2);
+            assert!(answer.contains("a=group:BUNDLE 0 1 2 3\r\n"));
+            for ssrc in [1111, 2222, 3333, 4444] {
+                assert!(answer.contains(&format!("a=msid:mediasoup-{ssrc} consumer-{ssrc}\r\n")));
+            }
+            transport.close().await.unwrap();
+        })
+        .await
+        .expect("receiver renegotiation and cleanup must finish");
+    }
+
+    #[tokio::test]
+    async fn dropping_transport_cancels_pending_track_pollers_and_closes_peer() {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            let (ice, dtls) = parameters();
+            let (transport, _) = WebRtcTransport::new(
+                "cancel-test".into(),
+                "cancel-transport".into(),
+                ice,
+                vec![candidate("127.0.0.1")],
+                dtls,
+                false,
+                None,
+            )
+            .await
+            .unwrap();
+            let peer = transport.peer_connection.clone();
+            let mut cancellation = transport.cancellation.subscribe();
+            let waiting = tokio::spawn(async move {
+                next_track_event::<()>(&mut cancellation, std::future::pending()).await
+            });
+            tokio::task::yield_now().await;
+            drop(transport);
+            assert_eq!(
+                waiting.await.unwrap(),
+                None,
+                "track polling must not depend on upstream OnEnded delivery"
+            );
+            loop {
+                if peer.create_offer(None).await.is_err() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("dropped peer must be closed and all pollers cancelled");
+    }
 }

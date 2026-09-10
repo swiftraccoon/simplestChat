@@ -1,6 +1,6 @@
 # WebRTC Client for mediasoup
 
-Real WebRTC client using webrtc-rs 0.17 that establishes genuine ICE/DTLS/RTP connections with mediasoup.
+Real WebRTC client using webrtc-rs 0.20's async Sans-I/O driver that establishes genuine ICE/DTLS/RTP connections with mediasoup.
 
 ## Files
 
@@ -30,9 +30,29 @@ mediasoup uses parameter-based signaling (ICE params, DTLS params), while webrtc
 
 **MID header extension**: Register `urn:ietf:params:rtp-hdrext:sdes:mid` and include in RTP packets so webrtc-rs routes packets to correct transceivers.
 
-**on_track handler**: Must `tokio::spawn` the read loop inside the handler so the returned future completes immediately. Otherwise the `Mutex<OnTrackHdlrFn>` lock is held forever, blocking subsequent tracks.
+**Track events**: `PeerConnectionEventHandler::on_track` spawns a cancellable
+`TrackRemote::poll()` loop and returns promptly so event dispatch can continue.
+Only `OnRtpPacket` events contribute to received-media metrics. Local-track
+feedback pollers and remote-track pollers stop when the transport closes or drops;
+the peer's background driver is explicitly closed as well.
 
-**Deferred consumer resume**: Resume consumers AFTER SDP renegotiation + 100ms delay. webrtc-rs enqueues `start_rtp` asynchronously during renegotiation; SSRCs aren't registered until the operation runs.
+**Consumer SDP**: Each received producer gets its own transceiver and SDP media
+section, with stable MID, MSID and SSRC mapping across batched renegotiations.
+Consumers resume only after their receive descriptions are installed; the load
+client retains a short settling delay before sending resume messages.
+
+**Send SSRC**: Synthetic packets are parsed as RTP and rewritten to each local
+track's negotiated SSRC before `write_rtp`. The new driver does not rewrite an
+unmatched SSRC automatically.
+
+**Send readiness**: `write_rtp` queues work instead of waiting for the network
+handshake. Publishers wait for the connection's `Connected` event before
+generating media or starting the session timer. A failed/closed transport or a
+ten-second setup timeout is an error; an ICE/DTLS setup failure is not counted
+as a successful media run.
+
+**Local testing**: Loopback ICE candidates select an explicit same-family
+loopback UDP bind. Other candidates use a wildcard bind of the matching family.
 
 ## API
 
@@ -51,11 +71,11 @@ let recv_dtls = session.create_recv_transport(
 ).await?;
 
 // Produce audio/video
-let audio_track = session.produce_audio().await?;
-let video_track = session.produce_video().await?;
+let audio_track = session.produce_audio()?;
+let video_track = session.produce_video()?;
 
 // Add consumer (called when ConsumerCreated arrives)
-session.add_consumer(consumer_id, kind, rtp_parameters).await?;
+session.record_consumer(producer_id, kind, &rtp_parameters)?;
 
 // Renegotiate after batch of consumers added
 session.renegotiate_consumers().await?;
@@ -76,6 +96,6 @@ RUST_LOG=debug ./target/release/load_test --clients 1 --duration 10
 
 Key log messages:
 - `Transport connected` - ICE/DTLS handshake succeeded
-- `on_track fired` - Receiving media from a consumer
+- `Received ... RTP packets` - Receiving media from a consumer (periodic debug log)
 - `Failed to set remote description` - SDP generation issue
 - `ICE state: Failed` - Network connectivity problem

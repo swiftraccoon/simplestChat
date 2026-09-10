@@ -4,13 +4,16 @@ A WebRTC SFU (Selective Forwarding Unit) server built with Rust and mediasoup, d
 
 ## Stack
 
-- **Rust 1.98** - Application logic, signaling, room management
+- **Rust 1.98.1** - Application logic, signaling, room management
 - **mediasoup 0.27** - C++ media workers for RTP packet routing
 - **Axum 0.8** - WebSocket signaling server
 - **tokio** - Async runtime
-- **PostgreSQL + sqlx 0.8** - Users, sessions, persisted rooms, roles (optional — runs anonymous-only without it)
-- **webrtc-rs 0.17** - Load test client with real ICE/DTLS/RTP
-- **TypeScript + Vite + mediasoup-client 3.21** - Browser client
+- **PostgreSQL + sqlx 0.9** - Users, sessions, persisted rooms, roles (optional — runs anonymous-only without it)
+- **webrtc-rs 0.20** - Load test client with real ICE/DTLS/RTP
+- **TypeScript 7 + Vite 8 + mediasoup-client 3.23** - Browser client
+
+See [the native dependency notes](vendor/README.md) for source provenance,
+compatibility exceptions, and update checks.
 
 ## Features
 
@@ -78,14 +81,18 @@ Validated with progressive stress testing (AMD Ryzen 9 8945HS, 8C/16T, 90GB RAM)
 
 ### Prerequisites
 
-- Rust 1.98+ (stable)
-- Node.js 22 and npm for the web client and its regression tests
+- Rust 1.98.1+ (stable); the project toolchain pins the compiler patch release
+- Node.js 26.8.1 and npm for the web client and its regression tests (minimum 22.12)
 - A C++ toolchain + `make`, `perl`, `curl`, `pkg-config`, `cmake`,
   `python3-pip`, `meson`, and `ninja` (mediasoup-sys builds C++ workers)
 - Linux x86_64 for deployment: `libstdc++-static`, `glibc-static` (static linking)
 - Static OpenSSL 3.5 LTS, version 3.5.8 or newer (but below 3.6.0); the
   checksum-pinned helper below avoids trusting an unversioned OS library
 - macOS builds too (current Xcode CLT); nuck11/Linux is the canonical deploy host
+
+If Homebrew's Rust binaries precede rustup in your shell, the toolchain file
+cannot select the compiler. Check `rustc --version` and `cargo --version` and
+put rustup's proxies first on `PATH` before building.
 
 ### Build & Run
 
@@ -254,7 +261,7 @@ src/
 ├── turn.rs                    # TURN credential generation
 ├── auth/
 │   ├── routes.rs              # /api/auth/* endpoints (register, login, refresh, passkeys)
-│   ├── jwt.rs                 # JWT create/validate (jsonwebtoken 10, HS256)
+│   ├── jwt.rs                 # JWT create/validate (jsonwebtoken 11, HS256)
 │   ├── password.rs            # argon2 hashing
 │   ├── webauthn.rs            # Passkey registration/login
 │   ├── account.rs             # Profiles, password changes, saved recovery keys
@@ -462,13 +469,18 @@ only the required table permissions:
 ```bash
 # /etc/simplestchat/migration.env is owner-readable and contains only:
 # DATABASE_URL=postgres://migration_user:<password>@db.example.com/chat?sslmode=verify-full
-cargo install sqlx-cli --locked --version 0.8.6 --no-default-features --features postgres,rustls
+cargo install sqlx-cli --version 0.9.0 --no-default-features --features postgres,rustls
 set -a
 . /etc/simplestchat/migration.env
 set +a
 sqlx migrate run
 unset DATABASE_URL
 ```
+
+SQLx 0.9 no longer ships a CLI lockfile, so the example pins the CLI version
+without `--locked`. For reproducible deployment tooling, build/package that
+version with your own reviewed lockfile. This does not affect the application's
+checked-in `Cargo.lock` or its `--locked` builds.
 
 Migration 011 enables the trusted PostgreSQL `pg_trgm` extension. Ensure the
 migration role is allowed to create that extension, or have a database
@@ -625,7 +637,7 @@ device coverage; mocked media cannot establish those behaviors.
   bundles vulnerable OpenSSL 3.0.8. This repository patches the exact crates.io
   source to forbid that fallback and statically links checksum-pinned OpenSSL
   3.5.8 LTS, which fixes CVE-2026-54874. It also patches `mediasoup` 0.27.0 to
-  use `lru` 0.18.3, removing RUSTSEC-2026-0253, and updates the embedded
+  use `lru` 0.18.4, removing RUSTSEC-2026-0253, and updates the embedded
   Abseil LTS archive to `20240722.2`, which fixes CVE-2025-0838. Provenance and
   the complete maintained-diff boundary are documented in `vendor/README.md`.
   Cargo cannot audit native code: keep the native-version CI checks, rebuild

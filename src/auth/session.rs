@@ -2,7 +2,7 @@
 
 use crate::auth::types::AuthError;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use rand::{TryRngCore, rngs::OsRng};
+use rand::{TryRng, rngs::SysRng};
 use sha2::{Digest, Sha256};
 use sqlx::{Executor, PgPool, Postgres, Transaction};
 use uuid::Uuid;
@@ -51,7 +51,7 @@ fn hash_bytes(value: &[u8]) -> String {
 
 fn random_secret() -> Result<[u8; REFRESH_SECRET_BYTES], AuthError> {
     let mut secret = [0_u8; REFRESH_SECRET_BYTES];
-    OsRng.try_fill_bytes(&mut secret).map_err(|error| {
+    SysRng.try_fill_bytes(&mut secret).map_err(|error| {
         AuthError::DatabaseError(format!("Secure refresh-token generation failed: {error}"))
     })?;
     Ok(secret)
@@ -376,6 +376,44 @@ pub async fn cleanup_expired(pool: &PgPool) -> Result<u64, AuthError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn persisted_token_hashes_remain_lowercase_sha256_hex() {
+        // SHA-256 standard known-answer vectors, independent of token generation.
+        assert_eq!(
+            hash_token(""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            hash_token("abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn fixed_v1_refresh_fixture_preserves_base64url_and_family_hashes() {
+        // Frozen pre-migration v1n format: 32 0xff generation bytes, then
+        // 32 0xfb family bytes. Expected hashes were independently checked
+        // with Node's crypto implementation, not this crate's encoder/hasher.
+        const GENERATION: &str = "__________________________________________8";
+        const FAMILY: &str = "-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_v7-_s";
+        let raw = format!("v1n{GENERATION}{FAMILY}");
+        assert_eq!(URL_SAFE_NO_PAD.encode([0xff; 32]), GENERATION);
+        assert_eq!(URL_SAFE_NO_PAD.encode([0xfb; 32]), FAMILY);
+        assert_eq!(family_secret(&raw).unwrap(), [0xfb; 32]);
+        assert_eq!(
+            hash_token(&raw),
+            "fb8e7de9c3c058fd86581ba30ca82e14e7ce146e8ba82b2441c1e36e63aa4e7c"
+        );
+        let successor = build_refresh_token(&[0xfb; 32]).unwrap();
+        assert!(successor.raw.ends_with(FAMILY));
+        assert_eq!(
+            successor.family_hash,
+            "456a04986c2572de19b058ef2ef20b0077017bcdb15819af052eb9d5d9b8e504"
+        );
+        assert!(family_secret(&format!("{raw}=")).is_none());
+        assert!(family_secret(&raw.replace('_', "/")).is_none());
+    }
 
     async fn rotate_and_commit(
         pool: &PgPool,

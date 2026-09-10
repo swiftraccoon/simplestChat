@@ -43,7 +43,7 @@ NUM_CORES = (
 )
 PYTHON = os.getenv("PYTHON") or sys.executable
 MESON = os.getenv("MESON") or f"{PIP_MESON_NINJA_DIR}/bin/meson"
-MESON_VERSION = os.getenv("MESON_VERSION") or "1.11.2"
+MESON_VERSION = os.getenv("MESON_VERSION") or "1.12.0"
 # MESON_ARGS can be used to provide extra configuration parameters to meson,
 # such as adding defines or changing optimization options. For instance, use
 # `MESON_ARGS="-Dms_log_trace=true -Dms_log_file_line=true" npm i` to compile
@@ -60,7 +60,7 @@ MESON_ARGS = (
 # Let's use a specific version of ninja to avoid buggy version 1.11.1:
 # https://mediasoup.discourse.group/t/partly-solved-could-not-detect-ninja-v1-8-2-or-newer/
 # https://github.com/ninja-build/ninja/issues/2211
-NINJA_VERSION = os.getenv("NINJA_VERSION") or "1.10.2.4"
+NINJA_VERSION = os.getenv("NINJA_VERSION") or "1.13.2"
 RUFF_VERSION = os.getenv("RUFF_VERSION") or "0.15.15"
 NPM = os.getenv("NPM") or "npm"
 DOCKER = os.getenv("DOCKER") or "docker"
