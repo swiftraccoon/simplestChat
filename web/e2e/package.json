@@ -1,0 +1,15 @@
+{
+  "name": "simplestchat-browser-tests",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "test": "node community.cjs",
+    "install:browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}
