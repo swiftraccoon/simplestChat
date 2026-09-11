@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Help · SimplestChat</title>
+    <link rel="stylesheet" href="/help.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#help-content">Skip to help</a>
+    <header>
+      <a href="/">SimplestChat</a>
+      <span>Help</span>
+    </header>
+    <main id="help-content">
+      <h1>Get comfortable in your room</h1>
+      <p class="intro">
+        Joining does not turn on your camera or microphone. You choose what to share.
+      </p>
+      <nav aria-label="Help topics">
+        <a href="#join">Join a room</a>
+        <a href="#media">Camera and sound</a>
+        <a href="#messages">Messages and privacy</a>
+        <a href="#hosting">Hosting a room</a>
+        <a href="#account">Accounts and recovery</a>
+        <a href="#trouble">When something goes wrong</a>
+      </nav>
+      <section aria-labelledby="join">
+        <h2 id="join">Join a room</h2>
+        <p>
+          Choose a room from the directory, or enter its room name. Room search needs at least three
+          consecutive letters or numbers. Enter the name you want people to see and choose
+          <strong>Join Room</strong>.
+        </p>
+        <p>
+          A room may require an account, a password or a host's approval. If you are waiting in the
+          lobby, you have not joined the room and are not broadcasting. You can cancel while you
+          wait.
+        </p>
+        <p>
+          <strong>Copy room link</strong> shares the room's address, not your account or its
+          password. A link does not bypass the room's entry rules. Keep passwords separate and share
+          them only with the people you intend to invite.
+        </p>
+      </section>
+      <section aria-labelledby="media">
+        <h2 id="media">Camera and sound</h2>
+        <p>
+          Open <strong>Your settings</strong> or <strong>Mic setup</strong> to choose devices.
+          <strong>Start preview</strong> lets you check them privately; your microphone is not
+          played through your speakers. Previewing is not broadcasting.
+        </p>
+        <p>
+          <strong>Save settings</strong> applies device preferences. It can switch a camera or
+          microphone you are already using, but never turns on an inactive one. Layout and talk-mode
+          choices apply immediately.
+        </p>
+        <p>
+          Use the camera, microphone or screen-sharing controls to publish. Your browser may ask for
+          permission or a screen/window to share. A stopped or disconnected device needs an explicit
+          restart; the app does not silently open it again.
+        </p>
+        <p>
+          In push-to-talk mode, hold the microphone control or Space to speak and release it to
+          stop. Space does not activate push-to-talk while you are typing or using a dialog.
+        </p>
+        <p>
+          Each person's viewing controls include volume, mute and hide. Those choices affect only
+          your view. They do not mute that person's microphone for anyone else. A browser may block
+          sound until you interact with the page; use the playback recovery control when offered.
+        </p>
+      </section>
+      <section aria-labelledby="messages">
+        <h2 id="messages">Messages and privacy</h2>
+        <p>
+          The room conversation is public to eligible room participants. Choose a person's
+          private-message action to start a separate conversation, and check the selected
+          conversation before sending. Drafts and sent-message recall stay with that conversation.
+        </p>
+        <p>
+          A pending message has not yet been confirmed. If delivery remains unconfirmed, reconnect
+          and check before sending it again: it may already have arrived. Private messages cannot be
+          sent to someone who has left, opted out or blocked delivery.
+        </p>
+        <p>
+          Chat preferences let you turn private messages off and ignore participants. Ignoring is
+          personal filtering, not a room-wide sanction. Reporting someone sends the report to room
+          moderators; it does not automatically hide them, remove them or preserve a full recording.
+        </p>
+        <p>
+          <strong>Do not use chat as permanent storage.</strong> Recent history and reconnect
+          recovery are limited and live in server memory. Leaving, restarting the server or older
+          entries being evicted can make messages unavailable.
+        </p>
+        <p>
+          Private messages and media are not end-to-end encrypted. Server operators are part of the
+          trust boundary. A room marked secret is unlisted, not protected from someone who knows its
+          address; hosts must configure access rules separately.
+        </p>
+      </section>
+      <section aria-labelledby="hosting">
+        <h2 id="hosting">Hosting a room</h2>
+        <p>
+          With an account, use <strong>Create Room</strong> and <strong>My rooms</strong> to manage
+          your rooms. Availability depends on the server's account and registration settings.
+        </p>
+        <p>
+          <strong>Room settings</strong> change the room for everyone and apply immediately. Entry
+          rules, lobby approval and participation permissions are separate: admitting someone does
+          not necessarily let them broadcast or speak in a moderated room.
+        </p>
+        <p>
+          Use membership roles to delegate moderation carefully. Moderation actions are not the same
+          as your personal viewing controls. Check the target and duration before banning someone,
+          and use the management views to review bans and reports.
+        </p>
+        <p>
+          A blank participant or broadcaster limit removes that room-specific cap; zero does not
+          mean unlimited. Server-wide capacity limits still apply. Deleting a room disconnects its
+          current participants; the confirmation asks for its room name.
+        </p>
+      </section>
+      <section aria-labelledby="account">
+        <h2 id="account">Accounts and recovery</h2>
+        <p>
+          Accounts can use passwords and, when configured by the server, passkeys. Display names can
+          change; they are not proof of someone's identity. This app does not verify ownership of
+          email addresses.
+        </p>
+        <p>
+          In <strong>Account</strong>, use your current password to generate a recovery key and save
+          it somewhere private. It is shown once. Generating another key replaces the previous one.
+        </p>
+        <p>
+          <strong>Recover with a saved key</strong> consumes that key and sets a new password.
+          Password changes and recovery sign out existing account sessions. Passkey-only accounts do
+          not have a current password for password-based controls.
+        </p>
+        <p>
+          There is no password-reset email flow. Do not assume an operator can recover an account
+          without a working sign-in method or saved recovery key. Never send passwords, passkeys,
+          recovery keys or session credentials in chat or reports.
+        </p>
+      </section>
+      <section aria-labelledby="trouble">
+        <h2 id="trouble">When something goes wrong</h2>
+        <dl>
+          <dt>My camera or microphone is unavailable</dt>
+          <dd>
+            Check the browser's permission for this site, whether another app is using the device,
+            and the selected device in Your settings. Reconnect a missing device, then explicitly
+            start preview or capture again. Preview failure does not grant the app permission to try
+            another device silently.
+          </dd>
+          <dt>I cannot hear someone</dt>
+          <dd>
+            Check your output device, system volume, room volume and that person's viewing controls.
+            Ask whether they are broadcasting. Use the playback recovery control if the browser
+            requests a gesture.
+          </dd>
+          <dt>Chat connects but video does not arrive</dt>
+          <dd>
+            Chat and media use different connections. A connected status alone does not prove video
+            is working. Check whether the person is publishing; if the problem persists, leave and
+            rejoin explicitly. That stops your current capture and may interrupt private
+            conversations. A network restriction may need help from the server operator.
+          </dd>
+          <dt>I was disconnected</dt>
+          <dd>
+            The app attempts to reconnect. A brief disconnect may recover the same room, but this is
+            not guaranteed. Wait for recovery before sending again. A full rejoin or expired session
+            may require the room password or approval again.
+          </dd>
+          <dt>I need to report a problem</dt>
+          <dd>
+            Contact your room host or server operator. Describe the action, visible error, browser
+            and whether chat, sound or video was affected. Leave out passwords, recovery keys,
+            private messages and raw connection diagnostics.
+          </dd>
+        </dl>
+      </section>
+      <p class="return-note">
+        If this help opened from a room, close this tab to return without leaving that room.
+      </p>
+    </main>
+  </body>
+</html>

@@ -12,24 +12,36 @@ export class ConversationInputs {
   private readonly conversations = new Map<string, Composition>();
 
   private state(id: string): Composition {
-    const value = this.conversations.get(id) ?? { draft: '', history: [], cursor: -1, beforeRecall: '' };
+    const value = this.conversations.get(id) ?? {
+      draft: '',
+      history: [],
+      cursor: -1,
+      beforeRecall: '',
+    };
     this.conversations.delete(id);
     this.conversations.set(id, value);
     return value;
   }
 
-  draft(id: string): string { return this.conversations.get(id)?.draft ?? ''; }
+  draft(id: string): string {
+    return this.conversations.get(id)?.draft ?? '';
+  }
 
   save(id: string, value: string): void {
     const state = this.state(id);
-    state.draft = value.slice(0, 2000); state.cursor = -1; state.beforeRecall = '';
+    state.draft = value.slice(0, 2000);
+    state.cursor = -1;
+    state.beforeRecall = '';
     this.trim(id);
   }
 
   sent(id: string, value: string): void {
     const state = this.state(id);
-    state.history.unshift(value.slice(0, 2000)); state.history.splice(50);
-    state.draft = ''; state.cursor = -1; state.beforeRecall = '';
+    state.history.unshift(value.slice(0, 2000));
+    state.history.splice(50);
+    state.draft = '';
+    state.cursor = -1;
+    state.beforeRecall = '';
     this.trim(id);
   }
 
@@ -45,15 +57,28 @@ export class ConversationInputs {
     return state.draft;
   }
 
-  isRecalling(id: string): boolean { return (this.conversations.get(id)?.cursor ?? -1) >= 0; }
-  close(id: string): void { this.conversations.delete(id); }
-  reset(): void { this.conversations.clear(); }
+  isRecalling(id: string): boolean {
+    return (this.conversations.get(id)?.cursor ?? -1) >= 0;
+  }
+  close(id: string): void {
+    this.conversations.delete(id);
+  }
+  reset(): void {
+    this.conversations.clear();
+  }
 
   private trim(active: string): void {
-    const size = (): number => [...this.conversations.values()].reduce((total, state) =>
-      total + state.draft.length + state.beforeRecall.length + state.history.reduce((sum, text) => sum + text.length, 0), 0);
+    const size = (): number =>
+      [...this.conversations.values()].reduce(
+        (total, state) =>
+          total +
+          state.draft.length +
+          state.beforeRecall.length +
+          state.history.reduce((sum, text) => sum + text.length, 0),
+        0,
+      );
     while (this.conversations.size > 100 || size() > 256 * 1024) {
-      const oldest = [...this.conversations.keys()].find(id => id !== active);
+      const oldest = [...this.conversations.keys()].find((id) => id !== active);
       if (!oldest) break;
       this.conversations.delete(oldest);
     }
@@ -70,7 +95,10 @@ export class ChatStore {
   active = 'public';
   localId = '';
 
-  constructor(private readonly maxMessages = 500, private readonly maxCharacters = 512 * 1024) {}
+  constructor(
+    private readonly maxMessages = 500,
+    private readonly maxCharacters = 512 * 1024,
+  ) {}
 
   conversation(message: ChatEntry): string {
     if (!message.recipientId) return 'public';
@@ -78,15 +106,29 @@ export class ChatStore {
   }
 
   private key(message: ChatEntry): string {
-    return JSON.stringify([message.participantId, message.clientMessageId, message.recipientId ?? 'public']);
+    return JSON.stringify([
+      message.participantId,
+      message.clientMessageId,
+      message.recipientId ?? 'public',
+    ]);
   }
 
   private accepts(entry: ChatEntry): boolean {
-    return !!this.localId && !!entry && typeof entry.messageId === 'string' && !!entry.messageId
-      && typeof entry.clientMessageId === 'string' && !!entry.clientMessageId
-      && typeof entry.participantId === 'string' && typeof entry.participantName === 'string'
-      && typeof entry.content === 'string' && Number.isFinite(Date.parse(entry.sentAt))
-      && (!entry.recipientId || entry.participantId === this.localId || entry.recipientId === this.localId);
+    return (
+      !!this.localId &&
+      !!entry &&
+      typeof entry.messageId === 'string' &&
+      !!entry.messageId &&
+      typeof entry.clientMessageId === 'string' &&
+      !!entry.clientMessageId &&
+      typeof entry.participantId === 'string' &&
+      typeof entry.participantName === 'string' &&
+      typeof entry.content === 'string' &&
+      Number.isFinite(Date.parse(entry.sentAt)) &&
+      (!entry.recipientId ||
+        entry.participantId === this.localId ||
+        entry.recipientId === this.localId)
+    );
   }
 
   private rememberName(entry: ChatEntry): void {
@@ -99,7 +141,9 @@ export class ChatStore {
   receive(entry: ChatEntry, _replay = false): boolean {
     if (!this.accepts(entry) || this.dismissedMessages.has(this.key(entry))) return false;
     const conversation = this.conversation(entry);
-    const existing = this.messages.find(message => message.messageId === entry.messageId || this.key(message) === this.key(entry));
+    const existing = this.messages.find(
+      (message) => message.messageId === entry.messageId || this.key(message) === this.key(entry),
+    );
     if (existing) {
       if (this.conversation(existing) !== conversation) return false;
       Object.assign(existing, entry, { status: 'sent', error: undefined });
@@ -110,7 +154,11 @@ export class ChatStore {
     this.rememberName(entry);
     const item: ChatItem = { ...entry, status: 'sent' };
     this.messages.push(item);
-    if (conversation !== this.active && entry.participantId && entry.participantId !== this.localId) {
+    if (
+      conversation !== this.active &&
+      entry.participantId &&
+      entry.participantId !== this.localId
+    ) {
       // Only unseen replay entries count; duplicates return above.
       this.unreadMessages.add(this.key(entry));
     }
@@ -120,7 +168,7 @@ export class ChatStore {
 
   pending(entry: ChatEntry): boolean {
     if (!this.accepts(entry) || entry.participantId !== this.localId) return false;
-    if (this.messages.some(item => this.key(item) === this.key(entry))) return false;
+    if (this.messages.some((item) => this.key(item) === this.key(entry))) return false;
     this.rememberName(entry);
     const item: ChatItem = { ...entry, status: 'pending' };
     this.messages.push(item);
@@ -129,21 +177,26 @@ export class ChatStore {
   }
 
   fail(clientMessageId: string, message: string): void {
-    const existing = this.messages.find(item => item.clientMessageId === clientMessageId && item.participantId === this.localId);
+    const existing = this.messages.find(
+      (item) => item.clientMessageId === clientMessageId && item.participantId === this.localId,
+    );
     if (existing?.status === 'pending') {
-      existing.status = 'failed'; existing.error = message.slice(0, 1024);
+      existing.status = 'failed';
+      existing.error = message.slice(0, 1024);
       this.trim();
     }
   }
 
   markRead(id: string): void {
-    for (const item of this.messages) if (this.conversation(item) === id) this.unreadMessages.delete(this.key(item));
+    for (const item of this.messages)
+      if (this.conversation(item) === id) this.unreadMessages.delete(this.key(item));
     this.refreshUnread();
   }
 
   markUnread(entry: ChatEntry): void {
     if (!entry.participantId || entry.participantId === this.localId) return;
-    if (this.messages.some(item => this.key(item) === this.key(entry))) this.unreadMessages.add(this.key(entry));
+    if (this.messages.some((item) => this.key(item) === this.key(entry)))
+      this.unreadMessages.add(this.key(entry));
     this.refreshUnread();
   }
 
@@ -168,24 +221,37 @@ export class ChatStore {
     if (this.active === id) this.active = 'public';
     this.refreshUnread();
     // Identities suppress replay/late acks without trusting the browser clock.
-    while (this.dismissedMessages.size > this.maxMessages * 2) this.dismissedMessages.delete(this.dismissedMessages.keys().next().value!);
+    while (this.dismissedMessages.size > this.maxMessages * 2)
+      this.dismissedMessages.delete(this.dismissedMessages.keys().next().value!);
   }
 
   reset(localId = ''): void {
     this.messages.length = 0;
-    this.unread.clear(); this.unreadMessages.clear(); this.names.clear(); this.dismissedMessages.clear();
-    this.active = 'public'; this.localId = localId;
+    this.unread.clear();
+    this.unreadMessages.clear();
+    this.names.clear();
+    this.dismissedMessages.clear();
+    this.active = 'public';
+    this.localId = localId;
   }
 
   private characters(item: ChatItem): number {
-    return item.content.length + item.participantName.length + (item.recipientName?.length ?? 0)
-      + item.messageId.length + item.clientMessageId.length + item.participantId.length
-      + (item.recipientId?.length ?? 0) + item.sentAt.length + (item.error?.length ?? 0);
+    return (
+      item.content.length +
+      item.participantName.length +
+      (item.recipientName?.length ?? 0) +
+      item.messageId.length +
+      item.clientMessageId.length +
+      item.participantId.length +
+      (item.recipientId?.length ?? 0) +
+      item.sentAt.length +
+      (item.error?.length ?? 0)
+    );
   }
 
   private refreshUnread(): void {
     this.unread.clear();
-    const retained = new Set(this.messages.map(item => this.key(item)));
+    const retained = new Set(this.messages.map((item) => this.key(item)));
     for (const key of this.unreadMessages) if (!retained.has(key)) this.unreadMessages.delete(key);
     for (const item of this.messages) {
       if (this.unreadMessages.has(this.key(item))) {
@@ -205,7 +271,7 @@ export class ChatStore {
       this.unreadMessages.delete(this.key(oldest));
     }
     while (this.names.size > 100) {
-      const oldest = [...this.names.keys()].find(id => id !== this.active);
+      const oldest = [...this.names.keys()].find((id) => id !== this.active);
       if (!oldest) break;
       this.close(oldest);
     }

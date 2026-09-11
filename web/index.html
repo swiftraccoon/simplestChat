@@ -1,355 +1,572 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SimplestChat</title>
-  <link rel="stylesheet" href="/src/style.css" />
-</head>
-<body>
-  <div id="app">
-    <header>
-      <div class="header-left">
-        <h1>SimplestChat</h1>
-        <span id="room-label" class="room-label" hidden></span>
-        <span id="room-topic" class="room-topic" hidden></span>
-      </div>
-      <div class="header-right">
-        <div id="community-actions"></div>
-        <span id="quality-indicator" class="quality-dot" hidden title="Connection quality"></span>
-        <span id="connection-status" class="status disconnected">Disconnected</span>
-      </div>
-    </header>
-
-    <div id="room-tools" hidden>
-      <div class="room-navigation">
-        <button id="copy-room-link" type="button">Copy room link</button>
-        <button id="toggle-roster" type="button" aria-controls="classic-users-panel users-panel" aria-expanded="true">People</button>
-        <button id="toggle-chat" type="button" aria-controls="sidebar" aria-expanded="true">Chat</button>
-        <button id="mic-setup-btn" type="button">Mic setup</button>
-      </div>
-    </div>
-
-    <div id="join-screen">
-      <div class="join-card">
-        <!-- Auth bar: shown when logged out -->
-        <div id="auth-bar-guest" class="auth-bar">
-          <div class="join-brand">SimplestChat</div>
-          <div class="join-subtitle">Video chat, simplified</div>
-          <button id="sign-in-btn" class="auth-link-btn">Sign in</button>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SimplestChat</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <div class="header-left">
+          <h1>SimplestChat</h1>
+          <span id="room-label" class="room-label" hidden></span>
+          <span id="room-topic" class="room-topic" hidden></span>
         </div>
-        <!-- Auth bar: shown when logged in -->
-        <div id="auth-bar-user" class="auth-bar" hidden>
-          <div class="join-brand">SimplestChat</div>
-          <div class="auth-user-info">
-            <span id="auth-display-name"></span>
-            <button id="logout-btn" class="auth-link-btn">Sign out</button>
+        <div class="header-right">
+          <a
+            class="help-link"
+            href="/help.html"
+            target="_blank"
+            rel="noopener"
+            aria-label="Help (opens in a new tab)"
+            >Help</a
+          >
+          <div id="community-actions"></div>
+          <span id="quality-indicator" class="quality-dot" hidden title="Connection quality"></span>
+          <span id="connection-status" class="status disconnected">Disconnected</span>
+        </div>
+      </header>
+
+      <div id="room-tools" hidden>
+        <div class="room-navigation">
+          <button id="copy-room-link" type="button">Copy room link</button>
+          <button
+            id="toggle-roster"
+            type="button"
+            aria-controls="classic-users-panel users-panel"
+            aria-expanded="true"
+          >
+            People
+          </button>
+          <button id="toggle-chat" type="button" aria-controls="sidebar" aria-expanded="true">
+            Chat
+          </button>
+          <button id="mic-setup-btn" type="button">Mic setup</button>
+        </div>
+      </div>
+
+      <div id="join-screen">
+        <div class="join-card">
+          <!-- Auth bar: shown when logged out -->
+          <div id="auth-bar-guest" class="auth-bar">
+            <div class="join-brand">SimplestChat</div>
+            <div class="join-subtitle">Video chat, simplified</div>
+            <button id="sign-in-btn" class="auth-link-btn">Sign in</button>
           </div>
-        </div>
-
-        <!-- Public rooms are discoverable without signing in. -->
-        <div id="room-browser">
-          <div class="room-browser-header">
-            <div class="room-search-row">
-              <input type="text" id="room-search-input" placeholder="Search rooms (3+ consecutive letters/numbers)..." minlength="3" maxlength="128" autocomplete="off" />
-            </div>
-            <button id="create-room-btn" class="btn-primary" title="Create Room" hidden>+ Create Room</button>
-          </div>
-          <div id="room-list" class="room-list"></div>
-          <button id="room-load-more" class="btn-secondary" hidden>Load more</button>
-        </div>
-
-        <!-- Manual join form (always visible) -->
-        <div class="join-form">
-          <div id="join-form-divider" class="divider" hidden><span>or join directly</span></div>
-          <input type="text" id="name-input" placeholder="Your name" autocomplete="off" />
-          <input type="text" id="room-input" placeholder="Room name" autocomplete="off" />
-          <button id="join-btn" disabled>Join Room</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="room-screen" class="layout-classic" hidden>
-      <div id="main-area">
-        <div id="video-grid"></div>
-      </div>
-      <div id="sidebar">
-        <div id="sidebar-tabs">
-          <button class="tab active" data-tab="chat">Chat</button>
-          <button class="tab" data-tab="users">Users</button>
-          <button class="tab" data-tab="lobby" id="lobby-tab" hidden>Lobby</button>
-        </div>
-        <div id="sidebar-content">
-          <div id="chat-panel" class="tab-content active">
-            <div id="chat-messages"></div>
-            <div id="scroll-bottom-btn" hidden>
-              <span id="unread-badge" hidden>0</span>
-            </div>
-            <div id="chat-input-row">
-              <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" />
-              <button id="chat-send-btn" title="Send message"></button>
+          <!-- Auth bar: shown when logged in -->
+          <div id="auth-bar-user" class="auth-bar" hidden>
+            <div class="join-brand">SimplestChat</div>
+            <div class="auth-user-info">
+              <span id="auth-display-name"></span>
+              <button id="logout-btn" class="auth-link-btn">Sign out</button>
             </div>
           </div>
-          <div id="users-panel" class="tab-content">
-            <ul id="participant-list"></ul>
+
+          <!-- Public rooms are discoverable without signing in. -->
+          <div id="room-browser">
+            <div class="room-browser-header">
+              <div class="room-search-row">
+                <label class="field-label" for="room-search-input">Search rooms</label>
+                <input
+                  type="text"
+                  id="room-search-input"
+                  placeholder="Room name or topic"
+                  aria-describedby="room-search-help"
+                  minlength="3"
+                  maxlength="128"
+                  autocomplete="off"
+                />
+                <p id="room-search-help" class="field-hint">
+                  Use 3+ consecutive letters or numbers.
+                </p>
+              </div>
+              <button id="create-room-btn" class="btn-primary" title="Create Room" hidden>
+                + Create Room
+              </button>
+            </div>
+            <div id="room-list" class="room-list"></div>
+            <button id="room-load-more" class="btn-secondary" hidden>Load more</button>
           </div>
-          <div id="lobby-panel" class="tab-content">
-            <ul id="lobby-list"></ul>
-            <div id="lobby-empty" class="room-list-empty">No one waiting</div>
+
+          <!-- Manual join form (always visible) -->
+          <div class="join-form">
+            <div id="join-form-divider" class="divider" hidden><span>or join directly</span></div>
+            <label class="field-label" for="name-input">Your name</label>
+            <input type="text" id="name-input" placeholder="Your name" autocomplete="off" />
+            <label class="field-label" for="room-input">Room name</label>
+            <input type="text" id="room-input" placeholder="Room name" autocomplete="off" />
+            <button id="join-btn" disabled>Join Room</button>
           </div>
         </div>
       </div>
-      <div id="controls">
-        <button id="mic-btn" title="Toggle microphone"></button>
-        <button id="cam-btn" title="Toggle camera"></button>
-        <button id="screen-btn" title="Share screen"></button>
-        <button id="hand-btn" title="Raise hand" hidden></button>
-        <button id="room-settings-btn" title="Room settings" hidden></button>
-        <button id="settings-btn" title="Settings"></button>
-        <button id="leave-btn" title="Leave room"></button>
-      </div>
-    </div>
 
-    <div id="lobby-screen" hidden>
-      <div class="lobby-card">
-        <h2 id="lobby-room-name"></h2>
-        <p id="lobby-topic"></p>
-        <div class="lobby-spinner"></div>
-        <p class="lobby-waiting-text">Waiting for moderator approval...</p>
-        <p id="lobby-count"></p>
-        <button id="lobby-cancel-btn">Cancel</button>
-      </div>
-    </div>
-
-    <div id="room-settings-modal" class="modal-overlay" hidden>
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Room Settings</h2>
-          <button id="room-settings-close" class="modal-close">&times;</button>
+      <div id="room-screen" class="layout-classic" hidden>
+        <div id="main-area">
+          <div id="video-grid"></div>
         </div>
-        <div class="modal-body">
-          <div class="settings-section">
-            <div class="settings-section-title">General</div>
-            <div class="setting-group">
+        <div id="sidebar">
+          <div id="sidebar-tabs">
+            <button class="tab active" data-tab="chat">Chat</button>
+            <button class="tab" data-tab="users">Users</button>
+            <button class="tab" data-tab="lobby" id="lobby-tab" hidden>Lobby</button>
+          </div>
+          <div id="sidebar-content">
+            <div id="chat-panel" class="tab-content active">
+              <div id="chat-messages"></div>
+              <button
+                id="scroll-bottom-btn"
+                type="button"
+                aria-label="Scroll to newest messages"
+                hidden
+              >
+                <span id="unread-badge" hidden>0</span>
+              </button>
+              <div id="chat-input-row">
+                <input
+                  type="text"
+                  id="chat-input"
+                  aria-label="Message"
+                  placeholder="Type a message..."
+                  autocomplete="off"
+                />
+                <button id="chat-send-btn" title="Send message"></button>
+              </div>
+            </div>
+            <div id="users-panel" class="tab-content">
+              <ul id="participant-list"></ul>
+            </div>
+            <div id="lobby-panel" class="tab-content">
+              <ul id="lobby-list"></ul>
+              <div id="lobby-empty" class="room-list-empty">No one waiting</div>
+            </div>
+          </div>
+        </div>
+        <div id="controls">
+          <button id="mic-btn" title="Toggle microphone"></button>
+          <button id="cam-btn" title="Toggle camera"></button>
+          <button id="screen-btn" title="Share screen"></button>
+          <button id="hand-btn" title="Raise hand" hidden></button>
+          <button id="room-settings-btn" title="Room settings" hidden></button>
+          <button id="settings-btn" title="Settings"></button>
+          <button id="leave-btn" title="Leave room"></button>
+        </div>
+      </div>
+
+      <div id="lobby-screen" hidden>
+        <div class="lobby-card">
+          <h2 id="lobby-room-name"></h2>
+          <p id="lobby-topic"></p>
+          <div class="lobby-spinner"></div>
+          <p class="lobby-waiting-text">Waiting for moderator approval...</p>
+          <p id="lobby-count"></p>
+          <button id="lobby-cancel-btn">Cancel</button>
+        </div>
+      </div>
+
+      <dialog
+        id="room-settings-modal"
+        class="settings-dialog"
+        aria-labelledby="room-settings-title"
+      >
+        <div class="settings-dialog-header">
+          <div>
+            <h2 id="room-settings-title">Room settings</h2>
+            <p class="settings-description">These controls affect everyone in this room.</p>
+          </div>
+          <button
+            id="room-settings-close"
+            type="button"
+            data-dialog-close
+            aria-label="Close room settings"
+          >
+            Close
+          </button>
+        </div>
+        <div class="settings-dialog-nav" role="tablist" aria-label="Room settings sections">
+          <button
+            id="room-settings-basics-tab"
+            type="button"
+            role="tab"
+            data-settings-tab
+            aria-selected="true"
+            aria-controls="room-settings-basics"
+          >
+            Basics
+          </button>
+          <button
+            id="room-settings-access-tab"
+            type="button"
+            role="tab"
+            data-settings-tab
+            aria-selected="false"
+            aria-controls="room-settings-access"
+            tabindex="-1"
+          >
+            Access
+          </button>
+          <button
+            id="room-settings-participation-tab"
+            type="button"
+            role="tab"
+            data-settings-tab
+            aria-selected="false"
+            aria-controls="room-settings-participation"
+            tabindex="-1"
+          >
+            Participation
+          </button>
+        </div>
+        <div class="settings-dialog-body">
+          <section
+            id="room-settings-basics"
+            role="tabpanel"
+            aria-labelledby="room-settings-basics-tab"
+            tabindex="0"
+          >
+            <div class="settings-field">
               <label for="rs-topic">Topic</label>
               <input type="text" id="rs-topic" placeholder="Room topic" autocomplete="off" />
+              <p class="settings-description">Shown beside the room name.</p>
             </div>
-            <div class="setting-group">
+            <div class="settings-field">
               <label for="rs-password">Password</label>
-              <input type="password" id="rs-password" minlength="8" maxlength="256" placeholder="Leave blank to remove" autocomplete="off" />
-              <span class="setting-hint">Use 8-256 bytes, or leave blank to remove</span>
+              <input
+                type="password"
+                id="rs-password"
+                minlength="8"
+                maxlength="256"
+                placeholder="Leave blank to remove"
+                autocomplete="off"
+              />
+              <p class="settings-description">Use 8-256 bytes, or leave blank to remove.</p>
             </div>
-          </div>
-          <div class="settings-section">
-            <div class="settings-section-title">Access</div>
-            <div class="setting-group setting-toggle">
-              <label for="rs-guests">Guests Allowed</label>
+          </section>
+          <section
+            id="room-settings-access"
+            role="tabpanel"
+            aria-labelledby="room-settings-access-tab"
+            tabindex="0"
+            hidden
+          >
+            <h3 class="settings-section-heading">Who can enter</h3>
+            <label class="settings-toggle" for="rs-guests">
+              <span
+                ><span class="settings-field-label">Allow guests</span
+                ><span class="settings-description"
+                  >Let people join without signing in, unless registration is required below.</span
+                ></span
+              >
               <input type="checkbox" id="rs-guests" />
-            </div>
-            <div class="setting-group setting-toggle">
-              <label for="rs-guests-broadcast">Guests Can Broadcast</label>
-              <input type="checkbox" id="rs-guests-broadcast" />
-            </div>
-            <div class="setting-group setting-toggle">
-              <label for="rs-require-reg">Require Registration</label>
+            </label>
+            <label class="settings-toggle" for="rs-require-reg">
+              <span
+                ><span class="settings-field-label">Require an account</span
+                ><span class="settings-description"
+                  >Everyone must sign in before joining.</span
+                ></span
+              >
               <input type="checkbox" id="rs-require-reg" />
-            </div>
-            <div class="setting-group setting-toggle">
-              <label for="rs-invite-only">Invite Only</label>
+            </label>
+            <label class="settings-toggle" for="rs-invite-only">
+              <span
+                ><span class="settings-field-label">Invite only</span
+                ><span class="settings-description"
+                  >People without a saved member role wait for moderator approval.</span
+                ></span
+              >
               <input type="checkbox" id="rs-invite-only" />
-            </div>
-            <div class="setting-group setting-toggle">
-              <label for="rs-secret">Unlisted</label>
+            </label>
+            <label class="settings-toggle" for="rs-secret">
+              <span
+                ><span class="settings-field-label">Unlisted room</span
+                ><span class="settings-description"
+                  >Hide this room from the directory. This does not restrict entry.</span
+                ></span
+              >
               <input type="checkbox" id="rs-secret" />
-            </div>
-            <div class="setting-group setting-toggle">
-              <label for="rs-lobby">Lobby Enabled</label>
+            </label>
+            <label class="settings-toggle" for="rs-lobby">
+              <span
+                ><span class="settings-field-label">Waiting room</span
+                ><span class="settings-description"
+                  >Ask a moderator to admit people before they enter an occupied room.</span
+                ></span
+              >
               <input type="checkbox" id="rs-lobby" />
-            </div>
-          </div>
-          <div class="settings-section">
-            <div class="settings-section-title">Media</div>
-            <div class="setting-group setting-toggle">
-              <label for="rs-video">Allow Video</label>
-              <input type="checkbox" id="rs-video" />
-            </div>
-            <div class="setting-group setting-toggle">
-              <label for="rs-chat">Allow Chat</label>
-              <input type="checkbox" id="rs-chat" />
-            </div>
-            <div class="setting-group setting-toggle">
-              <label for="rs-screen">Allow Screen Sharing</label>
-              <input type="checkbox" id="rs-screen" />
-            </div>
-            <div class="setting-group setting-toggle">
-              <label for="rs-ptt">Push to Talk</label>
-              <input type="checkbox" id="rs-ptt" />
-            </div>
-            <div class="setting-group">
-              <label for="rs-max-broadcasters">Max Broadcasters</label>
-              <input type="number" id="rs-max-broadcasters" min="0" placeholder="0 = unlimited" />
-            </div>
-            <div class="setting-group">
-              <label for="rs-max-participants">Max Participants</label>
-              <input type="number" id="rs-max-participants" min="0" placeholder="0 = unlimited" />
-            </div>
-          </div>
-          <div class="settings-section">
-            <div class="settings-section-title">Moderation</div>
-            <div class="setting-group setting-toggle">
-              <label for="rs-moderated">Moderated</label>
+            </label>
+          </section>
+          <section
+            id="room-settings-participation"
+            role="tabpanel"
+            aria-labelledby="room-settings-participation-tab"
+            tabindex="0"
+            hidden
+          >
+            <h3 class="settings-section-heading">Chat and broadcasting</h3>
+            <label class="settings-toggle" for="rs-guests-broadcast">
+              <span
+                ><span class="settings-field-label">Let guests broadcast</span
+                ><span class="settings-description"
+                  >Allow guest camera, microphone and screen sharing, subject to the other room
+                  controls.</span
+                ></span
+              >
+              <input type="checkbox" id="rs-guests-broadcast" />
+            </label>
+            <label class="settings-toggle" for="rs-moderated">
+              <span
+                ><span class="settings-field-label">Moderated participation</span
+                ><span class="settings-description"
+                  >Only members and higher roles can chat or broadcast. Others can request a
+                  voice.</span
+                ></span
+              >
               <input type="checkbox" id="rs-moderated" />
+            </label>
+            <label class="settings-toggle" for="rs-video">
+              <span class="settings-field-label">Allow cameras</span>
+              <input type="checkbox" id="rs-video" />
+            </label>
+            <label class="settings-toggle" for="rs-chat">
+              <span class="settings-field-label">Allow chat</span>
+              <input type="checkbox" id="rs-chat" />
+            </label>
+            <label class="settings-toggle" for="rs-screen">
+              <span class="settings-field-label">Allow screen sharing</span>
+              <input type="checkbox" id="rs-screen" />
+            </label>
+            <label class="settings-toggle" for="rs-ptt">
+              <span
+                ><span class="settings-field-label">Require push to talk</span
+                ><span class="settings-description"
+                  >Use a held button or key to speak instead of an open microphone.</span
+                ></span
+              >
+              <input type="checkbox" id="rs-ptt" />
+            </label>
+            <div class="settings-fields-grid">
+              <div class="settings-field">
+                <label for="rs-max-broadcasters">Broadcaster limit</label>
+                <input
+                  type="number"
+                  id="rs-max-broadcasters"
+                  min="0"
+                  placeholder="No room limit"
+                  aria-describedby="room-limit-hint"
+                />
+              </div>
+              <div class="settings-field">
+                <label for="rs-max-participants">Participant limit</label>
+                <input
+                  type="number"
+                  id="rs-max-participants"
+                  min="0"
+                  placeholder="No room limit"
+                  aria-describedby="room-limit-hint"
+                />
+              </div>
+            </div>
+            <p id="room-limit-hint" class="settings-description">
+              Leave a limit blank to use the server limit. Zero does not mean unlimited.
+            </p>
+          </section>
+        </div>
+        <div class="settings-dialog-footer">
+          <p class="settings-description">Changes apply immediately.</p>
+          <button type="button" data-dialog-close class="btn-primary">Done</button>
+        </div>
+      </dialog>
+
+      <div id="toast-container"></div>
+
+      <!-- Login Modal -->
+      <div id="login-modal" class="modal-overlay" hidden>
+        <div class="modal-content modal-sm">
+          <div class="modal-header">
+            <h2>Sign In</h2>
+            <button id="login-close" class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div id="login-error" class="auth-error" hidden></div>
+            <div class="setting-group">
+              <label for="login-email">Email</label>
+              <input
+                type="email"
+                id="login-email"
+                placeholder="you@example.com"
+                autocomplete="email"
+              />
+            </div>
+            <div class="setting-group">
+              <label for="login-password">Password</label>
+              <input
+                type="password"
+                id="login-password"
+                placeholder="Password"
+                autocomplete="current-password"
+              />
+            </div>
+            <button id="login-submit" class="btn-primary btn-full">Sign In</button>
+            <div class="auth-alt-actions">
+              <button id="login-passkey-btn" class="auth-link-btn">Use a passkey</button>
+              <button id="login-to-register" class="auth-link-btn">Create account</button>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div id="toast-container"></div>
-
-    <!-- Login Modal -->
-    <div id="login-modal" class="modal-overlay" hidden>
-      <div class="modal-content modal-sm">
-        <div class="modal-header">
-          <h2>Sign In</h2>
-          <button id="login-close" class="modal-close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div id="login-error" class="auth-error" hidden></div>
-          <div class="setting-group">
-            <label for="login-email">Email</label>
-            <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
+      <!-- Register Modal -->
+      <div id="register-modal" class="modal-overlay" hidden>
+        <div class="modal-content modal-sm">
+          <div class="modal-header">
+            <h2>Create Account</h2>
+            <button id="register-close" class="modal-close">&times;</button>
           </div>
-          <div class="setting-group">
-            <label for="login-password">Password</label>
-            <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" />
-          </div>
-          <button id="login-submit" class="btn-primary btn-full">Sign In</button>
-          <div class="auth-alt-actions">
-            <button id="login-passkey-btn" class="auth-link-btn">Use a passkey</button>
-            <button id="login-to-register" class="auth-link-btn">Create account</button>
+          <div class="modal-body">
+            <div id="register-error" class="auth-error" hidden></div>
+            <div class="setting-group">
+              <label for="register-email">Email</label>
+              <input
+                type="email"
+                id="register-email"
+                placeholder="you@example.com"
+                autocomplete="email"
+              />
+            </div>
+            <div class="setting-group">
+              <label for="register-name">Display Name</label>
+              <input
+                type="text"
+                id="register-name"
+                placeholder="Display name"
+                autocomplete="name"
+              />
+            </div>
+            <div class="setting-group">
+              <label for="register-password">Password</label>
+              <input
+                type="password"
+                id="register-password"
+                placeholder="Password (min 8 chars)"
+                autocomplete="new-password"
+              />
+            </div>
+            <div class="setting-group">
+              <label for="register-confirm">Confirm Password</label>
+              <input
+                type="password"
+                id="register-confirm"
+                placeholder="Confirm password"
+                autocomplete="new-password"
+              />
+            </div>
+            <button id="register-submit" class="btn-primary btn-full">Create Account</button>
+            <div class="auth-alt-actions">
+              <button id="register-passkey-btn" class="auth-link-btn">Register with passkey</button>
+              <button id="register-to-login" class="auth-link-btn">
+                Already have an account? Sign in
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Register Modal -->
-    <div id="register-modal" class="modal-overlay" hidden>
-      <div class="modal-content modal-sm">
-        <div class="modal-header">
-          <h2>Create Account</h2>
-          <button id="register-close" class="modal-close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div id="register-error" class="auth-error" hidden></div>
-          <div class="setting-group">
-            <label for="register-email">Email</label>
-            <input type="email" id="register-email" placeholder="you@example.com" autocomplete="email" />
+      <!-- Create Room Modal -->
+      <div id="create-room-modal" class="modal-overlay" hidden>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2>Create Room</h2>
+            <button id="create-room-close" class="modal-close">&times;</button>
           </div>
-          <div class="setting-group">
-            <label for="register-name">Display Name</label>
-            <input type="text" id="register-name" placeholder="Display name" autocomplete="name" />
-          </div>
-          <div class="setting-group">
-            <label for="register-password">Password</label>
-            <input type="password" id="register-password" placeholder="Password (min 8 chars)" autocomplete="new-password" />
-          </div>
-          <div class="setting-group">
-            <label for="register-confirm">Confirm Password</label>
-            <input type="password" id="register-confirm" placeholder="Confirm password" autocomplete="new-password" />
-          </div>
-          <button id="register-submit" class="btn-primary btn-full">Create Account</button>
-          <div class="auth-alt-actions">
-            <button id="register-passkey-btn" class="auth-link-btn">Register with passkey</button>
-            <button id="register-to-login" class="auth-link-btn">Already have an account? Sign in</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Create Room Modal -->
-    <div id="create-room-modal" class="modal-overlay" hidden>
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Create Room</h2>
-          <button id="create-room-close" class="modal-close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div id="create-room-error" class="auth-error" hidden></div>
-          <div class="setting-group">
-            <label for="cr-id">Room ID</label>
-            <input type="text" id="cr-id" placeholder="my-room (URL-safe slug)" autocomplete="off" />
-          </div>
-          <div class="setting-group">
-            <label for="cr-name">Display Name</label>
-            <input type="text" id="cr-name" placeholder="My Room" autocomplete="off" />
-          </div>
-          <div class="setting-group">
-            <label for="cr-topic">Topic (optional)</label>
-            <input type="text" id="cr-topic" placeholder="What's this room about?" autocomplete="off" />
-          </div>
-          <div class="setting-group">
+          <div class="modal-body">
+            <div id="create-room-error" class="auth-error" hidden></div>
+            <div class="setting-group">
+              <label for="cr-id">Room ID</label>
+              <input
+                type="text"
+                id="cr-id"
+                placeholder="my-room (URL-safe slug)"
+                autocomplete="off"
+              />
+            </div>
+            <div class="setting-group">
+              <label for="cr-name">Display Name</label>
+              <input type="text" id="cr-name" placeholder="My Room" autocomplete="off" />
+            </div>
+            <div class="setting-group">
+              <label for="cr-topic">Topic (optional)</label>
+              <input
+                type="text"
+                id="cr-topic"
+                placeholder="What's this room about?"
+                autocomplete="off"
+              />
+            </div>
+            <div class="setting-group">
               <label for="cr-password">Password (optional)</label>
-              <input type="password" id="cr-password" minlength="8" maxlength="256" placeholder="At least 8 bytes, or leave blank" autocomplete="off" />
+              <input
+                type="password"
+                id="cr-password"
+                minlength="8"
+                maxlength="256"
+                placeholder="At least 8 bytes, or leave blank"
+                autocomplete="off"
+              />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="cr-moderated">Moderated</label>
+              <input type="checkbox" id="cr-moderated" />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="cr-lobby">Lobby Enabled</label>
+              <input type="checkbox" id="cr-lobby" />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="cr-secret">Unlisted (hidden from room browser)</label>
+              <input type="checkbox" id="cr-secret" />
+            </div>
+            <div class="setting-group setting-toggle">
+              <label for="cr-guests">Guests Allowed</label>
+              <input type="checkbox" id="cr-guests" checked />
+            </div>
+            <button id="create-room-submit" class="btn-primary btn-full">Create Room</button>
           </div>
-          <div class="setting-group setting-toggle">
-            <label for="cr-moderated">Moderated</label>
-            <input type="checkbox" id="cr-moderated" />
-          </div>
-          <div class="setting-group setting-toggle">
-            <label for="cr-lobby">Lobby Enabled</label>
-            <input type="checkbox" id="cr-lobby" />
-          </div>
-          <div class="setting-group setting-toggle">
-            <label for="cr-secret">Unlisted (hidden from room browser)</label>
-            <input type="checkbox" id="cr-secret" />
-          </div>
-          <div class="setting-group setting-toggle">
-            <label for="cr-guests">Guests Allowed</label>
-            <input type="checkbox" id="cr-guests" checked />
-          </div>
-          <button id="create-room-submit" class="btn-primary btn-full">Create Room</button>
         </div>
       </div>
-    </div>
 
-    <div id="settings-modal" class="modal-overlay" hidden>
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Settings</h2>
-          <button id="settings-close" class="modal-close">&times;</button>
+      <!-- Moved into the shared personal-settings dialog when it opens. -->
+      <div id="personal-settings-controls" hidden>
+        <div id="appearance-controls">
+          <h3 class="settings-section-heading">Room layout</h3>
+          <p class="settings-description">
+            Layout changes apply immediately and only affect your view.
+          </p>
+          <div class="settings-field">
+            <label for="layout-select">Room layout</label>
+            <select id="layout-select" aria-describedby="layout-description">
+              <option value="classic">People, video &amp; chat</option>
+              <option value="modern">Video &amp; chat</option>
+            </select>
+            <p id="layout-description" class="settings-description">
+              Keep the people list alongside the conversation, or give video more space.
+            </p>
+          </div>
         </div>
-        <div class="modal-body">
-          <div class="setting-group">
-            <label for="layout-select">Layout</label>
-            <select id="layout-select">
-              <option value="modern">Modern (Full-width video)</option>
-              <option value="classic">Classic (3-panel)</option>
-            </select>
-          </div>
-          <div class="setting-group">
-            <label for="mic-mode-select">Mic Mode</label>
-            <select id="mic-mode-select">
-              <option value="open">Open Mic</option>
-              <option value="ptt">Push to Talk (Space / T)</option>
-            </select>
-          </div>
-          <div class="setting-group">
-            <label for="camera-select">Camera</label>
-            <select id="camera-select">
-              <option value="">Default</option>
-            </select>
-          </div>
-          <div class="setting-group">
-            <label for="mic-select">Microphone</label>
-            <select id="mic-select">
-              <option value="">Default</option>
-            </select>
-          </div>
+        <div id="microphone-controls" class="settings-field">
+          <label for="mic-mode-select">How you talk</label>
+          <select id="mic-mode-select" aria-describedby="mic-mode-description">
+            <option value="open">Toggle microphone on / off</option>
+            <option value="ptt">Hold to talk (Space / T)</option>
+          </select>
+          <p id="mic-mode-description" class="settings-description">
+            Applies immediately. Rooms can require hold-to-talk. Choosing a mode does not turn on
+            your microphone.
+          </p>
         </div>
       </div>
     </div>
-  </div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

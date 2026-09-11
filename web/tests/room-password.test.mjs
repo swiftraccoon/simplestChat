@@ -5,7 +5,9 @@ import { loadTypeScript } from './source-loader.mjs';
 async function roomWithReplies(replies) {
   const sent = [];
   const signaling = {
-    setOnMessage(handler) { this.onMessage = handler; },
+    setOnMessage(handler) {
+      this.onMessage = handler;
+    },
     setOnReconnected() {},
     send(message) {
       sent.push(message);
@@ -16,7 +18,11 @@ async function roomWithReplies(replies) {
   };
   const { RoomClient, RoomPasswordRequiredError } = await loadTypeScript('src/room.ts', {
     modules: {
-      './media': { MediaManager: class { async setup() {} } },
+      './media': {
+        MediaManager: class {
+          async setup() {}
+        },
+      },
     },
   });
   const events = {
@@ -30,8 +36,11 @@ test('password challenge permits a join retry carrying the entered password', as
   const { room, sent, RoomPasswordRequiredError } = await roomWithReplies([
     { type: 'roomPasswordRequired' },
     {
-      type: 'roomJoined', participantId: 'guest', participants: [],
-      reconnectToken: 'session-token', yourRole: 'guest',
+      type: 'roomJoined',
+      participantId: 'guest',
+      participants: [],
+      reconnectToken: 'session-token',
+      yourRole: 'guest',
     },
   ]);
   await assert.rejects(room.join('private-room', 'Guest'), (error) => {

@@ -138,6 +138,37 @@ test('community runner preserves the original failure when collecting peer diagn
   assert.deepEqual(report.diagnostics[0].media, { error: 'owned fixture diagnostics failure' });
 });
 
+for (const failedBeforeCleanup of [false, true]) {
+  test(`community cleanup failure ${failedBeforeCleanup ? 'preserves the original failure' : 'fails an otherwise successful run'}`, async () => {
+    const source = await readFile(runner, 'utf8');
+    const failureStart = source.indexOf('report.failedStep = activeStep;');
+    const cleanupStart = source.indexOf('\n  } finally {', failureStart);
+    const cleanupEnd = source.indexOf('\n})().catch', cleanupStart);
+    assert.ok(cleanupStart > failureStart && cleanupEnd > cleanupStart);
+    const tail = source.slice(cleanupStart + '\n  }'.length, cleanupEnd);
+    const report = { complete: true, passed: true };
+    const originalFailure = new Error('owned original failure');
+    const cleanupFailure = new Error('owned close failure');
+    const saved = [];
+    const run = runInNewContext(`(async () => {
+      let cleanupFailure;
+      try { if (failedBeforeCleanup) throw originalFailure; }
+      ${tail}
+    })`, {
+      report, clients: [], failedBeforeCleanup, originalFailure,
+      browser: { async close() { throw cleanupFailure; } },
+      saveReport() { saved.push({ ...report }); },
+    });
+    await assert.rejects(run(), error => error === (failedBeforeCleanup ? originalFailure : cleanupFailure));
+    assert.equal(report.complete, false);
+    assert.equal(report.passed, false);
+    assert.equal(report.cleanupError, cleanupFailure.message);
+    assert.ok(Date.parse(report.finishedAt));
+    assert.equal(saved.length, 1);
+    assert.deepEqual(saved[0], report);
+  });
+}
+
 test('community peer snapshots remain failure-only', async () => {
   const source = await readFile(runner, 'utf8');
   const failureStart = source.indexOf('report.failedStep = activeStep;');

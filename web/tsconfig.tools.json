@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "ESNext.Disposable"],
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.tools.tsbuildinfo"
+  },
+  "include": ["vite.config.ts", "scripts/**/*.mjs"]
+}

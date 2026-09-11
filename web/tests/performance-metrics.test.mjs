@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import metrics from '../e2e/performance-metrics.cjs';
+import { readFileSync } from 'node:fs';
+
+test('browser performance uses the shared fake-device options without autoplay bypass', () => {
+  const source = readFileSync(new URL('../e2e/performance.cjs', import.meta.url), 'utf8');
+  assert.match(source, /require\('\.\/browser-options\.cjs'\)/);
+  assert.match(source, /chromium\.launch\(browserConfiguration\.launchOptions\)/);
+  assert.match(source, /\.\.\.browserConfiguration\.contextOptions/);
+  assert.doesNotMatch(source, /autoplay-policy|no-user-gesture-required|ignoreDefaultArgs/);
+});
 
 test('browser frame deltas ignore an idle probation SSRC before the active receiver', () => {
   const before = [

@@ -34,7 +34,9 @@ function browserOptions(name = 'chromium') {
       // https://github.com/microsoft/playwright/blob/v1.63.0/browser_patches/webkit/embedder/Playwright/mac/AppDelegate.m#L201-L225
       // Other platforms remain blocked until their fake-capture path is audited.
       if (process.platform !== 'darwin') {
-        throw new Error('WebKit fake capture is verified only on macOS; use chromium or firefox on this platform.');
+        throw new Error(
+          'WebKit fake capture is verified only on macOS; use chromium or firefox on this platform.',
+        );
       }
       return {
         name,

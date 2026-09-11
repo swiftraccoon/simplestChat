@@ -1,0 +1,55 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "options": {
+    "typeAware": true,
+    "denyWarnings": true,
+    "reportUnusedDisableDirectives": "error"
+  },
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": ["node_modules/", "dist/", "e2e/node_modules/", "e2e/artifacts/"],
+  "rules": {
+    "eslint/eqeqeq": ["error", "always"],
+    "eslint/no-eval": "error",
+    "eslint/no-implied-eval": "error",
+    "eslint/no-new-func": "error",
+    "eslint/no-throw-literal": "error",
+    "eslint/prefer-const": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/**/*.ts"],
+      "env": { "browser": true }
+    },
+    {
+      "files": ["src/**/*.ts", "vite.config.ts", "scripts/**/*.mjs"],
+      "plugins": ["typescript", "oxc"],
+      "rules": {
+        "eslint/no-void": "error",
+        "typescript/await-thenable": "error",
+        "typescript/no-explicit-any": "error",
+        "typescript/no-floating-promises": ["error", { "ignoreVoid": false }],
+        "typescript/no-misused-promises": "error",
+        "typescript/no-redundant-type-constituents": "error",
+        "typescript/no-unnecessary-type-assertion": "error",
+        "typescript/no-unsafe-argument": "error",
+        "typescript/no-unsafe-assignment": "error",
+        "typescript/no-unsafe-call": "error",
+        "typescript/no-unsafe-member-access": "error",
+        "typescript/no-unsafe-return": "error",
+        "typescript/only-throw-error": "error",
+        "typescript/prefer-promise-reject-errors": "error",
+        "typescript/switch-exhaustiveness-check": "error"
+      }
+    },
+    {
+      "files": ["tests/**/*.mjs", "e2e/**/*.cjs", "scripts/**/*.mjs", "vite.config.ts"],
+      "env": { "node": true }
+    }
+  ]
+}

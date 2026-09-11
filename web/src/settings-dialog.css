@@ -1,0 +1,219 @@
+.settings-dialog {
+  width: min(52rem, calc(100vw - 2rem));
+  height: min(48rem, calc(100dvh - 2rem));
+  max-width: none;
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 80px #0009;
+}
+.settings-dialog[open] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+.settings-dialog::backdrop {
+  background: #000a;
+}
+.settings-dialog-form {
+  display: contents;
+}
+.settings-dialog-header,
+.settings-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+}
+.settings-dialog-header {
+  border-bottom: 1px solid var(--border);
+}
+.settings-dialog-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.3;
+}
+.settings-dialog-header .settings-description {
+  margin-top: 0.35rem;
+}
+.settings-dialog-nav {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 1.5rem 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.settings-dialog button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  background: var(--surface-2);
+  font: inherit;
+  cursor: pointer;
+}
+.settings-dialog button:hover {
+  background: var(--surface-3);
+}
+.settings-dialog button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.settings-dialog button.btn-primary {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
+}
+.settings-dialog button.btn-primary:hover {
+  background: var(--accent-fill-hover);
+}
+.settings-dialog-nav [role='tab'] {
+  flex: 0 0 auto;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent;
+  color: var(--text-dim);
+}
+.settings-dialog-nav [aria-selected='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+  background: var(--surface-2);
+}
+.settings-dialog-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.5rem;
+}
+.settings-dialog [role='tabpanel'] {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+.settings-dialog [role='tabpanel'][hidden] {
+  display: none;
+}
+.settings-dialog-footer {
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.settings-dialog-footer > :last-child {
+  margin-left: auto;
+}
+.settings-dialog-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.settings-section-heading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.settings-description {
+  color: var(--text-dim);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.settings-field > label,
+.settings-field-label {
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.settings-dialog input:not([type='checkbox']):not([type='range']),
+.settings-dialog select,
+.settings-dialog textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.65rem 0.75rem;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font: inherit;
+}
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+.settings-toggle > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.settings-toggle input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.settings-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.settings-dialog :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.settings-dialog [role='tabpanel']:focus-visible {
+  outline-offset: -2px;
+}
+@media (max-width: 600px) {
+  .settings-dialog {
+    width: calc(100vw - 1rem);
+    max-height: calc(100dvh - 1rem);
+  }
+  .settings-dialog-header,
+  .settings-dialog-footer {
+    padding: 0.75rem 1rem;
+    gap: 0.75rem;
+  }
+  .settings-dialog-nav {
+    padding: 0.25rem 0.75rem 0;
+  }
+  .settings-dialog-body {
+    padding: 1rem;
+  }
+  .settings-fields-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-height: 500px) {
+  .settings-dialog {
+    max-height: calc(100dvh - 0.5rem);
+  }
+  .settings-dialog-header,
+  .settings-dialog-footer {
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+  }
+  .settings-dialog-header .settings-description {
+    display: none;
+  }
+}

@@ -1,4 +1,5 @@
 import type { ClientMessage, ServerMessage } from './protocol';
+import { decodeServerMessage } from './protocol-validation';
 
 export type MessageHandler = (msg: ServerMessage) => void;
 
@@ -6,7 +7,8 @@ export class SignalingClient {
   private ws: WebSocket | null = null;
   private url: string;
   private onMessage: MessageHandler | null = null;
-  private onStatusChange: ((status: 'connected' | 'disconnected' | 'connecting') => void) | null = null;
+  private onStatusChange: ((status: 'connected' | 'disconnected' | 'connecting') => void) | null =
+    null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private shouldReconnect = true;
   private reconnectAttempt = 0;
@@ -39,10 +41,8 @@ export class SignalingClient {
   }
 
   connect(token?: string): void {
-    if (
-      this.ws?.readyState === WebSocket.OPEN ||
-      this.ws?.readyState === WebSocket.CONNECTING
-    ) return;
+    if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING)
+      return;
 
     this.shouldReconnect = true;
     this.currentToken = token ?? this.currentToken;
@@ -71,9 +71,19 @@ export class SignalingClient {
 
     socket.onmessage = (event) => {
       if (this.ws !== socket) return;
+      let msg: ServerMessage;
       try {
-        const msg: ServerMessage = JSON.parse(event.data as string);
+        const data: unknown = event.data;
+        if (typeof data !== 'string') throw new Error('Expected a text message');
+        const parsed: unknown = JSON.parse(data);
+        msg = decodeServerMessage(parsed);
+      } catch {
+        // Do not resolve a request or expose untrusted payloads in diagnostics.
+        console.error('[ws] ignored invalid server message');
+        return;
+      }
 
+      try {
         // Check pending resolvers first
         const idx = this.pendingResolvers.findIndex((p) => p.match(msg));
         if (idx !== -1) {
@@ -88,7 +98,7 @@ export class SignalingClient {
 
         this.onMessage?.(msg);
       } catch (e) {
-        console.error('[ws] failed to parse message:', e);
+        console.error('[ws] message handler failed:', e);
       }
     };
 

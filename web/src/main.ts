@@ -1,14 +1,20 @@
 import './style.css';
 import { SignalingClient } from './signaling';
-import { RoomClient, RoomPasswordRequiredError, type Participant, type ConnectionQuality } from './room';
+import {
+  RoomClient,
+  RoomPasswordRequiredError,
+  type Participant,
+  type ConnectionQuality,
+} from './room';
 import * as icons from './icons';
 import { AuthManager } from './auth';
 import { MediaControls } from './media-controls';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
-import { safeRasterUrl } from './ui';
+import { api, ApiError, safeRasterUrl } from './ui';
+import { configureSettingsDialog } from './settings-dialog';
 import './community.css';
-import type { RoomListItem, CreateRoomRequest } from './protocol';
+import type { CreateRoomRequest } from './protocol';
 
 // --- DOM refs ---
 const connectionStatus = document.getElementById('connection-status')!;
@@ -100,8 +106,7 @@ const createRoomSubmit = document.getElementById('create-room-submit') as HTMLBu
 const createRoomError = document.getElementById('create-room-error')!;
 
 // Room settings modal
-const roomSettingsModal = document.getElementById('room-settings-modal')!;
-const roomSettingsClose = document.getElementById('room-settings-close')!;
+const roomSettingsModal = document.getElementById('room-settings-modal') as HTMLDialogElement;
 const rsModerated = document.getElementById('rs-moderated') as HTMLInputElement;
 const rsLobby = document.getElementById('rs-lobby') as HTMLInputElement;
 const rsScreen = document.getElementById('rs-screen') as HTMLInputElement;
@@ -125,13 +130,12 @@ const toastContainer = document.getElementById('toast-container')!;
 const sidebarTabs = document.querySelectorAll<HTMLButtonElement>('#sidebar-tabs .tab');
 const tabContents = document.querySelectorAll<HTMLDivElement>('#sidebar-content .tab-content');
 
-// Settings modal
-const settingsModal = document.getElementById('settings-modal')!;
-const settingsClose = document.getElementById('settings-close')!;
+// Personal controls retain their values/listeners as they move into the shared dialog.
 const layoutSelect = document.getElementById('layout-select') as HTMLSelectElement;
 const micModeSelect = document.getElementById('mic-mode-select') as HTMLSelectElement;
-const cameraSelect = document.getElementById('camera-select') as HTMLSelectElement;
-const micSelect = document.getElementById('mic-select') as HTMLSelectElement;
+const appearanceControls = document.getElementById('appearance-controls')!;
+const microphoneControls = document.getElementById('microphone-controls')!;
+document.getElementById('personal-settings-controls')!.remove();
 
 // --- Auth ---
 const auth = new AuthManager();
@@ -152,7 +156,7 @@ function updateAuthUI(): void {
     authBarGuest.hidden = false;
     authBarUser.hidden = true;
   }
-  void loadRoomBrowser();
+  observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory');
   updateJoinBtn();
   community.refresh();
 }
@@ -166,14 +170,19 @@ auth.setOnChange((loggedIn, tokenRefresh) => {
     return;
   }
   // Identity changes leave the old membership before reconnecting.
-  if (room) void leaveCurrentRoom();
+  if (room) observeUiTask(leaveCurrentRoom(), 'Could not finish leaving the room');
   signaling.disconnect();
   signaling.connect(loggedIn ? (auth.jwt ?? undefined) : undefined);
 });
 
 // --- State ---
 let room: RoomClient | null = null;
-const mediaControls = new MediaControls({ getRoom: () => room, notify: message => showToast(message) });
+const mediaControls = new MediaControls({
+  getRoom: () => room,
+  notify: (message) => showToast(message),
+  appearanceControls,
+  microphoneControls,
+});
 mediaControls.mountToolbar(roomTools);
 let localTextMuted = false;
 let roomRecovering = false;
@@ -226,7 +235,32 @@ function showToast(message: string, duration = 3000): void {
   setTimeout(() => toast.remove(), duration);
 }
 
-function showActionToast(message: string, actions: { label: string; action: () => void }[], duration = 10000): void {
+/** Observe detached UI work without reporting an old room/account's failure to its replacement. */
+function observeUiTask(task: Promise<unknown>, failureMessage: string): void {
+  const expectedRoom = room;
+  const expectedUser = auth.userId;
+  task.catch(() => {
+    // Browser/library exceptions may contain transport or account details.
+    // Keep the diagnostic useful without retaining the raw error payload.
+    console.error(failureMessage);
+    if (room === expectedRoom && auth.userId === expectedUser) showToast(failureMessage);
+  });
+}
+
+/** DOM callbacks return void; their asynchronous work still needs a rejection observer. */
+function asyncUiAction(action: () => Promise<unknown>, failureMessage: string): () => void {
+  return () => observeUiTask((async () => action())(), failureMessage);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function showActionToast(
+  message: string,
+  actions: { label: string; action: () => void }[],
+  duration = 10000,
+): void {
   const toast = document.createElement('div');
   toast.className = 'toast toast-action';
 
@@ -239,7 +273,10 @@ function showActionToast(message: string, actions: { label: string; action: () =
   for (const a of actions) {
     const btn = document.createElement('button');
     btn.textContent = a.label;
-    btn.addEventListener('click', () => { a.action(); toast.remove(); });
+    btn.addEventListener('click', () => {
+      a.action();
+      toast.remove();
+    });
     btnRow.appendChild(btn);
   }
   toast.appendChild(btnRow);
@@ -259,24 +296,42 @@ function showModerationMenu(targetId: string, targetName: string, x: number, y: 
   const items: { label: string; action: () => void; danger?: boolean }[] = [];
 
   const isSelf = targetId === room?.localParticipantId;
-  const authenticated = isSelf ? auth.isLoggedIn : room?.getParticipants().get(targetId)?.authenticated === true;
-  if (authenticated) items.push({ label: 'View profile', action: () => { void community.showProfile(targetId); } });
+  const authenticated = isSelf
+    ? auth.isLoggedIn
+    : room?.getParticipants().get(targetId)?.authenticated === true;
+  if (authenticated)
+    items.push({
+      label: 'View profile',
+      action: () => observeUiTask(community.showProfile(targetId), 'Could not open the profile'),
+    });
   if (!isSelf) {
-    items.push({ label: 'Private message', action: () => socialChat.openPrivate(targetId, targetName) });
-    items.push({ label: socialChat.isIgnored(targetId) ? 'Unignore messages' : 'Ignore messages', action: () => {
-      void socialChat.toggleIgnore(targetId, targetName, authenticated).catch(error => showToast(error instanceof Error ? error.message : 'Ignore update failed'));
-    } });
-    items.push({ label: 'Report to moderators', action: () => community.report(targetId, targetName) });
+    items.push({
+      label: 'Private message',
+      action: () => socialChat.openPrivate(targetId, targetName),
+    });
+    items.push({
+      label: socialChat.isIgnored(targetId) ? 'Unignore messages' : 'Ignore messages',
+      action: () => {
+        socialChat
+          .toggleIgnore(targetId, targetName, authenticated)
+          .catch((error) =>
+            showToast(error instanceof Error ? error.message : 'Ignore update failed'),
+          );
+      },
+    });
+    items.push({
+      label: 'Report to moderators',
+      action: () => community.report(targetId, targetName),
+    });
   }
 
   // Mod+ actions
   if (isMod && !isSelf) {
-  items.push({ label: 'Close Camera', action: () => room?.closeCam(targetId) });
-  items.push({ label: 'Cam Unban', action: () => room?.camUnban(targetId) });
-  items.push({ label: 'Mute Text', action: () => room?.textMute(targetId) });
-  items.push({ label: 'Text Unmute', action: () => room?.textUnmute(targetId) });
-  items.push({ label: 'Kick', action: () => room?.kick(targetId), danger: true });
-
+    items.push({ label: 'Close Camera', action: () => room?.closeCam(targetId) });
+    items.push({ label: 'Cam Unban', action: () => room?.camUnban(targetId) });
+    items.push({ label: 'Mute Text', action: () => room?.textMute(targetId) });
+    items.push({ label: 'Text Unmute', action: () => room?.textUnmute(targetId) });
+    items.push({ label: 'Kick', action: () => room?.kick(targetId), danger: true });
   }
 
   // Admin+ actions
@@ -293,7 +348,10 @@ function showModerationMenu(targetId: string, targetName: string, x: number, y: 
     const btn = document.createElement('button');
     btn.textContent = item.label;
     if (item.danger) btn.className = 'danger';
-    btn.addEventListener('click', () => { item.action(); menu.remove(); });
+    btn.addEventListener('click', () => {
+      item.action();
+      menu.remove();
+    });
     menu.appendChild(btn);
   }
 
@@ -321,7 +379,10 @@ function showModerationMenu(targetId: string, targetName: string, x: number, y: 
     for (const opt of roleOptions) {
       const btn = document.createElement('button');
       btn.textContent = opt.label;
-      btn.addEventListener('click', () => { room?.setRole(targetId, opt.value); menu.remove(); });
+      btn.addEventListener('click', () => {
+        room?.setRole(targetId, opt.value);
+        menu.remove();
+      });
       group.appendChild(btn);
     }
     menu.appendChild(group);
@@ -366,7 +427,8 @@ function updateRoomModeUI(): void {
   const settings = room?.roomSettings;
 
   // Show hand-raise button for non-privileged users in moderated rooms
-  const isPrivileged = role === 'owner' || role === 'admin' || role === 'moderator' || role === 'member';
+  const isPrivileged =
+    role === 'owner' || role === 'admin' || role === 'moderator' || role === 'member';
   handBtn.hidden = !(settings?.moderated && !isPrivileged);
 
   // Show room settings button for admins+
@@ -379,18 +441,26 @@ function applyRoomSettingsToUI(): void {
   const settings = room?.roomSettings;
   const privileged = ['member', 'moderator', 'admin', 'owner'].includes(room?.role ?? 'guest');
   const needsVoice = settings?.moderated && !privileged;
-  const chatDisabled = localTextMuted || settings?.allowChat === false || needsVoice || roomRecovering;
+  const chatDisabled =
+    localTextMuted || settings?.allowChat === false || needsVoice || roomRecovering;
   chatInput.disabled = Boolean(chatDisabled);
-  chatInput.placeholder = roomRecovering ? 'Reconnecting…'
-    : localTextMuted ? 'You are muted in this room'
-    : settings?.allowChat === false ? 'Chat is disabled'
-    : needsVoice ? 'Raise your hand to request voice' : 'Type a message...';
+  chatInput.placeholder = roomRecovering
+    ? 'Reconnecting…'
+    : localTextMuted
+      ? 'You are muted in this room'
+      : settings?.allowChat === false
+        ? 'Chat is disabled'
+        : needsVoice
+          ? 'Raise your hand to request voice'
+          : 'Type a message...';
   (chatSendBtn as HTMLButtonElement).disabled = Boolean(chatDisabled);
   chatSendBtn.classList.toggle('disabled', Boolean(chatDisabled));
 
   setMicMode(settings?.pushToTalk ? 'ptt' : personalMicMode, false);
   micModeSelect.disabled = settings?.pushToTalk === true;
-  micModeSelect.title = micModeSelect.disabled ? 'This room requires push to talk' : 'Your preferred microphone mode';
+  micModeSelect.title = micModeSelect.disabled
+    ? 'This room requires push to talk'
+    : 'Your preferred microphone mode';
 
   // Screen sharing: hide button when disabled
   if (settings?.allowScreenSharing === false) {
@@ -406,7 +476,8 @@ function applyRoomSettingsToUI(): void {
 
 function renderLobbyPanel(): void {
   const role = room?.role ?? 'user';
-  const lobbyEnabled = room?.roomSettings?.lobbyEnabled || room?.roomSettings?.inviteOnly || lobbyWaiters.size > 0;
+  const lobbyEnabled =
+    room?.roomSettings?.lobbyEnabled || room?.roomSettings?.inviteOnly || lobbyWaiters.size > 0;
   const canAdmit = role === 'owner' || role === 'admin' || role === 'moderator';
 
   // Show/hide lobby tab
@@ -509,8 +580,12 @@ sidebarTabs.forEach((tab) => {
 
 // Wire lobby tab — queried at load time so hidden tabs may not be in sidebarTabs NodeList
 lobbyTab.addEventListener('click', () => {
-  document.querySelectorAll<HTMLButtonElement>('#sidebar-tabs .tab').forEach(t => t.classList.toggle('active', t === lobbyTab));
-  document.querySelectorAll<HTMLDivElement>('#sidebar-content .tab-content').forEach(c => c.classList.toggle('active', c.id === 'lobby-panel'));
+  document
+    .querySelectorAll<HTMLButtonElement>('#sidebar-tabs .tab')
+    .forEach((t) => t.classList.toggle('active', t === lobbyTab));
+  document
+    .querySelectorAll<HTMLDivElement>('#sidebar-content .tab-content')
+    .forEach((c) => c.classList.toggle('active', c.id === 'lobby-panel'));
 });
 
 // Set tab content with icons (these are static SVG literals from our icons module)
@@ -536,27 +611,38 @@ interface PanelPreferences {
 
 const panelPreferences: PanelPreferences = (() => {
   try {
-    const saved = JSON.parse(localStorage.getItem('panelPreferences') ?? '{}');
+    const saved: unknown = JSON.parse(localStorage.getItem('panelPreferences') ?? '{}');
+    if (!isRecord(saved)) throw new Error('Invalid panel preferences');
     return {
-      rosterWidth: Math.max(160, Math.min(360, Number(saved.rosterWidth) || 220)),
-      chatWidth: Math.max(240, Math.min(520, Number(saved.chatWidth) || 320)),
-      rosterCollapsed: saved.rosterCollapsed === true,
-      chatCollapsed: saved.chatCollapsed === true,
+      rosterWidth: Math.max(160, Math.min(360, Number(saved['rosterWidth']) || 220)),
+      chatWidth: Math.max(240, Math.min(520, Number(saved['chatWidth']) || 320)),
+      rosterCollapsed: saved['rosterCollapsed'] === true,
+      chatCollapsed: saved['chatCollapsed'] === true,
     };
-  } catch { return { rosterWidth: 220, chatWidth: 320, rosterCollapsed: false, chatCollapsed: false }; }
+  } catch {
+    return { rosterWidth: 220, chatWidth: 320, rosterCollapsed: false, chatCollapsed: false };
+  }
 })();
 
 function selectSidebarTab(tab: 'chat' | 'users' | 'lobby'): void {
-  sidebarTabs.forEach(button => button.classList.toggle('active', button.dataset['tab'] === tab));
-  tabContents.forEach(content => content.classList.toggle('active', content.id === `${tab}-panel`));
+  sidebarTabs.forEach((button) => button.classList.toggle('active', button.dataset['tab'] === tab));
+  tabContents.forEach((content) =>
+    content.classList.toggle('active', content.id === `${tab}-panel`),
+  );
 }
 
 function applyPanelPreferences(): void {
   const desktop = window.innerWidth > 768;
   const rosterCollapsed = desktop && panelPreferences.rosterCollapsed && getLayout() === 'classic';
   const chatCollapsed = desktop && panelPreferences.chatCollapsed;
-  roomScreen.style.setProperty('--roster-width', `${rosterCollapsed ? 0 : Math.min(panelPreferences.rosterWidth, window.innerWidth * 0.3)}px`);
-  roomScreen.style.setProperty('--chat-width', `${chatCollapsed ? 0 : Math.min(panelPreferences.chatWidth, window.innerWidth * 0.4)}px`);
+  roomScreen.style.setProperty(
+    '--roster-width',
+    `${rosterCollapsed ? 0 : Math.min(panelPreferences.rosterWidth, window.innerWidth * 0.3)}px`,
+  );
+  roomScreen.style.setProperty(
+    '--chat-width',
+    `${chatCollapsed ? 0 : Math.min(panelPreferences.chatWidth, window.innerWidth * 0.4)}px`,
+  );
   roomScreen.classList.toggle('roster-collapsed', rosterCollapsed);
   roomScreen.classList.toggle('chat-collapsed', chatCollapsed);
   rosterToggleBtn.textContent = rosterCollapsed ? 'Show people' : 'People';
@@ -571,7 +657,11 @@ function applyPanelPreferences(): void {
 }
 
 function savePanelPreferences(): void {
-  try { localStorage.setItem('panelPreferences', JSON.stringify(panelPreferences)); } catch { /* Retain session preferences. */ }
+  try {
+    localStorage.setItem('panelPreferences', JSON.stringify(panelPreferences));
+  } catch {
+    /* Retain session preferences. */
+  }
   applyPanelPreferences();
 }
 
@@ -585,14 +675,17 @@ function attachPanelResize(panel: HTMLElement, side: 'roster' | 'chat'): void {
   handle.setAttribute('aria-label', `Resize ${side === 'roster' ? 'people' : 'chat'} panel`);
   const key = side === 'roster' ? 'rosterWidth' : 'chatWidth';
   const setWidth = (width: number) => {
-    panelPreferences[key] = Math.max(side === 'roster' ? 160 : 240, Math.min(side === 'roster' ? 360 : 520, width));
+    panelPreferences[key] = Math.max(
+      side === 'roster' ? 160 : 240,
+      Math.min(side === 'roster' ? 360 : 520, width),
+    );
     handle.setAttribute('aria-valuenow', String(Math.round(panelPreferences[key])));
     applyPanelPreferences();
   };
   handle.setAttribute('aria-valuemin', side === 'roster' ? '160' : '240');
   handle.setAttribute('aria-valuemax', side === 'roster' ? '360' : '520');
   handle.setAttribute('aria-valuenow', String(panelPreferences[key]));
-  handle.addEventListener('pointerdown', event => {
+  handle.addEventListener('pointerdown', (event) => {
     if (window.innerWidth <= 768 || event.button !== 0) return;
     event.preventDefault();
     const startX = event.clientX;
@@ -613,10 +706,13 @@ function attachPanelResize(panel: HTMLElement, side: 'roster' | 'chat'): void {
     window.addEventListener('pointercancel', stop);
     window.addEventListener('blur', stop);
   });
-  handle.addEventListener('keydown', event => {
+  handle.addEventListener('keydown', (event) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
-    setWidth(panelPreferences[key] + (event.key === 'ArrowRight' ? 20 : -20) * (side === 'roster' ? 1 : -1));
+    setWidth(
+      panelPreferences[key] +
+        (event.key === 'ArrowRight' ? 20 : -20) * (side === 'roster' ? 1 : -1),
+    );
     savePanelPreferences();
   });
   panel.append(handle);
@@ -638,16 +734,25 @@ chatToggleBtn.addEventListener('click', () => {
 });
 attachPanelResize(document.getElementById('sidebar')!, 'chat');
 window.addEventListener('resize', applyPanelPreferences);
-document.getElementById('mic-setup-btn')!.addEventListener('click', () => { void mediaControls.openSetup('microphone'); });
-document.getElementById('copy-room-link')!.addEventListener('click', async () => {
-  if (!room?.currentRoomId) return;
-  const url = new URL(window.location.href);
-  url.hash = room.currentRoomId;
-  try {
-    await navigator.clipboard.writeText(url.toString());
-    showToast('Room link copied');
-  } catch { prompt('Copy this room link:', url.toString()); }
-});
+document.getElementById('mic-setup-btn')!.addEventListener(
+  'click',
+  asyncUiAction(() => mediaControls.openSetup('microphone'), 'Could not open microphone settings'),
+);
+document.getElementById('copy-room-link')!.addEventListener(
+  'click',
+  asyncUiAction(async () => {
+    const activeRoom = room;
+    if (!activeRoom?.currentRoomId) return;
+    const url = new URL(window.location.href);
+    url.hash = activeRoom.currentRoomId;
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      if (room === activeRoom) showToast('Room link copied');
+    } catch {
+      if (room === activeRoom) prompt('Copy this room link:', url.toString());
+    }
+  }, 'Could not copy the room link'),
+);
 
 // --- Set button icons (static SVG from our icons module, no user content) ---
 function setButtonContent(btn: HTMLElement, iconHtml: string, tooltip?: string): void {
@@ -671,7 +776,7 @@ if (!navigator.mediaDevices?.getDisplayMedia) {
 }
 setButtonContent(handBtn, icons.handRaised(), 'Raise Hand');
 setButtonContent(roomSettingsBtn, icons.roomSettings(), 'Room Settings');
-setButtonContent(settingsBtn, icons.settings(), 'Settings');
+setButtonContent(settingsBtn, icons.settings(), 'Your settings');
 setButtonContent(leaveBtn, icons.leave(), 'Leave');
 
 // --- Scroll-to-bottom for chat ---
@@ -686,15 +791,25 @@ const signaling = new SignalingClient(wsUrl);
 const socialChat = new SocialChat({
   getRoom: () => room,
   getViewerKey: () => auth.userId ?? 'guest',
-  notify: message => showToast(message),
+  notify: (message) => showToast(message),
   participantAction: showModerationMenu,
 });
 const community = new CommunityUI({
-  auth, getRoom: () => room, notify: message => showToast(message),
-  onProfileChanged: profile => { auth.updateDisplayName(profile.display_name); if (room) renderParticipants(room.getParticipants()); },
-  onRoomsChanged: () => { void loadRoomBrowser(); },
-  onRoomDeleted: async id => { if (room?.currentRoomId === id) await leaveCurrentRoom(); },
-  onSignedOut: async () => { await leaveCurrentRoom(); auth.forgetSession(); },
+  auth,
+  getRoom: () => room,
+  notify: (message) => showToast(message),
+  onProfileChanged: (profile) => {
+    auth.updateDisplayName(profile.display_name);
+    if (room) renderParticipants(room.getParticipants());
+  },
+  onRoomsChanged: () => observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory'),
+  onRoomDeleted: async (id) => {
+    if (room?.currentRoomId === id) await leaveCurrentRoom();
+  },
+  onSignedOut: async () => {
+    await leaveCurrentRoom();
+    auth.forgetSession();
+  },
 });
 
 signaling.setOnStatusChange((status) => {
@@ -704,10 +819,13 @@ signaling.setOnStatusChange((status) => {
 });
 
 // Try to restore auth session from cookie, then connect WS
-auth.tryRestore().then(() => {
-  updateAuthUI();
-  signaling.connect(auth.jwt ?? undefined);
-});
+observeUiTask(
+  auth.tryRestore().then(() => {
+    updateAuthUI();
+    signaling.connect(auth.jwt ?? undefined);
+  }),
+  'Could not restore sign-in. Reload the page to retry.',
+);
 
 // --- Join form ---
 function updateJoinBtn(): void {
@@ -717,8 +835,12 @@ function updateJoinBtn(): void {
 nameInput.addEventListener('input', updateJoinBtn);
 roomInput.addEventListener('input', updateJoinBtn);
 
-nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
-roomInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
+nameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') joinBtn.click();
+});
+roomInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') joinBtn.click();
+});
 
 // --- Room Browser ---
 let roomBrowserPage = 1;
@@ -763,18 +885,16 @@ async function loadRoomBrowser(append = false): Promise<void> {
   try {
     const params = new URLSearchParams({ page: String(roomBrowserPage), limit: '20' });
     if (roomBrowserQuery) params.set('q', roomBrowserQuery);
-    const resp = await fetch(`/api/rooms?${params}`, {
-      headers: auth.jwt ? { Authorization: `Bearer ${auth.jwt}` } : {},
-    });
-    if (request !== roomBrowserRequest) return;
-    if (!resp.ok) {
-      const explanation = resp.status === 404 || resp.status === 503
-        ? 'The room directory is unavailable on this server. Local guest rooms can still be joined by name below; browsing saved rooms requires a configured database.'
-        : resp.status === 429 ? 'Too many room searches. Wait a moment and try again.'
-        : 'Could not load the room directory. You can still join directly by room name below.';
+    const rooms = await api.rooms(auth.jwt, params).catch((error: unknown) => {
+      if (!(error instanceof ApiError)) throw error;
+      const explanation =
+        error.status === 404 || error.status === 503
+          ? 'The room directory is unavailable on this server. Local guest rooms can still be joined by name below; browsing saved rooms requires a configured database.'
+          : error.status === 429
+            ? 'Too many room searches. Wait a moment and try again.'
+            : 'Could not load the room directory. You can still join directly by room name below.';
       throw new Error(explanation);
-    }
-    const rooms: RoomListItem[] = await resp.json();
+    });
     if (request !== roomBrowserRequest) return;
     roomBrowserHasMore = rooms.length === 20;
     roomLoadMore.hidden = !roomBrowserHasMore;
@@ -782,9 +902,11 @@ async function loadRoomBrowser(append = false): Promise<void> {
     if (rooms.length === 0 && !append) {
       const empty = document.createElement('div');
       empty.className = 'room-list-empty';
-      empty.textContent = roomBrowserQuery ? 'No rooms match your search'
-        : auth.isLoggedIn ? 'No public rooms yet — create one or join by name below.'
-        : 'No public rooms are listed. Join by room name below, or sign in to create a saved room.';
+      empty.textContent = roomBrowserQuery
+        ? 'No rooms match your search'
+        : auth.isLoggedIn
+          ? 'No public rooms yet — create one or join by name below.'
+          : 'No public rooms are listed. Join by room name below, or sign in to create a saved room.';
       roomList.appendChild(empty);
       return;
     }
@@ -795,8 +917,11 @@ async function loadRoomBrowser(append = false): Promise<void> {
       card.tabIndex = 0;
       card.setAttribute('role', 'button');
       card.setAttribute('aria-label', `Join ${r.display_name}`);
-      card.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); card.click(); }
+      card.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          card.click();
+        }
       });
       card.addEventListener('click', () => {
         roomInput.value = r.id;
@@ -812,7 +937,9 @@ async function loadRoomBrowser(append = false): Promise<void> {
       info.className = 'room-card-info';
       if (safeRasterUrl(r.image_url)) {
         const image = document.createElement('img');
-        image.src = r.image_url; image.alt = ''; image.className = 'room-card-image';
+        image.src = r.image_url;
+        image.alt = '';
+        image.className = 'room-card-image';
         card.append(image);
       }
 
@@ -823,7 +950,10 @@ async function loadRoomBrowser(append = false): Promise<void> {
       nameRow.appendChild(nameText);
       if (r.password_protected) {
         const lockSpan = document.createElement('span');
-        lockSpan.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>');
+        lockSpan.insertAdjacentHTML(
+          'afterbegin',
+          '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+        );
         nameRow.appendChild(lockSpan);
       }
       info.appendChild(nameRow);
@@ -866,13 +996,18 @@ async function loadRoomBrowser(append = false): Promise<void> {
     const message = document.createElement('div');
     message.className = 'room-list-empty directory-status';
     message.setAttribute('role', 'status');
-    message.textContent = e instanceof Error && !(e instanceof TypeError) ? e.message
-      : 'The room directory could not be reached. You can still try joining directly below.';
+    message.textContent =
+      e instanceof Error && !(e instanceof TypeError)
+        ? e.message
+        : 'The room directory could not be reached. You can still try joining directly below.';
     const retry = document.createElement('button');
     retry.type = 'button';
     retry.className = 'auth-link-btn';
     retry.textContent = 'Retry directory';
-    retry.addEventListener('click', () => { void loadRoomBrowser(); });
+    retry.addEventListener(
+      'click',
+      asyncUiAction(() => loadRoomBrowser(), 'Could not refresh the room directory'),
+    );
     message.append(document.createElement('br'), retry);
     roomList.append(message);
   } finally {
@@ -891,69 +1026,85 @@ roomSearchInput.addEventListener('input', () => {
       return;
     }
     roomBrowserQuery = query;
-    loadRoomBrowser();
+    observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory');
   }, 300);
 });
 
 roomLoadMore.addEventListener('click', () => {
   roomBrowserPage++;
-  loadRoomBrowser(true);
+  observeUiTask(loadRoomBrowser(true), 'Could not load more rooms');
 });
 
 // --- Auth Events ---
-signInBtn.addEventListener('click', () => { loginModal.hidden = false; });
+signInBtn.addEventListener('click', () => {
+  loginModal.hidden = false;
+});
 logoutBtn.addEventListener('click', () => {
-  void auth.logout().catch((error) => {
+  auth.logout().catch((error) => {
     showToast(error instanceof Error ? error.message : 'Sign out failed');
   });
 });
 
 // Login
-loginClose.addEventListener('click', () => { loginModal.hidden = true; });
-loginModal.addEventListener('click', (e) => { if (e.target === loginModal) loginModal.hidden = true; });
-
-loginSubmit.addEventListener('click', async () => {
-  loginError.hidden = true;
-  loginSubmit.disabled = true;
-  loginSubmit.textContent = 'Signing in...';
-  try {
-    await auth.login(loginEmail.value.trim(), loginPassword.value);
-    loginModal.hidden = true;
-    loginEmail.value = '';
-    loginPassword.value = '';
-  } catch (e) {
-    loginError.textContent = e instanceof Error ? e.message : 'Login failed';
-    loginError.hidden = false;
-  } finally {
-    loginSubmit.disabled = false;
-    loginSubmit.textContent = 'Sign In';
-  }
+loginClose.addEventListener('click', () => {
+  loginModal.hidden = true;
+});
+loginModal.addEventListener('click', (e) => {
+  if (e.target === loginModal) loginModal.hidden = true;
 });
 
-loginEmail.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginPassword.focus(); });
-loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginSubmit.click(); });
+loginSubmit.addEventListener(
+  'click',
+  asyncUiAction(async () => {
+    loginError.hidden = true;
+    loginSubmit.disabled = true;
+    loginSubmit.textContent = 'Signing in...';
+    try {
+      await auth.login(loginEmail.value.trim(), loginPassword.value);
+      loginModal.hidden = true;
+      loginEmail.value = '';
+      loginPassword.value = '';
+    } catch (e) {
+      loginError.textContent = e instanceof Error ? e.message : 'Login failed';
+      loginError.hidden = false;
+    } finally {
+      loginSubmit.disabled = false;
+      loginSubmit.textContent = 'Sign In';
+    }
+  }, 'Could not complete sign-in'),
+);
 
-loginPasskeyBtn.addEventListener('click', async () => {
-  const email = loginEmail.value.trim();
-  if (!email) {
-    loginError.textContent = 'Enter your email first';
-    loginError.hidden = false;
-    return;
-  }
-  loginError.hidden = true;
-  try {
-    const options = await auth.passkeyLoginStart(email);
-    const credential = await navigator.credentials.get(options);
-    if (!credential) throw new Error('Passkey cancelled');
-    await auth.passkeyLoginFinish(credential);
-    loginModal.hidden = true;
-    loginEmail.value = '';
-    loginPassword.value = '';
-  } catch (e) {
-    loginError.textContent = e instanceof Error ? e.message : 'Passkey login failed';
-    loginError.hidden = false;
-  }
+loginEmail.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loginPassword.focus();
 });
+loginPassword.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loginSubmit.click();
+});
+
+loginPasskeyBtn.addEventListener(
+  'click',
+  asyncUiAction(async () => {
+    const email = loginEmail.value.trim();
+    if (!email) {
+      loginError.textContent = 'Enter your email first';
+      loginError.hidden = false;
+      return;
+    }
+    loginError.hidden = true;
+    try {
+      const options = await auth.passkeyLoginStart(email);
+      const credential = await navigator.credentials.get(options);
+      if (!credential) throw new Error('Passkey cancelled');
+      await auth.passkeyLoginFinish(credential);
+      loginModal.hidden = true;
+      loginEmail.value = '';
+      loginPassword.value = '';
+    } catch (e) {
+      loginError.textContent = e instanceof Error ? e.message : 'Passkey login failed';
+      loginError.hidden = false;
+    }
+  }, 'Could not complete passkey sign-in'),
+);
 
 loginToRegister.addEventListener('click', () => {
   loginModal.hidden = true;
@@ -961,63 +1112,77 @@ loginToRegister.addEventListener('click', () => {
 });
 
 // Register
-registerClose.addEventListener('click', () => { registerModal.hidden = true; });
-registerModal.addEventListener('click', (e) => { if (e.target === registerModal) registerModal.hidden = true; });
-
-registerSubmit.addEventListener('click', async () => {
-  registerError.hidden = true;
-  if (registerPassword.value !== registerConfirm.value) {
-    registerError.textContent = 'Passwords do not match';
-    registerError.hidden = false;
-    return;
-  }
-  if (registerPassword.value.length < 8) {
-    registerError.textContent = 'Password must be at least 8 characters';
-    registerError.hidden = false;
-    return;
-  }
-  registerSubmit.disabled = true;
-  registerSubmit.textContent = 'Creating account...';
-  try {
-    await auth.register(registerEmail.value.trim(), registerName.value.trim(), registerPassword.value);
-    registerModal.hidden = true;
-    registerEmail.value = '';
-    registerName.value = '';
-    registerPassword.value = '';
-    registerConfirm.value = '';
-  } catch (e) {
-    registerError.textContent = e instanceof Error ? e.message : 'Registration failed';
-    registerError.hidden = false;
-  } finally {
-    registerSubmit.disabled = false;
-    registerSubmit.textContent = 'Create Account';
-  }
+registerClose.addEventListener('click', () => {
+  registerModal.hidden = true;
+});
+registerModal.addEventListener('click', (e) => {
+  if (e.target === registerModal) registerModal.hidden = true;
 });
 
-registerPasskeyBtn.addEventListener('click', async () => {
-  const email = registerEmail.value.trim();
-  const displayName = registerName.value.trim();
-  if (!email || !displayName) {
-    registerError.textContent = 'Fill in email and display name first';
-    registerError.hidden = false;
-    return;
-  }
-  registerError.hidden = true;
-  try {
-    const options = await auth.passkeyRegisterStart(email, displayName);
-    const credential = await navigator.credentials.create(options);
-    if (!credential) throw new Error('Passkey registration cancelled');
-    await auth.passkeyRegisterFinish(credential);
-    registerModal.hidden = true;
-    registerEmail.value = '';
-    registerName.value = '';
-    registerPassword.value = '';
-    registerConfirm.value = '';
-  } catch (e) {
-    registerError.textContent = e instanceof Error ? e.message : 'Passkey registration failed';
-    registerError.hidden = false;
-  }
-});
+registerSubmit.addEventListener(
+  'click',
+  asyncUiAction(async () => {
+    registerError.hidden = true;
+    if (registerPassword.value !== registerConfirm.value) {
+      registerError.textContent = 'Passwords do not match';
+      registerError.hidden = false;
+      return;
+    }
+    if (registerPassword.value.length < 8) {
+      registerError.textContent = 'Password must be at least 8 characters';
+      registerError.hidden = false;
+      return;
+    }
+    registerSubmit.disabled = true;
+    registerSubmit.textContent = 'Creating account...';
+    try {
+      await auth.register(
+        registerEmail.value.trim(),
+        registerName.value.trim(),
+        registerPassword.value,
+      );
+      registerModal.hidden = true;
+      registerEmail.value = '';
+      registerName.value = '';
+      registerPassword.value = '';
+      registerConfirm.value = '';
+    } catch (e) {
+      registerError.textContent = e instanceof Error ? e.message : 'Registration failed';
+      registerError.hidden = false;
+    } finally {
+      registerSubmit.disabled = false;
+      registerSubmit.textContent = 'Create Account';
+    }
+  }, 'Could not complete registration'),
+);
+
+registerPasskeyBtn.addEventListener(
+  'click',
+  asyncUiAction(async () => {
+    const email = registerEmail.value.trim();
+    const displayName = registerName.value.trim();
+    if (!email || !displayName) {
+      registerError.textContent = 'Fill in email and display name first';
+      registerError.hidden = false;
+      return;
+    }
+    registerError.hidden = true;
+    try {
+      const options = await auth.passkeyRegisterStart(email, displayName);
+      const credential = await navigator.credentials.create(options);
+      if (!credential) throw new Error('Passkey registration cancelled');
+      await auth.passkeyRegisterFinish(credential);
+      registerModal.hidden = true;
+      registerEmail.value = '';
+      registerName.value = '';
+      registerPassword.value = '';
+      registerConfirm.value = '';
+    } catch (e) {
+      registerError.textContent = e instanceof Error ? e.message : 'Passkey registration failed';
+      registerError.hidden = false;
+    }
+  }, 'Could not complete passkey registration'),
+);
 
 registerToLogin.addEventListener('click', () => {
   registerModal.hidden = true;
@@ -1025,322 +1190,354 @@ registerToLogin.addEventListener('click', () => {
 });
 
 // --- Create Room ---
-createRoomBtn.addEventListener('click', () => { if (auth.isLoggedIn) createRoomModal.hidden = false; });
-createRoomClose.addEventListener('click', () => { createRoomModal.hidden = true; });
-createRoomModal.addEventListener('click', (e) => { if (e.target === createRoomModal) createRoomModal.hidden = true; });
-
-createRoomSubmit.addEventListener('click', async () => {
-  createRoomError.hidden = true;
-  const id = crId.value.trim();
-  const displayName = crName.value.trim();
-  if (!id || !displayName) {
-    createRoomError.textContent = 'Room ID and Display Name are required';
-    createRoomError.hidden = false;
-    return;
-  }
-  const roomPasswordBytes = new TextEncoder().encode(crPassword.value).length;
-  if (crPassword.value && (roomPasswordBytes < 8 || roomPasswordBytes > 256)) {
-    createRoomError.textContent = 'Room password must be 8-256 bytes';
-    createRoomError.hidden = false;
-    return;
-  }
-  createRoomSubmit.disabled = true;
-  createRoomSubmit.textContent = 'Creating...';
-  try {
-    const body: CreateRoomRequest = {
-      id,
-      display_name: displayName,
-    };
-    if (crTopic.value.trim()) body.topic = crTopic.value.trim();
-    if (crPassword.value) body.password = crPassword.value;
-    if (crModerated.checked) body.moderated = true;
-    if (crLobby.checked) body.lobby_enabled = true;
-    if (crSecret.checked) body.secret = true;
-    if (!crGuests.checked) body.guests_allowed = false;
-
-    const resp = await fetch('/api/rooms', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${auth.jwt}`,
-      },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Failed to create room' }));
-      throw new Error(err.error ?? 'Failed to create room');
-    }
-
-    createRoomModal.hidden = true;
-    // Auto-join the created room
-    roomInput.value = id;
-    if (auth.displayName && !nameInput.value.trim()) {
-      nameInput.value = auth.displayName;
-    }
-    updateJoinBtn();
-    joinBtn.click();
-    // Reset form
-    crId.value = '';
-    crName.value = '';
-    crTopic.value = '';
-    crPassword.value = '';
-    crModerated.checked = false;
-    crLobby.checked = false;
-    crSecret.checked = false;
-    crGuests.checked = true;
-  } catch (e) {
-    createRoomError.textContent = e instanceof Error ? e.message : 'Failed to create room';
-    createRoomError.hidden = false;
-  } finally {
-    createRoomSubmit.disabled = false;
-    createRoomSubmit.textContent = 'Create Room';
-  }
+createRoomBtn.addEventListener('click', () => {
+  if (auth.isLoggedIn) createRoomModal.hidden = false;
+});
+createRoomClose.addEventListener('click', () => {
+  createRoomModal.hidden = true;
+});
+createRoomModal.addEventListener('click', (e) => {
+  if (e.target === createRoomModal) createRoomModal.hidden = true;
 });
 
-joinBtn.addEventListener('click', async () => {
-  const name = nameInput.value.trim();
-  const roomId = roomInput.value.trim();
-  if (!name || !roomId) return;
-
-  localStorage.setItem('displayName', name);
-  window.location.hash = roomId;
-
-  joinBtn.disabled = true;
-  joinBtn.textContent = 'Joining...';
-  localTextMuted = false;
-  roomRecovering = false;
-
-  try {
-    room = new RoomClient(signaling, {
-      onParticipantsChanged: participants => { void socialChat.activate(); renderParticipants(participants); socialChat.participantsChanged(); community.refresh(); },
-      onLocalStream: () => {}, // Unused — local tile managed by updateLocalTile on user action
-      onLocalMediaChanged: () => {
-        if (!room) return;
-        updateMicButton(room.audioEnabled);
-        updateCamButton(room.videoEnabled);
-        updateScreenButton(room.isScreenSharing);
-        updateLocalTile();
-      },
-      onLocalCaptureStopped: handleLocalCaptureStopped,
-      onRemoteTrack: renderRemoteTrack,
-      onRemoteTrackRemoved: removeRemoteTrack,
-      onParticipantLeft: handleParticipantLeft,
-      onChatMessage: () => {}, // Typed entries and delivery state handled by session inbox.
-      onSocialEvent: message => {
-        socialChat.handleEvent(message);
-        if (message.type === 'nicknameChanged') {
-          if (message.participantId === room?.localParticipantId) nameInput.value = message.nickname;
-          for (const [key, tile] of remoteTiles) {
-            if (tile.dataset['participantId'] !== message.participantId) continue;
-            const tag = tile.querySelector('.name-tag');
-            if (tag) tag.textContent = message.nickname + (key.endsWith(':screen') ? ' (Screen)' : '');
-          }
-        } else if (message.type === 'socialResponse' && message.action === 'getRoomSnapshot') {
-          const lobby = message.data['lobby'] as { participantId: string; displayName: string }[] | undefined;
-          lobbyWaiters.clear();
-          for (const waiter of lobby ?? []) lobbyWaiters.set(waiter.participantId, waiter.displayName);
-          renderLobbyPanel();
-        }
-      },
-      onConnectionQuality: renderConnectionQuality,
-      onParticipantJoined: handleParticipantJoined,
-      onActiveSpeaker: (participantId) => {
-        if (currentDominantTile) {
-          currentDominantTile.classList.remove('dominant-speaker');
-          currentDominantTile = null;
-        }
-        const tile = remoteTiles.get(participantId);
-        if (tile) {
-          tile.classList.add('dominant-speaker');
-          currentDominantTile = tile;
-        }
-      },
-      onAudioLevels: (levels) => {
-        // Clear only previously-speaking elements (O(n) on speakers, not DOM)
-        for (const el of currentlySpeaking) {
-          el.classList.remove('speaking');
-        }
-        currentlySpeaking.clear();
-        for (const { participantId, volume } of levels) {
-          if (volume > AUDIO_LEVEL_THRESHOLD) {
-            const tile = remoteTiles.get(participantId);
-            if (tile) {
-              tile.classList.add('speaking');
-              currentlySpeaking.add(tile);
-            }
-            // Also update participant list items (cached by data attribute)
-            const listItem = participantList.querySelector<HTMLElement>(`[data-participant-id="${CSS.escape(participantId)}"]`);
-            if (listItem) {
-              listItem.classList.add('speaking');
-              currentlySpeaking.add(listItem);
-            }
-            // Classic users panel
-            const classicItem = document.getElementById('classic-users-panel')
-              ?.querySelector<HTMLElement>(`[data-participant-id="${CSS.escape(participantId)}"]`);
-            if (classicItem) {
-              classicItem.classList.add('speaking');
-              currentlySpeaking.add(classicItem);
-            }
-          }
-        }
-      },
-      onModeration: (action, participantId, reason) => {
-        const isLocal = participantId === room?.localParticipantId;
-        if (isLocal && (action === 'kicked' || action === 'banned')) {
-          void leaveCurrentRoom();
-          const reasonText = reason ? `\nReason: ${reason}` : '';
-          alert(`You have been ${action} from this room.${reasonText}`);
-          return;
-        }
-        if (isLocal && (action === 'textMuted' || action === 'textUnmuted')) {
-          localTextMuted = action === 'textMuted';
-          applyRoomSettingsToUI();
-        }
-        // For other participants, show toast as before
-        const participants = room?.getParticipants();
-        const targetName = participants?.get(participantId)?.name ?? participantId.slice(0, 8);
-        const reasonText = reason ? ` (${reason})` : '';
-        const messages: Record<string, string> = {
-          camBanned: `${targetName} was camera banned${reasonText}`,
-          camUnbanned: `${targetName} was camera unbanned`,
-          textMuted: `${targetName} was text muted`,
-          textUnmuted: `${targetName} was text unmuted`,
-          kicked: `${targetName} was kicked${reasonText}`,
-          banned: `${targetName} was banned${reasonText}`,
-        };
-        showToast(messages[action] ?? `${action} on ${targetName}`);
-      },
-      onRoleChanged: (participantId, newRole) => {
-        community.refresh();
-        socialChat.participantsChanged();
-        const participants = room?.getParticipants();
-        const targetName = participants?.get(participantId)?.name
-          ?? (participantId === room?.localParticipantId ? room.nickname : participantId.slice(0, 8));
-        if (participantId === room?.localParticipantId) {
-          showToast(`Your role has been changed to ${newRole}`);
-        } else {
-          showToast(`${targetName} is now ${newRole}`);
-        }
-        updateRoomModeUI();
-        applyRoomSettingsToUI();
-        // Re-render participants to update role badges
-        if (room) renderParticipants(room.getParticipants());
-      },
-      onRoomSettingsChanged: (settings) => {
-        roomLabel.textContent = settings.displayName;
-        socialChat.participantsChanged();
-        updateRoomModeUI();
-        applyRoomSettingsToUI();
-        roomTopic.textContent = settings.topic ?? '';
-        roomTopic.hidden = !settings.topic;
-      },
-      onTopicChanged: (topic, changedBy) => {
-        roomTopic.textContent = topic;
-        roomTopic.hidden = !topic;
-        showToast(`Topic changed by ${changedBy}: ${topic}`);
-      },
-      onVoiceRequested: (participantId, displayName) => {
-        const role = room?.role ?? 'user';
-        const canGrant = role === 'owner' || role === 'admin' || role === 'moderator';
-        if (canGrant) {
-          showActionToast(`${displayName} is requesting voice`, [
-            { label: 'Grant', action: () => room?.setRole(participantId, 2) },
-            { label: 'Dismiss', action: () => {} },
-          ]);
-        } else {
-          showToast(`${displayName} is requesting voice`);
-        }
-      },
-      onLobbyWaiting: (roomName, topic, count) => {
-        mediaControls.reset();
-        roomTools.hidden = true;
-        joinScreen.hidden = true;
-        roomScreen.hidden = true;
-        lobbyScreen.hidden = false;
-        lobbyRoomName.textContent = roomName;
-        lobbyTopic.textContent = topic ?? '';
-        lobbyTopic.hidden = !topic;
-        lobbyCount.textContent = `${count} participant${count !== 1 ? 's' : ''} in room`;
-      },
-      onLobbyJoin: (participantId, displayName) => {
-        lobbyWaiters.set(participantId, displayName);
-        renderLobbyPanel();
-        showToast(`${displayName} is waiting in the lobby`);
-      },
-      onLobbyAdmitted: () => {
-        lobbyScreen.hidden = true;
-        joinScreen.hidden = true;
-        roomScreen.hidden = false;
-        applyJoinedRoomUI();
-        showToast('You have been admitted to the room');
-      },
-      onAdmissionComplete: () => {
-        // Post-admission media + room state are ready — refresh buttons/settings UI
-        applyJoinedRoomUI();
-      },
-      onLobbyDenied: (reason) => {
-        void leaveCurrentRoom();
-        alert(`Lobby access denied${reason ? `: ${reason}` : ''}`);
-      },
-      onRecoveryState: (state, message) => {
-        roomRecovering = state !== 'connected';
-        if (state === 'connected') {
-          connectionStatus.textContent = 'Connected';
-          connectionStatus.className = 'status connected';
-          applyJoinedRoomUI();
-          updateLocalTile();
-          showToast('Room connection restored');
-        } else {
-          connectionStatus.textContent = state === 'reconnecting' ? 'Rejoining room…' : 'Room recovery failed';
-          connectionStatus.className = `status ${state === 'reconnecting' ? 'connecting' : 'disconnected'}`;
-          pttDeactivate();
-          applyRoomSettingsToUI();
-          if (state === 'failed') showActionToast(message ?? 'Unable to rejoin the room', [
-            { label: 'Leave room', action: () => { void leaveCurrentRoom(); } },
-          ], 15000);
-        }
-      },
-      onPasswordRequired: async () => prompt('The room password is required to reconnect:'),
-      onRoomClosed: reason => { void leaveCurrentRoom(); showToast(reason, 8000); },
-    });
-
-    let status: 'joined' | 'lobby';
-    try {
-      status = await room.join(roomId, name);
-    } catch (e) {
-      // Password-protected room: ask once and retry
-      if (e instanceof RoomPasswordRequiredError) {
-        const pw = prompt('This room requires a password:');
-        if (pw === null) {
-          room = null;
-          joinBtn.disabled = false;
-          joinBtn.textContent = 'Join Room';
-          updateJoinBtn();
-          return;
-        }
-        status = await room.join(roomId, name, pw);
-      } else {
-        throw e;
-      }
-    }
-
-    if (status === 'lobby') {
-      // onLobbyWaiting already switched to the lobby screen. Room UI is applied
-      // by onLobbyAdmitted/onAdmissionComplete if/when we are admitted.
+createRoomSubmit.addEventListener(
+  'click',
+  asyncUiAction(async () => {
+    createRoomError.hidden = true;
+    const id = crId.value.trim();
+    const displayName = crName.value.trim();
+    if (!id || !displayName) {
+      createRoomError.textContent = 'Room ID and Display Name are required';
+      createRoomError.hidden = false;
       return;
     }
+    const roomPasswordBytes = new TextEncoder().encode(crPassword.value).length;
+    if (crPassword.value && (roomPasswordBytes < 8 || roomPasswordBytes > 256)) {
+      createRoomError.textContent = 'Room password must be 8-256 bytes';
+      createRoomError.hidden = false;
+      return;
+    }
+    createRoomSubmit.disabled = true;
+    createRoomSubmit.textContent = 'Creating...';
+    try {
+      const body: CreateRoomRequest = {
+        id,
+        display_name: displayName,
+      };
+      if (crTopic.value.trim()) body.topic = crTopic.value.trim();
+      if (crPassword.value) body.password = crPassword.value;
+      if (crModerated.checked) body.moderated = true;
+      if (crLobby.checked) body.lobby_enabled = true;
+      if (crSecret.checked) body.secret = true;
+      if (!crGuests.checked) body.guests_allowed = false;
 
-    joinScreen.hidden = true;
-    roomScreen.hidden = false;
-    applyJoinedRoomUI();
-  } catch (e) {
-    console.error('Failed to join:', e);
-    alert(`Failed to join: ${e instanceof Error ? e.message : String(e)}`);
-    room = null;
-    joinBtn.disabled = false;
-    joinBtn.textContent = 'Join Room';
-  }
-});
+      await api.createRoom(auth.jwt, body);
+
+      createRoomModal.hidden = true;
+      // Auto-join the created room
+      roomInput.value = id;
+      if (auth.displayName && !nameInput.value.trim()) {
+        nameInput.value = auth.displayName;
+      }
+      updateJoinBtn();
+      joinBtn.click();
+      // Reset form
+      crId.value = '';
+      crName.value = '';
+      crTopic.value = '';
+      crPassword.value = '';
+      crModerated.checked = false;
+      crLobby.checked = false;
+      crSecret.checked = false;
+      crGuests.checked = true;
+    } catch (e) {
+      createRoomError.textContent = e instanceof Error ? e.message : 'Failed to create room';
+      createRoomError.hidden = false;
+    } finally {
+      createRoomSubmit.disabled = false;
+      createRoomSubmit.textContent = 'Create Room';
+    }
+  }, 'Could not complete room creation'),
+);
+
+joinBtn.addEventListener(
+  'click',
+  asyncUiAction(async () => {
+    const name = nameInput.value.trim();
+    const roomId = roomInput.value.trim();
+    if (!name || !roomId) return;
+
+    localStorage.setItem('displayName', name);
+    window.location.hash = roomId;
+
+    joinBtn.disabled = true;
+    joinBtn.textContent = 'Joining...';
+    localTextMuted = false;
+    roomRecovering = false;
+
+    try {
+      room = new RoomClient(signaling, {
+        onBackgroundError: (message) => showToast(message),
+        onParticipantsChanged: (participants) => {
+          observeUiTask(socialChat.activate(), 'Could not refresh room conversations');
+          renderParticipants(participants);
+          socialChat.participantsChanged();
+          community.refresh();
+        },
+        onLocalStream: () => {}, // Unused — local tile managed by updateLocalTile on user action
+        onLocalMediaChanged: () => {
+          if (!room) return;
+          updateMicButton(room.audioEnabled);
+          updateCamButton(room.videoEnabled);
+          updateScreenButton(room.isScreenSharing);
+          updateLocalTile();
+        },
+        onLocalCaptureStopped: handleLocalCaptureStopped,
+        onRemoteTrack: renderRemoteTrack,
+        onRemoteTrackRemoved: removeRemoteTrack,
+        onParticipantLeft: handleParticipantLeft,
+        onChatMessage: () => {}, // Typed entries and delivery state handled by session inbox.
+        onSocialEvent: (message) => {
+          socialChat.handleEvent(message);
+          if (message.type === 'nicknameChanged') {
+            if (message.participantId === room?.localParticipantId)
+              nameInput.value = message.nickname;
+            for (const [key, tile] of remoteTiles) {
+              if (tile.dataset['participantId'] !== message.participantId) continue;
+              const tag = tile.querySelector('.name-tag');
+              if (tag)
+                tag.textContent = message.nickname + (key.endsWith(':screen') ? ' (Screen)' : '');
+            }
+          } else if (message.type === 'socialResponse' && message.action === 'getRoomSnapshot') {
+            const lobby = message.data['lobby'] as
+              { participantId: string; displayName: string }[] | undefined;
+            lobbyWaiters.clear();
+            for (const waiter of lobby ?? [])
+              lobbyWaiters.set(waiter.participantId, waiter.displayName);
+            renderLobbyPanel();
+          }
+        },
+        onConnectionQuality: renderConnectionQuality,
+        onParticipantJoined: handleParticipantJoined,
+        onActiveSpeaker: (participantId) => {
+          if (currentDominantTile) {
+            currentDominantTile.classList.remove('dominant-speaker');
+            currentDominantTile = null;
+          }
+          const tile = remoteTiles.get(participantId);
+          if (tile) {
+            tile.classList.add('dominant-speaker');
+            currentDominantTile = tile;
+          }
+        },
+        onAudioLevels: (levels) => {
+          // Clear only previously-speaking elements (O(n) on speakers, not DOM)
+          for (const el of currentlySpeaking) {
+            el.classList.remove('speaking');
+          }
+          currentlySpeaking.clear();
+          for (const { participantId, volume } of levels) {
+            if (volume > AUDIO_LEVEL_THRESHOLD) {
+              const tile = remoteTiles.get(participantId);
+              if (tile) {
+                tile.classList.add('speaking');
+                currentlySpeaking.add(tile);
+              }
+              // Also update participant list items (cached by data attribute)
+              const listItem = participantList.querySelector<HTMLElement>(
+                `[data-participant-id="${CSS.escape(participantId)}"]`,
+              );
+              if (listItem) {
+                listItem.classList.add('speaking');
+                currentlySpeaking.add(listItem);
+              }
+              // Classic users panel
+              const classicItem = document
+                .getElementById('classic-users-panel')
+                ?.querySelector<HTMLElement>(
+                  `[data-participant-id="${CSS.escape(participantId)}"]`,
+                );
+              if (classicItem) {
+                classicItem.classList.add('speaking');
+                currentlySpeaking.add(classicItem);
+              }
+            }
+          }
+        },
+        onModeration: (action, participantId, reason) => {
+          const isLocal = participantId === room?.localParticipantId;
+          if (isLocal && (action === 'kicked' || action === 'banned')) {
+            observeUiTask(leaveCurrentRoom(), 'Could not finish leaving the room');
+            const reasonText = reason ? `\nReason: ${reason}` : '';
+            alert(`You have been ${action} from this room.${reasonText}`);
+            return;
+          }
+          if (isLocal && (action === 'textMuted' || action === 'textUnmuted')) {
+            localTextMuted = action === 'textMuted';
+            applyRoomSettingsToUI();
+          }
+          // For other participants, show toast as before
+          const participants = room?.getParticipants();
+          const targetName = participants?.get(participantId)?.name ?? participantId.slice(0, 8);
+          const reasonText = reason ? ` (${reason})` : '';
+          const messages: Record<string, string> = {
+            camBanned: `${targetName} was camera banned${reasonText}`,
+            camUnbanned: `${targetName} was camera unbanned`,
+            textMuted: `${targetName} was text muted`,
+            textUnmuted: `${targetName} was text unmuted`,
+            kicked: `${targetName} was kicked${reasonText}`,
+            banned: `${targetName} was banned${reasonText}`,
+          };
+          showToast(messages[action] ?? `${action} on ${targetName}`);
+        },
+        onRoleChanged: (participantId, newRole) => {
+          community.refresh();
+          socialChat.participantsChanged();
+          const participants = room?.getParticipants();
+          const targetName =
+            participants?.get(participantId)?.name ??
+            (participantId === room?.localParticipantId
+              ? room.nickname
+              : participantId.slice(0, 8));
+          if (participantId === room?.localParticipantId) {
+            showToast(`Your role has been changed to ${newRole}`);
+          } else {
+            showToast(`${targetName} is now ${newRole}`);
+          }
+          updateRoomModeUI();
+          applyRoomSettingsToUI();
+          // Re-render participants to update role badges
+          if (room) renderParticipants(room.getParticipants());
+        },
+        onRoomSettingsChanged: (settings) => {
+          roomLabel.textContent = settings.displayName;
+          socialChat.participantsChanged();
+          updateRoomModeUI();
+          applyRoomSettingsToUI();
+          roomTopic.textContent = settings.topic ?? '';
+          roomTopic.hidden = !settings.topic;
+        },
+        onTopicChanged: (topic, changedBy) => {
+          roomTopic.textContent = topic;
+          roomTopic.hidden = !topic;
+          showToast(`Topic changed by ${changedBy}: ${topic}`);
+        },
+        onVoiceRequested: (participantId, displayName) => {
+          const role = room?.role ?? 'user';
+          const canGrant = role === 'owner' || role === 'admin' || role === 'moderator';
+          if (canGrant) {
+            showActionToast(`${displayName} is requesting voice`, [
+              { label: 'Grant', action: () => room?.setRole(participantId, 2) },
+              { label: 'Dismiss', action: () => {} },
+            ]);
+          } else {
+            showToast(`${displayName} is requesting voice`);
+          }
+        },
+        onLobbyWaiting: (roomName, topic, count) => {
+          mediaControls.reset();
+          roomTools.hidden = true;
+          joinScreen.hidden = true;
+          roomScreen.hidden = true;
+          lobbyScreen.hidden = false;
+          lobbyRoomName.textContent = roomName;
+          lobbyTopic.textContent = topic ?? '';
+          lobbyTopic.hidden = !topic;
+          lobbyCount.textContent = `${count} participant${count !== 1 ? 's' : ''} in room`;
+        },
+        onLobbyJoin: (participantId, displayName) => {
+          lobbyWaiters.set(participantId, displayName);
+          renderLobbyPanel();
+          showToast(`${displayName} is waiting in the lobby`);
+        },
+        onLobbyAdmitted: () => {
+          lobbyScreen.hidden = true;
+          joinScreen.hidden = true;
+          roomScreen.hidden = false;
+          applyJoinedRoomUI();
+          showToast('You have been admitted to the room');
+        },
+        onAdmissionComplete: () => {
+          // Post-admission media + room state are ready — refresh buttons/settings UI
+          applyJoinedRoomUI();
+        },
+        onLobbyDenied: (reason) => {
+          observeUiTask(leaveCurrentRoom(), 'Could not finish leaving the room');
+          alert(`Lobby access denied${reason ? `: ${reason}` : ''}`);
+        },
+        onRecoveryState: (state, message) => {
+          roomRecovering = state !== 'connected';
+          if (state === 'connected') {
+            connectionStatus.textContent = 'Connected';
+            connectionStatus.className = 'status connected';
+            applyJoinedRoomUI();
+            updateLocalTile();
+            showToast('Room connection restored');
+          } else {
+            connectionStatus.textContent =
+              state === 'reconnecting' ? 'Rejoining room…' : 'Room recovery failed';
+            connectionStatus.className = `status ${state === 'reconnecting' ? 'connecting' : 'disconnected'}`;
+            pttDeactivate();
+            applyRoomSettingsToUI();
+            if (state === 'failed')
+              showActionToast(
+                message ?? 'Unable to rejoin the room',
+                [
+                  {
+                    label: 'Leave room',
+                    action: () =>
+                      observeUiTask(leaveCurrentRoom(), 'Could not finish leaving the room'),
+                  },
+                ],
+                15000,
+              );
+          }
+        },
+        onPasswordRequired: async () => prompt('The room password is required to reconnect:'),
+        onRoomClosed: (reason) => {
+          observeUiTask(leaveCurrentRoom(), 'Could not finish leaving the room');
+          showToast(reason, 8000);
+        },
+      });
+
+      let status: 'joined' | 'lobby';
+      try {
+        status = await room.join(roomId, name);
+      } catch (e) {
+        // Password-protected room: ask once and retry
+        if (e instanceof RoomPasswordRequiredError) {
+          const pw = prompt('This room requires a password:');
+          if (pw === null) {
+            room = null;
+            joinBtn.disabled = false;
+            joinBtn.textContent = 'Join Room';
+            updateJoinBtn();
+            return;
+          }
+          status = await room.join(roomId, name, pw);
+        } else {
+          throw e;
+        }
+      }
+
+      if (status === 'lobby') {
+        // onLobbyWaiting already switched to the lobby screen. Room UI is applied
+        // by onLobbyAdmitted/onAdmissionComplete if/when we are admitted.
+        return;
+      }
+
+      joinScreen.hidden = true;
+      roomScreen.hidden = false;
+      applyJoinedRoomUI();
+    } catch (e) {
+      console.error('Failed to join:', e);
+      alert(`Failed to join: ${e instanceof Error ? e.message : String(e)}`);
+      room = null;
+      joinBtn.disabled = false;
+      joinBtn.textContent = 'Join Room';
+    }
+  }, 'Could not complete joining the room'),
+);
 
 /** Apply all in-room UI state (label, topic, control buttons, settings-driven UI).
  * Called on direct join, on lobby admission (media pending), and again once
@@ -1384,7 +1581,7 @@ function applyJoinedRoomUI(): void {
   qualityIndicator.hidden = false;
   updateRoomModeUI();
   applyRoomSettingsToUI();
-  void socialChat.activate();
+  observeUiTask(socialChat.activate(), 'Could not refresh room conversations');
   community.refresh();
 }
 
@@ -1401,7 +1598,10 @@ roomTopic.addEventListener('click', () => {
 });
 
 // --- Lobby Cancel ---
-lobbyCancelBtn.addEventListener('click', () => { void leaveCurrentRoom(); });
+lobbyCancelBtn.addEventListener(
+  'click',
+  asyncUiAction(leaveCurrentRoom, 'Could not finish leaving the room'),
+);
 
 // --- Leave ---
 async function leaveCurrentRoom(): Promise<void> {
@@ -1469,14 +1669,16 @@ async function leaveCurrentRoom(): Promise<void> {
   joinBtn.textContent = 'Join Room';
   qualityIndicator.hidden = true;
   qualityIndicator.className = 'quality-dot';
-  settingsModal.hidden = true;
-  roomSettingsModal.hidden = true;
+  roomSettingsModal.close();
   document.getElementById('mod-menu')?.remove();
   updateJoinBtn();
-  void loadRoomBrowser();
+  observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory');
 }
 
-leaveBtn.addEventListener('click', () => { void leaveCurrentRoom(); });
+leaveBtn.addEventListener(
+  'click',
+  asyncUiAction(leaveCurrentRoom, 'Could not finish leaving the room'),
+);
 
 // --- Control buttons ---
 function updateMicButton(enabled: boolean): void {
@@ -1506,13 +1708,21 @@ function updateMicButton(enabled: boolean): void {
 }
 
 function updateCamButton(enabled: boolean): void {
-  setButtonContent(camBtn, enabled ? icons.camOn() : icons.camOff(), enabled ? 'Cam Off (V)' : 'Cam On (V)');
+  setButtonContent(
+    camBtn,
+    enabled ? icons.camOn() : icons.camOff(),
+    enabled ? 'Cam Off (V)' : 'Cam On (V)',
+  );
   camBtn.classList.toggle('active', enabled);
   camBtn.classList.toggle('muted', !enabled);
 }
 
 function updateScreenButton(active: boolean): void {
-  setButtonContent(screenBtn, active ? icons.screenShareOff() : icons.screenShare(), active ? 'Stop Sharing (S)' : 'Screen (S)');
+  setButtonContent(
+    screenBtn,
+    active ? icons.screenShareOff() : icons.screenShare(),
+    active ? 'Stop Sharing (S)' : 'Screen (S)',
+  );
   screenBtn.classList.toggle('active', active);
 }
 
@@ -1609,9 +1819,11 @@ function handleLocalCaptureStopped(kind: 'audio' | 'video'): void {
     // Retire the held intent and any pending activation; only a new user action may recapture.
     pttActivation++;
     pttHeld = false;
-    showToast(micMode === 'ptt'
-      ? 'Microphone stopped. Release, then hold Space/T or the microphone button again to restart.'
-      : 'Microphone stopped. Click Unmute (M) to restart.');
+    showToast(
+      micMode === 'ptt'
+        ? 'Microphone stopped. Release, then hold Space/T or the microphone button again to restart.'
+        : 'Microphone stopped. Click Unmute (M) to restart.',
+    );
   } else {
     showToast('Camera stopped. Click Cam On (V) to restart.');
   }
@@ -1650,7 +1862,7 @@ micBtn.addEventListener('mousedown', (e) => {
   if (!room || !room.hasMedia) return;
   if (micMode === 'ptt' && canStartBroadcast('microphone')) {
     e.preventDefault(); // prevent focus loss
-    pttActivate();
+    observeUiTask(pttActivate(), 'Could not enable push-to-talk');
   }
 });
 
@@ -1662,10 +1874,13 @@ micBtn.addEventListener('mouseleave', () => {
   if (micMode === 'ptt') pttDeactivate();
 });
 
-micBtn.addEventListener('click', async () => {
-  if (micMode === 'open') await toggleMicrophone();
-  // In PTT mode, click is handled by mousedown/mouseup above
-});
+micBtn.addEventListener(
+  'click',
+  asyncUiAction(async () => {
+    if (micMode === 'open') await toggleMicrophone();
+    // In PTT mode, click is handled by mousedown/mouseup above
+  }, 'Could not update the microphone'),
+);
 
 function canStartBroadcast(kind: 'microphone' | 'camera' | 'screen'): boolean {
   if (!room?.hasMedia || roomRecovering) return false;
@@ -1680,7 +1895,11 @@ function canStartBroadcast(kind: 'microphone' | 'camera' | 'screen'): boolean {
     return false;
   }
   if (kind === 'camera' && settings?.allowVideo === false) return false;
-  if (kind === 'screen' && (settings?.allowScreenSharing === false || !navigator.mediaDevices?.getDisplayMedia)) return false;
+  if (
+    kind === 'screen' &&
+    (settings?.allowScreenSharing === false || !navigator.mediaDevices?.getDisplayMedia)
+  )
+    return false;
   return true;
 }
 
@@ -1698,7 +1917,9 @@ async function toggleMicrophone(): Promise<void> {
     if (room !== activeRoom) return;
     updateMicButton(activeRoom.audioEnabled);
     showToast(error instanceof Error ? error.message : 'Could not enable microphone');
-  } finally { microphoneTogglePending = false; }
+  } finally {
+    microphoneTogglePending = false;
+  }
 }
 
 async function toggleCamera(): Promise<void> {
@@ -1708,7 +1929,7 @@ async function toggleCamera(): Promise<void> {
   cameraTogglePending = true;
   try {
     if (!activeRoom.videoEnabled && !mediaControls.hasConfiguredSetup) {
-      if (!await mediaControls.openSetup('camera')) return;
+      if (!(await mediaControls.openSetup('camera'))) return;
       if (room !== activeRoom || !canStartBroadcast('camera')) return;
     }
     const enabled = await activeRoom.toggleVideo();
@@ -1719,7 +1940,9 @@ async function toggleCamera(): Promise<void> {
     if (room !== activeRoom) return;
     updateCamButton(activeRoom.videoEnabled);
     showToast(error instanceof Error ? error.message : 'Could not enable camera');
-  } finally { cameraTogglePending = false; }
+  } finally {
+    cameraTogglePending = false;
+  }
 }
 
 async function toggleScreenShare(): Promise<void> {
@@ -1734,14 +1957,22 @@ async function toggleScreenShare(): Promise<void> {
   }
 }
 
-camBtn.addEventListener('click', () => { void toggleCamera(); });
-screenBtn.addEventListener('click', () => { void toggleScreenShare(); });
+camBtn.addEventListener('click', asyncUiAction(toggleCamera, 'Could not update the camera'));
+screenBtn.addEventListener(
+  'click',
+  asyncUiAction(toggleScreenShare, 'Could not update screen sharing'),
+);
 
-micBtn.addEventListener('touchstart', event => {
-  if (micMode !== 'ptt') return;
-  event.preventDefault();
-  if (canStartBroadcast('microphone')) void pttActivate();
-}, { passive: false });
+micBtn.addEventListener(
+  'touchstart',
+  (event) => {
+    if (micMode !== 'ptt') return;
+    event.preventDefault();
+    if (canStartBroadcast('microphone'))
+      observeUiTask(pttActivate(), 'Could not enable push-to-talk');
+  },
+  { passive: false },
+);
 micBtn.addEventListener('touchend', () => pttDeactivate());
 micBtn.addEventListener('touchcancel', () => pttDeactivate());
 
@@ -1754,17 +1985,10 @@ handBtn.addEventListener('click', () => {
 });
 
 // --- Room Settings Modal ---
+configureSettingsDialog(roomSettingsModal);
 roomSettingsBtn.addEventListener('click', () => {
   populateRoomSettingsModal();
-  roomSettingsModal.hidden = false;
-});
-
-roomSettingsClose.addEventListener('click', () => {
-  roomSettingsModal.hidden = true;
-});
-
-roomSettingsModal.addEventListener('click', (e) => {
-  if (e.target === roomSettingsModal) roomSettingsModal.hidden = true;
+  roomSettingsModal.showModal();
 });
 
 // Room settings toggle handlers
@@ -1801,34 +2025,25 @@ rsPassword.addEventListener('change', () => {
     rsPassword.focus();
     return;
   }
-  room?.updateRoomSettings({ password: password || null } as any);
+  room?.updateRoomSettings({ password: password || null });
 });
 
 rsMaxBroadcasters.addEventListener('change', () => {
   const val = parseInt(rsMaxBroadcasters.value, 10);
   // null (not undefined) so "clear the limit" survives JSON serialization
-  room?.updateRoomSettings({ maxBroadcasters: isNaN(val) ? null : val } as any);
+  room?.updateRoomSettings({ maxBroadcasters: isNaN(val) ? null : val });
 });
 
 rsMaxParticipants.addEventListener('change', () => {
   const val = parseInt(rsMaxParticipants.value, 10);
-  room?.updateRoomSettings({ maxParticipants: isNaN(val) ? null : val } as any);
+  room?.updateRoomSettings({ maxParticipants: isNaN(val) ? null : val });
 });
 
-// --- Settings Modal ---
-settingsBtn.addEventListener('click', () => {
-  settingsModal.hidden = false;
-  populateDeviceSelectors();
-});
-
-settingsClose.addEventListener('click', () => {
-  settingsModal.hidden = true;
-});
-
-// Close on backdrop click
-settingsModal.addEventListener('click', (e) => {
-  if (e.target === settingsModal) settingsModal.hidden = true;
-});
+// --- Personal settings ---
+settingsBtn.addEventListener(
+  'click',
+  asyncUiAction(() => mediaControls.openSetup('settings'), 'Could not open your settings'),
+);
 
 layoutSelect.addEventListener('change', () => {
   setLayout(layoutSelect.value as 'modern' | 'classic');
@@ -1874,56 +2089,6 @@ micModeSelect.addEventListener('change', () => {
   setMicMode(micModeSelect.value as MicMode);
 });
 
-cameraSelect.addEventListener('change', async () => {
-  const deviceId = cameraSelect.value;
-  if (deviceId && room) {
-    try {
-      await room.switchCamera(deviceId);
-    } catch (e) {
-      console.error('Failed to switch camera:', e);
-    }
-  }
-});
-
-micSelect.addEventListener('change', async () => {
-  const deviceId = micSelect.value;
-  if (deviceId && room) {
-    try {
-      await room.switchMic(deviceId);
-    } catch (e) {
-      console.error('Failed to switch mic:', e);
-    }
-  }
-});
-
-async function populateDeviceSelectors(): Promise<void> {
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-
-    // Camera
-    while (cameraSelect.firstChild) cameraSelect.removeChild(cameraSelect.firstChild);
-    const cameras = devices.filter((d) => d.kind === 'videoinput');
-    cameras.forEach((d, i) => {
-      const opt = document.createElement('option');
-      opt.value = d.deviceId;
-      opt.textContent = d.label || `Camera ${i + 1}`;
-      cameraSelect.appendChild(opt);
-    });
-
-    // Mic
-    while (micSelect.firstChild) micSelect.removeChild(micSelect.firstChild);
-    const mics = devices.filter((d) => d.kind === 'audioinput');
-    mics.forEach((d, i) => {
-      const opt = document.createElement('option');
-      opt.value = d.deviceId;
-      opt.textContent = d.label || `Microphone ${i + 1}`;
-      micSelect.appendChild(opt);
-    });
-  } catch (e) {
-    console.warn('Could not enumerate devices:', e);
-  }
-}
-
 // --- Update video grid count for adaptive sizing ---
 function updateVideoGridCount(): void {
   const count = videoGrid.children.length;
@@ -1943,7 +2108,8 @@ function renderParticipants(participants: Map<string, Participant>): void {
   if (room?.localParticipantId) {
     // Build local producers map from actual media state
     const localProducers = new Map<string, { kind: 'audio' | 'video'; source?: string }>();
-    if (room.audioEnabled) localProducers.set('local-audio', { kind: 'audio', source: 'microphone' });
+    if (room.audioEnabled)
+      localProducers.set('local-audio', { kind: 'audio', source: 'microphone' });
     if (room.videoEnabled) localProducers.set('local-video', { kind: 'video', source: 'camera' });
     allParticipants.push({
       id: room.localParticipantId,
@@ -1974,7 +2140,11 @@ function renderParticipants(participants: Map<string, Participant>): void {
     avatar.className = 'participant-avatar';
     avatar.style.background = nameColor(p.name);
     avatar.textContent = p.name.charAt(0).toUpperCase();
-    community.decorateAvatar(avatar, p.id, p.id === room?.localParticipantId ? auth.isLoggedIn : p.authenticated === true);
+    community.decorateAvatar(
+      avatar,
+      p.id,
+      p.id === room?.localParticipantId ? auth.isLoggedIn : p.authenticated === true,
+    );
 
     // Info
     const info = document.createElement('div');
@@ -2005,20 +2175,26 @@ function renderParticipants(participants: Map<string, Participant>): void {
     const micIcon = document.createElement('span');
     micIcon.className = `media-icon ${hasAudio ? 'active' : 'muted'}`;
     // These are static SVG strings from our own module, not user content
-    micIcon.insertAdjacentHTML('afterbegin',
-      `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">${hasAudio
-        ? '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>'
-        : '<line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>'
-      }</svg>`);
+    micIcon.insertAdjacentHTML(
+      'afterbegin',
+      `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">${
+        hasAudio
+          ? '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>'
+          : '<line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>'
+      }</svg>`,
+    );
     mediaIcons.appendChild(micIcon);
 
     const camIcon = document.createElement('span');
     camIcon.className = `media-icon ${hasVideo ? 'active' : 'muted'}`;
-    camIcon.insertAdjacentHTML('afterbegin',
-      `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">${hasVideo
-        ? '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>'
-        : '<path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><line x1="1" y1="1" x2="23" y2="23"/>'
-      }</svg>`);
+    camIcon.insertAdjacentHTML(
+      'afterbegin',
+      `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">${
+        hasVideo
+          ? '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>'
+          : '<path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><line x1="1" y1="1" x2="23" y2="23"/>'
+      }</svg>`,
+    );
     mediaIcons.appendChild(camIcon);
 
     li.appendChild(avatar);
@@ -2066,7 +2242,8 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
   const allParticipants: Participant[] = [];
   if (room?.localParticipantId) {
     const localProducers = new Map<string, { kind: 'audio' | 'video'; source?: string }>();
-    if (room.audioEnabled) localProducers.set('local-audio', { kind: 'audio', source: 'microphone' });
+    if (room.audioEnabled)
+      localProducers.set('local-audio', { kind: 'audio', source: 'microphone' });
     if (room.videoEnabled) localProducers.set('local-video', { kind: 'video', source: 'camera' });
     allParticipants.push({
       id: room.localParticipantId,
@@ -2100,7 +2277,11 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
     avatar.style.height = '24px';
     avatar.style.fontSize = '0.65rem';
     avatar.textContent = p.name.charAt(0).toUpperCase();
-    community.decorateAvatar(avatar, p.id, p.id === room?.localParticipantId ? auth.isLoggedIn : p.authenticated === true);
+    community.decorateAvatar(
+      avatar,
+      p.id,
+      p.id === room?.localParticipantId ? auth.isLoggedIn : p.authenticated === true,
+    );
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'classic-participant-name';
@@ -2126,7 +2307,7 @@ function participantActionButton(participantId: string, name: string): HTMLButto
   button.textContent = '⋯';
   button.title = `Actions for ${name}`;
   button.setAttribute('aria-label', `Actions for ${name}`);
-  button.addEventListener('click', event => {
+  button.addEventListener('click', (event) => {
     event.stopPropagation();
     const bounds = button.getBoundingClientRect();
     showModerationMenu(participantId, name, bounds.left, bounds.bottom);
@@ -2135,12 +2316,27 @@ function participantActionButton(participantId: string, name: string): HTMLButto
 }
 
 function sortParticipantRoster(participants: Participant[]): void {
-  const ranks: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member: 2, user: 1, guest: 0 };
-  participants.sort((left, right) => (ranks[right.role] ?? 0) - (ranks[left.role] ?? 0) || left.name.localeCompare(right.name));
+  const ranks: Record<string, number> = {
+    owner: 5,
+    admin: 4,
+    moderator: 3,
+    member: 2,
+    user: 1,
+    guest: 0,
+  };
+  participants.sort(
+    (left, right) =>
+      (ranks[right.role] ?? 0) - (ranks[left.role] ?? 0) || left.name.localeCompare(right.name),
+  );
 }
 
-
-function renderRemoteTrack(participantId: string, participantName: string, track: MediaStreamTrack, _kind: 'audio' | 'video', source?: string): void {
+function renderRemoteTrack(
+  participantId: string,
+  participantName: string,
+  track: MediaStreamTrack,
+  _kind: 'audio' | 'video',
+  source?: string,
+): void {
   const isScreen = source === 'screen' || source === 'screen-audio';
   const tileKey = isScreen ? `${participantId}:screen` : participantId;
   let tile = remoteTiles.get(tileKey);
@@ -2201,7 +2397,12 @@ function renderRemoteTrack(participantId: string, participantName: string, track
   mediaControls.attachTile(tile, participantId, participantName);
 }
 
-function removeRemoteTrack(participantId: string, _producerId: string, kind: 'audio' | 'video', source?: string): void {
+function removeRemoteTrack(
+  participantId: string,
+  _producerId: string,
+  kind: 'audio' | 'video',
+  source?: string,
+): void {
   const isScreen = source === 'screen' || source === 'screen-audio';
   const tileKey = isScreen ? `${participantId}:screen` : participantId;
   const tile = remoteTiles.get(tileKey);
@@ -2273,10 +2474,25 @@ function renderConnectionQuality(quality: ConnectionQuality): void {
 
 // --- Keyboard Shortcuts ---
 function shortcutsBlocked(event: KeyboardEvent): boolean {
-  if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return true;
+  if (
+    event.defaultPrevented ||
+    event.repeat ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    event.shiftKey
+  )
+    return true;
   if (!room || roomScreen.hidden || roomRecovering) return true;
   if (document.querySelector('dialog[open], .modal-overlay:not([hidden]), #mod-menu')) return true;
-  return event.target instanceof Element && Boolean(event.target.closest('input, textarea, select, button, a, summary, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="separator"]'));
+  return (
+    event.target instanceof Element &&
+    Boolean(
+      event.target.closest(
+        'input, textarea, select, button, a, summary, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="separator"]',
+      ),
+    )
+  );
 }
 
 document.addEventListener('keydown', (e) => {
@@ -2284,8 +2500,6 @@ document.addEventListener('keydown', (e) => {
   if (key === 'escape') {
     // Native dialogs handle Escape themselves, including preview cleanup and focus restoration.
     if (document.querySelector('dialog[open]')) return;
-    settingsModal.hidden = true;
-    roomSettingsModal.hidden = true;
     loginModal.hidden = true;
     registerModal.hidden = true;
     createRoomModal.hidden = true;
@@ -2297,19 +2511,20 @@ document.addEventListener('keydown', (e) => {
   // PTT keys: Space and T (only in PTT mode)
   if (micMode === 'ptt' && (key === ' ' || key === 't') && !e.repeat) {
     e.preventDefault();
-    if (canStartBroadcast('microphone')) void pttActivate();
+    if (canStartBroadcast('microphone'))
+      observeUiTask(pttActivate(), 'Could not enable push-to-talk');
     return;
   }
 
   switch (key) {
     case 'm':
-      void toggleMicrophone();
+      observeUiTask(toggleMicrophone(), 'Could not update the microphone');
       break;
     case 'v':
-      void toggleCamera();
+      observeUiTask(toggleCamera(), 'Could not update the camera');
       break;
     case 's':
-      void toggleScreenShare();
+      observeUiTask(toggleScreenShare(), 'Could not update screen sharing');
       break;
   }
 });

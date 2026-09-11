@@ -15,52 +15,87 @@ export interface CapturePreferences {
 export type RemoteVideoQuality = 'auto' | 'low' | 'medium' | 'high';
 
 export const DEFAULT_CAPTURE_PREFERENCES: CapturePreferences = {
-  cameraDeviceId: '', microphoneDeviceId: '', resolution: '720p', frameRate: 30,
-  echoCancellation: true, autoGainControl: true, noiseSuppression: true,
+  cameraDeviceId: '',
+  microphoneDeviceId: '',
+  resolution: '720p',
+  frameRate: 30,
+  echoCancellation: true,
+  autoGainControl: true,
+  noiseSuppression: true,
 };
 
 const CAPTURE_STORAGE_KEY = 'simplestchat.capturePreferences';
 
 export function normalizeCapturePreferences(value: unknown): CapturePreferences {
-  const preferences = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const preferences = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   return {
-    cameraDeviceId: typeof preferences.cameraDeviceId === 'string' ? preferences.cameraDeviceId : '',
-    microphoneDeviceId: typeof preferences.microphoneDeviceId === 'string' ? preferences.microphoneDeviceId : '',
-    resolution: preferences.resolution === '360p' || preferences.resolution === '1080p' ? preferences.resolution : '720p',
-    frameRate: preferences.frameRate === 15 || preferences.frameRate === 60 ? preferences.frameRate : 30,
-    echoCancellation: preferences.echoCancellation !== false,
-    autoGainControl: preferences.autoGainControl !== false,
-    noiseSuppression: preferences.noiseSuppression !== false,
+    cameraDeviceId:
+      typeof preferences['cameraDeviceId'] === 'string' ? preferences['cameraDeviceId'] : '',
+    microphoneDeviceId:
+      typeof preferences['microphoneDeviceId'] === 'string'
+        ? preferences['microphoneDeviceId']
+        : '',
+    resolution:
+      preferences['resolution'] === '360p' || preferences['resolution'] === '1080p'
+        ? preferences['resolution']
+        : '720p',
+    frameRate:
+      preferences['frameRate'] === 15 || preferences['frameRate'] === 60
+        ? preferences['frameRate']
+        : 30,
+    echoCancellation: preferences['echoCancellation'] !== false,
+    autoGainControl: preferences['autoGainControl'] !== false,
+    noiseSuppression: preferences['noiseSuppression'] !== false,
   };
 }
 
 export function loadCapturePreferences(): CapturePreferences {
   try {
-    return normalizeCapturePreferences(JSON.parse(localStorage.getItem(CAPTURE_STORAGE_KEY) ?? 'null'));
+    return normalizeCapturePreferences(
+      JSON.parse(localStorage.getItem(CAPTURE_STORAGE_KEY) ?? 'null'),
+    );
   } catch {
     return { ...DEFAULT_CAPTURE_PREFERENCES };
   }
 }
 
 export function saveCapturePreferences(preferences: CapturePreferences): void {
-  try { localStorage.setItem(CAPTURE_STORAGE_KEY, JSON.stringify(normalizeCapturePreferences(preferences))); } catch { /* Storage may be unavailable. */ }
+  try {
+    localStorage.setItem(
+      CAPTURE_STORAGE_KEY,
+      JSON.stringify(normalizeCapturePreferences(preferences)),
+    );
+  } catch {
+    /* Storage may be unavailable. */
+  }
 }
 
 /** The preview and publisher use the same requested capture settings. */
-export function captureConstraints(preferences: CapturePreferences, kind: 'audio' | 'video'): MediaTrackConstraints {
+export function captureConstraints(
+  preferences: CapturePreferences,
+  kind: 'audio' | 'video',
+): MediaTrackConstraints {
   if (kind === 'audio') {
     return {
-      ...(preferences.microphoneDeviceId && { deviceId: { exact: preferences.microphoneDeviceId } }),
+      ...(preferences.microphoneDeviceId && {
+        deviceId: { exact: preferences.microphoneDeviceId },
+      }),
       echoCancellation: preferences.echoCancellation,
       autoGainControl: preferences.autoGainControl,
       noiseSuppression: preferences.noiseSuppression,
     };
   }
-  const [width, height] = preferences.resolution === '360p' ? [640, 360]
-    : preferences.resolution === '1080p' ? [1920, 1080] : [1280, 720];
+  const [width, height] =
+    preferences.resolution === '360p'
+      ? [640, 360]
+      : preferences.resolution === '1080p'
+        ? [1920, 1080]
+        : [1280, 720];
   return {
     ...(preferences.cameraDeviceId && { deviceId: { exact: preferences.cameraDeviceId } }),
-    width: { ideal: width }, height: { ideal: height }, frameRate: { ideal: preferences.frameRate },
+    width: { ideal: width },
+    height: { ideal: height },
+    frameRate: { ideal: preferences.frameRate },
   };
 }
 
@@ -111,13 +146,19 @@ export class MediaManager {
   }
 
   get audioEnabled(): boolean {
-    return this.audioProducer?.closed === false && !this.audioProducer.paused
-      && this.audioProducer.track?.readyState === 'live';
+    return (
+      this.audioProducer?.closed === false &&
+      !this.audioProducer.paused &&
+      this.audioProducer.track?.readyState === 'live'
+    );
   }
 
   get videoEnabled(): boolean {
-    return this.videoProducer?.closed === false && !this.videoProducer.paused
-      && this.videoProducer.track?.readyState === 'live';
+    return (
+      this.videoProducer?.closed === false &&
+      !this.videoProducer.paused &&
+      this.videoProducer.track?.readyState === 'live'
+    );
   }
 
   private localCaptureStopped(kind: 'audio' | 'video'): void {
@@ -139,7 +180,11 @@ export class MediaManager {
   }
 
   /** A track can end before produce/replaceTrack has finished adopting it. */
-  private watchPendingCapture(track: MediaStreamTrack, kind: 'audio' | 'video', isCurrent: () => boolean): () => void {
+  private watchPendingCapture(
+    track: MediaStreamTrack,
+    kind: 'audio' | 'video',
+    isCurrent: () => boolean,
+  ): () => void {
     const onEnded = () => {
       if (isCurrent()) this.localCaptureStopped(kind);
     };
@@ -148,7 +193,10 @@ export class MediaManager {
     return () => track.removeEventListener('ended', onEnded);
   }
 
-  private watchLocalProducer(producer: mediasoupClient.types.Producer, kind: 'audio' | 'video'): void {
+  private watchLocalProducer(
+    producer: mediasoupClient.types.Producer,
+    kind: 'audio' | 'video',
+  ): void {
     // mediasoup follows the current track across replacements. Ignore retired
     // producers and intentionally paused capture; track.stop() itself is silent.
     producer.on('trackended', () => {
@@ -194,35 +242,51 @@ export class MediaManager {
       iceParameters: sendResponse.iceParameters,
       iceCandidates: sendResponse.iceCandidates,
       dtlsParameters: sendResponse.dtlsParameters,
-      iceServers: sendResponse.iceServers,
+      ...(sendResponse.iceServers !== undefined && { iceServers: sendResponse.iceServers }),
     });
     this.sendTransport = sendTransport;
 
     sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
-      try { assertCurrent(); } catch (error) { errback(error as Error); return; }
+      try {
+        assertCurrent();
+      } catch (error) {
+        errback(error as Error);
+        return;
+      }
       this.signaling
         .request(
           { type: 'connectTransport', transportId: sendTransport.id, dtlsParameters },
           'transportConnected',
         )
-        .then(() => { assertCurrent(); callback(); })
+        .then(() => {
+          assertCurrent();
+          callback();
+        })
         .catch(errback);
     });
 
-    sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
-      try {
+    sendTransport.on('produce', ({ kind, rtpParameters, appData }, callback, errback) => {
+      const produce = async () => {
         assertCurrent();
+        const source: unknown = appData['source'];
         const resp = await this.signaling.request<
           Extract<ServerMessage, { type: 'producerCreated' }>
         >(
-          { type: 'produce', transportId: sendTransport.id, kind, rtpParameters, source: appData?.source as string | undefined },
+          {
+            type: 'produce',
+            transportId: sendTransport.id,
+            kind,
+            rtpParameters,
+            ...(typeof source === 'string' && { source }),
+          },
           'producerCreated',
         );
         assertCurrent();
         callback({ id: resp.producerId });
-      } catch (e) {
-        errback(e as Error);
-      }
+      };
+      produce().catch((error) =>
+        errback(error instanceof Error ? error : new Error('Unable to publish media')),
+      );
     });
 
     this.setupIceRecovery(this.sendTransport);
@@ -240,18 +304,26 @@ export class MediaManager {
       iceParameters: recvResponse.iceParameters,
       iceCandidates: recvResponse.iceCandidates,
       dtlsParameters: recvResponse.dtlsParameters,
-      iceServers: recvResponse.iceServers,
+      ...(recvResponse.iceServers !== undefined && { iceServers: recvResponse.iceServers }),
     });
     this.recvTransport = recvTransport;
 
     recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
-      try { assertCurrent(); } catch (error) { errback(error as Error); return; }
+      try {
+        assertCurrent();
+      } catch (error) {
+        errback(error as Error);
+        return;
+      }
       this.signaling
         .request(
           { type: 'connectTransport', transportId: recvTransport.id, dtlsParameters },
           'transportConnected',
         )
-        .then(() => { assertCurrent(); callback(); })
+        .then(() => {
+          assertCurrent();
+          callback();
+        })
         .catch(errback);
     });
 
@@ -263,7 +335,8 @@ export class MediaManager {
   /** Monitor transport connection state and request ICE restart on failure */
   private setupIceRecovery(transport: mediasoupClient.types.Transport): void {
     transport.on('connectionstatechange', (state: string) => {
-      if (this.closed || (this.sendTransport !== transport && this.recvTransport !== transport)) return;
+      if (this.closed || (this.sendTransport !== transport && this.recvTransport !== transport))
+        return;
       console.log(`[media] transport ${transport.id} connection state: ${state}`);
 
       if (state === 'disconnected') {
@@ -271,7 +344,11 @@ export class MediaManager {
         if (!this.iceRestartTimers.has(transport.id)) {
           const timer = setTimeout(() => {
             this.iceRestartTimers.delete(transport.id);
-            if (this.closed || (this.sendTransport !== transport && this.recvTransport !== transport)) return;
+            if (
+              this.closed ||
+              (this.sendTransport !== transport && this.recvTransport !== transport)
+            )
+              return;
             console.log(`[media] requesting ICE restart for transport ${transport.id}`);
             this.signaling.send({ type: 'restartIce', transportId: transport.id });
           }, 3000);
@@ -297,18 +374,37 @@ export class MediaManager {
     });
   }
 
-  /** Handle ICE restarted response from server */
-  handleIceRestarted(transportId: string, iceParameters: unknown): void {
-    const transport = this.sendTransport?.id === transportId
-      ? this.sendTransport
-      : this.recvTransport?.id === transportId
-        ? this.recvTransport
-        : null;
+  /**
+   * Apply refreshed credentials to the current transport, not a retired room.
+   * This handles the library's asynchronous rejection; a fulfilled operation
+   * only means credentials were applied, not that connectivity has recovered.
+   */
+  async handleIceRestarted(
+    transportId: string,
+    iceParameters: mediasoupClient.types.IceParameters,
+  ): Promise<void> {
+    const transport =
+      this.sendTransport?.id === transportId
+        ? this.sendTransport
+        : this.recvTransport?.id === transportId
+          ? this.recvTransport
+          : null;
 
-    if (transport) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      transport.restartIce({ iceParameters: iceParameters as any });
-      console.log(`[media] ICE restarted for transport ${transportId}`);
+    const generation = this.lifecycle;
+    const isCurrent = () =>
+      !this.closed &&
+      generation === this.lifecycle &&
+      !transport?.closed &&
+      (transport === this.sendTransport || transport === this.recvTransport);
+    if (!transport || !isCurrent()) return;
+    try {
+      await transport.restartIce({ iceParameters });
+      if (isCurrent())
+        console.log(`[media] ICE restart credentials applied for transport ${transportId}`);
+    } catch {
+      // Avoid logging credentials or browser-native error details. Retired
+      // operations have no effect on the replacement room's diagnostics.
+      if (isCurrent()) console.warn(`[media] ICE restart failed for transport ${transportId}`);
     }
   }
 
@@ -396,7 +492,10 @@ export class MediaManager {
         encodings: [
           { rid: 'r0', maxBitrate: 100_000, scaleResolutionDownBy: 4 },
           { rid: 'r1', maxBitrate: 300_000, scaleResolutionDownBy: 2 },
-          { rid: 'r2', maxBitrate: this.capturePreferences.resolution === '1080p' ? 2_500_000 : 900_000 },
+          {
+            rid: 'r2',
+            maxBitrate: this.capturePreferences.resolution === '1080p' ? 2_500_000 : 900_000,
+          },
         ],
         codecOptions: { videoGoogleStartBitrate: 1000 },
         appData: { source: 'camera' },
@@ -432,15 +531,18 @@ export class MediaManager {
     if (this.closed || !device || !transport) {
       throw new Error('Device/transport not ready');
     }
-    const isCurrent = () => !this.closed && generation === this.lifecycle && this.device === device && this.recvTransport === transport;
-    const assertCurrent = () => { if (!isCurrent()) throw new Error('Media session closed'); };
+    const isCurrent = () =>
+      !this.closed &&
+      generation === this.lifecycle &&
+      this.device === device &&
+      this.recvTransport === transport;
+    const assertCurrent = () => {
+      if (!isCurrent()) throw new Error('Media session closed');
+    };
 
     const response = await this.signaling.request<
       Extract<ServerMessage, { type: 'consumerCreated' }>
-    >(
-      { type: 'consume', producerId, rtpCapabilities: device.rtpCapabilities },
-      'consumerCreated',
-    );
+    >({ type: 'consume', producerId, rtpCapabilities: device.rtpCapabilities }, 'consumerCreated');
     assertCurrent();
 
     const consumer = await transport.consume({
@@ -463,9 +565,12 @@ export class MediaManager {
       return consumer.track;
     } catch (error) {
       consumer.close();
-      if (this.consumers.get(response.consumerId) === consumer) this.consumers.delete(response.consumerId);
-      if (this.producerToConsumer.get(producerId) === response.consumerId) this.producerToConsumer.delete(producerId);
-      if (isCurrent()) this.signaling.send({ type: 'pauseConsumer', consumerId: response.consumerId });
+      if (this.consumers.get(response.consumerId) === consumer)
+        this.consumers.delete(response.consumerId);
+      if (this.producerToConsumer.get(producerId) === response.consumerId)
+        this.producerToConsumer.delete(producerId);
+      if (isCurrent())
+        this.signaling.send({ type: 'pauseConsumer', consumerId: response.consumerId });
       throw error;
     }
   }
@@ -487,7 +592,10 @@ export class MediaManager {
     if (!consumer || consumer.closed || consumer.paused === hidden) return;
     if (hidden) consumer.pause();
     else consumer.resume();
-    this.signaling.send({ type: hidden ? 'pauseConsumer' : 'resumeConsumer', consumerId: consumer.id });
+    this.signaling.send({
+      type: hidden ? 'pauseConsumer' : 'resumeConsumer',
+      consumerId: consumer.id,
+    });
   }
 
   /** Cap simulcast quality when layers exist. Auto restores the highest available cap. */
@@ -495,10 +603,13 @@ export class MediaManager {
     const consumerId = this.producerToConsumer.get(producerId);
     const consumer = consumerId ? this.consumers.get(consumerId) : undefined;
     if (!consumer || consumer.closed || consumer.kind !== 'video') return false;
-    const spatialLayers = Math.max(1, ...(consumer.rtpParameters.encodings ?? []).map(encoding => {
-      const match = /^[LS](\d+)T/.exec(encoding.scalabilityMode ?? '');
-      return match ? Number(match[1]) : 1;
-    }));
+    const spatialLayers = Math.max(
+      1,
+      ...(consumer.rtpParameters.encodings ?? []).map((encoding) => {
+        const match = /^[LS](\d+)T/.exec(encoding.scalabilityMode ?? '');
+        return match ? Number(match[1]) : 1;
+      }),
+    );
     if (spatialLayers <= 1) return false;
     const requested = quality === 'low' ? 0 : quality === 'medium' ? 1 : spatialLayers - 1;
     this.setPreferredLayers(consumer.id, Math.min(requested, spatialLayers - 1));
@@ -558,7 +669,12 @@ export class MediaManager {
   /** Release local capture for server-side closures missed during a disconnected interval. */
   reconcileLocalProducers(producerIds: readonly string[]): boolean {
     const active = new Set(producerIds);
-    const localIds = [this.audioProducer?.id, this.videoProducer?.id, this.screenProducer?.id, this.screenAudioProducer?.id];
+    const localIds = [
+      this.audioProducer?.id,
+      this.videoProducer?.id,
+      this.screenProducer?.id,
+      this.screenAudioProducer?.id,
+    ];
     let changed = false;
     for (const id of localIds) {
       if (id && !active.has(id)) changed = this.closeLocalProducer(id) || changed;
@@ -712,7 +828,10 @@ export class MediaManager {
   }
 
   /** Start screen sharing — creates screen video producer (and optional audio) */
-  async startScreenShare(): Promise<{ videoTrack: MediaStreamTrack; audioTrack?: MediaStreamTrack } | null> {
+  async startScreenShare(): Promise<{
+    videoTrack: MediaStreamTrack;
+    audioTrack?: MediaStreamTrack;
+  } | null> {
     const transport = this.sendTransport;
     if (!transport || this.screenProducer || this.screenStarting) return null;
     const version = ++this.screenVersion;
@@ -759,13 +878,13 @@ export class MediaManager {
         this.screenAudioProducer = audioProducer;
       }
       started = true;
-      return { videoTrack, audioTrack };
+      return { videoTrack, ...(audioTrack !== undefined && { audioTrack }) };
     } catch (error) {
       if (!isCurrent()) return null;
       this.stopScreenShare();
       throw error;
     } finally {
-      if (!started) stream?.getTracks().forEach(track => track.stop());
+      if (!started) stream?.getTracks().forEach((track) => track.stop());
       if (isCurrent()) {
         this.screenStarting = false;
         this.pendingScreenStream = null;
@@ -805,7 +924,7 @@ export class MediaManager {
   private cancelScreenStart(): void {
     this.screenVersion++;
     this.screenStarting = false;
-    this.pendingScreenStream?.getTracks().forEach(track => track.stop());
+    this.pendingScreenStream?.getTracks().forEach((track) => track.stop());
     this.pendingScreenStream = null;
   }
 

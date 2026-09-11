@@ -1,4 +1,14 @@
-import type { RoomSettings, ServerMessage, SocialAction, RoomSnapshot } from './protocol';
+import type {
+  RoomSettings,
+  RoomSettingsPatch,
+  ServerMessage,
+  SocialAction,
+  SocialRequest,
+  SocialRequestArguments,
+  SocialResponse,
+  SocialResponses,
+  RoomSnapshot,
+} from './protocol';
 import { SignalingClient } from './signaling';
 import { MediaManager, type CapturePreferences, type RemoteVideoQuality } from './media';
 
@@ -24,8 +34,19 @@ export type RoomEventHandler = {
   onLocalStream: (stream: MediaStream) => void;
   onLocalMediaChanged: () => void;
   onLocalCaptureStopped?: (kind: 'audio' | 'video') => void;
-  onRemoteTrack: (participantId: string, participantName: string, track: MediaStreamTrack, kind: 'audio' | 'video', source?: string) => void;
-  onRemoteTrackRemoved: (participantId: string, producerId: string, kind: 'audio' | 'video', source?: string) => void;
+  onRemoteTrack: (
+    participantId: string,
+    participantName: string,
+    track: MediaStreamTrack,
+    kind: 'audio' | 'video',
+    source?: string,
+  ) => void;
+  onRemoteTrackRemoved: (
+    participantId: string,
+    producerId: string,
+    kind: 'audio' | 'video',
+    source?: string,
+  ) => void;
   onParticipantLeft: (participantId: string) => void;
   onParticipantJoined: (participantId: string, participantName: string) => void;
   onChatMessage: (participantId: string, participantName: string, content: string) => void;
@@ -47,6 +68,8 @@ export type RoomEventHandler = {
   onRecoveryState?: (state: 'reconnecting' | 'connected' | 'failed', message?: string) => void;
   onPasswordRequired?: () => Promise<string | null>;
   onRoomClosed?: (reason: string) => void;
+  /** Unexpected asynchronous failures belonging to the current membership only. */
+  onBackgroundError?: (message: string) => void;
 };
 
 export class RoomClient {
@@ -79,18 +102,34 @@ export class RoomClient {
   private cancelJoin: (() => void) | null = null;
   private hiddenParticipants = new Set<string>();
   private videoQualities = new Map<string, RemoteVideoQuality>();
-  private socialRequests = new Map<string, {
-    action: SocialAction;
-    resolve: (value: Record<string, unknown>) => void;
-    reject: (error: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
-  }>();
+  private socialRequests = new Map<
+    string,
+    {
+      action: SocialAction;
+      resolve: (value: SocialResponse) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
 
   constructor(signaling: SignalingClient, events: RoomEventHandler) {
     this.signaling = signaling;
     this.events = events;
     this.signaling.setOnMessage((msg) => this.handleMessage(msg));
-    this.signaling.setOnReconnected(() => { void this.attemptReconnect(); });
+    this.signaling.setOnReconnected(() => {
+      this.observeTask(this.attemptReconnect(), 'Room reconnection');
+    });
+  }
+
+  /** Event dispatch cannot await work; keep its rejection and ownership explicit. */
+  private observeTask(task: Promise<unknown> | undefined, operation: string): void {
+    const generation = this.generation;
+    task?.catch(() => {
+      if (generation !== this.generation) return;
+      const message = `${operation} failed. Please try again.`;
+      console.error(`[room] ${message}`);
+      this.events.onBackgroundError?.(message);
+    });
   }
 
   get localParticipantId(): string | null {
@@ -101,17 +140,32 @@ export class RoomClient {
     return this.roomId;
   }
 
-  get nickname(): string { return this.participantName ?? ''; }
-  get membershipVersion(): number { return this.generation; }
-  get connected(): boolean { return this.localId !== null && this.signaling.connected && !this.recovering; }
-  get textMuted(): boolean { return this.localTextMuted; }
-  get camBanned(): boolean { return this.localCamBanned; }
+  get nickname(): string {
+    return this.participantName ?? '';
+  }
+  get membershipVersion(): number {
+    return this.generation;
+  }
+  get connected(): boolean {
+    return this.localId !== null && this.signaling.connected && !this.recovering;
+  }
+  get textMuted(): boolean {
+    return this.localTextMuted;
+  }
+  get camBanned(): boolean {
+    return this.localCamBanned;
+  }
   get canChat(): boolean {
-    if (!this.localId || this.localTextMuted || this._roomSettings?.allowChat === false) return false;
+    if (!this.localId || this.localTextMuted || this._roomSettings?.allowChat === false)
+      return false;
     return this.serverCanChat ?? (!this._roomSettings?.moderated || this.hasVoiceRole());
   }
   get canBroadcast(): boolean {
-    if (!this.localId || (this.localRole === 'guest' && this._roomSettings?.guestsCanBroadcast === false)) return false;
+    if (
+      !this.localId ||
+      (this.localRole === 'guest' && this._roomSettings?.guestsCanBroadcast === false)
+    )
+      return false;
     return this.serverCanBroadcast ?? (!this._roomSettings?.moderated || this.hasVoiceRole());
   }
 
@@ -136,7 +190,11 @@ export class RoomClient {
     media?.close();
   }
 
-  async join(roomId: string, participantName: string, password?: string): Promise<'joined' | 'lobby'> {
+  async join(
+    roomId: string,
+    participantName: string,
+    password?: string,
+  ): Promise<'joined' | 'lobby'> {
     this.cancelJoin?.();
     const generation = ++this.generation;
     this.recoveryPromise = null;
@@ -166,9 +224,17 @@ export class RoomClient {
         if (this.signaling['onMessage'] === interceptor) this.signaling['onMessage'] = origHandler;
         this.cancelJoin = null;
       };
-      const timer = setTimeout(() => { cleanup(); reject(new Error('Timeout waiting for join response')); }, 10000);
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error('Timeout waiting for join response'));
+      }, 10000);
       const interceptor = (msg: ServerMessage) => {
-        if (msg.type === 'roomJoined' || msg.type === 'lobbyWaiting' || msg.type === 'roomPasswordRequired' || msg.type === 'error') {
+        if (
+          msg.type === 'roomJoined' ||
+          msg.type === 'lobbyWaiting' ||
+          msg.type === 'roomPasswordRequired' ||
+          msg.type === 'error'
+        ) {
           cleanup();
           if (msg.type === 'roomPasswordRequired') {
             reject(new RoomPasswordRequiredError());
@@ -181,10 +247,18 @@ export class RoomClient {
         }
         origHandler?.(msg);
       };
-      this.cancelJoin = () => { cleanup(); reject(new Error('Room join cancelled')); };
+      this.cancelJoin = () => {
+        cleanup();
+        reject(new Error('Room join cancelled'));
+      };
       this.signaling['onMessage'] = interceptor;
       try {
-        this.signaling.send({ type: 'joinRoom', roomId, participantName, password });
+        this.signaling.send({
+          type: 'joinRoom',
+          roomId,
+          participantName,
+          ...(password !== undefined && { password }),
+        });
       } catch (error) {
         cleanup();
         reject(error instanceof Error ? error : new Error('Unable to join room'));
@@ -216,8 +290,13 @@ export class RoomClient {
         id: p.id,
         name: p.name,
         role: p.role,
-        authenticated: p.authenticated,
-        producers: new Map(p.producers.map((pr) => [pr.id, { kind: pr.kind, source: pr.source }])),
+        ...(p.authenticated !== undefined && { authenticated: p.authenticated }),
+        producers: new Map(
+          p.producers.map((pr) => [
+            pr.id,
+            { kind: pr.kind, ...(pr.source !== undefined && { source: pr.source }) },
+          ]),
+        ),
       });
     }
     this.events.onParticipantsChanged(this.participants);
@@ -239,7 +318,7 @@ export class RoomClient {
     const media = new MediaManager(this.signaling);
     this.media = media;
     this.mediaReady = false;
-    media.onLocalCaptureStopped = kind => {
+    media.onLocalCaptureStopped = (kind) => {
       if (generation !== this.generation || this.media !== media) return;
       this.events.onLocalMediaChanged();
       if (generation !== this.generation || this.media !== media) return;
@@ -249,8 +328,12 @@ export class RoomClient {
       await media.setup();
     } catch (error) {
       media.close();
-      if (this.media === media) { this.media = null; this.mediaReady = false; }
-      if (generation === this.generation) console.warn('[room] media unavailable; chat remains connected:', error);
+      if (this.media === media) {
+        this.media = null;
+        this.mediaReady = false;
+      }
+      if (generation === this.generation)
+        console.warn('[room] media unavailable; chat remains connected:', error);
       return;
     }
     if (generation !== this.generation || this.media !== media) media.close();
@@ -282,8 +365,11 @@ export class RoomClient {
     this.serverCanBroadcast = null;
     this.recovering = false;
     this.events.onParticipantsChanged(this.participants);
-    try { this.signaling.send({ type: 'leaveRoom' }); }
-    catch (error) { console.warn('[room] could not signal departure:', error); }
+    try {
+      this.signaling.send({ type: 'leaveRoom' });
+    } catch (error) {
+      console.warn('[room] could not signal departure:', error);
+    }
   }
 
   sendChat(content: string, clientMessageId = crypto.randomUUID()): void {
@@ -298,18 +384,38 @@ export class RoomClient {
     this.signaling.send({ type: 'privateMessage', targetParticipantId, content, clientMessageId });
   }
 
-  requestSocial<T = Record<string, unknown>>(action: SocialAction, data: Record<string, unknown> = {}): Promise<T> {
-    if (!this.localId || !this.signaling.connected) return Promise.reject(new Error('Join a connected room first'));
-    if (this.socialRequests.size >= 32) return Promise.reject(new Error('Please wait for pending actions'));
+  requestSocial<const Args extends SocialRequestArguments<SocialAction>>(
+    ...args: Args
+  ): Promise<SocialResponses[Args[0]]> {
+    const [action, data] = args;
+    if (!this.localId || !this.signaling.connected)
+      return Promise.reject(new Error('Join a connected room first'));
+    if (this.socialRequests.size >= 32)
+      return Promise.reject(new Error('Please wait for pending actions'));
     const requestId = crypto.randomUUID();
-    return new Promise<T>((resolve, reject) => {
+    return new Promise<SocialResponses[Args[0]]>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.socialRequests.delete(requestId);
         reject(new Error('The room did not respond; please try again'));
       }, 10_000);
-      this.socialRequests.set(requestId, { action, timer, resolve: value => resolve(value as T), reject });
+      this.socialRequests.set(requestId, {
+        action,
+        timer,
+        resolve: (response) => {
+          if (response.action !== action) {
+            reject(new Error('The room returned an unexpected action'));
+            return;
+          }
+          // Signaling already decoded the action-discriminated response; the
+          // runtime equality above also binds it to this pending generic action.
+          resolve(response.data as SocialResponses[Args[0]]);
+        },
+        reject,
+      });
       try {
-        this.signaling.send({ ...data, type: action, requestId });
+        // The argument tuple correlates action and payload, including actions
+        // without data; spreading that tuple loses the correlation in TypeScript.
+        this.signaling.send({ ...data, type: action, requestId } as SocialRequest);
       } catch (error) {
         clearTimeout(timer);
         this.socialRequests.delete(requestId);
@@ -338,11 +444,11 @@ export class RoomClient {
   }
 
   async toggleAudio(): Promise<boolean> {
-    return await this.media?.toggleAudio() ?? false;
+    return (await this.media?.toggleAudio()) ?? false;
   }
 
   async toggleVideo(): Promise<boolean> {
-    return await this.media?.toggleVideo() ?? false;
+    return (await this.media?.toggleVideo()) ?? false;
   }
 
   muteAudio(): void {
@@ -422,7 +528,11 @@ export class RoomClient {
   }
 
   camBan(targetId: string, reason?: string): void {
-    this.signaling.send({ type: 'camBan', targetParticipantId: targetId, reason });
+    this.signaling.send({
+      type: 'camBan',
+      targetParticipantId: targetId,
+      ...(reason !== undefined && { reason }),
+    });
   }
 
   camUnban(targetId: string): void {
@@ -438,11 +548,20 @@ export class RoomClient {
   }
 
   kick(targetId: string, reason?: string): void {
-    this.signaling.send({ type: 'kick', targetParticipantId: targetId, reason });
+    this.signaling.send({
+      type: 'kick',
+      targetParticipantId: targetId,
+      ...(reason !== undefined && { reason }),
+    });
   }
 
   ban(targetId: string, reason?: string, duration?: number): void {
-    this.signaling.send({ type: 'ban', targetParticipantId: targetId, reason, duration });
+    this.signaling.send({
+      type: 'ban',
+      targetParticipantId: targetId,
+      ...(reason !== undefined && { reason }),
+      ...(duration !== undefined && { duration }),
+    });
   }
 
   unban(targetUserId: string): void {
@@ -457,7 +576,7 @@ export class RoomClient {
     this.signaling.send({ type: 'requestVoice' });
   }
 
-  updateRoomSettings(settings: Partial<RoomSettings>): void {
+  updateRoomSettings(settings: RoomSettingsPatch): void {
     this.signaling.send({ type: 'updateRoomSettings', ...settings });
   }
 
@@ -494,7 +613,12 @@ export class RoomClient {
       const result = await this.signaling.request<
         Extract<ServerMessage, { type: 'reconnectResult' }>
       >(
-        { type: 'reconnect', participantId: this.localId, roomId: this.roomId, reconnectToken: this.reconnectToken! },
+        {
+          type: 'reconnect',
+          participantId: this.localId,
+          roomId: this.roomId,
+          reconnectToken: this.reconnectToken!,
+        },
         'reconnectResult',
         10000,
       );
@@ -514,8 +638,11 @@ export class RoomClient {
         } catch (error) {
           // A successfully resumed room remains usable even if its snapshot was
           // rate-limited. Do not destroy live transports or require another join.
-          if (generation === this.generation) this.events.onRecoveryState?.('connected',
-            error instanceof Error ? error.message : 'Room state could not be refreshed');
+          if (generation === this.generation)
+            this.events.onRecoveryState?.(
+              'connected',
+              error instanceof Error ? error.message : 'Room state could not be refreshed',
+            );
         }
         // Media transports survive independently — only signaling needed reconnection
       } else {
@@ -555,7 +682,8 @@ export class RoomClient {
         outcome = await this.join(roomId, name, password);
       } catch (error) {
         if (generation !== this.generation) return;
-        if (!(error instanceof RoomPasswordRequiredError) || !this.events.onPasswordRequired) throw error;
+        if (!(error instanceof RoomPasswordRequiredError) || !this.events.onPasswordRequired)
+          throw error;
         const supplied = await this.events.onPasswordRequired();
         if (generation !== this.generation) return;
         if (supplied === null) throw new Error('Rejoin cancelled');
@@ -598,8 +726,13 @@ export class RoomClient {
         id: p.id,
         name: p.name,
         role: p.role,
-        authenticated: p.authenticated,
-        producers: new Map(p.producers.map((pr) => [pr.id, { kind: pr.kind, source: pr.source }])),
+        ...(p.authenticated !== undefined && { authenticated: p.authenticated }),
+        producers: new Map(
+          p.producers.map((pr) => [
+            pr.id,
+            { kind: pr.kind, ...(pr.source !== undefined && { source: pr.source }) },
+          ]),
+        ),
       });
     }
     this.events.onParticipantsChanged(this.participants);
@@ -615,27 +748,45 @@ export class RoomClient {
     this.events.onRecoveryState?.('connected');
   }
 
-  private consumeProducer(participantId: string, producerId: string, kind: 'audio' | 'video', source?: string): Promise<void> {
+  private consumeProducer(
+    participantId: string,
+    producerId: string,
+    kind: 'audio' | 'video',
+    source?: string,
+  ): Promise<void> {
     const pending = this.pendingConsumes.get(producerId);
     if (pending) return pending;
     const media = this.media;
     const generation = this.generation;
     const metadata = this.participants.get(participantId)?.producers.get(producerId);
     if (!media || !this.mediaReady || !metadata) return Promise.resolve();
-    const current = (): boolean => generation === this.generation && this.media === media
-      && this.participants.get(participantId)?.producers.get(producerId) === metadata;
+    const current = (): boolean =>
+      generation === this.generation &&
+      this.media === media &&
+      this.participants.get(participantId)?.producers.get(producerId) === metadata;
     // Signaling consumer responses have no request ID, so only one consume
     // transaction may be outstanding even when several newProducer events arrive.
     const task = this.consumeQueue.then(async () => {
       if (!current()) return;
       try {
-        const track = media.getConsumerTrackByProducer?.(producerId) ?? await media.consume(producerId);
-        if (!current()) { media.closeConsumerByProducer(producerId); return; }
-        if (this.hiddenParticipants.has(participantId)) media.setConsumerHiddenByProducer(producerId, true);
+        const track =
+          media.getConsumerTrackByProducer?.(producerId) ?? (await media.consume(producerId));
+        if (!current()) {
+          media.closeConsumerByProducer(producerId);
+          return;
+        }
+        if (this.hiddenParticipants.has(participantId))
+          media.setConsumerHiddenByProducer(producerId, true);
         const quality = this.videoQualities.get(participantId);
         if (quality && kind === 'video') media.setConsumerQualityByProducer(producerId, quality);
         if (!this.pausedProducers.has(producerId)) {
-          this.events.onRemoteTrack(participantId, this.participants.get(participantId)?.name ?? participantId.slice(0, 8), track, kind, source);
+          this.events.onRemoteTrack(
+            participantId,
+            this.participants.get(participantId)?.name ?? participantId.slice(0, 8),
+            track,
+            kind,
+            source,
+          );
         }
       } catch (error) {
         if (current()) console.warn('[room] remote media unavailable:', producerId, error);
@@ -643,11 +794,14 @@ export class RoomClient {
     });
     this.consumeQueue = task.catch(() => {});
     this.pendingConsumes.set(producerId, task);
-    void task.then(() => {
-      if (this.pendingConsumes.get(producerId) === task) this.pendingConsumes.delete(producerId);
-    }, () => {
-      if (this.pendingConsumes.get(producerId) === task) this.pendingConsumes.delete(producerId);
-    });
+    task.then(
+      () => {
+        if (this.pendingConsumes.get(producerId) === task) this.pendingConsumes.delete(producerId);
+      },
+      () => {
+        if (this.pendingConsumes.get(producerId) === task) this.pendingConsumes.delete(producerId);
+      },
+    );
     return task;
   }
 
@@ -656,7 +810,7 @@ export class RoomClient {
     switch (msg.type) {
       case 'roomClosed': {
         // A deleted room must never be resumed, including while waiting in its lobby.
-        void this.leave();
+        this.observeTask(this.leave(), 'Leaving the room');
         this.events.onRoomClosed?.(msg.reason);
         break;
       }
@@ -666,11 +820,13 @@ export class RoomClient {
         this.socialRequests.delete(msg.requestId);
         clearTimeout(request.timer);
         try {
-          if (msg.action === 'getRoomSnapshot') this.applySnapshot(msg.data as unknown as RoomSnapshot);
+          if (msg.action === 'getRoomSnapshot') this.applySnapshot(msg.data);
           this.events.onSocialEvent?.(msg);
-          request.resolve(msg.data);
+          request.resolve(msg);
         } catch (error) {
-          request.reject(error instanceof Error ? error : new Error('Room response could not be applied'));
+          request.reject(
+            error instanceof Error ? error : new Error('Room response could not be applied'),
+          );
         }
         break;
       }
@@ -729,11 +885,17 @@ export class RoomClient {
         const participant = this.participants.get(msg.participantId);
         if (!participant) break;
         if (!participant.producers.has(msg.producerId)) {
-          participant.producers.set(msg.producerId, { kind: msg.kind, source: msg.source });
+          participant.producers.set(msg.producerId, {
+            kind: msg.kind,
+            ...(msg.source !== undefined && { source: msg.source }),
+          });
         }
         this.events.onParticipantsChanged(this.participants);
         // Auto-consume the new producer
-        void this.consumeProducer(msg.participantId, msg.producerId, msg.kind, msg.source);
+        this.observeTask(
+          this.consumeProducer(msg.participantId, msg.producerId, msg.kind, msg.source),
+          'Receiving media',
+        );
         break;
       }
       case 'producerClosed': {
@@ -755,7 +917,10 @@ export class RoomClient {
         break;
       }
       case 'iceRestarted': {
-        this.media?.handleIceRestarted(msg.transportId, msg.iceParameters);
+        this.observeTask(
+          this.media?.handleIceRestarted(msg.transportId, msg.iceParameters),
+          'Media reconnection',
+        );
         break;
       }
       case 'connectionStats': {
@@ -772,7 +937,9 @@ export class RoomClient {
       }
       case 'consumerLayersChanged': {
         // Informational — could show layer info in UI
-        console.log(`[room] consumer ${msg.consumerId} layers: spatial=${msg.spatialLayer}, temporal=${msg.temporalLayer}`);
+        console.log(
+          `[room] consumer ${msg.consumerId} layers: spatial=${msg.spatialLayer}, temporal=${msg.temporalLayer}`,
+        );
         break;
       }
       case 'chatReceived': {
@@ -845,12 +1012,18 @@ export class RoomClient {
         break;
       }
       case 'textMuted': {
-        if (msg.participantId === this.localId) { this.localTextMuted = true; this.serverCanChat = null; }
+        if (msg.participantId === this.localId) {
+          this.localTextMuted = true;
+          this.serverCanChat = null;
+        }
         this.events.onModeration('textMuted', msg.participantId);
         break;
       }
       case 'textUnmuted': {
-        if (msg.participantId === this.localId) { this.localTextMuted = false; this.serverCanChat = null; }
+        if (msg.participantId === this.localId) {
+          this.localTextMuted = false;
+          this.serverCanChat = null;
+        }
         this.events.onModeration('textUnmuted', msg.participantId);
         break;
       }
@@ -858,14 +1031,14 @@ export class RoomClient {
         this.events.onModeration('kicked', msg.participantId, msg.reason);
         // If it's us, leave the room
         if (msg.participantId === this.localId) {
-          void this.leave();
+          this.observeTask(this.leave(), 'Leaving the room');
         }
         break;
       }
       case 'participantBanned': {
         this.events.onModeration('banned', msg.participantId, msg.reason);
         if (msg.participantId === this.localId) {
-          void this.leave();
+          this.observeTask(this.leave(), 'Leaving the room');
         }
         break;
       }
@@ -922,28 +1095,56 @@ export class RoomClient {
       case 'roomJoined': {
         if (!this.awaitingPostAdmission) break;
         this.awaitingPostAdmission = false;
-        void this.handlePostAdmission(msg);
+        this.observeTask(this.handlePostAdmission(msg), 'Joining the room');
         break;
       }
-      default:
+      // These replies belong to SignalingClient.request or the join interceptor.
+      // Late responses have no membership-level action. Keep the list explicit
+      // so a new protocol variant requires an intentional dispatch decision.
+      case 'consumerCreated':
+      case 'consumerPaused':
+      case 'consumerResumed':
+      case 'error':
+      case 'producerCreated':
+      case 'reconnectResult':
+      case 'roomPasswordRequired':
+      case 'routerRtpCapabilities':
+      case 'transportConnected':
+      case 'transportCreated':
         break;
     }
   }
 
   private applySnapshot(snapshot: RoomSnapshot): void {
-    if (!snapshot || !Array.isArray(snapshot.participants) || typeof snapshot.yourRole !== 'string'
-      || snapshot.participants.some(p => !p || typeof p.id !== 'string' || typeof p.name !== 'string'
-        || !Array.isArray(p.producers) || p.producers.some(producer => !producer
-          || typeof producer.id !== 'string' || !['audio', 'video'].includes(producer.kind)))) {
+    if (
+      !snapshot ||
+      !Array.isArray(snapshot.participants) ||
+      typeof snapshot.yourRole !== 'string' ||
+      snapshot.participants.some(
+        (p) =>
+          !p ||
+          typeof p.id !== 'string' ||
+          typeof p.name !== 'string' ||
+          !Array.isArray(p.producers) ||
+          p.producers.some(
+            (producer) =>
+              !producer ||
+              typeof producer.id !== 'string' ||
+              !['audio', 'video'].includes(producer.kind),
+          ),
+      )
+    ) {
       throw new Error('The room snapshot was incomplete');
     }
     const oldPaused = this.pausedProducers;
     this.pausedProducers = new Set(snapshot.pausedProducerIds ?? oldPaused);
-    const incoming = new Map(snapshot.participants.filter(p => p.id !== this.localId).map(p => [p.id, p]));
+    const incoming = new Map(
+      snapshot.participants.filter((p) => p.id !== this.localId).map((p) => [p.id, p]),
+    );
     for (const [id, previous] of this.participants) {
       const current = incoming.get(id);
       for (const [producerId, metadata] of previous.producers) {
-        if (!current?.producers.some(producer => producer.id === producerId)) {
+        if (!current?.producers.some((producer) => producer.id === producerId)) {
           this.media?.closeConsumerByProducer(producerId);
           this.pausedProducers.delete(producerId);
           this.events.onRemoteTrackRemoved(id, producerId, metadata.kind, metadata.source);
@@ -958,12 +1159,26 @@ export class RoomClient {
     }
     for (const info of incoming.values()) {
       const previous = this.participants.get(info.id);
-      this.participants.set(info.id, { id: info.id, name: info.name, role: info.role, authenticated: info.authenticated,
-        producers: new Map(info.producers.map(producer => {
-          const old = previous?.producers.get(producer.id);
-          return [producer.id, old?.kind === producer.kind && old.source === producer.source
-            ? old : { kind: producer.kind, source: producer.source }];
-        })) });
+      this.participants.set(info.id, {
+        id: info.id,
+        name: info.name,
+        role: info.role,
+        ...(info.authenticated !== undefined && { authenticated: info.authenticated }),
+        producers: new Map(
+          info.producers.map((producer) => {
+            const old = previous?.producers.get(producer.id);
+            return [
+              producer.id,
+              old?.kind === producer.kind && old.source === producer.source
+                ? old
+                : {
+                    kind: producer.kind,
+                    ...(producer.source !== undefined && { source: producer.source }),
+                  },
+            ];
+          }),
+        ),
+      });
     }
     const oldRole = this.localRole;
     const oldTextMuted = this.localTextMuted;
@@ -975,26 +1190,48 @@ export class RoomClient {
     this.localCamBanned = snapshot.camBanned ?? this.localCamBanned;
     this.serverCanChat = snapshot.canChat ?? null;
     this.serverCanBroadcast = snapshot.canBroadcast ?? null;
-    if (snapshot.localProducerIds && this.media?.reconcileLocalProducers(snapshot.localProducerIds)) {
+    if (
+      snapshot.localProducerIds &&
+      this.media?.reconcileLocalProducers(snapshot.localProducerIds)
+    ) {
       this.events.onLocalMediaChanged();
     }
     this.events.onParticipantsChanged(this.participants);
-    if (oldRole !== this.localRole && this.localId) this.events.onRoleChanged(this.localId, this.localRole);
-    if (oldTextMuted !== this.localTextMuted && this.localId) this.events.onModeration(this.localTextMuted ? 'textMuted' : 'textUnmuted', this.localId);
-    if (oldCamBanned !== this.localCamBanned && this.localId) this.events.onModeration(this.localCamBanned ? 'camBanned' : 'camUnbanned', this.localId);
+    if (oldRole !== this.localRole && this.localId)
+      this.events.onRoleChanged(this.localId, this.localRole);
+    if (oldTextMuted !== this.localTextMuted && this.localId)
+      this.events.onModeration(this.localTextMuted ? 'textMuted' : 'textUnmuted', this.localId);
+    if (oldCamBanned !== this.localCamBanned && this.localId)
+      this.events.onModeration(this.localCamBanned ? 'camBanned' : 'camUnbanned', this.localId);
     if (this._roomSettings) this.events.onRoomSettingsChanged(this._roomSettings);
     for (const participant of this.participants.values()) {
       for (const [producerId, metadata] of participant.producers) {
         if (this.pausedProducers.has(producerId)) {
-          if (!oldPaused.has(producerId)) this.events.onRemoteTrackRemoved(participant.id, producerId, metadata.kind, metadata.source);
+          if (!oldPaused.has(producerId))
+            this.events.onRemoteTrackRemoved(
+              participant.id,
+              producerId,
+              metadata.kind,
+              metadata.source,
+            );
         } else if (oldPaused.has(producerId)) {
           const track = this.media?.getConsumerTrackByProducer(producerId);
-          if (track) this.events.onRemoteTrack(participant.id, participant.name, track, metadata.kind, metadata.source);
+          if (track)
+            this.events.onRemoteTrack(
+              participant.id,
+              participant.name,
+              track,
+              metadata.kind,
+              metadata.source,
+            );
         }
         // Reuse existing consumers, and retry previously missing ones. Metadata
         // identity and membership generation prevent late work restoring a tile.
         if (!this.media?.getConsumerTrackByProducer(producerId)) {
-          void this.consumeProducer(participant.id, producerId, metadata.kind, metadata.source);
+          this.observeTask(
+            this.consumeProducer(participant.id, producerId, metadata.kind, metadata.source),
+            'Receiving media',
+          );
         }
       }
     }

@@ -12,12 +12,21 @@ export async function loadTypeScript(relativePath, options = {}) {
   return evaluateTypeScript(source, { ...options, fileName: fileURLToPath(sourceUrl) });
 }
 
+/** Use real wire decoders when a source fixture exercises a boundary consumer. */
+export async function loadContractModules() {
+  const modules = { './validation': await loadTypeScript('src/validation.ts') };
+  modules['./api-validation'] = await loadTypeScript('src/api-validation.ts', { modules });
+  modules['./protocol-validation'] = await loadTypeScript('src/protocol-validation.ts', {
+    modules,
+  });
+  return modules;
+}
+
 /** Browser APIs and runtime imports are injected locally, leaving globals untouched. */
-export function evaluateTypeScript(source, {
-  fileName = 'test-source.ts',
-  modules = {},
-  globals = {},
-} = {}) {
+export function evaluateTypeScript(
+  source,
+  { fileName = 'test-source.ts', modules = {}, globals = {} } = {},
+) {
   const { outputText } = ts.transpileModule(source, {
     fileName,
     compilerOptions: {

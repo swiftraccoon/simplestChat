@@ -9,12 +9,20 @@
   "scripts": {
     "dev": "vite",
     "test": "node --test tests/*.test.mjs",
-    "typecheck": "node node_modules/typescript/bin/tsc",
-    "build": "npm run typecheck && vite build",
+    "lint": "oxlint --type-aware --deny-warnings --report-unused-disable-directives-severity error .",
+    "format:check": "prettier --check \"**/*.{ts,mts,cts,js,mjs,cjs,css,html,json,jsonc}\"",
+    "format": "prettier --write \"**/*.{ts,mts,cts,js,mjs,cjs,css,html,json,jsonc}\"",
+    "typecheck": "node node_modules/typescript/bin/tsc -b",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "build": "npm run typecheck && vite build && npm run check:bundle",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@types/node": "22.20.2",
     "@typescript/typescript6": "^6.0.2",
+    "oxlint": "1.82.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "prettier": "3.9.6",
     "typescript": "^7.0.2",
     "vite": "^8.2.2"
   },

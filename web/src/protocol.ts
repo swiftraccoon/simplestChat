@@ -10,7 +10,13 @@ export type ClientMessage =
   | { type: 'createSendTransport' }
   | { type: 'createRecvTransport' }
   | { type: 'connectTransport'; transportId: string; dtlsParameters: DtlsParameters }
-  | { type: 'produce'; transportId: string; kind: MediaKind; rtpParameters: RtpParameters; source?: string }
+  | {
+      type: 'produce';
+      transportId: string;
+      kind: MediaKind;
+      rtpParameters: RtpParameters;
+      source?: string;
+    }
   | { type: 'consume'; producerId: string; rtpCapabilities: RtpCapabilities }
   | { type: 'resumeConsumer'; consumerId: string }
   | { type: 'pauseConsumer'; consumerId: string }
@@ -19,10 +25,20 @@ export type ClientMessage =
   | { type: 'resumeProducer'; producerId: string }
   | { type: 'reconnect'; participantId: string; roomId: string; reconnectToken: string }
   | { type: 'restartIce'; transportId: string }
-  | { type: 'setConsumerPreferredLayers'; consumerId: string; spatialLayer: number; temporalLayer?: number }
+  | {
+      type: 'setConsumerPreferredLayers';
+      consumerId: string;
+      spatialLayer: number;
+      temporalLayer?: number;
+    }
   | { type: 'chatMessage'; content: string; clientMessageId?: string }
-  | { type: 'privateMessage'; targetParticipantId: string; content: string; clientMessageId: string }
-  | ({ type: SocialAction; requestId: string } & Record<string, unknown>)
+  | {
+      type: 'privateMessage';
+      targetParticipantId: string;
+      content: string;
+      clientMessageId: string;
+    }
+  | SocialRequest
   // Moderation
   | { type: 'closeCam'; targetParticipantId: string }
   | { type: 'camBan'; targetParticipantId: string; reason?: string }
@@ -35,7 +51,7 @@ export type ClientMessage =
   | { type: 'setRole'; targetParticipantId: string; role: number }
   | { type: 'requestVoice' }
   // Room management
-  | { type: 'updateRoomSettings'; [key: string]: unknown }
+  | ({ type: 'updateRoomSettings' } & RoomSettingsPatch)
   | { type: 'setTopic'; topic: string }
   // Lobby
   | { type: 'admitFromLobby'; targetParticipantId: string }
@@ -44,18 +60,50 @@ export type ClientMessage =
 // --- Server → Client ---
 
 export type ServerMessage =
-  | { type: 'roomJoined'; participantId: string; participants: ParticipantInfo[]; reconnectToken: string; yourRole: string; roomSettings?: RoomSettings }
+  | {
+      type: 'roomJoined';
+      participantId: string;
+      participants: ParticipantInfo[];
+      reconnectToken: string;
+      yourRole: string;
+      roomSettings?: RoomSettings;
+    }
   | { type: 'error'; message: string }
   | { type: 'roomPasswordRequired' }
   | { type: 'roomClosed'; reason: string }
   | { type: 'routerRtpCapabilities'; rtpCapabilities: RtpCapabilitiesFinalized }
-  | { type: 'transportCreated'; transportId: string; iceParameters: IceParameters; iceCandidates: IceCandidate[]; dtlsParameters: DtlsParameters; iceServers?: IceServerEntry[] }
+  | {
+      type: 'transportCreated';
+      transportId: string;
+      iceParameters: IceParameters;
+      iceCandidates: IceCandidate[];
+      dtlsParameters: DtlsParameters;
+      iceServers?: IceServerEntry[];
+    }
   | { type: 'transportConnected'; transportId: string }
   | { type: 'producerCreated'; producerId: string }
-  | { type: 'consumerCreated'; consumerId: string; producerId: string; kind: MediaKind; rtpParameters: RtpParameters }
-  | { type: 'participantJoined'; participantId: string; participantName: string; role: string; authenticated: boolean }
+  | {
+      type: 'consumerCreated';
+      consumerId: string;
+      producerId: string;
+      kind: MediaKind;
+      rtpParameters: RtpParameters;
+    }
+  | {
+      type: 'participantJoined';
+      participantId: string;
+      participantName: string;
+      role: string;
+      authenticated: boolean;
+    }
   | { type: 'participantLeft'; participantId: string }
-  | { type: 'newProducer'; participantId: string; producerId: string; kind: MediaKind; source?: string }
+  | {
+      type: 'newProducer';
+      participantId: string;
+      producerId: string;
+      kind: MediaKind;
+      source?: string;
+    }
   | { type: 'producerClosed'; producerId: string }
   | { type: 'producerPaused'; producerId: string }
   | { type: 'producerResumed'; producerId: string }
@@ -64,11 +112,16 @@ export type ServerMessage =
   | { type: 'reconnectResult'; success: boolean; participantId: string; reconnectToken?: string }
   | { type: 'iceRestarted'; transportId: string; iceParameters: IceParameters }
   | { type: 'connectionStats'; availableBitrate: number | null; rtt: number | null }
-  | { type: 'consumerLayersChanged'; consumerId: string; spatialLayer: number | null; temporalLayer: number | null }
+  | {
+      type: 'consumerLayersChanged';
+      consumerId: string;
+      spatialLayer: number | null;
+      temporalLayer: number | null;
+    }
   | ({ type: 'chatReceived' } & ChatEntry)
   | { type: 'privateMessageReceived'; message: ChatEntry }
   | { type: 'messageAck'; clientMessageId: string; message: ChatEntry }
-  | { type: 'socialResponse'; requestId: string; action: SocialAction; data: Record<string, unknown> }
+  | SocialResponse
   | { type: 'socialError'; requestId?: string; clientMessageId?: string; message: string }
   | { type: 'nicknameChanged'; participantId: string; nickname: string }
   | { type: 'activeSpeaker'; participantId: string }
@@ -102,9 +155,63 @@ export interface ParticipantInfo {
   authenticated?: boolean;
 }
 
-export type SocialAction = 'setChatPreferences' | 'changeNickname' | 'getRoomSnapshot'
-  | 'listRoomBans' | 'removeRoomBan' | 'listRoomMembers' | 'setMemberRole'
-  | 'reportParticipant' | 'listRoomReports' | 'resolveRoomReport';
+export type SocialAction =
+  | 'setChatPreferences'
+  | 'changeNickname'
+  | 'getRoomSnapshot'
+  | 'listRoomBans'
+  | 'removeRoomBan'
+  | 'listRoomMembers'
+  | 'setMemberRole'
+  | 'reportParticipant'
+  | 'listRoomReports'
+  | 'resolveRoomReport';
+
+/** The action selects both the outgoing payload and the validated response. */
+export interface SocialRequests {
+  setChatPreferences: { allowPrivateMessages: boolean; ignoredParticipantIds: string[] };
+  changeNickname: { nickname: string };
+  getRoomSnapshot: undefined;
+  listRoomBans: { offset?: number };
+  removeRoomBan: { banId: string };
+  listRoomMembers: { offset?: number };
+  setMemberRole: { targetUserId: string; role: number };
+  reportParticipant: { targetParticipantId: string; reason: string };
+  listRoomReports: { offset?: number };
+  resolveRoomReport: { reportId: string; status: 'resolved' | 'dismissed' };
+}
+
+export interface SocialResponses {
+  setChatPreferences: { allowPrivateMessages: boolean; ignoredParticipantIds: string[] };
+  changeNickname: { nickname: string };
+  getRoomSnapshot: RoomSnapshot;
+  listRoomBans: RoomBansPage;
+  removeRoomBan: { removed: boolean };
+  listRoomMembers: RoomMembersPage;
+  setMemberRole: { updated: boolean };
+  reportParticipant: { reportId: string; status: 'open' };
+  listRoomReports: RoomReportsPage;
+  resolveRoomReport: { reportId: string; status: 'resolved' | 'dismissed' };
+}
+
+export type SocialRequest = {
+  [A in SocialAction]: { type: A; requestId: string } & (SocialRequests[A] extends undefined
+    ? object
+    : SocialRequests[A]);
+}[SocialAction];
+
+export type SocialResponse<A extends SocialAction = SocialAction> = {
+  [K in A]: { type: 'socialResponse'; requestId: string; action: K; data: SocialResponses[K] };
+}[A];
+
+/** No-payload/page actions may omit data; mutation payloads remain required. */
+export type SocialRequestArguments<A extends SocialAction> = {
+  [K in A]: SocialRequests[K] extends undefined
+    ? [action: K]
+    : object extends SocialRequests[K]
+      ? [action: K, data?: SocialRequests[K]]
+      : [action: K, data: SocialRequests[K]];
+}[A];
 
 export interface ChatEntry {
   messageId: string;
@@ -134,9 +241,18 @@ export interface RoomSnapshot {
   lobby?: { participantId: string; displayName: string; authenticated: boolean }[];
 }
 
-export interface RoomBansPage { bans: BanEntry[]; hasMore: boolean }
-export interface RoomMembersPage { members: MemberEntry[]; hasMore: boolean }
-export interface RoomReportsPage { reports: ReportEntry[]; hasMore: boolean }
+export interface RoomBansPage {
+  bans: BanEntry[];
+  hasMore: boolean;
+}
+export interface RoomMembersPage {
+  members: MemberEntry[];
+  hasMore: boolean;
+}
+export interface RoomReportsPage {
+  reports: ReportEntry[];
+  hasMore: boolean;
+}
 
 export interface BanEntry {
   banId: string;
@@ -164,6 +280,24 @@ export interface ReportEntry {
   status: 'open' | 'resolved' | 'dismissed';
   createdAt: string;
   resolvedAt?: string;
+}
+
+/** Omitted fields stay unchanged; null clears a password or capacity limit. */
+export interface RoomSettingsPatch {
+  moderated?: boolean;
+  lobbyEnabled?: boolean;
+  guestsAllowed?: boolean;
+  guestsCanBroadcast?: boolean;
+  maxBroadcasters?: number | null;
+  maxParticipants?: number | null;
+  allowScreenSharing?: boolean;
+  allowChat?: boolean;
+  allowVideo?: boolean;
+  requireRegistration?: boolean;
+  inviteOnly?: boolean;
+  pushToTalk?: boolean;
+  secret?: boolean;
+  password?: string | null;
 }
 
 export interface RoomSettings {
@@ -194,19 +328,24 @@ export interface ProducerMetadata {
 
 export type MediaKind = 'audio' | 'video';
 
-// mediasoup types — these are opaque JSON objects passed through
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type DtlsParameters = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type RtpParameters = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type RtpCapabilities = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type RtpCapabilitiesFinalized = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type IceParameters = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type IceCandidate = any;
+// Use the client's actual transport/RTP contracts. Rust's finalized router
+// capabilities share the client capability shape on the wire.
+export type {
+  DtlsParameters,
+  RtpParameters,
+  RtpCapabilities,
+  RtpCapabilities as RtpCapabilitiesFinalized,
+  IceParameters,
+  IceCandidate,
+} from 'mediasoup-client/types';
+import type {
+  DtlsParameters,
+  RtpParameters,
+  RtpCapabilities,
+  RtpCapabilities as RtpCapabilitiesFinalized,
+  IceParameters,
+  IceCandidate,
+} from 'mediasoup-client/types';
 
 export interface IceServerEntry {
   urls: string[];
@@ -238,10 +377,10 @@ export interface RoomListItem {
   participant_count: number;
   password_protected: boolean;
   moderated: boolean;
-  broadcaster_count?: number;
-  description?: string;
-  image_url?: string | null;
-  secret?: boolean;
+  broadcaster_count: number;
+  description: string;
+  image_url: string | null;
+  secret: boolean;
 }
 
 export interface PublicProfile {
