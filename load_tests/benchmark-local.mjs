@@ -3,7 +3,7 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash, randomBytes } from 'node:crypto';
-import { readFile, writeFile, mkdir, stat, open } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, stat, lstat, readlink, open } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import os from 'node:os';
@@ -145,10 +145,54 @@ export async function verifyExecutable(binary, expectedSha256, role) {
   }
 }
 
-async function identity(root, binary) {
+const trackedSourcePaths = ['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'src', 'vendor', 'build/pip-constraints.txt'];
+const sourcePaths = [...trackedSourcePaths, 'build.rs', '.cargo/config', '.cargo/config.toml'];
+const pathOrder = (left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right));
+
+/** Hash versioned and nonignored untracked source inputs, not the build environment.
+ * Missing tracked inputs are omitted from the tree and listed separately; this
+ * makes a deletion's tree hash identical before and after git add/commit.
+ * Symlinks are hashed as links, never followed into private/outside files.
+ */
+export async function sourceTreeIdentity(root) {
+  const gitPaths = async args => (await exec('git', ['-C', root, ...args, '--', ...sourcePaths], { maxBuffer: 8 * 1024 * 1024 })).stdout.split('\0').filter(Boolean);
+  const [working, committed] = await Promise.all([
+    gitPaths(['ls-files', '--cached', '--others', '--exclude-standard', '-z']),
+    gitPaths(['ls-tree', '-r', '--name-only', '-z', 'HEAD']),
+  ]);
+  const paths = [...new Set([...working, ...committed])]
+    .filter(file => !['CLAUDE.md', 'CLAUDE.local.md'].includes(file.split('/').at(-1)))
+    .sort(pathOrder);
+  const entries = [], missing = [];
+  for (const file of paths) {
+    let info;
+    try { info = await lstat(join(root, file)); }
+    catch (error) {
+      if (error.code === 'ENOENT') { missing.push(file); continue; }
+      throw error;
+    }
+    if (info.isSymbolicLink()) entries.push([file, 'symlink', hash(await readlink(join(root, file)))]);
+    else if (info.isFile()) entries.push([file, 'file', Boolean(info.mode & 0o111), hash(await readFile(join(root, file)))]);
+    else throw new Error(`Unsupported build input type: ${file}`);
+  }
+  return {
+    sourceTreeSha256: hash(JSON.stringify({ format: 'simplestchat-source-tree-v1', entries })),
+    sourceTreeFiles: entries.length,
+    sourceTreeMissingPaths: missing,
+    sourceTreeScope: sourcePaths,
+  };
+}
+
+export function serverRevisionLabel(server) {
+  return `git:${server.revision};source:sha256:${server.sourceTreeSha256};binary:sha256:${server.binarySha256}`;
+}
+
+export async function identity(root, binary) {
   const git = async args => (await exec('git', ['-C', root, ...args])).stdout.trim();
   return { root, binary, revision: await git(['rev-parse', 'HEAD']),
-    trackedDiffSha256: hash(await git(['diff', 'HEAD', '--', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'src', 'vendor', 'build/pip-constraints.txt'])),
+    // Retain the existing field and exact diff scope for older report readers.
+    trackedDiffSha256: hash(await git(['diff', 'HEAD', '--', ...trackedSourcePaths])),
+    ...await sourceTreeIdentity(root),
     cargoLockSha256: hash(await readFile(join(root, 'Cargo.lock'))),
     binarySha256: hash(await readFile(binary)), binaryBytes: (await stat(binary)).size };
 }
@@ -202,7 +246,7 @@ async function runOne(options, variant, scenario, repetition, manifest) {
       '--rooms', String(scenario.rooms), '--room', `benchmark-${randomBytes(6).toString('hex')}`,
       '--duration', String(options.duration), '--ramp-up', String(options.rampUp), '--warmup', String(options.warmup),
       '--mode', scenario.mode, '--quality', '480p', '--fps', '30', '--max-audio', '4', '--max-video', '4',
-      '--output-dir', directory, '--run-label', name, '--server-revision', identity.revision,
+      '--output-dir', directory, '--run-label', name, '--server-revision', serverRevisionLabel(identity),
       '--generator-revision', manifest.generator.sourceIdentity, ...scenario.extra,
       ...diagnostics.generatorArgs];
     await json(join(directory, 'invocation.json'), { startedAt, variant, scenario, repetition, args, serverConfiguration: Object.fromEntries(Object.entries(env).filter(([k]) => !['METRICS_TOKEN', 'PATH', 'TMPDIR'].includes(k))) });
@@ -341,7 +385,7 @@ async function main() {
     servers: { baseline: await identity(options.baselineRoot, options.baselineBin), candidate: await identity(options.candidateRoot, options.candidateBin) },
     generator: { binary: options.generator, binarySha256: hash(await readFile(options.generator)), sourceRoot: options.generatorSourceRoot, sourceIdentity: `sha256:${hash(Buffer.concat(generatorSources))}` },
     orchestratorSha256: hash(await readFile(new URL(import.meta.url))),
-    limitations: ['Co-located server/generator: not production capacity.', 'Diagnostic runs skip resource sampling and never produce performance comparisons; full diagnostics change logging, while capture-only retains error-only logs.', 'ps sampled every~500ms in performance mode; RSS is sampled peak and CPU is total user+system for each process, including in-process media workers.', 'CPU window excludes first/last partial sampling intervals. Process launch/hash overhead causes a small offset from the generator clock; no child-process resource attribution.', 'Synthetic queued RTP is not confirmed egress; receive counts do not measure loss without expected fan-out.', 'Latency/CPU differences are descriptive, not an established regression budget.'] };
+    limitations: ['Co-located server/generator: not production capacity.', 'Source-tree hashes cover the listed versioned and nonignored untracked inputs, not ignored/ancestor Cargo configuration, environment flags, toolchains or external native libraries; record those build inputs separately.', 'Symlinks are identified by their link target, not external target contents. Source snapshots and independently frozen binary hashes do not attest that a binary was built from that snapshot.', 'Diagnostic runs skip resource sampling and never produce performance comparisons; full diagnostics change logging, while capture-only retains error-only logs.', 'ps sampled every~500ms in performance mode; RSS is sampled peak and CPU is total user+system for each process, including in-process media workers.', 'CPU window excludes first/last partial sampling intervals. Process launch/hash overhead causes a small offset from the generator clock; no child-process resource attribution.', 'Synthetic queued RTP is not confirmed egress; receive counts do not measure loss without expected fan-out.', 'Latency/CPU differences are descriptive, not an established regression budget.'] };
   await json(join(options.output, 'manifest.json'), manifest);
   const rows = [];
   try {
