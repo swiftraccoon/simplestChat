@@ -97,6 +97,10 @@ engine details, completed/skipped checks and failures. Failure diagnostics may
 include local network addresses; keep artifacts private. Discard the test database
 afterward, including any remaining accounts.
 
+Connection failures also record ICE gathering, transceiver state and sanitized
+SDP summaries. Raw SDP, ICE credentials, fingerprints and track identifiers are
+excluded from these snapshots.
+
 ## Informational browser/API performance
 
 With the disposable database still running and the UI already built:

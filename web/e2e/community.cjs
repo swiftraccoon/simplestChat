@@ -13,6 +13,7 @@ if (process.env.COMMUNITY_E2E !== '1') throw new Error('Set COMMUNITY_E2E=1 agai
 const base = process.env.BASE_URL || 'http://127.0.0.1:3109';
 if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname)) throw new Error('This smoke is restricted to local test servers.');
 const { browserOptions } = require('./browser-options.cjs');
+const { collectPeerDiagnostics } = require('./peer-diagnostics.cjs');
 const options = browserOptions(process.env.E2E_BROWSER);
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const artifacts = process.env.E2E_ARTIFACTS || fs.mkdtempSync(path.join(os.tmpdir(), 'simplestchat-community-e2e.'));
@@ -420,16 +421,7 @@ async function setRole(owner, name, role) {
     saveReport();
     report.diagnostics = [];
     for (const item of clients) {
-      const media = await deadline(item.page.evaluate(async () => Promise.all(window.__communityPeers.map(async peer => {
-        const state = { connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, signalingState: peer.signalingState };
-        if (peer.connectionState === 'closed') return state;
-        let timer;
-        try {
-          const stats = await Promise.race([peer.getStats(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('stats deadline')), 2000); })]);
-          return { ...state, stats: [...stats.values()].filter(stat => ['transport', 'candidate-pair', 'local-candidate', 'remote-candidate', 'inbound-rtp', 'outbound-rtp', 'codec'].includes(stat.type)) };
-        } catch (failure) { return { ...state, error: failure.message }; }
-        finally { clearTimeout(timer); }
-      })))).catch(failure => ({ error: failure.message }));
+      const media = await deadline(item.page.evaluate(collectPeerDiagnostics)).catch(failure => ({ error: failure.message }));
       report.diagnostics.push({ label: item.label, pageErrors: item.errors, warnings: item.warnings, media });
       saveReport();
     }

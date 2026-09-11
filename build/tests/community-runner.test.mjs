@@ -34,13 +34,13 @@ test('community steps distinguish successful checks, unsupported simulations, an
   assert.deepEqual(messages, ['PASS native check', 'SKIP unsupported simulation: No synthetic event delivery']);
 });
 
-async function fixture(t) {
+async function fixture(t, toolingSource) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-browser-runner.'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const tooling = path.join(directory, 'fake tooling');
   await mkdir(tooling);
   await writeFile(path.join(tooling, 'package.json'), JSON.stringify({ version: '0.0.0-fixture', main: 'index.cjs' }));
-  await writeFile(path.join(tooling, 'index.cjs'), `module.exports = {
+  await writeFile(path.join(tooling, 'index.cjs'), toolingSource ?? `module.exports = {
     chromium: { async launch() { throw new Error('owned fixture launch failure'); } },
     firefox: { async launch() { throw new Error('owned fixture launch failure'); } },
   };\n`);
@@ -59,6 +59,78 @@ async function fixture(t) {
     }),
   };
 }
+
+function pageFailureTooling(diagnosticsFail = false) {
+  return `
+    const { runInNewContext } = require('node:vm');
+    const peer = {
+      connectionState: 'new', iceConnectionState: 'new', signalingState: 'stable', iceGatheringState: 'complete',
+      localDescription: null,
+      remoteDescription: { type: 'offer', sdp: [
+        'v=0', 'a=ice-pwd:OWNED_ICE_SECRET', 'm=video 9 UDP/TLS/RTP/SAVPF 96',
+        'a=mid:0', 'a=sendonly', 'a=rtpmap:96 VP8/90000',
+        'a=candidate:PRIVATE_FOUNDATION 1 udp 1234 192.0.2.73 41010 typ host',
+      ].join('\\r\\n') },
+      getTransceivers() { return [{ mid: '0', direction: 'recvonly', currentDirection: null, stopped: false,
+        receiver: { track: { kind: 'video', enabled: true, muted: true, readyState: 'live', id: 'OWNED_TRACK_SECRET' } },
+      }]; },
+      async getStats() { return new Map([['T01', { id: 'T01', type: 'transport', iceState: 'new', dtlsState: 'new', bytesReceived: 0, bytesSent: 0 }]]); },
+    };
+    const page = {
+      setDefaultTimeout() {}, on() {}, async addInitScript() {},
+      async goto() { throw new Error('owned fixture navigation failure'); },
+      async evaluate(fn) {
+        if (${diagnosticsFail}) throw new Error('owned fixture diagnostics failure');
+        return runInNewContext('(' + fn.toString() + ')()', { window: { __communityPeers: [peer] }, setTimeout, clearTimeout });
+      },
+      locator() { return { async evaluateAll() {}, async isVisible() { return false; } }; },
+      async screenshot() {},
+    };
+    module.exports = { chromium: { async launch() { return {
+      version() { return 'fixture-browser'; },
+      async newContext() { return { async newPage() { return page; } }; },
+      async close() {},
+    }; } } };
+  `;
+}
+
+test('community runner collects sanitized peer state on failure without replacing the failed outcome', async t => {
+  const { artifacts, run } = await fixture(t, pageFailureTooling());
+  const result = run({});
+  assert.equal(result.status, 1, result.stderr);
+  const report = JSON.parse(await readFile(path.join(artifacts, 'community-results.json'), 'utf8'));
+  assert.equal(report.passed, false);
+  assert.equal(report.complete, false);
+  assert.equal(report.error, 'owned fixture navigation failure');
+  assert.equal(report.diagnostics.length, 1);
+  const peer = report.diagnostics[0].media[0];
+  assert.equal(peer.iceGatheringState, 'complete');
+  assert.equal(peer.descriptions.remote.media[0].direction, 'sendonly');
+  assert.equal(peer.descriptions.remote.media[0].candidates.count, 1);
+  assert.equal(peer.transceivers[0].currentDirection, null);
+  assert.equal(peer.stats[0].bytesReceived, 0);
+  assert.doesNotMatch(JSON.stringify(report.diagnostics), /OWNED_ICE_SECRET|OWNED_TRACK_SECRET|PRIVATE_FOUNDATION|192\.0\.2\.73/);
+});
+
+test('community runner preserves the original failure when collecting peer diagnostics fails', async t => {
+  const { artifacts, run } = await fixture(t, pageFailureTooling(true));
+  const result = run({});
+  assert.equal(result.status, 1, result.stderr);
+  const report = JSON.parse(await readFile(path.join(artifacts, 'community-results.json'), 'utf8'));
+  assert.equal(report.passed, false);
+  assert.equal(report.error, 'owned fixture navigation failure');
+  assert.deepEqual(report.diagnostics[0].media, { error: 'owned fixture diagnostics failure' });
+});
+
+test('community peer snapshots remain failure-only', async () => {
+  const source = await readFile(runner, 'utf8');
+  const failureStart = source.indexOf('report.failedStep = activeStep;');
+  const cleanupStart = source.indexOf('\n  } finally {', failureStart);
+  const call = 'item.page.evaluate(collectPeerDiagnostics)';
+  assert.ok(failureStart >= 0 && cleanupStart > failureStart);
+  assert.equal(source.split(call).length - 1, 1);
+  assert.ok(source.slice(failureStart, cleanupStart).includes(call));
+});
 
 test('community runner refuses missing disposable-server opt-in before launching', async t => {
   const { artifacts, run } = await fixture(t);
