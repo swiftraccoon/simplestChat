@@ -118,6 +118,30 @@ For a same-host comparison, run **Actions → ICE isolation → Run workflow**.
 It runs WebKit and Chromium on one hosted Mac without building the app, retaining
 both reports even when a probe fails. Each engine keeps its existing launch options.
 
+## Accessibility
+
+With the same pinned browser tooling, built UI and disposable-service setup:
+
+```sh
+ACCESSIBILITY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+  node web/e2e/accessibility.cjs
+```
+
+The separate `accessibility.cjs` runner uses axe-core WCAG 2 A/AA, 2.1 A/AA and
+2.2 AA tags without disabling rules or excluding elements. It scans public join,
+sign-in/register, room creation, joined chat, account and all personal/room
+settings tabs on desktop and 320px layouts, plus light/dark Help. Keyboard checks
+exercise actual chat overflow and the newest-message button, native dialog
+Escape/focus restoration, and Help opening in a separate tab while the room stays
+connected. It does not turn on capture.
+
+`accessibility-results.json` records rule IDs, impacts, bounded selectors and
+computed contrast styles, not DOM HTML. Violations or functional failures exit nonzero. `incomplete`
+findings remain in the report for manual review; a passing run is not full WCAG
+conformance or screen-reader/mobile-browser coverage. CI preserves its separate
+`accessibility-e2e` artifact for seven days. Use a unique `E2E_ARTIFACTS` directory
+to keep local runs separate.
+
 ## Informational browser/API performance
 
 With the disposable database still running and the UI already built:

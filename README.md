@@ -41,6 +41,7 @@ For frontend hot reload, see [the web guide](web/README.md).
 | Topic | Guide |
 | --- | --- |
 | Build, local launch, and troubleshooting | [Development](docs/development.md) |
+| Quality standards and review requirements | [Contributing](CONTRIBUTING.md) |
 | Frontend development and modules | [Web client](web/README.md) |
 | Server architecture and protocol | [Rust server](src/README.md) |
 | Environment variables and limits | [Configuration](docs/configuration.md) |
@@ -54,14 +55,11 @@ For frontend hot reload, see [the web guide](web/README.md).
 After [build setup](docs/development.md):
 
 ```sh
-cargo fmt --all -- --check
-cargo test --locked --all-features -- --test-threads=1
-npm --prefix web test
-npm --prefix web run build
+build/check.sh
 ```
 
-Database and browser integration tests require a disposable local database;
-see [testing](docs/testing.md).
+This runs source quality gates and web/helper tests. Native Rust, database and
+browser integration tests are documented in [testing](docs/testing.md).
 
 ## Deploying
 

@@ -10,6 +10,8 @@ Run commands from the repository root.
 - `make`, `perl`, `curl`, `pkg-config`, `cmake`, and Python 3/pip.
   See [native dependencies](../vendor/README.md) for platform details.
 - PostgreSQL if you want accounts and persistent rooms.
+- ShellCheck for the helper-script quality gate (`brew install shellcheck` on
+  macOS, or your Linux package manager).
 
 ## Guest-only local UI
 
@@ -43,8 +45,8 @@ To run a second instance, choose unused HTTP and media ports:
 PORT=3109 WEBRTC_SERVER_PORT_BASE=41000 build/run-local.sh --skip-web
 ```
 
-Joining a room does not start capture. Use **Cam**, **Mic setup**, or
-**Media setup** to preview devices and enable your broadcast.
+Joining a room does not start capture. Open **Your settings** or **Mic setup**
+for a private device preview. Use the camera or microphone button to broadcast.
 
 ## Accounts and persistent rooms
 

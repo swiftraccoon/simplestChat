@@ -2,7 +2,32 @@
 
 Use the synthetic load test to compare server forwarding and resource use, and
 the browser test to measure UI startup, API requests, chat, and decoded video.
-See [recorded results](performance-results.md) for the dependency-update comparison.
+See [recorded results](performance-results.md) for measured before/after comparisons.
+
+## Web asset budgets
+
+Every production web build checks the combined size of all emitted JavaScript,
+CSS and HTML, including lazy chunks and the help page. Splitting an asset does
+not avoid the limit. The initial budgets leave room for small product changes:
+
+| Asset group | Uncompressed limit | Gzip limit |
+| --- | --- | --- |
+| JavaScript | 450 KiB | 100 KiB |
+| CSS | 64 KiB | 12 KiB |
+| HTML | 48 KiB | 10 KiB |
+
+Limits are defined in [bundle-budget.json](../web/bundle-budget.json). Gzip uses
+level 6 independently for each file; the checker then sums each group. Run
+`npm --prefix web run check:bundle` to inspect an existing build, or
+`npm --prefix web run build` to rebuild and check it. Missing or empty entry/help pages,
+empty JavaScript or CSS output, and symbolic links fail the check.
+
+An exceeded budget needs an explanation of the user benefit and a review of
+avoidable dependencies, duplicate code and unused assets before raising a limit.
+These gates constrain delivery and parsing size; they do **not** establish
+startup latency, memory use, media quality or server capacity. Images, fonts,
+source maps and other non-JS/CSS/HTML files are not covered by these budgets.
+Measure runtime performance separately with the workflows below.
 
 ## Controlled local comparison
 

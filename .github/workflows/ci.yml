@@ -45,25 +45,19 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config
+          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config shellcheck
 
       - name: Install pinned Rust toolchain
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-09)
         with:
           toolchain: 1.98.1
           # mediasoup-sys formats generated bindings during its build script.
-          components: rustfmt
+          components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Check Rust formatting
         run: cargo fmt --all -- --check
-
-      - name: Check portable test helper syntax
-        run: bash -n build/with-test-server.sh build/test-container.sh
-
-      - name: Check local launcher syntax
-        run: sh -n build/run-local.sh
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -73,8 +67,8 @@ jobs:
             web/package-lock.json
             web/e2e/package-lock.json
 
-      - name: Test helper safety and cleanup
-        run: node --test build/tests/*.test.mjs load_tests/benchmark-local.test.mjs
+      - name: Check helper syntax, safety and cleanup
+        run: build/check.sh --helpers
 
       - name: Configure native dependency paths
         run: |
@@ -85,8 +79,14 @@ jobs:
       - name: Build checksum-pinned OpenSSL
         run: build/install-openssl.sh "${OPENSSL_DIR}"
 
+      - name: Check Rust lints and documentation
+        run: build/check.sh --rust
+
       - name: Build production server
         run: cargo build --locked --bin simplestChat
+
+      - name: Verify readiness and graceful shutdown
+        run: node build/shutdown-smoke.mjs --binary "$PWD/target/debug/simplestChat"
 
       - name: Verify native security patches
         run: |
@@ -145,7 +145,7 @@ jobs:
       - name: Migrate disposable test database with the real server
         run: build/with-test-server.sh true
 
-      # Include all three PostgreSQL tests, not only the default unit suite.
+      # Include all PostgreSQL tests, not only the default unit suite.
       # Serialize native media-worker and room-session integration tests.
       - name: Test (including PostgreSQL recovery, refresh and moderation)
         run: cargo test --locked --all-features -- --include-ignored --test-threads=1
@@ -185,6 +185,22 @@ jobs:
           E2E_ARTIFACTS: ${{ runner.temp }}/community-e2e
         run: build/with-test-server.sh npm --prefix web/e2e test
 
+      - name: Accessibility rules and keyboard smoke
+        timeout-minutes: 5
+        env:
+          ACCESSIBILITY_E2E: "1"
+          E2E_ARTIFACTS: ${{ runner.temp }}/accessibility-e2e
+        run: build/with-test-server.sh node web/e2e/accessibility.cjs
+
+      - name: Preserve accessibility diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: accessibility-e2e
+          path: ${{ runner.temp }}/accessibility-e2e
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Preserve browser diagnostics
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -205,7 +221,7 @@ jobs:
             --ignore RUSTSEC-2026-0097
 
   web:
-    name: Web client tests + typecheck + build
+    name: Web lint + format + tests + typecheck + build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
@@ -222,8 +238,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --ignore-scripts
-      - run: npm test
-      - run: npm run build
+      - run: ../build/check.sh --web
       - name: Audit web dependencies
         # Build-time packages execute against trusted source and are part of the
         # supply chain, so audit the complete lockfile rather than omitting dev.
