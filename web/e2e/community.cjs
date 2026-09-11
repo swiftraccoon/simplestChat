@@ -12,19 +12,73 @@ const path = require('node:path');
 if (process.env.COMMUNITY_E2E !== '1') throw new Error('Set COMMUNITY_E2E=1 against a disposable local server/database.');
 const base = process.env.BASE_URL || 'http://127.0.0.1:3109';
 if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname)) throw new Error('This smoke is restricted to local test servers.');
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { browserOptions } = require('./browser-options.cjs');
+const options = browserOptions(process.env.E2E_BROWSER);
+const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const artifacts = process.env.E2E_ARTIFACTS || fs.mkdtempSync(path.join(os.tmpdir(), 'simplestchat-community-e2e.'));
+fs.mkdirSync(artifacts, { recursive: true, mode: 0o700 });
 const runId = `e2e-${Date.now().toString(36)}`;
 const password = 'Disposable-browser-password-2026!';
 const clients = [];
 let browser;
 let activeStep = 'launch';
-async function step(name, work) { activeStep = name; await work(); console.log(`PASS ${name}`); }
+const report = {
+  runId, browser: options.name, browserVersion: null,
+  playwrightVersion: require(path.join(path.dirname(require.resolve(process.env.PLAYWRIGHT_MODULE || 'playwright')), 'package.json')).version,
+  platform: process.platform, arch: process.arch, baseUrl: base,
+  launchOptions: options.launchOptions, contextOptions: options.contextOptions,
+  announcedIp: process.env.TEST_ANNOUNCE_IP || null,
+  startedAt: new Date().toISOString(), complete: false, passed: false, steps: [], playbackRecoveries: [],
+  limitations: ['Fake capture devices; not physical device or permission-prompt coverage.', 'External capture termination is simulated with stop() plus an ended event on an owned fake local-stream track.', 'Mobile checks resize a desktop viewport; they do not run a mobile browser.'],
+};
+function saveReport() { fs.writeFileSync(path.join(artifacts, 'community-results.json'), `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 }); }
+async function deadline(work, milliseconds = 5000) {
+  let timer;
+  try { return await Promise.race([work, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Browser diagnostics deadline exceeded')), milliseconds); })]); }
+  finally { clearTimeout(timer); }
+}
+async function step(name, work) {
+  activeStep = name;
+  const result = { name, passed: false };
+  report.steps.push(result); saveReport();
+  const outcome = await work();
+  if (outcome?.skip) {
+    result.skipped = true; result.reason = outcome.skip;
+    saveReport(); console.log(`SKIP ${name}: ${outcome.skip}`);
+    return;
+  }
+  result.passed = true; saveReport(); console.log(`PASS ${name}`);
+}
 async function client(label, mobile = false) {
-  const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 }, permissions: ['camera', 'microphone'] });
+  const context = await browser.newContext({ ...options.contextOptions, viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 } });
   const page = await context.newPage(); page.setDefaultTimeout(10000);
-  const entry = { label, context, page, errors: [], frames: [] }; clients.push(entry);
+  const entry = { label, context, page, errors: [], frames: [], warnings: [] }; clients.push(entry);
+  // Observe native peer connections for failure diagnostics; no SDP/media mocking.
+  await page.addInitScript(() => {
+    window.__communityPeers = [];
+    window.__communityCaptureRequests = 0;
+    const devices = navigator.mediaDevices;
+    const getUserMedia = devices.getUserMedia.bind(devices);
+    devices.getUserMedia = (...args) => {
+      window.__communityCaptureRequests++;
+      return getUserMedia(...args);
+    };
+    if (!window.RTCPeerConnection) return;
+    window.RTCPeerConnection = new Proxy(window.RTCPeerConnection, {
+      construct(target, args, newTarget) {
+        const peer = Reflect.construct(target, args, newTarget);
+        window.__communityPeers.push(peer);
+        return peer;
+      },
+    });
+  });
   page.on('pageerror', error => entry.errors.push(error.stack || error.message));
+  page.on('console', message => {
+    if (['warning', 'error'].includes(message.type())) {
+      entry.warnings.push(message.text());
+      if (entry.warnings.length > 40) entry.warnings.shift();
+    }
+  });
   page.on('websocket', socket => {
     for (const direction of ['framesent', 'framereceived']) socket.on(direction, frame => {
       try { const message = JSON.parse(String(frame.payload)); entry.frames.push({ direction, type: message.type, content: message.content, message: typeof message.message === 'string' ? message.message : message.message?.content }); if (entry.frames.length > 40) entry.frames.shift(); } catch {}
@@ -38,6 +92,20 @@ async function client(label, mobile = false) {
   return page;
 }
 async function visible(page, text) { await page.getByText(text, { exact: true }).filter({ visible: true }).last().waitFor({ state: 'visible' }); }
+async function remotePlayback(page, kind) {
+  await page.waitForFunction(mediaKind => {
+    const playing = [...document.querySelectorAll(`.video-tile:not(.local) ${mediaKind}`)].some(element => !element.paused && (mediaKind === 'video' ? element.videoWidth > 0 : element.readyState >= 2 && !element.muted && element.volume > 0));
+    const prompt = [...document.querySelectorAll('.personal-playback-blocked')].some(notice => !notice.hidden);
+    return playing || prompt;
+  }, kind, { timeout: 15000 });
+  const retry = page.locator('[data-control="retry-playback"]').filter({ visible: true });
+  if (await retry.count()) {
+    await retry.first().click();
+    report.playbackRecoveries.push({ kind, step: activeStep });
+  }
+  await page.waitForFunction(mediaKind => [...document.querySelectorAll(`.video-tile:not(.local) ${mediaKind}`)].some(element => !element.paused && (mediaKind === 'video' ? element.videoWidth > 0 : element.readyState >= 2 && !element.muted && element.volume > 0)), kind, { timeout: 15000 });
+  await page.waitForFunction(() => [...document.querySelectorAll('.personal-playback-blocked')].every(notice => notice.hidden));
+}
 async function connected(page) {
   await page.locator('#room-screen').waitFor({ state: 'visible' });
   await page.waitForFunction(() => document.querySelector('#connection-status').textContent === 'Connected');
@@ -106,8 +174,11 @@ async function setRole(owner, name, role) {
 }
 
 (async () => {
-  browser = await chromium.launch({ headless: true, args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--allow-loopback-in-peer-connection', '--autoplay-policy=no-user-gesture-required'] });
+  saveReport();
   try {
+    browser = await playwright[options.name].launch(options.launchOptions);
+    report.browserVersion = browser.version(); saveReport();
+    console.log(`Browser: ${options.name} ${report.browserVersion}; Playwright ${report.playwrightVersion}`);
     const owner = await client('owner'); const member = await client('member'); const guest = await client('guest');
     const ownerEmail = `${runId}-owner@example.test`; const memberEmail = `${runId}-member@example.test`;
     await step('register owner/member, create room and guest join', async () => {
@@ -195,12 +266,91 @@ async function setRole(owner, name, role) {
       assert.equal(await owner.locator('.video-tile:not(.local) video').count(), 0, 'preview must not broadcast');
       await setup.getByRole('button', { name: 'Stop preview', exact: true }).click(); await guest.waitForFunction(() => !document.querySelector('.media-preview-video')?.srcObject);
       await setup.getByRole('button', { name: 'Save settings', exact: true }).click(); await setup.waitFor({ state: 'hidden' });
-      await guest.locator('#cam-btn').click(); await owner.waitForFunction(() => [...document.querySelectorAll('.video-tile:not(.local) video')].some(video => video.videoWidth > 0), {}, { timeout: 15000 });
-      await guest.locator('#mic-btn').click(); await owner.waitForFunction(() => [...document.querySelectorAll('.video-tile:not(.local) audio')].some(audio => audio.readyState >= 2));
-      await owner.locator('.personal-media-controls summary').first().click(); await owner.getByRole('combobox', { name: 'Video quality for E2ERenamed', exact: true }).selectOption('low');
+      await guest.locator('#cam-btn').click(); await remotePlayback(owner, 'video');
+      await guest.locator('#mic-btn').click(); await remotePlayback(owner, 'audio');
+      const audioTime = await owner.locator('.video-tile:not(.local) audio').first().evaluate(audio => audio.currentTime);
+      await owner.waitForFunction(previous => [...document.querySelectorAll('.video-tile:not(.local) audio')].some(audio => !audio.paused && !audio.muted && audio.volume > 0 && audio.currentTime > previous + 0.25), audioTime);
+      await owner.locator('.personal-media-controls summary').first().click();
+      // Deterministic UI recovery control: inject a policy rejection on this one
+      // element, then restore native play() before the real user-gesture retry.
+      // This is separate from the unmodified native playback assertion above.
+      const remoteAudio = owner.locator('.video-tile:not(.local) audio').first();
+      await remoteAudio.evaluate(audio => {
+        audio.autoplay = false; audio.pause();
+        audio.play = () => Promise.reject(new DOMException('Simulated autoplay denial', 'NotAllowedError'));
+      });
+      try {
+        await owner.locator('[data-control="volume"]').first().press('ArrowLeft');
+        const retry = owner.getByRole('button', { name: 'Enable playback for E2ERenamed', exact: true });
+        await retry.waitFor({ state: 'visible' });
+        await owner.screenshot({ path: path.join(artifacts, 'playback-recovery.png'), fullPage: true });
+        await remoteAudio.evaluate(audio => { delete audio.play; });
+        await retry.click(); await retry.waitFor({ state: 'hidden' });
+        const previous = await remoteAudio.evaluate(audio => audio.currentTime);
+        await owner.waitForFunction(time => [...document.querySelectorAll('.video-tile:not(.local) audio')].some(audio => !audio.paused && !audio.muted && audio.volume > 0 && audio.currentTime > time + 0.25), previous);
+        report.simulatedAutoplayRecovery = true;
+      } finally { await deadline(remoteAudio.evaluate(audio => { delete audio.play; audio.autoplay = true; })).catch(() => {}); }
+      await owner.getByRole('combobox', { name: 'Video quality for E2ERenamed', exact: true }).selectOption('low');
       await owner.getByRole('button', { name: 'Hide for me', exact: true }).first().click(); await owner.waitForFunction(() => [...document.querySelectorAll('.video-tile:not(.local) video')].every(video => video.paused));
       await owner.getByRole('button', { name: 'Restore broadcast', exact: true }).first().click(); await owner.waitForFunction(() => [...document.querySelectorAll('.video-tile:not(.local) video')].some(video => !video.paused && video.videoWidth > 0));
       await owner.screenshot({ path: path.join(artifacts, 'remote-media.png'), fullPage: true });
+      await guest.locator('#cam-btn').click(); await guest.locator('#mic-btn').click();
+    });
+    await step('simulated capture termination updates both clients and permits explicit restart', async () => {
+      await guest.locator('#cam-btn').click();
+      await guest.locator('#cam-btn:not(.muted)').waitFor({ state: 'visible' });
+      await remotePlayback(owner, 'video');
+      await guest.locator('#mic-btn').click();
+      await guest.locator('#mic-btn:not(.muted)').waitFor({ state: 'visible' });
+      await remotePlayback(owner, 'audio');
+      report.simulatedCaptureStops = [];
+      // Probe an unpublished clone, not the broadcast. Firefox can suppress
+      // dispatchEvent() delivery to track.addEventListener() (Mozilla 1473457).
+      // Do not replace real handlers or count an unsupported simulation as a pass.
+      report.syntheticTrackEndedSupported = await guest.evaluate(() => {
+        const stream = document.querySelector('#local-tile video')?.srcObject;
+        if (!stream) throw new Error('Expected the active local capture stream');
+        return stream.getTracks().every(track => {
+          const probe = track.clone();
+          let observed = false;
+          probe.addEventListener('ended', () => { observed = true; }, { once: true });
+          probe.stop(); probe.dispatchEvent(new Event('ended'));
+          return observed;
+        });
+      });
+      if (!report.syntheticTrackEndedSupported) {
+        await guest.locator('#cam-btn').click(); await guest.locator('#mic-btn').click();
+        return { skip: 'Engine suppresses synthetic track ended events; native device termination still needs manual testing.' };
+      }
+      for (const kind of ['audio', 'video']) {
+        const stopped = await guest.evaluate(mediaKind => {
+          const stream = document.querySelector('#local-tile video')?.srcObject;
+          const tracks = stream?.getTracks().filter(track => track.kind === mediaKind && track.readyState === 'live') || [];
+          if (tracks.length !== 1) throw new Error(`Expected one live owned ${mediaKind} capture track, found ${tracks.length}`);
+          const requestsBeforeStop = window.__communityCaptureRequests;
+          // stop() is deliberately silent in browsers. Dispatch the external-end
+          // event separately; this is not a physical unplug/permission-revoke test.
+          tracks[0].stop(); tracks[0].dispatchEvent(new Event('ended'));
+          return { requestsBeforeStop };
+        }, kind);
+        const button = kind === 'audio' ? '#mic-btn' : '#cam-btn';
+        const otherButton = kind === 'audio' ? '#cam-btn' : '#mic-btn';
+        await guest.locator(`${button}.muted`).waitFor({ state: 'visible' });
+        await visible(guest, kind === 'audio'
+          ? 'Microphone stopped. Click Unmute (M) to restart.'
+          : 'Camera stopped. Click Cam On (V) to restart.');
+        assert.equal(await guest.locator(`${otherButton}.muted`).count(), 0, 'other capture stays enabled');
+        await owner.locator(`.video-tile:not(.local) ${kind}`).waitFor({ state: 'detached' });
+        const otherKind = kind === 'audio' ? 'video' : 'audio';
+        await remotePlayback(owner, otherKind);
+        assert.equal(await guest.evaluate(() => window.__communityCaptureRequests), stopped.requestsBeforeStop, 'external stop must not recapture');
+        await guest.screenshot({ path: path.join(artifacts, `capture-stopped-${kind}.png`), fullPage: true });
+        await guest.locator(button).click();
+        await guest.locator(`${button}:not(.muted)`).waitFor({ state: 'visible' });
+        await remotePlayback(owner, kind);
+        assert.equal(await guest.evaluate(() => window.__communityCaptureRequests), stopped.requestsBeforeStop + 1, 'explicit restart captures once');
+        report.simulatedCaptureStops.push({ kind, stopped: true, restarted: true });
+      }
       await guest.locator('#cam-btn').click(); await guest.locator('#mic-btn').click();
     });
     await step('account profile/avatar update and safe public profile', async () => {
@@ -263,16 +413,36 @@ async function setRole(owner, name, role) {
       await guest.locator('#join-screen').waitFor({ state: 'visible' }); await member.locator('#join-screen').waitFor({ state: 'visible' });
     });
     for (const item of clients) assert.deepEqual(item.errors, [], `${item.label} page errors`);
+    report.complete = true; report.passed = true;
     console.log(`PASS complete community smoke (${runId}); artifacts: ${artifacts}`);
   } catch (error) {
+    report.failedStep = activeStep; report.error = error.message;
+    saveReport();
+    report.diagnostics = [];
+    for (const item of clients) {
+      const media = await deadline(item.page.evaluate(async () => Promise.all(window.__communityPeers.map(async peer => {
+        const state = { connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, signalingState: peer.signalingState };
+        if (peer.connectionState === 'closed') return state;
+        let timer;
+        try {
+          const stats = await Promise.race([peer.getStats(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('stats deadline')), 2000); })]);
+          return { ...state, stats: [...stats.values()].filter(stat => ['transport', 'candidate-pair', 'local-candidate', 'remote-candidate', 'inbound-rtp', 'outbound-rtp', 'codec'].includes(stat.type)) };
+        } catch (failure) { return { ...state, error: failure.message }; }
+        finally { clearTimeout(timer); }
+      })))).catch(failure => ({ error: failure.message }));
+      report.diagnostics.push({ label: item.label, pageErrors: item.errors, warnings: item.warnings, media });
+      saveReport();
+    }
     console.error(`FAIL ${activeStep}`);
-    for (const item of clients) { await item.page.screenshot({ path: path.join(artifacts, `failure-${item.label}.png`), fullPage: true, mask: [item.page.locator('input[type="password"], textarea[readonly]')] }).catch(() => {}); console.error(`${item.label} page errors:`, item.errors); console.error(`${item.label} last signaling events:`, JSON.stringify(item.frames)); }
+    for (const item of clients) { await item.page.screenshot({ path: path.join(artifacts, `failure-${item.label}.png`), fullPage: true, mask: [item.page.locator('input[type="password"], input[readonly], textarea[readonly]')] }).catch(() => {}); console.error(`${item.label} page errors:`, item.errors); console.error(`${item.label} last signaling events:`, JSON.stringify(item.frames)); }
     console.error(`Failure screenshots: ${artifacts}`); throw error;
   } finally {
     for (const item of clients) {
-      await item.page.locator('dialog[open]').evaluateAll(dialogs => dialogs.forEach(dialog => dialog.close())).catch(() => {});
+      await deadline(item.page.locator('dialog[open]').evaluateAll(dialogs => dialogs.forEach(dialog => dialog.close()))).catch(() => {});
       if (await item.page.locator('#leave-btn').isVisible().catch(() => false)) await item.page.locator('#leave-btn').click().catch(() => {});
     }
-    await browser?.close();
+    try { await browser?.close(); }
+    catch (error) { report.complete = false; report.passed = false; report.cleanupError = error.message; throw error; }
+    finally { report.finishedAt = new Date().toISOString(); saveReport(); }
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

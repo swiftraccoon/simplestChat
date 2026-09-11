@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run a command against an owned, loopback-only server and a disposable database.
+# Run a command against an owned HTTP-loopback server and a disposable database.
 # Example: DISPOSABLE_TEST_DATABASE=1 DATABASE_URL=postgres://.../chat_test \
 #   build/with-test-server.sh npm --prefix web/e2e test
 set -euo pipefail
@@ -25,6 +25,8 @@ test -f "${server_workdir}/Cargo.toml"
 test -d "${server_workdir}/migrations"
 test_port="${TEST_SERVER_PORT:-3119}"
 media_port="${TEST_MEDIA_PORT:-41010}"
+# An explicitly empty override is invalid, not a request for the default.
+test_announce_ip="${TEST_ANNOUNCE_IP-127.0.0.1}"
 for port in "${test_port}" "${media_port}"; do
   if [[ ! "${port}" =~ ^[1-9][0-9]{3,4}$ ]] || ((port > 65535)); then
     echo 'Test ports must be integers from 1000 through 65535.' >&2
@@ -35,9 +37,21 @@ test -x "${server_binary}"
 export BASE_URL="http://127.0.0.1:${test_port}"
 # Probe both sockets; a non-HTTP listener must not be mistaken for a free port.
 # The server still owns the final bind and must remain alive after readiness.
-node --input-type=module - "${test_port}" "${media_port}" <<'JS'
+node --input-type=module - "${test_port}" "${media_port}" "${test_announce_ip}" <<'JS'
 import net from 'node:net';
 import dgram from 'node:dgram';
+import os from 'node:os';
+const announceIp = process.argv[4];
+try {
+  if (!net.isIPv4(announceIp)) throw new Error('expected a literal IPv4 address');
+  if (announceIp !== '127.0.0.1' && !Object.values(os.networkInterfaces()).some(addresses =>
+    addresses?.some(address => address.address === announceIp))) {
+    throw new Error('address is not assigned to a local network interface');
+  }
+} catch (error) {
+  console.error(`Refusing TEST_ANNOUNCE_IP: ${error.message}`);
+  process.exit(2);
+}
 const tcp = net.createServer();
 const udp = dgram.createSocket('udp4');
 try {
@@ -55,6 +69,7 @@ try {
   try { udp.close(); } catch {}
 }
 JS
+export TEST_ANNOUNCE_IP="${test_announce_ip}"
 
 test_artifacts="${E2E_ARTIFACTS:-$(mktemp -d "${TMPDIR:-/tmp}/simplestchat-tests.XXXXXX")}"
 mkdir -p "${test_artifacts}"
@@ -90,7 +105,7 @@ trap 'exit 143' TERM
 (
   cd "${server_workdir}"
   exec env -i PATH="${PATH}" DATABASE_URL="${DATABASE_URL}" \
-  BIND_ADDR=127.0.0.1 PORT="${test_port}" ANNOUNCE_IP=127.0.0.1 \
+  BIND_ADDR=127.0.0.1 PORT="${test_port}" ANNOUNCE_IP="${test_announce_ip}" \
   MEDIA_WORKERS=1 WEBRTC_SERVER_PORT_BASE="${media_port}" \
   ALLOWED_ORIGINS="${BASE_URL}" REGISTRATION_ENABLED=true ALLOW_AD_HOC_ROOMS=true \
   JWT_SECRET=disposable-test-only-jwt-secret-at-least-32-bytes \

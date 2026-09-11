@@ -7,7 +7,8 @@
   },
   "scripts": {
     "test": "node community.cjs",
-    "install:browser": "playwright install chromium"
+    "install:browser": "playwright install chromium",
+    "install:browsers": "playwright install chromium firefox webkit"
   },
   "devDependencies": {
     "playwright": "1.63.0"
