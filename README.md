@@ -21,39 +21,30 @@ email-reset flow. See [limitations and security boundaries](docs/deployment.md#l
 
 ## Try the web UI locally
 
-Prerequisites: the pinned Rust toolchain, a native C++ build environment, Node/npm
-and checksum-pinned static OpenSSL. Follow the [development setup](docs/development.md)
-first; it covers macOS toolchain selection and native prerequisites.
+Prerequisites: rustup, a native C++ build environment and Node/npm. Follow the
+[development setup](docs/development.md) first for native prerequisites.
 
 From the repository root:
 
 ```sh
-build/install-openssl.sh "$PWD/target/openssl-3.5.8"
-export OPENSSL_DIR="$PWD/target/openssl-3.5.8"
-export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
-export OPENSSL_STATIC=1
-export PIP_CONSTRAINT="$PWD/build/pip-constraints.txt"
-npm ci --prefix web
-npm --prefix web run build
-cargo build --locked --release --bin simplestChat
+build/run-local.sh
 ```
 
-On a Mac, after building:
+The launcher selects the pinned Rust compiler even when Homebrew's Rust comes
+first, installs missing static OpenSSL, restores locked web dependencies, builds
+the UI and runs the debug server. On macOS it detects the active interface's LAN
+IPv4 address; elsewhere supply `ANNOUNCE_IP` explicitly. Use `--skip-web` to reuse
+built assets for a faster restart. HTTP stays on loopback with one media worker.
 
-```sh
-ANNOUNCE_IP="$(ipconfig getifaddr en0)" MEDIA_WORKERS=1 ALLOW_AD_HOC_ROOMS=true ./target/release/simplestChat
-```
-
-Use your active interface's LAN address if it is not `en0`. Open
-`http://localhost:3000` in two browser contexts and join the same room.
+Open `http://localhost:3000` in two browser contexts and join the same room.
 Joining does not capture or publish; use **Cam** or **Mic setup** explicitly.
 Advertise a reachable LAN address for manual browser media testing, even when
 loading the page from localhost.
 
-This starts guest-only mode unless database/auth settings are already present in
-your environment. Accounts and persistent rooms need a dedicated PostgreSQL
+This starts guest-only mode unless local database/auth settings are already present
+in your environment. Accounts and persistent rooms need a dedicated PostgreSQL
 database and JWT secret; see [full local UI setup](docs/development.md#accounts-and-persistent-rooms).
-Registration and ad-hoc rooms default closed. Startup migrations default off.
+The launcher enables ad-hoc rooms; registration and startup migrations remain opt-in.
 
 For live web development, see [web/README.md](web/README.md). The Rust server serves
 `web/dist`, so rebuild assets after changes unless using Vite's development server.

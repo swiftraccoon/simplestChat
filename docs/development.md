@@ -62,15 +62,39 @@ failures; preserve complete logs and exit statuses.
 
 ## Guest-only local UI
 
-After the build, on macOS:
+From the repository root:
 
 ```sh
-ANNOUNCE_IP="$(ipconfig getifaddr en0)" MEDIA_WORKERS=1 ALLOW_AD_HOC_ROOMS=true ./target/release/simplestChat
+build/run-local.sh
 ```
 
-Supply the active interface's LAN address if it is not `en0`. On Linux, supply
-the appropriate client-reachable address explicitly. Open `http://localhost:3000`
-in a normal and private browser window and join the same room.
+The launcher resolves the checkout relative to itself, explicitly selects the
+compiler/Cargo from `rust-toolchain.toml`, configures the pinned OpenSSL/Python
+environment, installs static OpenSSL if missing, and runs `npm ci` plus the web
+build before `cargo run --locked --bin simplestChat`. Native prerequisites still
+need to be installed; the first native build can take several minutes. It does
+not change your shell profile or global Rust default.
+
+For a restart without web installation/build:
+
+```sh
+build/run-local.sh --skip-web
+```
+
+That requires an existing `web/dist/index.html`; omit the flag after web changes.
+The normal launch restores dependencies from the lockfile every time. Do not
+launch/rebuild against assets being used by an in-progress browser test.
+
+On macOS the launcher tries the default-route interface, then `en0`. Override
+`ANNOUNCE_IP` when a VPN or another interface makes that choice inappropriate;
+on Linux supply the client-reachable IPv4 address explicitly. HTTP always binds
+to `127.0.0.1`, with default `PORT=3000`, `MEDIA_WORKERS=1` and
+`WEBRTC_SERVER_PORT_BASE=40000`. Occupied HTTP/media ports fail preflight without
+stopping their owners. The server's media sockets still bind all IPv4 interfaces.
+Use Ctrl-C to stop your foreground instance.
+
+Open `http://localhost:3000` in a normal and private browser window and join the
+same room.
 
 A manual browser test should advertise a real LAN address, even on the same
 machine. Loopback ICE candidates can fail despite successful signaling. The
@@ -79,20 +103,23 @@ establish compatibility with Firefox, Safari or real devices.
 
 Joining does not request camera/microphone access. Use **Cam** for initial setup,
 or **Mic setup** / **Media setup** for private preview, then explicitly publish.
-Rebuild `web/dist` after frontend changes and the server after Rust changes.
+The launcher rebuilds changed Rust code on every run.
 For a Vite development server, see [the web guide](../web/README.md).
 
 ## Accounts and persistent rooms
 
 Create a dedicated local development database using credentials you control.
 This setup modifies its schema; never use a production/shared database.
+The launcher inherits database/auth settings but never creates a database or
+enables migrations itself. It accepts only a loopback `DATABASE_URL`, with no
+query options other than `sslmode`; unset `DATABASE_URL` for guest-only mode.
 
 ```sh
 export DATABASE_URL='postgres://YOUR_USER:YOUR_PASSWORD@127.0.0.1:5432/simplestchat_dev?sslmode=disable'
 export JWT_SECRET="$(openssl rand -hex 32)"
 export RUN_MIGRATIONS=true
 export REGISTRATION_ENABLED=true
-ANNOUNCE_IP="$(ipconfig getifaddr en0)" MEDIA_WORKERS=1 ALLOW_AD_HOC_ROOMS=true ./target/release/simplestChat
+build/run-local.sh
 ```
 
 The schema includes `pg_trgm`; the development role needs permission to install
@@ -111,7 +138,7 @@ Email/password login does not require passkey settings.
 For a second instance without stopping an existing service, use unused ports:
 
 ```sh
-PORT=3109 MEDIA_WORKERS=1 WEBRTC_SERVER_PORT_BASE=41000 ANNOUNCE_IP="$(ipconfig getifaddr en0)" ALLOW_AD_HOC_ROOMS=true ./target/release/simplestChat
+PORT=3109 WEBRTC_SERVER_PORT_BASE=41000 build/run-local.sh --skip-web
 ```
 
 Browse `http://localhost:3109`, adjust the passkey origin, and use a separate
