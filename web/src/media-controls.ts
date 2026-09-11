@@ -22,6 +22,14 @@ interface PersonalPlaybackPreferences {
   quality: RemoteVideoQuality;
 }
 
+interface TilePlayback {
+  participantId: string;
+  controls: HTMLDetailsElement;
+  blockedNotice: HTMLElement;
+  blocked: Map<HTMLMediaElement, HTMLMediaElement['srcObject']>;
+  playbackVersion: number;
+}
+
 const MASTER_VOLUME_KEY = 'simplestchat.masterVolume';
 const SETUP_KEY = 'simplestchat.mediaSetupConfigured';
 
@@ -41,14 +49,18 @@ function volumeValue(value: number): number {
 export function applyPersonalPlayback(
   elements: Iterable<HTMLMediaElement>, preferences: Pick<PersonalPlaybackPreferences, 'volume' | 'muted' | 'hidden'>,
   masterVolume: number,
+  onPlaybackResult?: (element: HTMLMediaElement, error?: unknown) => void,
 ): void {
   for (const element of elements) {
     element.volume = volumeValue(preferences.volume) * volumeValue(masterVolume);
     element.muted = preferences.muted || preferences.hidden;
     if (preferences.hidden) element.pause();
     else if (element.paused && element.srcObject) {
-      // Browsers may require a separate click to allow playback; media controls remain available.
-      void element.play().catch(() => {});
+      // Invoke play synchronously so a retry retains the button's user activation.
+      void element.play().then(
+        () => onPlaybackResult?.(element),
+        error => onPlaybackResult?.(element, error),
+      );
     }
   }
 }
@@ -132,7 +144,7 @@ export class MediaPreview {
 }
 
 export class MediaControls {
-  private tiles = new Map<HTMLElement, { participantId: string; controls: HTMLDetailsElement }>();
+  private tiles = new Map<HTMLElement, TilePlayback>();
   private playback = new Map<string, PersonalPlaybackPreferences>();
   private toolbars = new Set<HTMLElement>();
   private preview: MediaPreview | null = null;
@@ -385,8 +397,20 @@ export class MediaControls {
       const text = document.createElement('span');
       text.textContent = `${participantName}'s broadcast is hidden for you.`;
       hiddenNotice.append(text, this.button('Restore broadcast', () => this.setHidden(participantId, false)));
-      tile.append(details, hiddenNotice);
-      this.tiles.set(tile, { participantId, controls: details });
+      const blockedNotice = document.createElement('div');
+      blockedNotice.className = 'personal-playback-blocked';
+      blockedNotice.hidden = true;
+      blockedNotice.setAttribute('role', 'status');
+      const explanation = document.createElement('span');
+      explanation.textContent = 'Your browser blocked playback.';
+      const retry = this.button('Enable playback', () => {
+        if (this.tiles.has(tile) && tile.isConnected) this.applyParticipant(participantId, tile);
+      });
+      retry.dataset['control'] = 'retry-playback';
+      retry.setAttribute('aria-label', `Enable playback for ${participantName}`);
+      blockedNotice.append(explanation, retry);
+      tile.append(details, hiddenNotice, blockedNotice);
+      this.tiles.set(tile, { participantId, controls: details, blockedNotice, blocked: new Map(), playbackVersion: 0 });
     }
     this.applyParticipant(participantId);
     const state = this.playback.get(participantId)!;
@@ -398,6 +422,7 @@ export class MediaControls {
     for (const [tile, info] of this.tiles) {
       if (info.participantId === participantId) {
         info.controls.remove();
+        info.blockedNotice.remove();
         tile.querySelector('.personal-media-hidden-notice')?.remove();
         this.tiles.delete(tile);
       }
@@ -434,12 +459,32 @@ export class MediaControls {
     this.options.getRoom()?.setRemoteMediaHidden(participantId, hidden);
   }
 
-  private applyParticipant(participantId: string): void {
+  private updatePlaybackNotice(tile: HTMLElement, info: TilePlayback, state: PersonalPlaybackPreferences): void {
+    const elements = Array.from(tile.querySelectorAll<HTMLMediaElement>('video, audio'));
+    for (const [element, source] of info.blocked) {
+      if (!elements.includes(element) || element.srcObject !== source || !element.paused) info.blocked.delete(element);
+    }
+    info.blockedNotice.hidden = state.hidden || state.muted || state.volume * this.masterVolume === 0 || info.blocked.size === 0;
+  }
+
+  private applyParticipant(participantId: string, onlyTile?: HTMLElement): void {
     const state = this.playback.get(participantId);
     if (!state) return;
     for (const [tile, info] of this.tiles) {
-      if (info.participantId !== participantId) continue;
-      applyPersonalPlayback(tile.querySelectorAll<HTMLMediaElement>('video, audio'), state, this.masterVolume);
+      if (info.participantId !== participantId || (onlyTile && tile !== onlyTile)) continue;
+      const version = ++info.playbackVersion;
+      const elements = Array.from(tile.querySelectorAll<HTMLMediaElement>('video, audio'));
+      const sources = new Map(elements.map(element => [element, element.srcObject]));
+      applyPersonalPlayback(elements, state, this.masterVolume, (element, error) => {
+        // A settled promise must not revive controls for a detached tile or an old stream.
+        if (this.tiles.get(tile) !== info || !tile.isConnected || version !== info.playbackVersion
+          || element.srcObject !== sources.get(element)) return;
+        if (error && typeof error === 'object' && 'name' in error && error.name === 'NotAllowedError') {
+          info.blocked.set(element, element.srcObject);
+        } else info.blocked.delete(element);
+        this.updatePlaybackNotice(tile, info, state);
+      });
+      this.updatePlaybackNotice(tile, info, state);
       tile.classList.toggle('personal-media-hidden', state.hidden);
       const notice = tile.querySelector<HTMLElement>('.personal-media-hidden-notice');
       if (notice) notice.hidden = !state.hidden;

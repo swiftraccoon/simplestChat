@@ -12,6 +12,7 @@
 .media-controls-toolbar button,
 .personal-media-controls button,
 .personal-media-hidden-notice button,
+.personal-playback-blocked button,
 .media-setup-dialog button {
   background: #263447;
   color: #edf3fa;
@@ -24,10 +25,12 @@
 .media-controls-toolbar button:hover,
 .personal-media-controls button:hover,
 .personal-media-hidden-notice button:hover,
+.personal-playback-blocked button:hover,
 .media-setup-dialog button:hover { background: #354964; }
 .media-setup-dialog :focus-visible,
 .personal-media-controls :focus-visible,
 .media-controls-toolbar :focus-visible,
+.personal-playback-blocked :focus-visible,
 .personal-media-hidden-notice :focus-visible { outline: 2px solid #80c4ff; outline-offset: 3px; }
 .media-setup-dialog {
   width: min(35rem, calc(100vw - 2rem));
@@ -74,6 +77,8 @@
 .personal-media-hidden > audio,
 .personal-media-hidden > .no-video-avatar { visibility: hidden; }
 .personal-media-hidden-notice { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.65rem; background: #15202c; color: #dbe8f7; padding: 2.4rem 0.6rem 1.7rem; font-size: 0.8rem; text-align: center; }
+.personal-playback-blocked { position: absolute; z-index: 4; bottom: 1.9rem; left: 0.6rem; right: 0.6rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.6rem; border-radius: 6px; background: #17212ef7; color: #edf3fa; font-size: 0.8rem; text-align: center; }
+.personal-playback-blocked[hidden],
 .personal-media-hidden-notice[hidden],
 .media-preview-video[hidden],
 .personal-media-controls button[hidden] { display: none; }
