@@ -70,6 +70,12 @@ pub struct TransportManager {
     bwe_trace_handlers: Arc<StdRwLock<HashMap<Uuid, Box<dyn Any + Send + Sync>>>>,
 }
 
+impl Default for TransportManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TransportManager {
     /// Creates a new TransportManager
     pub fn new() -> Self {
@@ -823,14 +829,18 @@ impl TransportManager {
         Ok(())
     }
 
-    /// Gets a participant's media state
+    /// Returns a snapshot containing cloned media handles, not an exclusive
+    /// owner. Fails if the session namespace is absent; callers must revalidate
+    /// membership before mutating resources from the snapshot.
     pub async fn get_participant(&self, participant_id: &str) -> MediaResult<ParticipantMedia> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let participant = participant_lock.lock().await;
         Ok(participant.clone())
     }
 
-    /// Removes a participant and closes all their transports
+    /// Evicts this session namespace, then closes its media under its own lock.
+    /// A second removal returns `ParticipantNotFound`; an old generation's
+    /// cleanup cannot erase a replacement generation's BWE callback.
     pub async fn remove_participant(&self, participant_id: &str) -> MediaResult<()> {
         // Remove from outer map (brief write lock)
         let participant_lock = {
@@ -1069,7 +1079,9 @@ impl TransportManager {
         }
     }
 
-    /// Closes all transports for all participants
+    /// Evicts all managed sessions and closes their media. Repeating after a
+    /// completed drain succeeds. The shutdown coordinator must first stop new
+    /// admissions and bound this future: per-session IPC/locks can stall.
     pub async fn close_all(&self) -> Result<()> {
         info!("Closing all transports");
 
@@ -1084,6 +1096,11 @@ impl TransportManager {
             self.clear_bwe_trace_handler(participant.generation);
             debug!("Closed all transports for participant: {}", participant_id);
         }
+
+        self.paused_producers
+            .write()
+            .unwrap_or_else(|error| error.into_inner())
+            .clear();
 
         Ok(())
     }

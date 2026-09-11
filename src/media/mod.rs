@@ -111,19 +111,26 @@ impl MediaServer {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
-    /// Gracefully shuts down all workers and cleans up resources
+    /// Attempt transport, router, and worker cleanup in order, allowing two
+    /// seconds per stage. Later stages still run after an error or timeout;
+    /// incomplete cleanup is logged and returned as an error.
     pub async fn shutdown(&self) -> Result<()> {
+        use crate::shutdown::run_stage;
+        use std::time::Duration;
         info!("Shutting down MediaServer");
-
-        // First close all transports
-        self.transport_manager.close_all().await?;
-
-        // Then close all routers
-        self.router_manager.close_all().await?;
-
-        // Finally close all workers
-        self.worker_manager.shutdown().await?;
-
+        let budget = Duration::from_secs(2);
+        let transports = run_stage(
+            "media transports",
+            budget,
+            self.transport_manager.close_all(),
+        )
+        .await;
+        let routers = run_stage("media routers", budget, self.router_manager.close_all()).await;
+        let workers = run_stage("media workers", budget, self.worker_manager.shutdown()).await;
+        anyhow::ensure!(
+            transports.is_ok() && routers.is_ok() && workers.is_ok(),
+            "Media shutdown incomplete"
+        );
         info!("MediaServer shutdown complete");
         Ok(())
     }

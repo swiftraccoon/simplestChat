@@ -102,6 +102,7 @@ pub struct MetricsCollector {
 }
 
 impl MetricsCollector {
+    #[cfg(test)]
     pub fn new(client_id: String) -> Self {
         Self::with_window(
             client_id,

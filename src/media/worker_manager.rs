@@ -27,6 +27,10 @@ fn select_worker_by_load(
         .ok_or_else(|| MediaError::WorkerError("No live media workers available".to_string()))
 }
 
+fn worker_has_capacity(worker_closed: bool, server_closed: Option<bool>) -> bool {
+    !worker_closed && server_closed == Some(false)
+}
+
 /// Manages a pool of mediasoup Workers
 pub struct WorkerManager {
     workers: Arc<RwLock<Vec<Worker>>>,
@@ -169,6 +173,9 @@ impl WorkerManager {
 
     /// Gets the least loaded worker based on real-time consumer counts.
     /// Returns both the Worker and its WorkerId (needed to look up the WebRtcServer).
+    /// Selection reserves one router-load slot before returning. The caller
+    /// must decrement that slot if router creation fails, or on router removal;
+    /// this is separate from the consumer counters used to choose a worker.
     ///
     /// # Errors
     /// Returns `MediaError::WorkerError` if no live workers are available
@@ -239,6 +246,21 @@ impl WorkerManager {
             debug!("Decremented load for worker {} to {}", worker_id, *count);
         }
         Ok(())
+    }
+
+    /// Counts workers with an open shared WebRTC listener without making IPC requests.
+    pub async fn live_worker_count(&self) -> usize {
+        let workers = self.workers.read().await;
+        let servers = self.webrtc_servers.read().await;
+        workers
+            .iter()
+            .filter(|worker| {
+                worker_has_capacity(
+                    worker.closed(),
+                    servers.get(&worker.id()).map(WebRtcServer::closed),
+                )
+            })
+            .count()
     }
 
     /// Gets current worker statistics
@@ -499,6 +521,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn closed_workers_or_listeners_have_no_ready_capacity() {
+        assert!(worker_has_capacity(false, Some(false)));
+        assert!(!worker_has_capacity(true, Some(false)), "dead worker");
+        assert!(!worker_has_capacity(false, Some(true)), "closed listener");
+        assert!(!worker_has_capacity(true, Some(true)));
+        assert!(
+            !worker_has_capacity(false, None),
+            "listener not initialized"
+        );
+    }
+
+    #[test]
     fn worker_selection_skips_unavailable_workers() {
         assert_eq!(
             select_worker_by_load([None, Some(8), Some(3), None]).unwrap(),
@@ -537,8 +571,12 @@ mod tests {
         assert!(manager.is_ok());
 
         if let Ok(manager) = manager {
+            assert_eq!(manager.live_worker_count().await, 1);
             let worker = manager.get_least_loaded_worker().await;
             assert!(worker.is_ok());
+            drop(worker);
+            manager.shutdown().await.unwrap();
+            assert_eq!(manager.live_worker_count().await, 0);
         }
     }
 }

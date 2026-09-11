@@ -14,6 +14,22 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
+/// Keep handler futures small without changing their HTTP error responses.
+#[derive(Debug)]
+pub struct RoomApiError(Box<Response>);
+
+impl From<Response> for RoomApiError {
+    fn from(response: Response) -> Self {
+        Self(Box::new(response))
+    }
+}
+
+impl IntoResponse for RoomApiError {
+    fn into_response(self) -> Response {
+        *self.0
+    }
+}
+
 #[derive(Serialize)]
 pub struct RoomListItem {
     pub id: String,
@@ -69,7 +85,7 @@ const MAX_ROOM_SEARCH_CHARACTERS: usize = 128;
 
 fn acquire_room_api_request(
     server: &SignalingServer,
-) -> Result<tokio::sync::OwnedSemaphorePermit, Response> {
+) -> Result<tokio::sync::OwnedSemaphorePermit, RoomApiError> {
     server.try_acquire_room_api_request().ok_or_else(|| {
         (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -77,6 +93,7 @@ fn acquire_room_api_request(
             "Service busy",
         )
             .into_response()
+            .into()
     })
 }
 
@@ -139,7 +156,7 @@ fn list_window(params: &ListParams) -> Result<(i64, i64), &'static str> {
 pub async fn list_rooms(
     State(server): State<SignalingServer>,
     Query(params): Query<ListParams>,
-) -> Result<Json<Vec<RoomListItem>>, Response> {
+) -> Result<Json<Vec<RoomListItem>>, RoomApiError> {
     let search_pattern = params
         .q
         .as_deref()
@@ -205,7 +222,7 @@ pub async fn create_room(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(req): Json<CreateRoomRequest>,
-) -> Result<Json<RoomSettings>, Response> {
+) -> Result<Json<RoomSettings>, RoomApiError> {
     let _request_permit = acquire_room_api_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers)
         .await
@@ -219,11 +236,12 @@ pub async fn create_room(
             StatusCode::TOO_MANY_REQUESTS,
             "Room creation is rate limited",
         )
-            .into_response());
+            .into_response()
+            .into());
     }
 
     if let Err(message) = settings::validate_create_request(&req) {
-        return Err((StatusCode::BAD_REQUEST, message).into_response());
+        return Err((StatusCode::BAD_REQUEST, message).into_response().into());
     }
     let password_hash = match req.password.clone() {
         Some(password) => Some(
@@ -244,6 +262,9 @@ pub async fn create_room(
         .create_persisted_room(&owner_id, &req, password_hash.as_deref())
         .await
         .map_err(|error| {
+            if server.room_manager().drain_signal().is_draining() {
+                return (StatusCode::SERVICE_UNAVAILABLE, "Server shutting down").into_response();
+            }
             if settings::is_global_persisted_room_quota_error(&error) {
                 return (
                     StatusCode::SERVICE_UNAVAILABLE,
@@ -280,12 +301,14 @@ pub async fn delete_room(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(room_id): Path<String>,
-) -> Result<StatusCode, Response> {
+) -> Result<StatusCode, RoomApiError> {
     if !settings::valid_room_id(&room_id) {
-        return Err((StatusCode::NOT_FOUND, "Room not found").into_response());
+        return Err((StatusCode::NOT_FOUND, "Room not found")
+            .into_response()
+            .into());
     }
     if server.db_pool().is_none() {
-        return Err(AuthError::NotConfigured.into_response());
+        return Err(AuthError::NotConfigured.into_response().into());
     }
     let _request_permit = acquire_room_api_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers)
@@ -307,7 +330,9 @@ pub async fn delete_room(
     match result {
         DeleteRoomResult::Deleted => Ok(StatusCode::NO_CONTENT),
         DeleteRoomResult::Forbidden | DeleteRoomResult::NotFound => {
-            Err((StatusCode::NOT_FOUND, "Room not found").into_response())
+            Err((StatusCode::NOT_FOUND, "Room not found")
+                .into_response()
+                .into())
         }
     }
 }
@@ -316,7 +341,7 @@ pub async fn delete_room(
 pub async fn owned_rooms(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
-) -> Result<(HeaderMap, Json<Vec<RoomListItem>>), Response> {
+) -> Result<(HeaderMap, Json<Vec<RoomListItem>>), RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers)
         .await
@@ -349,9 +374,11 @@ pub async fn update_room_identity(
     headers: HeaderMap,
     Path(id): Path<String>,
     Json(request): Json<RoomIdentityUpdate>,
-) -> Result<Json<RoomListItem>, Response> {
+) -> Result<Json<RoomListItem>, RoomApiError> {
     if !settings::valid_room_id(&id) {
-        return Err((StatusCode::NOT_FOUND, "Room not found").into_response());
+        return Err((StatusCode::NOT_FOUND, "Room not found")
+            .into_response()
+            .into());
     }
     let _permit = acquire_room_api_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers)
@@ -366,7 +393,9 @@ pub async fn update_room_identity(
         .await
         .map_err(|error| AuthError::DatabaseError(error.to_string()).into_response())?
     {
-        return Err((StatusCode::NOT_FOUND, "Room not found").into_response());
+        return Err((StatusCode::NOT_FOUND, "Room not found")
+            .into_response()
+            .into());
     }
     let row = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret FROM rooms WHERE id = $1 AND owner_id = $2")
         .bind(&id).bind(owner).fetch_optional(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?).await
@@ -378,6 +407,29 @@ pub async fn update_room_identity(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn compact_api_error_preserves_http_response() {
+        let original = (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [
+                (header::RETRY_AFTER, "1"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
+            "Service busy",
+        )
+            .into_response();
+        let expected_headers = original.headers().clone();
+        let response = RoomApiError::from(original).into_response();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers(), &expected_headers);
+        assert_eq!(
+            axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap(),
+            "Service busy",
+        );
+    }
 
     #[test]
     fn list_window_bounds_page_and_requested_limit() {

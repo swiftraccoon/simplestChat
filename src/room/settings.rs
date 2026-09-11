@@ -286,9 +286,27 @@ pub async fn create_room(
     })
 }
 
-/// Apply partial updates to an in-memory RoomSettings struct.
-/// Only fields that are `Some` are updated; `None` fields are left unchanged.
-#[allow(clippy::too_many_arguments)]
+/// Apply a validated patch to the in-memory projection of room settings.
+///
+/// Ordinary `Option<bool>` fields leave the current value unchanged for `None`
+/// and replace it for `Some(value)`. Nullable limits and the password have three
+/// states matching the wire contract:
+///
+/// | Rust value | JSON patch | Effect |
+/// | --- | --- | --- |
+/// | `None` | field omitted | Preserve the current value |
+/// | `Some(None)` | `null` | Remove the room-specific limit or password |
+/// | `Some(Some(value))` | an explicit value | Replace the current value |
+///
+/// A zero limit is not the same as removing a limit. This helper neither checks
+/// authorization/ranges nor persists changes; the caller must validate the
+/// request and coordinate it with the database and current room generation.
+/// Password input updates only `password_protected`; the plaintext is never
+/// stored in [`RoomSettings`]. Database persistence receives a hash separately.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "explicit patch fields mirror the wire contract and persistence order"
+)]
 pub fn apply_settings_update(
     settings: &mut RoomSettings,
     moderated: Option<bool>,
@@ -351,9 +369,26 @@ pub fn apply_settings_update(
     }
 }
 
-/// Persist partial room settings updates to the database.
-/// Only updates columns whose corresponding parameter is `Some`.
-#[allow(clippy::too_many_arguments)]
+/// Persist selected room-setting columns in one parameter-bound SQL update.
+///
+/// Only parameters with an outer `Some` enter the update. For nullable limits
+/// and `password_hash`, `None` preserves the column, `Some(None)` writes SQL
+/// `NULL`, and `Some(Some(value))` replaces it. Pass a prepared password **hash**,
+/// never plaintext. If every parameter is omitted, no query is executed.
+///
+/// This helper does not authorize, validate limits, update live room state or
+/// check the number of affected rows. In particular, a missing room is not a
+/// distinct error here. The owning room operation must serialize persistence
+/// with the appropriate runtime generation and enforce those preconditions.
+///
+/// # Errors
+/// Returns the database error if the update fails. It does not open a transaction
+/// with other mutations or provide a retry/idempotency token; callers must not
+/// infer that an interrupted response means the database remained unchanged.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "explicit patch fields preserve nullable updates and SQL binding order"
+)]
 pub async fn update_room_settings(
     pool: &PgPool,
     room_id: &str,
@@ -374,13 +409,12 @@ pub async fn update_room_settings(
 ) -> Result<(), sqlx::Error> {
     // Build a dynamic SET clause for only the provided fields
     let mut set_parts: Vec<String> = Vec::new();
-    let mut param_idx: usize = 2; // $1 is room_id
 
     macro_rules! maybe_add {
         ($opt:expr, $col:expr) => {
             if $opt.is_some() {
-                set_parts.push(format!("{} = ${}", $col, param_idx));
-                param_idx += 1;
+                // $1 is room_id; subsequent parameters follow insertion order.
+                set_parts.push(format!("{} = ${}", $col, set_parts.len() + 2));
             }
         };
     }

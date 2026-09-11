@@ -774,10 +774,7 @@ mod tests {
 
     #[test]
     fn dummy_password_hash_is_valid_and_never_matches_an_arbitrary_password() {
-        assert_eq!(
-            password::verify_password("not-the-dummy-password", DUMMY_PASSWORD_HASH).unwrap(),
-            false
-        );
+        assert!(!password::verify_password("not-the-dummy-password", DUMMY_PASSWORD_HASH).unwrap());
     }
 
     #[test]

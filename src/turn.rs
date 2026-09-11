@@ -41,7 +41,7 @@ impl TurnConfig {
         };
         let secret = std::env::var("TURN_SECRET")
             .map_err(|_| anyhow::anyhow!("TURN_SECRET is required when TURN_URLS is set"))?;
-        if secret.as_bytes().len() < 32 {
+        if secret.len() < 32 {
             anyhow::bail!("TURN_SECRET must contain at least 32 bytes");
         }
         let ttl_secs = std::env::var("TURN_TTL")
@@ -115,7 +115,7 @@ mod tests {
         mac.update(b"Hi There");
         let digest = mac.finalize().into_bytes();
         assert_eq!(
-            hex::encode(&digest),
+            hex::encode(digest),
             "b617318655057264e28bc0b6fb378c8ef146be00"
         );
         assert_eq!(

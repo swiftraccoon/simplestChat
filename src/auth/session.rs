@@ -125,6 +125,7 @@ fn family_secret(raw_token: &str) -> Option<Vec<u8>> {
     Some(family)
 }
 
+#[cfg(test)]
 pub(crate) async fn create_session(
     pool: &PgPool,
     user_id: &Uuid,

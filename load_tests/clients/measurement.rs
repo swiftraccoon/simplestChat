@@ -209,17 +209,16 @@ impl Measurements {
     }
 
     fn record_ssrc(&self, ssrc: u32) {
-        if let Some(bucket) = self.window.bucket(Instant::now()) {
-            if let Some(consumer) = self
+        if let Some(bucket) = self.window.bucket(Instant::now())
+            && let Some(consumer) = self
                 .consumers
                 .lock()
                 .unwrap()
                 .iter_mut()
                 .rev()
                 .find(|c| c.ssrc == ssrc && c.closed.is_none())
-            {
-                consumer.packets_by_second[bucket] += 1;
-            }
+        {
+            consumer.packets_by_second[bucket] += 1;
         }
     }
 

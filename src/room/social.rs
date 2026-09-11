@@ -13,6 +13,25 @@ const MAX_REPORTS: usize = 500;
 const MAX_RUNTIME_BANS: usize = 2000;
 const PAGE_SIZE: usize = 100;
 
+type BanRow = (
+    Uuid,
+    Option<String>,
+    bool,
+    Option<String>,
+    Option<chrono::DateTime<chrono::Utc>>,
+);
+type ReportRow = (
+    Uuid,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    chrono::DateTime<chrono::Utc>,
+    Option<chrono::DateTime<chrono::Utc>>,
+);
+
 #[derive(Clone)]
 pub(crate) struct ParticipantSocial {
     joined_sequence: u64,
@@ -671,7 +690,8 @@ mod tests {
                 .iter()
                 .all(|p| p["id"] != owner.id && p["authenticated"] == true)
         );
-        manager.shutdown().await;
+        manager.shutdown().await.unwrap();
+        manager.media_server().shutdown().await.unwrap();
         sqlx::query("DELETE FROM rooms WHERE id=ANY($1)")
             .bind(vec![room_id, other_room_id])
             .execute(&pool)
@@ -1221,7 +1241,7 @@ impl RoomManager {
                         .db_pool
                         .as_ref()
                         .ok_or_else(|| rejected("Ban service unavailable"))?;
-                    let rows:Vec<(Uuid,Option<String>,bool,Option<String>,Option<chrono::DateTime<chrono::Utc>>)>=sqlx::query_as(
+                    let rows: Vec<BanRow> = sqlx::query_as(
                         "SELECT s.id,u.display_name,s.user_id IS NOT NULL,s.reason,s.expires_at FROM room_states s LEFT JOIN users u ON u.id=s.user_id WHERE s.room_id=$1 AND s.state='banned' AND (s.expires_at IS NULL OR s.expires_at>now()) ORDER BY s.created_at DESC,s.id LIMIT 101 OFFSET $2")
                         .bind(room_id).bind(offset as i64).fetch_all(pool).await?;
                     rows.into_iter()
@@ -1487,7 +1507,7 @@ impl RoomManager {
                         .db_pool
                         .as_ref()
                         .ok_or_else(|| rejected("Report service unavailable"))?;
-                    let rows:Vec<(Uuid,String,String,String,String,String,String,chrono::DateTime<chrono::Utc>,Option<chrono::DateTime<chrono::Utc>>)>=sqlx::query_as("SELECT id,reporter_id,reporter_name,target_participant_id,target_name,reason,status,created_at,resolved_at FROM room_reports WHERE room_id=$1 ORDER BY created_at DESC,id LIMIT 101 OFFSET $2")
+                    let rows: Vec<ReportRow> = sqlx::query_as("SELECT id,reporter_id,reporter_name,target_participant_id,target_name,reason,status,created_at,resolved_at FROM room_reports WHERE room_id=$1 ORDER BY created_at DESC,id LIMIT 101 OFFSET $2")
                         .bind(room_id).bind(offset as i64).fetch_all(pool).await?;
                     rows.into_iter()
                         .map(

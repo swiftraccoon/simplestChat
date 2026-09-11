@@ -112,17 +112,17 @@ impl PeerConnectionEventHandler for TransportEvents {
     }
 
     async fn on_ice_connection_state_change(&self, state: RTCIceConnectionState) {
-        if let Some(metrics) = &self.metrics {
-            if metrics.diagnostics_enabled() {
-                metrics.diagnostic_event_for_attempt(
-                    self.diagnostic_attempt,
-                    "ice-state",
-                    serde_json::json!({
-                        "transportId": self.transport_id,
-                        "state": state.to_string(),
-                    }),
-                );
-            }
+        if let Some(metrics) = &self.metrics
+            && metrics.diagnostics_enabled()
+        {
+            metrics.diagnostic_event_for_attempt(
+                self.diagnostic_attempt,
+                "ice-state",
+                serde_json::json!({
+                    "transportId": self.transport_id,
+                    "state": state.to_string(),
+                }),
+            );
         }
         debug!(
             "{}: Transport {} ICE state: {:?}",
@@ -135,14 +135,14 @@ impl PeerConnectionEventHandler for TransportEvents {
         let metrics = self.metrics.clone();
         let transport_id = self.transport_id.clone();
         let diagnostic_attempt = self.diagnostic_attempt;
-        if let Some(metrics) = &metrics {
-            if metrics.diagnostics_enabled() {
-                metrics.diagnostic_event_for_attempt(
-                    diagnostic_attempt,
-                    "track-callback",
-                    serde_json::json!({"transportId": transport_id}),
-                );
-            }
+        if let Some(metrics) = &metrics
+            && metrics.diagnostics_enabled()
+        {
+            metrics.diagnostic_event_for_attempt(
+                diagnostic_attempt,
+                "track-callback",
+                serde_json::json!({"transportId": transport_id}),
+            );
         }
         let mut cancellation = self.cancellation.clone();
         // Return promptly: event dispatch must not wait for a track's lifetime.
@@ -169,7 +169,7 @@ impl PeerConnectionEventHandler for TransportEvents {
                             }
                             metrics.record_rtp_received(packet.header.ssrc, packet.payload.len());
                         }
-                        if count % 500 == 0 {
+                        if count.is_multiple_of(500) {
                             debug!(
                                 "{}: Received {} RTP packets (ssrc={})",
                                 client_id, count, packet.header.ssrc
@@ -177,10 +177,10 @@ impl PeerConnectionEventHandler for TransportEvents {
                         }
                     }
                     TrackRemoteEvent::OnError => {
-                        if !*cancellation.borrow() {
-                            if let Some(metrics) = &metrics {
-                                metrics.record_error("Remote RTP track error".into());
-                            }
+                        if !*cancellation.borrow()
+                            && let Some(metrics) = &metrics
+                        {
+                            metrics.record_error("Remote RTP track error".into());
                         }
                         break;
                     }
@@ -331,7 +331,6 @@ impl WebRtcTransport {
             RTCRtpCodecParameters {
                 rtp_codec: audio_codec(),
                 payload_type: 111,
-                ..Default::default()
             },
             RtpCodecKind::Audio,
         )?;
@@ -339,7 +338,6 @@ impl WebRtcTransport {
             RTCRtpCodecParameters {
                 rtp_codec: video_codec(),
                 payload_type: 96,
-                ..Default::default()
             },
             RtpCodecKind::Video,
         )?;
@@ -550,30 +548,6 @@ impl WebRtcTransport {
         Ok(())
     }
 
-    /// Add an audio track for sending RTP.
-    pub async fn add_audio_track(&self) -> Result<Arc<TrackLocalStaticRTP>> {
-        attach_local_track(
-            &self.peer_connection,
-            &self.client_id,
-            RtpCodecKind::Audio,
-            audio_codec(),
-            self.cancellation.subscribe(),
-        )
-        .await
-    }
-
-    /// Add a video track for sending RTP.
-    pub async fn add_video_track(&self) -> Result<Arc<TrackLocalStaticRTP>> {
-        attach_local_track(
-            &self.peer_connection,
-            &self.client_id,
-            RtpCodecKind::Video,
-            video_codec(),
-            self.cancellation.subscribe(),
-        )
-        .await
-    }
-
     /// Record a consumer for later SDP renegotiation (does NOT renegotiate yet).
     ///
     /// Call `renegotiate_consumers()` after all consumers are recorded to do a
@@ -711,21 +685,6 @@ impl WebRtcTransport {
         Ok(())
     }
 
-    /// Add a consumer and immediately renegotiate (legacy single-consumer path)
-    pub async fn add_consumer(
-        &mut self,
-        kind: MediaKind,
-        consumer_rtp_parameters: &RtpParameters,
-    ) -> Result<()> {
-        self.add_consumer_info(kind, consumer_rtp_parameters);
-        self.renegotiate_consumers().await
-    }
-
-    /// Get the peer connection for direct access
-    pub fn peer_connection(&self) -> Arc<dyn PeerConnection> {
-        Arc::clone(&self.peer_connection)
-    }
-
     /// Lifetime RTC counters are diagnostic evidence, not steady-window metrics.
     /// The caller bounds this entire operation, including peer/session locks.
     async fn diagnostic_snapshot(&self) -> Result<serde_json::Value> {
@@ -814,15 +773,14 @@ impl WebRtcTransport {
             } else if line.starts_with("m=video") {
                 in_audio = false;
                 in_video = true;
-            } else if let Some(ssrc_str) = line.strip_prefix("a=ssrc:") {
-                if let Some(ssrc_num_str) = ssrc_str.split_whitespace().next() {
-                    if let Ok(ssrc) = ssrc_num_str.parse::<u32>() {
-                        if in_audio && audio_ssrc.is_none() {
-                            audio_ssrc = Some(ssrc);
-                        } else if in_video && video_ssrc.is_none() {
-                            video_ssrc = Some(ssrc);
-                        }
-                    }
+            } else if let Some(ssrc_str) = line.strip_prefix("a=ssrc:")
+                && let Some(ssrc_num_str) = ssrc_str.split_whitespace().next()
+                && let Ok(ssrc) = ssrc_num_str.parse::<u32>()
+            {
+                if in_audio && audio_ssrc.is_none() {
+                    audio_ssrc = Some(ssrc);
+                } else if in_video && video_ssrc.is_none() {
+                    video_ssrc = Some(ssrc);
                 }
             }
         }
@@ -934,20 +892,6 @@ impl WebRtcSession {
 
         self.recv_transport = Some(transport);
         Ok(local_dtls)
-    }
-
-    /// Get audio track (created during send transport setup)
-    pub fn produce_audio(&self) -> Result<Arc<TrackLocalStaticRTP>> {
-        self.audio_track
-            .clone()
-            .context("No audio track (send transport not created?)")
-    }
-
-    /// Get video track (created during send transport setup)
-    pub fn produce_video(&self) -> Result<Arc<TrackLocalStaticRTP>> {
-        self.video_track
-            .clone()
-            .context("No video track (send transport not created?)")
     }
 
     /// Get the actual SSRCs assigned by webrtc-rs for the send transport
@@ -1143,10 +1087,9 @@ fn sanitize_sdp_media(sdp: &str) -> Vec<SdpMediaDiagnostic> {
                 .strip_prefix("a=ssrc:")
                 .and_then(|value| value.split_whitespace().next())
                 .and_then(|value| value.parse::<u32>().ok())
+                && !section.ssrcs.contains(&ssrc)
             {
-                if !section.ssrcs.contains(&ssrc) {
-                    section.ssrcs.push(ssrc);
-                }
+                section.ssrcs.push(ssrc);
             }
         }
     }
@@ -1344,7 +1287,7 @@ mod migration_tests {
         peer: &Arc<dyn PeerConnection>,
         index: usize,
     ) -> Result<LoopbackTrack> {
-        let (kind, codec_kind, codec) = if index % 2 == 0 {
+        let (kind, codec_kind, codec) = if index.is_multiple_of(2) {
             (MediaKind::Audio, RtpCodecKind::Audio, audio_codec())
         } else {
             (MediaKind::Video, RtpCodecKind::Video, video_codec())
@@ -1459,7 +1402,6 @@ mod migration_tests {
                         RTCRtpCodecParameters {
                             rtp_codec: codec,
                             payload_type,
-                            ..Default::default()
                         },
                         kind,
                     )?;

@@ -105,7 +105,10 @@ pub async fn load_punitive_state(
 /// Persist or remove a camera/chat sanction. Guest rows use the partial unique
 /// identity index installed by migration 012 so concurrent moderation cannot
 /// create duplicate state for one canonical IP cohort.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "sanction persistence keeps actor, target identity, and mutation fields explicit"
+)]
 pub async fn set_punitive_state(
     pool: &PgPool,
     room_id: &str,

@@ -122,8 +122,26 @@ curl --fail \
 
 `METRICS_TOKEN` must be at least 32 bytes; without it the endpoint returns 404.
 Keep tokens out of command history and monitoring logs. Monitor active
-connections, rooms, participants, errors and message latency. `GET /health`
-reports process liveness only, not database readiness.
+connections, rooms, participants, errors and message latency. The
+`simplestchat_media_workers_live` gauge counts open workers with open WebRTC
+listeners; a timed-out snapshot reports zero. Failed workers are not replaced
+automatically: restart the server to restore capacity.
+
+Use `GET /health` for process liveness and `GET /ready` for load-balancer
+readiness. `/ready` returns 503 when no media capacity remains, a configured
+database fails its one-second probe, or shutdown has begun. Probe concurrency
+is capped at four (additional probes return 503).
+Guest-only mode does not require a database. This does not verify client ICE or
+TURN connectivity; see
+[readiness details](configuration.md#health-and-readiness).
+
+Stop the application with `SIGTERM` (as Compose does). It closes admission,
+notifies existing sockets, cancels reconnect grace, and drains room/media/DB
+resources. Cleanup stages have 16 seconds of total asynchronous budgets plus
+one second for runtime teardown; incomplete stages log errors and exit nonzero.
+Keep Compose's 30-second hard-stop allowance for stalled native code. Existing
+requests may finish during drain; shutdown is not a delivery or transaction
+completion guarantee. See [shutdown behavior](configuration.md#shutdown).
 
 ## TURN relay controls
 

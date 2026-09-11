@@ -4,6 +4,23 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.98.1"
 
+# First-party targets only; dependencies keep their own policies.
+# https://doc.rust-lang.org/cargo/reference/manifest.html#the-lints-section
+[lints.rust]
+unsafe_code = "forbid"
+warnings = "deny"
+unfulfilled_lint_expectations = "deny"
+
+# Keep the reviewed default lint baseline strict without enabling all pedantic
+# or restriction lints. Name async lifetime checks explicitly for this server.
+# https://rust-lang.github.io/rust-clippy/master/index.html
+[lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+await_holding_lock = "deny"
+await_holding_refcell_ref = "deny"
+let_underscore_future = "deny"
+
 [features]
 default = []
 # Keep the synthetic WebRTC client and its dependency graph out of production

@@ -11,8 +11,6 @@
 use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use mediasoup::prelude::*;
-use rand;
-use serde_json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
@@ -548,11 +546,10 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
     } else {
         0
     };
-    let clients_per_room = if config.num_rooms > 0 {
-        (config.num_clients + config.num_rooms - 1) / config.num_rooms
-    } else {
-        config.num_clients
-    };
+    let clients_per_room = std::num::NonZeroUsize::new(config.num_rooms)
+        .map_or(config.num_clients, |rooms| {
+            config.num_clients.div_ceil(rooms.get())
+        });
 
     println!("\n=== Starting Load Test ===");
     println!("Clients: {}", config.num_clients);
@@ -613,7 +610,7 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
     let churner_start_idx = config.num_clients.saturating_sub(num_churners);
 
     // Spawn clients with gradual ramp-up
-    for i in 0..config.num_clients {
+    for (i, collector) in metrics_collectors.iter().enumerate() {
         let client_id = format!("client-{}", i);
         let participant_name = format!("TestUser{}", i);
         let room_id = if config.num_rooms <= 1 {
@@ -641,7 +638,7 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
             consume_existing_producers: true,
         };
 
-        let metrics = metrics_collectors[i].clone();
+        let metrics = collector.clone();
 
         let handle = tokio::spawn(run_client(client_config, client_id, metrics));
         handles.push(handle);
@@ -1324,10 +1321,8 @@ async fn run_client_inner(
     // Cap at 5s to avoid blocking setup. Any remaining consumers are handled by
     // receive_messages_loop which has its own batching.
     if expected_consumers > 0 {
-        let overall_timeout = Duration::from_millis(std::cmp::min(
-            5000,
-            std::cmp::max(1000, (expected_consumers as u64) * 10),
-        ));
+        let overall_timeout =
+            Duration::from_millis(((expected_consumers as u64) * 10).clamp(1000, 5000));
         let consumer_deadline = tokio::time::Instant::now() + overall_timeout;
         let mut received_consumers = pending_resumes.len();
 
@@ -1344,30 +1339,27 @@ async fn run_client_inner(
         {
             tokio::select! {
                 msg = read.next() => {
-                    match msg {
-                        Some(Ok(Message::Text(text))) => {
-                            if let Ok(server_msg) = serde_json::from_str::<ServerMessage>(&text) {
-                                let was_consumer = matches!(server_msg, ServerMessage::ConsumerCreated { .. });
-                                handle_server_message(
-                                    server_msg,
-                                    &metrics,
-                                    &client_id,
-                                    &mut write,
-                                    &rtp_capabilities,
-                                    &webrtc_session,
-                                    &mut needs_renegotiation,
-                                    &mut pending_resumes,
-                                    &mut audio_consumes_sent,
-                                    &mut video_consumes_sent,
-                                    config.max_audio_consumers,
-                                    config.max_video_consumers,
-                                ).await;
-                                if was_consumer {
-                                    received_consumers += 1;
-                                }
-                            }
+                    if let Some(Ok(Message::Text(text))) = msg
+                        && let Ok(server_msg) = serde_json::from_str::<ServerMessage>(&text)
+                    {
+                        let was_consumer = matches!(server_msg, ServerMessage::ConsumerCreated { .. });
+                        handle_server_message(
+                            server_msg,
+                            &metrics,
+                            &client_id,
+                            &mut write,
+                            &rtp_capabilities,
+                            &webrtc_session,
+                            &mut needs_renegotiation,
+                            &mut pending_resumes,
+                            &mut audio_consumes_sent,
+                            &mut video_consumes_sent,
+                            config.max_audio_consumers,
+                            config.max_video_consumers,
+                        ).await;
+                        if was_consumer {
+                            received_consumers += 1;
                         }
-                        _ => {}
                     }
                 }
                 _ = tokio::time::sleep(Duration::from_millis(200)) => {
@@ -1515,17 +1507,17 @@ async fn run_client_inner(
     tracing::info!("{}: Session duration completed, shutting down", client_id);
     if let Some(task) = media_task {
         task.abort();
-        if let Err(error) = task.await {
-            if !error.is_cancelled() {
-                metrics.record_error(format!("Media task failed: {error}"));
-            }
+        if let Err(error) = task.await
+            && !error.is_cancelled()
+        {
+            metrics.record_error(format!("Media task failed: {error}"));
         }
     }
     receive_task.abort();
-    if let Err(error) = receive_task.await {
-        if !error.is_cancelled() {
-            metrics.record_error(format!("Receive task failed: {error}"));
-        }
+    if let Err(error) = receive_task.await
+        && !error.is_cancelled()
+    {
+        metrics.record_error(format!("Receive task failed: {error}"));
     }
 
     // Close PeerConnections synchronously before returning
@@ -1802,6 +1794,10 @@ mod watchdog_tests {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "The owned receiver task takes its session resources, limits and pending producer events explicitly."
+)]
 async fn receive_messages_loop(
     mut read: futures_util::stream::SplitStream<
         tokio_tungstenite::WebSocketStream<
@@ -1961,7 +1957,7 @@ async fn receive_messages_loop(
             let batch_size = pending_resumes.len();
 
             // Adaptive SSRC wait
-            let ssrc_wait_ms = std::cmp::min(200, std::cmp::max(50, batch_size as u64 * 5));
+            let ssrc_wait_ms = (batch_size as u64 * 5).clamp(50, 200);
             let ssrc_deadline = tokio::time::Instant::now() + Duration::from_millis(ssrc_wait_ms);
             let mut ws_dead = false;
             loop {
@@ -2065,6 +2061,10 @@ async fn receive_messages_loop(
 const DEFAULT_MAX_AUDIO_CONSUMERS: usize = 4;
 const DEFAULT_MAX_VIDEO_CONSUMERS: usize = 4;
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "The shared initial/live signaling handler borrows subscription state explicitly without transferring ownership."
+)]
 async fn handle_server_message(
     msg: ServerMessage,
     metrics: &Arc<MetricsCollector>,
@@ -2409,22 +2409,22 @@ fn print_usage() {
     println!("\nExamples:");
     println!("  # Basic load test");
     println!("  cargo run --features load-test --bin load_test -- --clients 10 --duration 60");
-    println!("");
+    println!();
     println!("  # Multi-room: 1000 clients across 16 rooms (one per worker)");
     println!(
         "  cargo run --features load-test --bin load_test -- --clients 1000 --rooms 16 --duration 30"
     );
-    println!("");
+    println!();
     println!("  # Webinar: 10 presenters, 990 viewers");
     println!(
         "  cargo run --features load-test --bin load_test -- --clients 1000 --mode webinar --duration 60"
     );
-    println!("");
+    println!();
     println!("  # Churn test: 5 clients reconnecting per second");
     println!(
         "  cargo run --features load-test --bin load_test -- --clients 100 --churn-rate 5 --duration 60"
     );
-    println!("");
+    println!();
     println!("  # Panel discussions: 10% publish, 16 rooms");
     println!(
         "  cargo run --features load-test --bin load_test -- --clients 1000 --rooms 16 --mode panel"

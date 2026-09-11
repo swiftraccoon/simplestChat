@@ -4,6 +4,7 @@
 
 pub mod connection;
 pub mod protocol;
+mod readiness;
 
 use crate::auth::webauthn::ChallengeStore;
 use crate::metrics::ServerMetrics;
@@ -271,11 +272,14 @@ pub struct SignalingServer {
     turn_config: Option<Arc<TurnConfig>>,
     grace_periods: GracePeriodMap,
     metrics: ServerMetrics,
+    readiness: readiness::ReadinessState,
     connection_semaphore: Arc<Semaphore>,
+    max_connections: usize,
     ip_connection_limiter: IpConnectionLimiter,
     ws_handshake_guard: AuthGuard,
     auth_guard: AuthGuard,
     password_work: Arc<Semaphore>,
+    max_password_work: usize,
     principal_auth_limiter: PrincipalRateLimiter,
     room_creation_limiter: PrincipalRateLimiter,
     room_api_guard: AuthGuard,
@@ -311,7 +315,7 @@ impl SignalingServer {
 
         let jwt_secret = std::env::var("JWT_SECRET").ok();
         if let Some(secret) = jwt_secret.as_deref()
-            && secret.as_bytes().len() < 32
+            && secret.len() < 32
         {
             anyhow::bail!("JWT_SECRET must contain at least 32 bytes");
         }
@@ -323,7 +327,7 @@ impl SignalingServer {
 
         let metrics_token = std::env::var("METRICS_TOKEN").ok();
         if let Some(token) = metrics_token.as_deref()
-            && token.as_bytes().len() < 32
+            && token.len() < 32
         {
             anyhow::bail!("METRICS_TOKEN must contain at least 32 bytes");
         }
@@ -332,7 +336,7 @@ impl SignalingServer {
             .ok()
             .filter(|secret| !secret.is_empty());
         if let Some(secret) = trusted_proxy_secret.as_deref()
-            && secret.as_bytes().len() < 32
+            && secret.len() < 32
         {
             anyhow::bail!("TRUSTED_PROXY_SECRET must contain at least 32 bytes");
         }
@@ -381,6 +385,7 @@ impl SignalingServer {
             .map(|(w, c)| (Some(Arc::new(w)), Some(c)))
             .unwrap_or((None, None));
 
+        let readiness = readiness::ReadinessState::new(room_manager.drain_signal());
         Ok(Self {
             room_manager,
             turn_config: turn_config.map(Arc::new),
@@ -389,7 +394,9 @@ impl SignalingServer {
             // churn cannot grow retained room/media sessions without limit.
             grace_periods: GracePeriodMap::with_capacity(max_connections),
             metrics,
+            readiness,
             connection_semaphore: Arc::new(Semaphore::new(max_connections)),
+            max_connections,
             ip_connection_limiter: IpConnectionLimiter::new(max_connections_per_ip),
             ws_handshake_guard: AuthGuard::new(
                 ws_handshakes_per_minute,
@@ -407,6 +414,7 @@ impl SignalingServer {
             // outer HTTP timeout may cancel a handler, but it must not release
             // capacity while that CPU-heavy job is still running.
             password_work: Arc::new(Semaphore::new(auth_concurrency)),
+            max_password_work: auth_concurrency,
             principal_auth_limiter: PrincipalRateLimiter::new(auth_requests_per_account_per_minute),
             room_creation_limiter: PrincipalRateLimiter::new(room_creations_per_account),
             room_api_guard: AuthGuard::new(
@@ -430,6 +438,40 @@ impl SignalingServer {
 
     pub fn room_manager(&self) -> &RoomManager {
         &self.room_manager
+    }
+
+    /// Closes room/upgrade admission, wakes socket writers, stops HTTP accepts,
+    /// and cancels retained reconnect timers. Room/media cleanup is coordinated
+    /// separately, including membership retained by those cancelled timers.
+    pub fn begin_draining(&self) {
+        self.readiness.begin_draining();
+        let retained_sessions = self.grace_periods.close();
+        info!(
+            retained_sessions,
+            "Signaling admission closed; reconnect grace cancelled"
+        );
+    }
+
+    /// Upgraded WebSockets and blocking password jobs can outlive their HTTP
+    /// callers. Wait for their owned permits too; the coordinator bounds this.
+    pub async fn wait_for_connections(&self) {
+        while self.connection_count() > 0 || self.pending_password_work() > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    }
+
+    /// Includes accepted upgrades and any authentication work holding a permit.
+    pub fn connection_count(&self) -> usize {
+        self.max_connections
+            .saturating_sub(self.connection_semaphore.available_permits())
+    }
+
+    /// Password permits remain owned by blocking jobs even after cancellation
+    /// of a request. Counting both lanes makes incomplete CPU cleanup visible.
+    pub fn pending_password_work(&self) -> usize {
+        self.max_password_work
+            .saturating_sub(self.password_work.available_permits())
+            + self.room_manager.pending_password_work()
     }
 
     pub fn db_pool(&self) -> Option<&PgPool> {
@@ -571,9 +613,14 @@ impl SignalingServer {
         let routes = Router::new()
             .route("/ws", get(ws_handler))
             .route("/health", get(health_handler))
+            .route("/ready", get(readiness_handler))
             .route("/metrics", get(metrics_handler))
             .nest("/api/auth", auth_routes)
             .nest("/api/rooms", room_routes)
+            .layer(middleware::from_fn_with_state(
+                self.room_manager.drain_signal(),
+                drain_admission,
+            ))
             .with_state(self);
 
         with_static_fallback_and_security(routes)
@@ -589,6 +636,7 @@ impl SignalingServer {
         info!("Starting signaling server on {}", addr);
 
         let listener = tokio::net::TcpListener::bind(&addr).await?;
+        let drain = self.room_manager.drain_signal();
         let app = self.router();
 
         // with_connect_info exposes the peer SocketAddr to ws_handler (guest ban IPs)
@@ -596,10 +644,29 @@ impl SignalingServer {
             listener,
             app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
         )
+        .with_graceful_shutdown(async move { drain.wait().await })
         .await?;
 
         Ok(())
     }
+}
+
+/// Existing HTTP mutations may finish during the bounded drain; new room
+/// creation and upgrade requests must not enter their handlers afterwards.
+async fn drain_admission(
+    State(drain): State<crate::shutdown::DrainSignal>,
+    request: axum::extract::Request,
+    next: middleware::Next,
+) -> Response {
+    let path = request.uri().path();
+    if drain.is_draining()
+        && (path == "/ws"
+            || (request.method() == axum::http::Method::POST
+                && matches!(path, "/api/rooms" | "/api/rooms/")))
+    {
+        return (StatusCode::SERVICE_UNAVAILABLE, "Server shutting down").into_response();
+    }
+    next.run(request).await
 }
 
 fn with_static_fallback_and_security(router: Router) -> Router {
@@ -611,11 +678,42 @@ fn with_static_fallback_and_security(router: Router) -> Router {
         .layer(middleware::from_fn(security_headers))
 }
 
-/// Health check handler
+/// Process liveness only; dependency availability belongs to `/ready`.
 async fn health_handler() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "status": "ok"
     }))
+}
+
+async fn readiness_handler(State(server): State<SignalingServer>) -> Response {
+    let workers = server.room_manager.media_server().worker_manager();
+    let ready = server
+        .readiness
+        .check(async {
+            if workers.live_worker_count().await == 0 {
+                return false;
+            }
+            if !readiness::database_ready(server.db_pool.as_ref()).await {
+                return false;
+            }
+            // A worker may have closed while the database probe was pending.
+            workers.live_worker_count().await > 0
+        })
+        .await;
+    readiness_response(ready)
+}
+
+fn readiness_response(ready: bool) -> Response {
+    (
+        if ready {
+            StatusCode::OK
+        } else {
+            StatusCode::SERVICE_UNAVAILABLE
+        },
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(serde_json::json!({"status": if ready { "ready" } else { "not_ready" }})),
+    )
+        .into_response()
 }
 
 /// Metrics handler — Prometheus text exposition format.
@@ -635,7 +733,13 @@ async fn metrics_handler(State(server): State<SignalingServer>, headers: HeaderM
 
     let rooms = server.room_manager.room_count().await;
     let participants = server.room_manager.total_participant_count().await;
-    let body = server.metrics.render_prometheus(rooms, participants);
+    let workers = server.room_manager.media_server().worker_manager();
+    let live_workers = tokio::time::timeout(readiness::PROBE_TIMEOUT, workers.live_worker_count())
+        .await
+        .unwrap_or(0);
+    let body = server
+        .metrics
+        .render_prometheus(rooms, participants, live_workers);
     (
         StatusCode::OK,
         [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
@@ -657,6 +761,9 @@ async fn ws_handler(
     axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<std::net::SocketAddr>,
     State(server): State<SignalingServer>,
 ) -> Response {
+    if server.room_manager.drain_signal().is_draining() {
+        return (StatusCode::SERVICE_UNAVAILABLE, "Server shutting down").into_response();
+    }
     // Query strings are routinely captured by proxy and APM logs. Reject old
     // clients explicitly so an authenticated user is never silently treated as
     // a guest after bearer tokens move to the WebSocket subprotocol header.
@@ -741,6 +848,12 @@ async fn ws_handler(
         }
     };
 
+    // Serialize the upgrade commit with drain, after all authentication awaits.
+    // An already committed upgrade observes drain in its independent writer.
+    let drain = server.room_manager.drain_signal();
+    let Ok(_admission) = drain.admit() else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "Server shutting down").into_response();
+    };
     ws = ws.protocols(["simplestchat"]);
     ws.max_message_size(65_536)
         .max_frame_size(65_536)
@@ -1048,6 +1161,79 @@ async fn security_headers(request: Request<Body>, next: Next) -> Response {
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn shutdown_rejects_new_room_and_socket_requests_but_keeps_liveness() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        async fn response(address: std::net::SocketAddr, method: &str, path: &str) -> String {
+            let mut connection = tokio::net::TcpStream::connect(address).await.unwrap();
+            connection.write_all(format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 0\r\n\r\n").as_bytes()).await.unwrap();
+            let mut body = String::new();
+            connection.read_to_string(&mut body).await.unwrap();
+            body
+        }
+        let drain = crate::shutdown::DrainSignal::default();
+        let router = Router::new()
+            .route("/ws", get(|| async { StatusCode::OK }))
+            .route(
+                "/api/rooms",
+                get(|| async { StatusCode::OK }).post(|| async { StatusCode::OK }),
+            )
+            .route("/health", get(health_handler))
+            .layer(middleware::from_fn_with_state(
+                drain.clone(),
+                drain_admission,
+            ));
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let check = tokio::time::timeout(Duration::from_secs(2), async {
+            let initial = response(address, "POST", "/api/rooms").await;
+            drain.begin_draining();
+            let mut responses = vec![(initial, 200)];
+            for (method, path, status) in [
+                ("POST", "/api/rooms", 503),
+                ("GET", "/ws", 503),
+                ("GET", "/api/rooms", 200),
+                ("GET", "/health", 200),
+            ] {
+                responses.push((response(address, method, path).await, status));
+            }
+            responses
+        })
+        .await;
+        server.abort();
+        let _ = server.await;
+        for (body, status) in check.unwrap() {
+            assert!(body.starts_with(&format!("HTTP/1.1 {status} ")));
+        }
+    }
+
+    #[tokio::test]
+    async fn readiness_responses_are_uncached_generic_and_separate_from_liveness() {
+        for (ready, expected_status, expected_body) in [
+            (true, StatusCode::OK, r#"{"status":"ready"}"#),
+            (
+                false,
+                StatusCode::SERVICE_UNAVAILABLE,
+                r#"{"status":"not_ready"}"#,
+            ),
+        ] {
+            let response = readiness_response(ready);
+            assert_eq!(response.status(), expected_status);
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            assert_eq!(body, expected_body);
+        }
+        assert_eq!(
+            health_handler().await.0,
+            serde_json::json!({"status": "ok"})
+        );
+    }
 
     #[tokio::test]
     async fn stalled_json_body_does_not_hold_operation_concurrency() {

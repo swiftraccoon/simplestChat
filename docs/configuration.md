@@ -44,6 +44,43 @@ Media allocation in `src/media/config.rs`:
 - **Workers**: `MEDIA_WORKERS` when set; otherwise detected CPUs, always constrained to 1–64
 
 
+## Health and readiness
+
+`GET /health` returns `200 {"status":"ok"}` for process liveness only.
+`GET /ready` returns `200 {"status":"ready"}` when at least one media worker
+and its WebRTC listener are open, and a configured database answers `SELECT 1`.
+Without `DATABASE_URL`, readiness checks only media capacity. Failed checks,
+probe saturation, or explicit drain state return `503 {"status":"not_ready"}`.
+Responses are uncached and contain no backend errors.
+
+Each readiness probe has a one-second total deadline; at most four run at once.
+It does not test external ICE reachability, TURN, or existing room health, and
+does not automatically replace failed workers. Restart the server to restore
+lost worker capacity.
+
+## Shutdown
+
+`SIGTERM` and Ctrl-C start a one-way drain. Readiness becomes unavailable,
+new WebSocket upgrades and room creation/join/reconnect admissions are refused,
+and HTTP stops accepting connections. Existing sockets receive a best-effort
+`roomClosed` message (`Server shutting down`) and close code 1001. Reconnect
+grace is cancelled; live and lobby memberships are cleared without deleting
+persisted rooms or accounts.
+
+HTTP requests already in progress may finish, including database writes already
+started. HTTP/WebSocket, outstanding password jobs, and room cleanup share an
+eight-second window, followed by two seconds each for transports, routers,
+workers, and the database pool:
+16 seconds of asynchronous cleanup budgets, then at most one second waiting
+for runtime teardown. Later stages run even after a timeout; incomplete stages
+are logged and produce a nonzero exit. A socket that is already closed or does
+not read cannot be guaranteed delivery of its shutdown notice.
+
+The deadlines bound asynchronous waits, not a stalled native thread or OS call.
+Keep a supervisor hard-stop deadline (Compose uses 30 seconds). Timed-out HTTP
+tasks and unfinished blocking jobs may be abandoned when the runtime/process
+exits; a shutdown does not guarantee every in-flight write or message completed.
+
 ## Additional fixed admission limits
 
 Room joins also have code-level limits in `src/room/mod.rs`: 30 attempts per

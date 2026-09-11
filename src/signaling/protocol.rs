@@ -6,6 +6,16 @@ use crate::turn::IceServer;
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
 
+// Missing fields use the serde default (None); an explicit null must instead
+// survive as Some(None) so nullable settings can be cleared.
+fn deserialize_nullable_patch<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
+
 /// Client-to-Server messages
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -197,7 +207,17 @@ pub enum ClientMessage {
         lobby_enabled: Option<bool>,
         guests_allowed: Option<bool>,
         guests_can_broadcast: Option<bool>,
+        #[serde(
+            default,
+            deserialize_with = "deserialize_nullable_patch",
+            skip_serializing_if = "Option::is_none"
+        )]
         max_broadcasters: Option<Option<i32>>,
+        #[serde(
+            default,
+            deserialize_with = "deserialize_nullable_patch",
+            skip_serializing_if = "Option::is_none"
+        )]
         max_participants: Option<Option<i32>>,
         allow_screen_sharing: Option<bool>,
         allow_chat: Option<bool>,
@@ -206,6 +226,11 @@ pub enum ClientMessage {
         invite_only: Option<bool>,
         push_to_talk: Option<bool>,
         secret: Option<bool>,
+        #[serde(
+            default,
+            deserialize_with = "deserialize_nullable_patch",
+            skip_serializing_if = "Option::is_none"
+        )]
         password: Option<Option<String>>,
     },
     /// Set the room topic
@@ -489,4 +514,114 @@ pub struct ProducerMetadata {
     pub kind: MediaKind,
     #[serde(default)]
     pub source: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ClientMessage;
+    use serde_json::{Value, json};
+
+    fn assert_nullable_settings(
+        message: &ClientMessage,
+        expected_broadcasters: Option<Option<i32>>,
+        expected_participants: Option<Option<i32>>,
+        expected_password: Option<Option<&str>>,
+    ) {
+        let ClientMessage::UpdateRoomSettings {
+            max_broadcasters,
+            max_participants,
+            password,
+            ..
+        } = message
+        else {
+            panic!("expected a room settings patch");
+        };
+        assert_eq!(*max_broadcasters, expected_broadcasters);
+        assert_eq!(*max_participants, expected_participants);
+        assert_eq!(
+            password.as_ref().map(|value| value.as_deref()),
+            expected_password
+        );
+    }
+
+    #[test]
+    fn missing_nullable_settings_stay_omitted_on_roundtrip() {
+        let message: ClientMessage = serde_json::from_value(json!({
+            "type": "updateRoomSettings", "allowChat": false,
+        }))
+        .unwrap();
+        assert_nullable_settings(&message, None, None, None);
+        let serialized = serde_json::to_value(&message).unwrap();
+        for field in ["maxBroadcasters", "maxParticipants", "password"] {
+            assert!(serialized.get(field).is_none(), "{field} must be omitted");
+        }
+        assert_eq!(serialized["allowChat"], false);
+        let roundtrip = serde_json::from_value(serialized).unwrap();
+        assert_nullable_settings(&roundtrip, None, None, None);
+    }
+
+    #[test]
+    fn explicit_null_clears_nullable_settings_on_roundtrip() {
+        let value = json!({
+            "type": "updateRoomSettings",
+            "maxBroadcasters": null, "maxParticipants": null, "password": null,
+        });
+        let message: ClientMessage = serde_json::from_value(value).unwrap();
+        assert_nullable_settings(&message, Some(None), Some(None), Some(None));
+        let serialized = serde_json::to_value(&message).unwrap();
+        for field in ["maxBroadcasters", "maxParticipants", "password"] {
+            assert_eq!(serialized.get(field), Some(&Value::Null));
+        }
+        let roundtrip = serde_json::from_value(serialized).unwrap();
+        assert_nullable_settings(&roundtrip, Some(None), Some(None), Some(None));
+    }
+
+    #[test]
+    fn values_set_nullable_settings_on_roundtrip() {
+        let value = json!({
+            "type": "updateRoomSettings",
+            "maxBroadcasters": 4, "maxParticipants": 12, "password": "room-passphrase",
+        });
+        let message: ClientMessage = serde_json::from_value(value).unwrap();
+        assert_nullable_settings(
+            &message,
+            Some(Some(4)),
+            Some(Some(12)),
+            Some(Some("room-passphrase")),
+        );
+        let roundtrip = serde_json::from_str(&serde_json::to_string(&message).unwrap()).unwrap();
+        assert_nullable_settings(
+            &roundtrip,
+            Some(Some(4)),
+            Some(Some(12)),
+            Some(Some("room-passphrase")),
+        );
+    }
+
+    #[test]
+    fn nullable_settings_have_independent_patch_states() {
+        let message: ClientMessage = serde_json::from_value(json!({
+            "type": "updateRoomSettings", "maxBroadcasters": null, "password": "room-passphrase",
+        }))
+        .unwrap();
+        let serialized = serde_json::to_value(&message).unwrap();
+        assert_eq!(serialized.get("maxBroadcasters"), Some(&Value::Null));
+        assert!(serialized.get("maxParticipants").is_none());
+        assert_eq!(serialized["password"], "room-passphrase");
+        let roundtrip = serde_json::from_value(serialized).unwrap();
+        assert_nullable_settings(&roundtrip, Some(None), None, Some(Some("room-passphrase")));
+    }
+
+    #[test]
+    fn nullable_settings_reject_wrong_wire_types() {
+        for (field, value) in [
+            ("maxBroadcasters", json!("4")),
+            ("maxParticipants", json!(1.5)),
+            ("password", json!(false)),
+        ] {
+            let mut message = json!({"type": "updateRoomSettings"});
+            message[field] = value;
+            assert!(serde_json::from_value::<ClientMessage>(message).is_err());
+        }
+    }
 }

@@ -7,7 +7,7 @@ use crate::auth::types::Claims;
 use crate::metrics::ServerMetrics;
 use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, settings};
 use crate::turn::TurnConfig;
-use axum::extract::ws::{Message, WebSocket};
+use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -25,6 +25,23 @@ use uuid::Uuid;
 const CHANNEL_CAPACITY: usize = 64;
 const MAX_SIGNAL_MESSAGE_LEN: usize = 64 * 1024;
 const SEND_TIMEOUT: Duration = Duration::from_secs(10);
+const DRAIN_SEND_TIMEOUT: Duration = Duration::from_secs(1);
+
+/// Connection-owned tasks must not detach if a handler is cancelled at the
+/// process drain deadline. Aborting an already completed task is harmless.
+struct OwnedTask(tokio::task::JoinHandle<()>);
+
+impl OwnedTask {
+    fn abort(&self) {
+        self.0.abort();
+    }
+}
+
+impl Drop for OwnedTask {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
 
 /// Idle timeout — close connection if no message received within this duration.
 /// Prevents Slowloris-style attacks that hold semaphore permits indefinitely.
@@ -290,11 +307,20 @@ struct GraceEntry {
     timer: tokio::task::JoinHandle<()>,
 }
 
+type GraceEntries = HashMap<(String, String, String), GraceEntry>;
+
 /// Shared map of participants in grace period (disconnected but not yet removed)
 #[derive(Clone)]
 pub struct GracePeriodMap {
-    inner: Arc<StdRwLock<HashMap<(String, String, String), GraceEntry>>>,
+    inner: Arc<StdRwLock<GraceEntries>>,
     max_entries: usize,
+    closed: Arc<AtomicBool>,
+}
+
+impl Default for GracePeriodMap {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GracePeriodMap {
@@ -306,7 +332,23 @@ impl GracePeriodMap {
         Self {
             inner: Arc::new(StdRwLock::new(HashMap::new())),
             max_entries: max_entries.max(1),
+            closed: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Stop only this map's owned timers. Global room drain removes retained
+    /// memberships; closing also rejects timers created concurrently afterwards.
+    pub(super) fn close(&self) -> usize {
+        let mut map = self
+            .inner
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
+        self.closed.store(true, Ordering::Release);
+        let count = map.len();
+        for (_, entry) in map.drain() {
+            entry.timer.abort();
+        }
+        count
     }
 
     pub(crate) fn take_revoked(
@@ -345,7 +387,9 @@ impl GracePeriodMap {
     fn insert(&self, room_id: String, participant_id: String, entry: GraceEntry) -> bool {
         let mut map = self.inner.write().unwrap_or_else(|e| e.into_inner());
         let key = (room_id, participant_id, entry.reconnect_token.clone());
-        if map.len() >= self.max_entries && !map.contains_key(&key) {
+        if self.closed.load(Ordering::Acquire)
+            || (map.len() >= self.max_entries && !map.contains_key(&key))
+        {
             entry.timer.abort();
             return false;
         }
@@ -415,6 +459,10 @@ async fn account_credentials_current(pool: Option<&sqlx::PgPool>, claims: &Claim
 }
 
 /// Handles a single WebSocket connection
+#[expect(
+    clippy::too_many_arguments,
+    reason = "connection boundary keeps owned session resources explicit"
+)]
 pub async fn handle_connection(
     socket: WebSocket,
     room_manager: Arc<RoomManager>,
@@ -456,36 +504,59 @@ pub async fn handle_connection(
     // Clone for the send task
     let participant_id_clone = participant_id.clone();
     let send_metrics = metrics.clone();
+    let drain = room_manager.drain_signal();
+    let writer_drain = drain.clone();
 
-    // Spawn task to send messages to client
-    let send_task = tokio::spawn(async move {
-        while let Some(json) = rx.recv().await {
-            send_metrics.inc_messages_sent();
-            match tokio::time::timeout(
-                SEND_TIMEOUT,
-                ws_sender.send(Message::Text((*json).clone().into())),
-            )
-            .await
-            {
-                Ok(Ok(())) => {}
-                Ok(Err(error)) => {
-                    debug!(%error, "WebSocket send failed");
-                    break;
+    // Drain interrupts both an idle writer and a slow ordinary send, independent
+    // of a reader currently awaiting database/media work. Notification is best
+    // effort: a non-reading or already disconnected peer cannot delay shutdown.
+    let mut send_task = OwnedTask(tokio::spawn(async move {
+        tokio::select! {
+            biased;
+            _ = writer_drain.wait() => {},
+            _ = async {
+                while let Some(json) = rx.recv().await {
+                    send_metrics.inc_messages_sent();
+                    match tokio::time::timeout(
+                        SEND_TIMEOUT,
+                        ws_sender.send(Message::Text((*json).clone().into())),
+                    ).await {
+                        Ok(Ok(())) => {},
+                        Ok(Err(error)) => { debug!(%error, "WebSocket send failed"); break; },
+                        Err(_) => { warn!(participant_id = participant_id_clone, "WebSocket send timed out"); break; },
+                    }
                 }
-                Err(_) => {
-                    warn!(
-                        participant_id = participant_id_clone,
-                        "WebSocket send timed out"
-                    );
-                    break;
-                }
+            } => {},
+        }
+        if writer_drain.is_draining() {
+            let close = async {
+                let json = serde_json::to_string(&ServerMessage::RoomClosed {
+                    reason: "Server shutting down".to_string(),
+                })?;
+                ws_sender.send(Message::Text(json.into())).await?;
+                ws_sender
+                    .send(Message::Close(Some(CloseFrame {
+                        code: close_code::AWAY,
+                        reason: "Server shutting down".into(),
+                    })))
+                    .await?;
+                Ok::<(), anyhow::Error>(())
+            };
+            if !matches!(
+                tokio::time::timeout(DRAIN_SEND_TIMEOUT, close).await,
+                Ok(Ok(()))
+            ) {
+                debug!(
+                    participant_id = participant_id_clone,
+                    "Shutdown socket notification could not be delivered"
+                );
             }
         }
         debug!(
             "Send task finished for participant: {}",
             participant_id_clone
         );
-    });
+    }));
 
     // Handle incoming messages
     let mut current_room_id: Option<String> = None;
@@ -493,7 +564,7 @@ pub async fn handle_connection(
     // happens on the moderator's connection task — admit_from_lobby clears it via
     // the LobbyEntry so this task's guard opens without any local event.
     let in_lobby = Arc::new(AtomicBool::new(false));
-    let mut stats_task: Option<tokio::task::JoinHandle<()>> = None;
+    let mut stats_task: Option<OwnedTask> = None;
     let mut bwe_sender: Option<mpsc::Sender<u32>> = None;
 
     // Token bucket rate limiter state
@@ -534,6 +605,7 @@ pub async fn handle_connection(
 
         let receive_result = tokio::select! {
             biased;
+            _ = drain.wait() => break,
             _ = tx.closed() => break,
             notice = auth_revocations.recv(), if is_authenticated => {
                 match notice {
@@ -548,11 +620,11 @@ pub async fn handle_connection(
                 continue;
             }
             _ = tokio::time::sleep_until(next_auth_check.into()), if is_authenticated => {
-                if let Some(claims) = authenticated_user.as_ref() {
-                    if !account_credentials_current(db_pool.as_ref(), claims).await {
-                        credentials_invalidated = true;
-                        break;
-                    }
+                if let Some(claims) = authenticated_user.as_ref()
+                    && !account_credentials_current(db_pool.as_ref(), claims).await
+                {
+                    credentials_invalidated = true;
+                    break;
                 }
                 next_auth_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
                 continue;
@@ -739,16 +811,15 @@ pub async fn handle_connection(
                         if let ClientMessage::JoinRoom {
                             room_id, password, ..
                         } = &client_msg
+                            && !join_attempts.allow(room_id, password.is_some(), Instant::now())
                         {
-                            if !join_attempts.allow(room_id, password.is_some(), Instant::now()) {
-                                let _ = send_json(
-                                    &tx,
-                                    &ServerMessage::Error {
-                                        message: "Join attempts are rate limited".to_string(),
-                                    },
-                                );
-                                continue;
-                            }
+                            let _ = send_json(
+                                &tx,
+                                &ServerMessage::Error {
+                                    message: "Join attempts are rate limited".to_string(),
+                                },
+                            );
+                            continue;
                         }
 
                         if matches!(&client_msg, ClientMessage::RequestVoice) {
@@ -936,20 +1007,20 @@ pub async fn handle_connection(
                             }
                         }
 
-                        if is_join && current_room_id.is_some() {
-                            if !in_lobby.load(Ordering::Acquire)
-                                && let Some(task) = stats_task.take()
-                            {
-                                // Joined a new room directly — restart stats below
-                                task.abort();
-                            }
+                        if is_join
+                            && current_room_id.is_some()
+                            && !in_lobby.load(Ordering::Acquire)
+                            && let Some(task) = stats_task.take()
+                        {
+                            // Joined a new room directly — restart stats below
+                            task.abort();
                         }
 
                         // Ensure a stats task runs whenever we are a full room member.
                         // Invariant-based (not join-triggered) so it also covers lobby
                         // admission: admit_from_lobby clears in_lobby, and the admitted
                         // client's first media-setup message lands here.
-                        if current_room_id.is_some()
+                        if let Some(room_id) = current_room_id.as_ref()
                             && !in_lobby.load(Ordering::Acquire)
                             && stats_task.is_none()
                         {
@@ -959,7 +1030,7 @@ pub async fn handle_connection(
 
                             stats_task = Some(spawn_stats_task(
                                 room_manager.clone(),
-                                current_room_id.as_ref().unwrap().clone(),
+                                room_id.clone(),
                                 participant_id.clone(),
                                 tx.clone(),
                                 bwe_rx,
@@ -1013,13 +1084,20 @@ pub async fn handle_connection(
         task.abort();
     }
 
-    if !credentials_invalidated && let Some(claims) = authenticated_user.as_ref() {
+    if !drain.is_draining()
+        && !credentials_invalidated
+        && let Some(claims) = authenticated_user.as_ref()
+    {
         credentials_invalidated = !account_credentials_current(db_pool.as_ref(), claims).await;
     }
 
     // On disconnect: lobby participants clean up immediately, room participants get grace period
     if let Some(room_id) = current_room_id.take() {
-        if in_lobby.load(Ordering::Acquire) || credentials_invalidated {
+        if drain.is_draining() {
+            // Global room drain clears both live and retained memberships. Do
+            // not start a new grace timer or race its authoritative cleanup.
+            debug!(room_id, participant_id, "Membership handed to server drain");
+        } else if in_lobby.load(Ordering::Acquire) || credentials_invalidated {
             // Lobby participants have no transports/media — clean up immediately
             info!(
                 "Lobby participant {} disconnected from room {}, cleaning up immediately",
@@ -1058,10 +1136,10 @@ pub async fn handle_connection(
                     if tokio::time::Instant::now() >= deadline {
                         break;
                     }
-                    if let Some(claims) = timer_claims.as_ref() {
-                        if !account_credentials_current(timer_pool.as_ref(), claims).await {
-                            break;
-                        }
+                    if let Some(claims) = timer_claims.as_ref()
+                        && !account_credentials_current(timer_pool.as_ref(), claims).await
+                    {
+                        break;
                     }
                 }
                 // Only the timer that still owns this exact grace entry may
@@ -1124,8 +1202,26 @@ pub async fn handle_connection(
     // _permit dropped here → release semaphore
 
     drop(tx);
-    send_task.abort();
-    let _ = send_task.await;
+    if drain.is_draining() {
+        // Give the independent writer its bounded close attempt before releasing
+        // the connection permit. The RAII owner aborts it on cancellation.
+        if tokio::time::timeout(
+            DRAIN_SEND_TIMEOUT + Duration::from_millis(100),
+            &mut send_task.0,
+        )
+        .await
+        .is_err()
+        {
+            warn!(
+                participant_id,
+                "Shutdown writer did not finish within its deadline"
+            );
+            send_task.abort();
+        }
+    } else {
+        send_task.abort();
+        let _ = (&mut send_task.0).await;
+    }
 
     info!(
         "Connection handler finished for participant: {}",
@@ -1213,8 +1309,9 @@ fn spawn_stats_task(
     participant_id: String,
     sender: mpsc::Sender<Arc<String>>,
     mut bwe_rx: mpsc::Receiver<u32>,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
+) -> OwnedTask {
+    OwnedTask(tokio::spawn(async move {
+        let drain = room_manager.drain_signal();
         let mut current_layers: HashMap<String, u8> = HashMap::new();
         let mut last_bitrate: u32 = 0;
         let mut last_sent_bitrate: u32 = 0;
@@ -1230,6 +1327,8 @@ fn spawn_stats_task(
 
         loop {
             tokio::select! {
+                biased;
+                _ = drain.wait() => break,
                 // BWE event: bandwidth estimation changed
                 bwe = bwe_rx.recv() => {
                     match bwe {
@@ -1302,7 +1401,7 @@ fn spawn_stats_task(
                 }
             }
         }
-    })
+    }))
 }
 
 /// Generate ICE servers with an unlinkable TURN identity for each issuance.
@@ -1338,6 +1437,10 @@ fn validate_durable_reason(reason: Option<&str>) -> anyhow::Result<()> {
 }
 
 /// Handle a single client message
+#[expect(
+    clippy::too_many_arguments,
+    reason = "dispatcher borrows independently owned connection state"
+)]
 async fn handle_client_message(
     message: &ClientMessage,
     participant_id: &str,
@@ -1370,15 +1473,12 @@ async fn handle_client_message(
     if !matches!(
         message,
         ClientMessage::JoinRoom { .. } | ClientMessage::LeaveRoom | ClientMessage::Reconnect { .. }
-    ) {
-        if let Some(room_id) = current_room_id.as_ref() {
-            if !room_manager
-                .is_bound_participant(room_id, participant_id, sender)
-                .await
-            {
-                anyhow::bail!("Participant is no longer in this room");
-            }
-        }
+    ) && let Some(room_id) = current_room_id.as_ref()
+        && !room_manager
+            .is_bound_participant(room_id, participant_id, sender)
+            .await
+    {
+        anyhow::bail!("Participant is no longer in this room");
     }
 
     match message {
@@ -1520,16 +1620,15 @@ async fn handle_client_message(
                     .await?;
 
                 // Subscribe to BWE events now that recv transport exists
-                if let Some(bwe_tx) = bwe_sender {
-                    if let Err(e) = room_manager
+                if let Some(bwe_tx) = bwe_sender
+                    && let Err(e) = room_manager
                         .subscribe_bwe_events(room_id, participant_id, sender, bwe_tx.clone())
                         .await
-                    {
-                        debug!(
-                            "Failed to subscribe BWE events for {}: {}",
-                            participant_id, e
-                        );
-                    }
+                {
+                    debug!(
+                        "Failed to subscribe BWE events for {}: {}",
+                        participant_id, e
+                    );
                 }
 
                 send_json(
@@ -2072,6 +2171,50 @@ async fn handle_client_message(
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn shutdown_aborts_owned_tasks_on_drop() {
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (dropped_tx, dropped_rx) = tokio::sync::oneshot::channel();
+        struct NotifyDrop(Option<tokio::sync::oneshot::Sender<()>>);
+        impl Drop for NotifyDrop {
+            fn drop(&mut self) {
+                let _ = self.0.take().unwrap().send(());
+            }
+        }
+        let task = OwnedTask(tokio::spawn(async move {
+            let _guard = NotifyDrop(Some(dropped_tx));
+            let _ = entered_tx.send(());
+            std::future::pending::<()>().await;
+        }));
+        entered_rx.await.unwrap();
+        drop(task);
+        tokio::time::timeout(Duration::from_secs(1), dropped_rx)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn shutdown_cancels_retained_grace_and_rejects_late_timers() {
+        let map = GracePeriodMap::new();
+        let retained = grace_entry("retained");
+        let retained_abort = retained.timer.abort_handle();
+        assert!(map.insert("room".into(), "peer".into(), retained));
+        assert_eq!(map.close(), 1);
+        assert_eq!(map.close(), 0);
+        let late = grace_entry("late");
+        let late_abort = late.timer.abort_handle();
+        assert!(!map.clone().insert("room".into(), "late-peer".into(), late));
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !retained_abort.is_finished() || !late_abort.is_finished() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(map.inner.read().unwrap().is_empty());
+    }
 
     #[test]
     fn password_challenge_is_typed_and_internal_errors_stay_generic() {

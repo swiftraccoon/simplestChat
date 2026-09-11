@@ -8,9 +8,13 @@ pub mod roles;
 pub mod settings;
 pub mod social;
 
+#[cfg(test)]
+mod settings_patch_tests;
+
 use crate::media::types::{MediaResult, TransportInfo};
 use crate::media::{MediaConfig, MediaServer};
 use crate::metrics::ServerMetrics;
+use crate::shutdown::DrainSignal;
 use crate::signaling::protocol::{
     AudioLevelEntry, ParticipantInfo, ProducerMetadata, ServerMessage,
 };
@@ -649,34 +653,6 @@ impl Room {
         }
     }
 
-    /// Send a message to a specific participant
-    fn send_to(&self, participant_id: &str, message: &ServerMessage) {
-        let json = match serde_json::to_string(message) {
-            Ok(j) => Arc::new(j),
-            Err(e) => {
-                warn!("Failed to serialize message: {}", e);
-                return;
-            }
-        };
-        if let Some(participant) = self.participants.get(participant_id) {
-            match participant.sender.try_send(json) {
-                Ok(()) => {}
-                Err(mpsc::error::TrySendError::Full(_)) => {
-                    debug!(
-                        "Channel full for participant {} in room {}, dropping message",
-                        participant_id, self.id
-                    );
-                }
-                Err(mpsc::error::TrySendError::Closed(_)) => {
-                    debug!(
-                        "Channel closed for participant {} in room {} (disconnected)",
-                        participant_id, self.id
-                    );
-                }
-            }
-        }
-    }
-
     /// Broadcast a message to all participants with role >= min_role
     fn broadcast_to_role(&self, min_role: roles::Role, message: &ServerMessage) {
         let json = match serde_json::to_string(message) {
@@ -950,6 +926,7 @@ fn record_banned_cohort(
 pub struct RoomManager {
     rooms: Arc<StdRwLock<HashMap<String, Arc<TokioRwLock<Room>>>>>,
     media_server: Arc<MediaServer>,
+    drain: DrainSignal,
     metrics: ServerMetrics,
     db_pool: Option<sqlx::PgPool>,
     /// Serializes room creation — two clients joining a brand-new room
@@ -967,6 +944,7 @@ pub struct RoomManager {
     /// requests expensive password hashes.
     password_verify_work: Arc<tokio::sync::Semaphore>,
     password_hash_work: Arc<tokio::sync::Semaphore>,
+    max_password_verify_work: usize,
     join_attempts_by_ip: SharedRateLimiter<IpAddr>,
     join_attempts_by_room_ip: SharedRateLimiter<(String, IpAddr)>,
 }
@@ -1139,6 +1117,7 @@ impl RoomManager {
         Ok(Self {
             rooms: Arc::new(StdRwLock::new(HashMap::new())),
             media_server,
+            drain: DrainSignal::default(),
             metrics,
             db_pool,
             room_creation_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -1158,6 +1137,7 @@ impl RoomManager {
             // One bounded hashing lane prevents room settings from consuming
             // every CPU while the separate verification lane serves joiners.
             password_hash_work: Arc::new(tokio::sync::Semaphore::new(1)),
+            max_password_verify_work: password_verify_workers,
             join_attempts_by_ip: SharedRateLimiter::new(MAX_JOIN_ATTEMPTS_PER_IP),
             join_attempts_by_room_ip: SharedRateLimiter::new(MAX_JOIN_ATTEMPTS_PER_ROOM_IP),
         })
@@ -1166,6 +1146,19 @@ impl RoomManager {
     /// Gets the media server for direct access (e.g., find_producer_paused)
     pub fn media_server(&self) -> &MediaServer {
         &self.media_server
+    }
+
+    /// Shared one-way admission and shutdown notification for this process.
+    pub fn drain_signal(&self) -> DrainSignal {
+        self.drain.clone()
+    }
+
+    /// Jobs retain these permits inside `spawn_blocking`, including after their
+    /// requesting socket/HTTP future is cancelled. Includes hash and verify lanes.
+    pub(crate) fn pending_password_work(&self) -> usize {
+        self.max_password_verify_work
+            .saturating_sub(self.password_verify_work.available_permits())
+            + 1_usize.saturating_sub(self.password_hash_work.available_permits())
     }
 
     pub(crate) async fn hash_room_password(&self, password: String) -> Result<String> {
@@ -1199,10 +1192,16 @@ impl RoomManager {
         request: &settings::CreateRoomRequest,
         password_hash: Option<&str>,
     ) -> std::result::Result<Option<settings::RoomSettings>, sqlx::Error> {
+        if self.drain.is_draining() {
+            return Err(sqlx::Error::PoolClosed);
+        }
         let _creation_guard =
             tokio::time::timeout(ROOM_CREATION_TIMEOUT, self.room_creation_lock.lock())
                 .await
                 .map_err(|_| room_creation_timeout("waiting for room creation"))?;
+        if self.drain.is_draining() {
+            return Err(sqlx::Error::PoolClosed);
+        }
         if self
             .deleting_rooms
             .read()
@@ -1532,11 +1531,13 @@ impl RoomManager {
         let mut room = tokio::time::timeout(ROOM_CREATION_TIMEOUT, room_lock.write())
             .await
             .map_err(|_| anyhow::anyhow!("Room is busy; try again"))?;
+        let admission = self.drain.admit()?;
         room.ensure_live()?;
         room.pending_joins = room
             .pending_joins
             .checked_add(1)
             .ok_or_else(|| anyhow::anyhow!("Room join capacity has been reached"))?;
+        drop(admission);
         drop(room);
         Ok(PendingRoomJoin {
             room_id: room_id.to_string(),
@@ -1548,6 +1549,7 @@ impl RoomManager {
 
     /// Gets or creates a room, creating a router if needed
     async fn get_or_create_room(&self, room_id: &str) -> Result<PendingRoomJoin> {
+        anyhow::ensure!(!self.drain.is_draining(), "Server shutting down");
         if !settings::valid_room_id(room_id) {
             anyhow::bail!("Invalid room ID");
         }
@@ -1578,6 +1580,8 @@ impl RoomManager {
             tokio::time::timeout(ROOM_CREATION_TIMEOUT, self.room_creation_lock.lock())
                 .await
                 .map_err(|_| anyhow::anyhow!("Room creation is busy; try again"))?;
+
+        anyhow::ensure!(!self.drain.is_draining(), "Server shutting down");
 
         if self
             .deleting_rooms
@@ -1727,8 +1731,28 @@ impl RoomManager {
                 active_speaker_observer,
                 audio_level_observer,
             )));
-            rooms.insert(room_id.to_string(), new_room.clone());
-            new_room
+            if let Ok(_admission) = self.drain.admit() {
+                rooms.insert(room_id.to_string(), new_room.clone());
+                Some(new_room)
+            } else {
+                None
+            }
+        };
+        let Some(room_arc) = room_arc else {
+            // A router created before drain must never become a new runtime
+            // room afterwards. Global media shutdown is the fallback if this
+            // bounded rollback cannot complete.
+            if !matches!(
+                tokio::time::timeout(
+                    ROOM_CREATION_TIMEOUT,
+                    self.media_server.remove_router(room_id),
+                )
+                .await,
+                Ok(Ok(()))
+            ) {
+                warn!(room_id, "Draining room creation rollback incomplete");
+            }
+            anyhow::bail!("Server shutting down");
         };
 
         // Spawn background task with Weak reference (only for newly created rooms)
@@ -1793,7 +1817,10 @@ impl RoomManager {
     ///
     /// # Errors
     /// Returns an error if media server operations fail
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "join boundary owns participant identity, channel, and admission state"
+    )]
     pub async fn add_participant(
         &self,
         room_id: &str,
@@ -1837,13 +1864,10 @@ impl RoomManager {
             policy_revision,
         ) = {
             let room = room_lock.read().await;
-            let lobby = room.settings.as_ref().map_or(false, |s| s.lobby_enabled);
+            let lobby = room.settings.as_ref().is_some_and(|s| s.lobby_enabled);
             let invite_only = room.settings.as_ref().is_some_and(|s| s.invite_only);
             let owner = room.settings.as_ref().map(|s| s.owner_id);
-            let pw = room
-                .settings
-                .as_ref()
-                .map_or(false, |s| s.password_protected);
+            let pw = room.settings.as_ref().is_some_and(|s| s.password_protected);
             (
                 lobby,
                 invite_only,
@@ -1925,7 +1949,7 @@ impl RoomManager {
         };
 
         // Password gate: everyone below Admin must present the room password
-        if password_protected && !resolved_role.map_or(false, |r| r >= roles::Role::Admin) {
+        if password_protected && !resolved_role.is_some_and(|r| r >= roles::Role::Admin) {
             let hash =
                 password_hash.ok_or_else(|| anyhow::anyhow!("Room password is unavailable"))?;
             let supplied = password.ok_or(RoomPasswordRequired)?.to_owned();
@@ -1957,6 +1981,7 @@ impl RoomManager {
 
         // Now acquire write lock for mutation
         let mut room = room_lock.write().await;
+        let admission = self.drain.admit()?;
 
         if !policy_snapshot_matches(&room, policy_revision) {
             anyhow::bail!("Room policy changed while joining; retry");
@@ -2062,6 +2087,7 @@ impl RoomManager {
                 },
             );
             pending_join.complete_locked(&mut room);
+            drop(admission);
 
             info!(
                 "Participant {} ({}) entered lobby for room {}",
@@ -2086,6 +2112,9 @@ impl RoomManager {
         room.participants
             .insert(participant_id.clone(), participant);
         pending_join.complete_locked(&mut room);
+        // The membership is committed. Do not serialize response snapshots
+        // under the process-wide admission guard.
+        drop(admission);
 
         info!(
             "Participant {} ({}) joined room {}",
@@ -2882,14 +2911,12 @@ impl RoomManager {
         }; // room lock released
 
         // Remove from observers OUTSIDE lock
-        if was_audio {
-            if let Ok(pid) = producer_id.parse::<ProducerId>() {
-                if let Some(obs) = &active_obs {
-                    let _ = obs.remove_producer(pid).await;
-                }
-                if let Some(obs) = &audio_obs {
-                    let _ = obs.remove_producer(pid).await;
-                }
+        if was_audio && let Ok(pid) = producer_id.parse::<ProducerId>() {
+            if let Some(obs) = &active_obs {
+                let _ = obs.remove_producer(pid).await;
+            }
+            if let Some(obs) = &audio_obs {
+                let _ = obs.remove_producer(pid).await;
             }
         }
 
@@ -3139,6 +3166,7 @@ impl RoomManager {
     ) -> Result<bool> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
+        let _admission = self.drain.admit()?;
         room.ensure_live()?;
         if let Some(participant) = room.participants.get_mut(participant_id) {
             if !participant.sender.same_channel(expected_sender) {
@@ -3193,10 +3221,10 @@ impl RoomManager {
     }
 
     fn validate_capacity(label: &str, value: Option<Option<i32>>, maximum: i32) -> Result<()> {
-        if let Some(Some(value)) = value {
-            if !(1..=maximum).contains(&value) {
-                anyhow::bail!("{label} must be between 1 and {maximum}");
-            }
+        if let Some(Some(value)) = value
+            && !(1..=maximum).contains(&value)
+        {
+            anyhow::bail!("{label} must be between 1 and {maximum}");
         }
         Ok(())
     }
@@ -3205,7 +3233,10 @@ impl RoomManager {
     ///
     /// Applies partial updates to the in-memory RoomSettings, broadcasts the change
     /// to all participants, and optionally persists to DB.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "authorized mutation keeps each nullable wire patch field explicit"
+    )]
     pub async fn update_room_settings(
         &self,
         room_id: &str,
@@ -3460,6 +3491,10 @@ impl RoomManager {
 
     // === Moderation methods ===
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "moderation boundary keeps authorization identity and mutation fields explicit"
+    )]
     async fn update_punitive_state(
         &self,
         room_id: &str,
@@ -4253,6 +4288,7 @@ impl RoomManager {
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
+        let admission = self.drain.admit()?;
 
         // Verify moderator exists and has permission
         let moderator = Self::participant_for_sender(&room, moderator_id, expected_sender)?;
@@ -4343,6 +4379,7 @@ impl RoomManager {
         // Clear the connection task's lobby guard BEFORE notifying the client,
         // so its follow-up media-setup messages are not rejected.
         entry.in_lobby_flag.store(false, Ordering::Release);
+        drop(admission);
 
         // Send LobbyAdmitted to the admitted participant
         if let Ok(json) = serde_json::to_string(&ServerMessage::LobbyAdmitted) {
@@ -4633,7 +4670,7 @@ impl RoomManager {
             }
         }
 
-        let moderated = room.settings.as_ref().map_or(false, |s| s.moderated);
+        let moderated = room.settings.as_ref().is_some_and(|s| s.moderated);
         moderation::can_produce(&participant.punitive, participant.role, moderated, kind)
     }
 
@@ -4849,7 +4886,7 @@ impl RoomManager {
         if room.settings.as_ref().is_some_and(|s| !s.allow_chat) {
             return Ok(false);
         }
-        let moderated = room.settings.as_ref().map_or(false, |s| s.moderated);
+        let moderated = room.settings.as_ref().is_some_and(|s| s.moderated);
         Ok(moderation::can_chat(
             &participant.punitive,
             participant.role,
@@ -4878,50 +4915,67 @@ impl RoomManager {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
-    /// Gracefully shuts down all rooms: removes all participants, closes transports, removes routers.
-    pub async fn shutdown(&self) {
-        info!("Shutting down all rooms...");
+    /// Close admission and clear authoritative membership within eight seconds.
+    /// The coordinator must then call [`MediaServer::shutdown`] to release all
+    /// transports, routers, and workers, even if membership cleanup times out.
+    /// No persisted rooms or accounts are deleted.
+    pub async fn shutdown(&self) -> Result<()> {
+        self.shutdown_with_budget(std::time::Duration::from_secs(8))
+            .await
+    }
 
-        // Drain all rooms from the map
-        let all_rooms: Vec<(String, Arc<TokioRwLock<Room>>)> = {
-            let mut rooms = self.rooms.write().unwrap_or_else(|e| e.into_inner());
-            rooms.drain().collect()
+    async fn shutdown_with_budget(&self, budget: std::time::Duration) -> Result<()> {
+        use futures_util::StreamExt;
+        use std::sync::atomic::AtomicUsize;
+        self.drain.begin_draining();
+        let remaining = AtomicUsize::new(
+            self.rooms
+                .read()
+                .unwrap_or_else(|error| error.into_inner())
+                .len(),
+        );
+        let acquired_creation = AtomicBool::new(false);
+        let cleanup = async {
+            // Wait for an earlier room creation to finish or roll back. Holding
+            // this lock prevents any late publication after draining the map.
+            let _creation = self.room_creation_lock.lock().await;
+            acquired_creation.store(true, Ordering::Relaxed);
+            let all_rooms: Vec<_> = self
+                .rooms
+                .write()
+                .unwrap_or_else(|error| error.into_inner())
+                .drain()
+                .collect();
+            remaining.store(all_rooms.len(), Ordering::Relaxed);
+            futures_util::stream::iter(all_rooms)
+                .for_each_concurrent(16, |(room_id, room_lock)| {
+                    let remaining = &remaining;
+                    async move {
+                        let mut room = room_lock.write().await;
+                        let participants = room.participants.len();
+                        let lobby = room.lobby.len();
+                        room.deleting = true;
+                        room.participants.clear();
+                        room.lobby.clear();
+                        room.producer_to_participant.clear();
+                        room.active_speaker_observer = None;
+                        room.audio_level_observer = None;
+                        remaining.fetch_sub(1, Ordering::Relaxed);
+                        info!(room_id, participants, lobby, "Room membership drained");
+                    }
+                })
+                .await;
+            Ok::<(), anyhow::Error>(())
         };
-
-        for (room_id, room_lock) in &all_rooms {
-            let participant_sessions: Vec<(String, uuid::Uuid)> = {
-                let room = room_lock.read().await;
-                room.participants
-                    .values()
-                    .map(|participant| (participant.id.clone(), participant.media_session_id))
-                    .collect()
-            };
-
-            for (pid, media_session_id) in &participant_sessions {
-                let media_participant_id =
-                    Self::media_participant_id(room_id, pid, *media_session_id);
-                if let Err(e) = self
-                    .media_server
-                    .transport_manager()
-                    .remove_participant(&media_participant_id)
-                    .await
-                {
-                    warn!(
-                        "Failed to clean up media for participant {} during shutdown: {}",
-                        pid, e
-                    );
-                }
-            }
-
-            self.media_server.remove_router(room_id).await.ok();
-            info!(
-                "Shut down room {} ({} participants)",
-                room_id,
-                participant_sessions.len()
+        let result = crate::shutdown::run_stage("rooms", budget, cleanup).await;
+        if result.is_err() {
+            warn!(
+                remaining_rooms = remaining.load(Ordering::Relaxed),
+                acquired_creation_lock = acquired_creation.load(Ordering::Relaxed),
+                "Room drain incomplete; global media cleanup will still run"
             );
         }
-
-        info!("All rooms shut down ({} total)", all_rooms.len());
+        result
     }
 
     /// Gets current room count
@@ -4959,6 +5013,151 @@ impl RoomManager {
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    async fn drain_test_manager() -> RoomManager {
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 1;
+        // Port zero asks the owned native listener to select an unused port.
+        config.webrtc_server_port_base = 0;
+        let mut manager = RoomManager::new(config, ServerMetrics::new(), None)
+            .await
+            .unwrap();
+        manager.allow_ad_hoc_rooms = true;
+        manager
+    }
+
+    #[tokio::test]
+    async fn shutdown_rejects_admissions_and_clears_live_and_lobby_membership() {
+        let manager = Arc::new(drain_test_manager().await);
+        let (owner_tx, _owner_rx) = mpsc::channel(16);
+        let owner_join = manager
+            .add_participant(
+                "drain-test",
+                "owner".into(),
+                "Owner".into(),
+                owner_tx.clone(),
+                false,
+                Arc::new(AtomicBool::new(false)),
+                None,
+                "owner-token",
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(matches!(owner_join, JoinResult::Joined { .. }));
+        let room = manager.get_room("drain-test").unwrap();
+        let mut settings = RoomManager::default_room_settings("drain-test");
+        settings.lobby_enabled = true;
+        room.write().await.settings = Some(settings);
+        let (waiting_tx, _waiting_rx) = mpsc::channel(16);
+        let waiting = manager
+            .add_participant(
+                "drain-test",
+                "waiting".into(),
+                "Waiting".into(),
+                waiting_tx,
+                false,
+                Arc::new(AtomicBool::new(false)),
+                None,
+                "waiting-token",
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(matches!(waiting, JoinResult::Lobbied));
+
+        // This reservation began before drain but cannot commit until its room
+        // lock becomes available. The post-await admission guard must reject it.
+        let held_room = room.write().await;
+        let joining_manager = manager.clone();
+        let joining_room = room.clone();
+        let pending = tokio::spawn(async move {
+            joining_manager
+                .reserve_existing_room_join("drain-test", joining_room)
+                .await
+                .is_err()
+        });
+        tokio::task::yield_now().await;
+        manager.drain_signal().begin_draining();
+        drop(held_room);
+        let late_join_rejected = pending.await.unwrap();
+        let new_room_rejected = manager.get_or_create_room("late-room").await.is_err();
+        let reconnect_rejected = manager
+            .rebind_participant_sender("drain-test", "owner", None, &owner_tx, owner_tx.clone())
+            .await
+            .is_err();
+        let admission_rejected = manager
+            .admit_from_lobby("drain-test", "owner", &owner_tx, "waiting")
+            .await
+            .is_err();
+        let cleanup = manager.shutdown().await;
+        let repeated_cleanup = manager.shutdown().await;
+        let media_cleanup = manager.media_server().shutdown().await;
+        assert!(
+            late_join_rejected && new_room_rejected && reconnect_rejected && admission_rejected
+        );
+        cleanup.unwrap();
+        repeated_cleanup.unwrap();
+        media_cleanup.unwrap();
+        assert_eq!(manager.room_count().await, 0);
+        assert_eq!(
+            manager
+                .media_server()
+                .worker_manager()
+                .live_worker_count()
+                .await,
+            0
+        );
+        let retired = room.read().await;
+        assert!(retired.participants.is_empty() && retired.lobby.is_empty() && retired.deleting);
+    }
+
+    #[tokio::test]
+    async fn shutdown_reports_stalled_creation_and_room_locks_without_reopening_admission() {
+        let manager = drain_test_manager().await;
+        let pending_hash = manager
+            .password_hash_work
+            .clone()
+            .try_acquire_owned()
+            .unwrap();
+        let pending_verify = manager
+            .password_verify_work
+            .clone()
+            .try_acquire_owned()
+            .unwrap();
+        assert_eq!(manager.pending_password_work(), 2);
+        drop(pending_hash);
+        drop(pending_verify);
+        assert_eq!(manager.pending_password_work(), 0);
+        let room = Arc::new(TokioRwLock::new(Room::new(
+            "stalled".into(),
+            "unused".into(),
+            None,
+            false,
+            None,
+        )));
+        manager
+            .rooms
+            .write()
+            .unwrap()
+            .insert("stalled".into(), room.clone());
+        let held_creation = manager.room_creation_lock.lock().await;
+        let creation_result = manager
+            .shutdown_with_budget(std::time::Duration::from_millis(5))
+            .await;
+        drop(held_creation);
+        let held_room = room.write().await;
+        let result = manager
+            .shutdown_with_budget(std::time::Duration::from_millis(5))
+            .await;
+        drop(held_room);
+        let media_cleanup = manager.media_server().shutdown().await;
+        assert!(creation_result.is_err());
+        assert!(result.is_err());
+        assert!(manager.drain_signal().is_draining());
+        assert!(manager.get_or_create_room("new-room").await.is_err());
+        media_cleanup.unwrap();
+    }
 
     #[test]
     fn aggregate_room_chat_budget_is_bounded_and_recovers() {

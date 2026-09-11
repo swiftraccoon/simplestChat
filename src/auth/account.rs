@@ -1,3 +1,16 @@
+//! Account profiles, password changes and one-time recovery credentials.
+//!
+//! Authenticated handlers validate both the signed access token and the current
+//! database authentication version. Password changes and recovery commit the
+//! new password, increment that version and remove refresh sessions together;
+//! only then do they notify connected sessions of revocation. Profile edits do
+//! not change account credentials. Responses containing account or recovery
+//! information are not cacheable.
+//!
+//! Recovery is possession-based, not an email-verification or reset-email flow.
+//! Only a digest of the recovery key is stored. Treat the key returned to the
+//! caller as a credential: never include it in logs, metrics or room messages.
+
 #![forbid(unsafe_code)]
 
 use super::{
@@ -75,6 +88,17 @@ pub struct RedeemRecoveryRequest {
     pub new_password: String,
 }
 
+/// Resolve an exact `Bearer ` authorization header into currently valid claims.
+///
+/// Signature and expiry validation alone are insufficient: this also checks the
+/// account's persisted authentication version, so a password change or recovery
+/// invalidates previously issued access tokens. It neither refreshes a session
+/// nor accepts a refresh cookie in place of the header.
+///
+/// # Errors
+/// Returns an [`AuthError`] for missing configuration, absent/malformed/expired
+/// credentials, revoked claims or a failed database check. Callers must propagate
+/// the failure rather than downgrading an authenticated request to guest access.
 pub async fn authenticated_claims(
     server: &SignalingServer,
     headers: &HeaderMap,
@@ -95,6 +119,10 @@ fn profile_error() -> AuthError {
     AuthError::InvalidInput("Invalid profile: name must be 1–64 bytes; bio at most 1024 bytes")
 }
 
+/// Check a UTF-8 byte limit and reject control characters without trimming text.
+///
+/// `multiline` permits only newline and tab among control characters. This does
+/// not enforce a nonempty value; callers apply field-specific minimum lengths.
 pub fn validate_text(value: &str, maximum: usize, multiline: bool) -> bool {
     value.len() <= maximum
         && !value.chars().any(|character| {
@@ -316,6 +344,21 @@ async fn verified_password_hash(
     Ok(stored)
 }
 
+/// Change a password after verifying the account's current password and claims.
+///
+/// The conditional update prevents a concurrent credential change from being
+/// overwritten. Password replacement, authentication-version increment and
+/// refresh-session deletion commit atomically. Afterwards, connected account
+/// sessions are notified and the response clears the caller's refresh cookie.
+/// Success is HTTP 204 with no JSON body; the caller must sign in again.
+/// Existing passkeys and an unused recovery key are not replaced by this route.
+///
+/// # Errors and retries
+/// Validation, credential, capacity and database failures return [`AuthError`].
+/// A lost response does not prove the transaction failed: retrying with the old
+/// password or token after a successful change fails authentication. Clients
+/// should attempt normal sign-in with the new password, not blindly replay this
+/// mutation. Password hashing runs in the bounded password-work lane.
 pub async fn change_password(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
@@ -377,6 +420,19 @@ fn recovery_hash(key: &str) -> Result<String, AuthError> {
     Ok(session::hash_token(key))
 }
 
+/// Replace the account's recovery key after verifying its current password.
+///
+/// The response exposes the new credential once, with `Cache-Control: no-store`;
+/// only its digest is persisted. Creating a key invalidates the preceding key
+/// but does not revoke existing sessions or change the password. A passkey-only
+/// account without a password cannot use this password-authorized operation.
+///
+/// # Errors and retries
+/// Returns [`AuthError`] for failed authentication, password verification,
+/// admission, randomness or persistence. A successful update may outlive a lost
+/// response. There is no read-back endpoint: a subsequent successful request
+/// creates a different key and invalidates the inaccessible one. Clients must
+/// not claim that an earlier key still works when replacement is unconfirmed.
 pub async fn create_recovery_key(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
@@ -420,6 +476,21 @@ async fn consume_recovery(
     Ok((id, version))
 }
 
+/// Consume a saved recovery key and set a new password without a login session.
+///
+/// The email address selects the account; it is not verified by this operation.
+/// The key's digest is matched in a conditional transactional update, so a key
+/// can succeed only once even if requests overlap. The same commit clears the
+/// recovery digest, increments the authentication version and deletes refresh
+/// sessions. Connected account sessions are then notified of revocation.
+/// Success is HTTP 204, clears the caller's refresh cookie and issues no tokens;
+/// the user must sign in and create a new recovery key if desired.
+///
+/// # Errors and retries
+/// Invalid, replaced or already-consumed keys fail with [`AuthError`], as do
+/// validation, capacity and database failures. A lost success response cannot
+/// be recovered by redeeming the key again. The client should attempt sign-in
+/// using the new password rather than assuming that an unconfirmed reset failed.
 pub async fn redeem_recovery(
     State(server): State<SignalingServer>,
     Json(request): Json<RedeemRecoveryRequest>,

@@ -10,7 +10,7 @@ const JWT_AUDIENCE: &str = "simplestchat";
 pub const MIN_SECRET_BYTES: usize = 32;
 
 pub fn secret_is_strong(secret: &str) -> bool {
-    secret.as_bytes().len() >= MIN_SECRET_BYTES
+    secret.len() >= MIN_SECRET_BYTES
 }
 
 pub fn create_token(user_id: &str, display_name: &str, secret: &str) -> Result<String, AuthError> {

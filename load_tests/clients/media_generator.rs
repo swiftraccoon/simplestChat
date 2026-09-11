@@ -1,5 +1,3 @@
-use mediasoup::prelude::*;
-use std::num::{NonZeroU8, NonZeroU32};
 use std::time::Duration;
 
 /// Configuration for synthetic media generation
@@ -119,70 +117,6 @@ impl MediaGenerator {
         }
     }
 
-    /// Generate RTP parameters for audio producer
-    pub fn generate_audio_rtp_parameters(
-        &self,
-        _router_caps: &RtpCapabilitiesFinalized,
-    ) -> RtpParameters {
-        // Use standard Opus parameters
-        RtpParameters {
-            mid: None,
-            msid: None,
-            codecs: vec![RtpCodecParameters::Audio {
-                mime_type: MimeTypeAudio::Opus,
-                payload_type: 111, // Standard Opus payload type
-                clock_rate: NonZeroU32::new(self.config.audio_sample_rate).unwrap(),
-                channels: NonZeroU8::new(self.config.audio_channels).unwrap(),
-                parameters: RtpCodecParametersParameters::default(),
-                rtcp_feedback: vec![],
-            }],
-            header_extensions: vec![],
-            encodings: vec![RtpEncodingParameters {
-                ssrc: Some(self.audio_ssrc),
-                ..Default::default()
-            }],
-            rtcp: RtcpParameters::default(),
-        }
-    }
-
-    /// Generate RTP parameters for video producer
-    pub fn generate_video_rtp_parameters(
-        &self,
-        _router_caps: &RtpCapabilitiesFinalized,
-    ) -> RtpParameters {
-        // Use standard VP8/H264 parameters
-        let codec_params = if self.config.video_codec == "VP8" {
-            RtpCodecParameters::Video {
-                mime_type: MimeTypeVideo::Vp8,
-                payload_type: 96, // Standard VP8 payload type
-                clock_rate: NonZeroU32::new(90000).unwrap(),
-                parameters: RtpCodecParametersParameters::default(),
-                rtcp_feedback: vec![],
-            }
-        } else {
-            RtpCodecParameters::Video {
-                mime_type: MimeTypeVideo::H264,
-                payload_type: 102, // Standard H264 payload type
-                clock_rate: NonZeroU32::new(90000).unwrap(),
-                parameters: RtpCodecParametersParameters::default(),
-                rtcp_feedback: vec![],
-            }
-        };
-
-        RtpParameters {
-            mid: None,
-            msid: None,
-            codecs: vec![codec_params],
-            header_extensions: vec![],
-            encodings: vec![RtpEncodingParameters {
-                ssrc: Some(self.video_ssrc),
-                max_bitrate: Some(self.config.video_bitrate_kbps * 1000),
-                ..Default::default()
-            }],
-            rtcp: RtcpParameters::default(),
-        }
-    }
-
     /// Generate a synthetic audio RTP packet (Opus, 20ms packet)
     ///
     /// Includes one-byte RTP header extension (RFC 5285) with MID extension so
@@ -220,7 +154,7 @@ impl MediaGenerator {
         packet.push(0x00); // padding
 
         // Synthetic Opus payload (simulated compressed audio)
-        packet.extend(std::iter::repeat(0xAA).take(payload_size));
+        packet.extend(std::iter::repeat_n(0xAA, payload_size));
 
         packet
     }
@@ -241,7 +175,7 @@ impl MediaGenerator {
     /// picture ID so mediasoup can properly rewrite descriptors during forwarding.
     pub fn generate_video_frame(&mut self) -> Vec<Vec<u8>> {
         let keyframe_interval = self.config.video_fps as u64 * 5;
-        let is_keyframe = self.frame_count % keyframe_interval == 0;
+        let is_keyframe = self.frame_count.is_multiple_of(keyframe_interval);
         let frame_size = self.compute_frame_size(is_keyframe);
         let pic_id = (self.frame_count & 0x7F) as u8;
 
@@ -250,7 +184,7 @@ impl MediaGenerator {
         self.video_timestamp = self.video_timestamp.wrapping_add(timestamp_increment);
         self.frame_count += 1;
 
-        let num_packets = ((frame_size + FRAME_DATA_PER_PACKET - 1) / FRAME_DATA_PER_PACKET).max(1);
+        let num_packets = frame_size.div_ceil(FRAME_DATA_PER_PACKET).max(1);
         let mut packets = Vec::with_capacity(num_packets);
         let mut remaining = frame_size;
 
@@ -300,31 +234,27 @@ impl MediaGenerator {
                 packet.extend_from_slice(&(self.config.video_width as u16).to_le_bytes());
                 packet.extend_from_slice(&(self.config.video_height as u16).to_le_bytes());
                 let header_size = 10;
-                packet.extend(std::iter::repeat(0x00).take(chunk_size.saturating_sub(header_size)));
+                packet.extend(std::iter::repeat_n(
+                    0x00,
+                    chunk_size.saturating_sub(header_size),
+                ));
             } else if is_first {
                 packet.push(0x11);
                 packet.push(0x00);
                 packet.push(0x00);
                 let header_size = 3;
-                packet.extend(std::iter::repeat(0x00).take(chunk_size.saturating_sub(header_size)));
+                packet.extend(std::iter::repeat_n(
+                    0x00,
+                    chunk_size.saturating_sub(header_size),
+                ));
             } else {
-                packet.extend(std::iter::repeat(0x00).take(chunk_size));
+                packet.extend(std::iter::repeat_n(0x00, chunk_size));
             }
 
             packets.push(packet);
         }
 
         packets
-    }
-
-    /// Get the audio SSRC used in generated packets
-    pub fn audio_ssrc(&self) -> u32 {
-        self.audio_ssrc
-    }
-
-    /// Get the video SSRC used in generated packets
-    pub fn video_ssrc(&self) -> u32 {
-        self.video_ssrc
     }
 
     /// Get the interval between audio packets (20ms for Opus)

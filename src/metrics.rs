@@ -23,7 +23,7 @@ const BUCKET_BOUNDS_US: [u64; 10] = [
 
 /// Prometheus-compatible cumulative histogram with fixed buckets.
 pub struct Histogram {
-    /// Cumulative bucket counters — bucket[i] counts observations <= BUCKET_BOUNDS_US[i]
+    /// Cumulative counters: `buckets[i]` counts observations <= `BUCKET_BOUNDS_US[i]`.
     buckets: [AtomicU64; 10],
     /// +Inf bucket (total count)
     count: AtomicU64,
@@ -103,6 +103,12 @@ struct Inner {
     message_handling: Histogram,
 }
 
+impl Default for ServerMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ServerMetrics {
     pub fn new() -> Self {
         Self {
@@ -180,8 +186,13 @@ impl ServerMetrics {
     // --- Prometheus rendering ---
 
     /// Render all metrics in Prometheus text exposition format.
-    /// `rooms_active` and `participants_active` are passed in from RoomManager (on-demand gauges).
-    pub fn render_prometheus(&self, rooms_active: usize, participants_active: usize) -> String {
+    /// Room, participant, and live-worker counts are sampled by the caller.
+    pub fn render_prometheus(
+        &self,
+        rooms_active: usize,
+        participants_active: usize,
+        live_workers: usize,
+    ) -> String {
         let mut out = String::with_capacity(4096);
 
         let i = &self.inner;
@@ -245,6 +256,12 @@ impl ServerMetrics {
         // Gauges
         render_gauge(
             &mut out,
+            "simplestchat_media_workers_live",
+            "Media workers with an open WebRTC listener (zero if the snapshot times out)",
+            live_workers as u64,
+        );
+        render_gauge(
+            &mut out,
             "simplestchat_connections_active",
             "Currently active WebSocket connections",
             i.connections_active.load(Relaxed),
@@ -295,4 +312,21 @@ fn render_gauge(out: &mut String, name: &str, help: &str, value: u64) {
     let _ = writeln!(out, "# HELP {name} {help}");
     let _ = writeln!(out, "# TYPE {name} gauge");
     let _ = writeln!(out, "{name} {value}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn live_worker_gauge_uses_each_current_snapshot() {
+        let metrics = ServerMetrics::new();
+        let active = metrics.render_prometheus(2, 5, 3);
+        assert!(active.contains("# TYPE simplestchat_media_workers_live gauge\n"));
+        assert!(active.contains("simplestchat_media_workers_live 3\n"));
+        let closed = metrics.render_prometheus(2, 5, 0);
+        assert!(closed.contains("simplestchat_media_workers_live 0\n"));
+        assert!(closed.contains("simplestchat_rooms_active 2\n"));
+        assert!(closed.contains("simplestchat_participants_active 5\n"));
+    }
 }
