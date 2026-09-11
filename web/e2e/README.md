@@ -1,116 +1,120 @@
 # Browser integration tests
 
-The pinned Playwright/Chromium suite runs against a **disposable local database
-and server**. It creates unique test accounts and rooms. Never point it at a
-production database, even through a local tunnel.
+The Playwright suite creates accounts and rooms. Use a disposable local
+database and server.
 
 ## Install and run
 
-Configure the native build environment using the
-[development guide](../../docs/development.md), and start a disposable PostgreSQL
-database using the [testing guide](../../docs/testing.md#disposable-postgresql-and-browser-tests).
-Its name must end in `_test`. Then, from the repository root in the same shell:
+Complete [development setup](../../docs/development.md), then start the
+[disposable PostgreSQL cluster](../../docs/testing.md#disposable-postgresql-and-browser-tests).
+Keep its `DATABASE_URL` and `DISPOSABLE_TEST_DATABASE=1` exports in the same shell.
+From the repository root:
 
-```bash
+```sh
 cargo build --locked --bin simplestChat
 npm --prefix web ci --ignore-scripts
 npm --prefix web run build
 npm --prefix web/e2e ci --ignore-scripts
 npm --prefix web/e2e run install:browser
-export DISPOSABLE_TEST_DATABASE=1
-export DATABASE_URL='postgres://test_owner@127.0.0.1:15434/simplestchat_test?sslmode=disable'
 build/with-test-server.sh npm --prefix web/e2e test
 ```
 
-On Linux, install browser system dependencies with
+On Linux, install system dependencies with
 `npm --prefix web/e2e exec -- playwright install --with-deps chromium`.
-`npm ci` installs the exact test-tools lockfile; Playwright is not part of the
-application bundle or production image.
+Playwright is test-only, excluded from the application bundle and production image.
 
-The helper starts only its own server, runs SQLx migrations, waits for the
-database-backed room API, and stops that server on success or failure. It
-requires loopback PostgreSQL, an explicit disposable-database opt-in, and a
-database name ending `_test`. It neither creates nor deletes your database:
-dispose of that test database/cluster yourself after the run. Existing listeners
-are not reused or stopped. Database connection-query overrides are rejected.
+The helper migrates the database, enables registration, waits for API readiness,
+and stops the server afterward. It refuses occupied ports and non-test databases.
+Do not rebuild `web/dist` during tests.
 
-Defaults are HTTP `3119`, UDP `41010`, one media worker, registration enabled,
-and `target/debug/simplestChat`. Override these with `TEST_SERVER_PORT`,
-`TEST_MEDIA_PORT`, and `TEST_SERVER_BINARY` (prefer an absolute path). The helper
-exports `BASE_URL`, `COMMUNITY_E2E=1`, and `TEST_DATABASE_URL` to its child command.
-Running `build/with-test-server.sh true` just migrates/checks startup and shuts down.
+Defaults and overrides:
 
-Do not rebuild `web/dist` while browsers are running: changed asset hashes can
-invalidate in-flight requests. The suite uses fake media devices and Chromium's
-loopback peer-connection flag. This verifies actual browser decoding and media
-controls; synthetic RTP load tests alone cannot do that.
+| Setting | Default |
+| --- | --- |
+| `TEST_SERVER_PORT` | HTTP `3119`, loopback only |
+| `TEST_MEDIA_PORT` | UDP `41010`, one media worker |
+| `TEST_SERVER_BINARY` | `target/debug/simplestChat`; use an absolute override |
+| `TEST_ANNOUNCE_IP` | `127.0.0.1`; optional interface-owned IPv4 |
 
-## Coverage and diagnostics
+The helper exports `BASE_URL`, `COMMUNITY_E2E=1` and `TEST_DATABASE_URL`.
+`build/with-test-server.sh true` checks migration/startup only. To use an
+already-running disposable loopback server:
 
-`community.cjs` has 17 sequential checks covering registration, owned rooms,
-private conversations and isolation, ignore/opt-out, nickname, mentions/emoji,
-reports, role changes, bans/unban, local preview, received camera/audio,
-viewer-local media controls, profiles/images, recovery-key/password flows,
-mobile layout, and room deletion.
-
-The helper prints the temporary artifact directory containing `server.log` and
-screenshots. Set `E2E_ARTIFACTS` to choose another directory. CI retains these
-diagnostics for seven days. Accounts can remain after a successful run, and a
-failed run can leave its test room: discard the disposable database rather than
-running broad cleanup queries against a shared database.
-
-For an already-running disposable loopback server only:
-
-```bash
+```sh
 COMMUNITY_E2E=1 BASE_URL=http://127.0.0.1:3119 npm --prefix web/e2e test
 ```
 
-`PLAYWRIGHT_MODULE` and `PLAYWRIGHT_BROWSERS_PATH` remain available for an
-explicitly isolated tooling/browser installation.
+`PLAYWRIGHT_MODULE` and `PLAYWRIGHT_BROWSERS_PATH` support isolated tool/browser
+installations.
+
+## Firefox and WebKit
+
+Chromium is the default. Install the other pinned engines and run each with a
+fresh server:
+
+```sh
+npm --prefix web/e2e run install:browsers
+# macOS: change en0 to the interface holding this Mac's LAN address if needed.
+test_media_ip="$(ipconfig getifaddr en0)"
+TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER=firefox build/with-test-server.sh npm --prefix web/e2e test
+TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER=webkit build/with-test-server.sh npm --prefix web/e2e test
+```
+
+These engines may need LAN rather than loopback media candidates. The helper
+validates address ownership; HTTP and database access remain loopback-only.
+Media UDP already binds all IPv4 interfaces. WebKit fake capture is supported by
+this runner on macOS only. Unknown engine names fail rather than fall back.
+Tests use isolated profiles and fake capture without disabling autoplay policy.
+
+## Coverage and diagnostics
+
+`community.cjs` covers accounts/owned rooms, private-message
+isolation and preferences, mentions, profiles/images, moderation, recovery,
+preview, decoded video/audio, viewer controls, capture restart and mobile layout.
+Audio must be unmuted at positive volume with advancing playback. A separately
+simulated autoplay rejection checks the visible retry button.
+
+Capture termination is simulated on owned fake tracks. The check verifies remote
+removal, controls, restart guidance, preservation of the other capture kind and
+no automatic recapture. Firefox suppresses the synthetic track event; the runner
+probes support and reports this scenario as **skipped**, not passed. Native Firefox
+device termination still needs manual testing.
+
+The helper prints the artifact directory; set `E2E_ARTIFACTS` to choose one per
+run. It contains `server.log`, screenshots and `community-results.json` with
+engine details, completed/skipped checks and failures. Failure diagnostics may
+include local network addresses; keep artifacts private. Discard the test database
+afterward, including any remaining accounts.
 
 ## Informational browser/API performance
 
-With the same exported disposable database settings and cluster still running:
+With the disposable database still running and the UI already built:
 
-```bash
+```sh
 cargo build --locked --release --bin simplestChat
 PERFORMANCE_E2E=1 RUN_LABEL=local-sample \
   TEST_SERVER_BINARY="$PWD/target/release/simplestChat" \
   build/with-test-server.sh node web/e2e/performance.cjs
 ```
 
-`performance.cjs` records new-context navigation/paint timing, Chromium
-main-thread task duration and JS heap, hashed bundle bodies/resource transfers,
-two registrations, room creation/join, ten paced authenticated chat deliveries,
-and five seconds of actual fake-camera decoding. It asserts decoded-frame progress
-across that interval, no page errors, and closed peer connections/media elements after leave.
-The report is `browser-performance.json` in the printed artifact directory;
-failure reports remain marked incomplete/failed and the command exits nonzero.
+`browser-performance.json` records navigation/paint, Chromium task/heap samples,
+bundle identity/transfers, two-user registration and room creation, ten paced
+chat deliveries and five seconds of fake-camera decoding. The script checks
+frame progress, page errors and cleanup; failures exit nonzero.
 
-For comparisons, use release builds, the same pinned browser/harness, separate
-fresh databases for every run, and repeated alternating revision order. Supply
-`SERVER_REVISION`, `FRONTEND_REVISION`, `BUILD_TOOLCHAIN`, and `RUN_LABEL` metadata.
-`TEST_SERVER_WORKDIR` selects the server's checkout (validated to contain
-Cargo.toml and migrations), while `TEST_SERVER_BINARY` selects its absolute
-executable path. This makes each server serve its own built frontend assets.
-The helper's test command still runs from the current repository root.
+For comparisons, follow [performance](../../docs/performance.md): use release
+builds, the same pinned browser, fresh databases and alternating revision order.
+`TEST_SERVER_WORKDIR` selects the checkout/assets served by `TEST_SERVER_BINARY`;
+the test command still runs from the current repository. Label reports with
+`SERVER_REVISION`, `FRONTEND_REVISION`, `BUILD_TOOLCHAIN` and `RUN_LABEL`.
 
-The browser starts fresh and contexts do not share an HTTP cache, but OS file
-caches are not flushed. Chat delay includes browser-automation overhead. CDP
-task/heap samples are not whole-browser CPU/RSS, and direct loopback HTTP omits
-production TLS/proxy/compression/network effects. Run without competing builds
-or load tests. These tiny local samples are informational, not CI performance
-budgets, production-capacity claims, or cross-browser/device validation.
+Limits: patched headless engines, fake capture and resized desktop viewports do
+not establish branded-browser, physical-device or mobile behavior. Performance
+samples include automation overhead and unflushed OS caches; they are not
+whole-browser resource measurements or production-capacity budgets.
 
 ## Other checks
 
-- Fast source-level regressions: `npm --prefix web test`.
-- Native and database tests: see [testing](../../docs/testing.md).
-- Production image startup/migration/API test: after building an image named
-  `simplestchat-ci:production`, run `build/test-container.sh`. It creates only
-  disposable containers, publishes HTTP on a random loopback port, and removes
-  those containers and their temporary database data afterward.
-- `checklist.cjs` is the older 27-check room/lobby/moderation checklist. It is
-  **not a current CI gate** and its selectors may need updating. It defaults to
-  `localhost:3100`; inspect it before manual use, and use only a disposable local
-  server/database. The 17-check community suite is the maintained browser gate.
+See [testing](../../docs/testing.md) for unit, database and container checks.
+`checklist.cjs` is an older, non-CI checklist with potentially stale selectors;
+`community.cjs` is the maintained browser gate.
