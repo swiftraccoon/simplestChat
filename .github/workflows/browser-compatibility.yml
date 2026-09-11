@@ -106,10 +106,19 @@ jobs:
         run: npm --prefix web/e2e exec -- playwright install "${E2E_BROWSER}"
 
       - name: Community and real-media browser regressions
+        id: community
         timeout-minutes: 8
         env:
           E2E_ARTIFACTS: ${{ runner.temp }}/browser-compatibility
         run: build/with-test-postgres.sh build/with-test-server.sh npm --prefix web/e2e test
+
+      - name: Isolate native receive-only ICE gathering
+        if: ${{ !cancelled() && (steps.community.outcome == 'success' || steps.community.outcome == 'failure') }}
+        timeout-minutes: 3
+        env:
+          ICE_ISOLATION_E2E: '1'
+          E2E_ARTIFACTS: ${{ runner.temp }}/browser-compatibility/ice-isolation
+        run: node web/e2e/ice-isolation.cjs
 
       - name: Preserve browser and database diagnostics
         if: ${{ !cancelled() }}

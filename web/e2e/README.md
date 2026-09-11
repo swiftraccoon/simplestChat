@@ -102,6 +102,18 @@ the latest 128 ICE events per peer, including candidate address classifications.
 These snapshots exclude raw SDP, candidate addresses, ICE credentials,
 fingerprints and track identifiers.
 
+To isolate native ICE gathering without the app or database:
+
+```sh
+ICE_ISOLATION_E2E=1 E2E_BROWSER=webkit node web/e2e/ice-isolation.cjs
+```
+
+The check uses fresh browsers for receive-only offerer and answerer roles, with
+no capture or ICE servers. Each must publish a candidate and finish gathering
+within 15 seconds. `ice-isolation-results.json` contains sanitized snapshots;
+this does not test connectivity or media. CI runs it after the community check,
+including when that check fails.
+
 ## Informational browser/API performance
 
 With the disposable database still running and the UI already built:
