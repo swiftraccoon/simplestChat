@@ -77,6 +77,8 @@ removed afterward. Set `PRODUCTION_IMAGE` to test another built image.
 [CI](../.github/workflows/ci.yml) also runs formatting, locked Rust builds/tests,
 web tests/build, pinned Chromium integration tests, dependency audits, native
 dependency guards and production-image non-root/loader checks.
+The [browser compatibility workflow](../web/e2e/README.md#ci) adds weekly and
+manual Firefox/Linux and WebKit/macOS runs.
 
 ## Media correctness and performance
 

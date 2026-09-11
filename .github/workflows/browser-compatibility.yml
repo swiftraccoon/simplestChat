@@ -1,0 +1,124 @@
+name: Browser compatibility
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 7 * * 2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-compatibility-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  browser:
+    name: ${{ matrix.browser }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: firefox
+            os: ubuntu-24.04
+          - browser: webkit
+            os: macos-26
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+      OPENSSL_STATIC: '1'
+      CARGO_BUILD_JOBS: '2'
+      E2E_BROWSER: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config iproute2
+          # The Ubuntu 24.04 image includes PostgreSQL 16, with its service stopped.
+          test -x /usr/lib/postgresql/16/bin/initdb
+          echo '/usr/lib/postgresql/16/bin' >> "${GITHUB_PATH}"
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install postgresql@18
+          postgres_prefix="$(brew --prefix postgresql@18)"
+          echo "${postgres_prefix}/bin" >> "${GITHUB_PATH}"
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-09)
+        with:
+          toolchain: 1.98.1
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: browser-compatibility-${{ matrix.browser }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/e2e/package-lock.json
+
+      - name: Check test helpers
+        run: |
+          bash -n build/with-test-postgres.sh build/with-test-server.sh
+          node --test build/tests/*.test.mjs load_tests/benchmark-local.test.mjs
+
+      - name: Configure native dependencies and media address
+        run: |
+          echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-3.5.8" >> "${GITHUB_ENV}"
+          echo "PKG_CONFIG_PATH=${RUNNER_TEMP}/simplestchat-openssl-3.5.8/lib/pkgconfig" >> "${GITHUB_ENV}"
+          test_media_ip="$(node build/test-media-ip.mjs)"
+          echo "TEST_ANNOUNCE_IP=${test_media_ip}" >> "${GITHUB_ENV}"
+
+      # Keep OpenSSL outside target: rust-cache may clean non-Cargo files there.
+      - name: Build checksum-pinned OpenSSL
+        run: build/install-openssl.sh "${OPENSSL_DIR}"
+
+      - name: Build server
+        run: cargo build --locked --bin simplestChat
+
+      - name: Build UI and install pinned browser tooling
+        run: |
+          npm --prefix web ci --ignore-scripts
+          npm --prefix web run build
+          npm --prefix web/e2e ci --ignore-scripts
+
+      - name: Install Linux browser and dependencies
+        if: runner.os == 'Linux'
+        run: npm --prefix web/e2e exec -- playwright install --with-deps "${E2E_BROWSER}"
+
+      - name: Install macOS browser
+        if: runner.os == 'macOS'
+        run: npm --prefix web/e2e exec -- playwright install "${E2E_BROWSER}"
+
+      - name: Community and real-media browser regressions
+        timeout-minutes: 8
+        env:
+          E2E_ARTIFACTS: ${{ runner.temp }}/browser-compatibility
+        run: build/with-test-postgres.sh build/with-test-server.sh npm --prefix web/e2e test
+
+      - name: Preserve browser and database diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-compatibility-${{ matrix.browser }}-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/browser-compatibility
+            ${{ runner.temp }}/simplestchat-postgres.*/initdb.log
+            ${{ runner.temp }}/simplestchat-postgres.*/postgres.log
+          if-no-files-found: ignore
+          retention-days: 7

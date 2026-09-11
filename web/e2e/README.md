@@ -54,8 +54,7 @@ fresh server:
 
 ```sh
 npm --prefix web/e2e run install:browsers
-# macOS: change en0 to the interface holding this Mac's LAN address if needed.
-test_media_ip="$(ipconfig getifaddr en0)"
+test_media_ip="$(node build/test-media-ip.mjs)"
 TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER=firefox build/with-test-server.sh npm --prefix web/e2e test
 TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER=webkit build/with-test-server.sh npm --prefix web/e2e test
 ```
@@ -65,6 +64,18 @@ validates address ownership; HTTP and database access remain loopback-only.
 Media UDP already binds all IPv4 interfaces. WebKit fake capture is supported by
 this runner on macOS only. Unknown engine names fail rather than fall back.
 Tests use isolated profiles and fake capture without disabling autoplay policy.
+
+## CI
+
+[Browser compatibility](../../.github/workflows/browser-compatibility.yml) runs
+Firefox on Linux and WebKit on macOS every Tuesday at 07:23 UTC. To run it on
+demand, select **Actions → Browser compatibility → Run workflow**. Chromium
+remains in the push/pull-request checks.
+
+Each job creates and stops its own loopback PostgreSQL cluster and server.
+Reports, screenshots and logs are retained for seven days; database files are
+not uploaded. Firefox's unsupported capture-termination check remains an explicit
+skip in the report.
 
 ## Coverage and diagnostics
 
