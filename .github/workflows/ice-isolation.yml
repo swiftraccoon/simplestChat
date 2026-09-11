@@ -1,0 +1,68 @@
+name: ICE isolation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ice-isolation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  same-host:
+    name: WebKit and Chromium on the same Mac
+    runs-on: macos-26
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    env:
+      ICE_ISOLATION_E2E: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          cache: npm
+          cache-dependency-path: web/e2e/package-lock.json
+
+      - name: Install pinned browser tooling
+        id: tooling
+        run: |
+          npm --prefix web/e2e ci --ignore-scripts
+          npm --prefix web/e2e exec -- playwright install webkit chromium
+          test_media_ip="$(node build/test-media-ip.mjs)"
+          echo "TEST_ANNOUNCE_IP=${test_media_ip}" >> "${GITHUB_ENV}"
+
+      - name: Record macOS version
+        run: sw_vers
+
+      - name: WebKit receive-only ICE
+        if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}
+        timeout-minutes: 3
+        env:
+          E2E_BROWSER: webkit
+          E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation/webkit
+        run: node web/e2e/ice-isolation.cjs
+
+      - name: Chromium receive-only ICE
+        if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}
+        timeout-minutes: 3
+        env:
+          E2E_BROWSER: chromium
+          E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation/chromium
+        run: node web/e2e/ice-isolation.cjs
+
+      - name: Preserve both browser reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ice-isolation-macos-26
+          path: ${{ runner.temp }}/ice-isolation
+          if-no-files-found: ignore
+          retention-days: 7

@@ -114,6 +114,10 @@ within 15 seconds. `ice-isolation-results.json` contains sanitized snapshots;
 this does not test connectivity or media. CI runs it after the community check,
 including when that check fails.
 
+For a same-host comparison, run **Actions → ICE isolation → Run workflow**.
+It runs WebKit and Chromium on one hosted Mac without building the app, retaining
+both reports even when a probe fails. Each engine keeps its existing launch options.
+
 ## Informational browser/API performance
 
 With the disposable database still running and the UI already built:
