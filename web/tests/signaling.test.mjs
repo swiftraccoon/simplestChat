@@ -146,3 +146,71 @@ test('disconnect rejects all requests, cancels their timers, and permits a fresh
   timers.tick(10);
   assert.deepEqual(await request, reply);
 });
+
+test('a replaced socket closing late cannot disconnect the current connection or reject its requests', async t => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t);
+  const statuses = [];
+  client.setOnStatusChange(status => statuses.push(status));
+  // Browsers dispatch close asynchronously, sometimes after the replacement opens.
+  socket.close = () => { socket.readyState = 2; };
+  client.disconnect();
+  client.connect('replacement-token');
+  const replacement = FakeWebSocket.instances.at(-1);
+  replacement.open();
+  const request = client.request({ type: 'createSendTransport' }, 'transportCreated', 100);
+  request.catch(() => {});
+  socket.readyState = 3;
+  socket.onclose();
+  assert.equal(statuses.at(-1), 'connected');
+  assert.equal(client.connected, true);
+  assert.equal(timers.pendingCount, 1, 'only the active request timer may remain');
+  const reply = { type: 'transportCreated', transportId: 'current' };
+  replacement.receive(reply);
+  assert.deepEqual(await request, reply);
+  assert.equal(timers.pendingCount, 0);
+});
+
+test('events from a retired socket cannot reach current message or reconnect handlers', async t => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t);
+  const messages = [];
+  const statuses = [];
+  let reconnects = 0;
+  client.setOnMessage(message => messages.push(message));
+  client.setOnStatusChange(status => statuses.push(status));
+  client.setOnReconnected(() => reconnects++);
+  client.disconnect();
+  client.connect();
+  const replacement = FakeWebSocket.instances.at(-1);
+  replacement.open();
+  const statusCount = statuses.length;
+  const request = client.request({ type: 'createRecvTransport' }, 'transportCreated', 100);
+  socket.receive({ type: 'transportCreated', transportId: 'retired' });
+  socket.receive({ type: 'chatReceived', content: 'retired event' });
+  socket.onopen();
+  socket.onerror({ type: 'retired-error' });
+  assert.equal(timers.pendingCount, 1);
+  assert.deepEqual(messages, []);
+  assert.equal(statuses.length, statusCount);
+  assert.equal(reconnects, 0);
+  const reply = { type: 'transportCreated', transportId: 'current' };
+  replacement.receive(reply);
+  assert.deepEqual(await request, reply);
+});
+
+test('the current socket closing still rejects requests and reconnects once', async t => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t);
+  let reconnects = 0;
+  client.setOnReconnected(() => reconnects++);
+  const pending = assert.rejects(client.request({ type: 'createRecvTransport' }, 'transportCreated', 100), /WebSocket closed/);
+  socket.close();
+  await pending;
+  assert.equal(client.connected, false);
+  assert.equal(timers.pendingCount, 1);
+  timers.tick(2000);
+  const replacement = FakeWebSocket.instances.at(-1);
+  assert.notEqual(replacement, socket);
+  replacement.open();
+  assert.equal(reconnects, 1);
+  assert.equal(client.connected, true);
+  assert.equal(timers.pendingCount, 0);
+});

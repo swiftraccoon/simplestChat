@@ -54,9 +54,11 @@ export class SignalingClient {
     const protocols = this.currentToken
       ? ['simplestchat', `auth.${this.currentToken}`]
       : ['simplestchat'];
-    this.ws = new WebSocket(this.url, protocols);
+    const socket = new WebSocket(this.url, protocols);
+    this.ws = socket;
 
-    this.ws.onopen = () => {
+    socket.onopen = () => {
+      if (this.ws !== socket) return;
       console.log('[ws] connected');
       const wasReconnect = this.wasConnected;
       this.wasConnected = true;
@@ -67,7 +69,8 @@ export class SignalingClient {
       }
     };
 
-    this.ws.onmessage = (event) => {
+    socket.onmessage = (event) => {
+      if (this.ws !== socket) return;
       try {
         const msg: ServerMessage = JSON.parse(event.data as string);
 
@@ -89,7 +92,11 @@ export class SignalingClient {
       }
     };
 
-    this.ws.onclose = () => {
+    socket.onclose = () => {
+      // Authentication can replace a socket before its queued close arrives.
+      // Only the current connection owns status, requests, and reconnect timers.
+      if (this.ws !== socket) return;
+      this.ws = null;
       console.log('[ws] disconnected');
       this.onStatusChange?.('disconnected');
       this.rejectAllPending('WebSocket closed');
@@ -98,7 +105,8 @@ export class SignalingClient {
       }
     };
 
-    this.ws.onerror = (e) => {
+    socket.onerror = (e) => {
+      if (this.ws !== socket) return;
       console.error('[ws] error:', e);
     };
   }
@@ -112,9 +120,11 @@ export class SignalingClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.ws?.close();
+    const socket = this.ws;
     this.ws = null;
+    socket?.close();
     this.rejectAllPending('Disconnected');
+    if (socket) this.onStatusChange?.('disconnected');
   }
 
   send(msg: ClientMessage): void {
