@@ -97,9 +97,10 @@ engine details, completed/skipped checks and failures. Failure diagnostics may
 include local network addresses; keep artifacts private. Discard the test database
 afterward, including any remaining accounts.
 
-Connection failures also record ICE gathering, transceiver state and sanitized
-SDP summaries. Raw SDP, ICE credentials, fingerprints and track identifiers are
-excluded from these snapshots.
+Connection failures also record transceiver state, sanitized SDP summaries and
+the latest 128 ICE events per peer, including candidate address classifications.
+These snapshots exclude raw SDP, candidate addresses, ICE credentials,
+fingerprints and track identifiers.
 
 ## Informational browser/API performance
 

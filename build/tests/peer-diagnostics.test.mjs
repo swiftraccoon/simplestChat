@@ -29,7 +29,7 @@ function peer(overrides = {}) {
   };
 }
 
-async function collect(peers) {
+async function collect(peers, traces) {
   const mutations = [], delays = [], activeTimers = new Set();
   const forbidden = name => () => { mutations.push(name); throw new Error(`Unexpected mutation: ${name}`); };
   for (const value of peers) {
@@ -40,7 +40,8 @@ async function collect(peers) {
     Object.freeze(value);
   }
   const execute = runInNewContext(`(${collectPeerDiagnostics.toString()})`, {
-    window: { __communityPeers: Object.freeze(peers) },
+    window: { __communityPeers: Object.freeze(peers), __communityPeerEvents: traces },
+    performance: { now: () => 1000 },
     navigator: { mediaDevices: { getUserMedia: forbidden('getUserMedia'), getDisplayMedia: forbidden('getDisplayMedia') } },
     setTimeout(callback, delay) {
       delays.push(delay);
@@ -141,6 +142,38 @@ test('closed peers remain reportable without invoking unsafe getters or stats', 
   const value = peer({ connectionState: 'closed', iceConnectionState: 'closed', signalingState: 'closed', getStats() { assert.fail('closed peer stats read'); } });
   Object.defineProperty(value, 'localDescription', { get() { assert.fail('closed peer description read'); } });
   assert.deepEqual(await collect([value]), [{ connectionState: 'closed', iceConnectionState: 'closed', signalingState: 'closed', iceGatheringState: 'complete' }]);
+});
+
+test('ICE histories are copied before asynchronous stats and retain the observation age', async () => {
+  const trace = { startedAt: 100, dropped: 3, events: [{ event: 'icecandidate', elapsedMs: 20,
+    phase: 'candidate', candidate: { type: 'host', addressKind: 'mdns', isLoopback: null, matchesAnnouncedIp: null } }] };
+  const value = peer({ getStats: async () => {
+    trace.events[0].candidate.type = 'relay';
+    trace.events.push({ event: 'icecandidate', elapsedMs: 30, phase: 'complete', candidate: null });
+    return new Map();
+  } });
+  const [result] = await collect([value], new WeakMap([[value, trace]]));
+  assert.equal(result.iceEvents.length, 1);
+  assert.equal(result.iceEvents[0].candidate.type, 'host');
+  assert.equal(result.iceEventsDropped, 3);
+  assert.equal(result.iceEventsObservedAtMs, 900);
+  assert.equal(result.startedAt, undefined);
+});
+
+test('closed peers retain bounded ICE histories without reading descriptions or stats', async () => {
+  const value = peer({ connectionState: 'closed', getStats() { assert.fail('closed peer stats read'); } });
+  const trace = { dropped: 4, events: Array.from({ length: 140 }, (_, elapsedMs) => ({ event: 'connectionstatechange', elapsedMs, state: 'new' })) };
+  const [result] = await collect([value], new WeakMap([[value, trace]]));
+  assert.equal(result.iceEvents.length, 128);
+  assert.equal(result.iceEvents[0].elapsedMs, 12);
+  assert.equal(result.iceEventsDropped, 16);
+  assert.equal(result.descriptions, undefined);
+});
+
+test('unavailable ICE history cannot prevent the remaining peer snapshot', async () => {
+  const [result] = await collect([peer()], { get() { throw new Error(secret); } });
+  assert.deepEqual(result.errors, ['ICE event history unavailable']);
+  assert.deepEqual(result.stats, []);
 });
 
 test('missing and throwing description/transceiver accessors cannot prevent another peer snapshot', async () => {

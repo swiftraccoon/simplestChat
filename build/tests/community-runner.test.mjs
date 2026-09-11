@@ -63,7 +63,9 @@ async function fixture(t, toolingSource) {
 function pageFailureTooling(diagnosticsFail = false) {
   return `
     const { runInNewContext } = require('node:vm');
+    const listeners = new Map();
     const peer = {
+      addEventListener(type, listener) { listeners.set(type, listener); },
       connectionState: 'new', iceConnectionState: 'new', signalingState: 'stable', iceGatheringState: 'complete',
       localDescription: null,
       remoteDescription: { type: 'offer', sdp: [
@@ -76,12 +78,21 @@ function pageFailureTooling(diagnosticsFail = false) {
       }]; },
       async getStats() { return new Map([['T01', { id: 'T01', type: 'transport', iceState: 'new', dtlsState: 'new', bytesReceived: 0, bytesSent: 0 }]]); },
     };
+    const window = { RTCPeerConnection: class { constructor() { return peer; } } };
+    const navigator = { mediaDevices: { getUserMedia() { throw new Error('fixture must not capture'); } } };
     const page = {
-      setDefaultTimeout() {}, on() {}, async addInitScript() {},
-      async goto() { throw new Error('owned fixture navigation failure'); },
+      setDefaultTimeout() {}, on() {},
+      async addInitScript(fn, argument) {
+        runInNewContext('(' + fn.toString() + ')(argument)', { window, navigator, performance, URL, argument });
+      },
+      async goto() {
+        new window.RTCPeerConnection();
+        listeners.get('icecandidate')({ candidate: { candidate: 'candidate:PRIVATE_FOUNDATION 1 udp 1234 192.0.2.73 41010 typ host ufrag OWNED_ICE_SECRET' } });
+        throw new Error('owned fixture navigation failure');
+      },
       async evaluate(fn) {
         if (${diagnosticsFail}) throw new Error('owned fixture diagnostics failure');
-        return runInNewContext('(' + fn.toString() + ')()', { window: { __communityPeers: [peer] }, setTimeout, clearTimeout });
+        return runInNewContext('(' + fn.toString() + ')()', { window, performance, setTimeout, clearTimeout });
       },
       locator() { return { async evaluateAll() {}, async isVisible() { return false; } }; },
       async screenshot() {},
@@ -109,6 +120,11 @@ test('community runner collects sanitized peer state on failure without replacin
   assert.equal(peer.descriptions.remote.media[0].candidates.count, 1);
   assert.equal(peer.transceivers[0].currentDirection, null);
   assert.equal(peer.stats[0].bytesReceived, 0);
+  assert.equal(peer.iceEvents.length, 2);
+  assert.equal(peer.iceEvents[1].phase, 'candidate');
+  assert.equal(peer.iceEvents[1].candidate.addressKind, 'ipv4');
+  assert.equal(peer.iceEventsDropped, 0);
+  assert.ok(peer.iceEventsObservedAtMs >= peer.iceEvents[1].elapsedMs);
   assert.doesNotMatch(JSON.stringify(report.diagnostics), /OWNED_ICE_SECRET|OWNED_TRACK_SECRET|PRIVATE_FOUNDATION|192\.0\.2\.73/);
 });
 

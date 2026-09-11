@@ -26,6 +26,16 @@ async function collectPeerDiagnostics() {
       signalingState: choose(read(peer, 'signalingState'), ['stable', 'have-local-offer', 'have-remote-offer', 'have-local-pranswer', 'have-remote-pranswer', 'closed']),
       iceGatheringState: choose(read(peer, 'iceGatheringState'), ['new', 'gathering', 'complete']),
     };
+    try {
+      const trace = window.__communityPeerEvents?.get(peer);
+      if (trace) {
+        // Tracing stores only sanitized fields; copy now, before asynchronous stats.
+        result.iceEvents = trace.events.slice(-128).map(event => ({ ...event,
+          ...(event.candidate ? { candidate: { ...event.candidate } } : {}) }));
+        result.iceEventsDropped = trace.dropped + Math.max(0, trace.events.length - 128);
+        if (Number.isFinite(trace.startedAt)) result.iceEventsObservedAtMs = Math.max(0, performance.now() - trace.startedAt);
+      }
+    } catch { note(errors, 'ICE event history unavailable'); }
     if (result.connectionState === 'closed' || result.signalingState === 'closed') return finish(result);
 
     function summarizeDescription(description) {

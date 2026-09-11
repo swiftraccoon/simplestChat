@@ -14,6 +14,7 @@ const base = process.env.BASE_URL || 'http://127.0.0.1:3109';
 if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname)) throw new Error('This smoke is restricted to local test servers.');
 const { browserOptions } = require('./browser-options.cjs');
 const { collectPeerDiagnostics } = require('./peer-diagnostics.cjs');
+const { installPeerEventTracing } = require('./peer-events.cjs');
 const options = browserOptions(process.env.E2E_BROWSER);
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const artifacts = process.env.E2E_ARTIFACTS || fs.mkdtempSync(path.join(os.tmpdir(), 'simplestchat-community-e2e.'));
@@ -55,8 +56,8 @@ async function client(label, mobile = false) {
   const page = await context.newPage(); page.setDefaultTimeout(10000);
   const entry = { label, context, page, errors: [], frames: [], warnings: [] }; clients.push(entry);
   // Observe native peer connections for failure diagnostics; no SDP/media mocking.
+  await page.addInitScript(installPeerEventTracing, { announcedIp: process.env.TEST_ANNOUNCE_IP || null });
   await page.addInitScript(() => {
-    window.__communityPeers = [];
     window.__communityCaptureRequests = 0;
     const devices = navigator.mediaDevices;
     const getUserMedia = devices.getUserMedia.bind(devices);
@@ -64,14 +65,6 @@ async function client(label, mobile = false) {
       window.__communityCaptureRequests++;
       return getUserMedia(...args);
     };
-    if (!window.RTCPeerConnection) return;
-    window.RTCPeerConnection = new Proxy(window.RTCPeerConnection, {
-      construct(target, args, newTarget) {
-        const peer = Reflect.construct(target, args, newTarget);
-        window.__communityPeers.push(peer);
-        return peer;
-      },
-    });
   });
   page.on('pageerror', error => entry.errors.push(error.stack || error.message));
   page.on('console', message => {
