@@ -1121,6 +1121,7 @@ joinBtn.addEventListener('click', async () => {
         updateScreenButton(room.isScreenSharing);
         updateLocalTile();
       },
+      onLocalCaptureStopped: handleLocalCaptureStopped,
       onRemoteTrack: renderRemoteTrack,
       onRemoteTrackRemoved: removeRemoteTrack,
       onParticipantLeft: handleParticipantLeft,
@@ -1600,6 +1601,20 @@ function addLocalAvatar(tile: HTMLElement, name: string): void {
   initial.textContent = name.charAt(0).toUpperCase();
   noVideoAvatar.appendChild(initial);
   tile.insertBefore(noVideoAvatar, tile.firstChild);
+}
+
+function handleLocalCaptureStopped(kind: 'audio' | 'video'): void {
+  if (!room) return;
+  if (kind === 'audio') {
+    // Retire the held intent and any pending activation; only a new user action may recapture.
+    pttActivation++;
+    pttHeld = false;
+    showToast(micMode === 'ptt'
+      ? 'Microphone stopped. Release, then hold Space/T or the microphone button again to restart.'
+      : 'Microphone stopped. Click Unmute (M) to restart.');
+  } else {
+    showToast('Camera stopped. Click Cam On (V) to restart.');
+  }
 }
 
 async function pttActivate(): Promise<void> {

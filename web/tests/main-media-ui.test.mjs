@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import ts from '@typescript/typescript6';
 import { evaluateTypeScript } from './source-loader.mjs';
-import { createDOM } from './ui-fixture.mjs';
+import { createDOM, flush } from './ui-fixture.mjs';
 
 async function functionSource(name) {
   const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
@@ -91,6 +91,129 @@ test('media shortcuts are blocked in dialogs, interactive controls, and modified
   assert.equal(api.shortcutsBlocked({ ...basic, target: new Element(true) }), true);
   modal = {};
   assert.equal(api.shortcutsBlocked(basic), true);
+});
+
+async function captureStoppedUiFixture(initialRoom, mode = 'open', held = false) {
+  const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+  const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
+  let roomEvents;
+  function visit(node) {
+    if (ts.isNewExpression(node) && node.expression.getText(ast) === 'RoomClient') roomEvents = node.arguments[1];
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  assert.ok(roomEvents && ts.isObjectLiteralExpression(roomEvents));
+  const eventSource = ['onLocalMediaChanged', 'onLocalCaptureStopped'].map(name => {
+    const property = roomEvents.properties.find(node => node.name?.getText(ast) === name);
+    assert.ok(property, `${name} must be wired to the room`);
+    return property.getText(ast);
+  }).join(',');
+  const keyboardSource = ast.statements.filter(node => ts.isExpressionStatement(node) &&
+    ["document.addEventListener('keydown'", "document.addEventListener('keyup'"].some(prefix => node.getText(ast).startsWith(prefix)))
+    .map(node => node.getText(ast)).join('\n');
+  const functions = await Promise.all(['handleLocalCaptureStopped', 'pttActivate', 'pttDeactivate', 'shortcutsBlocked'].map(functionSource));
+  const updates = { mic: [], camera: [], screen: [], tiles: 0, toasts: [] };
+  const listeners = new Map();
+  class Element { closest() { return null; } }
+  const api = evaluateTypeScript(`
+    let room = initialRoom;
+    let micMode = initialMode;
+    let pttHeld = initialHeld;
+    let pttActivation = 0;
+    ${functions.join('\n')}
+    ${keyboardSource}
+    export const events = { ${eventSource} };
+    export function state() { return { pttHeld, pttActivation }; }
+    export function leave() { room = null; }
+  `, { globals: {
+    initialRoom, initialMode: mode, initialHeld: held, Element,
+    roomScreen: { hidden: false }, roomRecovering: false,
+    document: { querySelector() { return null; }, addEventListener(type, callback) { listeners.set(type, callback); } },
+    canStartBroadcast() { return true; },
+    updateMicButton(value) { updates.mic.push(value); },
+    updateCamButton(value) { updates.camera.push(value); },
+    updateScreenButton(value) { updates.screen.push(value); },
+    updateLocalTile() { updates.tiles++; },
+    showToast(message) { updates.toasts.push(message); },
+  } });
+  assert.equal(listeners.size, 2);
+  return {
+    ...api, updates,
+    stop(kind) { api.events.onLocalMediaChanged(); api.events.onLocalCaptureStopped(kind); },
+    key(type, key, repeat = false) {
+      listeners.get(type)({ key, repeat, target: new Element(), preventDefault() { this.defaultPrevented = true; } });
+    },
+  };
+}
+
+test('stopped open microphone refreshes controls and requests explicit restart without touching camera or screen', async () => {
+  const activeRoom = { hasMedia: true, audioEnabled: false, videoEnabled: true, isScreenSharing: true };
+  const api = await captureStoppedUiFixture(activeRoom);
+  api.stop('audio');
+  assert.deepEqual(api.updates, {
+    mic: [false], camera: [true], screen: [true], tiles: 1,
+    toasts: ['Microphone stopped. Click Unmute (M) to restart.'],
+  });
+  assert.deepEqual(api.state(), { pttHeld: false, pttActivation: 1 });
+  assert.equal(activeRoom.videoEnabled, true);
+  assert.equal(activeRoom.isScreenSharing, true);
+});
+
+test('stopped camera preserves held microphone intent and reports explicit camera restart', async () => {
+  const activeRoom = { hasMedia: true, audioEnabled: true, videoEnabled: false, isScreenSharing: true };
+  const api = await captureStoppedUiFixture(activeRoom, 'ptt', true);
+  api.stop('video');
+  assert.deepEqual(api.updates, {
+    mic: [true], camera: [false], screen: [true], tiles: 1,
+    toasts: ['Camera stopped. Click Cam On (V) to restart.'],
+  });
+  assert.deepEqual(api.state(), { pttHeld: true, pttActivation: 0 });
+  assert.equal(activeRoom.audioEnabled, true);
+  assert.equal(activeRoom.isScreenSharing, true);
+});
+
+for (const key of [' ', 't']) {
+  test(`stopped PTT ignores pending activation and repeated ${JSON.stringify(key)} until a fresh hold`, async () => {
+    const pending = deferred();
+    let activations = 0, mutes = 0;
+    const activeRoom = {
+      hasMedia: true, audioEnabled: false, videoEnabled: true, isScreenSharing: false,
+      unmuteAudio() { activations++; return activations === 1 ? pending.promise : Promise.resolve(); },
+      muteAudio() { mutes++; },
+    };
+    const api = await captureStoppedUiFixture(activeRoom, 'ptt');
+    api.key('keydown', key);
+    assert.equal(activations, 1);
+    assert.equal(api.state().pttHeld, true);
+    api.stop('audio');
+    assert.deepEqual(api.state(), { pttHeld: false, pttActivation: 2 });
+    assert.deepEqual(api.updates.toasts, ['Microphone stopped. Release, then hold Space/T or the microphone button again to restart.']);
+    api.key('keydown', key, true);
+    pending.resolve();
+    await flush();
+    assert.equal(activations, 1, 'a repeated held key must not reopen stopped capture');
+    assert.equal(api.updates.tiles, 1, 'late activation completion cannot refresh the retired intent');
+    assert.equal(api.state().pttHeld, false);
+    assert.equal(mutes, 0, 'capture stop must not issue new media commands');
+    api.key('keyup', key);
+    api.key('keydown', key);
+    await flush();
+    assert.equal(activations, 2, 'an explicit new hold may request capture again');
+    assert.equal(api.state().pttHeld, true);
+    assert.equal(activeRoom.videoEnabled, true);
+    api.key('keyup', key);
+    assert.equal(mutes, 1);
+    assert.equal(api.state().pttHeld, false);
+  });
+}
+
+test('capture-stop UI ignores notifications after leaving', async () => {
+  const api = await captureStoppedUiFixture({ hasMedia: true }, 'ptt');
+  api.leave();
+  api.stop('audio');
+  api.stop('video');
+  assert.deepEqual(api.updates, { mic: [], camera: [], screen: [], tiles: 0, toasts: [] });
+  assert.deepEqual(api.state(), { pttHeld: false, pttActivation: 0 });
 });
 
 test('scroll-button icon initialization preserves the unread badge for SocialChat startup', async () => {

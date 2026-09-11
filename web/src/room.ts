@@ -23,6 +23,7 @@ export type RoomEventHandler = {
   onParticipantsChanged: (participants: Map<string, Participant>) => void;
   onLocalStream: (stream: MediaStream) => void;
   onLocalMediaChanged: () => void;
+  onLocalCaptureStopped?: (kind: 'audio' | 'video') => void;
   onRemoteTrack: (participantId: string, participantName: string, track: MediaStreamTrack, kind: 'audio' | 'video', source?: string) => void;
   onRemoteTrackRemoved: (participantId: string, producerId: string, kind: 'audio' | 'video', source?: string) => void;
   onParticipantLeft: (participantId: string) => void;
@@ -238,6 +239,12 @@ export class RoomClient {
     const media = new MediaManager(this.signaling);
     this.media = media;
     this.mediaReady = false;
+    media.onLocalCaptureStopped = kind => {
+      if (generation !== this.generation || this.media !== media) return;
+      this.events.onLocalMediaChanged();
+      if (generation !== this.generation || this.media !== media) return;
+      this.events.onLocalCaptureStopped?.(kind);
+    };
     try {
       await media.setup();
     } catch (error) {

@@ -56,3 +56,89 @@ test('producer closure updates local controls and still removes remote media', a
   assert.equal(localChanges, 2, 'ordinary closure must also release a local producer');
   assert.equal(localProducers.size, 0);
 });
+
+async function captureStoppedFixture(events = {}) {
+  const managers = [];
+  class FakeMediaManager {
+    constructor() { managers.push(this); }
+    audioEnabled = true;
+    videoEnabled = true;
+    closed = false;
+    async setup() {}
+    close() { this.closed = true; }
+    stopCapture(kind) {
+      this[`${kind}Enabled`] = false;
+      this.onLocalCaptureStopped?.(kind);
+    }
+  }
+  const { RoomClient } = await loadTypeScript('src/room.ts', {
+    modules: { './media': { MediaManager: FakeMediaManager } },
+  });
+  const signaling = {
+    setOnMessage(handler) { this.onMessage = handler; },
+    setOnReconnected() {},
+    send(message) {
+      if (message.type !== 'joinRoom') return;
+      queueMicrotask(() => this.onMessage({
+        type: 'roomJoined', participantId: 'local', reconnectToken: 'token',
+        yourRole: 'user', participants: [],
+      }));
+    },
+  };
+  const room = new RoomClient(signaling, {
+    onParticipantsChanged() {}, onLocalMediaChanged() {}, ...events,
+  });
+  await room.join('room', 'Local participant');
+  return { room, managers };
+}
+
+test('capture stop refreshes current local state before reporting only the stopped kind', async () => {
+  const observed = [];
+  const { room, managers } = await captureStoppedFixture({
+    onLocalMediaChanged() { observed.push(['changed', room.audioEnabled, room.videoEnabled]); },
+    onLocalCaptureStopped(kind) { observed.push(['stopped', kind]); },
+  });
+  managers[0].stopCapture('audio');
+  assert.deepEqual(observed, [['changed', false, true], ['stopped', 'audio']]);
+  managers[0].stopCapture('video');
+  assert.deepEqual(observed.slice(2), [['changed', false, false], ['stopped', 'video']]);
+  await room.leave();
+});
+
+test('capture stop remains compatible with handlers that only refresh local media', async () => {
+  let changes = 0;
+  const { room, managers } = await captureStoppedFixture({ onLocalMediaChanged() { changes++; } });
+  managers[0].stopCapture('audio');
+  assert.equal(changes, 1);
+  await room.leave();
+});
+
+test('capture callbacks from a left or replaced media manager cannot update the room', async () => {
+  const observed = [];
+  const { room, managers } = await captureStoppedFixture({
+    onLocalMediaChanged() { observed.push('changed'); },
+    onLocalCaptureStopped(kind) { observed.push(kind); },
+  });
+  const oldCallback = managers[0].onLocalCaptureStopped;
+  await room.leave();
+  assert.equal(managers[0].closed, true);
+  oldCallback('audio');
+  assert.deepEqual(observed, []);
+  await room.join('another-room', 'Local participant');
+  oldCallback('video');
+  assert.deepEqual(observed, []);
+  managers[1].stopCapture('audio');
+  assert.deepEqual(observed, ['changed', 'audio']);
+  await room.leave();
+});
+
+test('capture notification is retired if the local-media callback leaves the room', async () => {
+  const observed = [];
+  const { room, managers } = await captureStoppedFixture({
+    onLocalMediaChanged() { observed.push('changed'); void room.leave(); },
+    onLocalCaptureStopped(kind) { observed.push(kind); },
+  });
+  managers[0].stopCapture('audio');
+  assert.deepEqual(observed, ['changed']);
+  assert.equal(managers[0].closed, true);
+});

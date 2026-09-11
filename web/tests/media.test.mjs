@@ -18,6 +18,10 @@ class Track extends EventTarget {
   readyState = 'live';
   constructor(kind) { super(); this.kind = kind; }
   stop() { this.readyState = 'ended'; }
+  endExternally() {
+    this.readyState = 'ended';
+    this.dispatchEvent(new Event('ended'));
+  }
 }
 
 class Stream {
@@ -31,7 +35,7 @@ class Stream {
 
 async function fixture(t) {
   const state = {
-    tracks: [], producers: [], sent: [],
+    tracks: [], producers: [], sent: [], captureCalls: [],
     capture: null, beforeProduce: null, replace: null,
   };
   const newTrack = kind => {
@@ -45,9 +49,12 @@ async function fixture(t) {
       localStorage: { getItem() { return null; }, setItem() {} },
       MediaStream: Stream,
       navigator: { mediaDevices: {
-        getUserMedia: constraints => state.capture
-          ? state.capture(constraints)
-          : Promise.resolve(new Stream([newTrack(constraints.audio ? 'audio' : 'video')])),
+        getUserMedia: constraints => {
+          state.captureCalls.push(constraints);
+          return state.capture
+            ? state.capture(constraints)
+            : Promise.resolve(new Stream([newTrack(constraints.audio ? 'audio' : 'video')]));
+        },
         getDisplayMedia: async () => new Stream([newTrack('video'), newTrack('audio')]),
       } },
       console: { log() {} },
@@ -64,6 +71,7 @@ async function fixture(t) {
         track: options.track, rtpParameters: {}, stopTracks: true,
         disableTrackOnPause: true, zeroRtpOnPause: false, appData: options.appData,
       });
+      t.mock.method(producer, 'close');
       producer.on('@replacetrack', (track, resolve, reject) => {
         Promise.resolve().then(() => state.replace?.(track)).then(resolve, reject);
       });
@@ -74,6 +82,389 @@ async function fixture(t) {
   };
   t.after(() => media.close());
   return { ...state, state, media, newTrack };
+}
+
+const startLocal = (media, kind) => kind === 'audio' ? media.unmuteAudio() : media.unmuteVideo();
+const localEnabled = (media, kind) => kind === 'audio' ? media.audioEnabled : media.videoEnabled;
+const switchLocal = (media, kind) => kind === 'audio' ? media.switchMic('next-mic') : media.switchCamera('next-camera');
+const localTracks = (media, kind) => media.getLocalStream()?.getTracks().filter(track => track.kind === kind) ?? [];
+const closeMessages = (state, producer) => state.sent.filter(message => message.type === 'closeProducer'
+  && message.producerId === producer.id);
+
+test('track fixture distinguishes explicit stop from external capture termination', () => {
+  const track = new Track('audio');
+  let events = 0;
+  track.addEventListener('ended', () => events++);
+  track.stop();
+  assert.equal(track.readyState, 'ended');
+  assert.equal(events, 0);
+  track.endExternally();
+  assert.equal(events, 1);
+});
+
+for (const kind of ['audio', 'video']) {
+  test(`external ${kind} end closes only its producer once and requires an explicit restart`, { timeout: 2_000 }, async t => {
+    const { state, media } = await fixture(t);
+    const stopped = [];
+    media.onLocalCaptureStopped = value => stopped.push(value);
+    await startLocal(media, kind);
+    const producer = state.producers[0];
+    const track = producer.track;
+    const otherKind = kind === 'audio' ? 'video' : 'audio';
+    await startLocal(media, otherKind);
+    const otherProducer = state.producers[1];
+    const captures = state.captureCalls.length;
+
+    track.endExternally();
+    track.endExternally(); // Duplicate/late delivery must be harmless.
+    await Promise.resolve();
+    assert.equal(producer.closed, true);
+    assert.equal(producer.close.mock.callCount(), 1);
+    assert.equal(closeMessages(state, producer).length, 1);
+    assert.equal(localEnabled(media, kind), false);
+    assert.deepEqual(localTracks(media, kind), []);
+    assert.deepEqual(stopped, [kind]);
+    assert.equal(otherProducer.closed, false);
+    assert.equal(localEnabled(media, otherKind), true);
+    assert.equal(state.captureCalls.length, captures, 'external end must not request another capture');
+
+    await startLocal(media, kind);
+    assert.equal(state.captureCalls.length, captures + 1);
+    assert.equal(state.producers.length, 3);
+    assert.equal(localEnabled(media, kind), true);
+    assert.equal(localTracks(media, kind)[0].readyState, 'live');
+    assert.deepEqual(stopped, [kind]);
+  });
+
+  test(`external ${kind} end follows replaceTrack and ignores the retired track`, { timeout: 2_000 }, async t => {
+    const { state, media } = await fixture(t);
+    const stopped = [];
+    media.onLocalCaptureStopped = value => stopped.push(value);
+    await startLocal(media, kind);
+    const producer = state.producers[0];
+    const retiredTrack = producer.track;
+    await switchLocal(media, kind);
+    const currentTrack = producer.track;
+    const captures = state.captureCalls.length;
+    assert.notEqual(currentTrack, retiredTrack);
+    assert.equal(retiredTrack.readyState, 'ended');
+    assert.deepEqual(stopped, [], 'deliberate replacement does not report an external end');
+
+    retiredTrack.endExternally();
+    assert.equal(producer.closed, false);
+    assert.equal(localEnabled(media, kind), true);
+    assert.deepEqual(localTracks(media, kind), [currentTrack]);
+    assert.deepEqual(stopped, []);
+    currentTrack.endExternally();
+    assert.equal(producer.closed, true);
+    assert.equal(producer.close.mock.callCount(), 1);
+    assert.equal(closeMessages(state, producer).length, 1);
+    assert.equal(localEnabled(media, kind), false);
+    assert.deepEqual(localTracks(media, kind), []);
+    assert.deepEqual(stopped, [kind]);
+    assert.equal(state.captureCalls.length, captures);
+  });
+
+  test(`external ${kind} end during produce discards the already-ended returned producer`, { timeout: 2_000 }, async t => {
+    const { state, media } = await fixture(t);
+    const stopped = [];
+    media.onLocalCaptureStopped = value => stopped.push(value);
+    const started = deferred(), produce = deferred();
+    t.after(() => produce.resolve());
+    state.beforeProduce = options => { started.resolve(options.track); return produce.promise; };
+    const activation = startLocal(media, kind);
+    const track = await started.promise;
+    track.endExternally();
+    produce.resolve();
+    await activation;
+    const producer = state.producers[0];
+    assert.equal(producer.closed, true);
+    assert.equal(producer.close.mock.callCount(), 1);
+    assert.equal(closeMessages(state, producer).length, 1);
+    assert.equal(localEnabled(media, kind), false);
+    assert.deepEqual(localTracks(media, kind), []);
+    assert.deepEqual(stopped, [kind]);
+    assert.equal(state.captureCalls.length, 1);
+    state.beforeProduce = null;
+    await startLocal(media, kind);
+    assert.equal(localEnabled(media, kind), true);
+    assert.equal(state.producers.length, 2);
+  });
+
+  test(`external end of pending ${kind} replacement cannot enable an ended track`, { timeout: 2_000 }, async t => {
+    const { state, media } = await fixture(t);
+    const stopped = [];
+    media.onLocalCaptureStopped = value => stopped.push(value);
+    await startLocal(media, kind);
+    const producer = state.producers[0];
+    const started = deferred(), replacement = deferred();
+    t.after(() => replacement.resolve());
+    state.replace = track => { started.resolve(track); return replacement.promise; };
+    const switching = switchLocal(media, kind);
+    const track = await started.promise;
+    track.endExternally();
+    replacement.resolve();
+    await switching;
+    assert.equal(producer.closed, true);
+    assert.equal(producer.close.mock.callCount(), 1);
+    assert.equal(closeMessages(state, producer).length, 1);
+    assert.equal(localEnabled(media, kind), false);
+    assert.deepEqual(localTracks(media, kind), []);
+    assert.equal(track.readyState, 'ended');
+    assert.deepEqual(stopped, [kind]);
+    assert.equal(state.captureCalls.length, 2);
+    state.replace = null;
+    await startLocal(media, kind);
+    assert.equal(localEnabled(media, kind), true);
+    assert.equal(state.producers.length, 2);
+  });
+
+  test(`temporary ${kind} mute/unmute events do not close or recapture`, { timeout: 2_000 }, async t => {
+    const { state, media } = await fixture(t);
+    const stopped = [];
+    media.onLocalCaptureStopped = value => stopped.push(value);
+    await startLocal(media, kind);
+    const producer = state.producers[0];
+    const track = producer.track;
+    track.dispatchEvent(new Event('mute'));
+    track.dispatchEvent(new Event('unmute'));
+    await Promise.resolve();
+    assert.equal(track.readyState, 'live');
+    assert.equal(producer.closed, false);
+    assert.equal(producer.close.mock.callCount(), 0);
+    assert.deepEqual(closeMessages(state, producer), []);
+    assert.equal(localEnabled(media, kind), true);
+    assert.deepEqual(localTracks(media, kind), [track]);
+    assert.deepEqual(stopped, []);
+    assert.equal(state.captureCalls.length, 1);
+  });
+
+  test(`external ${kind} end after manager close cannot notify, signal, or recapture`, { timeout: 2_000 }, async t => {
+    const { state, media } = await fixture(t);
+    const stopped = [];
+    media.onLocalCaptureStopped = value => stopped.push(value);
+    await startLocal(media, kind);
+    const producer = state.producers[0];
+    const track = producer.track;
+    media.close();
+    const sent = [...state.sent];
+    track.endExternally();
+    await Promise.resolve();
+    assert.equal(producer.close.mock.callCount(), 1);
+    assert.equal(localEnabled(media, kind), false);
+    assert.equal(media.getLocalStream(), null);
+    assert.deepEqual(stopped, []);
+    assert.deepEqual(state.sent, sent);
+    assert.equal(state.captureCalls.length, 1);
+  });
+}
+
+for (const stage of ['capture', 'replace']) {
+  test(`external active camera end during device ${stage} cancels the late replacement`, { timeout: 2_000 }, async t => {
+    const { state, media, newTrack } = await fixture(t);
+    const stopped = [];
+    media.onLocalCaptureStopped = value => stopped.push(value);
+    await media.unmuteVideo();
+    const producer = state.producers[0];
+    const activeTrack = producer.track;
+    const started = deferred(), pending = deferred();
+    const replacementTrack = newTrack('video');
+    const result = stage === 'capture' ? new Stream([replacementTrack]) : undefined;
+    t.after(() => pending.resolve(result));
+    state.capture = () => stage === 'capture'
+      ? (started.resolve(), pending.promise) : Promise.resolve(new Stream([replacementTrack]));
+    if (stage === 'replace') state.replace = () => { started.resolve(); return pending.promise; };
+    const switching = media.switchCamera('next-camera');
+    await started.promise;
+    activeTrack.endExternally();
+    pending.resolve(result);
+    await switching;
+    assert.equal(producer.closed, true);
+    assert.equal(producer.close.mock.callCount(), 1);
+    assert.equal(closeMessages(state, producer).length, 1);
+    assert.equal(replacementTrack.readyState, 'ended');
+    assert.equal(media.videoEnabled, false);
+    assert.deepEqual(localTracks(media, 'video'), []);
+    assert.deepEqual(stopped, ['video']);
+    assert.equal(state.captureCalls.length, 2);
+  });
+}
+
+for (const kind of ['audio', 'video']) {
+  test(`an already-ended ${kind} capture result never reaches produce`, { timeout: 2_000 }, async t => {
+    const { state, media, newTrack } = await fixture(t);
+    const stopped = [];
+    media.onLocalCaptureStopped = value => stopped.push(value);
+    const track = newTrack(kind);
+    track.endExternally(); // The browser's event predates the manager's listener.
+    state.capture = async () => new Stream([track]);
+    await startLocal(media, kind);
+    assert.equal(state.producers.length, 0);
+    assert.equal(localEnabled(media, kind), false);
+    assert.deepEqual(localTracks(media, kind), []);
+    assert.deepEqual(stopped, [kind]);
+    assert.equal(state.captureCalls.length, 1);
+    track.endExternally();
+    assert.deepEqual(stopped, [kind]);
+    state.capture = null;
+    await startLocal(media, kind);
+    assert.equal(localEnabled(media, kind), true);
+    assert.equal(state.producers.length, 1);
+  });
+
+  for (const stage of ['produce', 'replace']) {
+    test(`${kind} ${stage} checks ended readiness before the queued event arrives`, { timeout: 2_000 }, async t => {
+      const { state, media } = await fixture(t);
+      const stopped = [];
+      media.onLocalCaptureStopped = value => stopped.push(value);
+      if (stage === 'replace') await startLocal(media, kind);
+      const started = deferred(), pending = deferred();
+      t.after(() => pending.resolve());
+      if (stage === 'produce') {
+        state.beforeProduce = options => { started.resolve(options.track); return pending.promise; };
+      } else {
+        state.replace = track => { started.resolve(track); return pending.promise; };
+      }
+      const activation = stage === 'produce' ? startLocal(media, kind) : switchLocal(media, kind);
+      const track = await started.promise;
+      // Native readiness can change before the ended event's task is delivered.
+      // Do not dispatch here: this specifically tests the post-await state check.
+      track.readyState = 'ended';
+      pending.resolve();
+      await activation;
+      const producer = state.producers[0];
+      assert.equal(producer.closed, true);
+      assert.equal(producer.close.mock.callCount(), 1);
+      assert.equal(closeMessages(state, producer).length, 1);
+      assert.equal(localEnabled(media, kind), false);
+      assert.deepEqual(localTracks(media, kind), []);
+      assert.deepEqual(stopped, [kind]);
+      track.endExternally();
+      assert.equal(producer.close.mock.callCount(), 1);
+      assert.equal(closeMessages(state, producer).length, 1);
+      assert.deepEqual(stopped, [kind]);
+      assert.equal(state.captureCalls.length, stage === 'produce' ? 1 : 2);
+    });
+  }
+}
+
+test('late ended events from deliberately paused capture do not close producers or notify', { timeout: 2_000 }, async t => {
+  const { state, media } = await fixture(t);
+  const stopped = [];
+  media.onLocalCaptureStopped = value => stopped.push(value);
+  await media.unmuteAudio();
+  await media.unmuteVideo();
+  const [audioProducer, videoProducer] = state.producers;
+  const retiredTracks = state.producers.map(producer => producer.track);
+  media.muteAudio();
+  media.pauseVideo();
+  for (const track of retiredTracks) track.endExternally();
+  assert.equal(audioProducer.closed, false);
+  assert.equal(videoProducer.closed, false);
+  assert.equal(audioProducer.close.mock.callCount(), 0);
+  assert.equal(videoProducer.close.mock.callCount(), 0);
+  assert.equal(media.audioEnabled, false);
+  assert.equal(media.videoEnabled, false);
+  assert.deepEqual(stopped, []);
+  assert.equal(state.captureCalls.length, 2);
+  assert.equal(state.sent.some(message => message.type === 'closeProducer'), false);
+  await media.unmuteAudio();
+  await media.unmuteVideo();
+  assert.equal(state.producers.length, 2);
+  assert.equal(media.audioEnabled, true);
+  assert.equal(media.videoEnabled, true);
+  for (const track of retiredTracks) track.endExternally();
+  assert.equal(media.audioEnabled, true);
+  assert.equal(media.videoEnabled, true);
+  assert.deepEqual(stopped, []);
+});
+
+for (const stage of ['produce', 'replace']) {
+  test(`a fresh camera start survives stale ${stage} completion and retains pending-capture cancellation`, { timeout: 2_000 }, async t => {
+    const { state, media } = await fixture(t);
+    const stopped = [];
+    media.onLocalCaptureStopped = value => stopped.push(value);
+    if (stage === 'replace') await media.unmuteVideo();
+    const oldStarted = deferred(), oldPending = deferred();
+    const freshStarted = deferred(), freshPending = deferred();
+    t.after(() => { oldPending.resolve(); freshPending.resolve(); });
+    if (stage === 'produce') {
+      state.beforeProduce = options => { oldStarted.resolve(options.track); return oldPending.promise; };
+    } else {
+      state.replace = track => { oldStarted.resolve(track); return oldPending.promise; };
+    }
+    const oldActivation = stage === 'produce' ? media.unmuteVideo() : media.switchCamera('next-camera');
+    const oldTrack = await oldStarted.promise;
+    oldTrack.endExternally();
+    assert.deepEqual(stopped, ['video']);
+
+    state.beforeProduce = options => { freshStarted.resolve(options.track); return freshPending.promise; };
+    const freshActivation = media.unmuteVideo();
+    const freshTrack = await freshStarted.promise;
+    assert.notEqual(freshTrack, oldTrack);
+    oldPending.resolve();
+    await oldActivation;
+    assert.equal(freshTrack.readyState, 'live', 'stale completion must not stop a fresh capture');
+    assert.deepEqual(stopped, ['video']);
+    assert.equal(state.producers[0].closed, true);
+    assert.equal(state.producers[0].close.mock.callCount(), 1);
+    assert.equal(closeMessages(state, state.producers[0]).length, 1);
+
+    // This public operation also proves the old finally block did not erase
+    // the newer pending-track reference and leave capture running after pause.
+    media.pauseVideo();
+    assert.equal(freshTrack.readyState, 'ended');
+    freshPending.resolve();
+    await freshActivation;
+    assert.equal(state.producers[1].closed, true);
+    assert.equal(state.producers[1].close.mock.callCount(), 1);
+    assert.equal(closeMessages(state, state.producers[1]).length, 1);
+    assert.equal(media.videoEnabled, false);
+    assert.deepEqual(localTracks(media, 'video'), []);
+    assert.deepEqual(stopped, ['video']);
+    state.beforeProduce = state.replace = null;
+    await media.unmuteVideo();
+    assert.equal(media.videoEnabled, true);
+    assert.equal(state.producers.length, 3);
+    assert.deepEqual(stopped, ['video']);
+  });
+
+  test(`an already-active fresh camera survives an older cancelled ${stage}`, { timeout: 2_000 }, async t => {
+    const { state, media } = await fixture(t);
+    const stopped = [];
+    media.onLocalCaptureStopped = value => stopped.push(value);
+    if (stage === 'replace') await media.unmuteVideo();
+    const started = deferred(), pending = deferred();
+    t.after(() => pending.resolve());
+    if (stage === 'produce') {
+      state.beforeProduce = options => { started.resolve(options.track); return pending.promise; };
+    } else {
+      state.replace = track => { started.resolve(track); return pending.promise; };
+    }
+    const oldActivation = stage === 'produce' ? media.unmuteVideo() : media.switchCamera('next-camera');
+    const oldTrack = await started.promise;
+    oldTrack.endExternally();
+    state.beforeProduce = state.replace = null;
+    await media.unmuteVideo();
+    const freshTrack = localTracks(media, 'video')[0];
+    const freshProducer = state.producers.find(producer => producer.track === freshTrack);
+    assert.equal(media.videoEnabled, true);
+    oldTrack.endExternally();
+    pending.resolve();
+    await oldActivation;
+    assert.equal(media.videoEnabled, true);
+    assert.equal(freshTrack.readyState, 'live');
+    assert.deepEqual(localTracks(media, 'video'), [freshTrack]);
+    assert.equal(freshProducer.closed, false);
+    assert.equal(freshProducer.close.mock.callCount(), 0);
+    assert.deepEqual(closeMessages(state, freshProducer), []);
+    const oldProducer = state.producers.find(producer => producer !== freshProducer);
+    assert.equal(oldProducer.closed, true);
+    assert.equal(oldProducer.close.mock.callCount(), 1);
+    assert.equal(closeMessages(state, oldProducer).length, 1);
+    assert.deepEqual(stopped, ['video']);
+    assert.equal(state.captureCalls.length, stage === 'produce' ? 2 : 3);
+  });
 }
 
 async function pttFor(media) {
