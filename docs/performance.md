@@ -67,13 +67,18 @@ another checkout, set `--generator-source-root` to that source tree.
 | `multi-room` | Publishers distributed across up to four rooms |
 | `webinar` | One percent of clients publish, rounded up |
 | `audio` | Audio-only conference |
-| `churn` | About one fifth of clients reconnect during the run |
+| `churn` | About one fifth of clients repeatedly join with fresh media sessions |
 
 Start with the ten-client example. For 30 clients, use `--scenarios multi-room`.
-For churn, use `--clients 5 --scenarios churn`.
+For churn, start with `--clients 3 --scenarios churn`.
 Room admission allows 30 joins per IP and 10 per room/IP in 60 seconds, including
 reconnects. Larger runs need a slower ramp; the runner checks the initial ramp
 before starting. See [admission limits](configuration.md#additional-fixed-admission-limits).
+
+Churn is not retained-session signaling recovery. Its delivery gate is a lifetime
+minimum, not complete per-attempt coverage; inspect the individual attempts and
+skipped consumers. The [browser suite](../web/e2e/README.md#coverage-and-diagnostics)
+checks signaling recovery with retained media separately.
 
 The local runner supports up to 100 clients, four workers, five repetitions, and
 180 seconds per measurement. It tests guest media without a database.

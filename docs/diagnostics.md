@@ -146,6 +146,11 @@ or incomplete samples remain visible as incomplete coverage. The rollup reports
 `mediaDiagnosticCoverageComplete` separately from workload and shutdown results.
 Sampling failures must not erase the generator's original failure.
 
+Use a non-churn workload when complete native correlation is required. The three
+scheduled samples cannot reliably observe each short-lived churn session twice;
+missing pairs correctly make coverage incomplete even when delivery checks pass.
+Increasing entity or recorder limits does not close this sampling gap.
+
 Consumer packet/byte counters describe the worker's outbound RTP accounting;
 producer counters describe worker intake. Independent producer stats are retained
 in the raw snapshots, not summarized by the consumer correlation report.

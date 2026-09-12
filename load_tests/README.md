@@ -66,6 +66,9 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 Publishers are selected before room assignment; low ratios can leave rooms with
 no publisher. Churn selects a population, not an exact arrival rate: sessions last
 5–30 seconds, followed by a two-second reconnect cooldown.
+Each iteration performs a fresh room join with new media transports; it does not
+exercise credential-based signaling reconnection. With abrupt departure, the old
+membership can remain in reconnect grace while the new session joins.
 
 ## What constitutes success
 
@@ -77,7 +80,8 @@ creation, and measured publisher RTP. After a three-second setup allowance,
 eligible consumers must receive packets with no more than two consecutive empty
 one-second buckets. Planned churn ends eligibility; short-lived streams are
 reported as skipped. Each client must validate its initial expected subscription
-count. During churn, that is a lifetime minimum, not per-reconnect coverage.
+count. During churn, that is a lifetime minimum, not per-attempt coverage; a pass
+does not establish complete media delivery for every later session.
 Unexpected producer closure fails the run.
 
 Accept a run only when the process exits successfully, `run.completed` and

@@ -184,6 +184,12 @@ transport processing, or the client track reader.
 Sixteen follow-up one-minute runs did not reproduce the failure, but its cause
 has not been identified. Larger-scale regression validation remains incomplete.
 
+After the separate transport-ordering fix `3fc7b28`, two further 30-client,
+four-room checks each delivered all 240 subscriptions in every second of a
+three-minute measurement. Native diagnostics were complete and shutdown was
+clean. These checks did not reproduce the older receive-only failure; they do
+not establish that its cause was fixed.
+
 A separate 50-client single-room attempt hit the room/IP admission limit;
 it provides no throughput measurement. Production capacity and long-running
 churn/soak behavior have not been established by these local tests.
