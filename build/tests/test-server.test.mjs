@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import dgram from 'node:dgram';
 import { once } from 'node:events';
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -47,11 +47,35 @@ async function run(t, environment = {}, command = [process.execPath, '-e', 'proc
   let output = '';
   child.stdout.on('data', chunk => { output += chunk; });
   child.stderr.on('data', chunk => { output += chunk; });
-  const timer = setTimeout(() => child.kill('SIGTERM'), 10000);
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; child.kill('SIGTERM'); }, 10000);
   const [status, signal] = await once(child, 'close');
   clearTimeout(timer);
+  assert.equal(timedOut, false, `Helper timed out: ${output}`);
   assert.equal(signal, null, output);
   return { status, output, artifacts };
+}
+
+async function shutdownReport(result) {
+  const file = path.join(result.artifacts, 'server-shutdown.json');
+  assert.equal((await stat(file)).mode & 0o777, 0o600);
+  const report = JSON.parse(await readFile(file, 'utf8'));
+  assert.equal(report.schemaVersion, 1);
+  assert.ok(Date.parse(report.finishedAt));
+  return report;
+}
+
+async function shutdownFixture(t, behavior) {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-shutdown-test.'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const server = path.join(directory, 'shutdown-server.mjs');
+  await writeFile(server, `#!/usr/bin/env node
+    await import(${JSON.stringify(pathToFileURL(fixture).href)});
+    process.removeAllListeners('SIGTERM');
+    ${behavior}
+  `);
+  await chmod(server, 0o755);
+  return { TEST_SERVER_BINARY: server };
 }
 
 async function announcementFixture(t, expectedAddress) {
@@ -163,7 +187,116 @@ test('helper isolates server configuration and preserves command failures while 
   const pid = Number(log.match(/FIXTURE_PID=(\d+)/)?.[1]);
   assert.ok(pid > 0, log);
   assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+  const report = await shutdownReport(result);
+  assert.equal(report.passed, true, 'Shutdown succeeded even though the command failed');
+  assert.equal(report.statusBeforeCleanup, 23);
+  assert.equal(report.waitStatus, 0);
 });
+
+test('helper reports actual graceful exit separately from its requested TERM', async t => {
+  const result = await run(t);
+  assert.equal(result.status, 0, result.output);
+  const report = await shutdownReport(result);
+  assert.equal(report.statusBeforeCleanup, 0);
+  assert.equal(report.termAttempted, true);
+  assert.equal(report.termSent, true);
+  assert.equal(report.killAttempted, false);
+  assert.equal(report.killSent, false);
+  assert.equal(report.waitStatus, 0);
+  assert.equal(report.waitStatusInterpretation, 'exited_zero');
+  assert.equal(report.passed, true);
+  assert.throws(() => process.kill(report.serverPid, 0), { code: 'ESRCH' });
+});
+
+for (const [name, behavior, waitStatus, interpretation] of [
+  ['nonzero exit', "process.on('SIGTERM', () => process.exit(17));", 17, 'nonzero_exit'],
+  ['signal-only exit', '', 143, 'signal_or_high_exit_code'],
+  ['explicit high exit', "process.on('SIGTERM', () => process.exit(143));", 143, 'signal_or_high_exit_code'],
+  ['forced termination', "process.on('SIGTERM', () => {});", 137, 'signal_or_high_exit_code'],
+]) {
+  test(`helper fails ${name} and retains the raw wait status`, async t => {
+    const result = await run(t, await shutdownFixture(t, behavior));
+    assert.equal(result.status, 1, result.output);
+    const report = await shutdownReport(result);
+    assert.equal(report.statusBeforeCleanup, 0);
+    assert.equal(report.termAttempted, true);
+    assert.equal(report.termSent, true);
+    assert.equal(report.killAttempted, name === 'forced termination');
+    assert.equal(report.killSent, name === 'forced termination');
+    assert.equal(report.waitStatus, waitStatus);
+    assert.equal(report.waitStatusInterpretation, interpretation);
+    assert.equal(report.passed, false);
+    assert.equal(Object.hasOwn(report, 'signal'), false, 'A requested TERM does not identify the exit signal');
+    assert.throws(() => process.kill(report.serverPid, 0), { code: 'ESRCH' });
+  });
+}
+
+for (const [name, behavior] of [
+  ['nonzero exit', "process.on('SIGTERM', () => process.exit(17));"],
+  ['forced termination', "process.on('SIGTERM', () => {});"],
+]) {
+  test(`helper preserves an existing command failure after ${name}`, async t => {
+    const result = await run(t, await shutdownFixture(t, behavior), [process.execPath, '-e', 'process.exit(23)']);
+    assert.equal(result.status, 23, result.output);
+    const report = await shutdownReport(result);
+    assert.equal(report.statusBeforeCleanup, 23);
+    assert.equal(report.passed, false);
+    assert.throws(() => process.kill(report.serverPid, 0), { code: 'ESRCH' });
+  });
+}
+
+for (const statusBeforeCleanup of [0, 23]) {
+  test(`helper refuses to overwrite shutdown evidence and preserves status ${statusBeforeCleanup}`, async t => {
+    const result = await run(t, {}, [process.execPath, '-e', `
+      const fs = require('node:fs');
+      const path = require('node:path');
+      fs.writeFileSync(path.join(process.env.E2E_ARTIFACTS, 'server-shutdown.json'), 'prior owned fixture evidence');
+      process.exit(${statusBeforeCleanup});
+    `]);
+    assert.equal(result.status, statusBeforeCleanup || 1, result.output);
+    assert.match(result.output, /Could not retain the owned test server shutdown report/);
+    assert.equal(await readFile(path.join(result.artifacts, 'server-shutdown.json'), 'utf8'), 'prior owned fixture evidence');
+    const log = await readFile(path.join(result.artifacts, 'server.log'), 'utf8');
+    const pid = Number(log.match(/FIXTURE_PID=(\d+)/)?.[1]);
+    assert.ok(pid > 0, log);
+    assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+  });
+}
+
+for (const [pid, waitStatus, interpretation] of [
+  ['', '', 'not_waited'],
+  ['12345', '127', 'unavailable_or_exit_127'],
+]) {
+  test(`cleanup rejects ${interpretation} without inventing successful evidence`, async t => {
+    const artifacts = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-cleanup-status-test.'));
+    t.after(() => rm(artifacts, { recursive: true, force: true }));
+    const source = await readFile(helper, 'utf8');
+    const start = source.indexOf('cleanup() {');
+    const end = source.indexOf('\ntrap cleanup EXIT', start);
+    assert.ok(start >= 0 && end > start);
+    // Exercise the real cleanup function with unavailable shell bookkeeping.
+    // All kill/wait operations are intercepted; the fixture PID is never signaled.
+    const child = spawn('/bin/bash', ['-c', `${source.slice(start, end)}
+      server_pid="$1"
+      test_artifacts="$2"
+      fixture_wait_status="$3"
+      kill() { return 1; }
+      wait() { return "$fixture_wait_status"; }
+      true
+      cleanup
+    `, 'cleanup-fixture', pid, artifacts, waitStatus], { env: { PATH: process.env.PATH } });
+    let output = '';
+    child.stdout.on('data', chunk => { output += chunk; });
+    child.stderr.on('data', chunk => { output += chunk; });
+    const [status, signal] = await once(child, 'close');
+    assert.equal(signal, null, output);
+    assert.equal(status, 1, output);
+    const report = await shutdownReport({ artifacts });
+    assert.equal(report.waitStatus, waitStatus === '' ? null : Number(waitStatus));
+    assert.equal(report.waitStatusInterpretation, interpretation);
+    assert.equal(report.passed, false);
+  });
+}
 
 test('helper reports an early server exit as failure', async t => {
   const result = await run(t, { TEST_SERVER_BINARY: '/usr/bin/false' });

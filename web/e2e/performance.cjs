@@ -9,7 +9,16 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
-const { decodedVideoFrames } = require('./performance-metrics.cjs');
+const {
+  decodedVideoFrames,
+  firstDecodedVideoFrame,
+  waitForDecodedVideoFrame,
+} = require('./performance-metrics.cjs');
+const {
+  initializePerformanceReport,
+  finalizePerformanceReport,
+  persistPerformanceReport,
+} = require('./performance-report.cjs');
 const { browserOptions } = require('./browser-options.cjs');
 const browserConfiguration = browserOptions('chromium');
 if (process.env.PERFORMANCE_E2E !== '1')
@@ -59,6 +68,7 @@ const report = {
     buildToolchain: process.env.BUILD_TOOLCHAIN || 'not supplied',
     harnessSha256: hashFile(__filename),
     measurementHelpersSha256: hashFile(path.join(__dirname, 'performance-metrics.cjs')),
+    reportHelpersSha256: hashFile(path.join(__dirname, 'performance-report.cjs')),
     browserOptionsSha256: hashFile(path.join(__dirname, 'browser-options.cjs')),
     playwrightVersion: require(`${playwrightModule}/package.json`).version,
     node: process.version,
@@ -86,6 +96,8 @@ const report = {
     'Cross-page chat delay includes Playwright scheduling/polling; it is not network-only RTT.',
     'Fake camera and loopback ICE require Chromium-specific flags; real devices and other browsers are not covered.',
     'PeerConnection constructor instrumentation is identical across both revisions.',
+    'First-frame latency includes automation and polling until remote video dimensions and an inbound decoded-frame counter are positive; the workload publishes one camera.',
+    'The five-second frame delta confirms decode progress, not uninterrupted playback.',
   ],
   startup: [],
   api: [],
@@ -93,6 +105,8 @@ const report = {
   media: null,
   pageErrors: [],
 };
+const reportFilename = path.join(artifacts, 'browser-performance.json');
+initializePerformanceReport(reportFilename, report);
 const clients = [];
 const pendingBodies = [];
 let browser;
@@ -286,10 +300,9 @@ async function inboundStats(page) {
     await setup.waitFor({ state: 'hidden' });
     const cameraStart = performance.now();
     await owner.locator('#cam-btn').click();
-    await member.waitForFunction(() =>
-      [...document.querySelectorAll('.video-tile:not(.local) video')].some(
-        (video) => video.videoWidth > 0,
-      ),
+    const firstFrameEvidence = await waitForDecodedVideoFrame(
+      () => member.evaluate(firstDecodedVideoFrame),
+      (milliseconds) => member.waitForTimeout(milliseconds),
     );
     const firstDecodedFrameMs = performance.now() - cameraStart;
     const before = await inboundStats(member);
@@ -300,6 +313,7 @@ async function inboundStats(page) {
     const framesDecoded = decodedVideoFrames(before, after);
     report.media = {
       firstDecodedFrameMs,
+      firstFrameEvidence,
       before,
       after,
       framesDecodedInFiveSeconds: framesDecoded,
@@ -335,11 +349,10 @@ async function inboundStats(page) {
     report.failure = error.stack || error.message;
     throw error;
   } finally {
-    await browser?.close();
-    report.finishedAt = new Date().toISOString();
-    fs.writeFileSync(
-      path.join(artifacts, 'browser-performance.json'),
-      JSON.stringify(report, null, 2),
+    await finalizePerformanceReport(
+      report,
+      () => browser?.close(),
+      (value) => persistPerformanceReport(reportFilename, value),
     );
     console.log(`${report.passed ? 'PASS' : 'FAIL'} browser/API performance: ${artifacts}`);
   }

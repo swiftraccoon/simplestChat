@@ -25,6 +25,8 @@ Playwright is test-only, excluded from the application bundle and production ima
 
 The helper migrates the database, enables registration, waits for API readiness,
 and stops the server afterward. It refuses occupied ports and non-test databases.
+`server-shutdown.json` records the owned child's wait status and requested signals;
+forced termination, nonzero exit or missing shutdown evidence fails the command.
 Do not rebuild `web/dist` during tests.
 
 Defaults and overrides:
@@ -163,6 +165,12 @@ PERFORMANCE_E2E=1 RUN_LABEL=local-sample \
 bundle identity/transfers, two-user registration and room creation, ten paced
 chat deliveries and five seconds of fake-camera decoding. The script checks
 frame progress, page errors and cleanup; failures exit nonzero.
+
+First-frame timing requires positive native decoded-frame counters and remote
+video dimensions; it includes automation/polling delay. The five-second counter
+delta confirms decode progress, not uninterrupted playback. Use fresh artifacts:
+existing reports or pending writes are rejected. A nonpassing report is retained
+before browser cleanup; only completed cleanup and report writes permit success.
 
 For comparisons, follow [performance](../../docs/performance.md): use release
 builds, the same pinned browser, fresh databases and alternating revision order.

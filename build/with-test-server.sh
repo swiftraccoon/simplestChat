@@ -78,17 +78,67 @@ server_pid=''
 cleanup() {
   test_status=$?
   trap - EXIT
+  trap '' INT TERM
+  term_attempted=false
+  term_sent=false
+  kill_attempted=false
+  kill_sent=false
+  wait_status=''
   if [[ -n "${server_pid}" ]]; then
-    kill -TERM "${server_pid}" 2>/dev/null || true
+    term_attempted=true
+    if kill -TERM "${server_pid}" 2>/dev/null; then term_sent=true; fi
     # Bound shutdown; never kill by executable name or target another server.
     for ((attempt = 0; attempt < 50; attempt++)); do
       kill -0 "${server_pid}" 2>/dev/null || break
       sleep 0.1
     done
     if kill -0 "${server_pid}" 2>/dev/null; then
-      kill -KILL "${server_pid}" 2>/dev/null || true
+      kill_attempted=true
+      if kill -KILL "${server_pid}" 2>/dev/null; then kill_sent=true; fi
     fi
-    wait "${server_pid}" 2>/dev/null || true
+    if wait "${server_pid}" 2>/dev/null; then wait_status=0; else wait_status=$?; fi
+  fi
+  # Record observed wait status separately from requested signals. Bash cannot
+  # distinguish signal termination from an explicit high exit code (or exit 127
+  # from unavailable child status), so retain that ambiguity rather than infer it.
+  if ! env -i PATH="${PATH}" node --input-type=module - "${test_artifacts}" \
+    "${server_pid}" "${test_status}" "${term_attempted}" "${term_sent}" \
+    "${kill_attempted}" "${kill_sent}" "${wait_status}" <<'JS'
+import fs from 'node:fs';
+import path from 'node:path';
+const [artifacts, pid, status, termAttempted, termSent, killAttempted, killSent, waited] = process.argv.slice(2);
+const waitStatus = waited === '' ? null : Number(waited);
+const passed = waitStatus === 0 && killAttempted === 'false';
+const report = {
+  schemaVersion: 1,
+  serverPid: pid === '' ? null : Number(pid),
+  statusBeforeCleanup: Number(status),
+  termAttempted: termAttempted === 'true',
+  termSent: termSent === 'true',
+  killAttempted: killAttempted === 'true',
+  killSent: killSent === 'true',
+  waitStatus,
+  waitStatusInterpretation: waitStatus === null ? 'not_waited'
+    : waitStatus === 0 ? 'exited_zero'
+      : waitStatus === 127 ? 'unavailable_or_exit_127'
+        : waitStatus >= 128 ? 'signal_or_high_exit_code' : 'nonzero_exit',
+  passed,
+  finishedAt: new Date().toISOString(),
+};
+try {
+  // A fresh report is required; never overwrite an earlier run's evidence.
+  fs.writeFileSync(path.join(artifacts, 'server-shutdown.json'), `${JSON.stringify(report, null, 2)}\n`, {
+    flag: 'wx', mode: 0o600,
+  });
+  if (!passed) process.exitCode = 1;
+} catch {
+  console.error('Could not retain the owned test server shutdown report.');
+  process.exitCode = 1;
+}
+JS
+  then
+    echo 'Owned test server shutdown was unsuccessful or its evidence was unavailable.' >&2
+    if ((test_status == 0)); then test_status=1; fi
   fi
   echo "Test server log and browser artifacts: ${test_artifacts}"
   if ((test_status != 0)); then
