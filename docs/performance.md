@@ -70,15 +70,20 @@ another checkout, set `--generator-source-root` to that source tree.
 | `churn` | About one fifth of clients repeatedly join with fresh media sessions |
 
 Start with the ten-client example. For 30 clients, use `--scenarios multi-room`.
-For churn, start with `--clients 3 --scenarios churn`.
+For churn, start with `--clients 3 --scenarios churn --duration 120`.
 Room admission allows 30 joins per IP and 10 per room/IP in 60 seconds, including
 reconnects. Larger runs need a slower ramp; the runner checks the initial ramp
 before starting. See [admission limits](configuration.md#additional-fixed-admission-limits).
 
-Churn is not retained-session signaling recovery. Its delivery gate is a lifetime
-minimum, not complete per-attempt coverage; inspect the individual attempts and
-skipped consumers. The [browser suite](../web/e2e/README.md#coverage-and-diagnostics)
-checks signaling recovery with retained media separately.
+Churn is not retained-session signaling recovery. Each selected churner needs a
+passing, eligible second or later join with measured delivery from stable peers.
+Keep stable publishers in each churner's room and nonzero consumer caps; an
+all-churn population cannot establish this proof. Sessions still use the 5–30
+second range, so slow setup can leave a short attempt without validated media.
+Inspect per-attempt failures rather than weakening the gate. See
+[success criteria and scope](../load_tests/README.md#what-constitutes-success).
+The [browser suite](../web/e2e/README.md#coverage-and-diagnostics) checks signaling
+recovery with retained media separately.
 
 The local runner supports up to 100 clients, four workers, five repetitions, and
 180 seconds per measurement. It tests guest media without a database.
@@ -106,6 +111,11 @@ A passing media run requires expected subscriptions and sustained packet
 delivery. Use only completed, passing runs for timing comparisons; retain failures
 to investigate separately. Keep the default ten-second warmup because synthetic
 video keyframes arrive every five seconds.
+
+New summaries include `attemptCoverage` version 1 (`stable-publishers` scope).
+Historical reports without it do not establish per-attempt coverage. Dynamic
+streams occupying consumer caps can leave this scoped proof incomplete without
+establishing an application regression; full dynamic fan-out is not measured.
 
 Synthetic RTP exercises forwarding, not browser encoding or visual quality.
 Receive/send totals are not a packet-loss estimate because streams fan out to

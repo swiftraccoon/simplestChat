@@ -116,10 +116,10 @@ impl MetricsCollector {
     pub fn with_window(client_id: String, window: std::sync::Arc<MeasurementWindow>) -> Self {
         let now = Instant::now();
         Self {
-            client_id,
+            client_id: client_id.clone(),
             room_id: std::sync::Mutex::new(String::new()),
             start_time: now,
-            observations: Measurements::new(window),
+            observations: Measurements::new(client_id, window),
             connection_successful: AtomicBool::new(false),
             connection_time_ms: AtomicU64::new(0),
             first_media_sent: AtomicU64::new(0),
@@ -226,7 +226,7 @@ impl MetricsCollector {
             self.connection_time_ms.store(elapsed, Ordering::SeqCst);
         }
         if let Some(attempt) = self.attempts.lock().unwrap().last_mut() {
-            attempt.room_join_ms = Some(elapsed);
+            attempt.report.room_join_ms = Some(elapsed);
         }
     }
 
@@ -246,10 +246,15 @@ impl MetricsCollector {
         }
     }
 
-    pub fn record_packet_sent(&self, size: usize) {
+    pub fn record_packet_sent_for_attempt(&self, attempt: usize, size: usize) {
         self.packets_sent.fetch_add(1, Ordering::Relaxed);
         self.bytes_sent.fetch_add(size as u64, Ordering::Relaxed);
-        self.record_queued(size);
+        self.record_queued(attempt, size);
+    }
+
+    #[cfg(test)]
+    pub fn record_packet_sent(&self, size: usize) {
+        self.record_packet_sent_for_attempt(self.diagnostic_attempt(), size);
     }
 
     pub fn record_packet_received(&self, size: usize) {
@@ -259,9 +264,14 @@ impl MetricsCollector {
         self.record_received(size);
     }
 
-    pub fn record_rtp_received(&self, ssrc: u32, size: usize) {
+    pub fn record_rtp_received_for_attempt(&self, attempt: usize, ssrc: u32, size: usize) {
         self.record_packet_received(size);
-        self.record_ssrc(ssrc);
+        self.record_ssrc(attempt, ssrc);
+    }
+
+    #[cfg(test)]
+    pub fn record_rtp_received(&self, ssrc: u32, size: usize) {
+        self.record_rtp_received_for_attempt(self.diagnostic_attempt(), ssrc, size);
     }
 
     pub fn record_producer_created(&self) {
@@ -273,6 +283,17 @@ impl MetricsCollector {
     }
 
     pub fn record_error(&self, error: String) {
+        self.record_error_for_attempt(self.diagnostic_attempt(), error);
+    }
+
+    pub fn record_error_for_attempt(&self, ordinal: usize, error: String) {
+        if let Ok(mut attempts) = self.attempts.lock()
+            && let Some(attempt) = ordinal
+                .checked_sub(1)
+                .and_then(|index| attempts.get_mut(index))
+        {
+            attempt.failed = true;
+        }
         if let Ok(mut errors) = self.errors.lock() {
             errors.push(error);
         }
@@ -307,6 +328,8 @@ impl MetricsCollector {
         let first_received = self.first_media_received.load(Ordering::SeqCst);
 
         let signaling_latencies = self.compute_latency_report();
+        let consumer_delivery = self.delivery_report();
+        let connection_attempts = self.attempt_report(&consumer_delivery);
 
         ClientMetrics {
             client_id: self.client_id.clone(),
@@ -334,9 +357,9 @@ impl MetricsCollector {
             signaling_latencies,
             reconnections: self.reconnections.load(Ordering::Relaxed) as u32,
             reconnection_failures: self.reconnection_failures.load(Ordering::Relaxed) as u32,
-            connection_attempts: self.attempts.lock().unwrap().clone(),
-            measurement: self.measurement.lock().unwrap().clone(),
-            consumer_delivery: self.delivery_report(),
+            connection_attempts,
+            measurement: self.measurement.lock().unwrap().total.clone(),
+            consumer_delivery,
             diagnostics: self
                 .diagnostics_enabled()
                 .then(|| self.diagnostics.lock().unwrap().clone()),
@@ -837,7 +860,7 @@ mod measurement_tests {
         *metrics.connection_start.lock().unwrap() = Instant::now() - Duration::from_secs(60);
         metrics.begin_connection_attempt();
         metrics.mark_connection_successful();
-        metrics.mark_media_ready(true);
+        metrics.mark_media_ready_for_attempt(2, true);
         let report = metrics.generate_report();
         assert_eq!(report.connection_time_ms, initial);
         assert_eq!(report.connection_attempts.len(), 2);
@@ -944,12 +967,387 @@ mod measurement_tests {
         ));
         let publisher = MetricsCollector::with_window("publisher".into(), window.clone());
         let viewer = MetricsCollector::with_window("viewer".into(), window);
-        publisher.record_publisher("producer");
+        publisher.record_publisher("producer", false);
         viewer.subscribe("producer", false);
         viewer.record_consumer("consumer", "producer", 123);
         publisher.end_session();
         let (kind, unexpected) = viewer.close_producer("producer");
         assert_eq!(kind, Some(false));
         assert!(!unexpected);
+    }
+
+    fn coverage_fixture() -> (MetricsCollector, Instant) {
+        let start = Instant::now() - Duration::from_secs(20);
+        let window = Arc::new(MeasurementWindow::new(start, Duration::from_secs(20)));
+        let metrics = MetricsCollector::with_window("viewer".into(), window);
+        (metrics, start)
+    }
+
+    fn planned_attempt(metrics: &MetricsCollector, start: Instant, deadline: Instant) -> usize {
+        let attempt = metrics.begin_planned_attempt(AttemptPlan {
+            deadline,
+            stable_publishers: Arc::new(["stable".into(), "second-stable".into()].into()),
+            expected_audio: 1,
+            expected_video: 1,
+            is_publisher: false,
+        });
+        metrics.attempts.lock().unwrap()[attempt - 1].started = start;
+        metrics.mark_connection_successful();
+        attempt
+    }
+
+    fn delivered_consumer(
+        metrics: &MetricsCollector,
+        producer: &str,
+        owner: &str,
+        audio: bool,
+        start: Instant,
+    ) {
+        metrics
+            .window
+            .publisher_owners
+            .lock()
+            .unwrap()
+            .insert(producer.into(), (owner.into(), audio));
+        metrics.subscribe(producer, audio);
+        metrics.record_consumer(producer, producer, 123);
+        let mut consumers = metrics.consumers.lock().unwrap();
+        let consumer = consumers.last_mut().unwrap();
+        consumer.created = start;
+        consumer.packets_by_second.fill(1);
+    }
+
+    #[test]
+    fn later_attempt_cannot_borrow_earlier_delivery_or_skip_slow_setup() {
+        let (metrics, start) = coverage_fixture();
+        planned_attempt(&metrics, start, start + Duration::from_secs(10));
+        delivered_consumer(&metrics, "audio", "stable", true, start);
+        delivered_consumer(&metrics, "video", "stable", false, start);
+        metrics.end_session();
+        planned_attempt(
+            &metrics,
+            start + Duration::from_secs(10),
+            start + Duration::from_secs(20),
+        );
+        let before_setup = metrics.generate_report();
+        assert!(
+            before_setup.connection_attempts[0]
+                .coverage
+                .as_ref()
+                .unwrap()
+                .passed
+        );
+        let failed = before_setup.connection_attempts[1]
+            .coverage
+            .as_ref()
+            .unwrap();
+        assert_eq!(failed.planned_eligible_seconds, 7);
+        assert_eq!((failed.validated_audio, failed.validated_video), (0, 0));
+        assert!(!failed.passed && !failed.skipped_short_tail);
+        delivered_consumer(
+            &metrics,
+            "late-audio",
+            "stable",
+            true,
+            start + Duration::from_secs(19),
+        );
+        delivered_consumer(
+            &metrics,
+            "late-video",
+            "stable",
+            false,
+            start + Duration::from_secs(19),
+        );
+        let late = metrics.generate_report();
+        assert!(late.consumer_delivery[2].skipped_short_lived);
+        assert!(
+            !late.connection_attempts[1]
+                .coverage
+                .as_ref()
+                .unwrap()
+                .skipped_short_tail
+        );
+        assert!(
+            !late.connection_attempts[1]
+                .coverage
+                .as_ref()
+                .unwrap()
+                .passed
+        );
+    }
+
+    #[test]
+    fn coverage_requires_distinct_stable_peers_and_separate_media_kinds() {
+        let (metrics, start) = coverage_fixture();
+        planned_attempt(&metrics, start, start + Duration::from_secs(20));
+        metrics.attempts.lock().unwrap()[0]
+            .plan
+            .as_mut()
+            .unwrap()
+            .expected_audio = 2;
+        delivered_consumer(&metrics, "audio", "stable", true, start);
+        delivered_consumer(&metrics, "duplicate-audio", "stable", true, start);
+        delivered_consumer(&metrics, "dynamic-audio", "churner", true, start);
+        delivered_consumer(&metrics, "dynamic-video", "churner", false, start);
+        let report = metrics.generate_report();
+        let coverage = report.connection_attempts[0].coverage.as_ref().unwrap();
+        assert_eq!((coverage.validated_audio, coverage.validated_video), (1, 0));
+        assert!(!coverage.passed);
+        delivered_consumer(&metrics, "second-audio", "second-stable", true, start);
+        delivered_consumer(&metrics, "video", "stable", false, start);
+        assert!(
+            metrics.generate_report().connection_attempts[0]
+                .coverage
+                .as_ref()
+                .unwrap()
+                .passed
+        );
+    }
+
+    #[test]
+    fn planned_short_tail_skips_but_failed_admission_does_not() {
+        let (metrics, start) = coverage_fixture();
+        planned_attempt(
+            &metrics,
+            start + Duration::from_secs(17),
+            start + Duration::from_secs(20),
+        );
+        let report = metrics.generate_report();
+        let coverage = report.connection_attempts[0].coverage.as_ref().unwrap();
+        assert!(coverage.skipped_short_tail && !coverage.passed);
+        metrics.attempts.lock().unwrap()[0].report.room_join_ms = None;
+        let report = metrics.generate_report();
+        let coverage = report.connection_attempts[0].coverage.as_ref().unwrap();
+        assert!(!coverage.skipped_short_tail && !coverage.passed);
+        assert_eq!(coverage.failure_reasons.len(), 1);
+    }
+
+    #[test]
+    fn setup_errors_fail_short_tails_and_late_errors_keep_their_attempt() {
+        let (metrics, start) = coverage_fixture();
+        planned_attempt(
+            &metrics,
+            start + Duration::from_secs(17),
+            start + Duration::from_secs(20),
+        );
+        metrics.record_error("setup failed after admission".into());
+        planned_attempt(
+            &metrics,
+            start + Duration::from_secs(17),
+            start + Duration::from_secs(20),
+        );
+        metrics.record_error_for_attempt(1, "old native transport failed".into());
+        let report = metrics.generate_report();
+        assert!(
+            !report.connection_attempts[0]
+                .coverage
+                .as_ref()
+                .unwrap()
+                .skipped_short_tail
+        );
+        assert!(
+            !report.connection_attempts[0]
+                .coverage
+                .as_ref()
+                .unwrap()
+                .passed
+        );
+        assert!(
+            report.connection_attempts[1]
+                .coverage
+                .as_ref()
+                .unwrap()
+                .skipped_short_tail
+        );
+        assert_eq!(report.errors.len(), 2);
+    }
+
+    #[test]
+    fn attempt_eligibility_uses_complete_shared_window_seconds() {
+        let (metrics, start) = coverage_fixture();
+        planned_attempt(
+            &metrics,
+            start + Duration::from_millis(500),
+            start + Duration::from_millis(5900),
+        );
+        assert_eq!(
+            metrics.generate_report().connection_attempts[0]
+                .coverage
+                .as_ref()
+                .unwrap()
+                .planned_eligible_seconds,
+            1
+        );
+        planned_attempt(
+            &metrics,
+            start - Duration::from_secs(10),
+            start + Duration::from_secs(30),
+        );
+        assert_eq!(
+            metrics.generate_report().connection_attempts[1]
+                .coverage
+                .as_ref()
+                .unwrap()
+                .planned_eligible_seconds,
+            20
+        );
+    }
+
+    #[test]
+    fn stale_native_callbacks_cannot_credit_a_new_attempt_with_reused_ssrc() {
+        let metrics = MetricsCollector::new("client".into());
+        metrics.begin_connection_attempt();
+        metrics.record_consumer("old", "old-producer", 123);
+        metrics.end_session();
+        metrics.begin_connection_attempt();
+        metrics.record_consumer("new", "new-producer", 123);
+        metrics.mark_media_ready_for_attempt(1, false);
+        metrics.mark_media_ready_for_attempt(0, false);
+        metrics.mark_media_ready_for_attempt(100, false);
+        metrics.record_rtp_received_for_attempt(1, 123, 80);
+        let report = metrics.generate_report();
+        assert!(
+            report.connection_attempts[0]
+                .receive_media_ready_ms
+                .is_some()
+        );
+        assert!(
+            report.connection_attempts[1]
+                .receive_media_ready_ms
+                .is_none()
+        );
+        assert_eq!(
+            report.consumer_delivery[1]
+                .packets_by_second
+                .iter()
+                .sum::<u64>(),
+            0
+        );
+        metrics.record_rtp_received_for_attempt(2, 123, 80);
+        let report = metrics.generate_report();
+        assert_eq!(report.consumer_delivery[1].attempt, Some(2));
+        assert_eq!(
+            report.consumer_delivery[1]
+                .packets_by_second
+                .iter()
+                .sum::<u64>(),
+            1
+        );
+    }
+
+    #[test]
+    fn publisher_counts_are_attempt_scoped_and_freeze_at_owned_departure() {
+        let metrics = MetricsCollector::new("publisher".into());
+        let plan = AttemptPlan {
+            deadline: Instant::now() + Duration::from_secs(20),
+            stable_publishers: Arc::default(),
+            expected_audio: 0,
+            expected_video: 0,
+            is_publisher: true,
+        };
+        let first = metrics.begin_planned_attempt(plan.clone());
+        metrics.mark_connection_successful();
+        metrics.record_packet_sent_for_attempt(first, 100);
+        metrics.end_session();
+        metrics.record_packet_sent_for_attempt(first, 100);
+        metrics.end_session();
+        let second = metrics.begin_planned_attempt(plan);
+        metrics.mark_connection_successful();
+        metrics.record_packet_sent_for_attempt(first, 100);
+        let report = metrics.generate_report();
+        let earlier = report.connection_attempts[0].coverage.as_ref().unwrap();
+        let later = report.connection_attempts[1].coverage.as_ref().unwrap();
+        assert!(earlier.passed);
+        assert_eq!(earlier.packets_queued, 1);
+        assert!(!later.passed);
+        assert_eq!(later.packets_queued, 0);
+        metrics.record_packet_sent_for_attempt(second, 100);
+        assert!(
+            metrics.generate_report().connection_attempts[1]
+                .coverage
+                .as_ref()
+                .unwrap()
+                .passed
+        );
+    }
+
+    #[test]
+    fn legacy_artifacts_have_unknown_attempt_metadata_not_invented_success() {
+        let attempt: ConnectionAttempt = serde_json::from_value(serde_json::json!({
+            "roomJoinMs": 1, "sendMediaReadyMs": 2, "receiveMediaReadyMs": 3
+        }))
+        .unwrap();
+        assert!(attempt.coverage.is_none());
+        let metrics = MetricsCollector::new("viewer".into());
+        metrics.record_consumer("consumer", "producer", 123);
+        let report = metrics.generate_report();
+        let value = serde_json::to_value(&report.consumer_delivery[0]).unwrap();
+        assert!(value.get("attempt").is_none());
+        assert!(value.get("isAudio").is_none());
+        let legacy: ConsumerDelivery = serde_json::from_value(value).unwrap();
+        assert!(legacy.attempt.is_none() && legacy.is_audio.is_none());
+    }
+
+    #[test]
+    fn delivery_after_planned_departure_cannot_rescue_an_attempt() {
+        let (metrics, start) = coverage_fixture();
+        planned_attempt(&metrics, start, start + Duration::from_secs(5));
+        delivered_consumer(
+            &metrics,
+            "audio",
+            "stable",
+            true,
+            start + Duration::from_secs(1),
+        );
+        delivered_consumer(
+            &metrics,
+            "video",
+            "stable",
+            false,
+            start + Duration::from_secs(1),
+        );
+        for consumer in metrics.consumers.lock().unwrap().iter_mut() {
+            consumer.closed = Some(start + Duration::from_secs(8));
+            consumer.packets_by_second.fill(0);
+            consumer.packets_by_second[6] = 1;
+            consumer.packets_by_second[7] = 1;
+        }
+        let report = metrics.generate_report();
+        assert_eq!(report.consumer_delivery[0].eligible_seconds, 1);
+        assert_eq!(report.consumer_delivery[0].seconds_with_packets, 0);
+        assert!(
+            !report.connection_attempts[0]
+                .coverage
+                .as_ref()
+                .unwrap()
+                .passed
+        );
+    }
+
+    #[test]
+    fn publisher_queues_after_planned_departure_are_not_attempt_evidence() {
+        let now = Instant::now();
+        let metrics = MetricsCollector::with_window(
+            "publisher".into(),
+            Arc::new(MeasurementWindow::new(
+                now - Duration::from_secs(10),
+                Duration::from_secs(20),
+            )),
+        );
+        let attempt = metrics.begin_planned_attempt(AttemptPlan {
+            deadline: now - Duration::from_secs(1),
+            stable_publishers: Arc::default(),
+            expected_audio: 0,
+            expected_video: 0,
+            is_publisher: true,
+        });
+        metrics.attempts.lock().unwrap()[0].started = now - Duration::from_secs(10);
+        metrics.mark_connection_successful();
+        metrics.record_packet_sent_for_attempt(attempt, 100);
+        let report = metrics.generate_report();
+        let coverage = report.connection_attempts[0].coverage.as_ref().unwrap();
+        assert_eq!(report.measurement.packets_queued, 1);
+        assert_eq!(coverage.packets_queued, 0);
+        assert!(!coverage.passed && !coverage.skipped_short_tail);
     }
 }

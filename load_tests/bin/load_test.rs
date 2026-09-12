@@ -11,6 +11,7 @@
 use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use mediasoup::prelude::*;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
@@ -32,7 +33,7 @@ mod webrtc_client {
 }
 
 use media_generator::{MediaConfig, MediaGenerator};
-use metrics::{MeasurementWindow, MetricsCollector, TestSummary};
+use metrics::{AttemptPlan, ClientMetrics, MeasurementWindow, MetricsCollector, TestSummary};
 use rtc::shared::marshal::Unmarshal;
 use std::num::{NonZeroU8, NonZeroU32};
 use tokio::sync::Mutex;
@@ -77,6 +78,8 @@ struct ClientConfig {
     deadline: Instant,
     is_publisher: bool,
     is_churner: bool,
+    /// Shared owned non-churning publishers in this room; expectations exclude self.
+    stable_publishers: Arc<HashSet<String>>,
     churn_session_min_secs: u64,
     churn_session_max_secs: u64,
     max_audio_consumers: usize,
@@ -120,6 +123,150 @@ impl TestConfig {
         );
         Ok(())
     }
+
+    fn churner_count(&self) -> Result<usize> {
+        anyhow::ensure!(
+            self.churn_rate.is_finite() && self.churn_rate >= 0.0,
+            "--churn-rate must be nonnegative and finite"
+        );
+        let count = ((self.churn_rate * self.duration_secs as f64) as usize).min(self.num_clients);
+        anyhow::ensure!(
+            self.churn_rate <= 0.0 || count > 0,
+            "Positive --churn-rate selected no clients; increase the rate or duration"
+        );
+        Ok(count)
+    }
+}
+
+fn stable_publishers_by_room(
+    publishers: usize,
+    churner_start: usize,
+    rooms: usize,
+) -> HashMap<usize, Arc<HashSet<String>>> {
+    let rooms = rooms.max(1);
+    let mut by_room: HashMap<usize, HashSet<String>> = HashMap::new();
+    for publisher in 0..publishers.min(churner_start) {
+        by_room
+            .entry(publisher % rooms)
+            .or_default()
+            .insert(format!("client-{publisher}"));
+    }
+    by_room
+        .into_iter()
+        .map(|(room, publishers)| (room, Arc::new(publishers)))
+        .collect()
+}
+
+fn stable_peer_count(publishers: &HashSet<String>, client: &str) -> usize {
+    publishers.len() - usize::from(publishers.contains(client))
+}
+
+/// Additive evidence, not a claim that every changing publisher generation was
+/// subscribed to. Legacy per-consumer checks still validate dynamic consumers.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AttemptCoverageSummary {
+    version: u8,
+    scope: &'static str,
+    available: bool,
+    attempts: usize,
+    passed_attempts: usize,
+    failed_attempts: usize,
+    skipped_short_tail_attempts: usize,
+    missing_coverage_attempts: usize,
+    requested_churners: usize,
+    validated_churners: usize,
+}
+
+fn gate_attempt_coverage(
+    clients: &[ClientMetrics],
+    requested_churners: usize,
+    failures: &mut Vec<String>,
+) -> AttemptCoverageSummary {
+    let mut summary = AttemptCoverageSummary {
+        version: 1,
+        scope: "stable-publishers",
+        available: true,
+        attempts: 0,
+        passed_attempts: 0,
+        failed_attempts: 0,
+        skipped_short_tail_attempts: 0,
+        missing_coverage_attempts: 0,
+        requested_churners,
+        validated_churners: 0,
+    };
+    let churner_start = clients.len().saturating_sub(requested_churners);
+    for (index, client) in clients.iter().enumerate() {
+        if client.connection_attempts.is_empty() {
+            summary.available = false;
+            failures.push(format!(
+                "{}: no connection attempts recorded; coverage unavailable",
+                client.client_id
+            ));
+        }
+        let mut validated_churn = false;
+        for (attempt_index, attempt) in client.connection_attempts.iter().enumerate() {
+            summary.attempts += 1;
+            let Some(coverage) = &attempt.coverage else {
+                summary.available = false;
+                summary.missing_coverage_attempts += 1;
+                failures.push(format!(
+                    "{}: attempt {} has no delivery coverage plan",
+                    client.client_id,
+                    attempt_index + 1
+                ));
+                continue;
+            };
+            if coverage.passed
+                && !coverage.skipped_short_tail
+                && coverage.failure_reasons.is_empty()
+                && attempt.room_join_ms.is_some()
+                && coverage.planned_eligible_seconds > 0
+                && coverage.validated_audio >= coverage.expected_audio
+                && coverage.validated_video >= coverage.expected_video
+            {
+                summary.passed_attempts += 1;
+                if attempt_index > 0
+                    && attempt.room_join_ms.is_some()
+                    && coverage.planned_eligible_seconds > 0
+                    && (coverage.expected_audio > 0 || coverage.expected_video > 0)
+                {
+                    validated_churn = true;
+                }
+            } else if coverage.skipped_short_tail
+                && !coverage.passed
+                && coverage.planned_eligible_seconds == 0
+                && coverage.failure_reasons.is_empty()
+                && attempt.room_join_ms.is_some()
+            {
+                summary.skipped_short_tail_attempts += 1;
+            } else {
+                summary.failed_attempts += 1;
+                let reason = if coverage.failure_reasons.is_empty() {
+                    "missing or inconsistent measured delivery evidence".to_string()
+                } else {
+                    coverage.failure_reasons.join("; ")
+                };
+                failures.push(format!(
+                    "{}: attempt {} delivery coverage failed: {reason}",
+                    client.client_id,
+                    attempt_index + 1
+                ));
+            }
+        }
+        if index >= churner_start {
+            if validated_churn {
+                summary.validated_churners += 1;
+            } else {
+                failures.push(format!("{}: insufficient measured churn; no later joined, eligible, passing attempt against a stable publisher", client.client_id));
+            }
+        }
+    }
+    if requested_churners > clients.len() {
+        summary.available = false;
+        failures.push("Requested churners exceed available client evidence".into());
+    }
+    summary
 }
 
 const WATCHDOG_RUNNING: u8 = 0;
@@ -559,6 +706,7 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         config.publish_ratio.is_finite() && config.churn_rate.is_finite(),
         "Ratios must be finite"
     );
+    let num_churners = config.churner_count()?;
     std::fs::create_dir_all(&config.output_dir)?;
     let provenance = generator_provenance(&config)?;
     // Anchor reported wall time next to the monotonic workload schedule, after
@@ -592,11 +740,6 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
 
     let num_publishers = ((config.num_clients as f64) * config.publish_ratio).ceil() as usize;
     let num_publishers = num_publishers.max(1).min(config.num_clients);
-    let num_churners = if config.churn_rate > 0.0 {
-        ((config.churn_rate * config.duration_secs as f64) as usize).min(config.num_clients)
-    } else {
-        0
-    };
     let clients_per_room = std::num::NonZeroUsize::new(config.num_rooms)
         .map_or(config.num_clients, |rooms| {
             config.num_clients.div_ceil(rooms.get())
@@ -659,6 +802,11 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
 
     // Churner clients are the LAST N clients
     let churner_start_idx = config.num_clients.saturating_sub(num_churners);
+    // Store each stable identity once, not once per client or churn attempt.
+    // Empty rooms share a single empty set, with no allocation by room count.
+    let stable_publishers =
+        stable_publishers_by_room(num_publishers, churner_start_idx, config.num_rooms);
+    let no_stable_publishers = Arc::new(HashSet::new());
 
     // Spawn clients with gradual ramp-up
     for (i, collector) in metrics_collectors.iter().enumerate() {
@@ -682,6 +830,11 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
             deadline: window.end,
             is_publisher,
             is_churner,
+            stable_publishers: Arc::clone(
+                stable_publishers
+                    .get(&(i % config.num_rooms.max(1)))
+                    .unwrap_or(&no_stable_publishers),
+            ),
             churn_session_min_secs: 5,
             churn_session_max_secs: 30,
             max_audio_consumers: config.max_audio_consumers,
@@ -746,6 +899,12 @@ fn write_timeout_results(
 ) -> Result<()> {
     let report = serde_json::json!({
         "schemaVersion": 2,
+        "attemptCoverage": {
+            "version": 1, "scope": "stable-publishers", "available": false,
+            "attempts": 0, "passedAttempts": 0, "failedAttempts": 0,
+            "skippedShortTailAttempts": 0, "missingCoverageAttempts": 0,
+            "requestedChurners": config.churner_count()?, "validatedChurners": 0,
+        },
         "run": {
             "completed": false, "passed": false,
             "failureReasons": ["Hard deadline exceeded; detailed metrics unavailable"],
@@ -829,9 +988,12 @@ fn write_results_sync(
             ));
         }
     }
+    let attempt_coverage =
+        gate_attempt_coverage(&all_metrics, config.churner_count()?, &mut failures);
     let passed = completed && failures.is_empty();
     let mut report = serde_json::to_value(&summary)?;
     report["schemaVersion"] = serde_json::json!(2);
+    report["attemptCoverage"] = serde_json::to_value(attempt_coverage)?;
     report["run"] = serde_json::json!({
         "completed": completed, "passed": passed, "failureReasons": failures,
         "startedAt": started_at, "finishedAt": chrono::Utc::now().to_rfc3339(),
@@ -967,7 +1129,24 @@ async fn run_client_inner(
     );
 
     metrics.set_room_id(&config.room_id);
-    metrics.begin_connection_attempt();
+    // Freeze expectations before any signaling/consumer response can suppress a
+    // missing attempt. Churn clones retain the same stable publisher cohort.
+    let stable_peers = stable_peer_count(&config.stable_publishers, &client_id);
+    let attempt = metrics.begin_planned_attempt(AttemptPlan {
+        deadline: config.deadline,
+        expected_audio: if config.media_config.audio_enabled {
+            stable_peers.min(config.max_audio_consumers)
+        } else {
+            0
+        },
+        expected_video: if config.media_config.video_enabled {
+            stable_peers.min(config.max_video_consumers)
+        } else {
+            0
+        },
+        stable_publishers: Arc::clone(&config.stable_publishers),
+        is_publisher: config.is_publisher,
+    });
 
     // Connect to WebSocket signaling server
     let (ws_stream, _) = connect_async(&config.server_url).await.map_err(|e| {
@@ -1273,7 +1452,7 @@ async fn run_client_inner(
                         .record_signaling_latency("produce_audio", t.elapsed().as_millis() as u64);
                     tracing::info!("{}: Audio producer created: {}", client_id, producer_id);
                     metrics.record_producer_created();
-                    metrics.record_publisher(&producer_id);
+                    metrics.record_publisher(&producer_id, true);
                 }
                 ServerMessage::Error { message } => {
                     metrics.record_error(format!("Audio producer failed: {}", message));
@@ -1303,7 +1482,7 @@ async fn run_client_inner(
                         .record_signaling_latency("produce_video", t.elapsed().as_millis() as u64);
                     tracing::info!("{}: Video producer created: {}", client_id, producer_id);
                     metrics.record_producer_created();
-                    metrics.record_publisher(&producer_id);
+                    metrics.record_publisher(&producer_id, false);
                 }
                 ServerMessage::Error { message } => {
                     metrics.record_error(format!("Video producer failed: {}", message));
@@ -1502,6 +1681,7 @@ async fn run_client_inner(
                 media_config,
                 metrics_send,
                 client_id_send,
+                attempt,
             )
             .await;
         }))
@@ -1654,6 +1834,7 @@ async fn send_real_media_loop(
     config: MediaConfig,
     metrics: Arc<MetricsCollector>,
     client_id: String,
+    attempt: usize,
 ) {
     tracing::debug!("{}: Starting REAL media send loop", client_id);
 
@@ -1695,7 +1876,7 @@ async fn send_real_media_loop(
                     };
                     match result {
                         Ok(_) => {
-                            metrics.record_packet_sent(packet_bytes.len());
+                            metrics.record_packet_sent_for_attempt(attempt, packet_bytes.len());
                             if first_packet {
                                 metrics.mark_first_media_sent();
                                 first_packet = false;
@@ -1722,7 +1903,7 @@ async fn send_real_media_loop(
                         };
                         match result {
                             Ok(_) => {
-                                metrics.record_packet_sent(packet_bytes.len());
+                                metrics.record_packet_sent_for_attempt(attempt, packet_bytes.len());
                                 if first_packet {
                                     metrics.mark_first_media_sent();
                                     first_packet = false;
@@ -1754,6 +1935,247 @@ fn negotiated_rtp_packet(
     let mut packet = rtc::rtp::Packet::unmarshal(&mut source)?;
     packet.header.ssrc = ssrc;
     Ok(packet)
+}
+
+#[cfg(test)]
+mod attempt_coverage_gate_tests {
+    use super::*;
+
+    fn attempt(passed: bool) -> metrics::ConnectionAttempt {
+        serde_json::from_value(serde_json::json!({
+            "roomJoinMs": 1,
+            "sendMediaReadyMs": 2,
+            "receiveMediaReadyMs": 2,
+            "coverage": {
+                "plannedEligibleSeconds": 5,
+                "expectedAudio": 1, "expectedVideo": 1,
+                "validatedAudio": usize::from(passed),
+                "validatedVideo": usize::from(passed),
+                "packetsQueued": 10,
+                "passed": passed, "skippedShortTail": false,
+                "failureReasons": if passed { Vec::<String>::new() } else { vec!["No media in this attempt".into()] },
+            },
+        })).unwrap()
+    }
+
+    fn client(id: usize, attempts: Vec<metrics::ConnectionAttempt>) -> ClientMetrics {
+        let mut report = MetricsCollector::new(format!("client-{id}")).generate_report();
+        report.connection_attempts = attempts;
+        report
+    }
+
+    #[test]
+    fn positive_churn_must_select_at_least_one_client() {
+        let mut config = TestConfig {
+            num_clients: 3,
+            duration_secs: 120,
+            ..TestConfig::default()
+        };
+        assert_eq!(config.churner_count().unwrap(), 0);
+        config.churn_rate = 1.0 / 120.0;
+        assert_eq!(config.churner_count().unwrap(), 1);
+        config.churn_rate = 100.0;
+        assert_eq!(config.churner_count().unwrap(), 3);
+        for invalid in [0.5 / 120.0, -1.0, f64::NAN, f64::INFINITY] {
+            config.churn_rate = invalid;
+            assert!(config.churner_count().is_err());
+        }
+    }
+
+    #[test]
+    fn room_publisher_sets_are_shared_and_peer_counts_exclude_self() {
+        let rooms = stable_publishers_by_room(5, 4, 2);
+        assert_eq!(rooms.len(), 2);
+        assert_eq!(
+            rooms
+                .values()
+                .map(|publishers| publishers.len())
+                .sum::<usize>(),
+            4
+        );
+        let room = rooms.get(&0).unwrap();
+        assert_eq!(
+            room.as_ref(),
+            &HashSet::from(["client-0".into(), "client-2".into()])
+        );
+        assert_eq!(stable_peer_count(room, "client-4"), 2);
+        assert_eq!(stable_peer_count(room, "client-2"), 1);
+        let another_client = Arc::clone(room);
+        let later_attempt = Arc::clone(&another_client);
+        assert!(Arc::ptr_eq(room, &another_client));
+        assert!(Arc::ptr_eq(room, &later_attempt));
+        assert!(
+            !rooms
+                .values()
+                .any(|publishers| publishers.contains("client-4"))
+        );
+        assert_eq!(stable_peer_count(rooms.get(&1).unwrap(), "client-3"), 1);
+        assert!(stable_publishers_by_room(3, 0, 1).is_empty());
+        assert_eq!(stable_publishers_by_room(3, 3, usize::MAX).len(), 3);
+    }
+
+    #[test]
+    fn later_attempt_cannot_borrow_initial_delivery_success() {
+        let mut failures = Vec::new();
+        let summary = gate_attempt_coverage(
+            &[client(0, vec![attempt(true), attempt(false)])],
+            1,
+            &mut failures,
+        );
+        assert_eq!(summary.passed_attempts, 1);
+        assert_eq!(summary.failed_attempts, 1);
+        assert_eq!(summary.validated_churners, 0);
+        assert!(
+            failures
+                .iter()
+                .any(|reason| reason.contains("attempt 2 delivery coverage failed"))
+        );
+        assert!(
+            failures
+                .iter()
+                .any(|reason| reason.contains("insufficient measured churn"))
+        );
+    }
+
+    #[test]
+    fn later_eligible_joined_delivery_validates_a_churner() {
+        let mut failures = Vec::new();
+        let summary = gate_attempt_coverage(
+            &[client(0, vec![attempt(true), attempt(true)])],
+            1,
+            &mut failures,
+        );
+        assert!(failures.is_empty());
+        assert_eq!(summary.validated_churners, 1);
+        let json = serde_json::to_value(summary).unwrap();
+        assert_eq!(json["version"], 1);
+        assert_eq!(json["scope"], "stable-publishers");
+        assert_eq!(json["attempts"], 2);
+        assert_eq!(json["requestedChurners"], 1);
+        assert_eq!(json["validatedChurners"], 1);
+    }
+
+    #[test]
+    fn planned_short_tail_is_not_measured_churn_or_an_error_excuse() {
+        let mut tail = attempt(false);
+        let coverage = tail.coverage.as_mut().unwrap();
+        coverage.planned_eligible_seconds = 0;
+        coverage.skipped_short_tail = true;
+        coverage.failure_reasons.clear();
+        let mut failures = Vec::new();
+        let summary = gate_attempt_coverage(
+            &[client(0, vec![attempt(true), tail.clone()])],
+            1,
+            &mut failures,
+        );
+        assert_eq!(summary.skipped_short_tail_attempts, 1);
+        assert_eq!(summary.failed_attempts, 0);
+        assert_eq!(summary.validated_churners, 0);
+        tail.coverage
+            .as_mut()
+            .unwrap()
+            .failure_reasons
+            .push("Setup failed".into());
+        let mut failures = Vec::new();
+        let summary =
+            gate_attempt_coverage(&[client(0, vec![attempt(true), tail])], 1, &mut failures);
+        assert_eq!(summary.skipped_short_tail_attempts, 0);
+        assert_eq!(summary.failed_attempts, 1);
+    }
+
+    #[test]
+    fn missing_coverage_and_unjoined_or_receiver_free_repeats_do_not_pass() {
+        let mut missing = attempt(true);
+        missing.coverage = None;
+        let mut failures = Vec::new();
+        let summary = gate_attempt_coverage(&[client(0, vec![missing])], 0, &mut failures);
+        assert!(!summary.available);
+        assert_eq!(summary.missing_coverage_attempts, 1);
+        assert!(!failures.is_empty());
+        for receiver_free in [false, true] {
+            let mut later = attempt(true);
+            if receiver_free {
+                let coverage = later.coverage.as_mut().unwrap();
+                coverage.expected_audio = 0;
+                coverage.expected_video = 0;
+            } else {
+                later.room_join_ms = None;
+            }
+            let mut failures = Vec::new();
+            let summary =
+                gate_attempt_coverage(&[client(0, vec![attempt(true), later])], 1, &mut failures);
+            assert_eq!(summary.validated_churners, 0);
+            assert!(
+                failures
+                    .iter()
+                    .any(|reason| reason.contains("insufficient measured churn"))
+            );
+        }
+    }
+
+    #[test]
+    fn every_selected_churner_needs_its_own_measured_repeat() {
+        let mut failures = Vec::new();
+        let summary = gate_attempt_coverage(
+            &[
+                client(0, vec![attempt(true), attempt(true)]),
+                client(1, vec![attempt(true)]),
+            ],
+            2,
+            &mut failures,
+        );
+        assert_eq!(summary.validated_churners, 1);
+        assert!(
+            failures
+                .iter()
+                .any(|reason| reason.starts_with("client-1: insufficient measured churn"))
+        );
+    }
+
+    #[test]
+    fn contradictory_pass_and_skip_fields_fail_closed() {
+        for inconsistent in [
+            "zero-window",
+            "missing-audio",
+            "missing-video",
+            "unjoined",
+            "passed-and-skipped",
+        ] {
+            let mut later = attempt(true);
+            let coverage = later.coverage.as_mut().unwrap();
+            match inconsistent {
+                "zero-window" => coverage.planned_eligible_seconds = 0,
+                "missing-audio" => coverage.validated_audio = 0,
+                "missing-video" => coverage.validated_video = 0,
+                "unjoined" => later.room_join_ms = None,
+                "passed-and-skipped" => coverage.skipped_short_tail = true,
+                _ => unreachable!(),
+            }
+            let mut failures = Vec::new();
+            let summary =
+                gate_attempt_coverage(&[client(0, vec![attempt(true), later])], 1, &mut failures);
+            assert_eq!(summary.passed_attempts, 1, "{inconsistent}");
+            assert_eq!(summary.failed_attempts, 1, "{inconsistent}");
+            assert_eq!(summary.validated_churners, 0, "{inconsistent}");
+            assert!(
+                failures
+                    .iter()
+                    .any(|reason| reason.contains("inconsistent measured delivery")),
+                "{inconsistent}"
+            );
+        }
+        let mut tail = attempt(false);
+        tail.room_join_ms = None;
+        let coverage = tail.coverage.as_mut().unwrap();
+        coverage.planned_eligible_seconds = 0;
+        coverage.skipped_short_tail = true;
+        coverage.failure_reasons.clear();
+        let mut failures = Vec::new();
+        let summary =
+            gate_attempt_coverage(&[client(0, vec![attempt(true), tail])], 1, &mut failures);
+        assert_eq!(summary.skipped_short_tail_attempts, 0);
+        assert_eq!(summary.failed_attempts, 1);
+    }
 }
 
 #[cfg(test)]

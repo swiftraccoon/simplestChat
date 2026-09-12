@@ -86,10 +86,13 @@ impl PeerConnectionEventHandler for TransportEvents {
                 );
             }
             if state == RTCPeerConnectionState::Connected {
-                metrics.mark_media_ready(self.is_send);
+                metrics.mark_media_ready_for_attempt(self.diagnostic_attempt, self.is_send);
             }
             if state == RTCPeerConnectionState::Failed && !*self.cancellation.borrow() {
-                metrics.record_error(format!("Media transport {} failed", self.transport_id));
+                metrics.record_error_for_attempt(
+                    self.diagnostic_attempt,
+                    format!("Media transport {} failed", self.transport_id),
+                );
             }
         }
         match state {
@@ -167,7 +170,11 @@ impl PeerConnectionEventHandler for TransportEvents {
                                     );
                                 }
                             }
-                            metrics.record_rtp_received(packet.header.ssrc, packet.payload.len());
+                            metrics.record_rtp_received_for_attempt(
+                                diagnostic_attempt,
+                                packet.header.ssrc,
+                                packet.payload.len(),
+                            );
                         }
                         if count.is_multiple_of(500) {
                             debug!(
@@ -180,7 +187,10 @@ impl PeerConnectionEventHandler for TransportEvents {
                         if !*cancellation.borrow()
                             && let Some(metrics) = &metrics
                         {
-                            metrics.record_error("Remote RTP track error".into());
+                            metrics.record_error_for_attempt(
+                                diagnostic_attempt,
+                                "Remote RTP track error".into(),
+                            );
                         }
                         break;
                     }
@@ -359,7 +369,6 @@ impl WebRtcTransport {
             transport_id: transport_id.clone(),
             diagnostic_attempt: metrics
                 .as_ref()
-                .filter(|m| m.diagnostics_enabled())
                 .map(|m| m.diagnostic_attempt())
                 .unwrap_or(0),
             metrics,

@@ -12,7 +12,7 @@ For commands, options, and report definitions, see the
 | `webrtc_client.rs` | `WebRtcSession`, peer connections, SDP, track readers, cleanup |
 | `media_generator.rs` | Synthetic Opus/VP8 RTP packets |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
-| `measurement.rs` | Shared interval, per-attempt readiness, consumer delivery checks |
+| `measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
 | `mod.rs` | Module exports |
 
 ## How It Works
@@ -43,6 +43,24 @@ The measurement window is shared across clients and excludes ramp/warmup. Keep
 room admission separate from ICE/DTLS readiness and queued packets separate from
 received RTP. Consumer buckets validate delivery within publisher lifetimes and
 subscription caps.
+
+Attempt coverage has a separate, preplanned eligibility interval:
+
+- Freeze the deadline and stable-publisher expectations before WebSocket setup.
+  Exclude three settling seconds and partial measurement seconds; never derive
+  attempt eligibility from successful setup or consumer creation. Failed setup
+  must not become a skipped short tail.
+- Attribute consumers and queued packets to an immutable one-based attempt.
+  Late callbacks must not acquire the next attempt's identity, and session end
+  freezes queued counts before cleanup. Evidence after the planned deadline
+  cannot rescue an attempt whose cleanup ran late. Count distinct stable
+  publisher clients separately by media kind, not producer generations or
+  duplicate consumers.
+- Preserve existing gap checks for all created consumers. The additional
+  `stable-publishers` floor does not prove complete dynamic fan-out, and dynamic
+  consumers can occupy the configured caps. Keep that limitation visible.
+- Keep additive report fields optional when reading historical JSON. Missing
+  coverage is unavailable, not a passing or zero-expectation attempt.
 
 ## Debugging
 

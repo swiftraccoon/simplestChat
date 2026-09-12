@@ -55,7 +55,7 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 | `--mode MODE` | Publisher preset: `conference` (100%), `webinar` (1%), `panel` (10%), `classroom` (20%) |
 | `--publish-ratio RATIO` | Publisher fraction; 1.0, at least one publisher overall |
 | `--max-audio N`, `--max-video N` | Consumer caps per client; 4 each |
-| `--churn-rate N` | Select up to `N × duration` clients to reconnect; 0 |
+| `--churn-rate N` | Select `min(clients, floor(N × duration))` clients to repeatedly join; 0 |
 | `--audio-only`, `--video-only` | Generate only the selected media kind |
 | `--quality PRESET`, `--fps FPS` | `480p`/`720p`/`1080p`, 15/30/60 fps; defaults 480p/30 |
 | `--output-dir PATH` | JSON report directory; current directory |
@@ -66,6 +66,10 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 Publishers are selected before room assignment; low ratios can leave rooms with
 no publisher. Churn selects a population, not an exact arrival rate: sessions last
 5–30 seconds, followed by a two-second reconnect cooldown.
+The first session is held through the initial measured cohort when needed.
+Positive churn rates that select zero clients are rejected. Use a long enough
+measurement interval for the selected clients to complete another measured join;
+short runs cannot establish churn coverage.
 Each iteration performs a fresh room join with new media transports; it does not
 exercise credential-based signaling reconnection. With abrupt departure, the old
 membership can remain in reconnect grace while the new session joins.
@@ -76,13 +80,32 @@ All clients share a measurement interval beginning after `ramp-up + warmup`.
 Late setup does not extend it; non-churning clients that miss warmup fail.
 
 A pass requires successful tasks and media operations, expected capped consumer
-creation, and measured publisher RTP. After a three-second setup allowance,
-eligible consumers must receive packets with no more than two consecutive empty
-one-second buckets. Planned churn ends eligibility; short-lived streams are
-reported as skipped. Each client must validate its initial expected subscription
-count. During churn, that is a lifetime minimum, not per-attempt coverage; a pass
-does not establish complete media delivery for every later session.
-Unexpected producer closure fails the run.
+creation, and measured publisher RTP. Each eligible connection attempt must
+validate delivery from distinct stable (non-churning) publishers in its room,
+separately for audio and video up to the configured caps. Publisher attempts
+must also queue RTP during their own part of the shared measurement window.
+Evidence ends at the planned deadline even if setup or cleanup runs late.
+
+Expectations and the session deadline are fixed before connection setup. Attempt
+eligibility excludes the first three seconds, intersects the shared window, and
+counts complete seconds only. Delayed setup cannot shorten that planned interval
+or turn missing media into a skip. An admitted attempt with no planned eligible
+seconds is a skipped short tail; failed setup still fails. A five-second session
+with slow setup can therefore honestly fail coverage.
+
+Individual consumer checks remain in place, including streams from churning
+publishers: after their subscription/publication settling allowance, eligible
+buckets allow no more than two consecutive empty seconds. Owned publisher or
+client departure ends eligibility; unexpected producer closure fails the run.
+These checks do not prove complete dynamic-publisher fan-out. Dynamic streams
+occupying consumer caps can prevent the stable-peer proof; inspect the evidence
+before treating incomplete scoped coverage as an application regression.
+
+Every selected churner must complete an eligible, admitted, passing second or
+later attempt with a nonzero stable receiver expectation. All-churn populations,
+rooms without a stable counterpart, and zero effective consumer caps cannot
+establish measured churn. Earlier successful attempts cannot cover a later
+attempt's missing delivery.
 
 Accept a run only when the process exits successfully, `run.completed` and
 `run.passed` are true, and no `load_test_timeout.json` exists. Watchdog expiry
@@ -95,6 +118,13 @@ packet buckets. `load_test_summary.json` aggregates them (`schemaVersion: 2`):
 
 - `connectionAttempts` counts all attempts. Connection-time percentiles measure
   room admission from each successful WebSocket attempt, not ICE/DTLS readiness.
+- Per-client `connectionAttempts[].coverage` records planned eligible seconds,
+  expected/validated stable publishers by kind, queued packets, pass/short-tail
+  status, and failure reasons.
+- Summary `attemptCoverage` version 1 has scope `stable-publishers`, attempt
+  outcomes, and requested/validated churner counts. It is additive to summary
+  schema 2; older artifacts without it or per-attempt coverage are unavailable
+  evidence for this guarantee, not successful coverage.
 - `sendMediaReady` / `receiveMediaReady`: peer `Connected` timing for each attempt.
 - `signalingLatencies.operations`: P50/P95/P99 from merged exact millisecond
   histograms, not averages of client percentiles.
@@ -103,6 +133,8 @@ packet buckets. `load_test_summary.json` aggregates them (`schemaVersion: 2`):
   `bytesQueued` includes RTP headers; `bytesReceived` counts payload only.
 - `validatedConsumers`, `failedConsumers`, `skippedShortLivedConsumers`: delivery
   coverage; inspect per-consumer `packetsBySecond` for stalls.
+- Per-client `consumerDelivery[].attempt` is the immutable one-based connection
+  attempt; `isAudio` identifies its media kind. Older artifacts may omit both.
 - `run`: completion, failures, timestamps, workload configuration, revision
   labels, and generator binary hash.
 
