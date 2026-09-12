@@ -171,5 +171,9 @@ cargo test --locked --features load-test --bin load_test -- --test-threads=1
 ```
 
 Tests cover metrics, reconnect timing, delivery checks, cleanup, incremental
-receive renegotiation, and diagnostic filtering. See
+receive renegotiation, and diagnostic filtering. Native loopback tests also force
+ICE to start DTLS before signaling supplies the remote fingerprint and verify
+both transport directions reach native DTLS `Connected`. They also check that
+invalid parameters remain retryable and that an accepted connect is idempotent
+even before ICE starts. See
 [client internals](clients/README.md) for maintenance notes.

@@ -114,9 +114,14 @@ messages while disconnected.
    device, then request `createSendTransport` and `createRecvTransport` in order.
    `transportCreated` carries ICE/DTLS parameters and optional ICE-server entries.
 4. Handle the client transport's connect callback with `connectTransport` and
-   wait for `transportConnected`. Publishing is separate: explicit user capture
-   leads to `produce` / `producerCreated`, with `newProducer` notifying peers.
-   Joining and transport creation do not enable the camera or microphone.
+   wait for `transportConnected`. This acknowledges native acceptance of the
+   remote DTLS parameters, not completed ICE/DTLS negotiation or RTP delivery.
+   Retries after successful acceptance are idempotent while that same transport
+   remains usable; failed or closed transports are rejected. Early ICE/DTLS
+   activity does not replace the first request.
+   Publishing is separate: explicit user capture leads to `produce` /
+   `producerCreated`, with `newProducer` notifying peers. Joining and transport
+   creation do not enable the camera or microphone.
 5. For an existing or new producer, send `consume` with receiver RTP capabilities.
    The server creates a **paused** consumer and returns `consumerCreated`. Create
    the browser consumer first, then send `resumeConsumer` and await

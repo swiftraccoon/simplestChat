@@ -126,6 +126,11 @@ pub struct ParticipantMedia {
     pub generation: uuid::Uuid,
     pub send_transport: Option<WebRtcTransport>,
     pub recv_transport: Option<WebRtcTransport>,
+    /// Native connect acknowledged for this exact transport lifetime. ICE can
+    /// start DTLS before remote parameters are supplied, so DTLS state is not
+    /// evidence that connect was applied. These IDs do not imply media readiness.
+    pub(super) send_connect_applied: Option<TransportId>,
+    pub(super) recv_connect_applied: Option<TransportId>,
     pub producers: HashMap<String, Producer>,
     pub consumers: HashMap<String, Consumer>,
 }
@@ -137,6 +142,8 @@ impl ParticipantMedia {
             generation: uuid::Uuid::new_v4(),
             send_transport: None,
             recv_transport: None,
+            send_connect_applied: None,
+            recv_connect_applied: None,
             producers: HashMap::new(),
             consumers: HashMap::new(),
         }
@@ -178,6 +185,8 @@ impl ParticipantMedia {
         if let Some(transport) = self.recv_transport.take() {
             drop(transport);
         }
+        self.send_connect_applied = None;
+        self.recv_connect_applied = None;
     }
 }
 

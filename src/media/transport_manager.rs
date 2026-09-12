@@ -244,6 +244,7 @@ impl TransportManager {
         let transport_info = TransportInfo::from(&transport);
         self.setup_transport_handlers(&transport, &participant_id, "send");
         participant.send_transport = Some(transport);
+        participant.send_connect_applied = None;
 
         info!(
             "Created send transport {} for participant {}",
@@ -331,6 +332,7 @@ impl TransportManager {
         self.setup_transport_handlers(&transport, &participant_id, "recv");
         self.clear_bwe_trace_handler(participant.generation);
         participant.recv_transport = Some(transport);
+        participant.recv_connect_applied = None;
 
         info!(
             "Created receive transport {} for participant {}",
@@ -341,7 +343,9 @@ impl TransportManager {
 
     /// Connects a transport by ID (determines send vs recv automatically).
     /// Returns whether this call performed worker IPC; retries after a lost
-    /// signaling acknowledgement are successful no-ops.
+    /// signaling acknowledgement are successful no-ops once native connect has
+    /// acknowledged this transport's remote parameters. This is independent of
+    /// ICE/DTLS readiness, including ICE that arrives before the first request.
     pub async fn connect_transport(
         &self,
         participant_id: &str,
@@ -349,40 +353,57 @@ impl TransportManager {
         dtls_parameters: DtlsParameters,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
-        let participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
+        let mut participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
 
-        let transport = participant
+        let (transport, is_send) = participant
             .send_transport
             .as_ref()
             .filter(|transport| transport.id().to_string() == transport_id)
+            .map(|transport| (transport, true))
             .or_else(|| {
                 participant
                     .recv_transport
                     .as_ref()
                     .filter(|transport| transport.id().to_string() == transport_id)
+                    .map(|transport| (transport, false))
             })
             .ok_or_else(|| {
                 MediaError::TransportError(format!("Transport not found: {transport_id}"))
             })?;
 
-        match transport.dtls_state() {
-            DtlsState::New => {}
-            // A lost signaling acknowledgement can legitimately cause the
-            // client to retry while the handshake is still in progress.
-            DtlsState::Connecting | DtlsState::Connected => return Ok(false),
-            state => {
-                return Err(MediaError::InvalidState(format!(
-                    "Transport cannot connect from DTLS state {state:?}"
-                )));
-            }
+        let state = transport.dtls_state();
+        if transport.closed() || matches!(state, DtlsState::Failed | DtlsState::Closed) {
+            return Err(MediaError::InvalidState(format!(
+                "Transport is closed or cannot connect from DTLS state {state:?}"
+            )));
+        }
+        let native_id = transport.id();
+        let applied = if is_send {
+            participant.send_connect_applied
+        } else {
+            participant.recv_connect_applied
+        };
+        if applied == Some(native_id) {
+            return Ok(false);
         }
 
+        // Native ICE can start an AUTO-role DTLS handshake before signaling
+        // supplies the peer fingerprint. Skipping connect merely because its
+        // state is Connecting leaves that handshake unauthenticated indefinitely.
         measure_result(
             Stage::MediaConnectTransport,
             transport.connect(WebRtcTransportRemoteParameters { dtls_parameters }),
         )
         .await
         .map_err(|e| MediaError::TransportError(format!("Failed to connect transport: {e}")))?;
+
+        // Keep the participant lock through the acknowledgment and bookkeeping.
+        // Failed requests must not turn later attempts into successful no-ops.
+        if is_send {
+            participant.send_connect_applied = Some(native_id);
+        } else {
+            participant.recv_connect_applied = Some(native_id);
+        }
 
         info!(
             "Connected transport {} for participant {}",

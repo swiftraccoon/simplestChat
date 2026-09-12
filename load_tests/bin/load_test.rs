@@ -2970,3 +2970,221 @@ mod incremental_receive_tests {
         exercise_incremental_batch(false).await;
     }
 }
+
+#[cfg(test)]
+mod native_connect_order_tests {
+    use super::*;
+    use futures_util::FutureExt;
+    use mediasoup_types::data_structures::{DtlsFingerprint, DtlsRole, DtlsState, IceState};
+    use simplestChat::media::config::{RouterConfig, WebRtcTransportConfig};
+    use simplestChat::media::transport_manager::TransportManager;
+    use simplestChat::media::types::MediaError;
+    use std::net::{IpAddr, Ipv4Addr};
+    use std::panic::AssertUnwindSafe;
+
+    /// Withhold signaling until the owned peer has made the native transport
+    /// start DTLS from ICE. Connecting must not masquerade as an earlier
+    /// successful connect() request: the remote fingerprint is still missing.
+    async fn exercise_connect_order(is_send: bool, start_ice: bool, invalid_first: bool) {
+        let participant_id = "owned-native-connect-regression";
+        let manager = TransportManager::new();
+        let metrics = Arc::new(MetricsCollector::new(participant_id.into()));
+        let session = Arc::new(Mutex::new(WebRtcSession::new(
+            participant_id.into(),
+            metrics,
+        )));
+        let outcome = AssertUnwindSafe(tokio::time::timeout(Duration::from_secs(10), async {
+            let workers = WorkerManager::new();
+            let worker = workers.create_worker(WorkerSettings::default()).await?;
+            let router = worker
+                .create_router(RouterConfig::default().to_router_options())
+                .await?;
+            // Resolve a concrete owned loopback port, then hand it to the
+            // native listener. A competing bind is a fixture error, not a retry
+            // against an unrelated running service.
+            let reservation = std::net::UdpSocket::bind("127.0.0.1:0")?;
+            let port = reservation.local_addr()?.port();
+            drop(reservation);
+            let server = worker
+                .create_webrtc_server(WebRtcServerOptions::new(WebRtcServerListenInfos::new(
+                    ListenInfo {
+                        protocol: Protocol::Udp,
+                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                        announced_address: None,
+                        expose_internal_ip: false,
+                        port: Some(port),
+                        port_range: None,
+                        flags: None,
+                        send_buffer_size: None,
+                        recv_buffer_size: None,
+                    },
+                )))
+                .await?;
+            let captured = Arc::new(std::sync::Mutex::new(None));
+            let capture_handler = server.on_new_webrtc_transport({
+                let captured = captured.clone();
+                move |transport| *captured.lock().unwrap() = Some(transport.clone())
+            });
+            let configuration = WebRtcTransportConfig::default();
+            let info = if is_send {
+                manager
+                    .create_send_transport(participant_id.into(), &router, server, &configuration)
+                    .await?
+            } else {
+                manager
+                    .create_recv_transport(participant_id.into(), &router, server, &configuration)
+                    .await?
+            };
+            let native = captured
+                .lock()
+                .unwrap()
+                .take()
+                .context("Native transport callback did not retain the owned handle")?;
+            // Stop capture before awaiting: no retained callback-owned strong
+            // transport handle may interfere with the test's final cleanup.
+            drop(capture_handler);
+            assert_eq!(native.dtls_state(), DtlsState::New);
+
+            let parameters = if start_ice {
+                if is_send {
+                    session
+                        .lock()
+                        .await
+                        .create_send_transport(
+                            info.id.clone(),
+                            info.ice_parameters,
+                            info.ice_candidates,
+                            info.dtls_parameters,
+                        )
+                        .await?
+                } else {
+                    session
+                        .lock()
+                        .await
+                        .create_recv_transport(
+                            info.id.clone(),
+                            info.ice_parameters,
+                            info.ice_candidates,
+                            info.dtls_parameters,
+                        )
+                        .await?
+                }
+            } else {
+                // Native parameter acceptance does not require ICE activity.
+                // This case exercises idempotence while DTLS is still New.
+                DtlsParameters {
+                    role: DtlsRole::Client,
+                    fingerprints: vec![DtlsFingerprint::Sha256 { value: [0x42; 32] }],
+                }
+            };
+            if start_ice {
+                while native.dtls_state() != DtlsState::Connecting
+                    || !matches!(
+                        native.ice_state(),
+                        IceState::Connected | IceState::Completed
+                    )
+                {
+                    sleep(Duration::from_millis(10)).await;
+                }
+                let stats = native.get_stats().await?;
+                assert_eq!(
+                    stats
+                        .first()
+                        .context("Native transport stats missing")?
+                        .dtls_state,
+                    DtlsState::Connecting
+                );
+            }
+            if invalid_first {
+                assert!(
+                    manager
+                        .connect_transport(
+                            participant_id,
+                            &info.id,
+                            DtlsParameters {
+                                role: DtlsRole::Client,
+                                fingerprints: Vec::new()
+                            },
+                        )
+                        .await
+                        .is_err(),
+                    "Invalid first native connect must fail rather than becoming an applied retry"
+                );
+            }
+            assert!(
+                manager
+                    .connect_transport(participant_id, &info.id, parameters.clone())
+                    .await?,
+                "First valid signaling connect must perform native IPC even after DTLS starts"
+            );
+            assert!(
+                !manager
+                    .connect_transport(participant_id, &info.id, parameters)
+                    .await?,
+                "A successful native parameter application makes its immediate retry a no-op"
+            );
+            if start_ice {
+                loop {
+                    let stats = native.get_stats().await?;
+                    if stats
+                        .first()
+                        .context("Native transport stats missing")?
+                        .dtls_state
+                        == DtlsState::Connected
+                    {
+                        break;
+                    }
+                    sleep(Duration::from_millis(10)).await;
+                }
+            } else {
+                assert_eq!(native.dtls_state(), DtlsState::New);
+            }
+            Ok::<_, anyhow::Error>(())
+        }))
+        .catch_unwind()
+        .await;
+
+        // Execute both cleanup steps even when a test assertion, IPC error, or
+        // timeout interrupts the body. If explicit cleanup itself times out,
+        // the test fails and its owned Tokio runtime retires remaining tasks.
+        let cleanup = tokio::time::timeout(Duration::from_secs(3), async {
+            let peer_cleanup = session.lock().await.close().await;
+            let native_cleanup = manager.remove_participant(participant_id).await;
+            peer_cleanup?;
+            match native_cleanup {
+                Ok(()) | Err(MediaError::ParticipantNotFound(_)) => Ok(()),
+                Err(error) => Err(anyhow::Error::new(error)),
+            }
+        })
+        .await;
+        match outcome {
+            Ok(result) => result
+                .expect("Native connect order regression timed out")
+                .expect("Native connect order fixture failed"),
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+        cleanup
+            .expect("Native connect order cleanup timed out")
+            .expect("Native connect order cleanup failed");
+    }
+
+    #[tokio::test]
+    async fn send_transport_connects_when_ice_starts_dtls_before_signaling() {
+        exercise_connect_order(true, true, false).await;
+    }
+
+    #[tokio::test]
+    async fn receive_transport_connects_when_ice_starts_dtls_before_signaling() {
+        exercise_connect_order(false, true, false).await;
+    }
+
+    #[tokio::test]
+    async fn failed_native_parameters_do_not_consume_the_first_connect_attempt() {
+        exercise_connect_order(false, true, true).await;
+    }
+
+    #[tokio::test]
+    async fn successful_native_connect_is_idempotent_while_dtls_is_new() {
+        exercise_connect_order(true, false, false).await;
+    }
+}
