@@ -1081,6 +1081,16 @@ impl WebRtcSession {
         Ok(serde_json::json!({"transports": transports}))
     }
 
+    /// A stall capture inspects only the receive peer, using the same bounded
+    /// stats/SDP allowlists as pre-close diagnostics. This does not query the SFU.
+    pub async fn receive_diagnostic_snapshot(&self) -> Result<serde_json::Value> {
+        let transport = self
+            .recv_transport
+            .as_ref()
+            .context("Receive transport missing")?;
+        Ok(serde_json::json!({"transports": [transport.diagnostic_snapshot().await?]}))
+    }
+
     /// Close all transports
     pub async fn close(&self) -> Result<()> {
         let mut result = Ok(());

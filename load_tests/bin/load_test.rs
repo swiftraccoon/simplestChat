@@ -36,6 +36,10 @@ mod subscriptions {
     include!("../clients/subscriptions.rs");
 }
 
+mod receiver_stall {
+    include!("../clients/receiver_stall.rs");
+}
+
 #[cfg(test)]
 mod keyframe_tests {
     include!("../clients/keyframe_tests.rs");
@@ -99,6 +103,8 @@ struct ClientConfig {
     /// In conference mode, NewProducer events handle discovery naturally.
     consume_existing_producers: bool,
     departure: Departure,
+    /// Shared diagnostic-only budget across every client and churn attempt.
+    receiver_stall_budget: Option<Arc<receiver_stall::ReceiverStallBudget>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -817,6 +823,9 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
     let stable_publishers =
         stable_publishers_by_room(num_publishers, churner_start_idx, config.num_rooms);
     let no_stable_publishers = Arc::new(HashSet::new());
+    let receiver_stall_budget = config
+        .diagnostics
+        .then(|| Arc::new(receiver_stall::ReceiverStallBudget::default()));
 
     // Spawn clients with gradual ramp-up
     for (i, collector) in metrics_collectors.iter().enumerate() {
@@ -851,6 +860,7 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
             max_video_consumers: config.max_video_consumers,
             consume_existing_producers: true,
             departure: config.departure,
+            receiver_stall_budget: receiver_stall_budget.clone(),
         };
 
         let metrics = collector.clone();
@@ -1580,7 +1590,19 @@ async fn run_client_inner(
     });
 
     // Every client ends at the same instant; setup/ramp no longer inflate rates.
-    tokio::time::sleep_until(config.deadline.into()).await;
+    if let Some(budget) = &config.receiver_stall_budget {
+        receiver_stall::monitor_until_deadline(
+            webrtc_session.clone(),
+            metrics.clone(),
+            budget.clone(),
+            attempt,
+            config.measurement_start,
+            config.deadline,
+        )
+        .await;
+    } else {
+        tokio::time::sleep_until(config.deadline.into()).await;
+    }
 
     // Publish the intentional lifetime boundary before dropping signaling or
     // closing peers. Other clients may observe ProducerClosed immediately.
@@ -2836,7 +2858,7 @@ fn print_usage() {
     );
     println!("  --output-dir <PATH>        Directory for both JSON reports (default: .)");
     println!(
-        "  --diagnostics              Bounded pre-close RTC stats, sanitized SDP and lifecycle events"
+        "  --diagnostics              Bounded pre-close/stalled-receiver RTC stats and lifecycle events"
     );
     println!(
         "  --departure <MODE>         abrupt (default) or explicit-leave (requires --diagnostics)"

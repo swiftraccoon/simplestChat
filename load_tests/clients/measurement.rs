@@ -106,6 +106,19 @@ pub struct ConsumerDelivery {
     pub skipped_short_lived: bool,
 }
 
+/// Recent delivery failure evidence, using the shared measurement clock.
+/// Consumer ordinals refer to the complete, append-only delivery report; the
+/// end-exclusive bucket range contains exactly three completed empty seconds.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceiverStallTrigger {
+    pub consumer_ordinal: usize,
+    pub ssrc: u32,
+    pub is_audio: Option<bool>,
+    pub begin_bucket: usize,
+    pub end_bucket: usize,
+}
+
 struct ConsumerState {
     consumer_id: String,
     producer_id: String,
@@ -259,6 +272,65 @@ impl Measurements {
             .is_some_and(|attempt| !attempt.ended && attempt.deadline.is_none_or(|end| now < end))
     }
 
+    /// Inspect existing delivery buckets without adding packet-path counters.
+    /// Callers control opt-in polling and one-shot capture admission separately.
+    pub fn receiver_stall(&self, ordinal: usize) -> Option<ReceiverStallTrigger> {
+        self.receiver_stall_at(ordinal, Instant::now())
+    }
+
+    fn receiver_stall_at(&self, ordinal: usize, now: Instant) -> Option<ReceiverStallTrigger> {
+        if now < self.window.start
+            || now >= self.window.end
+            || ordinal == 0
+            || ordinal != self.attempts.lock().unwrap().len()
+        {
+            return None;
+        }
+        let live_attempt = self
+            .measurement
+            .lock()
+            .unwrap()
+            .queued_by_attempt
+            .get(&ordinal)
+            .is_some_and(|attempt| !attempt.ended && attempt.deadline.is_none_or(|end| now < end));
+        if !live_attempt {
+            return None;
+        }
+
+        // Match delivery_report's lock order. No attempt/measurement guard is
+        // retained while inspecting publisher lifetimes and consumer buckets.
+        let publishers = self.window.publishers.lock().unwrap();
+        let consumers = self.consumers.lock().unwrap();
+        consumers.iter().enumerate().find_map(|(index, consumer)| {
+            let publisher = publishers.get(&consumer.producer_id);
+            if consumer.attempt != ordinal
+                || consumer.closed.is_some()
+                || consumer.planned_end.is_some_and(|end| now >= end)
+                || publisher.is_some_and(|(_, ended)| ended.is_some())
+            {
+                return None;
+            }
+            let eligible = consumer_eligible_buckets(&self.window, consumer, publisher, now);
+            let begin_bucket = eligible.end.checked_sub(3)?;
+            if begin_bucket < eligible.start
+                || !consumer
+                    .packets_by_second
+                    .get(begin_bucket..eligible.end)?
+                    .iter()
+                    .all(|packets| *packets == 0)
+            {
+                return None;
+            }
+            Some(ReceiverStallTrigger {
+                consumer_ordinal: index + 1,
+                ssrc: consumer.ssrc,
+                is_audio: consumer.is_audio,
+                begin_bucket,
+                end_bucket: eligible.end,
+            })
+        })
+    }
+
     /// A server notification is not authority to excuse missing media from a
     /// generator that is still publishing. Only our owned lifecycle may do that.
     pub fn close_producer(&self, producer_id: &str) -> (Option<bool>, bool) {
@@ -384,32 +456,9 @@ impl Measurements {
             .iter()
             .map(|consumer| {
                 let publisher = publishers.get(&consumer.producer_id);
-                // Allow subscription batching/renegotiation to settle, then inspect
-                // complete seconds only. Intentional publisher/client churn ends
-                // eligibility immediately, not after the server's reconnect grace.
-                let start =
-                    (consumer.created + std::time::Duration::from_secs(3)).max(self.window.start);
-                let start = publisher.map_or(start, |(created, _)| {
-                    start.max(*created + std::time::Duration::from_secs(3))
-                });
-                let end = consumer
-                    .closed
-                    .unwrap_or(self.window.end)
-                    .min(self.window.end);
-                let end = consumer.planned_end.map_or(end, |planned| end.min(planned));
-                let end = publisher
-                    .and_then(|(_, end)| *end)
-                    .map_or(end, |closed| end.min(closed));
-                let begin_bucket = start
-                    .saturating_duration_since(self.window.start)
-                    .as_millis()
-                    .div_ceil(1000) as usize;
-                let end_bucket =
-                    end.saturating_duration_since(self.window.start).as_secs() as usize;
-                let eligible = consumer
-                    .packets_by_second
-                    .get(begin_bucket..end_bucket)
-                    .unwrap_or_default();
+                let range =
+                    consumer_eligible_buckets(&self.window, consumer, publisher, self.window.end);
+                let eligible = consumer.packets_by_second.get(range).unwrap_or_default();
                 let (seconds_with_packets, longest_gap_seconds) = delivery_coverage(eligible);
                 ConsumerDelivery {
                     consumer_id: consumer.consumer_id.clone(),
@@ -494,6 +543,35 @@ impl Measurements {
     }
 }
 
+/// Allow subscription/renegotiation to settle, then inspect complete seconds
+/// only. Owned departures end eligibility without waiting for reconnect grace.
+fn consumer_eligible_buckets(
+    window: &MeasurementWindow,
+    consumer: &ConsumerState,
+    publisher: Option<&(Instant, Option<Instant>)>,
+    observed_until: Instant,
+) -> std::ops::Range<usize> {
+    let start = (consumer.created + std::time::Duration::from_secs(3)).max(window.start);
+    let start = publisher.map_or(start, |(created, _)| {
+        start.max(*created + std::time::Duration::from_secs(3))
+    });
+    let end = consumer
+        .closed
+        .unwrap_or(window.end)
+        .min(window.end)
+        .min(observed_until);
+    let end = consumer.planned_end.map_or(end, |planned| end.min(planned));
+    let end = publisher
+        .and_then(|(_, end)| *end)
+        .map_or(end, |closed| end.min(closed));
+    let begin_bucket = start
+        .saturating_duration_since(window.start)
+        .as_millis()
+        .div_ceil(1000) as usize;
+    let end_bucket = end.saturating_duration_since(window.start).as_secs() as usize;
+    begin_bucket..end_bucket
+}
+
 fn delivery_coverage(buckets: &[u64]) -> (usize, usize) {
     let mut active = 0;
     let mut gap = 0;
@@ -508,4 +586,334 @@ fn delivery_coverage(buckets: &[u64]) -> (usize, usize) {
         }
     }
     (active, longest)
+}
+
+#[cfg(test)]
+mod receiver_stall_tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    fn fixture() -> (Measurements, Instant) {
+        let start = Instant::now() + Duration::from_secs(60);
+        let observations = Measurements::new(
+            "receiver".into(),
+            Arc::new(MeasurementWindow::new(start, Duration::from_secs(30))),
+        );
+        begin_attempt(&observations, start + Duration::from_secs(30));
+        (observations, start)
+    }
+
+    fn begin_attempt(observations: &Measurements, deadline: Instant) {
+        observations.begin_planned_attempt(AttemptPlan {
+            deadline,
+            stable_publishers: Arc::new(Default::default()),
+            expected_audio: 1,
+            expected_video: 1,
+            is_publisher: false,
+        });
+    }
+
+    fn consumer(observations: &Measurements, producer: &str, created: Instant, audio: bool) {
+        observations.subscribe(producer, audio);
+        observations.record_consumer(producer, producer, 123);
+        observations
+            .consumers
+            .lock()
+            .unwrap()
+            .last_mut()
+            .unwrap()
+            .created = created;
+    }
+
+    #[test]
+    fn receiver_stall_requires_three_latest_complete_empty_eligible_seconds() {
+        let (observations, start) = fixture();
+        consumer(
+            &observations,
+            "video",
+            start - Duration::from_secs(3),
+            false,
+        );
+        assert!(
+            observations
+                .receiver_stall_at(1, start + Duration::from_millis(2999))
+                .is_none()
+        );
+        let trigger = observations
+            .receiver_stall_at(1, start + Duration::from_secs(3))
+            .unwrap();
+        assert_eq!((trigger.begin_bucket, trigger.end_bucket), (0, 3));
+        assert_eq!(
+            (trigger.consumer_ordinal, trigger.ssrc, trigger.is_audio),
+            (1, 123, Some(false))
+        );
+
+        // A packet in the current incomplete second does not rewrite the
+        // preceding three empty completed seconds.
+        observations.consumers.lock().unwrap()[0].packets_by_second[3] = 1;
+        assert!(
+            observations
+                .receiver_stall_at(1, start + Duration::from_millis(3999))
+                .is_some()
+        );
+        assert!(
+            observations
+                .receiver_stall_at(1, start + Duration::from_secs(4))
+                .is_none()
+        );
+        assert!(
+            observations
+                .receiver_stall_at(1, start + Duration::from_secs(6))
+                .is_none()
+        );
+        let resumed_gap = observations
+            .receiver_stall_at(1, start + Duration::from_secs(7))
+            .unwrap();
+        assert_eq!((resumed_gap.begin_bucket, resumed_gap.end_bucket), (4, 7));
+    }
+
+    #[test]
+    fn receiver_stall_shares_settling_and_partial_start_geometry_with_delivery() {
+        let (observations, start) = fixture();
+        consumer(
+            &observations,
+            "video",
+            start + Duration::from_millis(500),
+            false,
+        );
+        assert!(
+            observations
+                .receiver_stall_at(1, start + Duration::from_millis(6999))
+                .is_none()
+        );
+        let trigger = observations
+            .receiver_stall_at(1, start + Duration::from_secs(7))
+            .unwrap();
+        assert_eq!((trigger.begin_bucket, trigger.end_bucket), (4, 7));
+        assert_eq!(observations.delivery_report()[0].eligible_seconds, 26);
+
+        observations
+            .window
+            .publishers
+            .lock()
+            .unwrap()
+            .insert("video".into(), (start + Duration::from_millis(1500), None));
+        assert!(
+            observations
+                .receiver_stall_at(1, start + Duration::from_millis(7999))
+                .is_none()
+        );
+        let trigger = observations
+            .receiver_stall_at(1, start + Duration::from_secs(8))
+            .unwrap();
+        assert_eq!((trigger.begin_bucket, trigger.end_bucket), (5, 8));
+        assert_eq!(observations.delivery_report()[0].eligible_seconds, 25);
+    }
+
+    #[test]
+    fn receiver_stall_excludes_warmup_shared_end_and_partial_final_second() {
+        let (observations, start) = fixture();
+        consumer(
+            &observations,
+            "audio",
+            start - Duration::from_secs(10),
+            true,
+        );
+        assert!(
+            observations
+                .receiver_stall_at(1, start - Duration::from_nanos(1))
+                .is_none()
+        );
+        assert!(observations.receiver_stall_at(1, start).is_none());
+        let trigger = observations
+            .receiver_stall_at(1, start + Duration::from_millis(29999))
+            .unwrap();
+        assert_eq!((trigger.begin_bucket, trigger.end_bucket), (26, 29));
+        assert!(
+            observations
+                .receiver_stall_at(1, start + Duration::from_secs(30))
+                .is_none()
+        );
+        assert!(
+            observations
+                .receiver_stall_at(1, start + Duration::from_secs(31))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn receiver_stall_requires_current_live_attempt_and_retains_full_consumer_ordinal() {
+        let (observations, start) = fixture();
+        consumer(&observations, "old", start - Duration::from_secs(3), true);
+        assert!(
+            observations
+                .receiver_stall_at(0, start + Duration::from_secs(4))
+                .is_none()
+        );
+        assert!(
+            observations
+                .receiver_stall_at(2, start + Duration::from_secs(4))
+                .is_none()
+        );
+        begin_attempt(&observations, start + Duration::from_secs(30));
+        assert!(
+            observations
+                .receiver_stall_at(1, start + Duration::from_secs(4))
+                .is_none()
+        );
+        assert!(
+            observations
+                .receiver_stall_at(2, start + Duration::from_secs(4))
+                .is_none()
+        );
+        consumer(
+            &observations,
+            "current",
+            start - Duration::from_secs(3),
+            false,
+        );
+        let trigger = observations
+            .receiver_stall_at(2, start + Duration::from_secs(4))
+            .unwrap();
+        assert_eq!(trigger.consumer_ordinal, 2);
+        observations.end_session();
+        assert!(
+            observations
+                .receiver_stall_at(2, start + Duration::from_secs(4))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn receiver_stall_ends_at_planned_deadline_even_without_owned_cleanup() {
+        let (observations, start) = fixture();
+        begin_attempt(&observations, start + Duration::from_millis(7500));
+        consumer(&observations, "audio", start - Duration::from_secs(3), true);
+        assert!(
+            observations
+                .receiver_stall_at(2, start + Duration::from_millis(7499))
+                .is_some()
+        );
+        assert!(
+            observations
+                .receiver_stall_at(2, start + Duration::from_millis(7500))
+                .is_none()
+        );
+        assert!(
+            observations
+                .receiver_stall_at(2, start + Duration::from_secs(8))
+                .is_none()
+        );
+        assert_eq!(observations.delivery_report()[0].eligible_seconds, 7);
+        assert!(observations.consumers.lock().unwrap()[0].closed.is_none());
+    }
+
+    #[test]
+    fn receiver_stall_skips_closed_and_owned_retired_but_keeps_unknown_publishers() {
+        let (observations, start) = fixture();
+        for producer in ["closed", "retired", "unknown"] {
+            consumer(
+                &observations,
+                producer,
+                start - Duration::from_secs(3),
+                true,
+            );
+        }
+        observations.consumers.lock().unwrap()[0].closed = Some(start + Duration::from_secs(4));
+        observations.window.publishers.lock().unwrap().insert(
+            "retired".into(),
+            (
+                start - Duration::from_secs(3),
+                Some(start + Duration::from_secs(4)),
+            ),
+        );
+        let trigger = observations
+            .receiver_stall_at(1, start + Duration::from_secs(5))
+            .unwrap();
+        assert_eq!(trigger.consumer_ordinal, 3);
+        assert_eq!((trigger.begin_bucket, trigger.end_bucket), (2, 5));
+        observations.consumers.lock().unwrap()[2].closed = Some(start + Duration::from_secs(5));
+        assert!(
+            observations
+                .receiver_stall_at(1, start + Duration::from_secs(5))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn receiver_stall_does_not_excuse_server_closure_of_live_owned_publisher() {
+        let (observations, start) = fixture();
+        consumer(&observations, "live", start - Duration::from_secs(3), false);
+        observations
+            .window
+            .publishers
+            .lock()
+            .unwrap()
+            .insert("live".into(), (start - Duration::from_secs(3), None));
+        let (_, unexpected) = observations.close_producer("live");
+        assert!(unexpected);
+        assert!(
+            observations
+                .receiver_stall_at(1, start + Duration::from_secs(4))
+                .is_some()
+        );
+        assert!(observations.consumers.lock().unwrap()[0].closed.is_none());
+
+        let (unknown, unknown_start) = fixture();
+        consumer(
+            &unknown,
+            "unknown",
+            unknown_start - Duration::from_secs(3),
+            false,
+        );
+        assert!(
+            unknown
+                .receiver_stall_at(1, unknown_start + Duration::from_secs(4))
+                .is_some()
+        );
+        let (_, unexpected) = unknown.close_producer("unknown");
+        assert!(!unexpected);
+        assert!(
+            unknown
+                .receiver_stall_at(1, unknown_start + Duration::from_secs(4))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn receiver_stall_skips_healthy_consumers_without_copying_or_changing_buckets() {
+        let (observations, start) = fixture();
+        consumer(
+            &observations,
+            "healthy",
+            start - Duration::from_secs(3),
+            true,
+        );
+        consumer(
+            &observations,
+            "stalled",
+            start - Duration::from_secs(3),
+            false,
+        );
+        observations.consumers.lock().unwrap()[0]
+            .packets_by_second
+            .fill(1);
+        let before = observations.delivery_report();
+        let trigger = observations
+            .receiver_stall_at(1, start + Duration::from_secs(10))
+            .unwrap();
+        assert_eq!(trigger.consumer_ordinal, 2);
+        let after = observations.delivery_report();
+        assert_eq!(
+            serde_json::to_value(before).unwrap(),
+            serde_json::to_value(after).unwrap()
+        );
+        let value = serde_json::to_value(&trigger).unwrap();
+        assert_eq!(value["consumerOrdinal"], 2);
+        assert_eq!(value["beginBucket"], 7);
+        assert_eq!(value["endBucket"], 10);
+        let restored: ReceiverStallTrigger = serde_json::from_value(value).unwrap();
+        assert_eq!(restored.ssrc, trigger.ssrc);
+    }
 }

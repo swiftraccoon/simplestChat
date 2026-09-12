@@ -40,6 +40,9 @@ pub struct ClientMetrics {
 pub struct DiagnosticReport {
     pub events: Vec<DiagnosticEntry>,
     pub snapshots: Vec<DiagnosticEntry>,
+    /// Separate from ordinary pre-close capacity; older reports omit this field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub receiver_stalls: Vec<DiagnosticEntry>,
     pub failures: Vec<String>,
 }
 
@@ -54,6 +57,8 @@ pub struct DiagnosticEntry {
 
 const MAX_DIAGNOSTIC_EVENTS: usize = 4096;
 const MAX_DIAGNOSTIC_SNAPSHOTS: usize = 128;
+const MAX_RECEIVER_STALL_SNAPSHOTS: usize = 8;
+const MAX_RECEIVER_STALL_BYTES: usize = 256 * 1024;
 
 /// Signaling latency report per operation
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -151,6 +156,11 @@ impl MetricsCollector {
         self.attempts.lock().unwrap().len()
     }
 
+    /// Collector-relative monotonic time, shared by events and capture boundaries.
+    pub fn diagnostic_elapsed_ms(&self) -> u64 {
+        self.start_time.elapsed().as_millis() as u64
+    }
+
     pub fn diagnostic_event(&self, kind: &str, details: serde_json::Value) {
         if self.diagnostics_enabled() {
             self.diagnostic_event_for_attempt(self.diagnostic_attempt(), kind, details);
@@ -175,6 +185,43 @@ impl MetricsCollector {
         }
     }
 
+    /// Retain a bounded, sanitized receiver snapshot without consuming pre-close
+    /// slots. The caller records a failed capture if this independent quota or
+    /// serialized-size bound rejects the result. No raw native errors are stored.
+    pub fn receiver_stall_snapshot_for_attempt(
+        &self,
+        attempt: usize,
+        triggered_elapsed_ms: u64,
+        trigger: ReceiverStallTrigger,
+        snapshot: serde_json::Value,
+    ) -> bool {
+        if !self.diagnostics_enabled() {
+            return false;
+        }
+        let entry = DiagnosticEntry {
+            attempt,
+            elapsed_ms: self.diagnostic_elapsed_ms(),
+            kind: "receiver-stall".into(),
+            details: serde_json::json!({
+                "triggerElapsedMs": triggered_elapsed_ms,
+                "trigger": trigger,
+                "snapshot": snapshot,
+            }),
+        };
+        let Ok(bytes) = serde_json::to_vec(&entry) else {
+            return false;
+        };
+        if bytes.len() > MAX_RECEIVER_STALL_BYTES {
+            return false;
+        }
+        let mut report = self.diagnostics.lock().unwrap();
+        if report.receiver_stalls.len() >= MAX_RECEIVER_STALL_SNAPSHOTS {
+            return false;
+        }
+        report.receiver_stalls.push(entry);
+        true
+    }
+
     fn push_diagnostic(
         &self,
         attempt: usize,
@@ -197,20 +244,29 @@ impl MetricsCollector {
             });
         } else {
             drop(report);
-            self.diagnostic_failure("Diagnostic capture limit exceeded; evidence is incomplete");
+            self.diagnostic_failure_for_attempt(
+                attempt,
+                "Diagnostic capture limit exceeded; evidence is incomplete",
+            );
         }
     }
 
     pub fn diagnostic_failure(&self, reason: &str) {
+        self.diagnostic_failure_for_attempt(self.diagnostic_attempt(), reason);
+    }
+
+    /// Asynchronous captures keep their original attempt even after cancellation
+    /// or a later connection attempt. Their failure cannot be credited elsewhere.
+    pub fn diagnostic_failure_for_attempt(&self, attempt: usize, reason: &str) {
         if !self.diagnostics_enabled() {
             return;
         }
-        let failure = format!("Attempt {}: {reason}", self.diagnostic_attempt());
+        let failure = format!("Attempt {attempt}: {reason}");
         let mut report = self.diagnostics.lock().unwrap();
         if !report.failures.contains(&failure) {
             report.failures.push(failure.clone());
             drop(report);
-            self.record_error(format!("Diagnostic failure: {failure}"));
+            self.record_error_for_attempt(attempt, format!("Diagnostic failure: {failure}"));
         }
     }
 
@@ -776,6 +832,62 @@ fn histogram_stats(histogram_ms: std::collections::BTreeMap<u64, u64>) -> Latenc
 mod measurement_tests {
     use super::*;
     use std::{sync::Arc, time::Duration};
+
+    #[test]
+    fn stall_snapshots_have_independent_capacity_and_legacy_compatibility() {
+        let metrics = MetricsCollector::new("stall-storage".into());
+        metrics.begin_connection_attempt();
+        let trigger = ReceiverStallTrigger {
+            consumer_ordinal: 1,
+            ssrc: 42,
+            is_audio: Some(false),
+            begin_bucket: 3,
+            end_bucket: 6,
+        };
+        assert!(!metrics.receiver_stall_snapshot_for_attempt(
+            1,
+            0,
+            trigger.clone(),
+            serde_json::json!({})
+        ));
+        metrics.enable_diagnostics();
+        for _ in 0..MAX_DIAGNOSTIC_SNAPSHOTS {
+            metrics.diagnostic_snapshot(serde_json::json!({"ordinary": true}));
+        }
+        metrics.begin_connection_attempt();
+        for _ in 0..MAX_RECEIVER_STALL_SNAPSHOTS {
+            assert!(metrics.receiver_stall_snapshot_for_attempt(
+                1,
+                0,
+                trigger.clone(),
+                serde_json::json!({"receiver": true})
+            ));
+        }
+        assert!(!metrics.receiver_stall_snapshot_for_attempt(1, 0, trigger, serde_json::json!({})));
+        metrics.diagnostic_failure_for_attempt(1, "snapshot test failure");
+        let report = metrics.generate_report().diagnostics.unwrap();
+        assert_eq!(report.snapshots.len(), MAX_DIAGNOSTIC_SNAPSHOTS);
+        assert_eq!(report.receiver_stalls.len(), MAX_RECEIVER_STALL_SNAPSHOTS);
+        assert!(
+            report
+                .receiver_stalls
+                .iter()
+                .all(|entry| entry.attempt == 1)
+        );
+        assert!(metrics.attempts.lock().unwrap()[0].failed);
+        assert!(!metrics.attempts.lock().unwrap()[1].failed);
+        let legacy: DiagnosticReport = serde_json::from_value(
+            serde_json::json!({"events": [], "snapshots": [], "failures": []}),
+        )
+        .unwrap();
+        assert!(legacy.receiver_stalls.is_empty());
+        assert!(
+            serde_json::to_value(legacy)
+                .unwrap()
+                .get("receiverStalls")
+                .is_none()
+        );
+    }
 
     #[test]
     fn diagnostics_are_opt_in_and_preserve_attempt_and_resume_evidence() {

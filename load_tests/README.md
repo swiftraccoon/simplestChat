@@ -174,6 +174,38 @@ forwarding counters do not establish client receipt. See
 [server forwarding snapshots](../docs/diagnostics.md#server-forwarding-snapshots)
 for limits, coverage gates and counter definitions.
 
+### Capture a stalled receiver
+
+With `--diagnostics`, the generator checks existing receive buckets once per
+completed measurement second. The first live consumer with three latest complete,
+eligible empty seconds triggers at most one receive-peer RTC capture attempt per
+connection attempt. The detector uses the delivery check's settling,
+publisher-lifetime and session-deadline rules; it does not change whether delivery passes.
+
+Successful captures appear in `diagnostics.receiverStalls`, separate from the
+128 pre-close snapshot slots. Each entry identifies the attempt and a `trigger`
+with a one-based `consumerOrdinal` into the full `consumerDelivery` array, SSRC,
+media kind, and end-exclusive `[beginBucket, endBucket)` range relative to the
+shared measurement start. `details.triggerElapsedMs` marks the trigger;
+the entry's `elapsedMs` marks capture completion, both on the collector clock.
+
+The run admits at most eight captures, with two concurrent and no waiting queue
+or retries. Each has a two-second timeout, including session-lock acquisition,
+clipped to the session deadline. Entries exceeding 256 KiB of compact serialized
+JSON are rejected; pretty-printed artifacts can be larger. The
+`receiver-stall-capture` event records `captured`, `busy`, `budget_exhausted`,
+`timed_out`, `attempt_ended`, `unavailable`, `snapshot_rejected`, or `cancelled`.
+Any non-captured outcome fails diagnostics without concealing the delivery gap.
+
+These are sanitized local receiver observations, not additional server samples.
+Media can recover or its publisher can depart before capture completes. Use the
+bucket range to locate the gap; do not treat the snapshot as simultaneous evidence
+or a root cause. Missing subscriptions, partial seconds, and gaps outside the
+latest three complete eligible buckets are not captured. Monitoring excludes
+observations at or after session/window end, so a final gap can fail delivery
+without a capture. An absent `receiverStalls` field, including in older artifacts,
+does not establish continuous receive-path health.
+
 ### Locate the last confirmed receive milestone
 
 Inspect each client and connection attempt separately; a working publisher does
@@ -228,5 +260,7 @@ receive renegotiation, and diagnostic filtering. Native loopback tests also forc
 ICE to start DTLS before signaling supplies the remote fingerprint and verify
 both transport directions reach native DTLS `Connected`. They also check that
 invalid parameters remain retryable and that an accepted connect is idempotent
-even before ICE starts. See
+even before ICE starts. A paused-consumer fixture verifies one bounded stall
+capture, resumed RTP, preservation of the original failing gap, and independent
+pre-close evidence. See
 [client internals](clients/README.md) for maintenance notes.

@@ -226,7 +226,8 @@ export async function verifyExecutable(binary, expectedSha256, role) {
 export async function generatorSourceIdentity(root) {
   const sources = await Promise.all(['load_tests/bin/load_test.rs', 'load_tests/clients/metrics.rs',
     'load_tests/clients/measurement.rs', 'load_tests/clients/media_generator.rs',
-    'load_tests/clients/webrtc_client.rs', 'load_tests/clients/subscriptions.rs']
+    'load_tests/clients/webrtc_client.rs', 'load_tests/clients/subscriptions.rs',
+    'load_tests/clients/receiver_stall.rs']
     .map(file => readFile(join(root, file))));
   return `sha256:${hash(Buffer.concat(sources))}`;
 }

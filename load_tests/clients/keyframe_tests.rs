@@ -24,7 +24,9 @@ struct Fixture {
     receiver_metrics: Arc<MetricsCollector>,
     publisher_origin: Instant,
     receiver_origin: Instant,
+    measurement_start: Instant,
     tasks: JoinSet<()>,
+    stall_monitors: JoinSet<()>,
     worker: Option<Worker>,
     router: Option<Router>,
     server: Option<WebRtcServer>,
@@ -32,10 +34,18 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
+        let measurement_start = Instant::now();
+        let window = Arc::new(MeasurementWindow::new(
+            measurement_start,
+            Duration::from_secs(30),
+        ));
         let publisher_origin = Instant::now();
-        let publisher_metrics = Arc::new(MetricsCollector::new(PUBLISHER.into()));
+        let publisher_metrics = Arc::new(MetricsCollector::with_window(
+            PUBLISHER.into(),
+            window.clone(),
+        ));
         let receiver_origin = Instant::now();
-        let receiver_metrics = Arc::new(MetricsCollector::new(RECEIVER.into()));
+        let receiver_metrics = Arc::new(MetricsCollector::with_window(RECEIVER.into(), window));
         publisher_metrics.enable_diagnostics();
         receiver_metrics.enable_diagnostics();
         publisher_metrics.begin_connection_attempt();
@@ -54,14 +64,16 @@ impl Fixture {
             receiver_metrics,
             publisher_origin,
             receiver_origin,
+            measurement_start,
             tasks: JoinSet::new(),
+            stall_monitors: JoinSet::new(),
             worker: None,
             router: None,
             server: None,
         }
     }
 
-    async fn run(&mut self, feedback_enabled: bool) -> Result<CaseEvidence> {
+    async fn prepare(&mut self, feedback_enabled: bool) -> Result<PreparedCase> {
         let workers = WorkerManager::new();
         let worker = workers.create_worker(WorkerSettings::default()).await?;
         self.worker = Some(worker.clone());
@@ -234,6 +246,23 @@ impl Fixture {
             self.ensure_sender_running()?;
             sleep(Duration::from_millis(10)).await;
         }
+        Ok(PreparedCase {
+            producer,
+            consumer_id,
+            consumer_ssrc,
+            video_ssrc,
+            initial,
+        })
+    }
+
+    async fn run(&mut self, feedback_enabled: bool) -> Result<CaseEvidence> {
+        let PreparedCase {
+            producer,
+            consumer_id,
+            consumer_ssrc,
+            video_ssrc,
+            initial,
+        } = self.prepare(feedback_enabled).await?;
         tokio::time::sleep_until((initial + RESUME_PHASE).into()).await;
         anyhow::ensure!(
             initial.elapsed() < Duration::from_secs(2),
@@ -377,6 +406,205 @@ impl Fixture {
         Ok(evidence)
     }
 
+    async fn run_receiver_stall(&mut self, deadline: Instant) -> Result<()> {
+        let PreparedCase {
+            producer,
+            consumer_id,
+            consumer_ssrc,
+            ..
+        } = self.prepare(true).await?;
+        let ingress_before: u64 = producer
+            .get_stats()
+            .await?
+            .iter()
+            .map(|stat| stat.packet_count)
+            .sum();
+        self.stall_monitors
+            .spawn(receiver_stall::monitor_until_deadline(
+                self.receiver.clone(),
+                self.receiver_metrics.clone(),
+                Arc::new(receiver_stall::ReceiverStallBudget::default()),
+                1,
+                self.measurement_start,
+                deadline,
+            ));
+
+        // The native consumer remains deliberately paused. Only already-owned
+        // publisher ingress continues; no network fault or packet interception
+        // is needed to produce three complete eligible empty receiver buckets.
+        let captured = loop {
+            self.ensure_sender_running()?;
+            let report = self.receiver_metrics.generate_report();
+            anyhow::ensure!(
+                report.total_packets_received == 0,
+                "Paused stall fixture unexpectedly received RTP"
+            );
+            let diagnostics = report
+                .diagnostics
+                .context("Stall fixture diagnostics were not enabled")?;
+            anyhow::ensure!(
+                diagnostics.failures.is_empty(),
+                "Stall fixture recorded a diagnostic capture failure"
+            );
+            if let Some(capture) = diagnostics.receiver_stalls.first() {
+                anyhow::ensure!(
+                    diagnostics.receiver_stalls.len() == 1 && diagnostics.snapshots.is_empty(),
+                    "Receiver-stall capture replaced or duplicated pre-close evidence"
+                );
+                break capture.clone();
+            }
+            sleep(Duration::from_millis(25)).await;
+        };
+        anyhow::ensure!(
+            captured.attempt == 1 && captured.kind == "receiver-stall",
+            "Stall snapshot was not attributed to the owned receiver attempt"
+        );
+        let trigger = &captured.details["trigger"];
+        let begin = trigger["beginBucket"]
+            .as_u64()
+            .context("Stall trigger omitted its first completed bucket")?;
+        let end = trigger["endBucket"]
+            .as_u64()
+            .context("Stall trigger omitted its end-exclusive completed bucket")?;
+        anyhow::ensure!(
+            trigger["consumerOrdinal"].as_u64() == Some(1)
+                && trigger["ssrc"].as_u64() == Some(u64::from(consumer_ssrc))
+                && trigger["isAudio"].as_bool() == Some(false)
+                && end.checked_sub(begin) == Some(3)
+                && captured.details["triggerElapsedMs"].as_u64().is_some(),
+            "Stall trigger did not identify exactly three empty owned video buckets"
+        );
+        let transports = captured.details["snapshot"]["transports"]
+            .as_array()
+            .context("Stall snapshot omitted native transport evidence")?;
+        anyhow::ensure!(
+            transports.len() == 1
+                && transports[0]["direction"] == "receive"
+                && transports[0]["connectionState"] == "connected",
+            "Stall snapshot did not capture the connected receive-only peer"
+        );
+        let mappings = transports[0]["consumerMappings"]
+            .as_array()
+            .context("Stall snapshot omitted consumer mappings")?;
+        anyhow::ensure!(
+            mappings.len() == 1
+                && mappings[0]["ssrc"].as_u64() == Some(u64::from(consumer_ssrc))
+                && transports[0]["stats"]
+                    .as_array()
+                    .context("Stall snapshot omitted native counters")?
+                    .iter()
+                    .any(|stat| stat["type"] == "transport"),
+            "Stall snapshot did not preserve the owned mapping and native counters"
+        );
+        let serialized = serde_json::to_string(&captured)?;
+        anyhow::ensure!(
+            !serialized.contains("127.0.0.1")
+                && !serialized.contains("a=ice-ufrag:")
+                && !serialized.contains("a=ice-pwd:")
+                && !serialized.contains("a=fingerprint:"),
+            "Stall snapshot leaked a fixture address or raw SDP credentials"
+        );
+        let ingress_after: u64 = producer
+            .get_stats()
+            .await?
+            .iter()
+            .map(|stat| stat.packet_count)
+            .sum();
+        anyhow::ensure!(
+            ingress_after > ingress_before,
+            "Publisher ingress stopped during the deliberate receiver stall"
+        );
+        // Keep the failure present across another monitor interval. Capturing
+        // evidence must remain one-shot, even when the empty buckets continue.
+        sleep(Duration::from_millis(1100)).await;
+        self.ensure_sender_running()?;
+        self.manager.resume_consumer(RECEIVER, &consumer_id).await?;
+        while self
+            .receiver_metrics
+            .generate_report()
+            .total_packets_received
+            == 0
+        {
+            self.ensure_sender_running()?;
+            sleep(Duration::from_millis(10)).await;
+        }
+        let mut previous_packets = self
+            .receiver_metrics
+            .generate_report()
+            .total_packets_received;
+        for _ in 0..2 {
+            sleep(Duration::from_secs(1)).await;
+            self.ensure_sender_running()?;
+            let packets = self
+                .receiver_metrics
+                .generate_report()
+                .total_packets_received;
+            anyhow::ensure!(
+                packets > previous_packets,
+                "Actual receiver RTP did not stay fresh after explicit resume"
+            );
+            previous_packets = packets;
+        }
+        self.stall_monitors.shutdown().await;
+        self.receiver_metrics.end_session();
+        let snapshot = self.receiver.lock().await.diagnostic_snapshot().await?;
+        self.receiver_metrics.diagnostic_snapshot(snapshot);
+        let report = self.receiver_metrics.generate_report();
+        let delivery = report
+            .consumer_delivery
+            .first()
+            .context("Stall fixture omitted delivery coverage")?;
+        anyhow::ensure!(
+            !delivery.passed
+                && !delivery.skipped_short_lived
+                && delivery.longest_gap_seconds >= 3
+                && delivery.seconds_with_packets > 0,
+            "Native snapshot or resumed media excused the original delivery failure"
+        );
+        let diagnostics = report
+            .diagnostics
+            .context("Stall fixture diagnostics disappeared")?;
+        anyhow::ensure!(
+            diagnostics.receiver_stalls.len() == 1
+                && diagnostics.snapshots.len() == 1
+                && diagnostics.snapshots[0].kind == "pre-close"
+                && diagnostics.failures.is_empty()
+                && report.errors.is_empty()
+                && self.publisher_metrics.generate_report().errors.is_empty(),
+            "Stall capture did not remain separate from valid pre-close evidence"
+        );
+        let triggers = diagnostics
+            .events
+            .iter()
+            .filter(|event| event.kind == "receiver-stall-triggered")
+            .count();
+        let captures: Vec<_> = diagnostics
+            .events
+            .iter()
+            .filter(|event| event.kind == "receiver-stall-capture")
+            .collect();
+        anyhow::ensure!(
+            triggers == 1
+                && captures.len() == 1
+                && captures[0].attempt == 1
+                && captures[0].details["status"] == "captured",
+            "One receiver stall did not produce exactly one successful capture event"
+        );
+        println!(
+            "receiver-stall {}",
+            serde_json::json!({
+                "captures": diagnostics.receiver_stalls.len(),
+                "preCloseSnapshots": diagnostics.snapshots.len(),
+                "triggerBeginBucket": begin,
+                "triggerEndBucket": end,
+                "longestGapSeconds": delivery.longest_gap_seconds,
+                "recoveredPackets": previous_packets,
+                "deliveryPassed": delivery.passed,
+            })
+        );
+        Ok(())
+    }
+
     fn ensure_sender_running(&mut self) -> Result<()> {
         if let Some(completion) = self.tasks.try_join_next() {
             completion.context("Owned media sender panicked")?;
@@ -386,6 +614,7 @@ impl Fixture {
     }
 
     async fn cleanup(&mut self) -> Result<()> {
+        self.stall_monitors.shutdown().await;
         self.tasks.shutdown().await;
         self.publisher_metrics.end_session();
         self.receiver_metrics.end_session();
@@ -406,6 +635,14 @@ impl Fixture {
         }
         Ok(())
     }
+}
+
+struct PreparedCase {
+    producer: Producer,
+    consumer_id: String,
+    consumer_ssrc: u32,
+    video_ssrc: u32,
+    initial: Instant,
 }
 
 fn diagnostic_events(metrics: &MetricsCollector) -> Vec<metrics::DiagnosticEntry> {
@@ -464,4 +701,30 @@ async fn native_feedback_unblocks_video_before_the_next_periodic_keyframe() {
     supported_cleanup
         .expect("Supported keyframe fixture cleanup timed out")
         .expect("Supported keyframe fixture cleanup failed");
+}
+
+/// Capture a real connected peer while its owned SFU consumer is paused, then
+/// prove fresh RTP recovers without reclassifying the measured delivery gap.
+#[tokio::test]
+async fn native_receiver_stall_capture_preserves_failure_and_allows_media_recovery() {
+    let mut fixture = Fixture::new();
+    let deadline = Instant::now() + Duration::from_secs(25);
+    let outcome = AssertUnwindSafe(tokio::time::timeout_at(
+        deadline.into(),
+        fixture.run_receiver_stall(deadline),
+    ))
+    .catch_unwind()
+    .await;
+    // Cleanup runs after success, an ordinary error, timeout, and panic. The
+    // whole fixture is bounded by its 25-second body plus this cleanup budget.
+    let cleanup = tokio::time::timeout(Duration::from_secs(3), fixture.cleanup()).await;
+    match outcome {
+        Ok(result) => result
+            .expect("Native receiver-stall fixture timed out")
+            .expect("Native receiver-stall fixture failed"),
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+    cleanup
+        .expect("Native receiver-stall fixture cleanup timed out")
+        .expect("Native receiver-stall fixture cleanup failed");
 }

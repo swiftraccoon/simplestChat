@@ -162,6 +162,12 @@ Immutable attempt tags on generator consumers improve attribution; they neither
 replace the required native counter pairs nor make historical attempt coverage
 available.
 
+The generator can also take an opt-in
+[receiver-stall capture](../load_tests/README.md#capture-a-stalled-receiver)
+after three complete eligible empty receive seconds. It records local receiver
+state, not another SFU sample, and does not satisfy or replace native counter-pair
+coverage. Its later observation may already reflect recovery or publisher departure.
+
 Consumer packet/byte counters describe the worker's outbound RTP accounting;
 producer counters describe worker intake. Independent producer stats are retained
 in the raw snapshots, not summarized by the consumer correlation report.

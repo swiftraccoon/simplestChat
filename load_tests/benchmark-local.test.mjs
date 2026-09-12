@@ -439,12 +439,13 @@ test('server and generator executables must match their recorded hashes', async 
   await assert.rejects(verifyExecutable(join(directory, 'missing'), expected, 'baseline server'), /ENOENT/);
 });
 
-test('generator source identity includes subscription scheduling contents and requires every declared input', async t => {
+test('generator source identity includes subscription and stall policies and requires every declared input', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'simplestchat-generator-source.'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const paths = ['load_tests/bin/load_test.rs', 'load_tests/clients/metrics.rs',
     'load_tests/clients/measurement.rs', 'load_tests/clients/media_generator.rs',
-    'load_tests/clients/webrtc_client.rs', 'load_tests/clients/subscriptions.rs'];
+    'load_tests/clients/webrtc_client.rs', 'load_tests/clients/subscriptions.rs',
+    'load_tests/clients/receiver_stall.rs'];
   const contents = paths.map(file => `// owned source fixture: ${file}\n`);
   for (const [index, file] of paths.entries()) {
     await mkdir(dirname(join(directory, file)), { recursive: true });
@@ -456,8 +457,15 @@ test('generator source identity includes subscription scheduling contents and re
   await writeFile(subscriptions, '// changed subscription dispatch policy\n');
   const changed = await generatorSourceIdentity(directory);
   assert.notEqual(changed, original, 'runtime subscription changes must alter generator provenance');
+  const receiverStall = join(directory, 'load_tests/clients/receiver_stall.rs');
+  await writeFile(receiverStall, '// changed stall capture policy\n');
+  const observed = await generatorSourceIdentity(directory);
+  assert.notEqual(observed, changed, 'runtime stall capture changes must alter generator provenance');
   await writeFile(join(directory, 'load_tests/README.md'), 'documentation only\n');
-  assert.equal(await generatorSourceIdentity(directory), changed, 'documentation is outside runtime source scope');
+  assert.equal(await generatorSourceIdentity(directory), observed, 'documentation is outside runtime source scope');
+  await rm(receiverStall);
+  await assert.rejects(generatorSourceIdentity(directory), /ENOENT/);
+  await writeFile(receiverStall, '// restored required input\n');
   await rm(subscriptions);
   await assert.rejects(generatorSourceIdentity(directory), /ENOENT/);
 });

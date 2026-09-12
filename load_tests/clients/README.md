@@ -14,7 +14,8 @@ For commands, options, and report definitions, see the
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
 | `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill |
-| `keyframe_tests.rs` | Paired native startup controls and bounded owned cleanup (tests only) |
+| `receiver_stall.rs` | Opt-in bucket monitoring, shared capture budget, and scoped native capture |
+| `keyframe_tests.rs` | Native startup/stall controls and bounded owned cleanup (tests only) |
 | `mod.rs` | Module exports |
 
 ## How It Works
@@ -85,6 +86,15 @@ Attempt coverage has a separate, preplanned eligibility interval:
 - Keep additive report fields optional when reading historical JSON. Missing
   coverage is unavailable, not a passing or zero-expectation attempt.
 
+Receiver-stall monitoring runs inside the session's existing wait-to-deadline,
+not a detached task. Inspect existing buckets once per completed second, sharing
+the delivery eligibility calculation; do not add packet-path work or routine
+native polling. Share one admission budget across clients and reconnects. Dropping
+a capture must release its native future, session lock and permit, and record
+missing evidence on the original attempt. Keep stall entries outside pre-close
+capacity and retain the original delivery failure after recovery. See the
+[capture bounds and report fields](../README.md#capture-a-stalled-receiver).
+
 ## Debugging
 
 Start with a small run using `--diagnostics`; inspect lifecycle events, resume
@@ -103,3 +113,8 @@ A paired native SFU fixture also compares equal receiver observations with and
 without advertised producer feedback. It checks delayed video startup against
 observed keyframe generation and actual RTP receipt, then verifies ongoing
 delivery. It is not a browser decoder or production-capacity test.
+
+A paused-consumer case keeps native publisher ingress active, checks a single
+sanitized receiver-stall capture, resumes actual RTP, and verifies that recovery
+does not erase the gap or displace pre-close evidence. Both fixtures own and close
+their synthetic loopback peers and workers within bounded cleanup.
