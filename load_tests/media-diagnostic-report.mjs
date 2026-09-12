@@ -216,6 +216,12 @@ function generatorConsumers(value) {
           delivery.longestGapSeconds > delivery.eligibleSeconds || !bool(delivery.passed) || !bool(delivery.skippedShortLived)) throw failure('invalid_generator_results');
       const event = created.get(delivery.consumerId);
       if (!event || event.producerId !== delivery.producerId || event.ssrc !== delivery.ssrc) throw failure('invalid_generator_results');
+      // Legacy deliveries omit this metadata. When present, it must agree with
+      // the immutable creation event; it does not establish attempt coverage.
+      if (Object.hasOwn(delivery, 'attempt') && (!uint(delivery.attempt) || !delivery.attempt ||
+          delivery.attempt > client.connectionAttempts.length || delivery.attempt !== event.attempt)) throw failure('invalid_generator_results');
+      if (Object.hasOwn(delivery, 'isAudio') && (!bool(delivery.isAudio) ||
+          delivery.isAudio !== (event.kind === 'audio'))) throw failure('invalid_generator_results');
       const packetCount = delivery.packetsBySecond.reduce((sum, packets) => sum + packets, 0);
       if (!uint(packetCount)) throw failure('invalid_generator_results');
       consumers.push({ id: delivery.consumerId, producerId: delivery.producerId, kind: event.kind, ssrc: delivery.ssrc,

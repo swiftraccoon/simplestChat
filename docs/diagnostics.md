@@ -65,7 +65,7 @@ Check the runner's independent results:
 
 | Result | What it establishes |
 | --- | --- |
-| `workloadPassed` | Generator delivery checks and room/session cleanup passed. |
+| `workloadPassed` | Generator delivery/attempt checks and room/session cleanup passed. |
 | `diagnosticCoverage.complete` | The requested recorder output is valid, nonempty and complete. |
 | `mediaDiagnosticCoverage.complete` | Scheduled native media samples and their client correlation meet the coverage checks below. |
 | `lifecycleDiagnosticCoverage.complete` | The lifecycle log and phase timeline contain the expected transport, departure and cleanup markers. |
@@ -77,6 +77,14 @@ inconsistent counts, dropped/expired records, write failures or unfinished timer
 make coverage incomplete. Valid prefix samples remain available as
 `recorded_subset`, which is **not** a random sample. Even `all_emitted_records`
 covers only instrumented paths during this recorder's lifetime.
+
+For generator attempt evidence, inspect summary `attemptCoverage` version 1 and
+per-client `connectionAttempts[].coverage`. Its `stable-publishers` scope checks
+each preplanned eligible attempt against distinct stable peers by media kind;
+it does not prove complete dynamic fan-out. Older artifacts without these fields
+have unavailable attempt coverage. See
+[generator success criteria](../load_tests/README.md#what-constitutes-success)
+for short tails, setup failures, consumer caps, and measured churn requirements.
 
 ## Record contract and current scope
 
@@ -150,6 +158,9 @@ Use a non-churn workload when complete native correlation is required. The three
 scheduled samples cannot reliably observe each short-lived churn session twice;
 missing pairs correctly make coverage incomplete even when delivery checks pass.
 Increasing entity or recorder limits does not close this sampling gap.
+Immutable attempt tags on generator consumers improve attribution; they neither
+replace the required native counter pairs nor make historical attempt coverage
+available.
 
 Consumer packet/byte counters describe the worker's outbound RTP accounting;
 producer counters describe worker intake. Independent producer stats are retained
