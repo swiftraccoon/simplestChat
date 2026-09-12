@@ -88,6 +88,9 @@ jobs:
       - name: Verify readiness and graceful shutdown
         run: node build/shutdown-smoke.mjs --binary "$PWD/target/debug/simplestChat"
 
+      - name: Verify bounded local operation diagnostics
+        run: node build/diagnostics-smoke.mjs --binary "$PWD/target/debug/simplestChat"
+
       - name: Verify native security patches
         run: |
           cargo tree --locked -i lru | grep -F 'lru v0.18.4'

@@ -10,6 +10,9 @@ import os from 'node:os';
 import net from 'node:net';
 import dgram from 'node:dgram';
 import { setTimeout as delay } from 'node:timers/promises';
+import { readDiagnosticReport } from './diagnostic-report.mjs';
+import { createMediaSampler, fetchMediaSnapshot, readGeneratorResults, correlateMediaDiagnostics } from './media-diagnostic-report.mjs';
+import { readLifecycleReport } from './lifecycle-diagnostic-report.mjs';
 
 const exec = promisify(execFile);
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -39,6 +42,7 @@ export function resourceSummary(samples, role, start, end) {
 
 export function comparison(rows) {
   if (rows.some(row => row.purpose === 'diagnostic')) throw new Error('Diagnostic runs are not performance comparisons');
+  if (!performanceRunStatus(rows).passed) throw new Error('Performance comparison requires passing workloads and clean server shutdowns');
   const fields = ['joinP99Ms', 'sendReadyP99Ms', 'receiveReadyP99Ms', 'receivedPacketsPerSecond', 'serverCpuPercent', 'serverPeakRssMiB', 'generatorCpuPercent', 'generatorPeakRssMiB'];
   const result = {};
   for (const scenario of new Set(rows.map(r => r.scenario))) {
@@ -83,11 +87,28 @@ export async function command(binary, args, cwd, env, logPath) {
   return child;
 }
 
-async function stop(child) {
+export const SERVER_SHUTDOWN_GRACE_MS = 20000;
+
+export async function stop(child, graceMs = 5000, wait = milliseconds => delay(milliseconds, undefined, { ref: false })) {
   if (!child || child.result) return;
   child.kill('SIGTERM');
-  await Promise.race([child.completion, delay(5000, undefined, { ref: false })]);
+  await Promise.race([child.completion, wait(graceMs)]);
   if (!child.result) { child.kill('SIGKILL'); await child.completion; }
+}
+
+/** Attempt every owned cleanup/artifact step without replacing a workload failure. */
+export async function runFinalizers(primaryError, steps, reportError = () => console.error('Run finalization failed; inspect retained artifacts.')) {
+  let firstError;
+  for (const step of steps) {
+    try { await step(); }
+    catch (error) {
+      firstError ??= error;
+      // Reporting is best effort too: a broken output stream must not prevent
+      // stopping the remaining owned children or replace the original failure.
+      try { reportError(error); } catch {}
+    }
+  }
+  if (!primaryError && firstError) throw firstError;
 }
 
 export async function finishCapture(capture, drain = () => delay(2000)) {
@@ -134,9 +155,65 @@ export function captureArguments(options, directory) {
 
 export function diagnosticPolicy(options) {
   const full = options.purpose === 'diagnostic' && options.diagnosticDetail !== 'capture-only';
-  return { generatorArgs: full ? ['--diagnostics'] : [], requireSnapshots: full,
-    serverLog: full ? 'warn,simplestChat::media::transport_manager=info' : 'error',
+  return { generatorArgs: full ? ['--diagnostics', '--departure', options.departure ?? 'abrupt'] : [], requireSnapshots: full,
+    serverLog: full ? 'warn,simplestChat::media::transport_manager=info,simplestChat::lifecycle=debug' : 'error',
     generatorLog: full ? 'warn,load_test=info' : 'error' };
+}
+
+/** Runner wall-clock anchors, with monotonic offsets to expose clock changes.
+ * Generator-reported boundaries remain separate from process launch/exit.
+ */
+export function createLifecycleTimeline(departure, { now = () => performance.now(), wall = () => new Date().toISOString() } = {}) {
+  const start = now();
+  const timeline = { schemaVersion: 1, departure, events: [], workload: null };
+  return { timeline, mark: event => {
+    timeline.events.push({ event, at: wall(), elapsedMs: now() - start });
+  } };
+}
+
+/** A failing completed workload still supplies useful nominal time boundaries.
+ * Never substitute metadata from a different executable or workload configuration.
+ */
+export function lifecycleWorkload(summary, options, generatorSha256) {
+  const run = summary?.run;
+  const config = run?.configuration;
+  if (summary?.schemaVersion !== 2 || run?.completed !== true || config?.diagnostics !== true ||
+      run?.provenance?.generatorBinarySha256 !== generatorSha256 || config.departure !== options.departure ||
+      config.rampUpSecs !== options.rampUp || config.warmupSecs !== options.warmup || config.durationSecs !== options.duration) return null;
+  return { startedAt: run.startedAt, finishedAt: run.finishedAt,
+    rampUpSecs: config.rampUpSecs, warmupSecs: config.warmupSecs, durationSecs: config.durationSecs };
+}
+
+export function serverDiagnosticEnvironment(options, directory) {
+  if (!diagnosticPolicy(options).requireSnapshots) return {};
+  return { DIAGNOSTICS_PATH: join(directory, 'server-diagnostics.jsonl'), DIAGNOSTICS_MAX_RECORDS: '10000', MEDIA_DIAGNOSTICS_ENABLED: 'true',
+    // Include bounded startup, generator deadline and cleanup, not just steady load.
+    DIAGNOSTICS_DURATION_SECS: String(Math.max(300, options.rampUp + options.warmup + options.duration + 200)) };
+}
+
+export function diagnosticRunStatus(rows) {
+  const { workloadPassed, serverShutdownPassed } = performanceRunStatus(rows);
+  const diagnosticCoverageComplete = rows.length > 0 && rows.every(row =>
+    row.diagnosticCoverage?.requested === false || row.diagnosticCoverage?.complete === true);
+  const mediaDiagnosticCoverageComplete = rows.length > 0 && rows.every(row =>
+    row.mediaDiagnosticCoverage?.requested === false || row.mediaDiagnosticCoverage?.complete === true);
+  const lifecycleDiagnosticCoverageComplete = rows.length > 0 && rows.every(row =>
+    row.lifecycleDiagnosticCoverage?.requested === false || row.lifecycleDiagnosticCoverage?.complete === true);
+  return { workloadPassed, diagnosticCoverageComplete, mediaDiagnosticCoverageComplete, lifecycleDiagnosticCoverageComplete, serverShutdownPassed,
+    passed: workloadPassed && diagnosticCoverageComplete && mediaDiagnosticCoverageComplete && lifecycleDiagnosticCoverageComplete && serverShutdownPassed };
+}
+
+export function performanceRunStatus(rows) {
+  const workloadPassed = rows.length > 0 && rows.every(row => row.workloadPassed === true);
+  const serverShutdownPassed = rows.length > 0 && rows.every(row =>
+    row.serverExit?.code === 0 && !row.serverExit.signal && !row.serverExit.error);
+  return { workloadPassed, serverShutdownPassed, passed: workloadPassed && serverShutdownPassed };
+}
+
+export async function collectServerDiagnostics(options, directory, server, readReport = readDiagnosticReport) {
+  if (!diagnosticPolicy(options).requireSnapshots) return null;
+  if (server && !server.result) throw new Error('Server diagnostics must be read after the owned server stops');
+  return readReport(join(directory, 'server-diagnostics.jsonl'));
 }
 
 export async function verifyExecutable(binary, expectedSha256, role) {
@@ -208,10 +285,13 @@ async function runOne(options, variant, scenario, repetition, manifest) {
     MEDIA_WORKERS: String(options.workers), WEBRTC_SERVER_PORT_BASE: String(options.udpPort),
     ALLOW_AD_HOC_ROOMS: 'true', ALLOWED_ORIGINS: origin, REGISTRATION_ENABLED: 'false',
     MAX_CONNECTIONS_PER_IP: '128', WS_HANDSHAKES_PER_MINUTE: '600', METRICS_TOKEN: token,
-    RUST_LOG: diagnostics.serverLog };
-  let server, generator, capture;
+    RUST_LOG: diagnostics.serverLog, ...serverDiagnosticEnvironment(options, directory) };
+  let server, generator, capture, diagnosticRow, performanceRow, mediaSampler, primaryError;
+  const lifecycle = diagnostics.requireSnapshots ? createLifecycleTimeline(options.departure) : null;
+  let lifecycleTimelineSaved = false;
   const samples = [];
   const startedAt = new Date().toISOString();
+  lifecycle?.mark('run_started');
   try {
     await Promise.all([
       verifyExecutable(options.generator, manifest.generator.binarySha256, 'Generator'),
@@ -219,6 +299,7 @@ async function runOne(options, variant, scenario, repetition, manifest) {
     ]);
     await availablePorts(options.port, options.udpPort, options.workers);
     server = await command(identity.binary, [], identity.root, env, join(directory, 'server.log'));
+    if (lifecycle) void server.completion.then(() => lifecycle.mark('server_exited'));
     let ready = false;
     for (let i = 0; i < 100 && !server.result; i++) {
       try { const response = await fetch(`${origin}/health`, { signal: AbortSignal.timeout(500) }); ready = response.ok; } catch {}
@@ -226,6 +307,7 @@ async function runOne(options, variant, scenario, repetition, manifest) {
       await delay(100);
     }
     if (!ready || server.result) throw new Error('Owned server did not become ready');
+    lifecycle?.mark('server_ready');
     const before = await metrics(origin, token); await writeFile(join(directory, 'metrics-before.txt'), before.raw, { flag: 'wx' });
     if (options.captureInterface) {
       const captureLog = join(directory, 'capture.log');
@@ -251,8 +333,17 @@ async function runOne(options, variant, scenario, repetition, manifest) {
       ...diagnostics.generatorArgs];
     await json(join(directory, 'invocation.json'), { startedAt, variant, scenario, repetition, args, serverConfiguration: Object.fromEntries(Object.entries(env).filter(([k]) => !['METRICS_TOKEN', 'PATH', 'TMPDIR'].includes(k))) });
     const start = performance.now();
+    lifecycle?.mark('generator_started');
     generator = await command(options.generator, args, options.candidateRoot,
       { ...cleanEnv(), RUST_LOG: diagnostics.generatorLog }, join(directory, 'generator.log'));
+    if (lifecycle) void generator.completion.then(() => lifecycle.mark('generator_exited'));
+    if (diagnostics.requireSnapshots) mediaSampler = createMediaSampler(options, {
+      now: () => performance.now() - start,
+      alive: () => ({ server: Boolean(server && !server.result), generator: Boolean(generator && !generator.result) }),
+      request: () => fetchMediaSnapshot({ origin, token }),
+      persist: sample => writeFile(join(directory, `server-media-sample-${String(sample.ordinal).padStart(2, '0')}.json`),
+        `${JSON.stringify(sample, null, 2)}\n`, { flag: 'wx', mode: 0o600 }),
+    });
     const deadline = (options.rampUp + options.warmup + options.duration + 135) * 1000;
     while (!generator.result) {
       if (server.result) throw new Error('Server exited during load');
@@ -261,15 +352,18 @@ async function runOne(options, variant, scenario, repetition, manifest) {
         const [serverSample, generatorSample] = await Promise.all([sample(server), sample(generator)]);
         samples.push({ elapsedMs: performance.now() - start, server: serverSample, generator: generatorSample });
       }
+      if (mediaSampler) await mediaSampler.poll();
       if (performance.now() - start > deadline) throw new Error('Outer generator deadline exceeded');
       await delay(500);
     }
     await finishCapture(capture);
     if (generator.result.code !== 0) throw new Error(`Generator failed: ${JSON.stringify(generator.result)}`);
     const summary = JSON.parse(await readFile(join(directory, 'load_test_summary.json'), 'utf8'));
+    if (lifecycle) lifecycle.timeline.workload = lifecycleWorkload(summary, options, manifest.generator.binarySha256);
     const timeoutMarker = await stat(join(directory, 'load_test_timeout.json')).then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; });
     if (timeoutMarker || summary.schemaVersion !== 2 || !summary.run?.completed || !summary.run?.passed || summary.totalErrors || summary.failedConnections || summary.failedConsumers) throw new Error('Incomplete or failing generator report');
     if (diagnostics.requireSnapshots && (summary.run.configuration?.diagnostics !== true || summary.diagnosticFailures !== 0)) throw new Error('Missing or failing generator diagnostics');
+    if (diagnostics.requireSnapshots && summary.run.configuration?.departure !== options.departure) throw new Error('Generator departure mode does not match the requested diagnostic run');
     if (summary.run.provenance?.generatorBinarySha256 !== manifest.generator.binarySha256) throw new Error('Generator report does not match the frozen executable');
     const finish = await metrics(origin, token); await writeFile(join(directory, 'metrics-finish.txt'), finish.raw, { flag: 'wx' });
     let cleaned = false;
@@ -282,21 +376,23 @@ async function runOne(options, variant, scenario, repetition, manifest) {
       await delay(500);
     }
     if (!cleaned || server.result) throw new Error('Server room/session cleanup did not complete within40 seconds');
+    lifecycle?.mark('cleanup_observed');
     await writeFile(join(directory, 'metrics-cleanup.txt'), final.raw, { flag: 'wx' });
     if (options.purpose === 'diagnostic') {
-      const row = { purpose: 'diagnostic', diagnosticDetail: options.diagnosticDetail, scenario: scenario.name, variant, repetition, startedAt,
+      diagnosticRow = { purpose: 'diagnostic', diagnosticDetail: options.diagnosticDetail, departure: options.departure, scenario: scenario.name, variant, repetition, startedAt,
         completedAt: new Date().toISOString(), cleanupMs: performance.now() - cleanupStart,
+        workloadPassed: true,
         media: { validatedConsumers: summary.validatedConsumers, failedConsumers: summary.failedConsumers,
           skippedShortLivedConsumers: summary.skippedShortLivedConsumers } };
-      await json(join(directory, 'result.json'), row);
-      console.log(`PASS diagnostic ${name}: ${summary.validatedConsumers} validated consumers; no performance comparison`);
-      return row;
+      // The finally block adds recorder coverage only after stopping the server.
+      return diagnosticRow;
     }
     const windowStart = (options.rampUp + options.warmup) * 1000;
     const windowEnd = windowStart + options.duration * 1000;
     const serverResources = resourceSummary(samples, 'server', windowStart, windowEnd);
     const generatorResources = resourceSummary(samples, 'generator', windowStart, windowEnd);
-    const row = { scenario: scenario.name, variant, repetition, startedAt, completedAt: new Date().toISOString(),
+    performanceRow = { purpose: 'performance', scenario: scenario.name, variant, repetition, startedAt,
+      workloadPassed: true,
       joinP99Ms: summary.p99ConnectionTimeMs, sendReadyP99Ms: summary.sendMediaReady.p99Ms,
       receiveReadyP99Ms: summary.receiveMediaReady.p99Ms,
       receivedPacketsPerSecond: summary.measurement.packetsReceived / (summary.measurement.durationMs / 1000),
@@ -304,31 +400,118 @@ async function runOne(options, variant, scenario, repetition, manifest) {
       generatorCpuPercent: generatorResources.cpuPercentOfOneCore, generatorPeakRssMiB: generatorResources.peakRssMiB,
       cleanupMs: performance.now() - cleanupStart, serverResources, generatorResources,
       media: { validatedConsumers: summary.validatedConsumers, failedConsumers: summary.failedConsumers, skippedShortLivedConsumers: summary.skippedShortLivedConsumers } };
-    await json(join(directory, 'result.json'), row);
-    console.log(`PASS ${name}: joinP99=${row.joinP99Ms}ms serverCPU=${row.serverCpuPercent.toFixed(1)}% RSS=${row.serverPeakRssMiB.toFixed(1)}MiB`);
-    return row;
+    // Final result and success output require the owned server's exit below.
+    return performanceRow;
   } catch (error) {
-    await json(join(directory, 'failure.json'), { startedAt, error: error.stack, server: server?.result, generator: generator?.result });
+    primaryError = error;
+    await runFinalizers(primaryError, [() => json(join(directory, 'failure.json'),
+      { startedAt, error: error.stack, server: server?.result, generator: generator?.result })]);
     throw error;
   } finally {
-    // Failure must not discard the owned server's last observable state.
-    if (server && !server.result) {
-      try {
-        const last = await metrics(origin, token);
-        await writeFile(join(directory, 'metrics-stop.txt'), last.raw, { flag: 'wx' });
-      } catch (error) {
-        console.error(`Final metrics unavailable for ${name}: ${error.message}`);
+    await runFinalizers(primaryError, [async () => {
+      // Failure must not discard the owned server's last observable state.
+      if (server && !server.result) {
+        try {
+          const last = await metrics(origin, token);
+          await writeFile(join(directory, 'metrics-stop.txt'), last.raw, { flag: 'wx' });
+        } catch (error) {
+          console.error(`Final metrics unavailable for ${name}: ${error.message}`);
+        }
       }
-    }
-    await stop(generator); await stop(capture); await stop(server);
-    if (capture) await json(join(directory, 'capture-exit.json'), capture.result);
-    await json(join(directory, 'resources.json'), samples);
+    }, () => stop(generator), () => stop(capture), async () => {
+      if (server && !server.result) lifecycle?.mark('server_stop_requested');
+      await stop(server, SERVER_SHUTDOWN_GRACE_MS);
+    }, async () => {
+      if (lifecycle) {
+        if (!lifecycle.timeline.workload) {
+          try {
+            const summary = JSON.parse(await readFile(join(directory, 'load_test_summary.json'), 'utf8'));
+            lifecycle.timeline.workload = lifecycleWorkload(summary, options, manifest.generator.binarySha256);
+          } catch { /* Keep missing boundaries explicit without replacing the original failure. */ }
+        }
+        await writeFile(join(directory, 'lifecycle-timeline.json'), `${JSON.stringify(lifecycle.timeline, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+        lifecycleTimelineSaved = true;
+      }
+    },
+    () => json(join(directory, 'server-exit.json'), server?.result ?? null),
+    () => json(join(directory, 'generator-exit.json'), generator?.result ?? null), async () => {
+      let mediaReport;
+      let lifecycleReport;
+      if (lifecycle) {
+        try { lifecycleReport = await readLifecycleReport(join(directory, 'server.log'), lifecycle.timeline, { expectedParticipants: scenario.clients }); }
+        catch { lifecycleReport = { schemaVersion: 1, coverage: { available: false, complete: false, issues: ['lifecycle_report_failed'] } }; }
+        if (!lifecycleTimelineSaved) {
+          lifecycleReport.coverage.complete = false;
+          lifecycleReport.coverage.issues.push('timeline_write_failed');
+        }
+        try { await writeFile(join(directory, 'server-lifecycle-report.json'), `${JSON.stringify(lifecycleReport, null, 2)}\n`, { flag: 'wx', mode: 0o600 }); }
+        catch {
+          lifecycleReport.coverage.complete = false;
+          lifecycleReport.coverage.issues.push('lifecycle_report_write_failed');
+          console.error('Server lifecycle report could not be saved; coverage is incomplete.');
+        }
+      }
+      if (diagnostics.requireSnapshots) {
+        let mediaSamples = [], generatorResults;
+        try { if (mediaSampler) mediaSamples = await mediaSampler.finish(); } catch {}
+        try {
+          const generatorSummary = JSON.parse(await readFile(join(directory, 'load_test_summary.json'), 'utf8'));
+          const timedOut = await stat(join(directory, 'load_test_timeout.json')).then(() => true, error => {
+            if (error.code === 'ENOENT') return false;
+            throw error;
+          });
+          if (generatorSummary.schemaVersion === 2 && generatorSummary.run?.completed === true &&
+              generatorSummary.run.configuration?.diagnostics === true && generatorSummary.diagnosticFailures === 0 && !timedOut &&
+              generatorSummary.run.provenance?.generatorBinarySha256 === manifest.generator.binarySha256) {
+            generatorResults = await readGeneratorResults(join(directory, 'load_test_results.json'));
+          }
+        } catch {}
+        try { mediaReport = correlateMediaDiagnostics(mediaSamples, generatorResults); }
+        catch { mediaReport = { schemaVersion: 1, coverage: { available: false, complete: false, issues: ['media_report_failed'] }, samples: [], consumers: [] }; }
+        try {
+          await writeFile(join(directory, 'server-media-report.json'), `${JSON.stringify(mediaReport, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+        } catch {
+          mediaReport.coverage.complete = false;
+          mediaReport.coverage.issues.push('media_report_write_failed');
+          console.error('Server media diagnostic report could not be saved; coverage is incomplete.');
+        }
+      }
+      const diagnosticReport = await collectServerDiagnostics(options, directory, server);
+      if (diagnosticReport) {
+        await json(join(directory, 'server-diagnostics-report.json'), diagnosticReport);
+      }
+      if (diagnosticRow) {
+        diagnosticRow.serverExit = server?.result ?? null;
+        diagnosticRow.diagnosticCoverage = diagnosticReport
+          ? { requested: true, ...diagnosticReport.coverage, report: 'server-diagnostics-report.json' }
+          : { requested: false, complete: null, scope: 'not_requested' };
+        diagnosticRow.mediaDiagnosticCoverage = mediaReport
+          ? { requested: true, ...mediaReport.coverage, report: 'server-media-report.json' }
+          : { requested: false, complete: null };
+        diagnosticRow.lifecycleDiagnosticCoverage = lifecycleReport
+          ? { requested: true, ...lifecycleReport.coverage, report: 'server-lifecycle-report.json' }
+          : { requested: false, complete: null };
+        const status = diagnosticRunStatus([diagnosticRow]);
+        diagnosticRow.serverShutdownPassed = status.serverShutdownPassed;
+        diagnosticRow.passed = status.passed;
+        await json(join(directory, 'result.json'), diagnosticRow);
+        console.log(`PASS workload ${name}: ${diagnosticRow.media.validatedConsumers} validated consumers; server diagnostics ${diagnosticReport ? diagnosticReport.coverage.complete ? 'complete' : 'INCOMPLETE' : 'not requested'}; media correlation ${mediaReport ? mediaReport.coverage.complete ? 'complete' : 'INCOMPLETE' : 'not requested'}; lifecycle ${lifecycleReport ? lifecycleReport.coverage.complete ? 'complete' : 'INCOMPLETE' : 'not requested'}; server shutdown ${status.serverShutdownPassed ? 'clean' : 'FAILED'}; no performance comparison`);
+      }
+      if (performanceRow) {
+        performanceRow.serverExit = server?.result ?? null;
+        Object.assign(performanceRow, performanceRunStatus([performanceRow]), { completedAt: new Date().toISOString() });
+        await json(join(directory, 'result.json'), performanceRow);
+        console.log(`${performanceRow.passed ? 'PASS' : 'FAIL'} ${name}: joinP99=${performanceRow.joinP99Ms}ms serverCPU=${performanceRow.serverCpuPercent.toFixed(1)}% RSS=${performanceRow.serverPeakRssMiB.toFixed(1)}MiB; server shutdown ${performanceRow.serverShutdownPassed ? 'clean' : 'FAILED'}`);
+      }
+    }, async () => {
+      if (capture) await json(join(directory, 'capture-exit.json'), capture.result);
+    }, () => json(join(directory, 'resources.json'), samples)]);
   }
 }
 
 export function parseOptions(args) {
   const raw = {};
-  const keys = new Set(['baseline-root', 'baseline-bin', 'candidate-root', 'candidate-bin', 'generator', 'generator-source-root', 'output', 'clients', 'duration', 'warmup', 'ramp-up', 'repetitions', 'workers', 'port', 'udp-port', 'scenarios', 'purpose', 'capture-interface', 'diagnostic-detail']);
+  const keys = new Set(['baseline-root', 'baseline-bin', 'candidate-root', 'candidate-bin', 'generator', 'generator-source-root', 'output', 'clients', 'duration', 'warmup', 'ramp-up', 'repetitions', 'workers', 'port', 'udp-port', 'scenarios', 'purpose', 'capture-interface', 'diagnostic-detail', 'departure']);
   for (let i = 0; i < args.length; i += 2) {
     const key = args[i]?.replace(/^--/, '');
     if (!args[i]?.startsWith('--') || !keys.has(key) || !args[i + 1] || args[i + 1].startsWith('--') || raw[key]) throw new Error(`Unknown, duplicate or incomplete option: ${args[i]}`);
@@ -351,6 +534,11 @@ export function parseOptions(args) {
       (raw['diagnostic-detail'] && options.purpose !== 'diagnostic') ||
       (options.diagnosticDetail === 'capture-only' && !options.captureInterface)) {
     throw new Error('--diagnostic-detail must be full or capture-only in diagnostic mode; capture-only requires --capture-interface');
+  }
+  options.departure = raw.departure ?? 'abrupt';
+  if (!['abrupt', 'explicit-leave'].includes(options.departure) ||
+      (raw.departure && (options.purpose !== 'diagnostic' || options.diagnosticDetail !== 'full'))) {
+    throw new Error('--departure must be abrupt or explicit-leave and requires full diagnostic mode');
   }
   for (const [key, fallback, minimum, maximum] of [['duration', 60, 3, 180], ['warmup', 10, 2, 60], ['ramp-up', 5, 1, 600], ['repetitions', 3, 1, 5], ['workers', 1, 1, 4], ['port', 3129, 1024, 65535], ['udp-port', 41100, 1024, 65531]]) {
     const value = Number(raw[key] ?? fallback);
@@ -385,6 +573,9 @@ async function main() {
     servers: { baseline: await identity(options.baselineRoot, options.baselineBin), candidate: await identity(options.candidateRoot, options.candidateBin) },
     generator: { binary: options.generator, binarySha256: hash(await readFile(options.generator)), sourceRoot: options.generatorSourceRoot, sourceIdentity: `sha256:${hash(Buffer.concat(generatorSources))}` },
     orchestratorSha256: hash(await readFile(new URL(import.meta.url))),
+    diagnosticReporterSha256: hash(await readFile(new URL('./diagnostic-report.mjs', import.meta.url))),
+    mediaDiagnosticReporterSha256: hash(await readFile(new URL('./media-diagnostic-report.mjs', import.meta.url))),
+    lifecycleDiagnosticReporterSha256: hash(await readFile(new URL('./lifecycle-diagnostic-report.mjs', import.meta.url))),
     limitations: ['Co-located server/generator: not production capacity.', 'Source-tree hashes cover the listed versioned and nonignored untracked inputs, not ignored/ancestor Cargo configuration, environment flags, toolchains or external native libraries; record those build inputs separately.', 'Symlinks are identified by their link target, not external target contents. Source snapshots and independently frozen binary hashes do not attest that a binary was built from that snapshot.', 'Diagnostic runs skip resource sampling and never produce performance comparisons; full diagnostics change logging, while capture-only retains error-only logs.', 'ps sampled every~500ms in performance mode; RSS is sampled peak and CPU is total user+system for each process, including in-process media workers.', 'CPU window excludes first/last partial sampling intervals. Process launch/hash overhead causes a small offset from the generator clock; no child-process resource attribution.', 'Synthetic queued RTP is not confirmed egress; receive counts do not measure loss without expected fan-out.', 'Latency/CPU differences are descriptive, not an established regression budget.'] };
   await json(join(options.output, 'manifest.json'), manifest);
   const rows = [];
@@ -392,8 +583,13 @@ async function main() {
     for (const scenario of options.scenarios) for (let rep = 1; rep <= options.repetitions; rep++) {
       for (const variant of rep % 2 ? ['baseline', 'candidate'] : ['candidate', 'baseline']) rows.push(await runOne(options, variant, scenario, rep, manifest));
     }
-    await json(join(options.output, 'comparison.json'), { purpose: options.purpose, completed: true, passed: true, rows,
-      comparison: options.purpose === 'diagnostic' ? null : comparison(rows) });
+    const status = options.purpose === 'diagnostic' ? diagnosticRunStatus(rows) : performanceRunStatus(rows);
+    await json(join(options.output, 'comparison.json'), { purpose: options.purpose, completed: true, ...status, rows,
+      comparison: options.purpose === 'diagnostic' || !status.passed ? null : comparison(rows) });
+    if (!status.passed) {
+      console.error('Run did not pass workload, diagnostic coverage or server shutdown gates; see per-run reports.');
+      process.exitCode = 1;
+    }
   } catch (error) {
     await json(join(options.output, 'comparison.json'), { purpose: options.purpose, completed: false, passed: false, rows, error: error.stack });
     throw error;

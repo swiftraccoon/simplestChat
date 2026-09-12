@@ -39,6 +39,33 @@ use tokio::sync::Mutex;
 use webrtc::media_stream::track_local::TrackLocal;
 use webrtc_client::WebRtcSession;
 
+/// Departure is an experimental workload dimension, never an implicit change
+/// to the default disconnect-and-reconnect-grace performance workload.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum Departure {
+    #[default]
+    Abrupt,
+    ExplicitLeave,
+}
+
+impl Departure {
+    fn parse(value: &str) -> Result<Self> {
+        match value {
+            "abrupt" => Ok(Self::Abrupt),
+            "explicit-leave" => Ok(Self::ExplicitLeave),
+            _ => anyhow::bail!("--departure must be abrupt or explicit-leave"),
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Abrupt => "abrupt",
+            Self::ExplicitLeave => "explicit-leave",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct ClientConfig {
     server_url: String,
@@ -58,6 +85,7 @@ struct ClientConfig {
     /// Only needed in webinar/panel mode where most clients don't publish.
     /// In conference mode, NewProducer events handle discovery naturally.
     consume_existing_producers: bool,
+    departure: Departure,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -81,6 +109,17 @@ struct TestConfig {
     server_revision: String,
     generator_revision: String,
     diagnostics: bool,
+    departure: Departure,
+}
+
+impl TestConfig {
+    fn validate_departure(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.departure == Departure::Abrupt || self.diagnostics,
+            "--departure explicit-leave requires --diagnostics"
+        );
+        Ok(())
+    }
 }
 
 const WATCHDOG_RUNNING: u8 = 0;
@@ -204,6 +243,7 @@ impl Default for TestConfig {
             server_revision: "unknown".to_string(),
             generator_revision: "unknown".to_string(),
             diagnostics: false,
+            departure: Departure::Abrupt,
         }
     }
 }
@@ -231,6 +271,10 @@ async fn main() -> Result<()> {
             "--diagnostics" => {
                 config.diagnostics = true;
                 i += 1;
+            }
+            "--departure" => {
+                config.departure = Departure::parse(&args[i + 1])?;
+                i += 2;
             }
             "--warmup"
             | "--deadline-grace"
@@ -470,6 +514,9 @@ fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
             matches!(value.as_str(), "15" | "30" | "60"),
             "FPS must be 15, 30 or 60"
         ),
+        "--departure" => {
+            Departure::parse(value)?;
+        }
         "--server" | "-s" => {
             let url = url::Url::parse(value)?;
             anyhow::ensure!(
@@ -491,6 +538,7 @@ fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
 }
 
 async fn run_load_test(config: TestConfig) -> Result<()> {
+    config.validate_departure()?;
     anyhow::ensure!(
         config.num_clients > 0 && config.num_clients <= 10_000,
         "--clients must be between 1 and 10000"
@@ -512,8 +560,11 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         "Ratios must be finite"
     );
     std::fs::create_dir_all(&config.output_dir)?;
-    let started_at = chrono::Utc::now().to_rfc3339();
     let provenance = generator_provenance(&config)?;
+    // Anchor reported wall time next to the monotonic workload schedule, after
+    // provenance hashing. Cross-process phase correlation is still approximate:
+    // wall-clock adjustments and this small capture gap are not measured here.
+    let started_at = chrono::Utc::now().to_rfc3339();
     let run_start = Instant::now();
     let measurement_start =
         run_start + Duration::from_secs(config.ramp_up_secs + config.warmup_secs);
@@ -636,6 +687,7 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
             max_audio_consumers: config.max_audio_consumers,
             max_video_consumers: config.max_video_consumers,
             consume_existing_producers: true,
+            departure: config.departure,
         };
 
         let metrics = collector.clone();
@@ -1469,6 +1521,12 @@ async fn run_client_inner(
 
     let max_audio = config.max_audio_consumers;
     let max_video = config.max_video_consumers;
+    let (departure_request, departure_receiver) = if config.departure == Departure::ExplicitLeave {
+        let (request, receiver) = tokio::sync::oneshot::channel();
+        (Some(request), Some(receiver))
+    } else {
+        (None, None)
+    };
     let receive_task = tokio::spawn(async move {
         receive_messages_loop(
             read,
@@ -1483,6 +1541,7 @@ async fn run_client_inner(
             max_audio,
             max_video,
             existing_producer_events,
+            departure_receiver,
         )
         .await;
     });
@@ -1502,6 +1561,21 @@ async fn run_client_inner(
             Ok(snapshot) => metrics.diagnostic_snapshot(snapshot),
             Err(error) => metrics.diagnostic_failure(&error.to_string()),
         }
+        metrics.diagnostic_event(
+            "departure-started",
+            serde_json::json!({"departure": config.departure}),
+        );
+        tracing::info!(
+            event = "departure_started",
+            departure = config.departure.as_str(),
+            client_id = %client_id,
+            "Client departure started after the session boundary and pre-close snapshot"
+        );
+    }
+    if let Some(request) = departure_request
+        && let Err(error) = request_explicit_leave(request, DEPARTURE_TIMEOUT).await
+    {
+        metrics.record_error(format!("Explicit leave failed: {error:#}"));
     }
     // Clean shutdown — explicitly close PeerConnections to avoid slow async drop.
     tracing::info!("{}: Session duration completed, shutting down", client_id);
@@ -1537,6 +1611,41 @@ async fn bounded_diagnostic_snapshot(
     tokio::time::timeout(limit, snapshot)
         .await
         .context("Pre-close diagnostic snapshot timed out; evidence is incomplete")?
+}
+
+const DEPARTURE_TIMEOUT: Duration = Duration::from_secs(2);
+type DepartureRequest = tokio::sync::oneshot::Sender<Result<()>>;
+
+/// Request a write from the task that owns the signaling sink. This deadline
+/// includes waiting for that task: a stalled negotiation cannot delay cleanup
+/// indefinitely. Success confirms a local write, not server LeaveRoom handling;
+/// the signaling protocol has no leave acknowledgment.
+async fn request_explicit_leave(
+    request: tokio::sync::oneshot::Sender<DepartureRequest>,
+    limit: Duration,
+) -> Result<()> {
+    let (completion, result) = tokio::sync::oneshot::channel();
+    request
+        .send(completion)
+        .map_err(|_| anyhow::anyhow!("Signaling task unavailable for explicit leave"))?;
+    tokio::time::timeout(limit, result)
+        .await
+        .context("Explicit leave write timed out")?
+        .context("Signaling task stopped before completing explicit leave")?
+}
+
+/// Flush exactly the protocol leave message before returning the local write
+/// result. Keep the native WebRTC peers open until the caller gets this result
+/// (or its enclosing command deadline expires).
+async fn send_explicit_leave<S>(write: &mut S, limit: Duration) -> Result<()>
+where
+    S: futures_util::Sink<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin,
+{
+    let message = serde_json::to_string(&ClientMessage::LeaveRoom)?;
+    tokio::time::timeout(limit, write.send(Message::Text(message.into())))
+        .await
+        .context("Explicit leave write timed out")?
+        .context("Explicit leave signaling write failed")
 }
 
 async fn send_real_media_loop(
@@ -1820,6 +1929,7 @@ async fn receive_messages_loop(
     max_audio: usize,
     max_video: usize,
     existing_producer_events: Vec<ServerMessage>,
+    mut departure_receiver: Option<tokio::sync::oneshot::Receiver<DepartureRequest>>,
 ) {
     let deadline = tokio::time::Instant::now() + timeout;
     let mut needs_renegotiation = false;
@@ -1836,6 +1946,24 @@ async fn receive_messages_loop(
 
     while tokio::time::Instant::now() < deadline {
         let got_message = tokio::select! {
+            request = async {
+                match departure_receiver.as_mut() {
+                    Some(receiver) => receiver.await,
+                    None => std::future::pending().await,
+                }
+            }, if departure_receiver.is_some() => {
+                match request {
+                    Ok(completion) => {
+                        let result = send_explicit_leave(&mut write, DEPARTURE_TIMEOUT).await;
+                        let _ = completion.send(result);
+                        break;
+                    }
+                    Err(_) => {
+                        departure_receiver = None;
+                        continue;
+                    }
+                }
+            }
             msg = read.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
@@ -1947,6 +2075,9 @@ async fn receive_messages_loop(
             if let Err(e) = webrtc_session.lock().await.renegotiate_consumers().await {
                 metrics.record_error(format!("Consumer renegotiation failed: {e}"));
                 tracing::error!("{}: Failed to renegotiate consumers: {}", client_id, e);
+                // The pending batch has no installed receive description. Stop
+                // signaling receipt without draining it or asking for media.
+                break;
             } else if metrics.diagnostics_enabled() {
                 metrics.diagnostic_event(
                     "renegotiation-applied",
@@ -2385,6 +2516,9 @@ fn print_usage() {
     println!(
         "  --diagnostics              Bounded pre-close RTC stats, sanitized SDP and lifecycle events"
     );
+    println!(
+        "  --departure <MODE>         abrupt (default) or explicit-leave (requires --diagnostics)"
+    );
     println!("  --run-label <LABEL>        Human-readable run identifier");
     println!("  --server-revision <SHA>    Server source revision supplied by the runner");
     println!("  --generator-revision <SHA> Generator source revision supplied by the runner");
@@ -2432,4 +2566,407 @@ fn print_usage() {
     println!("\nEnvironment Variables:");
     println!("  RUST_LOG=debug          Enable debug logging");
     println!("  RUST_LOG=info           Enable info logging (default)");
+}
+
+#[cfg(test)]
+mod departure_tests {
+    use super::*;
+
+    #[test]
+    fn cli_departure_is_validated_and_explicit_leave_requires_diagnostics() {
+        for value in ["abrupt", "explicit-leave"] {
+            let args = ["load_test".into(), "--departure".into(), value.into()];
+            assert!(validate_cli_value(&args, 1).is_ok());
+        }
+        for values in [
+            vec!["load_test", "--departure"],
+            vec!["load_test", "--departure", "leave"],
+            vec!["load_test", "--departure", "--diagnostics"],
+        ] {
+            let args = values.into_iter().map(str::to_string).collect::<Vec<_>>();
+            assert!(validate_cli_value(&args, 1).is_err());
+        }
+        let mut config = TestConfig::default();
+        assert_eq!(config.departure, Departure::Abrupt);
+        assert!(config.validate_departure().is_ok());
+        assert_eq!(
+            serde_json::to_value(&config).unwrap()["departure"],
+            "abrupt"
+        );
+        config.departure = Departure::ExplicitLeave;
+        assert!(config.validate_departure().is_err());
+        config.diagnostics = true;
+        assert!(config.validate_departure().is_ok());
+        assert_eq!(
+            serde_json::to_value(&config).unwrap()["departure"],
+            "explicit-leave"
+        );
+    }
+
+    #[tokio::test]
+    async fn explicit_leave_uses_owned_signaling_writer_before_socket_drop() -> Result<()> {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+            let address = listener.local_addr()?;
+            let (client, server) = tokio::join!(connect_async(format!("ws://{address}/")), async {
+                let (stream, _) = listener.accept().await?;
+                Ok::<_, anyhow::Error>(tokio_tungstenite::accept_async(stream).await?)
+            });
+            let (client, _) = client?;
+            let mut server = server?;
+            let (mut write, read) = client.split();
+            send_message(&mut write, ClientMessage::GetRouterRtpCapabilities).await?;
+            let metrics = Arc::new(MetricsCollector::new("departure-test".into()));
+            let session = Arc::new(Mutex::new(WebRtcSession::new(
+                "departure-test".into(),
+                metrics.clone(),
+            )));
+            let (request, receiver) = tokio::sync::oneshot::channel();
+            // JoinSet aborts the owned receive loop on assertion/timeout as well.
+            let mut tasks = tokio::task::JoinSet::new();
+            tasks.spawn(receive_messages_loop(
+                read,
+                write,
+                metrics.clone(),
+                "departure-test".into(),
+                Duration::from_secs(10),
+                RtpCapabilities::default(),
+                session,
+                0,
+                0,
+                4,
+                4,
+                Vec::new(),
+                Some(receiver),
+            ));
+            request_explicit_leave(request, Duration::from_secs(1)).await?;
+            // No server response is sent: the completion must be a write
+            // result, and cannot be mistaken for a protocol acknowledgment.
+            for expected in [
+                ClientMessage::GetRouterRtpCapabilities,
+                ClientMessage::LeaveRoom,
+            ] {
+                let frame = server.next().await.context("Missing signaling frame")??;
+                let Message::Text(text) = frame else {
+                    anyhow::bail!("Socket closed before the expected signaling message");
+                };
+                assert_eq!(
+                    serde_json::from_str::<serde_json::Value>(&text)?,
+                    serde_json::to_value(expected)?
+                );
+            }
+            tasks.join_next().await.context("Missing receive task")??;
+            assert!(metrics.generate_report().errors.is_empty());
+            Ok::<_, anyhow::Error>(())
+        })
+        .await?
+    }
+
+    #[tokio::test]
+    async fn explicit_leave_command_timeout_and_task_loss_are_reported() {
+        let (request, receiver) = tokio::sync::oneshot::channel();
+        let started = Instant::now();
+        let error = request_explicit_leave(request, Duration::from_millis(10))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("timed out"));
+        assert!(started.elapsed() < Duration::from_secs(1));
+        drop(receiver);
+
+        let (request, receiver) = tokio::sync::oneshot::channel();
+        drop(receiver);
+        assert!(
+            request_explicit_leave(request, Duration::from_secs(1))
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("unavailable")
+        );
+
+        let (request, receiver) = tokio::sync::oneshot::channel();
+        let (result, ()) = tokio::join!(
+            request_explicit_leave(request, Duration::from_secs(1)),
+            async { drop(receiver.await.unwrap()) },
+        );
+        assert!(result.unwrap_err().to_string().contains("stopped"));
+    }
+
+    #[tokio::test]
+    async fn explicit_leave_write_timeout_and_transport_failure_are_reported() {
+        let stalled = futures_util::sink::unfold((), |(), _: Message| {
+            std::future::pending::<std::result::Result<(), tokio_tungstenite::tungstenite::Error>>()
+        });
+        tokio::pin!(stalled);
+        let started = Instant::now();
+        assert!(
+            send_explicit_leave(&mut stalled, Duration::from_millis(10))
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("timed out")
+        );
+        assert!(started.elapsed() < Duration::from_secs(1));
+
+        let failed = futures_util::sink::unfold((), |(), _: Message| async {
+            Err::<(), _>(tokio_tungstenite::tungstenite::Error::ConnectionClosed)
+        });
+        tokio::pin!(failed);
+        assert!(
+            send_explicit_leave(&mut failed, Duration::from_secs(1))
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("write failed")
+        );
+    }
+}
+
+#[cfg(test)]
+mod incremental_receive_tests {
+    use super::*;
+    use futures_util::FutureExt;
+    use mediasoup_types::data_structures::{DtlsFingerprint, DtlsRole, IceCandidateType};
+    use std::panic::AssertUnwindSafe;
+    use tokio::task::JoinHandle;
+
+    /// Abort on unwind/timeout as well as the normal explicit cleanup path.
+    struct OwnedTask(Option<JoinHandle<()>>);
+
+    impl OwnedTask {
+        fn abort(&self) {
+            if let Some(task) = &self.0 {
+                task.abort();
+            }
+        }
+
+        async fn finish(&mut self) -> Result<()> {
+            if let Some(task) = self.0.as_mut() {
+                let result = task.await;
+                self.0.take();
+                if let Err(error) = result {
+                    anyhow::ensure!(error.is_cancelled(), "Fixture task failed: {error}");
+                }
+            }
+            Ok(())
+        }
+    }
+
+    impl Drop for OwnedTask {
+        fn drop(&mut self) {
+            self.abort();
+        }
+    }
+
+    async fn exercise_incremental_batch(closed_peer: bool) {
+        let metrics = Arc::new(MetricsCollector::new("incremental-receiver".into()));
+        metrics.enable_diagnostics();
+        metrics.begin_connection_attempt();
+        let session = Arc::new(Mutex::new(WebRtcSession::new(
+            "incremental-receiver".into(),
+            metrics.clone(),
+        )));
+        let mut tasks = Vec::<OwnedTask>::new();
+
+        // Keep cleanup outside the bounded body so a failed assertion or a
+        // timeout cannot detach the receive loop or leave its real peer open.
+        let outcome = AssertUnwindSafe(tokio::time::timeout(Duration::from_secs(10), async {
+            let udp = tokio::net::UdpSocket::bind("127.0.0.1:0").await?;
+            let udp_port = udp.local_addr()?.port();
+            tasks.push(OwnedTask(Some(tokio::spawn(async move {
+                let mut packet = [0; 2048];
+                while udp.recv_from(&mut packet).await.is_ok() {}
+            }))));
+            session
+                .lock()
+                .await
+                .create_recv_transport(
+                    "incremental-recv-transport".into(),
+                    IceParameters {
+                        username_fragment: "testufrag".into(),
+                        password: "test-password-at-least-twenty-two-bytes".into(),
+                        ice_lite: Some(true),
+                    },
+                    vec![IceCandidate {
+                        foundation: "owned-loopback".into(),
+                        priority: 2_130_706_431,
+                        address: "127.0.0.1".into(),
+                        protocol: Protocol::Udp,
+                        port: udp_port,
+                        r#type: IceCandidateType::Host,
+                        tcp_type: None,
+                    }],
+                    DtlsParameters {
+                        role: DtlsRole::Server,
+                        fingerprints: vec![DtlsFingerprint::Sha256 { value: [0x42; 32] }],
+                    },
+                )
+                .await?;
+            if closed_peer {
+                // close(&self) retains the transport handle: record_consumer
+                // succeeds, but the real peer rejects SDP renegotiation.
+                session.lock().await.close().await?;
+            }
+
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+            let address = listener.local_addr()?;
+            let (client, server) = tokio::join!(connect_async(format!("ws://{address}/")), async {
+                let (stream, _) = listener.accept().await?;
+                Ok::<_, anyhow::Error>(tokio_tungstenite::accept_async(stream).await?)
+            },);
+            let (client, _) = client?;
+            let mut server = server?;
+            drop(listener);
+            let (write, read) = client.split();
+            tasks.push(OwnedTask(Some(tokio::spawn(receive_messages_loop(
+                read,
+                write,
+                metrics.clone(),
+                "incremental-receiver".into(),
+                Duration::from_secs(30),
+                RtpCapabilities::default(),
+                session.clone(),
+                0,
+                0,
+                4,
+                4,
+                Vec::new(),
+                None,
+            )))));
+
+            server
+                .send(Message::Text(
+                    serde_json::to_string(&ServerMessage::ConsumerCreated {
+                        consumer_id: "batch-consumer".into(),
+                        producer_id: "batch-producer".into(),
+                        kind: MediaKind::Audio,
+                        rtp_parameters: RtpParameters {
+                            encodings: vec![RtpEncodingParameters {
+                                ssrc: Some(123_456),
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        },
+                    })?
+                    .into(),
+                ))
+                .await?;
+
+            if closed_peer {
+                // The loop's own deadline is longer than the enclosing test
+                // deadline: reaching this point proves the failure exited it.
+                tokio::try_join!(tasks[1].finish(), async {
+                    while let Some(Ok(message)) = server.next().await {
+                        if let Message::Text(text) = message {
+                            let message: ClientMessage = serde_json::from_str(&text)?;
+                            anyhow::ensure!(
+                                !matches!(message, ClientMessage::ResumeConsumer { .. }),
+                                "Failed renegotiation must not send ResumeConsumer",
+                            );
+                        }
+                    }
+                    Ok::<_, anyhow::Error>(())
+                })?;
+            } else {
+                loop {
+                    let message = server
+                        .next()
+                        .await
+                        .context("Receiver closed before resume")??;
+                    if let Message::Text(text) = message {
+                        let message: ClientMessage = serde_json::from_str(&text)?;
+                        if let ClientMessage::ResumeConsumer { consumer_id } = message {
+                            anyhow::ensure!(consumer_id == "batch-consumer");
+                            break;
+                        }
+                    }
+                }
+                // Stop the live receive loop before dropping the scripted
+                // server, which would otherwise record an unrelated WS error.
+                tasks[1].abort();
+                tasks[1].finish().await?;
+            }
+
+            let report = metrics.generate_report();
+            let events = &report
+                .diagnostics
+                .as_ref()
+                .context("Missing diagnostics")?
+                .events;
+            anyhow::ensure!(report.consumers_created == 1);
+            anyhow::ensure!(events.iter().any(|event| event.kind == "consumer-created"));
+            if closed_peer {
+                anyhow::ensure!(
+                    report.errors.len() == 1,
+                    "Unexpected errors: {:?}",
+                    report.errors
+                );
+                anyhow::ensure!(report.errors[0].starts_with("Consumer renegotiation failed:"));
+                anyhow::ensure!(
+                    !events
+                        .iter()
+                        .any(|event| event.kind == "renegotiation-applied")
+                );
+                anyhow::ensure!(!events.iter().any(|event| event.kind == "resume-requested"));
+                anyhow::ensure!(TestSummary::from_metrics(&[report]).total_errors == 1);
+            } else {
+                anyhow::ensure!(
+                    report.errors.is_empty(),
+                    "Unexpected errors: {:?}",
+                    report.errors
+                );
+                let applied = events
+                    .iter()
+                    .position(|event| event.kind == "renegotiation-applied")
+                    .context("Missing applied-renegotiation evidence")?;
+                let resumed = events
+                    .iter()
+                    .position(|event| event.kind == "resume-requested")
+                    .context("Missing resume evidence")?;
+                anyhow::ensure!(applied < resumed);
+                anyhow::ensure!(events[resumed].details["consumerId"] == "batch-consumer");
+            }
+            Ok::<_, anyhow::Error>(())
+        }))
+        .catch_unwind()
+        .await;
+
+        for task in &tasks {
+            task.abort();
+        }
+        let cleanup = tokio::time::timeout(Duration::from_secs(3), async {
+            let mut task_error = None;
+            for task in &mut tasks {
+                if let Err(error) = task.finish().await {
+                    task_error = Some(error);
+                }
+            }
+            let closed = session.lock().await.close().await;
+            closed?;
+            if let Some(error) = task_error {
+                return Err(error);
+            }
+            Ok::<_, anyhow::Error>(())
+        })
+        .await;
+
+        match outcome {
+            Ok(result) => result
+                .expect("Incremental receive test timed out")
+                .expect("Incremental receive control flow failed"),
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+        cleanup
+            .expect("Fixture cleanup timed out")
+            .expect("Fixture cleanup failed");
+    }
+
+    #[tokio::test]
+    async fn closed_peer_renegotiation_exits_without_resuming_pending_consumers() {
+        exercise_incremental_batch(true).await;
+    }
+
+    #[tokio::test]
+    async fn applied_incremental_renegotiation_resumes_its_pending_batch() {
+        exercise_incremental_batch(false).await;
+    }
 }
