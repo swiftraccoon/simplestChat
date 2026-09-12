@@ -69,15 +69,38 @@ function summarizeFindings(findings) {
   };
 }
 
+/** Only approve opaque computed RGB pairs; unsupported colors stay unverified. */
+function opaqueContrastRatio(foreground, background) {
+  const luminance = (value) => {
+    const match =
+      /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/.exec(value);
+    if (!match || (match[4] !== undefined && Number(match[4]) !== 1)) return null;
+    const channels = match.slice(1, 4).map(Number);
+    if (channels.some((channel) => !Number.isFinite(channel) || channel < 0 || channel > 255))
+      return null;
+    const linear = channels.map((channel) => {
+      const value = channel / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+  };
+  const first = luminance(foreground);
+  const second = luminance(background);
+  return first === null || second === null
+    ? null
+    : (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+}
+
 async function scanPage(page, name, AxeBuilder) {
   const result = await new AxeBuilder({ page }).withTags([...tags]).analyze();
-  const targets = result.violations
+  const targets = [...result.violations, ...result.incomplete]
     .filter((finding) => finding.id === 'color-contrast')
     .flatMap((finding) => finding.nodes.map((node) => node.target))
     .filter((target) => target.length === 1 && typeof target[0] === 'string')
     .slice(0, 50)
     .map((target) => target[0].slice(0, 512));
-  // Computed CSS values help diagnose contrast without saving HTML or form data.
+  // Incomplete checks need evidence too. Keep computed CSS/geometry, never HTML,
+  // text, form values or image URLs. A hit-test sample does not prove full visibility.
   const contrastStyles = targets.length
     ? await page.evaluate(
         (selectors) =>
@@ -86,6 +109,44 @@ async function scanPage(page, name, AxeBuilder) {
               const node = document.querySelector(target);
               if (!node) return { target, unavailable: true };
               const style = getComputedStyle(node);
+              const imageKind = (value) =>
+                !value || value === 'none'
+                  ? 'none'
+                  : !value.includes('url(') &&
+                      /^(?:repeating-)?(?:linear|radial|conic)-gradient\(/.test(value)
+                    ? 'gradient'
+                    : 'other';
+              const box = (rect) => ({
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+              });
+              const bounds = node.getBoundingClientRect();
+              const fragments = [];
+              const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+              let textNode;
+              let inspectedTextNodes = 0;
+              while (
+                inspectedTextNodes < 32 &&
+                fragments.length < 32 &&
+                (textNode = walker.nextNode())
+              ) {
+                inspectedTextNodes++;
+                if (!textNode.textContent.trim()) continue;
+                const range = document.createRange();
+                range.selectNodeContents(textNode);
+                for (const rect of range.getClientRects()) {
+                  if (fragments.length >= 32) break;
+                  const x = rect.x + rect.width / 2;
+                  const y = rect.y + rect.height / 2;
+                  const top = document.elementFromPoint(x, y);
+                  fragments.push({
+                    ...box(rect),
+                    centerHitsTarget: top !== null && node.contains(top),
+                  });
+                }
+              }
               const backgrounds = [];
               for (
                 let ancestor = node.parentElement;
@@ -96,6 +157,10 @@ async function scanPage(page, name, AxeBuilder) {
                 backgrounds.push({
                   color: ancestorStyle.backgroundColor,
                   opacity: ancestorStyle.opacity,
+                  imageKind: imageKind(ancestorStyle.backgroundImage),
+                  overflowX: ancestorStyle.overflowX,
+                  overflowY: ancestorStyle.overflowY,
+                  bounds: box(ancestor.getBoundingClientRect()),
                 });
               }
               return {
@@ -105,6 +170,12 @@ async function scanPage(page, name, AxeBuilder) {
                 opacity: style.opacity,
                 fontSize: style.fontSize,
                 fontWeight: style.fontWeight,
+                textFillColor: style.webkitTextFillColor,
+                backgroundImageKind: imageKind(style.backgroundImage),
+                bounds: box(bounds),
+                textFragments: fragments,
+                textFragmentsLimit: 32,
+                textNodesLimit: 32,
                 backgrounds,
               };
             } catch {
@@ -142,6 +213,7 @@ async function run(env = process.env) {
       'Automated WCAG-tagged rule checks and selected keyboard paths, not full WCAG conformance.',
       'Incomplete axe findings need manual review; no rule disabling or selector exclusions.',
       'Isolated headless desktop browser and resized viewport, not screen-reader or mobile-browser coverage.',
+      'Contrast geometry samples at most 32 text nodes/fragments per target; center hit tests do not establish full visibility or focus conformance.',
     ],
   };
   const save = () =>
@@ -249,6 +321,32 @@ async function run(env = process.env) {
       .getByRole('combobox', { name: 'Conversation', exact: true })
       .waitFor({ state: 'visible' });
     await scan(page, 'joined-chat-desktop', AxeBuilder);
+    await check('participant initials have readable rendered contrast', async () => {
+      const colors = await page.locator('.participant-avatar').evaluateAll((avatars) =>
+        avatars
+          .filter((avatar) => avatar.textContent.trim())
+          .map((avatar) => {
+            const style = getComputedStyle(avatar);
+            return {
+              color: style.color,
+              backgroundColor: style.backgroundColor,
+              opacity: style.opacity,
+            };
+          }),
+      );
+      assert.ok(colors.length > 0, 'The owned participant must have an initial');
+      report.avatarContrast = colors.map((pair) => ({
+        ...pair,
+        ratio: opaqueContrastRatio(pair.color, pair.backgroundColor),
+      }));
+      for (const evidence of report.avatarContrast) {
+        assert.equal(evidence.opacity, '1');
+        assert.ok(
+          evidence.ratio !== null && evidence.ratio >= 4.5,
+          'Rendered initial needs normal-text contrast',
+        );
+      }
+    });
 
     await check('newest-message button is keyboard-operable after real chat overflow', async () => {
       const content = 'Accessibility keyboard scrolling check. '.repeat(45).trim();
@@ -430,7 +528,7 @@ async function run(env = process.env) {
   return report;
 }
 
-module.exports = { configuration, summarizeFindings, scanPage, tags, run };
+module.exports = { configuration, summarizeFindings, opaqueContrastRatio, scanPage, tags, run };
 if (require.main === module)
   run().catch((error) => {
     console.error(error.message);

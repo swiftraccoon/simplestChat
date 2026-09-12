@@ -9,9 +9,20 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const require = createRequire(import.meta.url);
-const { configuration, summarizeFindings, scanPage, tags } = require('../../web/e2e/accessibility.cjs');
+const { configuration, summarizeFindings, opaqueContrastRatio, scanPage, tags } = require('../../web/e2e/accessibility.cjs');
 const runner = fileURLToPath(new URL('../../web/e2e/accessibility.cjs', import.meta.url));
 const allowed = { ACCESSIBILITY_E2E: '1', DISPOSABLE_TEST_DATABASE: '1', BASE_URL: 'http://127.0.0.1:3119' };
+
+test('rendered contrast checks accept only opaque computed RGB pairs', () => {
+  assert.equal(opaqueContrastRatio('rgb(0, 0, 0)', 'rgb(255, 255, 255)'), 21);
+  assert.equal(opaqueContrastRatio('rgba(0, 0, 0, 1)', 'rgb(255, 255, 255)'), 21);
+  assert.ok(opaqueContrastRatio('rgb(255, 255, 255)', 'rgb(215, 108, 66)') < 4.5);
+  assert.ok(opaqueContrastRatio('rgb(0, 0, 0)', 'rgb(215, 108, 66)') >= 4.5);
+  for (const unsupported of ['transparent', 'rgba(0,0,0,0.5)', 'rgb(256,0,0)', 'rgb(-1,0,0)', 'rgb(.,0,0)', 'color(srgb 1 1 1)']) {
+    assert.equal(opaqueContrastRatio(unsupported, 'rgb(255,255,255)'), null);
+    assert.equal(opaqueContrastRatio('rgb(0,0,0)', unsupported), null);
+  }
+});
 
 test('accessibility runner requires both explicit accessibility and disposable-service opt-ins', () => {
   assert.throws(() => configuration({}), /ACCESSIBILITY_E2E/);
@@ -71,18 +82,30 @@ test('incomplete rule findings remain visible for manual review', async () => {
     withTags() { return this; }
     async analyze() { return { testEngine: { version: 'fixture' }, violations: [], incomplete: [{ id: 'color-contrast', impact: 'serious', nodes: [{ target: ['#fixture'] }] }] }; }
   }
-  const result = await scanPage({}, 'review-needed', AxeBuilder);
+  const page = { async evaluate(_work, selectors) {
+    assert.deepEqual(selectors, ['#fixture']);
+    return [{ target: '#fixture', unavailable: true }];
+  } };
+  const result = await scanPage(page, 'review-needed', AxeBuilder);
   assert.equal(result.violations.ruleCount, 0);
   assert.equal(result.incomplete.ruleCount, 1);
   assert.equal(result.incomplete.rules[0].id, 'color-contrast');
+  assert.deepEqual(result.contrastStyles, [{ target: '#fixture', unavailable: true }]);
 });
 
 test('contrast diagnostics retain only bounded selectors and computed CSS, not content', async () => {
-  const node = { textContent: 'PRIVATE_TEXT', value: 'PRIVATE_VALUE', innerHTML: 'PRIVATE_HTML', parentElement: null };
+  const rect = { x: 1, y: 2, width: 3, height: 4 };
+  const node = { textContent: 'PRIVATE_TEXT', value: 'PRIVATE_VALUE', innerHTML: 'PRIVATE_HTML', parentElement: null,
+    getBoundingClientRect: () => rect, contains: element => element === node };
   node.parentElement = node;
-  const context = { document: { querySelector: () => node }, getComputedStyle: () => ({
+  const context = { NodeFilter: { SHOW_TEXT: 4 }, document: {
+    querySelector: () => node,
+    elementFromPoint: () => node,
+    createTreeWalker: () => ({ nextNode: () => node }),
+    createRange: () => ({ selectNodeContents() {}, getClientRects: () => Array.from({ length: 40 }, () => rect) }),
+  }, getComputedStyle: () => ({
     color: 'rgb(255, 255, 255)', backgroundColor: 'rgb(59, 130, 246)', opacity: '1', fontSize: '14px', fontWeight: '500',
-    backgroundImage: 'url(PRIVATE_IMAGE)',
+    backgroundImage: 'url(PRIVATE_IMAGE)', webkitTextFillColor: 'rgb(255, 255, 255)', overflowX: 'hidden', overflowY: 'auto',
   }) };
   const page = { async evaluate(work, selectors) {
     assert.equal(selectors.length, 50);
@@ -100,7 +123,51 @@ test('contrast diagnostics retain only bounded selectors and computed CSS, not c
   assert.equal(result.contrastStyles[0].backgrounds.length, 6);
   assert.equal(result.contrastStyles[0].opacity, '1');
   assert.equal(result.contrastStyles[0].color, 'rgb(255, 255, 255)');
+  assert.equal(result.contrastStyles[0].backgroundImageKind, 'other');
+  assert.equal(result.contrastStyles[0].textFragments.length, 32);
+  assert.equal(result.contrastStyles[0].textFragmentsLimit, 32);
+  assert.equal(result.contrastStyles[0].textFragments[0].centerHitsTarget, true);
+  assert.equal(result.contrastStyles[0].backgrounds[0].bounds.width, 3);
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE_/);
+});
+
+test('computed contrast evidence includes violations and incomplete findings together', async () => {
+  const page = { async evaluate(_work, selectors) { return selectors.map(target => ({ target, unavailable: true })); } };
+  class AxeBuilder {
+    withTags() { return this; }
+    async analyze() { return { testEngine: { version: 'fixture' },
+      violations: [{ id: 'color-contrast', nodes: [{ target: ['#violation'] }] }],
+      incomplete: [{ id: 'color-contrast', nodes: [{ target: ['#incomplete'] }] }],
+    }; }
+  }
+  const result = await scanPage(page, 'mixed', AxeBuilder);
+  assert.deepEqual(result.contrastStyles.map(style => style.target), ['#violation', '#incomplete']);
+  assert.equal(result.violations.ruleCount, 1);
+  assert.equal(result.incomplete.ruleCount, 1);
+});
+
+test('contrast hit-test misses stay explicit and text-node traversal has its own bound', async () => {
+  for (const hit of [null, {}]) {
+    let visited = 0;
+    const rect = { x: 0, y: 0, width: 10, height: 10 };
+    const node = { textContent: 'fixture', parentElement: null, getBoundingClientRect: () => rect,
+      contains: element => element === node };
+    const context = { NodeFilter: { SHOW_TEXT: 4 }, document: {
+      querySelector: () => node, elementFromPoint: () => hit,
+      createTreeWalker: () => ({ nextNode() { visited++; return node; } }),
+      createRange: () => ({ selectNodeContents() {}, getClientRects: () => visited === 1 ? [rect] : [] }),
+    }, getComputedStyle: () => ({ color: 'rgb(0, 0, 0)', backgroundColor: 'rgb(255, 255, 255)', opacity: '1' }) };
+    const page = { async evaluate(work, selectors) { context.selectors = selectors; return vm.runInNewContext(`(${work.toString()})(selectors)`, context); } };
+    class AxeBuilder {
+      withTags() { return this; }
+      async analyze() { return { testEngine: { version: 'fixture' }, violations: [], incomplete: [{ id: 'color-contrast', nodes: [{ target: ['#fixture'] }] }] }; }
+    }
+    const result = await scanPage(page, 'geometry', AxeBuilder);
+    assert.equal(visited, 32);
+    assert.equal(result.contrastStyles[0].textFragments.length, 1);
+    assert.equal(result.contrastStyles[0].textFragments[0].centerHitsTarget, false);
+    assert.equal(result.contrastStyles[0].textNodesLimit, 32);
+  }
 });
 
 test('failed accessibility launch exits nonzero with a private failure report', async t => {

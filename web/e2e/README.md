@@ -144,7 +144,13 @@ Escape/focus restoration, and Help opening in a separate tab while the room stay
 connected. It does not turn on capture.
 
 `accessibility-results.json` records rule IDs, impacts, bounded selectors and
-computed contrast styles, not DOM HTML. Violations or functional failures exit nonzero. `incomplete`
+computed contrast styles for violations **and incomplete findings**, not DOM HTML.
+Text-fragment rectangles and center hit tests aid review; they do not prove full
+visibility. Evidence is limited to 50 targets, 32 text nodes/fragments per target
+and six ancestors, with no text, form values or image URLs retained. A separate
+rendered-avatar check enforces opaque initial/background contrast of at least
+[4.5:1](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html).
+Violations or functional failures exit nonzero. `incomplete`
 findings remain in the report for manual review; a passing run is not full WCAG
 conformance or screen-reader/mobile-browser coverage. CI preserves its separate
 `accessibility-e2e` artifact for seven days. Use a unique `E2E_ARTIFACTS` directory
