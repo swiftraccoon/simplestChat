@@ -2,7 +2,8 @@
 
 Use the synthetic load test to compare server forwarding and resource use, and
 the browser test to measure UI startup, API requests, chat, and decoded video.
-See [recorded results](performance-results.md) for measured before/after comparisons.
+See [recorded results](performance-results.md) for current-build baselines and
+measured before/after comparisons.
 
 ## Web asset budgets
 

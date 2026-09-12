@@ -1,5 +1,49 @@
 # Performance results
 
+## Current-build baseline — 2026-09-12
+
+These are repeatability measurements, **not a before/after comparison**. Native runs
+used the same frozen release server (`2d6366d1ece842a1`) and corrected generator
+(`aeb825d83181b14c`), with diagnostics disabled. The host was an Apple M5 Max,
+18 logical CPUs, 128 GiB RAM, Darwin 27.0.0; Rust 1.98.1/static OpenSSL 3.5.8.
+No builds or other owned workloads overlapped measurements.
+
+Native workloads used one worker, synthetic 480p/30 fps, caps of four audio and
+four video subscriptions per client, a five-second ramp and ten-second warmup. Values are
+medians of per-run measurements; CPU is percent of one core and RSS is sampled peak.
+
+| Workload | Runs × measured seconds | Receive-ready P99 | Received packets/s | Server CPU | Server RSS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Conference, 10 clients | 6 × 60 | 411 ms | 6,920 | 13.15% | 91.80 MiB |
+| Four rooms, 30 clients | 6 × 60 | 411 ms | 20,760 | 42.25% | 201.81 MiB |
+| Churn, 3 clients | 2 × 120 | 410.5 ms | 713 | 5.51% | 52.83 MiB |
+
+All 258 connection attempts and 2,008 consumer lifetimes passed coverage gates.
+Rooms, participants and connections returned to zero; all native processes exited
+0 without signals. Churn produced different schedules: seven versus eleven
+attempts. Its coverage is scoped to stable publishers.
+
+CPU varied widely with the same build: 7.85–19.92% for conference and
+21.85–48.48% for four rooms. These local samples do not establish regression
+limits or production capacity. Native bitrate-clamping errors remain: after the
+stable workloads, and also during churn measurement. The historical receive
+failure did not reproduce; its cause remains unresolved.
+
+Three valid Chromium 153.0.8010.12 / Playwright 1.63.0 samples used fresh PostgreSQL
+15.19 databases, two users, ten paced messages and five seconds of fake-camera
+playback. Median FCP was **44 ms**, chat delivery
+**41.18 ms**, and publish-to-positive-native-decoded-frame evidence **142.21 ms**
+(141.24–169.60 ms). Timing includes automation/polling. Every sample decoded
+81–82 additional frames and passed media, browser and server cleanup. Two initial
+timings with invalid first-frame evidence were retained and excluded.
+
+The community suite passed all **22 scenarios**, including settings, preview,
+capture restart and media-preserving signaling recovery. Accessibility completed
+**26 scans and 12 keyboard/layout checks**, with no automated violations;
+15 incomplete contrast rule results still need manual review. These checks use
+synthetic capture and resized desktop Chromium, not physical devices or full
+accessibility conformance.
+
 ## Observability update, diagnostics disabled — 2026-09-11
 
 Compared `46b1af7` with the observability working tree using frozen release
@@ -70,7 +114,7 @@ measurements. Values are medians of three per-run medians.
 | Startup JS heap | 2,589,706 B | 2,696,968 B |
 | Registration request | 15.56 ms | 15.31 ms |
 | Chat delivery, including automation overhead | 29.11 ms | 29.35 ms |
-| Camera publish to first decoded frame | 166.84 ms | 158.43 ms |
+| Camera publish to video dimensions | 166.84 ms | 158.43 ms |
 | Main JS bundle | 390,068 B | 408,627 B |
 | Main JS bundle, gzip level 6 | 78,363 B | 84,107 B |
 
@@ -80,7 +124,7 @@ validation and UX have a measurable size cost: 5,744 more gzip bytes (+7.3%) and
 [size budgets](performance.md#web-asset-budgets).
 
 All six runs recorded decoded video during the five-second sample, had no page errors, and
-released their media connections after leaving. First-frame timing ranged from
+released their media connections after leaving. Video-dimensions timing ranged from
 130–231 ms for the baseline and 127–174 ms for the candidate; the median change
 is not an established speedup. Local browser samples do not establish production
 capacity, real-device behavior or a statistically stable regression threshold.
@@ -145,7 +189,7 @@ per revision.
 | Startup JS heap | 2,604,130 B | 2,587,140 B |
 | Registration request | 15.31 ms | 15.09 ms |
 | Chat delivery, including automation overhead | 28.84 ms | 29.34 ms |
-| Camera publish to first decoded frame | 146.55 ms | 147.04 ms |
+| Camera publish to video dimensions | 146.55 ms | 147.04 ms |
 | Main JS bundle | 391,284 B | 386,797 B |
 | Main JS bundle, gzip | 83,726 B | 77,585 B |
 
