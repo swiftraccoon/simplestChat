@@ -85,6 +85,12 @@ preview, decoded video/audio, viewer controls, capture restart and mobile layout
 Audio must be unmuted at positive volume with advancing playback. A separately
 simulated autoplay rejection checks the visible retry button.
 
+Signaling recovery closes only the owned browser WebSocket while fake audio/video
+is active, separately for publisher and receiver. The check requires successful
+session recovery without a fresh join, new media peers or recapture, plus decoded
+video and audible audio progress during the interruption and after recovery.
+This does not simulate UDP failure, a network outage or expired reconnect grace.
+
 Capture termination is simulated on owned fake tracks. The check verifies remote
 removal, controls, restart guidance, preservation of the other capture kind and
 no automatic recapture. Firefox suppresses the synthetic track event; the runner

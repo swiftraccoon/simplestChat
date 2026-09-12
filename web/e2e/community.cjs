@@ -17,6 +17,7 @@ if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname))
 const { browserOptions } = require('./browser-options.cjs');
 const { collectPeerDiagnostics } = require('./peer-diagnostics.cjs');
 const { installPeerEventTracing } = require('./peer-events.cjs');
+const { installSignalingReconnectObservation } = require('./signaling-reconnect.cjs');
 const options = browserOptions(process.env.E2E_BROWSER);
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const artifacts =
@@ -49,10 +50,12 @@ const report = {
   passed: false,
   steps: [],
   playbackRecoveries: [],
+  signalingReconnects: [],
   limitations: [
     'Fake capture devices; not physical device or permission-prompt coverage.',
     'External capture termination is simulated with stop() plus an ended event on an owned fake local-stream track.',
     'Mobile checks resize a desktop viewport; they do not run a mobile browser.',
+    'Signaling recovery closes an owned WebSocket only; it is not a UDP outage or reconnect-grace-expiry test.',
   ],
 };
 function saveReport() {
@@ -108,6 +111,7 @@ async function client(label, mobile = false) {
   await page.addInitScript(installPeerEventTracing, {
     announcedIp: process.env.TEST_ANNOUNCE_IP || null,
   });
+  await page.addInitScript(installSignalingReconnectObservation);
   await page.addInitScript(() => {
     const devices = navigator.mediaDevices;
     const getUserMedia = devices.getUserMedia.bind(devices);
@@ -224,6 +228,251 @@ async function connected(page) {
   await page
     .getByRole('combobox', { name: 'Conversation', exact: true })
     .waitFor({ state: 'visible' });
+}
+async function reconnectMediaIdentity(page) {
+  return page.evaluateHandle(() => {
+    const registry = window.__communityPeers;
+    if (!Array.isArray(registry) || registry.length === 0)
+      throw new Error('Native peer observation unavailable');
+    const captures = window.__communityCaptureRequests;
+    if (!Number.isSafeInteger(captures) || captures < 0)
+      throw new Error('Capture request observation unavailable');
+    const peers = registry.map((peer) => ({
+      peer,
+      closed: peer.connectionState === 'closed',
+      senders: peer.getSenders().map((sender) => sender.track),
+      receivers: peer.getReceivers().map((receiver) => receiver.track),
+    }));
+    const liveTracks = peers
+      .flatMap(({ senders, receivers }) => [...senders, ...receivers])
+      .filter((track) => track?.readyState === 'live');
+    const localTracks = document.querySelector('#local-tile video')?.srcObject?.getTracks() || [];
+    const same = (before, after) =>
+      before.length === after.length && before.every((value, index) => value === after[index]);
+    return {
+      verify() {
+        if (
+          window.__communityPeers !== registry ||
+          !same(
+            peers.map(({ peer }) => peer),
+            registry,
+          )
+        )
+          throw new Error('Signaling recovery replaced or added native peers');
+        if (window.__communityCaptureRequests !== captures)
+          throw new Error('Signaling recovery requested new capture');
+        for (const entry of peers) {
+          // Unused directions legitimately remain New; already closed historical
+          // peers may also exist after earlier smoke steps.
+          if (!entry.closed && ['closed', 'failed'].includes(entry.peer.connectionState))
+            throw new Error('Signaling recovery closed or failed a retained native peer');
+          if (
+            !same(
+              entry.senders,
+              entry.peer.getSenders().map((sender) => sender.track),
+            ) ||
+            !same(
+              entry.receivers,
+              entry.peer.getReceivers().map((receiver) => receiver.track),
+            )
+          )
+            throw new Error('Signaling recovery replaced native media tracks');
+        }
+        if (
+          liveTracks.some((track) => track.readyState !== 'live') ||
+          !same(
+            localTracks,
+            document.querySelector('#local-tile video')?.srcObject?.getTracks() || [],
+          )
+        )
+          throw new Error('Signaling recovery ended or replaced capture/receive tracks');
+        return { peers: peers.length, liveTracks: liveTracks.length, captureRequests: captures };
+      },
+      async sample() {
+        const audio = [...document.querySelectorAll('.video-tile:not(.local) audio')].filter(
+          (element) =>
+            !element.paused &&
+            !element.muted &&
+            element.volume > 0 &&
+            element.readyState >= 2 &&
+            element.srcObject?.getAudioTracks().some((track) => track.readyState === 'live'),
+        );
+        if (audio.length !== 1) throw new Error('Expected one audible owned remote audio element');
+        let videoReports = 0;
+        let audioReports = 0;
+        let framesDecoded = 0;
+        let audioPackets = 0;
+        for (const { peer, closed } of peers) {
+          if (closed) continue;
+          for (const stat of (await peer.getStats()).values()) {
+            if (stat.type !== 'inbound-rtp') continue;
+            if (stat.kind === 'video' && Number.isFinite(stat.framesDecoded)) {
+              videoReports++;
+              framesDecoded += stat.framesDecoded;
+            }
+            if (stat.kind === 'audio' && Number.isFinite(stat.packetsReceived)) {
+              audioReports++;
+              audioPackets += stat.packetsReceived;
+            }
+          }
+        }
+        if (!videoReports || !audioReports)
+          throw new Error('Native decoded-video/audio-packet counters unavailable');
+        return {
+          framesDecoded,
+          audioPackets,
+          audioTime: audio[0].currentTime,
+          sampledAtMs: performance.now(),
+        };
+      },
+    };
+  });
+}
+function mediaProgressDelta(before, after) {
+  return {
+    framesDecoded: after.framesDecoded - before.framesDecoded,
+    audioPackets: after.audioPackets - before.audioPackets,
+    audioSeconds: after.audioTime - before.audioTime,
+    elapsedMs: after.sampledAtMs - before.sampledAtMs,
+  };
+}
+async function advancingReconnectMedia(page, identity, milliseconds, ensureGap) {
+  if (ensureGap) await ensureGap();
+  const before = await identity.evaluate((state) => state.sample());
+  if (ensureGap) await ensureGap();
+  const until = performance.now() + milliseconds;
+  do {
+    await page.waitForTimeout(200);
+    if (ensureGap) await ensureGap();
+    const after = await identity.evaluate((state) => state.sample());
+    if (ensureGap) await ensureGap();
+    const delta = mediaProgressDelta(before, after);
+    if (delta.framesDecoded > 0 && delta.audioPackets > 0 && delta.audioSeconds > 0.05)
+      return delta;
+  } while (performance.now() < until);
+  throw new Error(
+    ensureGap
+      ? 'No measured video/audio progress inside the observed signaling outage'
+      : 'No measured decoded video and audible audio progress',
+  );
+}
+async function signalingReconnect(interrupted, publisher, receiver, direction) {
+  const evidence = { direction, passed: false };
+  report.signalingReconnects.push(evidence);
+  saveReport();
+  const identities = [];
+  try {
+    await deadline(
+      (async () => {
+        identities.push(await reconnectMediaIdentity(publisher));
+        identities.push(await reconnectMediaIdentity(receiver));
+        evidence.before = await advancingReconnectMedia(receiver, identities[1], 3000);
+        const baseline = await interrupted.evaluate(() =>
+          window.__communitySignalingReconnect.snapshot(),
+        );
+        const closedAt = performance.now();
+        const requested = await interrupted.evaluate(() =>
+          window.__communitySignalingReconnect.closeCurrent(),
+        );
+        await interrupted.waitForFunction(
+          (ordinal) => {
+            const snapshot = window.__communitySignalingReconnect.snapshot();
+            return snapshot.events.some(
+              (event) => event.event === 'close' && event.socketOrdinal === ordinal,
+            );
+          },
+          requested.socketOrdinal,
+          { timeout: 1500 },
+        );
+        const ensureGap = async () => {
+          const snapshot = await interrupted.evaluate(() =>
+            window.__communitySignalingReconnect.snapshot(),
+          );
+          assert.equal(
+            snapshot.openSocketOrdinals.length,
+            0,
+            'Media sample must finish before signaling reopens',
+          );
+          assert.equal(
+            snapshot.counters.receivedReconnectResult,
+            baseline.counters.receivedReconnectResult,
+            'Media sample must precede any reconnect result',
+          );
+          assert.equal(
+            snapshot.events.filter((event) => event.event === 'open').length,
+            baseline.events.filter((event) => event.event === 'open').length,
+            'No recovery socket may have opened during the outage sample',
+          );
+        };
+        evidence.during = await advancingReconnectMedia(receiver, identities[1], 1000, ensureGap);
+        for (const identity of identities) await identity.evaluate((state) => state.verify());
+        await interrupted.waitForFunction(
+          (previous) => {
+            const snapshot = window.__communitySignalingReconnect.snapshot();
+            return (
+              snapshot.counters.reconnectSuccess > previous.reconnectSuccess &&
+              snapshot.counters.receivedRoomSnapshot > previous.receivedRoomSnapshot &&
+              snapshot.openSocketOrdinals.length === 1
+            );
+          },
+          baseline.counters,
+          { timeout: Math.max(1, 10000 - (performance.now() - closedAt)) },
+        );
+        // Host-observed resume + room snapshot, including automation overhead;
+        // separate from the following decoded-media progress check.
+        evidence.resumeObservedMs = performance.now() - closedAt;
+        await connected(interrupted);
+        evidence.after = await advancingReconnectMedia(receiver, identities[1], 3000);
+        evidence.identities = [];
+        for (const identity of identities)
+          evidence.identities.push(await identity.evaluate((state) => state.verify()));
+        const restored = await interrupted.evaluate(() =>
+          window.__communitySignalingReconnect.snapshot(),
+        );
+        const delta = Object.fromEntries(
+          Object.entries(restored.counters).map(([key, value]) => [
+            key,
+            value - baseline.counters[key],
+          ]),
+        );
+        for (const key of [
+          'sentJoinRoom',
+          'sentCreateSendTransport',
+          'sentCreateRecvTransport',
+          'sentProduce',
+          'reconnectFailure',
+        ])
+          assert.equal(delta[key], 0, `Signaling recovery must not invoke ${key}`);
+        for (const key of [
+          'sentReconnect',
+          'receivedReconnectResult',
+          'reconnectSuccess',
+          'sentGetRoomSnapshot',
+          'receivedRoomSnapshot',
+        ])
+          assert.equal(delta[key], 1, `Expected one successful signaling recovery: ${key}`);
+        assert.equal(
+          restored.socketsObserved - baseline.socketsObserved,
+          1,
+          'Expected exactly one replacement signaling socket',
+        );
+        evidence.counters = delta;
+        const other = interrupted === publisher ? receiver : publisher;
+        await publicChat(interrupted);
+        await publicChat(other);
+        const message = `${runId}-reconnected-${direction}`;
+        await send(interrupted, message);
+        await visible(other, message);
+        evidence.passed = true;
+        saveReport();
+      })(),
+      25000,
+    );
+  } finally {
+    await deadline(
+      Promise.all(identities.map((identity) => identity.dispose().catch(() => {}))),
+    ).catch(() => {});
+  }
 }
 async function register(page, email, name) {
   await page.locator('#sign-in-btn').click();
@@ -997,6 +1246,18 @@ async function setRole(owner, name, role) {
         await guest.locator('#mic-btn').click();
       },
     );
+    await step('publisher and receiver signaling resume preserve live media', async () => {
+      // Reuse owned fake devices, but make this a separate result from viewer UI
+      // controls. Only native signaling is interrupted; media UDP stays intact.
+      await guest.locator('#cam-btn').click();
+      await remotePlayback(owner, 'video');
+      await guest.locator('#mic-btn').click();
+      await remotePlayback(owner, 'audio');
+      await signalingReconnect(guest, guest, owner, 'publisher');
+      await signalingReconnect(owner, guest, owner, 'receiver');
+      await guest.locator('#cam-btn').click();
+      await guest.locator('#mic-btn').click();
+    });
     await step(
       'simulated capture termination updates both clients and permits explicit restart',
       async () => {
