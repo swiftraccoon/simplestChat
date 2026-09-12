@@ -158,6 +158,28 @@ delivery correctness; it does not set a performance budget.
 
 ## Manual release checklist
 
+### Real-browser targets
+
+Record the OS and browser version, result and any reproduction steps for each:
+
+| Device | Browser |
+| --- | --- |
+| macOS | Chrome and Firefox, tested separately and together |
+| iPhone | Kagi |
+| iPad | Safari |
+
+On the Mac, run `build/run-local.sh`, open `http://localhost:3000` in Chrome
+and Firefox, and join the same room with different names. Guest-only local mode
+is enough for media checks; account and room-management checks need the
+[disposable database setup](#disposable-postgresql-and-browser-tests).
+
+Phone/tablet camera tests need an HTTPS test address reachable from those
+devices. `localhost` refers to the device opening the page, not the Mac, and
+the local launcher intentionally keeps HTTP on the Mac. Until a mobile test
+address is available, record mobile checks as **not run**, not passed.
+
+### Hands-on checks
+
 Use an owner and a guest in separate browser contexts:
 
 - Preview and cancel without publishing; leave during a permission prompt. Test
@@ -169,6 +191,10 @@ Use an owner and a guest in separate browser contexts:
   account isolation after logout. Verify a redeemed recovery key cannot be reused.
 - Check keyboard-only dialogs, screen-reader labels, push-to-talk, participant
   menus, desktop resizing and real mobile navigation/capture.
+- On touch devices, open the keyboard, rotate the device, switch apps or lock
+  the screen, then return. Check that controls remain reachable and media either
+  works or gives clear recovery guidance. Record what happened; background media
+  behavior is not assumed to match desktop browsers.
 
 Headless tests use fake devices and resized desktop viewports. Complete the
 manual checklist on real browsers and devices before a release.
