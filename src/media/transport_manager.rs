@@ -2,6 +2,7 @@
 
 // Transport management for WebRTC connections
 
+use crate::diagnostics::{Stage, measure, measure_result};
 use crate::media::config::WebRtcTransportConfig;
 use crate::media::types::{MediaError, MediaResult, ParticipantMedia, TransportInfo};
 use crate::signaling::protocol::ServerMessage;
@@ -50,6 +51,20 @@ fn consumer_layers_transition_needed(
     current_layers != Some(requested_layers)
 }
 
+/// Extracts only the public UUID from a room-scoped media namespace. The
+/// namespace also contains a room identifier, which must not enter lifecycle
+/// markers. Reject unfamiliar shapes instead of falling back to the raw key.
+fn lifecycle_participant_id(media_namespace: &str) -> Option<Uuid> {
+    let mut parts = media_namespace.rsplitn(3, '\u{1f}');
+    let participant_id = Uuid::parse_str(parts.next()?).ok()?;
+    Uuid::parse_str(parts.next()?).ok()?;
+    let room_id = parts.next()?;
+    if room_id.is_empty() {
+        return None;
+    }
+    Some(participant_id)
+}
+
 /// Manages WebRTC transports for participants.
 ///
 /// Uses per-participant locking: the outer HashMap is protected by a std::sync::RwLock
@@ -77,6 +92,15 @@ impl Default for TransportManager {
 }
 
 impl TransportManager {
+    /// Collects bounded worker forwarding/intake observations without waiting
+    /// for participant locks or retaining them across native statistics calls.
+    pub async fn diagnostic_snapshot(
+        &self,
+        context: &super::diagnostics::SnapshotContext,
+    ) -> super::diagnostics::MediaSnapshot {
+        super::diagnostics::collect_snapshot(&self.participants, context).await
+    }
+
     /// Creates a new TransportManager
     pub fn new() -> Self {
         Self {
@@ -162,7 +186,7 @@ impl TransportManager {
         );
 
         let participant_lock = self.get_or_create_participant(&participant_id);
-        let mut participant = participant_lock.lock().await;
+        let mut participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
         if !self.participant_is_current(&participant_id, &participant_lock) {
             return Err(MediaError::InvalidState(
                 "Participant media session is no longer active".to_string(),
@@ -187,23 +211,28 @@ impl TransportManager {
         transport_options.enable_tcp = config.enable_tcp;
         transport_options.prefer_udp = config.prefer_udp;
         transport_options.prefer_tcp = config.prefer_tcp;
-        let transport = router
-            .create_webrtc_transport(transport_options)
-            .await
-            .map_err(|e| {
-                MediaError::TransportError(format!("Failed to create send transport: {e}"))
-            })?;
-
-        if let Some(maximum) = config.max_incoming_bitrate {
-            transport
-                .set_max_incoming_bitrate(maximum)
+        let transport = measure_result(Stage::MediaCreateTransport, async {
+            let transport = router
+                .create_webrtc_transport(transport_options)
                 .await
-                .map_err(|error| {
-                    MediaError::TransportError(format!(
-                        "Failed to apply incoming bitrate limit: {error}"
-                    ))
+                .map_err(|e| {
+                    MediaError::TransportError(format!("Failed to create send transport: {e}"))
                 })?;
-        }
+
+            if let Some(maximum) = config.max_incoming_bitrate {
+                transport
+                    .set_max_incoming_bitrate(maximum)
+                    .await
+                    .map_err(|error| {
+                        MediaError::TransportError(format!(
+                            "Failed to apply incoming bitrate limit: {error}"
+                        ))
+                    })?;
+            }
+
+            Ok::<_, MediaError>(transport)
+        })
+        .await?;
 
         if !self.participant_is_current(&participant_id, &participant_lock) {
             drop(transport);
@@ -237,7 +266,7 @@ impl TransportManager {
         );
 
         let participant_lock = self.get_or_create_participant(&participant_id);
-        let mut participant = participant_lock.lock().await;
+        let mut participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
         if !self.participant_is_current(&participant_id, &participant_lock) {
             return Err(MediaError::InvalidState(
                 "Participant media session is no longer active".to_string(),
@@ -262,29 +291,34 @@ impl TransportManager {
         transport_options.enable_tcp = config.enable_tcp;
         transport_options.prefer_udp = config.prefer_udp;
         transport_options.prefer_tcp = config.prefer_tcp;
-        let transport = router
-            .create_webrtc_transport(transport_options)
-            .await
-            .map_err(|e| {
-                MediaError::TransportError(format!("Failed to create receive transport: {e}"))
-            })?;
+        let transport = measure_result(Stage::MediaCreateTransport, async {
+            let transport = router
+                .create_webrtc_transport(transport_options)
+                .await
+                .map_err(|e| {
+                    MediaError::TransportError(format!("Failed to create receive transport: {e}"))
+                })?;
 
-        transport
-            .set_max_outgoing_bitrate(config.max_outgoing_bitrate)
-            .await
-            .map_err(|error| {
-                MediaError::TransportError(format!(
-                    "Failed to apply outgoing bitrate limit: {error}"
-                ))
-            })?;
-        transport
-            .set_min_outgoing_bitrate(config.min_outgoing_bitrate)
-            .await
-            .map_err(|error| {
-                MediaError::TransportError(format!(
-                    "Failed to apply minimum outgoing bitrate: {error}"
-                ))
-            })?;
+            transport
+                .set_max_outgoing_bitrate(config.max_outgoing_bitrate)
+                .await
+                .map_err(|error| {
+                    MediaError::TransportError(format!(
+                        "Failed to apply outgoing bitrate limit: {error}"
+                    ))
+                })?;
+            transport
+                .set_min_outgoing_bitrate(config.min_outgoing_bitrate)
+                .await
+                .map_err(|error| {
+                    MediaError::TransportError(format!(
+                        "Failed to apply minimum outgoing bitrate: {error}"
+                    ))
+                })?;
+
+            Ok::<_, MediaError>(transport)
+        })
+        .await?;
 
         if !self.participant_is_current(&participant_id, &participant_lock) {
             drop(transport);
@@ -315,7 +349,7 @@ impl TransportManager {
         dtls_parameters: DtlsParameters,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
-        let participant = participant_lock.lock().await;
+        let participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
 
         let transport = participant
             .send_transport
@@ -343,10 +377,12 @@ impl TransportManager {
             }
         }
 
-        transport
-            .connect(WebRtcTransportRemoteParameters { dtls_parameters })
-            .await
-            .map_err(|e| MediaError::TransportError(format!("Failed to connect transport: {e}")))?;
+        measure_result(
+            Stage::MediaConnectTransport,
+            transport.connect(WebRtcTransportRemoteParameters { dtls_parameters }),
+        )
+        .await
+        .map_err(|e| MediaError::TransportError(format!("Failed to connect transport: {e}")))?;
 
         info!(
             "Connected transport {} for participant {}",
@@ -364,7 +400,7 @@ impl TransportManager {
         app_data: AppData,
     ) -> MediaResult<Producer> {
         let participant_lock = self.get_participant_lock(participant_id)?;
-        let mut participant = participant_lock.lock().await;
+        let mut participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
 
         participant
             .producers
@@ -384,8 +420,7 @@ impl TransportManager {
         let mut producer_options = ProducerOptions::new(kind, rtp_parameters);
         producer_options.app_data = app_data;
 
-        let producer = transport
-            .produce(producer_options)
+        let producer = measure_result(Stage::MediaProduce, transport.produce(producer_options))
             .await
             .map_err(|e| MediaError::ProducerError(format!("Failed to create producer: {e}")))?;
 
@@ -423,7 +458,7 @@ impl TransportManager {
         consumer_counter: Option<Arc<AtomicUsize>>,
     ) -> MediaResult<Consumer> {
         let participant_lock = self.get_participant_lock(participant_id)?;
-        let mut participant = participant_lock.lock().await;
+        let mut participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
 
         participant
             .consumers
@@ -446,8 +481,7 @@ impl TransportManager {
         // the producer is active. Producer pause state is tracked separately.
         consumer_options.paused = true;
 
-        let consumer = transport
-            .consume(consumer_options)
+        let consumer = measure_result(Stage::MediaConsume, transport.consume(consumer_options))
             .await
             .map_err(|e| MediaError::ConsumerError(format!("Failed to create consumer: {e}")))?;
 
@@ -487,7 +521,7 @@ impl TransportManager {
         consumer_id: &str,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
-        let participant = participant_lock.lock().await;
+        let participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
 
         let consumer = participant.consumers.get(consumer_id).ok_or_else(|| {
             MediaError::ConsumerError(format!("Consumer not found: {consumer_id}"))
@@ -497,8 +531,7 @@ impl TransportManager {
             return Ok(false);
         }
 
-        consumer
-            .resume()
+        measure_result(Stage::MediaResume, consumer.resume())
             .await
             .map_err(|e| MediaError::ConsumerError(format!("Failed to resume consumer: {e}")))?;
 
@@ -583,7 +616,7 @@ impl TransportManager {
         producer_id: &str,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
-        let participant = participant_lock.lock().await;
+        let participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
 
         let producer = participant.producers.get(producer_id).ok_or_else(|| {
             MediaError::ProducerError(format!("Producer not found: {producer_id}"))
@@ -593,8 +626,7 @@ impl TransportManager {
             return Ok(false);
         }
 
-        producer
-            .resume()
+        measure_result(Stage::MediaResume, producer.resume())
             .await
             .map_err(|e| MediaError::ProducerError(format!("Failed to resume producer: {e}")))?;
 
@@ -850,6 +882,21 @@ impl TransportManager {
 
         if let Some(lock) = participant_lock {
             let mut participant = lock.lock().await;
+            let lifecycle_id = if tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+            {
+                lifecycle_participant_id(participant_id)
+            } else {
+                None
+            };
+            if let Some(lifecycle_id) = lifecycle_id {
+                debug!(
+                    target: "simplestChat::lifecycle",
+                    event = "media_cleanup_started",
+                    participant_id = %lifecycle_id,
+                    generation = %participant.generation,
+                    "lifecycle"
+                );
+            }
 
             // Clean up paused index for all this participant's producers
             {
@@ -867,6 +914,17 @@ impl TransportManager {
             // participant ID. Holding its mutex orders this after any in-flight
             // subscription on the old receive transport.
             self.clear_bwe_trace_handler(participant.generation);
+            // This marks completion of application-owned handle drops, not a
+            // worker close acknowledgement or the end of other cloned handles.
+            if let Some(lifecycle_id) = lifecycle_id {
+                debug!(
+                    target: "simplestChat::lifecycle",
+                    event = "media_cleanup_finished",
+                    participant_id = %lifecycle_id,
+                    generation = %participant.generation,
+                    "lifecycle"
+                );
+            }
             info!(
                 "Removed participant {} and closed all media resources",
                 participant_id
@@ -883,32 +941,63 @@ impl TransportManager {
         &self,
         transport: &WebRtcTransport,
         participant_id: &str,
-        transport_type: &str,
+        transport_type: &'static str,
     ) {
+        let lifecycle_id = if tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+        {
+            lifecycle_participant_id(participant_id)
+        } else {
+            None
+        };
         let participant_id = participant_id.to_string();
-        let transport_type = transport_type.to_string();
-        let transport_id = transport.id().to_string();
+        let transport_id = transport.id();
+
+        if let Some(lifecycle_id) = lifecycle_id {
+            debug!(
+                target: "simplestChat::lifecycle",
+                event = "transport_created",
+                participant_id = %lifecycle_id,
+                transport_id = %transport_id,
+                transport_type,
+                "lifecycle"
+            );
+        }
 
         transport
-            .on_close({
-                let participant_id = participant_id.clone();
-                let transport_type = transport_type.clone();
-                let transport_id = transport_id.clone();
-                Box::new(move || {
-                    warn!(
-                        "Transport {} ({}) closed for participant {}",
-                        transport_id, transport_type, participant_id
-                    );
-                })
-            })
+            .on_close(Box::new({
+                // Capture identifiers only: a strong transport handle here
+                // would retain the transport whose close we need to observe.
+                move || {
+                    if let Some(lifecycle_id) = lifecycle_id {
+                        debug!(
+                            target: "simplestChat::lifecycle",
+                            event = "transport_closed",
+                            participant_id = %lifecycle_id,
+                            transport_id = %transport_id,
+                            transport_type,
+                            "lifecycle"
+                        );
+                    }
+                    debug!("Media transport closed");
+                }
+            }))
             .detach();
 
         transport
             .on_dtls_state_change({
                 let participant_id = participant_id.clone();
-                let transport_id = transport_id.clone();
-                let transport_type = transport_type.clone();
                 move |dtls_state| {
+                    if let Some(lifecycle_id) = lifecycle_id {
+                        debug!(
+                            target: "simplestChat::lifecycle",
+                            event = "transport_dtls",
+                            participant_id = %lifecycle_id,
+                            transport_id = %transport_id,
+                            transport_type,
+                            state = ?dtls_state,
+                            "lifecycle"
+                        );
+                    }
                     info!(
                         "DTLS state: {:?} for {} transport {} (participant {})",
                         dtls_state, transport_type, transport_id, participant_id
@@ -920,6 +1009,17 @@ impl TransportManager {
         transport
             .on_ice_state_change({
                 move |ice_state| {
+                    if let Some(lifecycle_id) = lifecycle_id {
+                        debug!(
+                            target: "simplestChat::lifecycle",
+                            event = "transport_ice",
+                            participant_id = %lifecycle_id,
+                            transport_id = %transport_id,
+                            transport_type,
+                            state = ?ice_state,
+                            "lifecycle"
+                        );
+                    }
                     info!(
                         "ICE state: {:?} for {} transport {} (participant {})",
                         ice_state, transport_type, transport_id, participant_id
@@ -936,15 +1036,8 @@ impl TransportManager {
         let producer_id = producer.id().to_string();
 
         producer
-            .on_close({
-                let participant_id = participant_id.clone();
-                let producer_id = producer_id.clone();
-                move || {
-                    warn!(
-                        "Producer {} closed for participant {}",
-                        producer_id, participant_id
-                    );
-                }
+            .on_close(|| {
+                debug!("Media producer closed");
             })
             .detach();
 
@@ -987,17 +1080,12 @@ impl TransportManager {
 
         consumer
             .on_close({
-                let participant_id = participant_id.clone();
-                let consumer_id = consumer_id.clone();
                 let counter = consumer_counter;
                 move || {
                     if let Some(ref c) = counter {
                         c.fetch_sub(1, Ordering::Relaxed);
                     }
-                    warn!(
-                        "Consumer {} closed for participant {}",
-                        consumer_id, participant_id
-                    );
+                    debug!("Media consumer closed");
                 }
             })
             .detach();
@@ -1119,6 +1207,33 @@ mod tests {
     impl Drop for DropCounter {
         fn drop(&mut self) {
             self.0.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    #[test]
+    fn lifecycle_identity_contains_only_the_canonical_public_uuid() {
+        let participant_id = Uuid::new_v4();
+        let namespace = format!(
+            "private room\u{1f}{}\u{1f}{}",
+            Uuid::new_v4(),
+            participant_id.to_string().to_uppercase()
+        );
+        assert_eq!(lifecycle_participant_id(&namespace), Some(participant_id));
+    }
+
+    #[test]
+    fn lifecycle_identity_rejects_unfamiliar_media_namespaces() {
+        let participant_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+        for namespace in [
+            "arbitrary private data".to_string(),
+            participant_id.to_string(),
+            format!("private room\u{1f}{participant_id}"),
+            format!("private room\u{1f}not-a-session-uuid\u{1f}{participant_id}"),
+            format!("private room\u{1f}{session_id}\u{1f}not-a-participant-uuid"),
+            format!("\u{1f}{session_id}\u{1f}{participant_id}"),
+        ] {
+            assert_eq!(lifecycle_participant_id(&namespace), None);
         }
     }
 

@@ -3,6 +3,7 @@
 // Signaling module - WebSocket signaling server
 
 pub mod connection;
+mod media_diagnostics;
 pub mod protocol;
 mod readiness;
 
@@ -286,6 +287,7 @@ pub struct SignalingServer {
     db_pool: Option<PgPool>,
     jwt_secret: Option<String>,
     metrics_token: Option<String>,
+    media_diagnostics: Option<Arc<media_diagnostics::MediaDiagnostics>>,
     allowed_origins: Arc<Vec<String>>,
     trusted_proxy_secret: Arc<Option<String>>,
     webauthn: Option<Arc<webauthn_rs::prelude::Webauthn>>,
@@ -331,6 +333,10 @@ impl SignalingServer {
         {
             anyhow::bail!("METRICS_TOKEN must contain at least 32 bytes");
         }
+        let media_diagnostics = media_diagnostics::MediaDiagnostics::configure(
+            env_bool("MEDIA_DIAGNOSTICS_ENABLED", false)?,
+            metrics_token.as_deref(),
+        )?;
 
         let trusted_proxy_secret = std::env::var("TRUSTED_PROXY_SECRET")
             .ok()
@@ -426,6 +432,7 @@ impl SignalingServer {
             db_pool,
             jwt_secret,
             metrics_token,
+            media_diagnostics,
             allowed_origins,
             trusted_proxy_secret,
             webauthn,
@@ -615,6 +622,7 @@ impl SignalingServer {
             .route("/health", get(health_handler))
             .route("/ready", get(readiness_handler))
             .route("/metrics", get(metrics_handler))
+            .route("/diagnostics/media", get(media_diagnostics::handler))
             .nest("/api/auth", auth_routes)
             .nest("/api/rooms", room_routes)
             .layer(middleware::from_fn_with_state(
@@ -732,14 +740,14 @@ async fn metrics_handler(State(server): State<SignalingServer>, headers: HeaderM
     }
 
     let rooms = server.room_manager.room_count().await;
-    let participants = server.room_manager.total_participant_count().await;
+    let participants = server.room_manager.try_total_participant_count().await;
     let workers = server.room_manager.media_server().worker_manager();
     let live_workers = tokio::time::timeout(readiness::PROBE_TIMEOUT, workers.live_worker_count())
         .await
-        .unwrap_or(0);
+        .ok();
     let body = server
         .metrics
-        .render_prometheus(rooms, participants, live_workers);
+        .render_prometheus_snapshot(rooms, participants, live_workers);
     (
         StatusCode::OK,
         [("content-type", "text/plain; version=0.0.4; charset=utf-8")],

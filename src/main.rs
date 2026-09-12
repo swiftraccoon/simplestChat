@@ -2,12 +2,12 @@
 
 use anyhow::Result;
 use simplestChat::{
-    db, media::MediaConfig, metrics::ServerMetrics, room::RoomManager, shutdown::run_stage,
-    signaling::SignalingServer, turn::TurnConfig,
+    db, diagnostics::Diagnostics, media::MediaConfig, metrics::ServerMetrics, room::RoomManager,
+    shutdown::run_stage, signaling::SignalingServer, turn::TurnConfig,
 };
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 async fn shutdown_signal() -> std::io::Result<()> {
@@ -48,6 +48,15 @@ async fn run() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    let diagnostics = Diagnostics::from_env()?;
+    let result = run_server(diagnostics.clone()).await;
+    if !diagnostics.shutdown().await {
+        warn!("Local diagnostic output incomplete; server outcome is unchanged");
+    }
+    result
+}
+
+async fn run_server(diagnostics: Diagnostics) -> Result<()> {
     info!("SimplestChat - Starting server");
 
     // Create room manager (includes media server)
@@ -71,7 +80,7 @@ async fn run() -> Result<()> {
             .with_public_ip(default_ip);
     }
 
-    let metrics = ServerMetrics::new();
+    let metrics = ServerMetrics::with_diagnostics(diagnostics);
     // Connect to database (optional)
     let db_pool = db::connect().await?;
 

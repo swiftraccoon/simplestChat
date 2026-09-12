@@ -11,6 +11,7 @@ pub mod social;
 #[cfg(test)]
 mod settings_patch_tests;
 
+use crate::diagnostics::{Stage, measure, measure_result};
 use crate::media::types::{MediaResult, TransportInfo};
 use crate::media::{MediaConfig, MediaServer};
 use crate::metrics::ServerMetrics;
@@ -341,8 +342,26 @@ fn policy_snapshot_matches(room: &Room, revision: u64) -> bool {
     !room.deleting && room.policy_revision == revision
 }
 
+/// Record essential enqueue rejection attempts without changing retry semantics.
+/// Successful enqueue is not a successful socket write; the writer owns that count.
+fn try_send_essential(
+    metrics: &ServerMetrics,
+    sender: &mpsc::Sender<Arc<String>>,
+    json: Arc<String>,
+) -> std::result::Result<(), mpsc::error::TrySendError<Arc<String>>> {
+    let result = sender.try_send(json);
+    match &result {
+        Ok(()) => {}
+        Err(mpsc::error::TrySendError::Full(_)) => metrics.inc_outbound_queue_full(),
+        Err(mpsc::error::TrySendError::Closed(_)) => metrics.inc_outbound_queue_closed(),
+    }
+    result
+}
+
 /// Room state
 pub struct Room {
+    /// Shared process counters; runtime rooms must not keep isolated counters.
+    metrics: ServerMetrics,
     pub(crate) social: social::RoomSocial,
     pub id: String,
     pub router_id: String,
@@ -427,6 +446,7 @@ impl Room {
         password_hash: Option<String>,
     ) -> Self {
         Self {
+            metrics: ServerMetrics::new(),
             id,
             router_id,
             social: social::RoomSocial::default(),
@@ -454,6 +474,10 @@ impl Room {
         }
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "room construction binds loaded policy, native observers, and process counters"
+    )]
     fn new_with_observers(
         id: String,
         router_id: String,
@@ -462,8 +486,10 @@ impl Room {
         password_hash: Option<String>,
         active_speaker_observer: Option<ActiveSpeakerObserver>,
         audio_level_observer: Option<AudioLevelObserver>,
+        metrics: ServerMetrics,
     ) -> Self {
         Self {
+            metrics,
             id,
             router_id,
             social: social::RoomSocial::default(),
@@ -634,21 +660,7 @@ impl Room {
         };
         for (id, participant) in &self.participants {
             if id != sender_id {
-                match participant.sender.try_send(json.clone()) {
-                    Ok(()) => {}
-                    Err(mpsc::error::TrySendError::Full(_)) => {
-                        debug!(
-                            "Channel full for participant {} in room {}, dropping message",
-                            id, self.id
-                        );
-                    }
-                    Err(mpsc::error::TrySendError::Closed(_)) => {
-                        debug!(
-                            "Channel closed for participant {} in room {} (disconnected)",
-                            id, self.id
-                        );
-                    }
-                }
+                self.try_send_broadcast(&participant.sender, json.clone(), message);
             }
         }
     }
@@ -662,23 +674,9 @@ impl Room {
                 return;
             }
         };
-        for (id, participant) in &self.participants {
+        for participant in self.participants.values() {
             if participant.role >= min_role {
-                match participant.sender.try_send(json.clone()) {
-                    Ok(()) => {}
-                    Err(mpsc::error::TrySendError::Full(_)) => {
-                        debug!(
-                            "Channel full for participant {} in room {}, dropping message",
-                            id, self.id
-                        );
-                    }
-                    Err(mpsc::error::TrySendError::Closed(_)) => {
-                        debug!(
-                            "Channel closed for participant {} in room {} (disconnected)",
-                            id, self.id
-                        );
-                    }
-                }
+                self.try_send_broadcast(&participant.sender, json.clone(), message);
             }
         }
     }
@@ -692,23 +690,27 @@ impl Room {
                 return;
             }
         };
-        for (id, participant) in &self.participants {
-            match participant.sender.try_send(json.clone()) {
-                Ok(()) => {}
-                Err(mpsc::error::TrySendError::Full(_)) => {
-                    debug!(
-                        "Channel full for participant {} in room {}, dropping message",
-                        id, self.id
-                    );
-                }
-                Err(mpsc::error::TrySendError::Closed(_)) => {
-                    debug!(
-                        "Channel closed for participant {} in room {} (disconnected)",
-                        id, self.id
-                    );
-                }
-            }
+        for participant in self.participants.values() {
+            self.try_send_broadcast(&participant.sender, json.clone(), message);
         }
+    }
+
+    fn try_send_broadcast(
+        &self,
+        sender: &mpsc::Sender<Arc<String>>,
+        json: Arc<String>,
+        message: &ServerMessage,
+    ) {
+        // These observations are deliberately lossy and refreshed frequently.
+        // Counting them as failed control/chat delivery would hide real pressure.
+        if matches!(
+            message,
+            ServerMessage::ActiveSpeaker { .. } | ServerMessage::AudioLevels { .. }
+        ) {
+            let _ = sender.try_send(json);
+            return;
+        }
+        let _ = try_send_essential(&self.metrics, sender, json);
     }
 }
 
@@ -1396,7 +1398,7 @@ impl RoomManager {
                 }) {
                     let message = Arc::new(message);
                     for entry in room.lobby.values() {
-                        let _ = entry.sender.try_send(message.clone());
+                        let _ = try_send_essential(&room.metrics, &entry.sender, message.clone());
                     }
                 }
                 let participant_sessions: Vec<(String, uuid::Uuid)> = room
@@ -1528,9 +1530,12 @@ impl RoomManager {
         room_id: &str,
         room_lock: Arc<TokioRwLock<Room>>,
     ) -> Result<PendingRoomJoin> {
-        let mut room = tokio::time::timeout(ROOM_CREATION_TIMEOUT, room_lock.write())
-            .await
-            .map_err(|_| anyhow::anyhow!("Room is busy; try again"))?;
+        let mut room = measure_result(
+            Stage::RoomLockWait,
+            tokio::time::timeout(ROOM_CREATION_TIMEOUT, room_lock.write()),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Room is busy; try again"))?;
         let admission = self.drain.admit()?;
         room.ensure_live()?;
         room.pending_joins = room
@@ -1576,10 +1581,12 @@ impl RoomManager {
 
         // Serialize creation: a concurrent creator may be mid-way between
         // create_router and inserting into the rooms map.
-        let _creation_guard =
-            tokio::time::timeout(ROOM_CREATION_TIMEOUT, self.room_creation_lock.lock())
-                .await
-                .map_err(|_| anyhow::anyhow!("Room creation is busy; try again"))?;
+        let _creation_guard = measure_result(
+            Stage::RoomCreationLockWait,
+            tokio::time::timeout(ROOM_CREATION_TIMEOUT, self.room_creation_lock.lock()),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Room creation is busy; try again"))?;
 
         anyhow::ensure!(!self.drain.is_draining(), "Server shutting down");
 
@@ -1609,14 +1616,16 @@ impl RoomManager {
         // Load security-relevant state before creating any runtime room. A DB
         // outage must not turn a protected persisted room into an ad-hoc room.
         let (room_settings, password_hash) = if let Some(pool) = &self.db_pool {
-            let loaded =
-                tokio::time::timeout(ROOM_CREATION_TIMEOUT, settings::load_room(pool, room_id))
-                    .await
-                    .map_err(|_| anyhow::anyhow!("Room data is temporarily unavailable"))?
-                    .map_err(|error| {
-                        warn!(room_id, %error, "Failed to load room");
-                        anyhow::anyhow!("Room data is temporarily unavailable")
-                    })?;
+            let loaded = tokio::time::timeout(
+                ROOM_CREATION_TIMEOUT,
+                measure_result(Stage::RoomPolicyLookup, settings::load_room(pool, room_id)),
+            )
+            .await
+            .map_err(|_| anyhow::anyhow!("Room data is temporarily unavailable"))?
+            .map_err(|error| {
+                warn!(room_id, %error, "Failed to load room");
+                anyhow::anyhow!("Room data is temporarily unavailable")
+            })?;
             loaded.map_or((None, None), |(settings, hash)| (Some(settings), hash))
         } else {
             (None, None)
@@ -1664,27 +1673,31 @@ impl RoomManager {
             };
             Ok::<_, anyhow::Error>((router_id, active_speaker_observer, audio_level_observer))
         };
-        let (router_id, active_speaker_observer, audio_level_observer) =
-            match tokio::time::timeout(ROOM_CREATION_TIMEOUT, media_setup).await {
-                Ok(Ok(setup)) => setup,
-                Ok(Err(error)) => {
-                    let _ = tokio::time::timeout(
-                        ROOM_DELETE_TIMEOUT,
-                        self.media_server.remove_router(room_id),
-                    )
-                    .await;
-                    return Err(error);
-                }
-                Err(_) => {
-                    warn!(room_id, "Room media setup timed out; rolling back router");
-                    let _ = tokio::time::timeout(
-                        ROOM_DELETE_TIMEOUT,
-                        self.media_server.remove_router(room_id),
-                    )
-                    .await;
-                    anyhow::bail!("Room media service is temporarily unavailable");
-                }
-            };
+        let (router_id, active_speaker_observer, audio_level_observer) = match tokio::time::timeout(
+            ROOM_CREATION_TIMEOUT,
+            measure_result(Stage::RoomMediaSetup, media_setup),
+        )
+        .await
+        {
+            Ok(Ok(setup)) => setup,
+            Ok(Err(error)) => {
+                let _ = tokio::time::timeout(
+                    ROOM_DELETE_TIMEOUT,
+                    self.media_server.remove_router(room_id),
+                )
+                .await;
+                return Err(error);
+            }
+            Err(_) => {
+                warn!(room_id, "Room media setup timed out; rolling back router");
+                let _ = tokio::time::timeout(
+                    ROOM_DELETE_TIMEOUT,
+                    self.media_server.remove_router(room_id),
+                )
+                .await;
+                anyhow::bail!("Room media service is temporarily unavailable");
+            }
+        };
         self.metrics.inc_rooms_created();
 
         // Create bounded channel for observer events (observer events are ephemeral UI hints)
@@ -1730,6 +1743,7 @@ impl RoomManager {
                 password_hash,
                 active_speaker_observer,
                 audio_level_observer,
+                self.metrics.clone(),
             )));
             if let Ok(_admission) = self.drain.admit() {
                 rooms.insert(room_id.to_string(), new_room.clone());
@@ -1863,7 +1877,7 @@ impl RoomManager {
             persisted,
             policy_revision,
         ) = {
-            let room = room_lock.read().await;
+            let room = measure(Stage::RoomLockWait, room_lock.read()).await;
             let lobby = room.settings.as_ref().is_some_and(|s| s.lobby_enabled);
             let invite_only = room.settings.as_ref().is_some_and(|s| s.invite_only);
             let owner = room.settings.as_ref().map(|s| s.owner_id);
@@ -1892,8 +1906,11 @@ impl RoomManager {
         // Persistent ban check (registered users by id, guests by IP)
         if persisted {
             if let Some(pool) = &self.db_pool {
-                match moderation::is_banned(pool, room_id, user_uuid, client_ip, authenticated)
-                    .await
+                match measure_result(
+                    Stage::RoomPolicyLookup,
+                    moderation::is_banned(pool, room_id, user_uuid, client_ip, authenticated),
+                )
+                .await
                 {
                     Ok(true) => anyhow::bail!("You are banned from this room"),
                     Ok(false) => {}
@@ -1919,12 +1936,15 @@ impl RoomManager {
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Room access could not be verified"))?;
             Some(
-                roles::resolve_role(pool, room_id, user_uuid.as_ref(), owner_id, authenticated)
-                    .await
-                    .map_err(|error| {
-                        warn!(room_id, %error, "Role lookup failed");
-                        anyhow::anyhow!("Room access could not be verified")
-                    })?,
+                measure_result(
+                    Stage::RoomPolicyLookup,
+                    roles::resolve_role(pool, room_id, user_uuid.as_ref(), owner_id, authenticated),
+                )
+                .await
+                .map_err(|error| {
+                    warn!(room_id, %error, "Role lookup failed");
+                    anyhow::anyhow!("Room access could not be verified")
+                })?,
             )
         } else {
             None
@@ -1938,12 +1958,15 @@ impl RoomManager {
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Room access could not be verified"))?;
-            moderation::load_punitive_state(pool, room_id, user_uuid, client_ip, authenticated)
-                .await
-                .map_err(|error| {
-                    warn!(room_id, %error, "Sanction lookup failed");
-                    anyhow::anyhow!("Room access could not be verified")
-                })?
+            measure_result(
+                Stage::RoomPolicyLookup,
+                moderation::load_punitive_state(pool, room_id, user_uuid, client_ip, authenticated),
+            )
+            .await
+            .map_err(|error| {
+                warn!(room_id, %error, "Sanction lookup failed");
+                anyhow::anyhow!("Room access could not be verified")
+            })?
         } else {
             moderation::PunitiveState::default()
         };
@@ -1953,13 +1976,16 @@ impl RoomManager {
             let hash =
                 password_hash.ok_or_else(|| anyhow::anyhow!("Room password is unavailable"))?;
             let supplied = password.ok_or(RoomPasswordRequired)?.to_owned();
-            let permit = tokio::time::timeout(
-                PASSWORD_VERIFY_QUEUE_TIMEOUT,
-                self.password_verify_work.clone().acquire_owned(),
-            )
-            .await
-            .map_err(|_| anyhow::anyhow!("Password verification is busy; try again"))?
-            .map_err(|_| anyhow::anyhow!("Password verification is unavailable"))?;
+            let permit = measure_result(Stage::RoomPasswordPermitWait, async {
+                tokio::time::timeout(
+                    PASSWORD_VERIFY_QUEUE_TIMEOUT,
+                    self.password_verify_work.clone().acquire_owned(),
+                )
+                .await
+                .map_err(|_| anyhow::anyhow!("Password verification is busy; try again"))?
+                .map_err(|_| anyhow::anyhow!("Password verification is unavailable"))
+            })
+            .await?;
             let verified = tokio::task::spawn_blocking(move || {
                 let _permit = permit;
                 crate::auth::password::verify_password(&supplied, &hash).unwrap_or(false)
@@ -1980,191 +2006,197 @@ impl RoomManager {
         let media_session_id = uuid::Uuid::new_v4();
 
         // Now acquire write lock for mutation
-        let mut room = room_lock.write().await;
-        let admission = self.drain.admit()?;
+        let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
+        // Only post-lock validation/commit/fan-out work belongs to this stage;
+        // password, database, media setup, and room contention are disjoint.
+        measure_result(Stage::RoomMembershipCommit, async {
+            let admission = self.drain.admit()?;
 
-        if !policy_snapshot_matches(&room, policy_revision) {
-            anyhow::bail!("Room policy changed while joining; retry");
-        }
-
-        // Check ban list before allowing join
-        let now = std::time::Instant::now();
-        room.prune_expired_bans(now);
-        if room.identity_is_banned(&participant_id, authenticated, client_ip) {
-            anyhow::bail!("You are banned from this room");
-        }
-        if room.participants.contains_key(&participant_id)
-            || room.lobby.contains_key(&participant_id)
-        {
-            anyhow::bail!("This participant already has an active room session");
-        }
-
-        // Enforce room modes
-        if let Some(settings) = &room.settings {
-            if settings.require_registration && !authenticated {
-                anyhow::bail!("This room requires registration");
+            if !policy_snapshot_matches(&room, policy_revision) {
+                anyhow::bail!("Room policy changed while joining; retry");
             }
-            if !settings.guests_allowed && !authenticated {
-                anyhow::bail!("Guests are not allowed in this room");
+
+            // Check ban list before allowing join
+            let now = std::time::Instant::now();
+            room.prune_expired_bans(now);
+            if room.identity_is_banned(&participant_id, authenticated, client_ip) {
+                anyhow::bail!("You are banned from this room");
             }
-            if let Some(max) = settings.max_participants {
-                let Ok(max) = usize::try_from(max) else {
-                    anyhow::bail!("Room capacity is unavailable");
-                };
-                if max == 0 || room.participants.len() >= max {
-                    anyhow::bail!("Room is full");
+            if room.participants.contains_key(&participant_id)
+                || room.lobby.contains_key(&participant_id)
+            {
+                anyhow::bail!("This participant already has an active room session");
+            }
+
+            // Enforce room modes
+            if let Some(settings) = &room.settings {
+                if settings.require_registration && !authenticated {
+                    anyhow::bail!("This room requires registration");
+                }
+                if !settings.guests_allowed && !authenticated {
+                    anyhow::bail!("Guests are not allowed in this room");
+                }
+                if let Some(max) = settings.max_participants {
+                    let Ok(max) = usize::try_from(max) else {
+                        anyhow::bail!("Room capacity is unavailable");
+                    };
+                    if max == 0 || room.participants.len() >= max {
+                        anyhow::bail!("Room is full");
+                    }
                 }
             }
-        }
 
-        if room.lobby.len() >= 1_000 {
-            anyhow::bail!("Room lobby is full");
-        }
-
-        // Re-check is_first under write lock (another join could have raced)
-        let is_first = room.participants.is_empty() && room.lobby.is_empty();
-
-        // Determine final role
-        let role = select_join_role(persisted, is_first, resolved_role, authenticated)
-            .ok_or_else(|| anyhow::anyhow!("Room access could not be verified"))?;
-        let sanction_key = SanctionKey::for_identity(&participant_id, authenticated, client_ip);
-        // A sanction may have been installed after the DB snapshot but before
-        // this join acquired the room lock. Restrictions only merge in the safe
-        // direction.
-        let punitive = merge_punitive_state(persisted_punitive, room.sanctions.get(&sanction_key));
-        if punitive != moderation::PunitiveState::default() {
-            room.sanctions.insert(sanction_key, punitive.clone());
-        }
-
-        // Invite-only rooms treat a persisted Member+ role as the backwards-
-        // compatible invitation. Unknown users wait for an explicit moderator
-        // admission even when the ordinary lobby toggle is off.
-        let must_wait_for_invite = invite_only && role < roles::Role::Member;
-        let ordinary_lobby = lobby_enabled && !is_first && role < roles::Role::Moderator;
-        if must_wait_for_invite || ordinary_lobby {
-            // Place in lobby
-            let room_name = room
-                .settings
-                .as_ref()
-                .map_or_else(|| room.id.clone(), |s| s.display_name.clone());
-            let topic = room.settings.as_ref().and_then(|s| s.topic.clone());
-            let participant_count = room.participants.len() as u32;
-
-            // Send LobbyWaiting to the participant
-            let lobby_waiting = ServerMessage::LobbyWaiting {
-                room_name,
-                topic,
-                participant_count,
-            };
-            if let Ok(json) = serde_json::to_string(&lobby_waiting) {
-                let _ = sender.try_send(Arc::new(json));
+            if room.lobby.len() >= 1_000 {
+                anyhow::bail!("Room lobby is full");
             }
 
-            // Broadcast LobbyJoin to Moderator+ participants
-            room.broadcast_to_role(
-                roles::Role::Moderator,
-                &ServerMessage::LobbyJoin {
-                    participant_id: participant_id.clone(),
-                    display_name: participant_name.clone(),
-                    authenticated,
-                },
-            );
+            // Re-check is_first under write lock (another join could have raced)
+            let is_first = room.participants.is_empty() && room.lobby.is_empty();
 
-            // Add to lobby map (reconnect_token set later by connection handler)
-            room.lobby.insert(
-                participant_id.clone(),
-                LobbyEntry {
-                    participant_id: participant_id.clone(),
-                    name: participant_name.clone(),
-                    sender,
-                    media_session_id,
-                    authenticated,
-                    reconnect_token: reconnect_token.to_string(),
-                    in_lobby_flag,
-                    ip: client_ip,
-                    role,
-                    punitive,
-                },
-            );
+            // Determine final role
+            let role = select_join_role(persisted, is_first, resolved_role, authenticated)
+                .ok_or_else(|| anyhow::anyhow!("Room access could not be verified"))?;
+            let sanction_key = SanctionKey::for_identity(&participant_id, authenticated, client_ip);
+            // A sanction may have been installed after the DB snapshot but before
+            // this join acquired the room lock. Restrictions only merge in the safe
+            // direction.
+            let punitive =
+                merge_punitive_state(persisted_punitive, room.sanctions.get(&sanction_key));
+            if punitive != moderation::PunitiveState::default() {
+                room.sanctions.insert(sanction_key, punitive.clone());
+            }
+
+            // Invite-only rooms treat a persisted Member+ role as the backwards-
+            // compatible invitation. Unknown users wait for an explicit moderator
+            // admission even when the ordinary lobby toggle is off.
+            let must_wait_for_invite = invite_only && role < roles::Role::Member;
+            let ordinary_lobby = lobby_enabled && !is_first && role < roles::Role::Moderator;
+            if must_wait_for_invite || ordinary_lobby {
+                // Place in lobby
+                let room_name = room
+                    .settings
+                    .as_ref()
+                    .map_or_else(|| room.id.clone(), |s| s.display_name.clone());
+                let topic = room.settings.as_ref().and_then(|s| s.topic.clone());
+                let participant_count = room.participants.len() as u32;
+
+                // Send LobbyWaiting to the participant
+                let lobby_waiting = ServerMessage::LobbyWaiting {
+                    room_name,
+                    topic,
+                    participant_count,
+                };
+                if let Ok(json) = serde_json::to_string(&lobby_waiting) {
+                    let _ = try_send_essential(&room.metrics, &sender, Arc::new(json));
+                }
+
+                // Broadcast LobbyJoin to Moderator+ participants
+                room.broadcast_to_role(
+                    roles::Role::Moderator,
+                    &ServerMessage::LobbyJoin {
+                        participant_id: participant_id.clone(),
+                        display_name: participant_name.clone(),
+                        authenticated,
+                    },
+                );
+
+                // Add to lobby map (reconnect_token set later by connection handler)
+                room.lobby.insert(
+                    participant_id.clone(),
+                    LobbyEntry {
+                        participant_id: participant_id.clone(),
+                        name: participant_name.clone(),
+                        sender,
+                        media_session_id,
+                        authenticated,
+                        reconnect_token: reconnect_token.to_string(),
+                        in_lobby_flag,
+                        ip: client_ip,
+                        role,
+                        punitive,
+                    },
+                );
+                pending_join.complete_locked(&mut room);
+                drop(admission);
+
+                info!(
+                    "Participant {} ({}) entered lobby for room {}",
+                    participant_id, participant_name, room_id
+                );
+                return Ok(JoinResult::Lobbied);
+            }
+
+            let participant = Participant {
+                id: participant_id.clone(),
+                social: social::ParticipantSocial::new(room.social.next_sequence),
+                name: participant_name.clone(),
+                sender,
+                media_session_id,
+                producers: HashMap::new(),
+                role,
+                punitive,
+                authenticated,
+                ip: client_ip,
+            };
+
+            room.participants
+                .insert(participant_id.clone(), participant);
             pending_join.complete_locked(&mut room);
+            // The membership is committed. Do not serialize response snapshots
+            // under the process-wide admission guard.
             drop(admission);
 
             info!(
-                "Participant {} ({}) entered lobby for room {}",
+                "Participant {} ({}) joined room {}",
                 participant_id, participant_name, room_id
             );
-            return Ok(JoinResult::Lobbied);
-        }
 
-        let participant = Participant {
-            id: participant_id.clone(),
-            social: social::ParticipantSocial::new(room.social.next_sequence),
-            name: participant_name.clone(),
-            sender,
-            media_session_id,
-            producers: HashMap::new(),
-            role,
-            punitive,
-            authenticated,
-            ip: client_ip,
-        };
+            // Notify other participants
+            room.broadcast_except(
+                &participant_id,
+                &ServerMessage::ParticipantJoined {
+                    participant_id: participant_id.clone(),
+                    participant_name,
+                    role: role.name().to_string(),
+                    authenticated,
+                },
+            );
 
-        room.participants
-            .insert(participant_id.clone(), participant);
-        pending_join.complete_locked(&mut room);
-        // The membership is committed. Do not serialize response snapshots
-        // under the process-wide admission guard.
-        drop(admission);
+            // Return list of existing participants
+            let participants: Vec<ParticipantInfo> = room
+                .participants
+                .values()
+                .filter(|p| p.id != participant_id)
+                .map(|p| ParticipantInfo {
+                    id: p.id.clone(),
+                    name: p.name.clone(),
+                    producers: p
+                        .producers
+                        .iter()
+                        .map(|(id, (kind, source))| ProducerMetadata {
+                            id: id.clone(),
+                            kind: *kind,
+                            source: source.clone(),
+                        })
+                        .collect(),
+                    role: p.role.name().to_string(),
+                    authenticated: p.authenticated,
+                })
+                .collect();
 
-        info!(
-            "Participant {} ({}) joined room {}",
-            participant_id, participant_name, room_id
-        );
+            // Serialize room settings for the joining client
+            let room_settings = room
+                .settings
+                .as_ref()
+                .and_then(|s| serde_json::to_value(s).ok());
 
-        // Notify other participants
-        room.broadcast_except(
-            &participant_id,
-            &ServerMessage::ParticipantJoined {
-                participant_id: participant_id.clone(),
-                participant_name,
+            Ok(JoinResult::Joined {
+                participants,
                 role: role.name().to_string(),
-                authenticated,
-            },
-        );
-
-        // Return list of existing participants
-        let participants: Vec<ParticipantInfo> = room
-            .participants
-            .values()
-            .filter(|p| p.id != participant_id)
-            .map(|p| ParticipantInfo {
-                id: p.id.clone(),
-                name: p.name.clone(),
-                producers: p
-                    .producers
-                    .iter()
-                    .map(|(id, (kind, source))| ProducerMetadata {
-                        id: id.clone(),
-                        kind: *kind,
-                        source: source.clone(),
-                    })
-                    .collect(),
-                role: p.role.name().to_string(),
-                authenticated: p.authenticated,
+                room_settings,
             })
-            .collect();
-
-        // Serialize room settings for the joining client
-        let room_settings = room
-            .settings
-            .as_ref()
-            .and_then(|s| serde_json::to_value(s).ok());
-
-        Ok(JoinResult::Joined {
-            participants,
-            role: role.name().to_string(),
-            room_settings,
         })
+        .await
     }
 
     /// Removes a participant from a room
@@ -3606,7 +3638,7 @@ impl RoomManager {
                 room.lobby.get(affected_participant_id),
                 serde_json::to_string(&notification),
             ) {
-                let _ = entry.sender.try_send(Arc::new(json));
+                let _ = try_send_essential(&room.metrics, &entry.sender, Arc::new(json));
             }
         }
 
@@ -4049,7 +4081,7 @@ impl RoomManager {
                         ),
                     })
                 {
-                    let _ = entry.sender.try_send(Arc::new(json));
+                    let _ = try_send_essential(&room.metrics, &entry.sender, Arc::new(json));
                 }
             }
             target_sessions
@@ -4383,7 +4415,7 @@ impl RoomManager {
 
         // Send LobbyAdmitted to the admitted participant
         if let Ok(json) = serde_json::to_string(&ServerMessage::LobbyAdmitted) {
-            let _ = entry.sender.try_send(Arc::new(json));
+            let _ = try_send_essential(&room.metrics, &entry.sender, Arc::new(json));
         }
 
         // Send RoomJoined to the admitted participant (use stored reconnect token)
@@ -4403,7 +4435,7 @@ impl RoomManager {
             your_role: admitted_role.name().to_string(),
             room_settings,
         }) {
-            let _ = entry.sender.try_send(Arc::new(json));
+            let _ = try_send_essential(&room.metrics, &entry.sender, Arc::new(json));
         }
 
         // Broadcast ParticipantJoined to existing participants (excluding the admitted one)
@@ -4458,7 +4490,7 @@ impl RoomManager {
 
         // Send LobbyDenied to the denied participant
         if let Ok(json) = serde_json::to_string(&ServerMessage::LobbyDenied { reason }) {
-            let _ = entry.sender.try_send(Arc::new(json));
+            let _ = try_send_essential(&room.metrics, &entry.sender, Arc::new(json));
         }
 
         info!(
@@ -4492,7 +4524,7 @@ impl RoomManager {
         producer_id: Option<&str>,
     ) -> Result<MediaMutationReservation> {
         let room_lock = self.get_room(room_id)?;
-        let mut room = room_lock.write().await;
+        let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         let participant = Self::participant_for_sender(&room, participant_id, expected_sender)?;
         if producer_id.is_some_and(|producer_id| !participant.producers.contains_key(producer_id)) {
             anyhow::bail!("Producer does not belong to this participant");
@@ -4517,7 +4549,7 @@ impl RoomManager {
         desired_paused: bool,
     ) -> Result<Option<MediaMutationReservation>> {
         let room_lock = self.get_room(room_id)?;
-        let mut room = room_lock.write().await;
+        let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         let participant = Self::participant_for_sender(&room, participant_id, expected_sender)?;
         if !participant.producers.contains_key(producer_id) {
             anyhow::bail!("Producer does not belong to this participant");
@@ -4553,7 +4585,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<Arc<String>>,
     ) -> Result<MediaControlIpcReservation> {
         let room_lock = self.get_room(room_id)?;
-        let mut room = room_lock.write().await;
+        let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         Self::participant_for_sender(&room, participant_id, expected_sender)?;
         let reserved_at = std::time::Instant::now();
         if !room.reserve_media_control_ipc(reserved_at) {
@@ -4615,7 +4647,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<Arc<String>>,
     ) -> Result<uuid::Uuid> {
         let room_lock = self.get_room(room_id)?;
-        let room = room_lock.read().await;
+        let room = measure(Stage::RoomLockWait, room_lock.read()).await;
         Ok(Self::participant_for_sender(&room, participant_id, expected_sender)?.media_session_id)
     }
 
@@ -4862,7 +4894,7 @@ impl RoomManager {
         source: &str,
     ) -> Result<bool> {
         let room_lock = self.get_room(room_id)?;
-        let room = room_lock.read().await;
+        let room = measure(Stage::RoomLockWait, room_lock.read()).await;
         let participant = Self::participant_for_sender(&room, participant_id, expected_sender)?;
 
         Ok(Self::participant_can_produce(
@@ -4983,20 +5015,41 @@ impl RoomManager {
         self.rooms.read().unwrap_or_else(|e| e.into_inner()).len()
     }
 
-    /// Gets total participant count across all rooms
+    /// Best-effort membership count, excluding lobbies and any write-locked
+    /// rooms. Retained for callers that tolerate a partial result; metrics must
+    /// use [`Self::try_total_participant_count`] to distinguish incompleteness.
     pub async fn total_participant_count(&self) -> usize {
+        self.participant_count_snapshot().0
+    }
+
+    /// Count memberships (including disconnected grace sessions) only if every
+    /// room in the map snapshot is readable. `Some(0)` means known empty; `None`
+    /// means a room was write-locked. This avoids waiting on room operations but
+    /// is not a globally atomic snapshot across independently changing rooms.
+    pub async fn try_total_participant_count(&self) -> Option<usize> {
+        let (total, complete) = self.participant_count_snapshot();
+        complete.then_some(total)
+    }
+
+    fn participant_count_snapshot(&self) -> (usize, bool) {
         let room_locks: Vec<Arc<TokioRwLock<Room>>> = {
             let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
             rooms.values().cloned().collect()
         };
+        Self::count_readable_participants(&room_locks)
+    }
 
+    fn count_readable_participants(room_locks: &[Arc<TokioRwLock<Room>>]) -> (usize, bool) {
         let mut total = 0;
+        let mut complete = true;
         for room_lock in room_locks {
             if let Ok(room) = room_lock.try_read() {
                 total += room.participants.len();
+            } else {
+                complete = false;
             }
         }
-        total
+        (total, complete)
     }
 
     /// Gets participant count for a specific room (non-async, brief read lock)
@@ -5013,6 +5066,33 @@ impl RoomManager {
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn participant_snapshot_distinguishes_empty_partial_and_complete_counts() {
+        assert_eq!(RoomManager::count_readable_participants(&[]), (0, true));
+        let make_room = |name: &str| {
+            let mut room = Room::new(name.into(), "unused".into(), None, false, None);
+            room.participants.insert(
+                "member".into(),
+                participant(
+                    "member",
+                    roles::Role::Guest,
+                    moderation::PunitiveState::default(),
+                    None,
+                ),
+            );
+            Arc::new(TokioRwLock::new(room))
+        };
+        let rooms = [make_room("first"), make_room("second")];
+        assert_eq!(RoomManager::count_readable_participants(&rooms), (2, true));
+        let first_locked = rooms[0].write().await;
+        assert_eq!(RoomManager::count_readable_participants(&rooms), (1, false));
+        let second_locked = rooms[1].write().await;
+        assert_eq!(RoomManager::count_readable_participants(&rooms), (0, false));
+        drop(first_locked);
+        drop(second_locked);
+        assert_eq!(RoomManager::count_readable_participants(&rooms), (2, true));
+    }
 
     async fn drain_test_manager() -> RoomManager {
         let mut config = MediaConfig::default();
@@ -5157,6 +5237,111 @@ mod security_tests {
         assert!(manager.drain_signal().is_draining());
         assert!(manager.get_or_create_room("new-room").await.is_err());
         media_cleanup.unwrap();
+    }
+
+    #[test]
+    fn broadcast_queue_counters_count_selected_essential_rejections_only() {
+        let mut room = Room::new("room".into(), "router".into(), None, false, None);
+        let (owner_sender, _owner_receiver) = mpsc::channel(1);
+        let (member_sender, _member_receiver) = mpsc::channel(1);
+        owner_sender.try_send(Arc::new("queued".into())).unwrap();
+        member_sender.try_send(Arc::new("queued".into())).unwrap();
+        for (id, role, sender) in [
+            ("owner", roles::Role::Owner, Some(owner_sender)),
+            ("member", roles::Role::Member, Some(member_sender)),
+            ("closed", roles::Role::Guest, None),
+        ] {
+            let mut entry = participant(id, role, moderation::PunitiveState::default(), None);
+            if let Some(sender) = sender {
+                entry.sender = sender;
+            }
+            room.participants.insert(id.into(), entry);
+        }
+        let control = ServerMessage::RoomClosed {
+            reason: "Room closed".into(),
+        };
+        room.broadcast_except("owner", &control);
+        room.broadcast_to_role(roles::Role::Moderator, &control);
+        room.broadcast_all(&control);
+
+        let before_hints = room.metrics.render_prometheus(0, 0, 0);
+        assert!(
+            before_hints
+                .lines()
+                .any(|line| line == "simplestchat_outbound_queue_full_total 4")
+        );
+        assert!(
+            before_hints
+                .lines()
+                .any(|line| line == "simplestchat_outbound_queue_closed_total 2")
+        );
+        for hint in [
+            ServerMessage::ActiveSpeaker {
+                participant_id: "owner".into(),
+            },
+            ServerMessage::AudioLevels { levels: vec![] },
+        ] {
+            room.broadcast_all(&hint);
+            room.broadcast_except("owner", &hint);
+            room.broadcast_to_role(roles::Role::Moderator, &hint);
+        }
+        assert_eq!(room.metrics.render_prometheus(0, 0, 0), before_hints);
+    }
+
+    #[test]
+    fn runtime_room_queue_failures_reach_shared_process_metrics() {
+        let metrics = ServerMetrics::new();
+        let mut room = Room::new_with_observers(
+            "room".into(),
+            "router".into(),
+            None,
+            false,
+            None,
+            None,
+            None,
+            metrics.clone(),
+        );
+        // This helper intentionally drops its receiver, simulating a departed socket.
+        let entry = participant(
+            "closed",
+            roles::Role::Guest,
+            moderation::PunitiveState::default(),
+            None,
+        );
+        room.participants.insert(entry.id.clone(), entry);
+        room.broadcast_all(&ServerMessage::RoomClosed {
+            reason: "Room closed".into(),
+        });
+        assert!(
+            metrics
+                .render_prometheus(0, 0, 0)
+                .lines()
+                .any(|line| line == "simplestchat_outbound_queue_closed_total 1")
+        );
+    }
+
+    #[test]
+    fn successful_broadcast_enqueue_does_not_count_as_failure_or_socket_write() {
+        let mut room = Room::new("room".into(), "router".into(), None, false, None);
+        let (sender, mut receiver) = mpsc::channel(1);
+        let mut entry = participant(
+            "owner",
+            roles::Role::Owner,
+            moderation::PunitiveState::default(),
+            None,
+        );
+        entry.sender = sender;
+        room.participants.insert(entry.id.clone(), entry);
+        let event = ServerMessage::RoomClosed {
+            reason: "Room closed".into(),
+        };
+        let before = room.metrics.render_prometheus(0, 0, 0);
+        room.broadcast_all(&event);
+        assert_eq!(
+            receiver.try_recv().unwrap().as_str(),
+            serde_json::to_string(&event).unwrap()
+        );
+        assert_eq!(room.metrics.render_prometheus(0, 0, 0), before);
     }
 
     #[test]

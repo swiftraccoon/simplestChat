@@ -4,11 +4,12 @@
 
 use super::protocol::{ClientMessage, ServerMessage};
 use crate::auth::types::Claims;
+use crate::diagnostics::{self, OperationKind, Outcome, Stage};
 use crate::metrics::ServerMetrics;
 use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, settings};
 use crate::turn::TurnConfig;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{Sink, SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
@@ -428,10 +429,103 @@ impl GracePeriodMap {
 }
 
 /// Serialize a ServerMessage and send it through the channel as pre-serialized JSON.
-fn send_json(sender: &mpsc::Sender<Arc<String>>, msg: &ServerMessage) -> anyhow::Result<()> {
+fn send_json(
+    metrics: &ServerMetrics,
+    sender: &mpsc::Sender<Arc<String>>,
+    msg: &ServerMessage,
+) -> anyhow::Result<()> {
     let json = Arc::new(serde_json::to_string(msg)?);
-    sender.try_send(json).map_err(|e| anyhow::anyhow!("{e}"))?;
+    if let Err(error) = sender.try_send(json) {
+        match error {
+            mpsc::error::TrySendError::Full(_) => metrics.inc_outbound_queue_full(),
+            mpsc::error::TrySendError::Closed(_) => metrics.inc_outbound_queue_closed(),
+        }
+        anyhow::bail!("Outbound signaling queue unavailable");
+    }
     Ok(())
+}
+
+/// Only completed text writes increment sent; queue acceptance is not delivery.
+/// Cancellation remains a diagnostic outcome, not a completed send failure.
+async fn write_message<S: Sink<Message> + Unpin>(
+    sink: &mut S,
+    message: Message,
+    metrics: &ServerMetrics,
+    connection_id: Option<u64>,
+    deadline: tokio::time::Instant,
+    kind: OperationKind,
+) -> Result<(), Outcome> {
+    let operation = metrics.diagnostics().operation(kind, connection_id);
+    let result = operation
+        .scope(diagnostics::measure_result(Stage::SocketWrite, async {
+            match tokio::time::timeout_at(deadline, sink.send(message)).await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(_)) => Err(Outcome::Error),
+                Err(_) => Err(Outcome::Timeout),
+            }
+        }))
+        .await;
+    let outcome = match result {
+        Ok(()) => {
+            metrics.inc_messages_sent();
+            Outcome::Ok
+        }
+        Err(outcome) => {
+            metrics.inc_message_send_failed();
+            outcome
+        }
+    };
+    operation.finish(outcome);
+    result
+}
+
+/// Operation names come from protocol variants, never message data. Social and
+/// administrative requests are deliberately grouped until they gain stage probes.
+fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
+    match message {
+        ClientMessage::JoinRoom { .. } => OperationKind::JoinRoom,
+        ClientMessage::LeaveRoom => OperationKind::LeaveRoom,
+        ClientMessage::Reconnect { .. } => OperationKind::Reconnect,
+        ClientMessage::GetRouterRtpCapabilities => OperationKind::RouterCapabilities,
+        ClientMessage::CreateSendTransport => OperationKind::CreateSendTransport,
+        ClientMessage::CreateRecvTransport => OperationKind::CreateRecvTransport,
+        ClientMessage::ConnectTransport { .. } => OperationKind::ConnectTransport,
+        ClientMessage::Produce { .. } => OperationKind::Produce,
+        ClientMessage::Consume { .. } => OperationKind::Consume,
+        ClientMessage::ResumeConsumer { .. } => OperationKind::ResumeConsumer,
+        ClientMessage::PauseConsumer { .. } => OperationKind::PauseConsumer,
+        ClientMessage::PauseProducer { .. } => OperationKind::PauseProducer,
+        ClientMessage::ResumeProducer { .. } => OperationKind::ResumeProducer,
+        ClientMessage::CloseProducer { .. } => OperationKind::CloseProducer,
+        ClientMessage::RestartIce { .. } => OperationKind::RestartIce,
+        ClientMessage::SetConsumerPreferredLayers { .. } => OperationKind::SetPreferredLayers,
+        ClientMessage::ChatMessage { .. } => OperationKind::Chat,
+        ClientMessage::PrivateMessage { .. } => OperationKind::PrivateMessage,
+        ClientMessage::SetChatPreferences { .. }
+        | ClientMessage::ChangeNickname { .. }
+        | ClientMessage::GetRoomSnapshot { .. }
+        | ClientMessage::ListRoomBans { .. }
+        | ClientMessage::RemoveRoomBan { .. }
+        | ClientMessage::ListRoomMembers { .. }
+        | ClientMessage::SetMemberRole { .. }
+        | ClientMessage::ReportParticipant { .. }
+        | ClientMessage::ListRoomReports { .. }
+        | ClientMessage::ResolveRoomReport { .. }
+        | ClientMessage::CloseCam { .. }
+        | ClientMessage::CamBan { .. }
+        | ClientMessage::CamUnban { .. }
+        | ClientMessage::TextMute { .. }
+        | ClientMessage::TextUnmute { .. }
+        | ClientMessage::Kick { .. }
+        | ClientMessage::Ban { .. }
+        | ClientMessage::Unban { .. }
+        | ClientMessage::SetRole { .. }
+        | ClientMessage::RequestVoice
+        | ClientMessage::UpdateRoomSettings { .. }
+        | ClientMessage::SetTopic { .. }
+        | ClientMessage::AdmitFromLobby { .. }
+        | ClientMessage::DenyFromLobby { .. } => OperationKind::RoomAction,
+    }
 }
 
 fn begin_join_session(reconnect_token: &mut String) -> String {
@@ -485,9 +579,11 @@ pub async fn handle_connection(
     let authenticated_display_name = authenticated_user.as_ref().map(|c| c.name.clone());
     let auth_exp = authenticated_user.as_ref().map(|claims| claims.exp as u64);
 
+    let diagnostic_connection_id = metrics.diagnostics().connection_id();
     info!(
-        "New WebSocket connection: {} (authenticated: {})",
-        participant_id, is_authenticated
+        connection_id = diagnostic_connection_id,
+        authenticated = is_authenticated,
+        "New WebSocket connection"
     );
 
     metrics.inc_connections_total();
@@ -502,7 +598,6 @@ pub async fn handle_connection(
     let (tx, mut rx) = mpsc::channel::<Arc<String>>(CHANNEL_CAPACITY);
 
     // Clone for the send task
-    let participant_id_clone = participant_id.clone();
     let send_metrics = metrics.clone();
     let drain = room_manager.drain_signal();
     let writer_drain = drain.clone();
@@ -516,45 +611,53 @@ pub async fn handle_connection(
             _ = writer_drain.wait() => {},
             _ = async {
                 while let Some(json) = rx.recv().await {
-                    send_metrics.inc_messages_sent();
-                    match tokio::time::timeout(
-                        SEND_TIMEOUT,
-                        ws_sender.send(Message::Text((*json).clone().into())),
+                    match write_message(
+                        &mut ws_sender, Message::Text((*json).clone().into()),
+                        &send_metrics, diagnostic_connection_id, tokio::time::Instant::now() + SEND_TIMEOUT, OperationKind::SocketWrite,
                     ).await {
-                        Ok(Ok(())) => {},
-                        Ok(Err(error)) => { debug!(%error, "WebSocket send failed"); break; },
-                        Err(_) => { warn!(participant_id = participant_id_clone, "WebSocket send timed out"); break; },
+                        Ok(()) => {},
+                        Err(Outcome::Timeout) => { warn!(connection_id = diagnostic_connection_id, "WebSocket send timed out"); break; },
+                        Err(_) => { debug!(connection_id = diagnostic_connection_id, "WebSocket send failed"); break; },
                     }
                 }
             } => {},
         }
         if writer_drain.is_draining() {
+            let deadline = tokio::time::Instant::now() + DRAIN_SEND_TIMEOUT;
             let close = async {
                 let json = serde_json::to_string(&ServerMessage::RoomClosed {
                     reason: "Server shutting down".to_string(),
                 })?;
-                ws_sender.send(Message::Text(json.into())).await?;
-                ws_sender
-                    .send(Message::Close(Some(CloseFrame {
+                write_message(
+                    &mut ws_sender,
+                    Message::Text(json.into()),
+                    &send_metrics,
+                    diagnostic_connection_id,
+                    deadline,
+                    OperationKind::ShutdownNotification,
+                )
+                .await
+                .map_err(|_| anyhow::anyhow!("Shutdown notification write failed"))?;
+                tokio::time::timeout_at(
+                    deadline,
+                    ws_sender.send(Message::Close(Some(CloseFrame {
                         code: close_code::AWAY,
                         reason: "Server shutting down".into(),
-                    })))
-                    .await?;
+                    }))),
+                )
+                .await??;
                 Ok::<(), anyhow::Error>(())
             };
-            if !matches!(
-                tokio::time::timeout(DRAIN_SEND_TIMEOUT, close).await,
-                Ok(Ok(()))
-            ) {
+            if close.await.is_err() {
                 debug!(
-                    participant_id = participant_id_clone,
+                    connection_id = diagnostic_connection_id,
                     "Shutdown socket notification could not be delivered"
                 );
             }
         }
         debug!(
-            "Send task finished for participant: {}",
-            participant_id_clone
+            connection_id = diagnostic_connection_id,
+            "Send task finished"
         );
     }));
 
@@ -672,6 +775,7 @@ pub async fn handle_connection(
             if rate_limit_violations == 1 {
                 warn!("Rate limit exceeded for participant {}", participant_id);
                 let _ = send_json(
+                    &metrics,
                     &tx,
                     &ServerMessage::Error {
                         message: format!(
@@ -710,6 +814,7 @@ pub async fn handle_connection(
                         if media_limit_exceeded {
                             let media_mutation_violations = media_rate_state.record_violation(now);
                             let _ = send_json(
+                                &metrics,
                                 &tx,
                                 &ServerMessage::Error {
                                     message: "Media changes are rate limited".to_string(),
@@ -743,6 +848,7 @@ pub async fn handle_connection(
                             }
                             admin_mutation_violations = admin_mutation_violations.saturating_add(1);
                             let _ = send_json(
+                                &metrics,
                                 &tx,
                                 &client_msg
                                     .social_error("Room administration changes are rate limited")
@@ -775,6 +881,7 @@ pub async fn handle_connection(
                         ) {
                             warn!(participant_id, "Closing WebSocket for chat flooding");
                             let _ = send_json(
+                                &metrics,
                                 &tx,
                                 &client_msg
                                     .social_error("Chat rate limit exceeded")
@@ -797,6 +904,7 @@ pub async fn handle_connection(
                                 now.duration_since(previous) < ROOM_PASSWORD_HASH_COOLDOWN
                             }) {
                                 let _ = send_json(
+                                    &metrics,
                                     &tx,
                                     &ServerMessage::Error {
                                         message: "Room password updates are rate limited"
@@ -814,6 +922,7 @@ pub async fn handle_connection(
                             && !join_attempts.allow(room_id, password.is_some(), Instant::now())
                         {
                             let _ = send_json(
+                                &metrics,
                                 &tx,
                                 &ServerMessage::Error {
                                     message: "Join attempts are rate limited".to_string(),
@@ -828,6 +937,7 @@ pub async fn handle_connection(
                                 now.duration_since(previous) < VOICE_REQUEST_COOLDOWN
                             }) {
                                 let _ = send_json(
+                                    &metrics,
                                     &tx,
                                     &ServerMessage::Error {
                                         message: "Voice requests are rate limited".to_string(),
@@ -855,6 +965,7 @@ pub async fn handle_connection(
                                     "Rejected reconnect from a socket with an active room session"
                                 );
                                 let _ = send_json(
+                                    &metrics,
                                     &tx,
                                     &ServerMessage::ReconnectResult {
                                         success: false,
@@ -865,18 +976,30 @@ pub async fn handle_connection(
                                 continue;
                             }
 
-                            let restored_media_rate_state = handle_reconnect(
-                                reconnect_id,
-                                reconnect_room,
-                                client_token,
-                                authenticated_user
-                                    .as_ref()
-                                    .map(|claims| claims.sub.as_str()),
-                                &grace_periods,
-                                &room_manager,
-                                &tx,
-                            )
-                            .await;
+                            let operation = metrics
+                                .diagnostics()
+                                .operation(OperationKind::Reconnect, diagnostic_connection_id);
+                            let restored_media_rate_state = operation
+                                .scope(diagnostics::measure(
+                                    Stage::Dispatch,
+                                    handle_reconnect(
+                                        reconnect_id,
+                                        reconnect_room,
+                                        client_token,
+                                        authenticated_user
+                                            .as_ref()
+                                            .map(|claims| claims.sub.as_str()),
+                                        &grace_periods,
+                                        &room_manager,
+                                        &tx,
+                                    ),
+                                ))
+                                .await;
+                            operation.finish(if restored_media_rate_state.is_some() {
+                                Outcome::Ok
+                            } else {
+                                Outcome::Rejected
+                            });
 
                             let success = restored_media_rate_state.is_some();
                             let fresh_reconnect_token = success.then(|| Uuid::new_v4().to_string());
@@ -919,6 +1042,7 @@ pub async fn handle_connection(
                             }
 
                             let response_sent = send_json(
+                                &metrics,
                                 &tx,
                                 &ServerMessage::ReconnectResult {
                                     success,
@@ -947,22 +1071,34 @@ pub async fn handle_connection(
                         let previous_reconnect_token = reconnect_token.clone();
 
                         let start = Instant::now();
-                        let result = handle_client_message(
-                            &client_msg,
-                            &participant_id,
-                            &mut current_room_id,
-                            &in_lobby,
-                            &tx,
-                            &room_manager,
-                            &turn_config,
-                            &metrics,
-                            &mut reconnect_token,
-                            &bwe_sender,
-                            is_authenticated,
-                            authenticated_display_name.as_deref(),
-                            client_ip,
-                        )
-                        .await;
+                        let operation = metrics
+                            .diagnostics()
+                            .operation(diagnostic_operation(&client_msg), diagnostic_connection_id);
+                        let result = operation
+                            .scope(diagnostics::measure_result(
+                                Stage::Dispatch,
+                                handle_client_message(
+                                    &client_msg,
+                                    &participant_id,
+                                    &mut current_room_id,
+                                    &in_lobby,
+                                    &tx,
+                                    &room_manager,
+                                    &turn_config,
+                                    &metrics,
+                                    &mut reconnect_token,
+                                    &bwe_sender,
+                                    is_authenticated,
+                                    authenticated_display_name.as_deref(),
+                                    client_ip,
+                                ),
+                            ))
+                            .await;
+                        operation.finish(match &result {
+                            Ok(()) => Outcome::Ok,
+                            Err(error) if error.is::<RoomPasswordRequired>() => Outcome::Rejected,
+                            Err(_) => Outcome::Error,
+                        });
                         metrics.observe_message_handling(start.elapsed());
 
                         // A successful JoinRoom creates a new media-session
@@ -1002,7 +1138,7 @@ pub async fn handle_connection(
                             let response = client_msg
                                 .social_error(public_message)
                                 .unwrap_or_else(|| client_error_response(&e));
-                            if send_json(&tx, &response).is_err() {
+                            if send_json(&metrics, &tx, &response).is_err() {
                                 break;
                             }
                         }
@@ -1053,6 +1189,7 @@ pub async fn handle_connection(
                         );
                         metrics.inc_errors();
                         let _ = send_json(
+                            &metrics,
                             &tx,
                             &ServerMessage::Error {
                                 message: "Invalid message format".to_string(),
@@ -1154,6 +1291,16 @@ pub async fn handle_connection(
                         "Grace period expired for participant {} in room {}",
                         pid, rid
                     );
+                    if tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+                        && let Ok(lifecycle_id) = Uuid::parse_str(&pid)
+                    {
+                        debug!(
+                            target: "simplestChat::lifecycle",
+                            event = "grace_cleanup_started",
+                            participant_id = %lifecycle_id,
+                            "lifecycle"
+                        );
+                    }
                     if let Err(e) = rm
                         .remove_participant_for_sender(&rid, &pid, &timer_sender)
                         .await
@@ -1177,6 +1324,17 @@ pub async fn handle_connection(
                     timer,
                 },
             );
+            if retained_for_reconnect
+                && tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+                && let Ok(lifecycle_id) = Uuid::parse_str(&participant_id)
+            {
+                debug!(
+                    target: "simplestChat::lifecycle",
+                    event = "grace_started",
+                    participant_id = %lifecycle_id,
+                    "lifecycle"
+                );
+            }
             if !retained_for_reconnect {
                 warn!(
                     room_id,
@@ -1545,6 +1703,7 @@ async fn handle_client_message(
                     metrics.inc_joins();
 
                     send_json(
+                        metrics,
                         sender,
                         &ServerMessage::RoomJoined {
                             participant_id: participant_id.to_string(),
@@ -1568,9 +1727,34 @@ async fn handle_client_message(
 
         ClientMessage::LeaveRoom => {
             if let Some(room_id) = current_room_id.take() {
+                let lifecycle_id = if tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+                {
+                    Uuid::parse_str(participant_id).ok()
+                } else {
+                    None
+                };
+                if let Some(lifecycle_id) = lifecycle_id {
+                    debug!(
+                        target: "simplestChat::lifecycle",
+                        event = "explicit_leave_started",
+                        participant_id = %lifecycle_id,
+                        "lifecycle"
+                    );
+                }
                 room_manager
                     .remove_participant_for_sender(&room_id, participant_id, sender)
                     .await?;
+                // Completion is not proof that membership was removed: this
+                // sender-scoped call can return Ok(false) for a stale sender.
+                // Media cleanup has separate markers for actual handle drops.
+                if let Some(lifecycle_id) = lifecycle_id {
+                    debug!(
+                        target: "simplestChat::lifecycle",
+                        event = "explicit_leave_finished",
+                        participant_id = %lifecycle_id,
+                        "lifecycle"
+                    );
+                }
                 in_lobby.store(false, Ordering::Release);
                 metrics.inc_leaves();
             }
@@ -1582,6 +1766,7 @@ async fn handle_client_message(
                     .get_router_rtp_capabilities(room_id, participant_id, sender)
                     .await?;
                 send_json(
+                    metrics,
                     sender,
                     &ServerMessage::RouterRtpCapabilities {
                         rtp_capabilities: capabilities,
@@ -1599,6 +1784,7 @@ async fn handle_client_message(
                     .await?;
 
                 send_json(
+                    metrics,
                     sender,
                     &ServerMessage::TransportCreated {
                         transport_id: transport_info.id,
@@ -1632,6 +1818,7 @@ async fn handle_client_message(
                 }
 
                 send_json(
+                    metrics,
                     sender,
                     &ServerMessage::TransportCreated {
                         transport_id: transport_info.id,
@@ -1662,6 +1849,7 @@ async fn handle_client_message(
                     .await?;
 
                 send_json(
+                    metrics,
                     sender,
                     &ServerMessage::TransportConnected {
                         transport_id: transport_id.clone(),
@@ -1710,7 +1898,11 @@ async fn handle_client_message(
                     .await?;
 
                 metrics.inc_producers_created();
-                send_json(sender, &ServerMessage::ProducerCreated { producer_id })?;
+                send_json(
+                    metrics,
+                    sender,
+                    &ServerMessage::ProducerCreated { producer_id },
+                )?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -1734,6 +1926,7 @@ async fn handle_client_message(
 
                 metrics.inc_consumers_created();
                 send_json(
+                    metrics,
                     sender,
                     &ServerMessage::ConsumerCreated {
                         consumer_id: consumer_info.id,
@@ -1747,6 +1940,7 @@ async fn handle_client_message(
                 // so it can hide the video tile instead of showing a black square.
                 if consumer_info.producer_paused {
                     send_json(
+                        metrics,
                         sender,
                         &ServerMessage::ProducerPaused {
                             producer_id: producer_id.clone(),
@@ -1765,6 +1959,7 @@ async fn handle_client_message(
                     .await?;
 
                 send_json(
+                    metrics,
                     sender,
                     &ServerMessage::ConsumerResumed {
                         consumer_id: consumer_id.clone(),
@@ -1782,6 +1977,7 @@ async fn handle_client_message(
                     .await?;
 
                 send_json(
+                    metrics,
                     sender,
                     &ServerMessage::ConsumerPaused {
                         consumer_id: consumer_id.clone(),
@@ -1808,6 +2004,7 @@ async fn handle_client_message(
                     .pause_producer(room_id, participant_id, sender, producer_id)
                     .await?;
                 send_json(
+                    metrics,
                     sender,
                     &ServerMessage::ProducerPaused {
                         producer_id: producer_id.clone(),
@@ -1824,6 +2021,7 @@ async fn handle_client_message(
                     .resume_producer(room_id, participant_id, sender, producer_id)
                     .await?;
                 send_json(
+                    metrics,
                     sender,
                     &ServerMessage::ProducerResumed {
                         producer_id: producer_id.clone(),
@@ -1846,6 +2044,7 @@ async fn handle_client_message(
                     .await?;
 
                 send_json(
+                    metrics,
                     sender,
                     &ServerMessage::IceRestarted {
                         transport_id: transport_id.clone(),
@@ -2235,6 +2434,121 @@ mod security_tests {
                 }),
             );
         }
+    }
+
+    #[tokio::test]
+    async fn socket_counters_distinguish_completed_writes_errors_and_timeouts() {
+        let metrics = ServerMetrics::new();
+        let mut successful = futures_util::sink::drain();
+        assert!(
+            write_message(
+                &mut successful,
+                Message::Text("fixture".into()),
+                &metrics,
+                None,
+                tokio::time::Instant::now() + Duration::from_secs(1),
+                OperationKind::SocketWrite
+            )
+            .await
+            .is_ok()
+        );
+        let mut failed = Box::pin(futures_util::sink::unfold((), |(), _: Message| async {
+            Err::<(), ()>(())
+        }));
+        assert!(matches!(
+            write_message(
+                &mut failed,
+                Message::Text("fixture".into()),
+                &metrics,
+                None,
+                tokio::time::Instant::now() + Duration::from_secs(1),
+                OperationKind::SocketWrite
+            )
+            .await,
+            Err(Outcome::Error)
+        ));
+        let mut stalled = Box::pin(futures_util::sink::unfold((), |(), _: Message| {
+            std::future::pending::<Result<(), ()>>()
+        }));
+        assert!(matches!(
+            write_message(
+                &mut stalled,
+                Message::Text("fixture".into()),
+                &metrics,
+                None,
+                tokio::time::Instant::now(),
+                OperationKind::SocketWrite
+            )
+            .await,
+            Err(Outcome::Timeout)
+        ));
+        let rendered = metrics.render_prometheus(0, 0, 0);
+        assert!(rendered.contains("simplestchat_messages_sent_total 1\n"));
+        assert!(rendered.contains("simplestchat_message_send_failed_total 2\n"));
+    }
+
+    #[tokio::test]
+    async fn cancelled_socket_write_is_not_a_completed_write_or_error() {
+        let metrics = ServerMetrics::new();
+        let mut stalled = Box::pin(futures_util::sink::unfold((), |(), _: Message| {
+            std::future::pending::<Result<(), ()>>()
+        }));
+        let mut future = Box::pin(write_message(
+            &mut stalled,
+            Message::Text("fixture".into()),
+            &metrics,
+            None,
+            tokio::time::Instant::now() + Duration::from_secs(10),
+            OperationKind::SocketWrite,
+        ));
+        assert!(futures_util::poll!(&mut future).is_pending());
+        drop(future);
+        let rendered = metrics.render_prometheus(0, 0, 0);
+        assert!(rendered.contains("simplestchat_messages_sent_total 0\n"));
+        assert!(rendered.contains("simplestchat_message_send_failed_total 0\n"));
+    }
+
+    #[tokio::test]
+    async fn shutdown_notice_uses_one_deadline_and_counts_a_timeout() {
+        let metrics = ServerMetrics::new();
+        let mut stalled = Box::pin(futures_util::sink::unfold((), |(), _: Message| {
+            std::future::pending::<Result<(), ()>>()
+        }));
+        let result = write_message(
+            &mut stalled,
+            Message::Text("fixture shutdown notice".into()),
+            &metrics,
+            None,
+            tokio::time::Instant::now(),
+            OperationKind::ShutdownNotification,
+        )
+        .await;
+        assert!(matches!(result, Err(Outcome::Timeout)));
+        let rendered = metrics.render_prometheus(0, 0, 0);
+        assert!(rendered.contains("simplestchat_messages_sent_total 0\n"));
+        assert!(rendered.contains("simplestchat_message_send_failed_total 1\n"));
+    }
+
+    #[test]
+    fn direct_signaling_queue_rejections_are_counted_without_payloads() {
+        let metrics = ServerMetrics::new();
+        let (sender, receiver) = mpsc::channel(1);
+        let message = ServerMessage::Error {
+            message: "PRIVATE_FIXTURE_CONTENT".into(),
+        };
+        send_json(&metrics, &sender, &message).unwrap();
+        assert!(
+            !send_json(&metrics, &sender, &message)
+                .unwrap_err()
+                .to_string()
+                .contains("PRIVATE")
+        );
+        drop(receiver);
+        assert!(send_json(&metrics, &sender, &message).is_err());
+        let rendered = metrics.render_prometheus(0, 0, 0);
+        assert!(rendered.contains("simplestchat_outbound_queue_full_total 1\n"));
+        assert!(rendered.contains("simplestchat_outbound_queue_closed_total 1\n"));
+        assert!(rendered.contains("simplestchat_messages_sent_total 0\n"));
     }
 
     #[test]

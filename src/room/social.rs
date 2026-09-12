@@ -291,6 +291,82 @@ mod tests {
         assert!(chat(&mut room, &alice, "busy", Some(&bob.id)).is_err());
         assert!(room.social.history.is_empty());
         assert!(receivers[0].try_recv().is_err());
+        assert!(
+            room.metrics
+                .render_prometheus(0, 0, 0)
+                .lines()
+                .any(|line| line == "simplestchat_outbound_queue_full_total 1")
+        );
+    }
+
+    #[test]
+    fn closed_private_queue_is_counted_without_claiming_delivery() {
+        let (mut room, alice, bob, _, mut receivers) = fixture();
+        drop(receivers.remove(1));
+        assert!(chat(&mut room, &alice, "closed", Some(&bob.id)).is_err());
+        assert!(room.social.history.is_empty());
+        assert!(receivers[0].try_recv().is_err());
+        let metrics = room.metrics.render_prometheus(0, 0, 0);
+        assert!(
+            metrics
+                .lines()
+                .any(|line| line == "simplestchat_outbound_queue_closed_total 1")
+        );
+        assert!(
+            metrics
+                .lines()
+                .any(|line| line == "simplestchat_outbound_queue_full_total 0")
+        );
+    }
+
+    #[test]
+    fn public_queue_rejections_count_only_eligible_recipients() {
+        let (mut room, alice, bob, _, mut receivers) = fixture();
+        for _ in 0..16 {
+            bob.sender.try_send(Arc::new("queued".into())).unwrap();
+        }
+        drop(receivers.pop());
+        chat(&mut room, &alice, "first", None).unwrap();
+        room.participants
+            .get_mut(&bob.id)
+            .unwrap()
+            .social
+            .ignored
+            .insert(alice.id.clone());
+        chat(&mut room, &alice, "ignored", None).unwrap();
+        let metrics = room.metrics.render_prometheus(0, 0, 0);
+        assert!(
+            metrics
+                .lines()
+                .any(|line| line == "simplestchat_outbound_queue_full_total 1")
+        );
+        assert!(
+            metrics
+                .lines()
+                .any(|line| line == "simplestchat_outbound_queue_closed_total 2")
+        );
+        assert_eq!(room.social.history.len(), 2);
+    }
+
+    #[test]
+    fn failed_ack_retries_are_counted_without_rebroadcasting_chat() {
+        let (mut room, alice, _, _, mut receivers) = fixture();
+        for _ in 0..16 {
+            alice.sender.try_send(Arc::new("queued".into())).unwrap();
+        }
+        assert!(chat(&mut room, &alice, "same-id", None).is_err());
+        assert!(chat(&mut room, &alice, "same-id", None).is_err());
+        assert_eq!(room.social.history.len(), 1);
+        for receiver in receivers.iter_mut().skip(1) {
+            assert!(receiver.try_recv().is_ok());
+            assert!(receiver.try_recv().is_err());
+        }
+        assert!(
+            room.metrics
+                .render_prometheus(0, 0, 0)
+                .lines()
+                .any(|line| line == "simplestchat_outbound_queue_full_total 2")
+        );
     }
 
     #[test]
@@ -833,9 +909,12 @@ impl ClientMessage {
     }
 }
 
-fn send(sender: &mpsc::Sender<Arc<String>>, message: &ServerMessage) -> Result<()> {
-    sender
-        .try_send(Arc::new(serde_json::to_string(message)?))
+fn send(
+    metrics: &ServerMetrics,
+    sender: &mpsc::Sender<Arc<String>>,
+    message: &ServerMessage,
+) -> Result<()> {
+    try_send_essential(metrics, sender, Arc::new(serde_json::to_string(message)?))
         .map_err(|_| rejected("Connection is busy; please retry"))
 }
 fn page_offset(offset: Option<u32>) -> Result<usize> {
@@ -1009,6 +1088,7 @@ impl RoomManager {
                 return Err(rejected("Message ID was already used"));
             }
             return send(
+                &room.metrics,
                 expected_sender,
                 &ServerMessage::MessageAck {
                     client_message_id,
@@ -1048,6 +1128,7 @@ impl RoomManager {
         if let Some((_, _, recipient_sender)) = &recipient {
             // Only acknowledged when the recipient's live connection accepted delivery.
             send(
+                &room.metrics,
                 recipient_sender,
                 &ServerMessage::PrivateMessageReceived {
                     message: message.clone(),
@@ -1065,7 +1146,7 @@ impl RoomManager {
             let json = Arc::new(serde_json::to_string(&event)?);
             for participant in room.participants.values() {
                 if participant.id != sender_id && !participant.social.ignored.contains(sender_id) {
-                    let _ = participant.sender.try_send(json.clone());
+                    let _ = try_send_essential(&room.metrics, &participant.sender, json.clone());
                 }
             }
         }
@@ -1075,6 +1156,7 @@ impl RoomManager {
             message.clone(),
         );
         send(
+            &room.metrics,
             expected_sender,
             &ServerMessage::MessageAck {
                 client_message_id,
@@ -1119,6 +1201,7 @@ impl RoomManager {
                 )
                 .await?;
                 return send(
+                    &self.metrics,
                     expected_sender,
                     &ServerMessage::SocialResponse {
                         request_id: request_id.to_string(),
@@ -1573,6 +1656,7 @@ impl RoomManager {
             _ => return Err(rejected("Unknown request")),
         };
         send(
+            &self.metrics,
             expected_sender,
             &ServerMessage::SocialResponse {
                 request_id: request_id.to_string(),

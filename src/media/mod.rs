@@ -4,6 +4,7 @@
 // Handles mediasoup workers, routers, transports, producers, and consumers
 
 pub mod config;
+pub mod diagnostics;
 pub mod router_manager;
 pub mod transport_manager;
 pub mod types;

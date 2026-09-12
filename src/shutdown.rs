@@ -4,7 +4,7 @@
 
 use std::future::Future;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
 /// Shared, persistent drain notification, including for late subscribers.
@@ -66,18 +66,24 @@ pub async fn run_stage<E: std::fmt::Display>(
     budget: Duration,
     work: impl Future<Output = Result<(), E>>,
 ) -> anyhow::Result<()> {
+    let started = Instant::now();
     match tokio::time::timeout(budget, work).await {
         Ok(Ok(())) => {
-            tracing::info!(stage, "Shutdown stage complete");
+            tracing::info!(
+                stage,
+                elapsed_ms = started.elapsed().as_millis(),
+                "Shutdown stage complete"
+            );
             Ok(())
         }
         Ok(Err(error)) => {
-            tracing::error!(stage, %error, "Shutdown stage failed; continuing remaining cleanup");
+            tracing::error!(stage, elapsed_ms = started.elapsed().as_millis(), %error, "Shutdown stage failed; continuing remaining cleanup");
             anyhow::bail!("Shutdown stage failed: {stage}")
         }
         Err(_) => {
             tracing::error!(
                 stage,
+                elapsed_ms = started.elapsed().as_millis(),
                 budget_ms = budget.as_millis(),
                 "Shutdown stage timed out; unfinished work will be cancelled"
             );

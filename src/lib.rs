@@ -13,6 +13,7 @@
 
 pub mod auth;
 pub mod db;
+pub mod diagnostics;
 pub mod media;
 pub mod metrics;
 pub mod room;
