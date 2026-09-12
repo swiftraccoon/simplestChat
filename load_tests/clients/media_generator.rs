@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 /// Configuration for synthetic media generation
@@ -87,6 +88,38 @@ const MAX_RTP_PAYLOAD: usize = 1100;
 const VP8_DESCRIPTOR_SIZE: usize = 3;
 const FRAME_DATA_PER_PACKET: usize = MAX_RTP_PAYLOAD - VP8_DESCRIPTOR_SIZE;
 
+/// Coalesces feedback into one pending request, without allocating a packet queue.
+#[derive(Default)]
+pub struct KeyframeRequests {
+    pending: AtomicBool,
+}
+
+impl KeyframeRequests {
+    /// Return true only for the first request since the last generated keyframe.
+    pub fn request(&self) -> bool {
+        !self.pending.swap(true, Ordering::Relaxed)
+    }
+
+    pub fn is_pending(&self) -> bool {
+        self.pending.load(Ordering::Relaxed)
+    }
+
+    /// Only the frame generator clears the latch, when satisfying the request.
+    /// A concurrent request after this operation remains pending for a later frame.
+    pub fn take(&self) -> bool {
+        self.pending.swap(false, Ordering::Relaxed)
+    }
+}
+
+/// Frame metadata describes local generation, not network egress or decoding.
+pub struct GeneratedVideoFrame {
+    pub packets: Vec<Vec<u8>>,
+    pub frame_index: u64,
+    pub rtp_timestamp: u32,
+    pub is_keyframe: bool,
+    pub requested: bool,
+}
+
 /// Generates synthetic media packets
 pub struct MediaGenerator {
     config: MediaConfig,
@@ -97,6 +130,7 @@ pub struct MediaGenerator {
     audio_ssrc: u32,
     video_ssrc: u32,
     frame_count: u64,
+    last_keyframe: Option<u64>,
 }
 
 impl MediaGenerator {
@@ -114,6 +148,7 @@ impl MediaGenerator {
             audio_ssrc,
             video_ssrc,
             frame_count: 0,
+            last_keyframe: None,
         }
     }
 
@@ -173,11 +208,26 @@ impl MediaGenerator {
     /// Returns multiple MTU-sized packets that together represent one video frame.
     /// Each packet contains a valid VP8 RTP payload descriptor (RFC 7741) with
     /// picture ID so mediasoup can properly rewrite descriptors during forwarding.
-    pub fn generate_video_frame(&mut self) -> Vec<Vec<u8>> {
+    ///
+    /// Feedback is satisfied on a scheduled frame, never by an extra timer tick.
+    /// Request-driven keyframes are separated by at least `video_fps` frames from
+    /// the preceding keyframe. Pending requests survive that cooldown. Periodic
+    /// keyframes retain their original five-second frame phase and also satisfy
+    /// requests; an extra keyframe never postpones the periodic schedule.
+    pub fn generate_video_frame(&mut self, requests: &KeyframeRequests) -> GeneratedVideoFrame {
         let keyframe_interval = self.config.video_fps as u64 * 5;
-        let is_keyframe = self.frame_count.is_multiple_of(keyframe_interval);
+        let periodic = self.frame_count.is_multiple_of(keyframe_interval);
+        let can_request = self
+            .last_keyframe
+            .is_none_or(|last| self.frame_count - last >= self.config.video_fps as u64);
+        let requested = (periodic || can_request) && requests.is_pending() && requests.take();
+        let is_keyframe = periodic || requested;
+        if is_keyframe {
+            self.last_keyframe = Some(self.frame_count);
+        }
         let frame_size = self.compute_frame_size(is_keyframe);
         let pic_id = (self.frame_count & 0x7F) as u8;
+        let frame_index = self.frame_count;
 
         let timestamp_increment = 90000 / self.config.video_fps as u32;
         let frame_timestamp = self.video_timestamp;
@@ -254,7 +304,13 @@ impl MediaGenerator {
             packets.push(packet);
         }
 
-        packets
+        GeneratedVideoFrame {
+            packets,
+            frame_index,
+            rtp_timestamp: frame_timestamp,
+            is_keyframe,
+            requested,
+        }
     }
 
     /// Get the interval between audio packets (20ms for Opus)
@@ -265,6 +321,112 @@ impl MediaGenerator {
     /// Get the interval between video frames
     pub fn video_packet_interval(&self) -> Duration {
         Duration::from_secs_f64(1.0 / self.config.video_fps as f64)
+    }
+}
+
+#[cfg(test)]
+mod keyframe_tests {
+    use super::*;
+
+    fn assert_frame(frame: &GeneratedVideoFrame, fps: u8) {
+        assert!(!frame.packets.is_empty());
+        assert_eq!(
+            frame.rtp_timestamp,
+            frame.frame_index as u32 * (90000 / fps as u32)
+        );
+        for (index, packet) in frame.packets.iter().enumerate() {
+            assert_eq!(
+                u32::from_be_bytes(packet[4..8].try_into().unwrap()),
+                frame.rtp_timestamp
+            );
+            assert_eq!(packet[1] & 0x80 != 0, index + 1 == frame.packets.len());
+            assert_eq!(packet[20] & 0x10 != 0, index == 0);
+            assert_eq!(packet[22], (frame.frame_index & 0x7f) as u8);
+        }
+        assert_eq!(frame.packets[0][23] & 1 == 0, frame.is_keyframe);
+        if frame.is_keyframe {
+            assert_eq!(&frame.packets[0][26..29], &[0x9d, 0x01, 0x2a]);
+        }
+    }
+
+    #[test]
+    fn periodic_keyframes_keep_their_phase_at_every_supported_frame_rate() {
+        for fps in [15, 30, 60] {
+            let requests = KeyframeRequests::default();
+            let mut generator = MediaGenerator::new(MediaConfig::from_preset("480p", fps));
+            for index in 0..=u64::from(fps) * 10 {
+                let frame = generator.generate_video_frame(&requests);
+                assert_frame(&frame, fps);
+                assert_eq!(frame.frame_index, index);
+                assert_eq!(frame.is_keyframe, index.is_multiple_of(u64::from(fps) * 5));
+                assert!(!frame.requested);
+            }
+        }
+    }
+
+    #[test]
+    fn requests_coalesce_and_survive_cooldown_until_a_scheduled_frame() {
+        let requests = KeyframeRequests::default();
+        let mut generator = MediaGenerator::new(MediaConfig::default());
+        assert!(generator.generate_video_frame(&requests).is_keyframe);
+        assert!(requests.request());
+        for _ in 0..1000 {
+            assert!(!requests.request());
+        }
+        for _ in 1..30 {
+            let frame = generator.generate_video_frame(&requests);
+            assert!(!frame.is_keyframe);
+            assert!(requests.is_pending());
+        }
+        let frame = generator.generate_video_frame(&requests);
+        assert_frame(&frame, 30);
+        assert_eq!(frame.frame_index, 30);
+        assert!(frame.is_keyframe && frame.requested);
+        assert!(!requests.is_pending());
+        assert!(!generator.generate_video_frame(&requests).is_keyframe);
+        // A new request after satisfaction must not be lost to the old batch.
+        assert!(requests.request());
+        for _ in 32..60 {
+            assert!(!generator.generate_video_frame(&requests).is_keyframe);
+        }
+        assert!(generator.generate_video_frame(&requests).requested);
+    }
+
+    #[test]
+    fn continuous_requests_are_bounded_without_postponing_periodic_keyframes() {
+        let requests = KeyframeRequests::default();
+        let mut generator = MediaGenerator::new(MediaConfig::default());
+        let mut keys = Vec::new();
+        for index in 0..=300 {
+            requests.request();
+            let frame = generator.generate_video_frame(&requests);
+            assert_frame(&frame, 30);
+            if frame.is_keyframe {
+                keys.push(index);
+                assert!(frame.requested);
+            }
+        }
+        assert_eq!(keys, (0..=300).step_by(30).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn periodic_frame_satisfies_request_even_inside_extra_keyframe_cooldown() {
+        let requests = KeyframeRequests::default();
+        let mut generator = MediaGenerator::new(MediaConfig::default());
+        for _ in 0..130 {
+            generator.generate_video_frame(&requests);
+        }
+        requests.request();
+        assert!(generator.generate_video_frame(&requests).requested);
+        requests.request();
+        for _ in 131..150 {
+            assert!(!generator.generate_video_frame(&requests).is_keyframe);
+            assert!(requests.is_pending());
+        }
+        let periodic = generator.generate_video_frame(&requests);
+        assert_eq!(periodic.frame_index, 150);
+        assert!(periodic.is_keyframe && periodic.requested);
+        assert!(!requests.is_pending());
     }
 }
 

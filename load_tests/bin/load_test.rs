@@ -36,6 +36,11 @@ mod subscriptions {
     include!("../clients/subscriptions.rs");
 }
 
+#[cfg(test)]
+mod keyframe_tests {
+    include!("../clients/keyframe_tests.rs");
+}
+
 use media_generator::{MediaConfig, MediaGenerator};
 use metrics::{AttemptPlan, ClientMetrics, MeasurementWindow, MetricsCollector, TestSummary};
 use rtc::shared::marshal::Unmarshal;
@@ -1687,11 +1692,12 @@ async fn send_real_media_loop(
     tracing::debug!("{}: Starting REAL media send loop", client_id);
 
     // Get tracks from WebRTC session
-    let (audio_track, video_track, ssrcs) = {
+    let (audio_track, video_track, keyframe_requests, ssrcs) = {
         let session = webrtc_session.lock().await;
         (
             session.audio_track(),
             session.video_track(),
+            session.video_keyframe_requests(),
             session.send_ssrcs().await,
         )
     };
@@ -1701,6 +1707,13 @@ async fn send_real_media_loop(
             metrics.record_error(format!("Cannot send without negotiated SSRCs: {error}"));
             return;
         }
+    };
+    let Some(keyframe_requests) = keyframe_requests else {
+        metrics.record_error_for_attempt(
+            attempt,
+            "Cannot send without owned keyframe request state".into(),
+        );
+        return;
     };
 
     let mut audio_interval = tokio::time::interval(media_gen.audio_packet_interval());
@@ -1741,9 +1754,9 @@ async fn send_real_media_loop(
             }
             _ = video_interval.tick(), if config.video_enabled => {
                 if let Some(track) = &video_track {
-                    let frame_packets = media_gen.generate_video_frame();
+                    let frame = media_gen.generate_video_frame(&keyframe_requests);
                     let mut send_error = false;
-                    for packet_bytes in frame_packets {
+                    for packet_bytes in frame.packets {
                         let packet = negotiated_rtp_packet(&packet_bytes, video_ssrc);
                         let result = match packet {
                             Ok(packet) => track.write_rtp(packet).await,
@@ -1767,6 +1780,14 @@ async fn send_real_media_loop(
                         }
                     }
                     if send_error { break; }
+                    if frame.is_keyframe && metrics.diagnostics_enabled() {
+                        metrics.diagnostic_event_for_attempt(attempt, "video-keyframe-queued", serde_json::json!({
+                            "ssrc": video_ssrc,
+                            "frameIndex": frame.frame_index,
+                            "rtpTimestamp": frame.rtp_timestamp,
+                            "requested": frame.requested,
+                        }));
+                    }
                 }
             }
         }
@@ -2031,6 +2052,29 @@ mod packet_migration_tests {
     use super::*;
 
     #[test]
+    fn producer_video_advertises_supported_feedback_without_changing_audio() {
+        let audio = extract_rtp_parameters(MediaKind::Audio, 12_345, 1000);
+        let video = extract_rtp_parameters(MediaKind::Video, 54_321, 1000);
+        let RtpCodecParameters::Audio { rtcp_feedback, .. } = &audio.codecs[0] else {
+            panic!("audio codec expected");
+        };
+        assert!(rtcp_feedback.is_empty());
+        let RtpCodecParameters::Video { rtcp_feedback, .. } = &video.codecs[0] else {
+            panic!("video codec expected");
+        };
+        assert_eq!(
+            rtcp_feedback,
+            &[
+                RtcpFeedback::Nack,
+                RtcpFeedback::NackPli,
+                RtcpFeedback::CcmFir
+            ]
+        );
+        assert_eq!(video.encodings[0].ssrc, Some(54_321));
+        assert_eq!(video.encodings[0].max_bitrate, Some(1_000_000));
+    }
+
+    #[test]
     fn cli_rejects_malformed_and_unknown_workload_options() {
         for args in [
             vec!["load_test", "--clients", "nope"],
@@ -2076,7 +2120,9 @@ mod packet_migration_tests {
     fn generated_packets_use_negotiated_ssrc_without_altering_media_payload() {
         let mut generator = MediaGenerator::new(MediaConfig::default());
         let audio = generator.generate_audio_packet();
-        let mut video = generator.generate_video_frame();
+        let mut video = generator
+            .generate_video_frame(&media_generator::KeyframeRequests::default())
+            .packets;
         assert!(!video.is_empty());
         for (bytes, ssrc, payload_type) in [(audio, 12_345, 111), (video.remove(0), 54_321, 96)] {
             let before = rtc::rtp::Packet::unmarshal(&mut bytes.as_slice()).unwrap();
@@ -2753,7 +2799,11 @@ fn extract_rtp_parameters(kind: MediaKind, ssrc: u32, video_bitrate_kbps: u32) -
                 payload_type: 96,
                 clock_rate: NonZeroU32::new(90000).unwrap(),
                 parameters: RtpCodecParametersParameters::default(),
-                rtcp_feedback: vec![],
+                rtcp_feedback: vec![
+                    RtcpFeedback::Nack,
+                    RtcpFeedback::NackPli,
+                    RtcpFeedback::CcmFir,
+                ],
             }],
             header_extensions: vec![RtpHeaderExtensionParameters {
                 uri: RtpHeaderExtensionUri::Mid,

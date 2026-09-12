@@ -14,6 +14,7 @@ For commands, options, and report definitions, see the
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
 | `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill |
+| `keyframe_tests.rs` | Paired native startup controls and bounded owned cleanup (tests only) |
 | `mod.rs` | Module exports |
 
 ## How It Works
@@ -46,9 +47,18 @@ Keep these invariants when changing the client:
   extensions and valid VP8 Picture ID descriptors for forwarding.
 - Wait for peer `Connected` before publishing: `write_rtp` queues packets and
   does not wait for the handshake or confirm network egress.
+- Advertise supported video NACK, PLI and FIR consistently in producer parameters
+  and SDP. Observe keyframe feedback before the default interceptor chain consumes
+  RTCP, then preserve that chain's processing. Only requests targeting the owned
+  video SSRC can set the single pending bit; repeated latest FIR identities
+  (sender and sequence) are ignored without an unbounded sender registry.
+- Satisfy feedback on a scheduled video frame, coalescing requests through a
+  cooldown of `video_fps` frames after the preceding keyframe. Periodic keyframes
+  retain their five-second frame phase and also satisfy pending requests. Extra
+  keyframes increase synthetic traffic; comparisons require the same generator.
 - Return promptly from `on_track`; run cancellable `TrackRemote::poll()` readers
-  separately. Only `OnRtpPacket` counts as received media. Close readers, feedback
-  pollers, and the peer driver with the transport.
+  separately. Only `OnRtpPacket` counts as received media. Close readers and the
+  peer driver with the transport; feedback observation adds no polling task.
 - Bind loopback candidates to same-family loopback UDP addresses; other
   candidates use a matching-family wildcard bind.
 
@@ -88,3 +98,8 @@ RTP across incremental consumer renegotiation and unchanged-mapping replay.
 It exercises receiver registration and cleanup, not browser decoding or
 mediasoup interoperability. Run it through the
 [development command](../README.md#development).
+
+A paired native SFU fixture also compares equal receiver observations with and
+without advertised producer feedback. It checks delayed video startup against
+observed keyframe generation and actual RTP receipt, then verifies ongoing
+delivery. It is not a browser decoder or production-capacity test.

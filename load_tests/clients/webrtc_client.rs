@@ -4,10 +4,16 @@
 use anyhow::{Context, Result};
 use mediasoup::prelude::*;
 use mediasoup_types::data_structures::{DtlsFingerprint, DtlsRole, IceCandidateType};
-use rtc::rtp_transceiver::rtp_sender::{
-    RTCRtpCodec, RTCRtpCodecParameters, RTCRtpCodingParameters, RTCRtpEncodingParameters,
-    RTCRtpHeaderExtensionCapability, RtpCodecKind,
+use rtc::interceptor::{Interceptor, Packet, StreamInfo, TaggedPacket, interceptor};
+use rtc::rtcp::payload_feedbacks::{
+    full_intra_request::FullIntraRequest, picture_loss_indication::PictureLossIndication,
 };
+use rtc::rtp_transceiver::rtp_sender::{
+    RTCPFeedback, RTCRtpCodec, RTCRtpCodecParameters, RTCRtpCodingParameters,
+    RTCRtpEncodingParameters, RTCRtpHeaderExtensionCapability, RtpCodecKind,
+};
+use rtc::sansio;
+use rtc::shared::error::Error;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 use webrtc::media_stream::MediaStreamTrack;
@@ -20,6 +26,78 @@ use webrtc::peer_connection::{
     register_default_interceptors,
 };
 use webrtc::rtp_transceiver::{RTCRtpTransceiverDirection, RTCRtpTransceiverInit};
+
+/// Observe requests before the default chain consumes RTCP. The original packet
+/// still reaches every interceptor; this observer neither clones nor queues it.
+#[derive(Interceptor)]
+struct VideoFeedbackObserver<P> {
+    #[next]
+    next: P,
+    video_ssrc: Option<u32>,
+    requests: Arc<super::media_generator::KeyframeRequests>,
+    cancellation: tokio::sync::watch::Receiver<bool>,
+    metrics: Option<Arc<super::metrics::MetricsCollector>>,
+    diagnostic_attempt: usize,
+    // One SFU owns this transport. Retain only its latest FIR identity rather
+    // than allocating a map proportional to arbitrary RTCP sender identities.
+    last_fir: Option<(u32, u8)>,
+}
+
+impl<P> VideoFeedbackObserver<P> {
+    fn request(&self, ssrc: u32, feedback: &str) {
+        if self.requests.request()
+            && let Some(metrics) = &self.metrics
+            && metrics.diagnostics_enabled()
+        {
+            metrics.diagnostic_event_for_attempt(
+                self.diagnostic_attempt,
+                "keyframe-requested",
+                serde_json::json!({"ssrc": ssrc, "feedback": feedback}),
+            );
+        }
+    }
+
+    fn observe(&mut self, packets: &[Box<dyn rtc::rtcp::Packet>]) {
+        let Some(ssrc) = self.video_ssrc else {
+            return;
+        };
+        if *self.cancellation.borrow() {
+            return;
+        }
+        for packet in packets {
+            if let Some(pli) = packet.as_any().downcast_ref::<PictureLossIndication>() {
+                if pli.media_ssrc == ssrc {
+                    self.request(ssrc, "pli");
+                }
+            } else if let Some(fir) = packet.as_any().downcast_ref::<FullIntraRequest>() {
+                for entry in &fir.fir {
+                    let identity = (fir.sender_ssrc, entry.sequence_number);
+                    if entry.ssrc == ssrc && self.last_fir != Some(identity) {
+                        self.last_fir = Some(identity);
+                        self.request(ssrc, "fir");
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[interceptor]
+impl<P: Interceptor> VideoFeedbackObserver<P> {
+    #[overrides]
+    fn handle_read(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
+        if let Packet::Rtcp(packets) = &msg.message {
+            self.observe(packets);
+        }
+        self.next.handle_read(msg)
+    }
+
+    #[overrides]
+    fn close(&mut self) -> Result<(), Self::Error> {
+        self.video_ssrc = None;
+        self.next.close()
+    }
+}
 
 struct TransportEvents {
     client_id: String,
@@ -221,6 +299,7 @@ pub struct WebRtcTransport {
     connection_state: tokio::sync::watch::Receiver<RTCPeerConnectionState>,
     send_audio_track: Option<Arc<TrackLocalStaticRTP>>,
     send_video_track: Option<Arc<TrackLocalStaticRTP>>,
+    video_keyframe_requests: Arc<super::media_generator::KeyframeRequests>,
 }
 
 impl Drop for WebRtcTransport {
@@ -263,7 +342,22 @@ fn video_codec() -> RTCRtpCodec {
         clock_rate: 90000,
         channels: 0,
         sdp_fmtp_line: String::new(),
-        rtcp_feedback: vec![],
+        // Default interceptors provide NACK retransmission. The bounded video
+        // observer additionally turns PLI/FIR into scheduled generator work.
+        rtcp_feedback: vec![
+            RTCPFeedback {
+                typ: "nack".into(),
+                parameter: String::new(),
+            },
+            RTCPFeedback {
+                typ: "nack".into(),
+                parameter: "pli".into(),
+            },
+            RTCPFeedback {
+                typ: "ccm".into(),
+                parameter: "fir".into(),
+            },
+        ],
     }
 }
 
@@ -272,7 +366,7 @@ async fn attach_local_track(
     client_id: &str,
     kind: RtpCodecKind,
     codec: RTCRtpCodec,
-    mut cancellation: tokio::sync::watch::Receiver<bool>,
+    ssrc: u32,
 ) -> Result<Arc<TrackLocalStaticRTP>> {
     let track = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
         format!("stream-{client_id}"),
@@ -281,7 +375,7 @@ async fn attach_local_track(
         kind,
         vec![RTCRtpEncodingParameters {
             rtp_coding_parameters: RTCRtpCodingParameters {
-                ssrc: Some(rand::random::<u32>()),
+                ssrc: Some(ssrc),
                 ..Default::default()
             },
             codec,
@@ -291,14 +385,6 @@ async fn attach_local_track(
     peer.add_track(track.clone() as Arc<dyn TrackLocal>)
         .await
         .context("Failed to add local RTP track")?;
-    // In 0.20 feedback is delivered on the local track, not on RtpSender.
-    let feedback_track = track.clone();
-    tokio::spawn(async move {
-        while next_track_event(&mut cancellation, feedback_track.poll())
-            .await
-            .is_some()
-        {}
-    });
     Ok(track)
 }
 
@@ -344,9 +430,15 @@ impl WebRtcTransport {
             },
             RtpCodecKind::Audio,
         )?;
+        // The default registry appends NACK and PLI capabilities; register only
+        // FIR here so the offer does not advertise duplicate feedback entries.
+        let mut registered_video_codec = video_codec();
+        registered_video_codec
+            .rtcp_feedback
+            .retain(|feedback| feedback.typ != "nack");
         media_engine.register_codec(
             RTCRtpCodecParameters {
-                rtp_codec: video_codec(),
+                rtp_codec: registered_video_codec,
                 payload_type: 96,
             },
             RtpCodecKind::Video,
@@ -362,15 +454,27 @@ impl WebRtcTransport {
         }
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
         let (cancellation, cancellation_rx) = tokio::sync::watch::channel(false);
+        let video_ssrc = rand::random::<u32>();
+        let video_keyframe_requests = Arc::new(super::media_generator::KeyframeRequests::default());
+        let diagnostic_attempt = metrics
+            .as_ref()
+            .map(|m| m.diagnostic_attempt())
+            .unwrap_or(0);
+        let registry = registry.with(|next| VideoFeedbackObserver {
+            next,
+            video_ssrc: is_send.then_some(video_ssrc),
+            requests: video_keyframe_requests.clone(),
+            cancellation: cancellation.subscribe(),
+            metrics: metrics.clone(),
+            diagnostic_attempt,
+            last_fir: None,
+        });
         let (connection_state_tx, connection_state) =
             tokio::sync::watch::channel(RTCPeerConnectionState::New);
         let handler = Arc::new(TransportEvents {
             client_id: client_id.clone(),
             transport_id: transport_id.clone(),
-            diagnostic_attempt: metrics
-                .as_ref()
-                .map(|m| m.diagnostic_attempt())
-                .unwrap_or(0),
+            diagnostic_attempt,
             metrics,
             cancellation: cancellation_rx,
             connection_state: connection_state_tx,
@@ -431,7 +535,7 @@ impl WebRtcTransport {
                             &client_id,
                             RtpCodecKind::Audio,
                             audio_codec(),
-                            cancellation.subscribe(),
+                            rand::random::<u32>(),
                         )
                         .await?,
                     ),
@@ -441,7 +545,7 @@ impl WebRtcTransport {
                             &client_id,
                             RtpCodecKind::Video,
                             video_codec(),
-                            cancellation.subscribe(),
+                            video_ssrc,
                         )
                         .await?,
                     ),
@@ -475,6 +579,7 @@ impl WebRtcTransport {
                 connection_state,
                 send_audio_track,
                 send_video_track,
+                video_keyframe_requests,
             };
             let local_dtls = transport.generate_dtls_parameters().await?;
             Ok::<_, anyhow::Error>((transport, local_dtls))
@@ -954,6 +1059,13 @@ impl WebRtcSession {
         self.video_track.clone()
     }
 
+    /// Return this send transport's bounded request latch, never a prior session's.
+    pub fn video_keyframe_requests(&self) -> Option<Arc<super::media_generator::KeyframeRequests>> {
+        self.send_transport
+            .as_ref()
+            .map(|transport| transport.video_keyframe_requests.clone())
+    }
+
     pub async fn diagnostic_snapshot(&self) -> Result<serde_json::Value> {
         let mut transports = Vec::new();
         if let Some(transport) = &self.send_transport {
@@ -1235,6 +1347,8 @@ fn generate_remote_sdp(
         ));
         if kind == MediaKind::Audio {
             sdp.push_str("a=fmtp:111 minptime=10;useinbandfec=1\r\n");
+        } else {
+            sdp.push_str("a=rtcp-fb:96 nack\r\na=rtcp-fb:96 nack pli\r\na=rtcp-fb:96 ccm fir\r\n");
         }
         if let Some(consumer) = consumer {
             let ssrc = consumer.ssrc;
@@ -1260,8 +1374,246 @@ fn hex_encode(bytes: &[u8]) -> String {
 mod migration_tests {
     use super::*;
     use futures_util::FutureExt;
+    use rtc::interceptor::NoopInterceptor;
+    use rtc::rtcp::payload_feedbacks::full_intra_request::FirEntry;
+    use rtc::sansio::Protocol as _;
     use std::time::Duration;
     use webrtc::media_stream::Track;
+
+    #[derive(Interceptor)]
+    struct FeedbackProbe<P> {
+        #[next]
+        next: P,
+        reads: usize,
+        last_read: Option<Packet>,
+    }
+
+    #[interceptor]
+    impl<P: Interceptor> FeedbackProbe<P> {
+        #[overrides]
+        fn handle_read(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
+            self.reads += 1;
+            self.last_read = Some(msg.message.clone());
+            self.next.handle_read(msg)
+        }
+    }
+
+    struct FeedbackFixture {
+        observer: VideoFeedbackObserver<FeedbackProbe<NoopInterceptor>>,
+        cancellation: tokio::sync::watch::Sender<bool>,
+    }
+
+    impl FeedbackFixture {
+        fn new() -> Self {
+            let (cancellation, receiver) = tokio::sync::watch::channel(false);
+            let metrics = Arc::new(super::super::metrics::MetricsCollector::new(
+                "feedback-test".into(),
+            ));
+            metrics.begin_connection_attempt();
+            metrics.enable_diagnostics();
+            Self {
+                observer: VideoFeedbackObserver {
+                    next: FeedbackProbe {
+                        next: NoopInterceptor::new(),
+                        reads: 0,
+                        last_read: None,
+                    },
+                    video_ssrc: Some(7),
+                    requests: Arc::new(super::super::media_generator::KeyframeRequests::default()),
+                    cancellation: receiver,
+                    metrics: Some(metrics),
+                    diagnostic_attempt: 1,
+                    last_fir: None,
+                },
+                cancellation,
+            }
+        }
+
+        fn receive(&mut self, packets: Vec<Box<dyn rtc::rtcp::Packet>>) {
+            self.observer
+                .handle_read(TaggedPacket {
+                    now: std::time::Instant::now(),
+                    transport: Default::default(),
+                    message: Packet::Rtcp(packets),
+                })
+                .unwrap();
+        }
+    }
+
+    fn pli(ssrc: u32) -> Box<dyn rtc::rtcp::Packet> {
+        Box::new(PictureLossIndication {
+            sender_ssrc: 99,
+            media_ssrc: ssrc,
+        })
+    }
+
+    fn fir(sender_ssrc: u32, ssrc: u32, sequence_number: u8) -> Box<dyn rtc::rtcp::Packet> {
+        Box::new(FullIntraRequest {
+            sender_ssrc,
+            // FIR targets are carried by entries, not this field.
+            media_ssrc: 0,
+            fir: vec![FirEntry {
+                ssrc,
+                sequence_number,
+            }],
+        })
+    }
+
+    #[test]
+    fn video_feedback_filters_targets_and_coalesces_attempt_scoped_diagnostics() {
+        let mut fixture = FeedbackFixture::new();
+        fixture.receive(vec![
+            pli(8),
+            fir(99, 8, 1),
+            Box::new(rtc::rtcp::receiver_report::ReceiverReport::default()),
+            Box::new(
+                rtc::rtcp::transport_feedbacks::transport_layer_nack::TransportLayerNack {
+                    media_ssrc: 7,
+                    ..Default::default()
+                },
+            ),
+        ]);
+        assert!(!fixture.observer.requests.take());
+        fixture
+            .observer
+            .metrics
+            .as_ref()
+            .unwrap()
+            .begin_connection_attempt();
+        fixture.receive(vec![pli(7), pli(7), pli(7)]);
+        assert!(fixture.observer.requests.take());
+        fixture.receive(vec![pli(7)]);
+        assert!(fixture.observer.requests.take());
+        let report = fixture.observer.metrics.as_ref().unwrap().generate_report();
+        let events = &report.diagnostics.unwrap().events;
+        assert_eq!(events.len(), 2);
+        assert!(
+            events
+                .iter()
+                .all(|event| event.attempt == 1 && event.kind == "keyframe-requested")
+        );
+        assert_eq!(
+            events[0].details,
+            serde_json::json!({"ssrc": 7, "feedback": "pli"})
+        );
+    }
+
+    #[test]
+    fn video_feedback_fir_duplicates_are_bounded_and_sequence_wrap_is_valid() {
+        let mut fixture = FeedbackFixture::new();
+        fixture.receive(vec![fir(99, 7, 255)]);
+        assert!(fixture.observer.requests.take());
+        fixture.receive(vec![fir(99, 7, 255)]);
+        assert!(!fixture.observer.requests.take());
+        fixture.receive(vec![fir(99, 8, 0)]);
+        assert_eq!(fixture.observer.last_fir, Some((99, 255)));
+        fixture.receive(vec![fir(99, 7, 0)]);
+        assert!(fixture.observer.requests.take());
+        fixture.receive(vec![fir(100, 7, 0)]);
+        assert!(fixture.observer.requests.take());
+        assert_eq!(fixture.observer.last_fir, Some((100, 0)));
+        let report = fixture.observer.metrics.as_ref().unwrap().generate_report();
+        let events = &report.diagnostics.unwrap().events;
+        assert_eq!(events.len(), 3);
+        assert!(
+            events
+                .iter()
+                .all(|event| event.details["feedback"] == "fir")
+        );
+    }
+
+    #[test]
+    fn video_feedback_cancellation_close_and_receive_only_never_request_frames() {
+        let mut fixture = FeedbackFixture::new();
+        fixture.cancellation.send_replace(true);
+        fixture.receive(vec![pli(7), fir(99, 7, 1)]);
+        assert!(!fixture.observer.requests.take());
+        assert_eq!(fixture.observer.next.reads, 1);
+
+        let mut fixture = FeedbackFixture::new();
+        fixture.observer.close().unwrap();
+        fixture.receive(vec![pli(7), fir(99, 7, 1)]);
+        assert!(!fixture.observer.requests.take());
+        assert_eq!(fixture.observer.next.reads, 1);
+
+        let mut fixture = FeedbackFixture::new();
+        fixture.observer.video_ssrc = None;
+        fixture.receive(vec![pli(7), fir(99, 7, 1)]);
+        assert!(!fixture.observer.requests.take());
+        assert_eq!(fixture.observer.next.reads, 1);
+    }
+
+    #[test]
+    fn video_feedback_preserves_inner_packet_processing_and_rtp_passthrough() {
+        let mut fixture = FeedbackFixture::new();
+        let packets = vec![pli(7), fir(99, 7, 1)];
+        let expected = Packet::Rtcp(packets.clone());
+        fixture.receive(packets);
+        assert_eq!(fixture.observer.next.last_read.as_ref(), Some(&expected));
+        assert_eq!(fixture.observer.next.reads, 1);
+        assert!(
+            fixture.observer.poll_read().is_none(),
+            "terminal consumes RTCP as before"
+        );
+        assert!(fixture.observer.requests.take());
+
+        let rtp = rtc::rtp::Packet::default();
+        fixture
+            .observer
+            .handle_read(TaggedPacket {
+                now: std::time::Instant::now(),
+                transport: Default::default(),
+                message: Packet::Rtp(rtp.clone()),
+            })
+            .unwrap();
+        assert_eq!(
+            fixture.observer.poll_read().unwrap().message,
+            Packet::Rtp(rtp.clone())
+        );
+        fixture
+            .observer
+            .handle_write(TaggedPacket {
+                now: std::time::Instant::now(),
+                transport: Default::default(),
+                message: Packet::Rtp(rtp.clone()),
+            })
+            .unwrap();
+        assert_eq!(
+            fixture.observer.poll_write().unwrap().message,
+            Packet::Rtp(rtp)
+        );
+        assert!(!fixture.observer.requests.take());
+    }
+
+    #[test]
+    fn video_feedback_observer_precedes_the_complete_default_interceptor_chain() {
+        let (cancellation, receiver) = tokio::sync::watch::channel(false);
+        let requests = Arc::new(super::super::media_generator::KeyframeRequests::default());
+        let mut media_engine = MediaEngine::default();
+        let registry = register_default_interceptors(Registry::new(), &mut media_engine).unwrap();
+        let mut observer = registry
+            .with(|next| VideoFeedbackObserver {
+                next,
+                video_ssrc: Some(7),
+                requests: requests.clone(),
+                cancellation: receiver,
+                metrics: None,
+                diagnostic_attempt: 0,
+                last_fir: None,
+            })
+            .build();
+        observer
+            .handle_read(TaggedPacket {
+                now: std::time::Instant::now(),
+                transport: Default::default(),
+                message: Packet::Rtcp(vec![pli(7)]),
+            })
+            .unwrap();
+        assert!(requests.take());
+        assert!(observer.poll_read().is_none());
+        cancellation.send_replace(true);
+        observer.close().unwrap();
+    }
 
     struct LoopbackSenderEvents {
         state: tokio::sync::watch::Sender<RTCPeerConnectionState>,
@@ -1763,7 +2115,31 @@ mod migration_tests {
             let (audio_ssrc, video_ssrc) = transport.get_send_ssrcs().await.unwrap();
             assert_eq!(audio.ssrcs().await, vec![audio_ssrc]);
             assert_eq!(video.ssrcs().await, vec![video_ssrc]);
+            let offer = transport
+                .peer_connection
+                .local_description()
+                .await
+                .unwrap()
+                .sdp;
+            for feedback in ["nack", "nack pli", "ccm fir"] {
+                assert_eq!(
+                    offer
+                        .matches(&format!("a=rtcp-fb:96 {feedback}\r\n"))
+                        .count(),
+                    1
+                );
+            }
             transport.set_remote_description(&ice, &dtls).await.unwrap();
+            let answer = transport
+                .peer_connection
+                .remote_description()
+                .await
+                .unwrap()
+                .sdp;
+            for feedback in ["nack", "nack pli", "ccm fir"] {
+                assert!(answer.contains(&format!("a=rtcp-fb:96 {feedback}\r\n")));
+            }
+            assert!(!answer.contains("a=rtcp-fb:111"));
             transport.close().await.unwrap();
         })
         .await

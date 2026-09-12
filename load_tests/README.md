@@ -189,8 +189,17 @@ not establish a working receive path for every subscriber.
 Match consumer IDs within an attempt, then use SSRC mappings to locate first RTP.
 The SDP event describes a batch, not individual consumers. Compare elapsed times
 only within the same collector; server operation clocks are independent.
-Synthetic video emits a keyframe every five seconds, so resume-to-first-video
-timing is not a browser startup benchmark.
+Synthetic video keeps a periodic keyframe every five seconds of generated frames
+and responds to PLI/FIR on scheduled frames, with additional keyframes spaced by
+at least one second of generated frames after the preceding keyframe. Diagnostic
+`keyframe-requested` marks a newly pending request; repeated requests coalesce.
+`video-keyframe-queued` records the frame index, RTP timestamp, SSRC and whether a
+request was satisfied, only after all frame packets enter the local writer.
+Neither event confirms egress or decoding. Added keyframes change synthetic
+traffic; use the same generator for comparisons. Resume-to-first-video timing
+is not a browser startup benchmark.
+Feedback and writer callbacks can run concurrently; event ordering alone cannot
+pair a request with a frame. Use the SSRC and the frame's `requested` flag.
 
 Transport/candidate-pair bytes include control traffic. Zero remote RTP-report
 counters alone do not prove missing forwarding; check local inbound RTP and
