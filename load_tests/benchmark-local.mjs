@@ -13,6 +13,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { readDiagnosticReport } from './diagnostic-report.mjs';
 import { createMediaSampler, fetchMediaSnapshot, readGeneratorResults, correlateMediaDiagnostics } from './media-diagnostic-report.mjs';
 import { readLifecycleReport } from './lifecycle-diagnostic-report.mjs';
+import { correlateReceiverStalls } from './receiver-stall-report.mjs';
 
 const exec = promisify(execFile);
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -199,8 +200,13 @@ export function diagnosticRunStatus(rows) {
     row.mediaDiagnosticCoverage?.requested === false || row.mediaDiagnosticCoverage?.complete === true);
   const lifecycleDiagnosticCoverageComplete = rows.length > 0 && rows.every(row =>
     row.lifecycleDiagnosticCoverage?.requested === false || row.lifecycleDiagnosticCoverage?.complete === true);
+  // Older rows predate this report. New requested reports must be persisted
+  // before a passing per-run result can be published.
+  const stallReportsWritten = rows.every(row => !Object.hasOwn(row, 'receiverStallReport') ||
+    row.receiverStallReport?.requested === false ||
+    (row.receiverStallReport?.written === true && row.receiverStallReport?.available === true));
   return { workloadPassed, diagnosticCoverageComplete, mediaDiagnosticCoverageComplete, lifecycleDiagnosticCoverageComplete, serverShutdownPassed,
-    passed: workloadPassed && diagnosticCoverageComplete && mediaDiagnosticCoverageComplete && lifecycleDiagnosticCoverageComplete && serverShutdownPassed };
+    passed: workloadPassed && diagnosticCoverageComplete && mediaDiagnosticCoverageComplete && lifecycleDiagnosticCoverageComplete && serverShutdownPassed && stallReportsWritten };
 }
 
 export function performanceRunStatus(rows) {
@@ -214,6 +220,28 @@ export async function collectServerDiagnostics(options, directory, server, readR
   if (!diagnosticPolicy(options).requireSnapshots) return null;
   if (server && !server.result) throw new Error('Server diagnostics must be read after the owned server stops');
   return readReport(join(directory, 'server-diagnostics.jsonl'));
+}
+
+/** Failure counts describe incomplete diagnostics, not unusable identities.
+ * Completed failing workloads remain evidence; foreign/timeout artifacts do not.
+ */
+export function admitsDiagnosticEvidence(summary, options, generatorSha256, timedOut) {
+  return diagnosticPolicy(options).requireSnapshots && timedOut === false &&
+    typeof generatorSha256 === 'string' && /^[a-f0-9]{64}$/.test(generatorSha256) &&
+    lifecycleWorkload(summary, options, generatorSha256) !== null &&
+    Number.isSafeInteger(summary.diagnosticFailures) && summary.diagnosticFailures >= 0 && summary.diagnosticFailures <= 409600;
+}
+
+/** A separate finalizer retains stall correlation even when the workload failed.
+ * It performs no native requests and cannot replace the original failure.
+ */
+export async function collectReceiverStallDiagnostics(options, directory, server, generator, samples, results,
+  persist = (path, report) => writeFile(path, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 })) {
+  if (!diagnosticPolicy(options).requireSnapshots) return null;
+  if ((server && !server.result) || (generator && !generator.result)) throw new Error('Stall diagnostics require stopped owned processes');
+  const report = correlateReceiverStalls(samples, results);
+  await persist(join(directory, 'receiver-stall-report.json'), report);
+  return report;
 }
 
 export async function verifyExecutable(binary, expectedSha256, role) {
@@ -297,6 +325,8 @@ async function runOne(options, variant, scenario, repetition, manifest) {
     MAX_CONNECTIONS_PER_IP: '128', WS_HANDSHAKES_PER_MINUTE: '600', METRICS_TOKEN: token,
     RUST_LOG: diagnostics.serverLog, ...serverDiagnosticEnvironment(options, directory) };
   let server, generator, capture, diagnosticRow, performanceRow, mediaSampler, primaryError;
+  let mediaSamples = [], generatorResults;
+  let stallReportWritten = false, stallReport;
   const lifecycle = diagnostics.requireSnapshots ? createLifecycleTimeline(options.departure) : null;
   let lifecycleTimelineSaved = false;
   const samples = [];
@@ -445,6 +475,22 @@ async function runOne(options, variant, scenario, repetition, manifest) {
     },
     () => json(join(directory, 'server-exit.json'), server?.result ?? null),
     () => json(join(directory, 'generator-exit.json'), generator?.result ?? null), async () => {
+      if (!diagnostics.requireSnapshots) return;
+      try { if (mediaSampler) mediaSamples = await mediaSampler.finish(); } catch {}
+      try {
+        const generatorSummary = await readGeneratorResults(join(directory, 'load_test_summary.json'));
+        const timedOut = await stat(join(directory, 'load_test_timeout.json')).then(() => true, error => {
+          if (error.code === 'ENOENT') return false;
+          throw error;
+        });
+        if (admitsDiagnosticEvidence(generatorSummary, options, manifest.generator.binarySha256, timedOut)) {
+          generatorResults = await readGeneratorResults(join(directory, 'load_test_results.json'));
+        }
+      } catch {}
+    }, async () => {
+      stallReport = await collectReceiverStallDiagnostics(options, directory, server, generator, mediaSamples, generatorResults);
+      stallReportWritten = diagnostics.requireSnapshots;
+    }, async () => {
       let mediaReport;
       let lifecycleReport;
       if (lifecycle) {
@@ -462,20 +508,6 @@ async function runOne(options, variant, scenario, repetition, manifest) {
         }
       }
       if (diagnostics.requireSnapshots) {
-        let mediaSamples = [], generatorResults;
-        try { if (mediaSampler) mediaSamples = await mediaSampler.finish(); } catch {}
-        try {
-          const generatorSummary = JSON.parse(await readFile(join(directory, 'load_test_summary.json'), 'utf8'));
-          const timedOut = await stat(join(directory, 'load_test_timeout.json')).then(() => true, error => {
-            if (error.code === 'ENOENT') return false;
-            throw error;
-          });
-          if (generatorSummary.schemaVersion === 2 && generatorSummary.run?.completed === true &&
-              generatorSummary.run.configuration?.diagnostics === true && generatorSummary.diagnosticFailures === 0 && !timedOut &&
-              generatorSummary.run.provenance?.generatorBinarySha256 === manifest.generator.binarySha256) {
-            generatorResults = await readGeneratorResults(join(directory, 'load_test_results.json'));
-          }
-        } catch {}
         try { mediaReport = correlateMediaDiagnostics(mediaSamples, generatorResults); }
         catch { mediaReport = { schemaVersion: 1, coverage: { available: false, complete: false, issues: ['media_report_failed'] }, samples: [], consumers: [] }; }
         try {
@@ -501,11 +533,14 @@ async function runOne(options, variant, scenario, repetition, manifest) {
         diagnosticRow.lifecycleDiagnosticCoverage = lifecycleReport
           ? { requested: true, ...lifecycleReport.coverage, report: 'server-lifecycle-report.json' }
           : { requested: false, complete: null };
+        diagnosticRow.receiverStallReport = { requested: diagnostics.requireSnapshots,
+          written: diagnostics.requireSnapshots ? stallReportWritten : null,
+          available: diagnostics.requireSnapshots ? stallReport?.coverage.available === true : null };
         const status = diagnosticRunStatus([diagnosticRow]);
         diagnosticRow.serverShutdownPassed = status.serverShutdownPassed;
         diagnosticRow.passed = status.passed;
         await json(join(directory, 'result.json'), diagnosticRow);
-        console.log(`PASS workload ${name}: ${diagnosticRow.media.validatedConsumers} validated consumers; server diagnostics ${diagnosticReport ? diagnosticReport.coverage.complete ? 'complete' : 'INCOMPLETE' : 'not requested'}; media correlation ${mediaReport ? mediaReport.coverage.complete ? 'complete' : 'INCOMPLETE' : 'not requested'}; lifecycle ${lifecycleReport ? lifecycleReport.coverage.complete ? 'complete' : 'INCOMPLETE' : 'not requested'}; server shutdown ${status.serverShutdownPassed ? 'clean' : 'FAILED'}; no performance comparison`);
+        console.log(`PASS workload ${name}: ${diagnosticRow.media.validatedConsumers} validated consumers; server diagnostics ${diagnosticReport ? diagnosticReport.coverage.complete ? 'complete' : 'INCOMPLETE' : 'not requested'}; media correlation ${mediaReport ? mediaReport.coverage.complete ? 'complete' : 'INCOMPLETE' : 'not requested'}; lifecycle ${lifecycleReport ? lifecycleReport.coverage.complete ? 'complete' : 'INCOMPLETE' : 'not requested'}; stall report ${diagnostics.requireSnapshots ? stallReportWritten ? 'saved' : 'FAILED' : 'not requested'}; server shutdown ${status.serverShutdownPassed ? 'clean' : 'FAILED'}; no performance comparison`);
       }
       if (performanceRow) {
         performanceRow.serverExit = server?.result ?? null;
@@ -584,6 +619,7 @@ async function main() {
     orchestratorSha256: hash(await readFile(new URL(import.meta.url))),
     diagnosticReporterSha256: hash(await readFile(new URL('./diagnostic-report.mjs', import.meta.url))),
     mediaDiagnosticReporterSha256: hash(await readFile(new URL('./media-diagnostic-report.mjs', import.meta.url))),
+    receiverStallReporterSha256: hash(await readFile(new URL('./receiver-stall-report.mjs', import.meta.url))),
     lifecycleDiagnosticReporterSha256: hash(await readFile(new URL('./lifecycle-diagnostic-report.mjs', import.meta.url))),
     limitations: ['Co-located server/generator: not production capacity.', 'Source-tree hashes cover the listed versioned and nonignored untracked inputs, not ignored/ancestor Cargo configuration, environment flags, toolchains or external native libraries; record those build inputs separately.', 'Symlinks are identified by their link target, not external target contents. Source snapshots and independently frozen binary hashes do not attest that a binary was built from that snapshot.', 'Diagnostic runs skip resource sampling and never produce performance comparisons; full diagnostics change logging, while capture-only retains error-only logs.', 'ps sampled every~500ms in performance mode; RSS is sampled peak and CPU is total user+system for each process, including in-process media workers.', 'CPU window excludes first/last partial sampling intervals. Process launch/hash overhead causes a small offset from the generator clock; no child-process resource attribution.', 'Synthetic queued RTP is not confirmed egress; receive counts do not measure loss without expected fan-out.', 'Latency/CPU differences are descriptive, not an established regression budget.'] };
   await json(join(options.output, 'manifest.json'), manifest);

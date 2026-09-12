@@ -183,14 +183,19 @@ export async function readGeneratorResults(path) {
   finally { if (file) await file.close(); }
 }
 
-function generatorConsumers(value) {
+/** Extract immutable identities without exposing diagnostic failure text. Callers
+ * admitting incomplete diagnostics must preserve that distinction in coverage.
+ */
+export function generatorConsumers(value, { allowDiagnosticFailures = false } = {}) {
   if (!Array.isArray(value) || !value.length || value.length > 100) throw failure('invalid_generator_results');
   const consumers = [];
   for (const [clientIndex, client] of value.entries()) {
     if (!client || !Array.isArray(client.consumerDelivery) || client.consumerDelivery.length > 2048 ||
         !Array.isArray(client.connectionAttempts) || client.connectionAttempts.length > 128 ||
         !client.diagnostics || !Array.isArray(client.diagnostics.events) || client.diagnostics.events.length > 4096 ||
-        !Array.isArray(client.diagnostics.failures) || client.diagnostics.failures.length) throw failure('invalid_generator_results');
+        !Array.isArray(client.diagnostics.failures) || client.diagnostics.failures.length > 4096 ||
+        !client.diagnostics.failures.every(reason => typeof reason === 'string' && reason.length <= 4096) ||
+        (allowDiagnosticFailures !== true && client.diagnostics.failures.length)) throw failure('invalid_generator_results');
     const created = new Map(), resumed = new Set(), requested = new Set(), received = new Set();
     for (const event of client.diagnostics.events) {
       if (!event || !uint(event.attempt) || !event.attempt || event.attempt > client.connectionAttempts.length ||
@@ -238,13 +243,19 @@ function generatorConsumers(value) {
   return consumers;
 }
 
-export function correlateMediaDiagnostics(samples, generatorResults) {
+/** Internal analysis also returns the exact validated native samples. Reusers
+ * must not resolve samples from an unvalidated list by ordinal alone.
+ */
+export function analyzeMediaDiagnostics(samples, generatorResults) {
   const issues = new Set();
   const report = { schemaVersion: 1, coverage: { available: false, complete: false, issues: [],
     expectedConsumers: 0, matchedConsumers: 0, shortLivedUnobservedConsumers: 0, consumersWithCounterPairs: 0 }, samples: [], consumers: [],
     interpretation: 'Native cumulative RTP accounting and generator measurement buckets have different intervals. No cross-clock arithmetic or packet-loss/peer-receipt inference. Flat counters are observations, not workload failures; sparse samples cannot exclude unobserved resets or state changes.' };
   let consumers;
-  try { consumers = generatorConsumers(generatorResults); }
+  try {
+    consumers = generatorConsumers(generatorResults, { allowDiagnosticFailures: true });
+    if (generatorResults.some(client => client.diagnostics.failures.length)) issues.add('generator_diagnostics_incomplete');
+  }
   catch { issues.add('generator_correlation_unavailable'); }
   const valid = [];
   let salt, lastId = 0, lastOrdinal = 0, lastScheduled = -1, lastStarted = -Infinity, lastFinished = -Infinity, windowStart, windowEnd;
@@ -343,5 +354,9 @@ export function correlateMediaDiagnostics(samples, generatorResults) {
   }
   report.coverage.issues = [...issues].sort();
   report.coverage.complete = report.coverage.available && !issues.size && report.coverage.matchedConsumers > 0;
-  return report;
+  return {report, validatedSamples:valid};
+}
+
+export function correlateMediaDiagnostics(samples, generatorResults) {
+  return analyzeMediaDiagnostics(samples, generatorResults).report;
 }

@@ -187,6 +187,37 @@ and room IDs, addresses, SDP and native errors. This is pseudonymization, not
 anonymization: someone holding generator artifacts can match the media identities
 within that server process. Keep samples and generator output private together.
 
+### Correlate receiver stalls
+
+Full local diagnostic runs also write `receiver-stall-report.json` after the
+owned processes stop, including when the workload fails. It connects recorded
+receiver-stall triggers to the existing scheduled SFU observations for both
+publisher ingress and consumer forwarding. It makes no additional native requests.
+
+Entries identify the client, connection attempt and consumer by one-based
+ordinals, retain the failing delivery interval, and link the receiver capture by
+its ordinal in `diagnostics.receiverStalls`. Missing or failed captures stay
+explicit. Producer SSRCs can differ from consumer SSRCs; producer deltas compare
+all streams only while their SSRC set, transport identity and counters remain
+consistent. Missing pairs, resets, replaced transports and partial samples do
+not become zero counters or complete evidence.
+
+The report retains at most 128 triggers in client/attempt order and flags excess
+triggers as incomplete. `coverage.complete` describes recorded-trigger evidence,
+not workload success or continuous health. It is `null` when valid input contains
+no recorded triggers, including older artifacts that cannot establish detector
+support. Malformed input is unavailable. Valid diagnostic failures retain native
+identity/counter evidence but keep both correlation reports incomplete.
+The runner requires a persisted report with structurally valid generator evidence
+before publishing diagnostic success; it does not require `complete: true` when
+no triggers were recorded.
+
+These are identity matches, not measurements at the stall. Trigger times use the
+client collector clock; sample boundaries use the runner clock; native counters
+keep their server/worker clocks. Do not subtract them to infer before/after ordering
+or a cause. Scheduled sampling can miss short sessions and transient faults;
+this report does not replace the existing native-coverage or delivery gates.
+
 ## Native bitrate-clamping messages
 
 The pinned media stack can log `start bitrate smaller than min bitrate` after

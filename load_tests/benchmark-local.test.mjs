@@ -76,6 +76,20 @@ test('complete diagnostic coverage and workload success cannot hide a failed own
     { workloadPassed: true, diagnosticCoverageComplete: true, mediaDiagnosticCoverageComplete: true, lifecycleDiagnosticCoverageComplete: true, serverShutdownPassed: true, passed: true });
 });
 
+test('requested stall reports must be persisted before diagnostic success, without reinterpreting legacy rows', () => {
+  const row = { workloadPassed: true, serverExit: { code: 0, signal: null },
+    diagnosticCoverage: { requested: true, complete: true }, mediaDiagnosticCoverage: { requested: true, complete: true },
+    lifecycleDiagnosticCoverage: { requested: true, complete: true } };
+  assert.equal(diagnosticRunStatus([row]).passed, true);
+  for (const receiverStallReport of [null, {}, { requested: true }, { requested: true, written: false },
+    { requested: true, written: true }, { requested: true, written: true, available: false }]) {
+    assert.equal(diagnosticRunStatus([{ ...row, receiverStallReport }]).passed, false);
+  }
+  for (const receiverStallReport of [{ requested: false, written: null }, { requested: true, written: true, available: true }]) {
+    assert.equal(diagnosticRunStatus([{ ...row, receiverStallReport }]).passed, true);
+  }
+});
+
 test('performance workload success requires a separately verified owned server exit', () => {
   for (const serverExit of [undefined, null, {}, { code: 1, signal: null }, { code: null, signal: 'SIGKILL' },
     { code: null, signal: 'SIGTERM' }, { code: null, error: 'ENOENT' }, { code: 0, signal: 'SIGTERM' },
@@ -821,7 +835,7 @@ test('generator evidence is per attempt, requires consumer creation and bounded 
   const valid = generatorMedia(); valid[0].connectionAttempts.push({});
   for (const event of valid[0].diagnostics.events) event.attempt = 2;
   assert.equal(correlateMediaDiagnostics(mediaSamples(), valid).consumers[0].generator.attemptOrdinal, 2);
-  for (const mutate of [v => { v[0].diagnostics.events.shift(); }, v => { v[0].diagnostics.failures.push('PRIVATE'); },
+  for (const mutate of [v => { v[0].diagnostics.events.shift(); }, v => { v[0].diagnostics.failures.push({ private: 'PRIVATE' }); },
     v => { v[0].consumerDelivery[0].packetsBySecond = [Number.MAX_SAFE_INTEGER, 1]; },
     v => { v[0].diagnostics.events[0].attempt = 2; }, v => { v[0].consumerDelivery[0].ssrc++; },
     v => { v[0].consumerDelivery[0].eligibleSeconds = 9; }]) {

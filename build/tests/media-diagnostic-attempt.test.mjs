@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { correlateMediaDiagnostics, mediaReference } from '../../load_tests/media-diagnostic-report.mjs';
+import { correlateMediaDiagnostics, generatorConsumers, mediaReference } from '../../load_tests/media-diagnostic-report.mjs';
 
 const salt = '0123456789abcdef0123456789abcdef';
 const consumerId = '11111111-2222-4333-8444-555555555555';
@@ -95,4 +95,69 @@ test('valid additive delivery metadata cannot relax sparse native sample coverag
   assert.ok(legacy.coverage.issues.includes('consumer_counter_pair_missing'));
   Object.assign(f.delivery, { attempt: 1, isAudio: true });
   assert.deepEqual(f.report(), legacy);
+});
+
+test('diagnostic failures retain sanitized identity and native counter evidence with incomplete coverage', () => {
+  const f = fixture();
+  const complete = f.report();
+  f.generator[0].diagnostics.failures.push('PRIVATE receiver-stall native detail');
+  const report = f.report();
+  assert.equal(report.coverage.available, true);
+  assert.equal(report.coverage.complete, false);
+  assert.deepEqual(report.coverage.issues, ['generator_diagnostics_incomplete']);
+  assert.equal(report.coverage.expectedConsumers, 1);
+  assert.equal(report.coverage.matchedConsumers, 1);
+  assert.equal(report.coverage.consumersWithCounterPairs, 1);
+  assert.deepEqual(report.samples, complete.samples);
+  assert.deepEqual(report.consumers, complete.consumers);
+  assert.equal(JSON.stringify(report).includes('PRIVATE'), false);
+});
+
+test('identity extraction requires explicit opt-in to structurally valid diagnostic failures', () => {
+  const f = fixture();
+  const identities = generatorConsumers(f.generator);
+  f.generator[0].diagnostics.failures.push('PRIVATE');
+  for (const options of [undefined, {}, { allowDiagnosticFailures: false }, { allowDiagnosticFailures: 'true' }]) {
+    assert.throws(() => generatorConsumers(f.generator, options), { message: 'invalid_generator_results' });
+  }
+  assert.deepEqual(generatorConsumers(f.generator, { allowDiagnosticFailures: true }), identities);
+  assert.equal(JSON.stringify(identities).includes('PRIVATE'), false);
+});
+
+test('diagnostic failures have bounded string-only shape even when incomplete evidence is admitted', () => {
+  for (const failures of [undefined, null, 'PRIVATE', {}, [null], [undefined], [42], [true], [{}], [[]],
+    ['PRIVATE', { private: 'PRIVATE' }], ['PRIVATE'.repeat(586)], Array(4097).fill('PRIVATE')]) {
+    const f = fixture();
+    f.generator[0].diagnostics.failures = failures;
+    assert.throws(() => generatorConsumers(f.generator, { allowDiagnosticFailures: true }), { message: 'invalid_generator_results' });
+    assertUnavailable(f.report());
+  }
+  for (const failures of [['P'.repeat(4096)], Array(4096).fill('PRIVATE')]) {
+    const f = fixture();
+    f.generator[0].diagnostics.failures = failures;
+    assert.equal(generatorConsumers(f.generator, { allowDiagnosticFailures: true }).length, 1);
+    const report = f.report();
+    assert.equal(report.coverage.available, true);
+    assert.equal(report.coverage.complete, false);
+    assert.deepEqual(report.coverage.issues, ['generator_diagnostics_incomplete']);
+    assert.equal(JSON.stringify(report).includes('PRIVATE'), false);
+  }
+});
+
+test('failed delivery remains failed while available diagnostic evidence is retained', () => {
+  const f = fixture();
+  Object.assign(f.delivery, { packetsBySecond: [0, 0, 0], secondsWithPackets: 0, longestGapSeconds: 3, passed: false });
+  const failedReceive = f.report();
+  assert.equal(failedReceive.coverage.complete, true, 'native coverage does not excuse the failed workload');
+  assert.equal(failedReceive.consumers[0].generator.deliveryPassed, false);
+  assert.equal(failedReceive.consumers[0].generator.packetsInMeasurement, 0);
+  assert.equal(failedReceive.consumers[0].generator.longestGapSeconds, 3);
+  assert.equal(failedReceive.consumers[0].nativeAccounting.movement, 'increased');
+  f.generator[0].diagnostics.failures.push('PRIVATE stalled receiver capture timeout');
+  const incomplete = f.report();
+  assert.equal(incomplete.coverage.available, true);
+  assert.equal(incomplete.coverage.complete, false);
+  assert.deepEqual(incomplete.coverage.issues, ['generator_diagnostics_incomplete']);
+  assert.deepEqual(incomplete.consumers, failedReceive.consumers);
+  assert.equal(JSON.stringify(incomplete).includes('PRIVATE'), false);
 });

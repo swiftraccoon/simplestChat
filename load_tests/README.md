@@ -206,6 +206,12 @@ observations at or after session/window end, so a final gap can fail delivery
 without a capture. An absent `receiverStalls` field, including in older artifacts,
 does not establish continuous receive-path health.
 
+Full local benchmark diagnostics also write
+[`receiver-stall-report.json`](../docs/diagnostics.md#correlate-receiver-stalls),
+matching recorded triggers to retained SFU producer and consumer observations.
+Failed captures remain visible; these scheduled snapshots are not observations
+taken at the trigger and cannot establish its cause.
+
 ### Locate the last confirmed receive milestone
 
 Inspect each client and connection attempt separately; a working publisher does
