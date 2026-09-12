@@ -13,6 +13,7 @@ import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
 import { api, ApiError, safeRasterUrl } from './ui';
 import { configureSettingsDialog } from './settings-dialog';
+import { avatarColors } from './avatar-colors';
 import './community.css';
 import type { CreateRoomRequest } from './protocol';
 
@@ -214,16 +215,6 @@ if (hashRoom) roomInput.value = hashRoom;
 // --- Utility ---
 function clearChildren(el: HTMLElement): void {
   while (el.firstChild) el.removeChild(el.firstChild);
-}
-
-/** Deterministic HSL color from a string (for sender names, avatars) */
-function nameColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue}, 65%, 55%)`;
 }
 
 // --- Toast Notifications ---
@@ -1807,7 +1798,7 @@ function addLocalAvatar(tile: HTMLElement, name: string): void {
   noVideoAvatar.className = 'no-video-avatar';
   const initial = document.createElement('div');
   initial.className = 'avatar-initial';
-  initial.style.background = nameColor(name);
+  Object.assign(initial.style, avatarColors(name));
   initial.textContent = name.charAt(0).toUpperCase();
   noVideoAvatar.appendChild(initial);
   tile.insertBefore(noVideoAvatar, tile.firstChild);
@@ -2138,7 +2129,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
     // Avatar
     const avatar = document.createElement('div');
     avatar.className = 'participant-avatar';
-    avatar.style.background = nameColor(p.name);
+    Object.assign(avatar.style, avatarColors(p.name));
     avatar.textContent = p.name.charAt(0).toUpperCase();
     community.decorateAvatar(
       avatar,
@@ -2272,7 +2263,7 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
 
     const avatar = document.createElement('div');
     avatar.className = 'participant-avatar';
-    avatar.style.background = nameColor(p.name);
+    Object.assign(avatar.style, avatarColors(p.name));
     avatar.style.width = '24px';
     avatar.style.height = '24px';
     avatar.style.fontSize = '0.65rem';
@@ -2358,7 +2349,7 @@ function renderRemoteTrack(
       noVideoAvatar.className = 'no-video-avatar';
       const initial = document.createElement('div');
       initial.className = 'avatar-initial';
-      initial.style.background = nameColor(participantName);
+      Object.assign(initial.style, avatarColors(participantName));
       initial.textContent = participantName.charAt(0).toUpperCase();
       noVideoAvatar.appendChild(initial);
       tile.appendChild(noVideoAvatar);
