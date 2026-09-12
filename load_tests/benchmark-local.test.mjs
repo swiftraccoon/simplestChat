@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cpuSeconds, resourceSummary, comparison, parseOptions, command, captureArguments, finishCapture, diagnosticPolicy, createLifecycleTimeline, lifecycleWorkload, serverDiagnosticEnvironment, diagnosticRunStatus, performanceRunStatus, runFinalizers, collectServerDiagnostics, verifyExecutable, sourceTreeIdentity, identity, serverRevisionLabel, stop, SERVER_SHUTDOWN_GRACE_MS } from './benchmark-local.mjs';
+import { cpuSeconds, resourceSummary, comparison, parseOptions, command, captureArguments, finishCapture, diagnosticPolicy, createLifecycleTimeline, lifecycleWorkload, serverDiagnosticEnvironment, diagnosticRunStatus, performanceRunStatus, runFinalizers, collectServerDiagnostics, verifyExecutable, generatorSourceIdentity, sourceTreeIdentity, identity, serverRevisionLabel, stop, SERVER_SHUTDOWN_GRACE_MS } from './benchmark-local.mjs';
 import { DIAGNOSTIC_LIMITS, readDiagnosticReport } from './diagnostic-report.mjs';
 import { MEDIA_BODY_LIMIT, MEDIA_SAMPLE_LATENESS_MS, validateMediaSnapshot, mediaReference, fetchMediaSnapshot,
   mediaSampleSchedule, createMediaSampler, readGeneratorResults, correlateMediaDiagnostics } from './media-diagnostic-report.mjs';
@@ -437,6 +437,29 @@ test('server and generator executables must match their recorded hashes', async 
   await assert.rejects(verifyExecutable(binary, expected, 'Generator'), /Generator binary changed/);
   await assert.rejects(verifyExecutable(binary, expected, 'candidate server'), /candidate server binary changed/);
   await assert.rejects(verifyExecutable(join(directory, 'missing'), expected, 'baseline server'), /ENOENT/);
+});
+
+test('generator source identity includes subscription scheduling contents and requires every declared input', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'simplestchat-generator-source.'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const paths = ['load_tests/bin/load_test.rs', 'load_tests/clients/metrics.rs',
+    'load_tests/clients/measurement.rs', 'load_tests/clients/media_generator.rs',
+    'load_tests/clients/webrtc_client.rs', 'load_tests/clients/subscriptions.rs'];
+  const contents = paths.map(file => `// owned source fixture: ${file}\n`);
+  for (const [index, file] of paths.entries()) {
+    await mkdir(dirname(join(directory, file)), { recursive: true });
+    await writeFile(join(directory, file), contents[index]);
+  }
+  const original = await generatorSourceIdentity(directory);
+  assert.equal(original, `sha256:${createHash('sha256').update(contents.join('')).digest('hex')}`);
+  const subscriptions = join(directory, 'load_tests/clients/subscriptions.rs');
+  await writeFile(subscriptions, '// changed subscription dispatch policy\n');
+  const changed = await generatorSourceIdentity(directory);
+  assert.notEqual(changed, original, 'runtime subscription changes must alter generator provenance');
+  await writeFile(join(directory, 'load_tests/README.md'), 'documentation only\n');
+  assert.equal(await generatorSourceIdentity(directory), changed, 'documentation is outside runtime source scope');
+  await rm(subscriptions);
+  await assert.rejects(generatorSourceIdentity(directory), /ENOENT/);
 });
 
 test('source identity includes new Rust inputs and is unchanged by staging identical contents', async t => {

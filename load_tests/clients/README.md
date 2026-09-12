@@ -13,6 +13,7 @@ For commands, options, and report definitions, see the
 | `media_generator.rs` | Synthetic Opus/VP8 RTP packets |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
+| `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill |
 | `mod.rs` | Module exports |
 
 ## How It Works
@@ -21,6 +22,18 @@ Each session creates separate send/receive peers, extracts local DTLS parameters
 from an offer, and synthesizes remote SDP from the server's ICE/DTLS parameters.
 Consumers are recorded in batches, installed through receive renegotiation, then
 resumed through signaling.
+
+Existing-room and live producer discovery feed the same audio/video FIFO queues.
+The first dispatch tick is immediate; later ticks inspect at most two queued
+items in total every 100 ms. Retired-item checks count toward that budget.
+Skip a producer known to have ended through the owned generator lifecycle before
+sending `Consume`; retain an already requested slot until the server sends
+`ProducerClosed`. That notification frees capacity for queued discovery.
+Discovery/deduplication is bounded to 20,000 identities and fails loudly at the
+limit. Do not silently drop excess identities or bypass the queue on live events.
+Keep pending consumer metadata outside the native peer until its live SDP batch;
+a close before installation must cancel that work. Already-installed mappings
+are retained, so consumer caps do not bound cumulative local transceiver count.
 
 Keep these invariants when changing the client:
 

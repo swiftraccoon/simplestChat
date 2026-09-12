@@ -222,6 +222,15 @@ export async function verifyExecutable(binary, expectedSha256, role) {
   }
 }
 
+/** Fingerprint the generator's explicit runtime source inputs, not its build environment. */
+export async function generatorSourceIdentity(root) {
+  const sources = await Promise.all(['load_tests/bin/load_test.rs', 'load_tests/clients/metrics.rs',
+    'load_tests/clients/measurement.rs', 'load_tests/clients/media_generator.rs',
+    'load_tests/clients/webrtc_client.rs', 'load_tests/clients/subscriptions.rs']
+    .map(file => readFile(join(root, file))));
+  return `sha256:${hash(Buffer.concat(sources))}`;
+}
+
 const trackedSourcePaths = ['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'src', 'vendor', 'build/pip-constraints.txt'];
 const sourcePaths = [...trackedSourcePaths, 'build.rs', '.cargo/config', '.cargo/config.toml'];
 const pathOrder = (left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right));
@@ -567,11 +576,10 @@ export function parseOptions(args) {
 async function main() {
   const options = parseOptions(process.argv.slice(2));
   await mkdir(options.output, { recursive: false, mode: 0o700 });
-  const generatorSources = await Promise.all(['load_tests/bin/load_test.rs', 'load_tests/clients/metrics.rs', 'load_tests/clients/measurement.rs', 'load_tests/clients/media_generator.rs', 'load_tests/clients/webrtc_client.rs'].map(file => readFile(join(options.generatorSourceRoot, file))));
   const manifest = { schemaVersion: 1, startedAt: new Date().toISOString(), options,
     environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, memoryBytes: os.totalmem(), node: process.version, loadAverageBefore: os.loadavg() },
     servers: { baseline: await identity(options.baselineRoot, options.baselineBin), candidate: await identity(options.candidateRoot, options.candidateBin) },
-    generator: { binary: options.generator, binarySha256: hash(await readFile(options.generator)), sourceRoot: options.generatorSourceRoot, sourceIdentity: `sha256:${hash(Buffer.concat(generatorSources))}` },
+    generator: { binary: options.generator, binarySha256: hash(await readFile(options.generator)), sourceRoot: options.generatorSourceRoot, sourceIdentity: await generatorSourceIdentity(options.generatorSourceRoot) },
     orchestratorSha256: hash(await readFile(new URL(import.meta.url))),
     diagnosticReporterSha256: hash(await readFile(new URL('./diagnostic-report.mjs', import.meta.url))),
     mediaDiagnosticReporterSha256: hash(await readFile(new URL('./media-diagnostic-report.mjs', import.meta.url))),

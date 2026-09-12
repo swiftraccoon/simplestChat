@@ -967,13 +967,26 @@ mod measurement_tests {
         ));
         let publisher = MetricsCollector::with_window("publisher".into(), window.clone());
         let viewer = MetricsCollector::with_window("viewer".into(), window);
+        assert!(!viewer.producer_retired("unknown"));
         publisher.record_publisher("producer", false);
+        assert!(!viewer.producer_retired("producer"));
         viewer.subscribe("producer", false);
         viewer.record_consumer("consumer", "producer", 123);
         publisher.end_session();
+        assert!(viewer.producer_retired("producer"));
         let (kind, unexpected) = viewer.close_producer("producer");
         assert_eq!(kind, Some(false));
         assert!(!unexpected);
+    }
+
+    #[test]
+    fn server_close_does_not_turn_an_active_or_unknown_publisher_into_owned_retirement() {
+        let publisher = MetricsCollector::new("publisher".into());
+        publisher.record_publisher("active", true);
+        assert!(publisher.close_producer("active").1);
+        assert!(!publisher.producer_retired("active"));
+        assert!(!publisher.close_producer("unknown").1);
+        assert!(!publisher.producer_retired("unknown"));
     }
 
     fn coverage_fixture() -> (MetricsCollector, Instant) {
@@ -1246,12 +1259,16 @@ mod measurement_tests {
             is_publisher: true,
         };
         let first = metrics.begin_planned_attempt(plan.clone());
+        assert!(metrics.attempt_accepts_work(first));
         metrics.mark_connection_successful();
         metrics.record_packet_sent_for_attempt(first, 100);
         metrics.end_session();
         metrics.record_packet_sent_for_attempt(first, 100);
+        assert!(!metrics.attempt_accepts_work(first));
         metrics.end_session();
         let second = metrics.begin_planned_attempt(plan);
+        assert!(metrics.attempt_accepts_work(second));
+        assert!(!metrics.attempt_accepts_work(first));
         metrics.mark_connection_successful();
         metrics.record_packet_sent_for_attempt(first, 100);
         let report = metrics.generate_report();
@@ -1342,6 +1359,7 @@ mod measurement_tests {
             is_publisher: true,
         });
         metrics.attempts.lock().unwrap()[0].started = now - Duration::from_secs(10);
+        assert!(!metrics.attempt_accepts_work(attempt));
         metrics.mark_connection_successful();
         metrics.record_packet_sent_for_attempt(attempt, 100);
         let report = metrics.generate_report();

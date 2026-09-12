@@ -32,10 +32,15 @@ mod webrtc_client {
     include!("../clients/webrtc_client.rs");
 }
 
+mod subscriptions {
+    include!("../clients/subscriptions.rs");
+}
+
 use media_generator::{MediaConfig, MediaGenerator};
 use metrics::{AttemptPlan, ClientMetrics, MeasurementWindow, MetricsCollector, TestSummary};
 use rtc::shared::marshal::Unmarshal;
 use std::num::{NonZeroU8, NonZeroU32};
+use subscriptions::Subscriptions;
 use tokio::sync::Mutex;
 use webrtc::media_stream::track_local::TrackLocal;
 use webrtc_client::WebRtcSession;
@@ -1492,165 +1497,10 @@ async fn run_client_inner(
         }
     }
 
-    // Replay buffered events from setup phase (e.g., NewProducer from other clients).
-    // This sends Consume requests for producers from other clients.
-    let mut needs_renegotiation = false;
-    let mut pending_resumes: Vec<String> = Vec::new();
-    let mut audio_consumes_sent: usize = 0;
-    let mut video_consumes_sent: usize = 0;
-
-    // Count expected consumers — capped at max consumers since we limit Consume requests
-    let expected_consumers = {
-        let mut audio_count = 0usize;
-        let mut video_count = 0usize;
-        for e in &buffered_events {
-            if let ServerMessage::NewProducer { kind, .. } = e {
-                match kind {
-                    MediaKind::Audio => {
-                        if audio_count < config.max_audio_consumers {
-                            audio_count += 1;
-                        }
-                    }
-                    MediaKind::Video => {
-                        if video_count < config.max_video_consumers {
-                            video_count += 1;
-                        }
-                    }
-                }
-            }
-        }
-        audio_count + video_count
-    };
-
-    if !buffered_events.is_empty() {
-        tracing::info!(
-            "{}: Replaying {} buffered events, expecting {} consumers",
-            client_id,
-            buffered_events.len(),
-            expected_consumers
-        );
-        for event in buffered_events {
-            handle_server_message(
-                event,
-                &metrics,
-                &client_id,
-                &mut write,
-                &rtp_capabilities,
-                &webrtc_session,
-                &mut needs_renegotiation,
-                &mut pending_resumes,
-                &mut audio_consumes_sent,
-                &mut video_consumes_sent,
-                config.max_audio_consumers,
-                config.max_video_consumers,
-            )
-            .await;
-        }
-    }
-
-    // Wait for ConsumerCreated responses and batch into a single SDP renegotiation.
-    // Cap at 5s to avoid blocking setup. Any remaining consumers are handled by
-    // receive_messages_loop which has its own batching.
-    if expected_consumers > 0 {
-        let overall_timeout =
-            Duration::from_millis(((expected_consumers as u64) * 10).clamp(1000, 5000));
-        let consumer_deadline = tokio::time::Instant::now() + overall_timeout;
-        let mut received_consumers = pending_resumes.len();
-
-        tracing::debug!(
-            "{}: Waiting for {} consumers (have {}), timeout {}ms",
-            client_id,
-            expected_consumers,
-            received_consumers,
-            overall_timeout.as_millis()
-        );
-
-        while tokio::time::Instant::now() < consumer_deadline
-            && received_consumers < expected_consumers
-        {
-            tokio::select! {
-                msg = read.next() => {
-                    if let Some(Ok(Message::Text(text))) = msg
-                        && let Ok(server_msg) = serde_json::from_str::<ServerMessage>(&text)
-                    {
-                        let was_consumer = matches!(server_msg, ServerMessage::ConsumerCreated { .. });
-                        handle_server_message(
-                            server_msg,
-                            &metrics,
-                            &client_id,
-                            &mut write,
-                            &rtp_capabilities,
-                            &webrtc_session,
-                            &mut needs_renegotiation,
-                            &mut pending_resumes,
-                            &mut audio_consumes_sent,
-                            &mut video_consumes_sent,
-                            config.max_audio_consumers,
-                            config.max_video_consumers,
-                        ).await;
-                        if was_consumer {
-                            received_consumers += 1;
-                        }
-                    }
-                }
-                _ = tokio::time::sleep(Duration::from_millis(200)) => {
-                    // 200ms of silence — consumers have stopped arriving
-                    tracing::debug!("{}: Consumer collection idle timeout ({}/{})",
-                        client_id, received_consumers, expected_consumers);
-                    break;
-                }
-            }
-        }
-        tracing::info!(
-            "{}: Collected {}/{} consumers",
-            client_id,
-            received_consumers,
-            expected_consumers
-        );
-    }
-
-    // Renegotiate SDP once for ALL consumers recorded during setup.
-    if needs_renegotiation {
-        webrtc_session.lock().await.renegotiate_consumers().await?;
-        if metrics.diagnostics_enabled() {
-            metrics.diagnostic_event(
-                "renegotiation-applied",
-                serde_json::json!({"consumerCount": pending_resumes.len()}),
-            );
-        }
-
-        // Preserve the existing settling interval. In webrtc 0.20 core SSRC
-        // registration is synchronous; driver IO/event delivery remains async.
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        tracing::debug!(
-            "{}: Consumer renegotiation settling interval completed",
-            client_id
-        );
-    }
-
-    // Resume consumers only after applying the complete SDP batch.
-    let resume_count = pending_resumes.len();
-    for consumer_id in pending_resumes.drain(..) {
-        if metrics.diagnostics_enabled() {
-            metrics.diagnostic_event(
-                "resume-requested",
-                serde_json::json!({"consumerId": consumer_id}),
-            );
-        }
-        let resume_msg = ClientMessage::ResumeConsumer {
-            consumer_id: consumer_id.clone(),
-        };
-        let json = serde_json::to_string(&resume_msg)?;
-        write.feed(Message::Text(json.into())).await?;
-    }
-    if resume_count > 0 {
-        write.flush().await?;
-        tracing::info!(
-            "{}: Resumed {} consumers after initial SDP renegotiation",
-            client_id,
-            resume_count
-        );
-    }
+    // Snapshot discovery precedes events buffered during setup. Replay both into
+    // the same bounded queue, so a later close cancels its earlier discovery and
+    // live producers cannot bypass older work when a subscription slot opens.
+    existing_producer_events.extend(buffered_events);
 
     // write_rtp in webrtc 0.20 only enqueues. Wait before generating media so
     // the first keyframe and packet counters start after the SRTP handshake.
@@ -1716,8 +1566,6 @@ async fn run_client_inner(
             recv_timeout,
             rtp_caps_for_consume,
             webrtc_session_recv,
-            audio_consumes_sent,
-            video_consumes_sent,
             max_audio,
             max_video,
             existing_producer_events,
@@ -2325,6 +2173,15 @@ mod watchdog_tests {
     }
 }
 
+/// Signaling metadata remains pending until its live SDP batch is installed.
+/// A server closure before then must not create an unnecessary transceiver.
+struct PendingConsumer {
+    consumer_id: String,
+    producer_id: String,
+    kind: MediaKind,
+    rtp_parameters: RtpParameters,
+}
+
 #[expect(
     clippy::too_many_arguments,
     reason = "The owned receiver task takes its session resources, limits and pending producer events explicitly."
@@ -2346,8 +2203,6 @@ async fn receive_messages_loop(
     timeout: Duration,
     rtp_capabilities: RtpCapabilities,
     webrtc_session: Arc<Mutex<WebRtcSession>>,
-    mut audio_consumes_sent: usize,
-    mut video_consumes_sent: usize,
     max_audio: usize,
     max_video: usize,
     existing_producer_events: Vec<ServerMessage>,
@@ -2355,16 +2210,27 @@ async fn receive_messages_loop(
 ) {
     let deadline = tokio::time::Instant::now() + timeout;
     let mut needs_renegotiation = false;
-    let mut pending_resumes: Vec<String> = Vec::new();
+    let mut pending_resumes: Vec<PendingConsumer> = Vec::new();
     let mut renegotiation_since: Option<tokio::time::Instant> = None;
     let mut total_resumed: usize = 0;
 
-    // Process existing producers with throttling — send one Consume request per
-    // iteration of the main loop, interleaved with real-time events. This avoids
-    // the burst that kills ratio when many producers already exist.
-    let mut deferred_events: std::collections::VecDeque<ServerMessage> =
-        existing_producer_events.into();
-    let mut deferred_batch_size: usize = 0;
+    let mut subscriptions = Subscriptions::new(max_audio, max_video);
+    for event in existing_producer_events {
+        handle_server_message(
+            event,
+            &metrics,
+            &client_id,
+            &mut needs_renegotiation,
+            &mut pending_resumes,
+            &mut subscriptions,
+        )
+        .await;
+    }
+    // This is a work timer, separate from the signaling-idle coalescing timer.
+    // A ready queue gets an immediate first turn without a continuously ready
+    // branch that could drain every producer or repeatedly renegotiate SDP.
+    let mut next_subscription_work = tokio::time::Instant::now();
+    let attempt = metrics.diagnostic_attempt();
 
     while tokio::time::Instant::now() < deadline {
         let got_message = tokio::select! {
@@ -2395,15 +2261,9 @@ async fn receive_messages_loop(
                                     server_msg,
                                     &metrics,
                                     &client_id,
-                                    &mut write,
-                                    &rtp_capabilities,
-                                    &webrtc_session,
                                     &mut needs_renegotiation,
                                     &mut pending_resumes,
-                                    &mut audio_consumes_sent,
-                                    &mut video_consumes_sent,
-                                    max_audio,
-                                    max_video,
+                                    &mut subscriptions,
                                 ).await;
                             }
                             Err(e) => {
@@ -2434,44 +2294,47 @@ async fn receive_messages_loop(
                     _ => { true } // Ping/Pong handled by library
                 }
             }
+            _ = tokio::time::sleep_until(next_subscription_work), if subscriptions.has_work() => {
+                if !metrics.attempt_accepts_work(attempt) {
+                    subscriptions.stop();
+                    continue;
+                }
+                for _ in 0..2 {
+                    if !metrics.attempt_accepts_work(attempt) {
+                        subscriptions.stop();
+                        break;
+                    }
+                    let Some(request) = subscriptions.next_request(|id| metrics.producer_retired(id)) else {
+                        continue;
+                    };
+                    if !metrics.subscribe(&request.producer_id, request.kind == MediaKind::Audio) {
+                        metrics.record_error("Subscription state attempted a duplicate Consume".into());
+                        subscriptions.stop();
+                        break;
+                    }
+                    if metrics.diagnostics_enabled() {
+                        metrics.diagnostic_event("consume-requested", serde_json::json!({
+                            "producerId": request.producer_id, "kind": request.kind,
+                        }));
+                    }
+                    if let Err(error) = send_message(&mut write, ClientMessage::Consume {
+                        producer_id: request.producer_id,
+                        rtp_capabilities: rtp_capabilities.clone(),
+                    }).await {
+                        // A failed write has ambiguous remote receipt. Keep the
+                        // reservation and stop, never release-and-retry it.
+                        metrics.record_error(format!("Consume request failed: {error}"));
+                        subscriptions.stop();
+                        break;
+                    }
+                }
+                next_subscription_work = tokio::time::Instant::now() + Duration::from_millis(100);
+                true
+            }
             _ = tokio::time::sleep(Duration::from_millis(2000)) => {
                 false
             }
         };
-
-        // Process deferred existing-producer events gradually (2 per loop iteration).
-        // This interleaves with real-time events and avoids the burst that kills
-        // server throughput when hundreds of producers already exist.
-        if !deferred_events.is_empty() {
-            let batch = std::cmp::min(2, deferred_events.len());
-            for _ in 0..batch {
-                if let Some(event) = deferred_events.pop_front() {
-                    handle_server_message(
-                        event,
-                        &metrics,
-                        &client_id,
-                        &mut write,
-                        &rtp_capabilities,
-                        &webrtc_session,
-                        &mut needs_renegotiation,
-                        &mut pending_resumes,
-                        &mut audio_consumes_sent,
-                        &mut video_consumes_sent,
-                        max_audio,
-                        max_video,
-                    )
-                    .await;
-                    deferred_batch_size += 1;
-                }
-            }
-            if deferred_events.is_empty() && deferred_batch_size > 0 {
-                tracing::debug!(
-                    "{}: Finished processing {} deferred existing-producer events",
-                    client_id,
-                    deferred_batch_size
-                );
-            }
-        }
 
         // Track when renegotiation was first needed (for max timer)
         if needs_renegotiation && renegotiation_since.is_none() {
@@ -2493,8 +2356,39 @@ async fn receive_messages_loop(
             .unwrap_or(false);
 
         if needs_renegotiation && (!got_message || max_timer_expired) {
-            // Single renegotiation for ALL consumers collected in this window
-            if let Err(e) = webrtc_session.lock().await.renegotiate_consumers().await {
+            if !metrics.attempt_accepts_work(attempt) {
+                subscriptions.stop();
+            }
+            pending_resumes.retain(|consumer| subscriptions.can_resume(&consumer.consumer_id));
+            if pending_resumes.is_empty() {
+                needs_renegotiation = false;
+                renegotiation_since = None;
+                continue;
+            }
+            let applied = {
+                let mut session = webrtc_session.lock().await;
+                if !metrics.attempt_accepts_work(attempt) {
+                    subscriptions.stop();
+                    continue;
+                }
+                let mut recorded = Ok(());
+                for consumer in &pending_resumes {
+                    recorded = session.record_consumer(
+                        consumer.producer_id.clone(),
+                        consumer.kind,
+                        &consumer.rtp_parameters,
+                    );
+                    if recorded.is_err() {
+                        break;
+                    }
+                }
+                match recorded {
+                    Ok(()) => session.renegotiate_consumers().await,
+                    Err(error) => Err(error),
+                }
+            };
+            // Single renegotiation for all still-live consumers in this batch.
+            if let Err(e) = applied {
                 metrics.record_error(format!("Consumer renegotiation failed: {e}"));
                 tracing::error!("{}: Failed to renegotiate consumers: {}", client_id, e);
                 // The pending batch has no installed receive description. Stop
@@ -2507,7 +2401,11 @@ async fn receive_messages_loop(
                 );
             }
 
-            let batch_size = pending_resumes.len();
+            // Snapshot the installed batch before reading more signaling. A
+            // closure during settling cannot invalidate a later drain range,
+            // and newly created consumers still need their own SDP batch.
+            let to_resume = std::mem::take(&mut pending_resumes);
+            let batch_size = to_resume.len();
 
             // Adaptive SSRC wait
             let ssrc_wait_ms = (batch_size as u64 * 5).clamp(50, 200);
@@ -2523,15 +2421,9 @@ async fn receive_messages_loop(
                                         server_msg,
                                         &metrics,
                                         &client_id,
-                                        &mut write,
-                                        &rtp_capabilities,
-                                        &webrtc_session,
                                         &mut needs_renegotiation,
                                         &mut pending_resumes,
-                                        &mut audio_consumes_sent,
-                                        &mut video_consumes_sent,
-                                        max_audio,
-                                        max_video,
+                                        &mut subscriptions,
                                         ).await;
                                 }
                             }
@@ -2561,9 +2453,18 @@ async fn receive_messages_loop(
             }
 
             // Only resume consumers from the CURRENT batch
-            let to_resume: Vec<String> = pending_resumes.drain(..batch_size).collect();
-            let resume_count = to_resume.len();
-            for consumer_id in to_resume {
+            if !metrics.attempt_accepts_work(attempt) {
+                subscriptions.stop();
+            }
+            let mut resume_count = 0;
+            for consumer in to_resume
+                .into_iter()
+                .filter(|consumer| subscriptions.can_resume(&consumer.consumer_id))
+            {
+                if !metrics.attempt_accepts_work(attempt) {
+                    break;
+                }
+                let consumer_id = consumer.consumer_id;
                 if metrics.diagnostics_enabled() {
                     metrics.diagnostic_event(
                         "resume-requested",
@@ -2583,6 +2484,7 @@ async fn receive_messages_loop(
                         e
                     );
                 }
+                resume_count += 1;
             }
             if resume_count > 0 {
                 if let Err(e) = write.flush().await {
@@ -2614,28 +2516,13 @@ async fn receive_messages_loop(
 const DEFAULT_MAX_AUDIO_CONSUMERS: usize = 4;
 const DEFAULT_MAX_VIDEO_CONSUMERS: usize = 4;
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "The shared initial/live signaling handler borrows subscription state explicitly without transferring ownership."
-)]
 async fn handle_server_message(
     msg: ServerMessage,
     metrics: &Arc<MetricsCollector>,
     client_id: &str,
-    write: &mut futures_util::stream::SplitSink<
-        tokio_tungstenite::WebSocketStream<
-            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-        >,
-        Message,
-    >,
-    rtp_capabilities: &RtpCapabilities,
-    webrtc_session: &Arc<Mutex<WebRtcSession>>,
     needs_renegotiation: &mut bool,
-    pending_resumes: &mut Vec<String>,
-    audio_consumes_sent: &mut usize,
-    video_consumes_sent: &mut usize,
-    max_audio: usize,
-    max_video: usize,
+    pending_resumes: &mut Vec<PendingConsumer>,
+    subscriptions: &mut Subscriptions,
 ) {
     match msg {
         ServerMessage::NewProducer {
@@ -2644,53 +2531,10 @@ async fn handle_server_message(
             kind,
             ..
         } => {
-            // Smart subscription: separate caps for audio and video
-            let at_cap = match kind {
-                MediaKind::Audio => *audio_consumes_sent >= max_audio,
-                MediaKind::Video => *video_consumes_sent >= max_video,
-            };
-
-            if at_cap {
-                return;
+            let retired = metrics.producer_retired(&producer_id);
+            if let Err(error) = subscriptions.discover(producer_id, kind, retired) {
+                metrics.record_error(format!("Producer discovery failed: {error}"));
             }
-            if !metrics.subscribe(&producer_id, kind == MediaKind::Audio) {
-                return;
-            }
-
-            tracing::debug!(
-                "{}: New producer available: {} ({:?}), creating consumer...",
-                client_id,
-                producer_id,
-                kind
-            );
-
-            let consume_msg = ClientMessage::Consume {
-                producer_id: producer_id.clone(),
-                rtp_capabilities: rtp_capabilities.clone(),
-            };
-
-            if let Err(e) = send_message(write, consume_msg).await {
-                metrics.record_error(format!("Consume request failed: {e}"));
-                tracing::error!("{}: Failed to send Consume message: {}", client_id, e);
-                return;
-            }
-
-            match kind {
-                MediaKind::Audio => *audio_consumes_sent += 1,
-                MediaKind::Video => *video_consumes_sent += 1,
-            }
-
-            let total = *audio_consumes_sent + *video_consumes_sent;
-            tracing::debug!(
-                "{}: Sent Consume request (audio:{}/{}, video:{}/{}, total:{}) for producer {}",
-                client_id,
-                audio_consumes_sent,
-                max_audio,
-                video_consumes_sent,
-                max_video,
-                total,
-                producer_id
-            );
         }
         ServerMessage::ConsumerCreated {
             consumer_id,
@@ -2698,6 +2542,19 @@ async fn handle_server_message(
             kind,
             rtp_parameters,
         } => {
+            if !metrics.attempt_accepts_work(metrics.diagnostic_attempt()) {
+                subscriptions.stop();
+                return;
+            }
+            match subscriptions.created(&producer_id, kind, &consumer_id) {
+                Ok(true) => {}
+                Ok(false) => return,
+                Err(error) => {
+                    metrics.record_error(format!("Invalid consumer response: {error}"));
+                    subscriptions.stop();
+                    return;
+                }
+            }
             metrics.record_consumer_created();
             let ssrc = rtp_parameters
                 .encodings
@@ -2714,18 +2571,12 @@ async fn handle_server_message(
                 metrics.record_error(format!("Consumer {consumer_id} has no SSRC"));
             }
 
-            // Record consumer info WITHOUT renegotiating SDP yet.
-            if let Err(e) = webrtc_session.lock().await.record_consumer(
-                producer_id.clone(),
+            pending_resumes.push(PendingConsumer {
+                consumer_id,
+                producer_id,
                 kind,
-                &rtp_parameters,
-            ) {
-                metrics.record_error(format!("Consumer setup failed: {e}"));
-                tracing::error!("{}: Failed to record consumer: {}", client_id, e);
-                return;
-            }
-
-            pending_resumes.push(consumer_id.clone());
+                rtp_parameters,
+            });
             *needs_renegotiation = true;
         }
         ServerMessage::ParticipantJoined {
@@ -2744,14 +2595,13 @@ async fn handle_server_message(
             tracing::debug!("{}: Participant left: {}", client_id, participant_id);
         }
         ServerMessage::ProducerClosed { producer_id } => {
-            let (kind, unexpected) = metrics.close_producer(&producer_id);
+            if let Err(error) = subscriptions.close(&producer_id) {
+                metrics.record_error(format!("Producer closure failed: {error}"));
+            }
+            pending_resumes.retain(|consumer| subscriptions.can_resume(&consumer.consumer_id));
+            let (_, unexpected) = metrics.close_producer(&producer_id);
             if unexpected {
                 metrics.record_error(format!("Server closed active generated producer {producer_id} before its planned lifetime ended"));
-            }
-            match kind {
-                Some(true) => *audio_consumes_sent = audio_consumes_sent.saturating_sub(1),
-                Some(false) => *video_consumes_sent = video_consumes_sent.saturating_sub(1),
-                None => {}
             }
             tracing::debug!("{}: Producer closed: {}", client_id, producer_id);
         }
@@ -3054,8 +2904,6 @@ mod departure_tests {
                 Duration::from_secs(10),
                 RtpCapabilities::default(),
                 session,
-                0,
-                0,
                 4,
                 4,
                 Vec::new(),
@@ -3247,14 +3095,23 @@ mod incremental_receive_tests {
                 Duration::from_secs(30),
                 RtpCapabilities::default(),
                 session.clone(),
-                0,
-                0,
                 4,
                 4,
-                Vec::new(),
+                vec![ServerMessage::NewProducer {
+                    participant_id: "batch-publisher".into(),
+                    producer_id: "batch-producer".into(),
+                    kind: MediaKind::Audio,
+                    source: None,
+                }],
                 None,
             )))));
 
+            let request = server.next().await.context("Missing Consume request")??;
+            let Message::Text(request) = request else {
+                anyhow::bail!("Expected a text Consume request");
+            };
+            anyhow::ensure!(matches!(serde_json::from_str::<ClientMessage>(&request)?,
+                ClientMessage::Consume { producer_id, .. } if producer_id == "batch-producer"));
             server
                 .send(Message::Text(
                     serde_json::to_string(&ServerMessage::ConsumerCreated {
@@ -3390,6 +3247,310 @@ mod incremental_receive_tests {
     #[tokio::test]
     async fn applied_incremental_renegotiation_resumes_its_pending_batch() {
         exercise_incremental_batch(false).await;
+    }
+}
+
+#[cfg(test)]
+mod subscription_loop_tests {
+    use super::*;
+
+    struct Fixture {
+        server: tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+        metrics: Arc<MetricsCollector>,
+        tasks: tokio::task::JoinSet<()>,
+        departure: tokio::sync::oneshot::Sender<DepartureRequest>,
+    }
+
+    fn producer(id: &str, kind: MediaKind) -> ServerMessage {
+        ServerMessage::NewProducer {
+            participant_id: "scripted-publisher".into(),
+            producer_id: id.into(),
+            kind,
+            source: None,
+        }
+    }
+
+    impl Fixture {
+        async fn new(
+            events: Vec<ServerMessage>,
+            max_audio: usize,
+            max_video: usize,
+        ) -> Result<Self> {
+            let metrics = Arc::new(MetricsCollector::new("queue-receiver".into()));
+            metrics.begin_connection_attempt();
+            metrics.enable_diagnostics();
+            let session = Arc::new(Mutex::new(WebRtcSession::new(
+                "queue-receiver".into(),
+                metrics.clone(),
+            )));
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+            let address = listener.local_addr()?;
+            let (client, server) = tokio::join!(connect_async(format!("ws://{address}/")), async {
+                let (stream, _) = listener.accept().await?;
+                Ok::<_, anyhow::Error>(tokio_tungstenite::accept_async(stream).await?)
+            });
+            let (client, _) = client?;
+            let server = server?;
+            let (write, read) = client.split();
+            let (departure, receiver) = tokio::sync::oneshot::channel();
+            let mut tasks = tokio::task::JoinSet::new();
+            tasks.spawn(receive_messages_loop(
+                read,
+                write,
+                metrics.clone(),
+                "queue-receiver".into(),
+                Duration::from_secs(10),
+                RtpCapabilities::default(),
+                session,
+                max_audio,
+                max_video,
+                events,
+                Some(receiver),
+            ));
+            Ok(Self {
+                server,
+                metrics,
+                tasks,
+                departure,
+            })
+        }
+
+        async fn read(&mut self) -> Result<ClientMessage> {
+            let message = tokio::time::timeout(Duration::from_secs(1), self.server.next())
+                .await?
+                .context("Receiver closed unexpectedly")??;
+            let Message::Text(text) = message else {
+                anyhow::bail!("Expected text signaling");
+            };
+            Ok(serde_json::from_str(&text)?)
+        }
+
+        async fn consume(&mut self, expected: &str) -> Result<()> {
+            anyhow::ensure!(
+                matches!(self.read().await?, ClientMessage::Consume { producer_id, .. }
+                if producer_id == expected),
+                "Unexpected queued request"
+            );
+            Ok(())
+        }
+
+        async fn send(&mut self, message: ServerMessage) -> Result<()> {
+            self.server
+                .send(Message::Text(serde_json::to_string(&message)?.into()))
+                .await?;
+            Ok(())
+        }
+
+        async fn finish(self) -> Result<()> {
+            let Self {
+                mut server,
+                metrics,
+                mut tasks,
+                departure,
+            } = self;
+            request_explicit_leave(departure, Duration::from_secs(1)).await?;
+            let message = server.next().await.context("Missing LeaveRoom")??;
+            let Message::Text(text) = message else {
+                anyhow::bail!("Expected LeaveRoom text");
+            };
+            anyhow::ensure!(matches!(
+                serde_json::from_str::<ClientMessage>(&text)?,
+                ClientMessage::LeaveRoom
+            ));
+            tasks.join_next().await.context("Missing receive task")??;
+            anyhow::ensure!(metrics.generate_report().errors.is_empty());
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn quiet_discovery_starts_promptly_and_keeps_two_item_work_budget() -> Result<()> {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let mut fixture = Fixture::new(
+                vec![
+                    producer("a1", MediaKind::Audio),
+                    producer("a2", MediaKind::Audio),
+                    producer("v1", MediaKind::Video),
+                    producer("v2", MediaKind::Video),
+                ],
+                4,
+                4,
+            )
+            .await?;
+            for id in ["a1", "v1", "a2", "v2"] {
+                fixture.consume(id).await?;
+            }
+            let report = fixture.metrics.generate_report();
+            let events: Vec<_> = report
+                .diagnostics
+                .as_ref()
+                .unwrap()
+                .events
+                .iter()
+                .filter(|event| event.kind == "consume-requested")
+                .collect();
+            anyhow::ensure!(events.len() == 4);
+            anyhow::ensure!(
+                events[2].elapsed_ms.saturating_sub(events[1].elapsed_ms) >= 90,
+                "A work tick exceeded its two-item budget"
+            );
+            anyhow::ensure!(!report.diagnostics.as_ref().unwrap().events.iter().any(
+                |event| matches!(
+                    event.kind.as_str(),
+                    "renegotiation-applied" | "resume-requested"
+                )
+            ));
+            fixture.finish().await
+        })
+        .await?
+    }
+
+    #[tokio::test]
+    async fn full_caps_retain_fifo_and_refill_once_after_real_closure() -> Result<()> {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let mut fixture = Fixture::new(
+                vec![
+                    producer("a1", MediaKind::Audio),
+                    producer("a2", MediaKind::Audio),
+                    producer("v1", MediaKind::Video),
+                    producer("v2", MediaKind::Video),
+                ],
+                1,
+                1,
+            )
+            .await?;
+            fixture.consume("a1").await?;
+            fixture.consume("v1").await?;
+            anyhow::ensure!(
+                tokio::time::timeout(Duration::from_millis(150), fixture.server.next())
+                    .await
+                    .is_err()
+            );
+            fixture.send(producer("a3", MediaKind::Audio)).await?;
+            fixture
+                .send(ServerMessage::ProducerClosed {
+                    producer_id: "a1".into(),
+                })
+                .await?;
+            fixture
+                .send(ServerMessage::ProducerClosed {
+                    producer_id: "a1".into(),
+                })
+                .await?;
+            fixture.send(producer("a1", MediaKind::Audio)).await?;
+            fixture.consume("a2").await?;
+            fixture
+                .send(ServerMessage::ProducerClosed {
+                    producer_id: "v1".into(),
+                })
+                .await?;
+            fixture.consume("v2").await?;
+            fixture
+                .send(ServerMessage::ProducerClosed {
+                    producer_id: "a2".into(),
+                })
+                .await?;
+            fixture.consume("a3").await?;
+            fixture.finish().await
+        })
+        .await?
+    }
+
+    #[tokio::test]
+    async fn buffered_close_cancels_discovery_before_first_dispatch() -> Result<()> {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let mut fixture = Fixture::new(
+                vec![
+                    producer("closed", MediaKind::Audio),
+                    ServerMessage::ProducerClosed {
+                        producer_id: "closed".into(),
+                    },
+                    producer("closed", MediaKind::Audio),
+                    producer("live", MediaKind::Video),
+                ],
+                1,
+                1,
+            )
+            .await?;
+            fixture.consume("live").await?;
+            fixture.finish().await
+        })
+        .await?
+    }
+
+    #[tokio::test]
+    async fn closed_pending_consumer_never_reaches_native_setup_or_resume() -> Result<()> {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let mut fixture =
+                Fixture::new(vec![producer("closing", MediaKind::Audio)], 1, 0).await?;
+            fixture.consume("closing").await?;
+            fixture
+                .send(ServerMessage::ConsumerCreated {
+                    consumer_id: "closing-consumer".into(),
+                    producer_id: "closing".into(),
+                    kind: MediaKind::Audio,
+                    rtp_parameters: RtpParameters {
+                        encodings: vec![RtpEncodingParameters {
+                            ssrc: Some(12345),
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    },
+                })
+                .await?;
+            fixture
+                .send(ServerMessage::ProducerClosed {
+                    producer_id: "closing".into(),
+                })
+                .await?;
+            // This fixture has no native receive transport: attempting native
+            // setup would record an error, even if no resume were sent.
+            anyhow::ensure!(
+                tokio::time::timeout(Duration::from_millis(2300), fixture.server.next())
+                    .await
+                    .is_err()
+            );
+            let report = fixture.metrics.generate_report();
+            anyhow::ensure!(report.consumers_created == 1);
+            anyhow::ensure!(report.errors.is_empty());
+            anyhow::ensure!(!report.diagnostics.as_ref().unwrap().events.iter().any(
+                |event| matches!(
+                    event.kind.as_str(),
+                    "renegotiation-applied" | "resume-requested"
+                )
+            ));
+            fixture.finish().await
+        })
+        .await?
+    }
+
+    #[tokio::test]
+    async fn departure_stops_new_work_without_losing_explicit_leave() -> Result<()> {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let mut fixture = Fixture::new(
+                vec![
+                    producer("first", MediaKind::Audio),
+                    producer("second", MediaKind::Audio),
+                ],
+                1,
+                0,
+            )
+            .await?;
+            fixture.consume("first").await?;
+            fixture.metrics.end_session();
+            fixture
+                .send(ServerMessage::ProducerClosed {
+                    producer_id: "first".into(),
+                })
+                .await?;
+            anyhow::ensure!(
+                tokio::time::timeout(Duration::from_millis(150), fixture.server.next())
+                    .await
+                    .is_err()
+            );
+            fixture.finish().await
+        })
+        .await?
     }
 }
 

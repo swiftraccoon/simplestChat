@@ -74,6 +74,14 @@ Each iteration performs a fresh room join with new media transports; it does not
 exercise credential-based signaling reconnection. With abrupt departure, the old
 membership can remain in reconnect grace while the new session joins.
 
+Existing and newly announced producers share bounded audio/video FIFO queues.
+Starting immediately, each 100 ms dispatch tick inspects at most two items in
+total. Known owned-retired producers are skipped before requesting a consumer;
+already requested slots stay occupied until the server's `ProducerClosed`
+notification frees capacity. Discovery deduplication retains at most 20,000
+identities and fails the run on overflow. This scheduling does not change
+consumer caps, coverage thresholds, keyframe cadence, or session lengths.
+
 ## What constitutes success
 
 All clients share a measurement interval beginning after `ramp-up + warmup`.

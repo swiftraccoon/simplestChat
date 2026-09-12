@@ -236,6 +236,29 @@ impl Measurements {
             .is_none()
     }
 
+    /// Only an owned publisher's completed lifetime can exclude a new request.
+    /// Unknown IDs and server notifications are not evidence of owned retirement.
+    pub fn producer_retired(&self, producer_id: &str) -> bool {
+        self.window
+            .publishers
+            .lock()
+            .unwrap()
+            .get(producer_id)
+            .is_some_and(|(_, ended)| ended.is_some())
+    }
+
+    /// Stop new subscription work at the planned boundary, while allowing the
+    /// signaling loop to finish owned departure and diagnostic cleanup.
+    pub fn attempt_accepts_work(&self, ordinal: usize) -> bool {
+        let now = Instant::now();
+        self.measurement
+            .lock()
+            .unwrap()
+            .queued_by_attempt
+            .get(&ordinal)
+            .is_some_and(|attempt| !attempt.ended && attempt.deadline.is_none_or(|end| now < end))
+    }
+
     /// A server notification is not authority to excuse missing media from a
     /// generator that is still publishing. Only our owned lifecycle may do that.
     pub fn close_producer(&self, producer_id: &str) -> (Option<bool>, bool) {
