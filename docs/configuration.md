@@ -33,6 +33,8 @@
 | `MAX_CONSUMERS_PER_PARTICIPANT` | `16` | Server-side consumer cap per participant |
 | `METRICS_TOKEN` | (none) | Bearer token of at least 32 bytes; `/metrics` returns 404 when unset |
 | `RUST_LOG` | `simplestChat=info,mediasoup=warn` | Tracing filter |
+| `DIAGNOSTICS_PATH` | (none) | Opt-in, new absolute path for private local operation records; see [limits and report definitions](diagnostics.md) |
+| `MEDIA_DIAGNOSTICS_ENABLED` | `false` | Enable authenticated, on-demand native media snapshots; requires `METRICS_TOKEN`. See [collection bounds and interpretation](diagnostics.md#server-forwarding-snapshots) |
 | `TURN_URLS` | (none) | Comma-separated TURN server URLs |
 | `TURN_SECRET` | (none) | TURN shared secret of at least 32 bytes; required when `TURN_URLS` is set |
 | `TURN_TTL` | `600` | TURN credential TTL in seconds; constrained to 60–3600 |
@@ -71,8 +73,10 @@ HTTP requests already in progress may finish, including database writes already
 started. HTTP/WebSocket, outstanding password jobs, and room cleanup share an
 eight-second window, followed by two seconds each for transports, routers,
 workers, and the database pool:
-16 seconds of asynchronous cleanup budgets, then at most one second waiting
-for runtime teardown. Later stages run even after a timeout; incomplete stages
+16 seconds of asynchronous cleanup budgets, up to 200 ms for an enabled local
+diagnostic writer to close, then at most one second waiting for runtime teardown.
+Recorder incompleteness is reported separately and does not change the server's
+exit outcome. Later cleanup stages run even after a timeout; incomplete stages
 are logged and produce a nonzero exit. A socket that is already closed or does
 not read cannot be guaranteed delivery of its shutdown notice.
 

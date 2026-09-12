@@ -122,6 +122,46 @@ Debug logs can contain them; keep those private. For receive-path warnings, use
 diagnosis, not performance comparisons. The local benchmark workflow also offers
 `--diagnostic-detail capture-only` for packet capture without client diagnostics.
 
+Full local benchmark diagnostic runs also save bounded native server samples in
+`server-media-sample-*.json` and correlate worker RTP counters with client receipt
+in `server-media-report.json`. Matching uses process-scoped hashed media references
+and SSRCs; missing samples or unmatched streams are unknown, not zero. Native
+forwarding counters do not establish client receipt. See
+[server forwarding snapshots](../docs/diagnostics.md#server-forwarding-snapshots)
+for limits, coverage gates and counter definitions.
+
+### Locate the last confirmed receive milestone
+
+Inspect each client and connection attempt separately; a working publisher does
+not establish a working receive path for every subscriber.
+
+| Evidence | What it establishes |
+| --- | --- |
+| Receive peer `connected` | Local ICE/DTLS readiness, not RTP delivery |
+| `consumer-created`, `renegotiation-applied`, `resume-requested`, `resume-ack` | Subscription setup milestones; an acknowledgment is not a received packet |
+| `track-first-rtp` | The track reader observed RTP for that SSRC, not browser decoding |
+| Consumer `packetsBySecond` | Delivery during eligible measurement seconds, including sustained gaps |
+
+Match consumer IDs within an attempt, then use SSRC mappings to locate first RTP.
+The SDP event describes a batch, not individual consumers. Compare elapsed times
+only within the same collector; server operation clocks are independent.
+Synthetic video emits a keyframe every five seconds, so resume-to-first-video
+timing is not a browser startup benchmark.
+
+Transport/candidate-pair bytes include control traffic. Zero remote RTP-report
+counters alone do not prove missing forwarding; check local inbound RTP and
+application receipt. A pre-close lifetime snapshot cannot locate a transient
+stall in time. If every stream fails for one client while those same producers
+reach other clients, investigate that receiver's path without assuming whether
+the fault is server egress, transport processing, or track delivery.
+
+For cleanup diagnosis, the local runner's full diagnostic mode accepts
+`--departure abrupt` (default) or `--departure explicit-leave`. The latter sends
+`leaveRoom` after each session boundary and before peer closure; churn can end
+sessions inside the shared measurement window. It does not change normal
+performance runs. Check the server-side lifecycle report, not just write success.
+See [departure comparison and evidence limits](../docs/diagnostics.md#compare-explicit-leave-with-disconnect).
+
 ## Development
 
 With the same build environment:

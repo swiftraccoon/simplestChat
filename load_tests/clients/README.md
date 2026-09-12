@@ -27,7 +27,8 @@ Keep these invariants when changing the client:
 - Use the client DTLS role and passive remote setup; serialize ICE candidate
   protocol/type names in lowercase.
 - Give each consumer a transceiver/media section with stable MID and SSRC
-  mappings across renegotiations. Install descriptions before resuming consumers.
+  mappings across renegotiations. Install descriptions before resuming consumers;
+  failed renegotiation must end signaling receipt without resuming the failed batch.
 - Rewrite generated RTP to the local track's negotiated SSRC. Preserve MID
   extensions and valid VP8 Picture ID descriptors for forwarding.
 - Wait for peer `Connected` before publishing: `write_rtp` queues packets and

@@ -1,5 +1,51 @@
 # Performance results
 
+## Observability update, diagnostics disabled — 2026-09-11
+
+Compared `46b1af7` with the observability working tree using frozen release
+servers and the same generator. Operation recording, native media sampling and
+extra logs were disabled. Server SHA-256 prefixes are `08cfc3c0b1255845`
+(baseline) and `bb12f3ec44823ef1` (candidate). This measures the whole server
+update, not the snapshot endpoint in isolation, and applies only to those builds.
+
+Three alternating pairs used ten publishers, one room and worker, synthetic
+480p/30 fps media, four audio and four video subscriptions per client, a
+five-second ramp, ten-second warmup and 60-second measurement. Hardware was
+an Apple M5 Max with 18 logical CPUs and 128 GiB RAM, running Darwin 27.0.0;
+servers used Rust 1.98.1 and static OpenSSL 3.5.8. No builds or other owned test
+suites ran during measurement. Values below are medians of three per-run values.
+
+| Metric | Baseline | Candidate |
+| --- | ---: | ---: |
+| Send ICE/DTLS-ready P99 | 409 ms | 409 ms |
+| Receive ICE/DTLS-ready P99 | 409 ms | 409 ms |
+| Received packets/second | 6,920 | 6,920 |
+| Server CPU, percent of one core | 11.46% | 11.31% |
+| Server peak RSS | 91.31 MiB | 91.88 MiB |
+| Generator CPU, percent of one core | 20.64% | 20.56% |
+| Generator peak RSS | 35.13 MiB | 35.20 MiB |
+
+All 80 subscriptions passed in all six runs, with no failed or skipped consumers.
+Rooms, participants and connections returned to zero; every server exited with
+code 0 and no signal. Each CPU interval had 119 samples spanning 59.67–59.73
+seconds. No diagnostic artifacts were generated.
+
+Throughput and readiness were unchanged by median. Candidate peak RSS was higher
+in every pair: +0.53, +1.34 and +0.45 MiB, with a median-of-runs increase of
+0.56 MiB (+0.6%). CPU changed by −0.15 percentage points (−1.3% relative) by
+median, but paired relative changes were −4.4%, +4.1% and −1.3%; ranges overlapped
+(11.28–11.65% baseline, 11.13–11.74% candidate). This does not establish a CPU
+improvement or prove zero overhead.
+
+Both variants logged [native bitrate-clamping errors](diagnostics.md#native-bitrate-clamping-messages)
+during post-workload cleanup. Delivery and exits passed, but the logs were not
+error-free; this shared cleanup behavior remains separate from the measured
+forwarding results.
+
+This paced, ten-client workload validates sustained delivery at that load, not
+production capacity, enabled-diagnostics overhead, or the cause of the
+[intermittent larger-room receive failure](#open-issue-intermittent-receive-failure).
+
 ## Quality and settings update — 2026-09-11
 
 Compared `e054e6b` with the quality/settings working tree using frozen release
@@ -131,6 +177,10 @@ CPU and memory use were effectively unchanged at this load.
 
 In a 30-client, four-room baseline run, one client received no media on its eight
 streams despite completing ICE/DTLS setup. The other 232 streams passed.
+All eight affected source streams reached other subscribers, which narrows the
+failure to that client's receive path. The failed run has no transport snapshot
+or packet capture establishing whether delivery stopped at server egress,
+transport processing, or the client track reader.
 Sixteen follow-up one-minute runs did not reproduce the failure, but its cause
 has not been identified. Larger-scale regression validation remains incomplete.
 

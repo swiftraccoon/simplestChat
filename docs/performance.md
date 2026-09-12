@@ -84,6 +84,11 @@ Compare the medians and ranges in `comparison.json`, then inspect individual
 runs when a change stands out. The output also includes workload settings,
 source/binary identifiers, raw reports, process samples, and server logs.
 
+Timing summaries require both `workloadPassed` and `serverShutdownPassed`.
+The runner saves `server-exit.json` after stopping each owned server; a nonzero,
+signaled or unavailable exit prevents a valid comparison, even if delivery and
+room cleanup passed. Failed runs retain their evidence and original failure.
+
 | Metric | Interpretation |
 | --- | --- |
 | Admission latency | WebSocket connection through room admission |
@@ -123,7 +128,9 @@ production sizing needs a representative deployment, network, and client workloa
 ## Diagnosing missing media
 
 Add `--purpose diagnostic` to the local comparison command to collect transport
-snapshots and signaling logs instead of resource measurements. For packet headers,
+snapshots, bounded native forwarding samples, server operation traces and signaling logs instead of resource
+measurements. See [local server diagnostics](diagnostics.md) for configuration,
+coverage and shutdown results. For packet headers,
 also add `--capture-interface lo0` on macOS or `lo` on Linux; this requires
 `tcpdump` and existing capture permission.
 

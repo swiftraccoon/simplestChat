@@ -124,7 +124,9 @@ curl --fail \
 Keep tokens out of command history and monitoring logs. Monitor active
 connections, rooms, participants, errors and message latency. The
 `simplestchat_media_workers_live` gauge counts open workers with open WebRTC
-listeners; a timed-out snapshot reports zero. Failed workers are not replaced
+listeners. A timed-out snapshot omits that gauge and reports
+`simplestchat_media_workers_snapshot_complete 0`; it is unknown capacity, not
+zero live workers. Failed workers are not replaced
 automatically: restart the server to restore capacity.
 
 Use `GET /health` for process liveness and `GET /ready` for load-balancer
@@ -137,8 +139,9 @@ TURN connectivity; see
 
 Stop the application with `SIGTERM` (as Compose does). It closes admission,
 notifies existing sockets, cancels reconnect grace, and drains room/media/DB
-resources. Cleanup stages have 16 seconds of total asynchronous budgets plus
-one second for runtime teardown; incomplete stages log errors and exit nonzero.
+resources. Cleanup stages have 16 seconds of total asynchronous budgets, up to
+200 ms for an enabled diagnostic recorder to close, and one second for runtime
+teardown; incomplete cleanup stages log errors and exit nonzero.
 Keep Compose's 30-second hard-stop allowance for stalled native code. Existing
 requests may finish during drain; shutdown is not a delivery or transaction
 completion guarantee. See [shutdown behavior](configuration.md#shutdown).

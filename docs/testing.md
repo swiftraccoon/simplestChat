@@ -36,6 +36,19 @@ room notice, clean WebSocket close code 1001 and exit status zero within its
 Native tests separately cover drain races, stalled cleanup and readiness probe
 failures. See [shutdown guarantees and limits](configuration.md#shutdown).
 
+To validate the server's actual diagnostic JSONL schema with the same owned
+guest-only workflow, also run by CI:
+
+```sh
+node build/diagnostics-smoke.mjs --binary "$PWD/target/debug/simplestChat"
+```
+
+This additionally requires complete recorder coverage, successful `join_room`
+and `room_lock_wait` records, and clean server exit. It prints and retains a new
+private `results/diagnostics-smoke.*` directory, including failure artifacts;
+it does not use a browser, capture media or upload anything. See
+[diagnostic interpretation](diagnostics.md#read-the-results).
+
 ## Disposable PostgreSQL and browser tests
 
 With PostgreSQL tools on `PATH`, use the owned bootstrap:

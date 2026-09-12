@@ -32,6 +32,7 @@ HTTP / WebSocket
 | Native worker/router/transport lifecycle | `media/worker_manager.rs`, `router_manager.rs`, `transport_manager.rs` |
 | Media configuration and types | `media/config.rs`, `media/types.rs` |
 | Prometheus metrics and TURN credentials | `metrics.rs`, `turn.rs` |
+| Opt-in local operation traces | `diagnostics.rs`; [capture and interpretation](../docs/diagnostics.md) |
 
 Worker count is configurable (detected CPUs capped at 64 by default), not fixed
 at 16. Each worker has a dedicated WebRtcServer UDP port; each room has one
