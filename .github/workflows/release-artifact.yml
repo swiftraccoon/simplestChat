@@ -1,0 +1,30 @@
+name: Build production release artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  artifact:
+    name: Verified Linux production image without deployment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build the exact selected commit without publishing or deploying
+        run: python3 build/build-release.py --output "${RUNNER_TEMP}/simplestchat-release"
+
+      - name: Retain the artifact and original build outcome
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: simplestchat-production-${{ github.sha }}
+          path: ${{ runner.temp }}/simplestchat-release
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
