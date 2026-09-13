@@ -49,6 +49,27 @@ COMMUNITY_E2E=1 BASE_URL=http://127.0.0.1:3119 npm --prefix web/e2e test
 `PLAYWRIGHT_MODULE` and `PLAYWRIGHT_BROWSERS_PATH` support isolated tool/browser
 installations.
 
+## Homepage layout without a backend
+
+After building `web/dist` and installing the browser tooling above:
+
+```sh
+npm --prefix web/e2e run test:layout
+```
+
+This check renders production assets with intercepted room/account fixtures;
+Chromium is the default, with `E2E_BROWSER=firefox` or `E2E_BROWSER=webkit` selecting
+the other installed engines. It contacts no application server, grants no capture
+permissions, and fails if the homepage requests media. Populated, empty, unavailable and filtered
+directories are checked at 320, 375, 768 and 1440px, plus short landscape.
+Long names, thumbnails, counts and badges must fit the card without overlaps or
+horizontal scrolling; the last room and direct-join controls must remain reachable.
+This is layout coverage, not backend integration or native mobile-browser proof.
+
+The printed private artifact directory retains asset hashes, rendered geometry,
+screenshots and browser cleanup results. `E2E_ARTIFACTS` may select a new directory;
+an existing directory is rejected. CI retains the separate `homepage-layout` report.
+
 ## Firefox and WebKit
 
 Chromium is the default. Install the other pinned engines and run each with a

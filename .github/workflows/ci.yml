@@ -207,6 +207,21 @@ jobs:
           npm --prefix web/e2e exec -- playwright install --with-deps chromium
           npm --prefix web/e2e audit --audit-level=moderate
 
+      - name: Homepage containment and responsive layout
+        timeout-minutes: 3
+        env:
+          E2E_ARTIFACTS: ${{ runner.temp }}/homepage-layout
+        run: npm --prefix web/e2e run test:layout
+
+      - name: Preserve homepage layout diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: homepage-layout
+          path: ${{ runner.temp }}/homepage-layout
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Community and real-media browser regressions
         timeout-minutes: 8
         env:

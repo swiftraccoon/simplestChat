@@ -78,6 +78,7 @@ textarea::placeholder {
 
 header {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 1rem;
@@ -197,16 +198,21 @@ header h1 {
 /* ========== Join Screen ========== */
 
 #join-screen {
-  flex: 1;
+  /* Grow with the card on short screens so its top and bottom stay reachable. */
+  flex: 1 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
+  padding: 2rem 1rem;
 }
 
 .join-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  flex-shrink: 0;
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -214,8 +220,8 @@ header h1 {
   box-shadow:
     var(--shadow-panel),
     0 0 40px rgba(0, 0, 0, 0.3);
-  width: 360px;
-  max-width: calc(100vw - 2rem);
+  width: 100%;
+  max-width: 40rem;
 }
 
 .join-brand {
@@ -243,13 +249,14 @@ header h1 {
 
 .join-form input,
 .room-search-row input {
+  min-width: 0;
   padding: 0.65rem 0.9rem;
   min-height: 44px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: 1rem;
   outline: none;
   transition:
     border-color var(--transition-fast),
@@ -1380,12 +1387,12 @@ header h1 {
 }
 
 @media (max-width: 480px) {
+  #join-screen {
+    padding: 1rem 0.75rem;
+  }
+
   .join-card {
-    padding: 2rem 1.25rem 1.5rem;
-    width: 100%;
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
+    padding: 1.5rem 1rem;
   }
 
   #controls button {
@@ -1401,12 +1408,18 @@ header h1 {
 
 /* --- Auth Bar --- */
 .auth-bar {
+  min-width: 0;
   text-align: center;
   margin-bottom: 1rem;
 }
 
+.auth-bar .auth-link-btn {
+  min-height: 44px;
+}
+
 .auth-user-info {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
@@ -1416,6 +1429,8 @@ header h1 {
 }
 
 #auth-display-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-weight: 500;
   color: var(--text-primary, #e0e0e0);
 }
@@ -1498,6 +1513,11 @@ header h1 {
 }
 
 /* --- Room Browser --- */
+#room-browser {
+  width: 100%;
+  min-width: 0;
+}
+
 .room-browser-header {
   display: flex;
   flex-wrap: wrap;
@@ -1534,7 +1554,11 @@ header h1 {
 
 .room-card {
   display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
   align-items: center;
+  width: 100%;
+  min-width: 0;
   gap: 0.75rem;
   padding: 0.75rem;
   background: var(--bg-secondary, #2a2a2a);
@@ -1548,6 +1572,11 @@ header h1 {
   border-color: var(--accent, #6c9fff);
 }
 
+#room-browser .room-card:focus-visible {
+  /* Keep keyboard focus visible inside the directory's scrolling boundary. */
+  outline-offset: -3px;
+}
+
 .room-card-info {
   flex: 1;
   min-width: 0;
@@ -1557,8 +1586,17 @@ header h1 {
   font-weight: 500;
   color: var(--text-primary, #e0e0e0);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
+}
+
+.room-card-name > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.room-card-name > span + span {
+  flex-shrink: 0;
 }
 
 .room-card-topic {
@@ -1571,11 +1609,14 @@ header h1 {
 
 .room-card-meta {
   display: flex;
+  /* Keep counts and badges below the title, including cards with thumbnails. */
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.75rem;
   color: var(--text-secondary, #b0b0b0);
-  flex-shrink: 0;
 }
 
 .room-card-badge {
