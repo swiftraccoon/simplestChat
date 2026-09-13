@@ -159,6 +159,7 @@ const fixtures = [
   { type: 'error', message: 'Test error' },
   { type: 'roomPasswordRequired' },
   { type: 'roomClosed', reason: 'Deleted' },
+  { type: 'serverRestarting', reason: 'Server shutting down' },
   { type: 'routerRtpCapabilities', rtpCapabilities: capabilities },
   {
     type: 'transportCreated',

@@ -3,6 +3,8 @@ import { decodeServerMessage } from './protocol-validation';
 
 export type MessageHandler = (msg: ServerMessage) => void;
 
+const RECONNECT_DEADLINE_MS = 120_000;
+
 export class SignalingClient {
   private ws: WebSocket | null = null;
   private url: string;
@@ -12,6 +14,11 @@ export class SignalingClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private shouldReconnect = true;
   private reconnectAttempt = 0;
+  private reconnectDeadline: ReturnType<typeof setTimeout> | null = null;
+  private restarting = false;
+  private recoveryFailed = false;
+  private onReconnectFailed: (() => void) | null = null;
+  private onConnectionLost: (() => void) | null = null;
   private onReconnected: (() => void) | null = null;
   private wasConnected = false;
   private currentToken: string | undefined;
@@ -40,12 +47,41 @@ export class SignalingClient {
     this.onReconnected = handler;
   }
 
+  setOnReconnectFailed(handler: () => void): void {
+    this.onReconnectFailed = handler;
+  }
+
+  setOnConnectionLost(handler: () => void): void {
+    this.onConnectionLost = handler;
+  }
+
+  /** Explicit user retry keeps the current identity and starts a fresh budget. */
+  retryConnection(): void {
+    this.restarting = true;
+    this.shouldReconnect = true;
+    this.startReconnectDeadline();
+    this.connect();
+  }
+
+  /** Room recovery, explicit leave, or a replacement membership ends restart intent. */
+  completeRestartRecovery(): void {
+    this.restarting = false;
+    this.clearReconnectDeadline();
+    // Leaving the room must not leave an unbounded background connection attempt.
+    if (this.shouldReconnect && this.wasConnected && !this.connected) this.startReconnectDeadline();
+  }
+
   connect(token?: string): void {
     if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING)
       return;
 
     this.shouldReconnect = true;
     this.currentToken = token ?? this.currentToken;
+    this.recoveryFailed = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.onStatusChange?.('connecting');
 
     // Keep bearer credentials out of the request URL, where proxies and APM
@@ -63,6 +99,7 @@ export class SignalingClient {
       const wasReconnect = this.wasConnected;
       this.wasConnected = true;
       this.reconnectAttempt = 0;
+      if (!this.restarting) this.clearReconnectDeadline();
       this.onStatusChange?.('connected');
       if (wasReconnect) {
         this.onReconnected?.();
@@ -84,6 +121,11 @@ export class SignalingClient {
       }
 
       try {
+        if (msg.type === 'serverRestarting') {
+          this.restarting = true;
+          this.startReconnectDeadline();
+          this.rejectAllPending('Server restarting');
+        }
         // Check pending resolvers first
         const idx = this.pendingResolvers.findIndex((p) => p.match(msg));
         if (idx !== -1) {
@@ -110,7 +152,9 @@ export class SignalingClient {
       console.log('[ws] disconnected');
       this.onStatusChange?.('disconnected');
       this.rejectAllPending('WebSocket closed');
+      this.onConnectionLost?.();
       if (this.shouldReconnect) {
+        this.startReconnectDeadline();
         this.scheduleReconnect();
       }
     };
@@ -126,6 +170,9 @@ export class SignalingClient {
     this.wasConnected = false;
     this.reconnectAttempt = 0;
     this.currentToken = undefined;
+    this.restarting = false;
+    this.recoveryFailed = false;
+    this.clearReconnectDeadline();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -178,14 +225,21 @@ export class SignalingClient {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  get reconnectExhausted(): boolean {
+    return this.recoveryFailed;
+  }
+
   /** Update JWT token for next connection/reconnection */
   setToken(token: string | undefined): void {
     this.currentToken = token;
   }
 
   private scheduleReconnect(): void {
-    // Exponential backoff: 2s, 4s, 8s, 16s, max 30s
-    const delay = Math.min(2000 * Math.pow(2, this.reconnectAttempt), 30000);
+    // Equal jitter spreads recovering clients without immediate reconnect loops.
+    // The exponential ceiling is 2s, 4s, 8s, 16s, then 30s; every delay uses
+    // half to all of that ceiling and one overall deadline bounds the outage.
+    const ceiling = Math.min(2000 * Math.pow(2, this.reconnectAttempt), 30000);
+    const delay = Math.floor(ceiling / 2 + (Math.random() * ceiling) / 2);
     this.reconnectAttempt++;
     console.log(`[ws] reconnecting in ${delay}ms (attempt ${this.reconnectAttempt})`);
     this.reconnectTimer = setTimeout(() => {
@@ -193,6 +247,29 @@ export class SignalingClient {
       console.log('[ws] attempting reconnect...');
       this.connect(this.currentToken);
     }, delay);
+  }
+
+  private clearReconnectDeadline(): void {
+    if (this.reconnectDeadline) clearTimeout(this.reconnectDeadline);
+    this.reconnectDeadline = null;
+  }
+
+  private startReconnectDeadline(): void {
+    if (this.reconnectDeadline !== null) return;
+    this.reconnectDeadline = setTimeout(() => {
+      this.reconnectDeadline = null;
+      this.shouldReconnect = false;
+      this.restarting = false;
+      this.recoveryFailed = true;
+      if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+      const socket = this.ws;
+      this.ws = null;
+      socket?.close();
+      this.rejectAllPending('Reconnection timed out');
+      this.onStatusChange?.('disconnected');
+      this.onReconnectFailed?.();
+    }, RECONNECT_DEADLINE_MS);
   }
 
   private rejectAllPending(reason: string): void {

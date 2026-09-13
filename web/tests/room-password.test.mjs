@@ -9,6 +9,9 @@ async function roomWithReplies(replies) {
       this.onMessage = handler;
     },
     setOnReconnected() {},
+    setOnReconnectFailed() {},
+    setOnConnectionLost() {},
+    completeRestartRecovery() {},
     send(message) {
       sent.push(message);
       const reply = replies.shift();

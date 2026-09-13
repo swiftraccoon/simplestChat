@@ -22,7 +22,7 @@ async function harness(options = {}) {
     tracks = [],
     removed = [],
     recovery = [];
-  const records = { admissions: 0, localChanges: 0, publicChats: [], departures: [] };
+  const records = { admissions: 0, localChanges: 0, publicChats: [], departures: [], retries: 0 };
   const timers = new Map();
   let timerId = 0;
   class Media {
@@ -75,6 +75,16 @@ async function harness(options = {}) {
     },
     setOnReconnected(handler) {
       this.onReconnected = handler;
+    },
+    setOnReconnectFailed(handler) {
+      this.onReconnectFailed = handler;
+    },
+    setOnConnectionLost(handler) {
+      this.onConnectionLost = handler;
+    },
+    completeRestartRecovery() {},
+    retryConnection() {
+      records.retries++;
     },
     send(message) {
       sent.push(message);
@@ -224,6 +234,183 @@ test('room closure also clears a waiting lobby membership', async () => {
   h.reply({ type: 'roomClosed', reason: 'Room deleted' });
   assert.equal(h.room.currentRoomId, null);
   assert.deepEqual(closed, ['Room deleted']);
+});
+
+test('temporary restart retains room intent and password, stops media, and automatically rejoins without capture', async () => {
+  const closed = [];
+  const h = await harness({ events: { onRoomClosed: (reason) => closed.push(reason) } });
+  await h.room.join('retained-room', 'Local', 'retained-password');
+  h.instances[0].audioEnabled = h.instances[0].videoEnabled = h.instances[0].isScreenSharing = true;
+  const pending = assert.rejects(h.room.requestSocial('listRoomMembers'), /Server restarting/);
+  h.reply({ type: 'serverRestarting', reason: 'Server shutting down' });
+  await pending;
+  assert.equal(h.room.currentRoomId, 'retained-room');
+  assert.equal(h.room.nickname, 'Local');
+  assert.equal(h.room.joinPassword, 'retained-password');
+  assert.equal(h.room.connected, false);
+  assert.equal(h.instances[0].closes, 1);
+  assert.deepEqual(closed, []);
+  assert.deepEqual(
+    [h.room.audioEnabled, h.room.videoEnabled, h.room.isScreenSharing],
+    [false, false, false],
+  );
+  assert.equal(h.recovery.at(-1)[0], 'reconnecting');
+  assert.equal(
+    h.sent.filter(({ type }) => type === 'joinRoom').length,
+    1,
+    'wait for a replacement socket',
+  );
+  h.signaling.onReconnected();
+  await h.room.recoveryPromise;
+  assert.equal(h.room.connected, true);
+  assert.equal(h.room.rejoiningAfterRestart, false);
+  assert.deepEqual(
+    h.sent.filter(({ type }) => type === 'joinRoom'),
+    [
+      {
+        type: 'joinRoom',
+        roomId: 'retained-room',
+        participantName: 'Local',
+        password: 'retained-password',
+      },
+      {
+        type: 'joinRoom',
+        roomId: 'retained-room',
+        participantName: 'Local',
+        password: 'retained-password',
+      },
+    ],
+  );
+  assert.equal(
+    h.sent.some(({ type }) => type === 'reconnect'),
+    false,
+    'restart cannot resume an old process transport',
+  );
+  assert.equal(h.instances.length, 2);
+  assert.deepEqual(
+    [h.room.audioEnabled, h.room.videoEnabled, h.room.isScreenSharing],
+    [false, false, false],
+  );
+  assert.match(h.recovery.at(-1)[1], /microphone, camera, and screen sharing are off/);
+});
+
+test('a temporary restart rejoins a lobby without claiming admission or restarting media', async () => {
+  const h = await harness({
+    joinReply: () => ({ type: 'lobbyWaiting', roomName: 'Waiting', participantCount: 1 }),
+  });
+  await h.room.join('waiting-room', 'Guest');
+  h.reply({ type: 'serverRestarting', reason: 'Server shutting down' });
+  h.signaling.onReconnected();
+  await h.room.recoveryPromise;
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 2);
+  assert.equal(h.room.currentRoomId, 'waiting-room');
+  assert.equal(h.room.localParticipantId, null);
+  assert.equal(h.records.admissions, 0);
+  assert.equal(h.instances.length, 0);
+  assert.equal(h.room.connected, false, 'restored signaling is not lobby admission');
+  assert.deepEqual(h.recovery.at(-1), [
+    'connected',
+    'Connection restored. Waiting for room admission.',
+  ]);
+});
+
+for (const finish of ['leave', 'roomClosed', 'new-room']) {
+  test(`${finish} cancels temporary restart intent and late failure callbacks`, async () => {
+    const h = await harness();
+    await h.room.join('old-room', 'Local');
+    h.reply({ type: 'serverRestarting', reason: 'Server shutting down' });
+    if (finish === 'leave') await h.room.leave();
+    if (finish === 'roomClosed') h.reply({ type: 'roomClosed', reason: 'Room deleted' });
+    if (finish === 'new-room') await h.room.join('new-room', 'Replacement');
+    const count = h.sent.filter(({ type }) => type === 'joinRoom').length;
+    if (finish !== 'new-room') {
+      h.signaling.onReconnected();
+      h.signaling.onReconnectFailed();
+      await flush();
+    }
+    assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, count);
+    assert.equal(h.room.rejoiningAfterRestart, false);
+    assert.equal(h.room.currentRoomId, finish === 'new-room' ? 'new-room' : null);
+    assert.ok(h.recovery.every(([state]) => state !== 'failed'));
+  });
+}
+
+test('a stale reconnect result cannot replace a session freshly rejoined after restart', async () => {
+  const stale = deferred();
+  const h = await harness({ reconnect: () => stale.promise });
+  await h.room.join('room', 'Local');
+  const oldRecovery = h.room.attemptReconnect();
+  await flush();
+  h.reply({ type: 'serverRestarting', reason: 'Server shutting down' });
+  await h.room.attemptReconnect();
+  const generation = h.room.membershipVersion;
+  stale.resolve({
+    type: 'reconnectResult',
+    success: true,
+    participantId: 'retired',
+    reconnectToken: 'retired-token',
+  });
+  await oldRecovery;
+  assert.equal(h.room.membershipVersion, generation);
+  assert.equal(h.room.reconnectToken, 'reconnect-token');
+  assert.equal(h.room.connected, true);
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 2);
+});
+
+test('restart timeout leaves room intent available for an explicit user retry', async () => {
+  const h = await harness();
+  await h.room.join('room', 'Local');
+  h.reply({ type: 'serverRestarting', reason: 'Server shutting down' });
+  h.signaling.onReconnectFailed();
+  assert.equal(h.room.currentRoomId, 'room');
+  assert.equal(h.room.connected, false);
+  assert.equal(h.recovery.at(-1)[0], 'failed');
+  assert.match(h.recovery.at(-1)[1], /two minutes/);
+  h.room.retryRecovery();
+  await h.room.recoveryPromise;
+  assert.equal(h.records.retries, 1);
+  assert.equal(h.room.connected, true);
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 2);
+});
+
+test('user leave during a restart rejoin discards its late admission and media setup', async () => {
+  const ready = deferred();
+  let setups = 0;
+  const h = await harness({ setup: () => (++setups === 2 ? ready.promise : undefined) });
+  await h.room.join('room', 'Local');
+  h.reply({ type: 'serverRestarting', reason: 'Server shutting down' });
+  const rejoining = h.room.attemptReconnect();
+  await flush();
+  await h.room.leave();
+  ready.resolve();
+  await rejoining;
+  assert.equal(h.room.currentRoomId, null);
+  assert.equal(h.room.hasMedia, false);
+  assert.equal(h.records.admissions, 0);
+  assert.ok(h.recovery.every(([state]) => state !== 'connected' && state !== 'failed'));
+});
+
+test('a socket lost during restart admission retires its waiter before the next socket rejoins', async () => {
+  const h = await harness();
+  await h.room.join('room', 'Local');
+  h.reply({ type: 'serverRestarting', reason: 'Server shutting down' });
+  const send = h.signaling.send;
+  h.signaling.send = (message) => h.sent.push(message);
+  const interrupted = h.room.attemptReconnect();
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 2);
+  h.signaling.connected = false;
+  h.signaling.onConnectionLost();
+  await interrupted;
+  assert.equal(h.room.rejoiningAfterRestart, true);
+  assert.equal(h.room.currentRoomId, 'room');
+  assert.equal(h.room.localParticipantId, null);
+  assert.ok(h.recovery.every(([state]) => state !== 'failed'));
+  h.signaling.connected = true;
+  h.signaling.send = send;
+  h.signaling.onReconnected();
+  await h.room.recoveryPromise;
+  assert.equal(h.room.connected, true);
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 3);
 });
 
 test('social responses correlate by request ID and action even when replies arrive out of order', async () => {

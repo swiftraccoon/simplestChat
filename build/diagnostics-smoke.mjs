@@ -56,7 +56,7 @@ export async function runDiagnosticsSmoke({ binary, signal } = {}, dependencies 
     } catch { artifactIssues.push('server_log_write_failed'); }
   }
   const workloadPassed = !smokeFailure && shutdown?.ready === true && shutdown.joined === true &&
-    shutdown.roomClosed === true && shutdown.closeCode === 1001 && shutdown.exitCode === 0;
+    shutdown.serverRestarting === true && shutdown.closeCode === 1001 && shutdown.exitCode === 0;
   const serverShutdownPassed = serverExit?.code === 0 && serverExit.signal === null;
   const diagnosticCoverageComplete = report?.coverage.complete === true;
   const evidence = {

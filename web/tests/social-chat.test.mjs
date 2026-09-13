@@ -188,6 +188,42 @@ test('private drafts, generated text, and sent recall stay isolated from public 
   assert.equal(f.chat.input.value, 'private 😀');
 });
 
+test('a restarted guest keeps only the public draft within the same room and viewer', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.input.value = 'unsent public draft';
+  f.chat.openPrivate('alice', 'Alice');
+  f.chat.insertText('private draft', 0, 0);
+  f.state.room.rejoiningAfterRestart = true;
+  f.state.room.localParticipantId = 'replacement-guest';
+  f.state.room.membershipVersion++;
+  await f.chat.activate();
+  assert.equal(f.chat.input.value, 'unsent public draft');
+  assert.equal(f.chat.composition.draft('public'), 'unsent public draft');
+  assert.equal(f.chat.composition.draft('alice'), '');
+  assert.equal(f.chat.store.active, 'public');
+  assert.deepEqual(f.state.sent, [], 'restoration never sends a draft');
+});
+
+for (const change of ['viewer', 'room', 'instance', 'leave', 'ordinary-rejoin']) {
+  test(`restart draft retention does not cross ${change}`, async () => {
+    const f = await fixture();
+    await f.chat.activate();
+    f.chat.input.value = 'private-to-this-intent draft';
+    f.state.room.rejoiningAfterRestart = true;
+    f.state.room.localParticipantId = 'replacement-guest';
+    f.state.room.membershipVersion++;
+    if (change === 'viewer') f.state.viewer = 'another-viewer';
+    if (change === 'room') f.state.room.currentRoomId = 'another-room';
+    if (change === 'instance') f.state.room = { ...f.state.room };
+    if (change === 'leave') f.chat.reset();
+    if (change === 'ordinary-rejoin') f.state.room.rejoiningAfterRestart = false;
+    await f.chat.activate();
+    assert.equal(f.chat.input.value, '');
+    assert.equal(f.chat.composition.draft('public'), '');
+  });
+}
+
 test('generated mentions and emoji obey character and byte bounds and reset recall state', async () => {
   const f = await fixture();
   await f.chat.activate();

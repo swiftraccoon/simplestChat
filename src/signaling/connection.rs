@@ -659,7 +659,7 @@ pub async fn handle_connection(
         if writer_drain.is_draining() {
             let deadline = tokio::time::Instant::now() + DRAIN_SEND_TIMEOUT;
             let close = async {
-                let json = serde_json::to_string(&ServerMessage::RoomClosed {
+                let json = serde_json::to_string(&ServerMessage::ServerRestarting {
                     reason: "Server shutting down".to_string(),
                 })?;
                 write_message(

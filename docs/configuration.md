@@ -65,9 +65,14 @@ lost worker capacity.
 `SIGTERM` and Ctrl-C start a one-way drain. Readiness becomes unavailable,
 new WebSocket upgrades and room creation/join/reconnect admissions are refused,
 and HTTP stops accepting connections. Existing sockets receive a best-effort
-`roomClosed` message (`Server shutting down`) and close code 1001. Reconnect
+`serverRestarting` message (`Server shutting down`) and close code 1001. Reconnect
 grace is cancelled; live and lobby memberships are cleared without deleting
 persisted rooms or accounts.
+
+The browser treats this as temporary maintenance, retaining established room or
+lobby intent for a bounded automatic rejoin. Local media stops and must be
+explicitly enabled after rejoining. Permanent `roomClosed` still cancels recovery.
+See [connection recovery](protocol.md#reconnection-and-ownership) for retry and draft limits.
 
 HTTP requests already in progress may finish, including database writes already
 started. HTTP/WebSocket, outstanding password jobs, and room cleanup share an

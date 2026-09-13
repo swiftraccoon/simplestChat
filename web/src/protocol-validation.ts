@@ -341,6 +341,7 @@ const messages = {
   error: message('error', { message: text }),
   roomPasswordRequired: message('roomPasswordRequired', {}),
   roomClosed: message('roomClosed', { reason: text }),
+  serverRestarting: message('serverRestarting', { reason: text }),
   routerRtpCapabilities: message('routerRtpCapabilities', { rtpCapabilities: capabilities }),
   transportCreated: message('transportCreated', {
     transportId: text,

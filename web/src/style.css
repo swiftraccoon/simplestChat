@@ -1726,6 +1726,8 @@ header h1 {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  /* Action lifetime is owned by its controller, including persistent retries. */
+  animation: toastIn 200ms ease;
 }
 .toast-actions {
   display: flex;

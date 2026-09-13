@@ -44,10 +44,13 @@ function fakeTimers() {
     get pendingCount() {
       return timers.size;
     },
+    get delays() {
+      return [...timers.values()].map((timer) => timer.at - now);
+    },
   };
 }
 
-async function connectedClient(t) {
+async function connectedClient(t, random = 0.5) {
   class FakeWebSocket {
     static OPEN = 1;
     static CONNECTING = 0;
@@ -55,7 +58,8 @@ async function connectedClient(t) {
     readyState = FakeWebSocket.CONNECTING;
     sent = [];
 
-    constructor() {
+    constructor(url, protocols) {
+      this.protocols = protocols;
       FakeWebSocket.instances.push(this);
     }
 
@@ -86,6 +90,7 @@ async function connectedClient(t) {
       WebSocket: FakeWebSocket,
       setTimeout: timers.setTimeout,
       clearTimeout: timers.clearTimeout,
+      Math: Object.assign(Object.create(Math), { random: () => random }),
       console: {
         log() {},
         error(...args) {
@@ -225,6 +230,7 @@ test('events from a retired socket cannot reach current message or reconnect han
   const request = client.request({ type: 'createRecvTransport' }, 'transportCreated', 100);
   socket.receive({ type: 'transportCreated', transportId: 'retired' });
   socket.receive({ type: 'chatReceived', content: 'retired event' });
+  socket.receive({ type: 'serverRestarting', reason: 'Retired notice' });
   socket.onopen();
   socket.onerror({ type: 'retired-error' });
   assert.equal(timers.pendingCount, 1);
@@ -247,7 +253,7 @@ test('the current socket closing still rejects requests and reconnects once', as
   socket.close();
   await pending;
   assert.equal(client.connected, false);
-  assert.equal(timers.pendingCount, 1);
+  assert.equal(timers.pendingCount, 2, 'one retry and one overall recovery deadline');
   timers.tick(2000);
   const replacement = FakeWebSocket.instances.at(-1);
   assert.notEqual(replacement, socket);
@@ -256,3 +262,92 @@ test('the current socket closing still rejects requests and reconnects once', as
   assert.equal(client.connected, true);
   assert.equal(timers.pendingCount, 0);
 });
+
+test('restart recovery keeps its deadline across socket open until room recovery completes', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t);
+  const messages = [];
+  client.setOnMessage((message) => messages.push(message));
+  socket.receive({ type: 'serverRestarting', reason: 'Server shutting down' });
+  assert.equal(messages[0].type, 'serverRestarting');
+  assert.deepEqual(timers.delays, [120000]);
+  socket.close();
+  timers.tick(1500);
+  FakeWebSocket.instances.at(-1).open();
+  assert.equal(timers.pendingCount, 1, 'room rejoin remains under the original deadline');
+  client.completeRestartRecovery();
+  assert.equal(timers.pendingCount, 0);
+});
+
+test('restart deadline rejects pending work, closes a stalled attempt, and preserves identity for explicit retry', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t);
+  const failures = [];
+  client.setToken('fixture-current-token');
+  client.setOnReconnectFailed(() => failures.push('expired'));
+  socket.receive({ type: 'serverRestarting', reason: 'Server shutting down' });
+  socket.close();
+  timers.tick(1500);
+  const stalled = FakeWebSocket.instances.at(-1);
+  const pending = assert.rejects(
+    client.request({ type: 'createRecvTransport' }, 'transportCreated', 180000),
+    /Reconnection timed out/,
+  );
+  timers.tick(118500);
+  await pending;
+  assert.deepEqual(failures, ['expired']);
+  assert.equal(stalled.readyState, 3);
+  assert.equal(timers.pendingCount, 0);
+  const attempts = FakeWebSocket.instances.length;
+  timers.tick(600000);
+  assert.equal(FakeWebSocket.instances.length, attempts, 'no unlimited background retries');
+  client.retryConnection();
+  const retry = FakeWebSocket.instances.at(-1);
+  assert.notEqual(retry, stalled);
+  assert.deepEqual(retry.protocols, ['simplestchat', 'auth.fixture-current-token']);
+  retry.open();
+  client.completeRestartRecovery();
+  assert.equal(client.connected, true);
+  assert.equal(timers.pendingCount, 0);
+});
+
+test('repeated restart notices do not extend the deadline and disconnect cancels it', async (t) => {
+  const { client, socket, timers } = await connectedClient(t);
+  let failures = 0;
+  client.setOnReconnectFailed(() => failures++);
+  socket.receive({ type: 'serverRestarting', reason: 'Server shutting down' });
+  timers.tick(60000);
+  socket.receive({ type: 'serverRestarting', reason: 'Server shutting down' });
+  assert.deepEqual(timers.delays, [60000]);
+  client.disconnect();
+  timers.tick(120000);
+  assert.equal(failures, 0);
+  assert.equal(timers.pendingCount, 0);
+});
+
+test('an initial connection outage also exposes an explicit retry after its deadline', async (t) => {
+  const { client, timers, FakeWebSocket } = await connectedClient(t);
+  client.disconnect();
+  client.connect();
+  FakeWebSocket.instances.at(-1).close();
+  timers.tick(120000);
+  assert.equal(client.reconnectExhausted, true);
+  assert.equal(timers.pendingCount, 0);
+  client.retryConnection();
+  assert.equal(client.reconnectExhausted, false);
+  FakeWebSocket.instances.at(-1).open();
+  client.completeRestartRecovery();
+  assert.equal(timers.pendingCount, 0);
+});
+
+for (const random of [0, 0.5, 0.999999]) {
+  test(`reconnect delay is bounded equal jitter for random=${random}`, async (t) => {
+    const { socket, timers, FakeWebSocket } = await connectedClient(t, random);
+    socket.close();
+    for (const ceiling of [2000, 4000, 8000, 16000, 30000, 30000]) {
+      const delay = Math.min(...timers.delays);
+      assert.equal(delay, Math.floor(ceiling / 2 + (random * ceiling) / 2));
+      assert.ok(delay >= ceiling / 2 && delay < ceiling);
+      timers.tick(delay);
+      FakeWebSocket.instances.at(-1).close();
+    }
+  });
+}

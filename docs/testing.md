@@ -32,11 +32,33 @@ node build/shutdown-smoke.mjs --binary "$PWD/target/debug/simplestChat"
 The smoke starts its own guest-only server on unused ports, checks `/ready`,
 and verifies that a client-initiated close finishes cleanly with code 1000.
 It then opens a separate connection, joins a room, and sends `SIGTERM` only to
-that child. It requires the shutdown room notice, clean WebSocket close code
+that child. It requires the temporary `serverRestarting` notice (and rejects
+terminal `roomClosed`), clean WebSocket close code
 1001 and exit status zero within its 20-second deadline. It never connects to
 an existing server or database.
 Native tests separately cover drain races, stalled cleanup and readiness probe
 failures. See [shutdown guarantees and limits](configuration.md#shutdown).
+
+Mocked client checks cover restart versus permanent deletion, retained room/lobby
+intent, public-draft isolation, bounded jittered retries, explicit retry and leave,
+and stale or interrupted rejoins. With the UI built and
+[browser tooling installed](../web/e2e/README.md), run the real restart check:
+
+```sh
+node build/restart-browser-smoke.mjs --binary "$PWD/target/debug/simplestChat" \
+  --browser chromium --output "$PWD/results/restart-browser"
+```
+
+Use a fresh output directory each time. This check owns its local servers and
+browser, verifies two guests rejoin without reloading, preserves a public draft,
+and delivers messages before and after restart. Capture calls are intercepted
+and must remain zero. CI runs Chromium; `--browser firefox` and `--browser webkit`
+use those installed Playwright engines. Retained results include recovery timing
+and browser/server exit status. They do not prove physical-device media recovery.
+
+Manually check leaving during recovery and a prolonged outage: after two minutes,
+automatic retries stop and explicit retry remains available. Do not interrupt a
+shared server without authorization.
 
 To validate the server's actual diagnostic JSONL schema with the same owned
 guest-only workflow, also run by CI:

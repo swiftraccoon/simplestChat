@@ -30,7 +30,7 @@ function fixture(options = {}) {
     if (options.killRefused && state.kills.length === 1) return false;
     if (options.stalled || options.cleanupFails) return true;
     queueMicrotask(() => {
-      if (state.socket && !options.noRoomClosed) state.socket.receive({ type: 'roomClosed', reason: options.wrongReason ? 'Room deleted' : 'Server shutting down' });
+      if (state.socket && !options.noRestartNotice) state.socket.receive({ type: options.terminalRoom ? 'roomClosed' : 'serverRestarting', reason: options.wrongReason ? 'Room deleted' : 'Server shutting down' });
       if (state.socket && !options.noClose) state.socket.serverClose(options.closeCode ?? 1001, options.cleanClose ?? true);
       finish(options.exitCode ?? 0, options.exitSignal ?? null);
     });
@@ -100,13 +100,13 @@ function fixture(options = {}) {
   return { state, dependencies, run };
 }
 
-test('shutdown smoke verifies readiness, unique guest admission, terminal room event and clean owned exit', async () => {
+test('shutdown smoke verifies readiness, unique guest admission, temporary restart and clean owned exit', async () => {
   const first = fixture();
   const result = await first.run();
   assert.equal(result.ready, true);
   assert.equal(result.peerCloseCode, 1000);
   assert.equal(result.joined, true);
-  assert.equal(result.roomClosed, true);
+  assert.equal(result.serverRestarting, true);
   assert.equal(result.closeCode, 1001);
   assert.equal(result.exitCode, 0);
   assert.ok(result.shutdownMs < 50);
@@ -163,8 +163,9 @@ for (const [options, expected] of [
   [{ socketError: true }, /WebSocket failed/],
   [{ neverJoin: true }, /was not joined/],
   [{ admissionError: true }, /admission failed/],
-  [{ noRoomClosed: true }, /terminal roomClosed/],
-  [{ wrongReason: true }, /terminal roomClosed/],
+  [{ noRestartNotice: true }, /temporary serverRestarting/],
+  [{ wrongReason: true }, /temporary serverRestarting/],
+  [{ terminalRoom: true }, /incorrectly terminated the room/],
   [{ noClose: true }, /exceeded its deadline/],
   [{ closeCode: 1006 }, /clean WebSocket close/],
   [{ cleanClose: false }, /clean WebSocket close/],

@@ -11,6 +11,9 @@ async function settingsSender() {
     {
       setOnMessage() {},
       setOnReconnected() {},
+      setOnReconnectFailed() {},
+      setOnConnectionLost() {},
+      completeRestartRecovery() {},
       send(message) {
         messages.push(JSON.parse(JSON.stringify(message)));
       },

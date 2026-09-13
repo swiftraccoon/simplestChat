@@ -90,6 +90,8 @@ export class RoomClient {
   private serverCanChat: boolean | null = null;
   private serverCanBroadcast: boolean | null = null;
   private recovering = false;
+  private restarting = false;
+  private membershipEstablished = false;
   private recoveryPromise: Promise<void> | null = null;
   private consumeQueue: Promise<void> = Promise.resolve();
   private pendingConsumes = new Map<string, Promise<void>>();
@@ -119,6 +121,27 @@ export class RoomClient {
     this.signaling.setOnReconnected(() => {
       this.observeTask(this.attemptReconnect(), 'Room reconnection');
     });
+    this.signaling.setOnConnectionLost(() => {
+      // Retire a join waiter before the replacement socket can produce an
+      // unrelated admission; the next open then owns one fresh rejoin attempt.
+      if (this.restarting) this.cancelJoin?.();
+    });
+    this.signaling.setOnReconnectFailed(() => {
+      if (!this.roomId || !this.membershipEstablished) return;
+      const generation = ++this.generation;
+      this.cancelJoin?.();
+      this.recoveryPromise = null;
+      this.restarting = false;
+      this.recovering = true;
+      this.rejectSocialRequests('Reconnection timed out');
+      this.closeMedia();
+      this.events.onLocalMediaChanged?.();
+      if (generation !== this.generation) return;
+      this.events.onRecoveryState?.(
+        'failed',
+        'The server has not returned after two minutes. Retry the connection when ready. Your media is off.',
+      );
+    });
   }
 
   /** Event dispatch cannot await work; keep its rejection and ownership explicit. */
@@ -146,8 +169,23 @@ export class RoomClient {
   get membershipVersion(): number {
     return this.generation;
   }
+  get rejoiningAfterRestart(): boolean {
+    return this.restarting;
+  }
   get connected(): boolean {
     return this.localId !== null && this.signaling.connected && !this.recovering;
+  }
+
+  /** A user may retry after the bounded automatic recovery window expires. */
+  retryRecovery(): void {
+    if (!this.roomId || !this.membershipEstablished) return;
+    const generation = this.generation;
+    this.restarting = true;
+    this.recovering = true;
+    this.events.onRecoveryState?.('reconnecting');
+    if (generation !== this.generation) return;
+    this.signaling.retryConnection();
+    if (this.signaling.connected) this.observeTask(this.attemptReconnect(), 'Room reconnection');
   }
   get textMuted(): boolean {
     return this.localTextMuted;
@@ -191,6 +229,19 @@ export class RoomClient {
   }
 
   async join(
+    roomId: string,
+    participantName: string,
+    password?: string,
+  ): Promise<'joined' | 'lobby'> {
+    this.restarting = false;
+    this.membershipEstablished = false;
+    this.signaling.completeRestartRecovery();
+    const outcome = await this.joinSession(roomId, participantName, password);
+    this.membershipEstablished = this.roomId === roomId;
+    return outcome;
+  }
+
+  private async joinSession(
     roomId: string,
     participantName: string,
     password?: string,
@@ -342,6 +393,9 @@ export class RoomClient {
 
   async leave(): Promise<void> {
     this.generation++;
+    this.restarting = false;
+    this.membershipEstablished = false;
+    this.signaling.completeRestartRecovery();
     this.recoveryPromise = null;
     this.cancelJoin?.();
     this.joinPassword = undefined;
@@ -602,7 +656,12 @@ export class RoomClient {
   }
 
   private async reconnectSession(): Promise<void> {
-    if (!this.localId || !this.roomId) return;
+    if (!this.roomId || !this.membershipEstablished) return;
+    if (this.restarting) {
+      await this.fullRejoin();
+      return;
+    }
+    if (!this.localId) return;
     const generation = this.generation;
     this.recovering = true;
     this.rejectSocialRequests('Connection changed; please retry');
@@ -684,7 +743,7 @@ export class RoomClient {
       let outcome: 'joined' | 'lobby';
       try {
         generation = this.generation + 1;
-        outcome = await this.join(roomId, name, password);
+        outcome = await this.joinSession(roomId, name, password);
       } catch (error) {
         if (generation !== this.generation) return;
         if (!(error instanceof RoomPasswordRequiredError) || !this.events.onPasswordRequired)
@@ -693,20 +752,33 @@ export class RoomClient {
         if (generation !== this.generation) return;
         if (supplied === null) throw new Error('Rejoin cancelled');
         generation = this.generation + 1;
-        outcome = await this.join(roomId, name, supplied);
+        outcome = await this.joinSession(roomId, name, supplied);
       }
       if (generation !== this.generation) return;
+      this.restarting = false;
+      this.recovering = false;
+      this.signaling.completeRestartRecovery();
       if (outcome === 'joined') {
-        this.recovering = false;
         this.events.onAdmissionComplete();
         if (generation !== this.generation) return;
         this.events.onRecoveryState?.(
           'connected',
           'Room rejoined. Your microphone, camera, and screen sharing are off; turn them on when you are ready.',
         );
+      } else {
+        this.events.onRecoveryState?.(
+          'connected',
+          'Connection restored. Waiting for room admission.',
+        );
       }
     } catch (e) {
       if (generation !== this.generation) return;
+      // A fresh join can race another disconnect during the restart window.
+      // Keep only room intent; the next current socket may try again. A real
+      // admission denial on a live socket is terminal for this recovery attempt.
+      if (this.restarting && !this.signaling.connected) return;
+      this.restarting = false;
+      this.signaling.completeRestartRecovery();
       console.error('[room] full rejoin failed:', e);
       this.events.onRecoveryState?.('failed', e instanceof Error ? e.message : 'Unable to rejoin');
     }
@@ -817,6 +889,26 @@ export class RoomClient {
   private handleMessage(msg: ServerMessage): void {
     if (!this.roomId) return;
     switch (msg.type) {
+      case 'serverRestarting': {
+        // Only established membership has recovery intent. A first join that
+        // has not completed remains a bounded join attempt, not an automatic
+        // request to enroll in a room after an unrelated later connection.
+        if (!this.membershipEstablished || this.restarting) break;
+        const generation = ++this.generation;
+        this.restarting = true;
+        this.recovering = true;
+        this.recoveryPromise = null;
+        this.cancelJoin?.();
+        this.rejectSocialRequests('Server restarting; please retry when connected');
+        this.closeMedia();
+        this.events.onLocalMediaChanged?.();
+        if (generation !== this.generation) break;
+        this.events.onRecoveryState?.(
+          'reconnecting',
+          'Server restarting. Your room will rejoin automatically; your media is off.',
+        );
+        break;
+      }
       case 'roomClosed': {
         // A deleted room must never be resumed, including while waiting in its lobby.
         this.observeTask(this.leave(), 'Leaving the room');

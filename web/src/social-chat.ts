@@ -35,6 +35,7 @@ export class SocialChat {
   };
   private temporaryIgnored = new Map<string, string>();
   private scope = '';
+  private activeRoom: RoomClient | null = null;
   private viewerKey = '';
   private activation = 0;
   private membershipVersion = -1;
@@ -123,12 +124,28 @@ export class SocialChat {
     if (
       this.store.localId !== room.localParticipantId ||
       this.scope !== room.currentRoomId ||
-      this.viewerKey !== viewerKey
+      this.viewerKey !== viewerKey ||
+      this.activeRoom !== room
     ) {
+      // A restart gives guests new participant IDs. Preserve only their public
+      // draft within this same room/viewer intent, never history or old PM
+      // recipients. Explicit leave and identity changes still clear everything.
+      const publicDraft =
+        room.rejoiningAfterRestart &&
+        this.activeRoom === room &&
+        this.scope === room.currentRoomId &&
+        this.viewerKey === viewerKey
+          ? this.store.active === 'public'
+            ? this.input.value
+            : this.composition.draft('public')
+          : '';
       this.reset();
       this.scope = room.currentRoomId ?? '';
+      this.activeRoom = room;
       this.viewerKey = viewerKey;
       this.store.localId = room.localParticipantId;
+      this.composition.save('public', publicDraft);
+      this.input.value = publicDraft;
       this.loadPreferences();
     }
     if (this.membershipVersion !== room.membershipVersion) {
@@ -196,6 +213,7 @@ export class SocialChat {
     this.composition.reset();
     this.temporaryIgnored.clear();
     this.scope = '';
+    this.activeRoom = null;
     this.viewerKey = '';
     this.preferences = { allowPrivateMessages: true, sounds: false, largeText: false, ignored: [] };
     this.seenAtBottom = true;

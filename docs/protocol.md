@@ -89,8 +89,9 @@ reconnect grace. It runs before any disconnect-time database credential check.
 An `error` carries a human-readable `message`. It rejects the first pending generic
 request regardless of that request's expected response type; an unclaimed error
 can reach the join handler. `roomPasswordRequired` is a distinct retry/prompt
-result, while `roomClosed` is terminal room state. Do not infer machine-readable
-error codes from message text.
+result, while `roomClosed` is terminal room state. `serverRestarting` is a separate
+temporary process-shutdown event with a human-readable `reason`; it is not room
+deletion. Do not infer machine-readable error codes from message text.
 
 Generic requests have **no request ID**. Concurrent requests expecting the same
 response type cannot be distinguished by the client. Transport setup therefore
@@ -178,8 +179,10 @@ definitely undelivered. Replay is bounded recovery, not exactly-once delivery.
 
 ## Reconnection and ownership
 
-The browser retries closed sockets after 2, 4, 8, 16, then at most 30 seconds;
-successful open resets the backoff. Normal admitted disconnects can retain room
+The browser retries closed sockets with exponential equal jitter: half to all of
+a 2, 4, 8, 16, then 30-second ceiling. Successful open resets the backoff. A
+continuous connection outage is bounded to two minutes; explicit retry starts a
+new window and keeps the current account identity. Normal admitted disconnects can retain room
 and media state for a 30-second grace period. Lobby disconnects and invalidated
 credentials are cleaned up immediately; grace capacity or expired state can also
 prevent recovery.
@@ -190,6 +193,22 @@ success returns `reconnectResult` with a rotated reconnect credential. The brows
 then requests a snapshot and reconciles surviving producers/consumers. Failed
 recovery leads to a full rejoin and new media setup. A fresh socket or a successful
 snapshot alone does not prove media has recovered.
+
+On `serverRestarting`, an established room or lobby retains its intended room,
+nickname and in-memory password, but immediately stops local media. Once signaling
+returns, it performs a fresh join rather than attempting to resume transports from
+the old process. The original two-minute restart deadline also bounds that join;
+repeated notices do not extend it. A failed connection remains explicitly
+retryable. Room deletion, user leave, and a new membership cancel the old room's
+recovery. A first join that never completed remains an ordinary bounded join,
+not established restart intent.
+
+The same guest/room/viewer intent retains its unsent public draft across the new
+participant ID; old guest private-conversation state is not reassigned. Account
+changes and explicit departure still clear conversation state. Rejoined media
+starts off and requires the user's action to publish again. This is automatic
+room recovery, not uninterrupted text delivery, capture or WebRTC transport
+continuity, and does not persist runtime history across server restarts.
 
 Each socket, membership, media manager and auth operation owns its pending work.
 After an `await`, code must confirm that owner is still current before adopting

@@ -164,6 +164,8 @@ test('successful recovery displays fresh-session media guidance and keeps the re
     {
       globals: {
         connectionStatus,
+        document: createDOM().document,
+        room: { localParticipantId: 'local' },
         applyJoinedRoomUI: () => joinedUpdates++,
         updateLocalTile: () => localUpdates++,
         showToast: (message) => toasts.push(message),
@@ -180,6 +182,72 @@ test('successful recovery displays fresh-session media guidance and keeps the re
   assert.deepEqual(toasts, [guidance, 'Room connection restored']);
   assert.equal(joinedUpdates, 2);
   assert.equal(localUpdates, 2);
+});
+
+test('restored lobby signaling does not expose joined-room or media controls', async () => {
+  const changes = [];
+  const api = evaluateTypeScript(
+    `let roomRecovering = true;
+     export const events = { ${await roomEventSource(['onRecoveryState'])} };
+     export function recovering() { return roomRecovering; }`,
+    {
+      globals: {
+        document: createDOM().document,
+        connectionStatus: {},
+        room: { localParticipantId: null },
+        applyJoinedRoomUI: () => changes.push('joined'),
+        updateLocalTile: () => changes.push('media'),
+        showToast: (message) => changes.push(message),
+      },
+    },
+  );
+  api.events.onRecoveryState('connected', 'Connection restored. Waiting for room admission.');
+  assert.equal(api.recovering(), false);
+  assert.deepEqual(changes, ['Connection restored. Waiting for room admission.']);
+});
+
+test('failed recovery actions persist and cannot retry or leave a replacement room', async () => {
+  const { document } = createDOM();
+  const notices = [];
+  let retries = 0;
+  let leaves = 0;
+  const initialRoom = { retryRecovery: () => retries++ };
+  const api = evaluateTypeScript(
+    `let roomRecovering = false;
+     let room = initialRoom;
+     export const events = { ${await roomEventSource(['onRecoveryState'])} };
+     export function replaceRoom(next) { room = next; }`,
+    {
+      globals: {
+        document,
+        initialRoom,
+        connectionStatus: {},
+        pttDeactivate() {},
+        applyRoomSettingsToUI() {},
+        observeUiTask() {},
+        leaveCurrentRoom: () => leaves++,
+        showActionToast(message, actions, duration) {
+          const node = document.createElement('div');
+          document.body.append(node);
+          notices.push({ message, actions, duration, node });
+          return node;
+        },
+      },
+    },
+  );
+  api.events.onRecoveryState('failed', 'Retry after maintenance');
+  const first = notices[0];
+  assert.equal(first.duration, 0);
+  assert.equal(first.node.id, 'room-recovery-notice');
+  first.actions[0].action();
+  assert.equal(retries, 1);
+  api.events.onRecoveryState('failed', 'Still unavailable');
+  assert.equal(first.node.isConnected, false, 'a newer notice retires the previous one');
+  api.replaceRoom({ retryRecovery: () => retries++ });
+  first.actions[0].action();
+  first.actions[1].action();
+  assert.equal(retries, 1);
+  assert.equal(leaves, 0);
 });
 
 test('room-required PTT does not overwrite the personal microphone mode', async () => {

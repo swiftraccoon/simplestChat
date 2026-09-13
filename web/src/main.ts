@@ -251,7 +251,7 @@ function showActionToast(
   message: string,
   actions: { label: string; action: () => void }[],
   duration = 10000,
-): void {
+): HTMLElement {
   const toast = document.createElement('div');
   toast.className = 'toast toast-action';
 
@@ -273,7 +273,8 @@ function showActionToast(
   toast.appendChild(btnRow);
 
   toastContainer.appendChild(toast);
-  setTimeout(() => toast.remove(), duration);
+  if (duration > 0) setTimeout(() => toast.remove(), duration);
+  return toast;
 }
 
 // --- Moderation Context Menu ---
@@ -804,9 +805,22 @@ const community = new CommunityUI({
 });
 
 signaling.setOnStatusChange((status) => {
-  connectionStatus.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-  connectionStatus.className = `status ${status}`;
+  const awaitingRoom = status === 'connected' && roomRecovering;
+  connectionStatus.textContent = awaitingRoom
+    ? 'Rejoining room…'
+    : status.charAt(0).toUpperCase() + status.slice(1);
+  connectionStatus.className = `status ${awaitingRoom ? 'connecting' : status}`;
   joinBtn.disabled = status !== 'connected' || !nameInput.value.trim() || !roomInput.value.trim();
+  document.getElementById('connection-retry-notice')?.remove();
+  if (status === 'connected' && !room?.currentRoomId) signaling.completeRestartRecovery();
+  if (status === 'disconnected' && signaling.reconnectExhausted && !room?.currentRoomId) {
+    const notice = showActionToast(
+      'The server is still unavailable. Retry when ready.',
+      [{ label: 'Retry connection', action: () => signaling.retryConnection() }],
+      0,
+    );
+    notice.id = 'connection-retry-notice';
+  }
 });
 
 // Try to restore auth session from cookie, then connect WS
@@ -1457,12 +1471,15 @@ joinBtn.addEventListener(
           alert(`Lobby access denied${reason ? `: ${reason}` : ''}`);
         },
         onRecoveryState: (state, message) => {
+          document.getElementById('room-recovery-notice')?.remove();
           roomRecovering = state !== 'connected';
           if (state === 'connected') {
             connectionStatus.textContent = 'Connected';
             connectionStatus.className = 'status connected';
-            applyJoinedRoomUI();
-            updateLocalTile();
+            if (room?.localParticipantId) {
+              applyJoinedRoomUI();
+              updateLocalTile();
+            }
             showToast(message ?? 'Room connection restored');
           } else {
             connectionStatus.textContent =
@@ -1470,18 +1487,29 @@ joinBtn.addEventListener(
             connectionStatus.className = `status ${state === 'reconnecting' ? 'connecting' : 'disconnected'}`;
             pttDeactivate();
             applyRoomSettingsToUI();
-            if (state === 'failed')
-              showActionToast(
+            if (state === 'failed') {
+              const recoveringRoom = room;
+              const notice = showActionToast(
                 message ?? 'Unable to rejoin the room',
                 [
                   {
+                    label: 'Retry connection',
+                    action: () => {
+                      if (room === recoveringRoom) recoveringRoom?.retryRecovery();
+                    },
+                  },
+                  {
                     label: 'Leave room',
-                    action: () =>
-                      observeUiTask(leaveCurrentRoom(), 'Could not finish leaving the room'),
+                    action: () => {
+                      if (room === recoveringRoom)
+                        observeUiTask(leaveCurrentRoom(), 'Could not finish leaving the room');
+                    },
                   },
                 ],
-                15000,
+                0,
               );
+              notice.id = 'room-recovery-notice';
+            }
           }
         },
         onPasswordRequired: async () => prompt('The room password is required to reconnect:'),
@@ -1596,6 +1624,7 @@ lobbyCancelBtn.addEventListener(
 
 // --- Leave ---
 async function leaveCurrentRoom(): Promise<void> {
+  document.getElementById('room-recovery-notice')?.remove();
   pttDeactivate();
   mediaControls.reset();
   const leavingRoom = room;
@@ -1603,6 +1632,9 @@ async function leaveCurrentRoom(): Promise<void> {
   socialChat.reset();
   community.refresh();
   await leavingRoom?.leave();
+  // An explicit departure also makes the homepage usable after a bounded
+  // recovery failure, without changing the retained account identity.
+  if (signaling.reconnectExhausted) signaling.retryConnection();
   localTextMuted = false;
   roomRecovering = false;
   setMicMode(personalMicMode, false);

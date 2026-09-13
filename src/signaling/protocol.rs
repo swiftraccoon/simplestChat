@@ -265,6 +265,9 @@ pub enum ServerMessage {
     RoomPasswordRequired,
     /// Terminal room lifecycle event, distinct from recoverable request errors.
     RoomClosed { reason: String },
+    /// Temporary process shutdown; clients may retain room intent and rejoin.
+    /// Existing media transports do not survive the replacement process.
+    ServerRestarting { reason: String },
     /// Router RTP capabilities
     #[serde(rename_all = "camelCase")]
     RouterRtpCapabilities {
@@ -518,8 +521,25 @@ pub struct ProducerMetadata {
 
 #[cfg(test)]
 mod tests {
-    use super::ClientMessage;
+    use super::{ClientMessage, ServerMessage};
     use serde_json::{Value, json};
+
+    #[test]
+    fn temporary_restart_and_permanent_room_closure_have_distinct_wire_events() {
+        let temporary = serde_json::to_value(ServerMessage::ServerRestarting {
+            reason: "Server shutting down".into(),
+        })
+        .unwrap();
+        let terminal = serde_json::to_value(ServerMessage::RoomClosed {
+            reason: "Room deleted".into(),
+        })
+        .unwrap();
+        assert_eq!(
+            temporary,
+            json!({"type": "serverRestarting", "reason": "Server shutting down"})
+        );
+        assert_eq!(terminal["type"], "roomClosed");
+    }
 
     fn assert_nullable_settings(
         message: &ClientMessage,

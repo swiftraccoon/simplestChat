@@ -27,6 +27,9 @@ test('producer closure updates local controls and still removes remote media', a
       this.onMessage = handler;
     },
     setOnReconnected() {},
+    setOnReconnectFailed() {},
+    setOnConnectionLost() {},
+    completeRestartRecovery() {},
     send() {
       queueMicrotask(() =>
         this.onMessage({
@@ -112,6 +115,9 @@ async function captureStoppedFixture(events = {}) {
       this.onMessage = handler;
     },
     setOnReconnected() {},
+    setOnReconnectFailed() {},
+    setOnConnectionLost() {},
+    completeRestartRecovery() {},
     send(message) {
       if (message.type !== 'joinRoom') return;
       queueMicrotask(() =>

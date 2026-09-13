@@ -37,7 +37,7 @@ async function fixture(t, options = {}) {
         child.emit('exit', options.exitCode ?? 0, options.exitSignal ?? null);
       }
       if (options.failure) throw options.failure;
-      return { ready: true, joined: true, roomClosed: true, closeCode: 1001,
+      return { ready: true, joined: true, serverRestarting: true, closeCode: 1001,
         exitCode: 0, shutdownMs: 10, ...options.shutdown };
     },
   };

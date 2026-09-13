@@ -75,7 +75,7 @@ export async function runShutdownSmoke({
   const child = spawn(binary, [], {
     cwd: repoRoot, env: serverEnvironment(ports), stdio: ['ignore', 'pipe', 'pipe'],
   });
-  let exit, spawnFailure, socket, socketFailure, opened = false, joined = false, closed, roomClosed = false;
+  let exit, spawnFailure, socket, socketFailure, opened = false, joined = false, closed, serverRestarting = false;
   let output = '';
   const recordOutput = chunk => { output = (output + chunk.toString()).slice(-32_768); };
   child.stdout?.on('data', recordOutput);
@@ -127,7 +127,8 @@ export async function runShutdownSmoke({
         try { message = JSON.parse(event.data); }
         catch { socketFailure = new Error('Owned WebSocket returned invalid JSON'); return; }
         if (message?.type === 'roomJoined' && typeof message.participantId === 'string' && message.participantId) joined = true;
-        else if (message?.type === 'roomClosed' && message.reason === 'Server shutting down') roomClosed = true;
+        else if (message?.type === 'serverRestarting' && message.reason === 'Server shutting down') serverRestarting = true;
+        else if (message?.type === 'roomClosed') socketFailure = new Error('Shutdown incorrectly terminated the room');
         else if (['error', 'roomPasswordRequired', 'lobbyWaiting'].includes(message?.type)) socketFailure = new Error('Owned guest room admission failed');
       });
       return owned;
@@ -156,10 +157,10 @@ export async function runShutdownSmoke({
       return Boolean(exit && closed);
     }, shutdownTimeoutMs, 'Shutdown exceeded its deadline');
     const shutdownMs = now() - shutdownStarted;
-    if (!roomClosed) throw new Error('Shutdown did not deliver the terminal roomClosed event');
+    if (!serverRestarting) throw new Error('Shutdown did not deliver the temporary serverRestarting event');
     if (closed.code !== 1001 || !closed.wasClean) throw new Error('Shutdown did not complete a clean WebSocket close with code 1001');
     if (shutdownMs >= shutdownTimeoutMs) throw new Error('Shutdown exceeded its deadline');
-    result = { ready: true, peerCloseCode, joined: true, roomClosed: true, closeCode: closed.code, exitCode: exit.code, shutdownMs, ports };
+    result = { ready: true, peerCloseCode, joined: true, serverRestarting: true, closeCode: closed.code, exitCode: exit.code, shutdownMs, ports };
   } catch (error) { failure = error instanceof Error ? error : new Error('Shutdown smoke failed'); }
 
   // Only the ChildProcess object created above may be signaled. Cleanup never

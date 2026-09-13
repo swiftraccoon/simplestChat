@@ -71,6 +71,7 @@ export type ServerMessage =
   | { type: 'error'; message: string }
   | { type: 'roomPasswordRequired' }
   | { type: 'roomClosed'; reason: string }
+  | { type: 'serverRestarting'; reason: string }
   | { type: 'routerRtpCapabilities'; rtpCapabilities: RtpCapabilitiesFinalized }
   | {
       type: 'transportCreated';
