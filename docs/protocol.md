@@ -71,6 +71,12 @@ socket implementation; there is no application `ping` message. Rate limits and
 bounded outgoing queues also apply. A connected WebSocket means neither room
 admission nor working media.
 
+When a peer sends a WebSocket Close frame, the server stops application writes
+and allows up to one second to flush the protocol's close reply. For valid close
+frames, the reply preserves the peer's code and reason; an empty Close remains
+empty. This transport handshake is not a `leaveRoom` request and does not change
+reconnect grace. It runs before any disconnect-time database credential check.
+
 ## Requests, replies and events
 
 | Operation | Correlation and browser deadline |

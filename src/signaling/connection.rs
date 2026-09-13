@@ -9,7 +9,7 @@ use crate::metrics::ServerMetrics;
 use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, settings};
 use crate::turn::TurnConfig;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
-use futures_util::{Sink, SinkExt, StreamExt};
+use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
@@ -27,6 +27,7 @@ const CHANNEL_CAPACITY: usize = 64;
 const MAX_SIGNAL_MESSAGE_LEN: usize = 64 * 1024;
 const SEND_TIMEOUT: Duration = Duration::from_secs(10);
 const DRAIN_SEND_TIMEOUT: Duration = Duration::from_secs(1);
+const PEER_CLOSE_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Connection-owned tasks must not detach if a handler is cancelled at the
 /// process drain deadline. Aborting an already completed task is harmless.
@@ -41,6 +42,39 @@ impl OwnedTask {
 impl Drop for OwnedTask {
     fn drop(&mut self) {
         self.0.abort();
+    }
+}
+
+/// Flush the protocol's queued peer-close reply without sending more app data.
+///
+/// The split sink can retain an unsent text frame, so stop its owner before
+/// driving the existing receiver to EOF. Tungstenite queues the exact close
+/// echo when it reads Close and flushes it on the next read. Do not manufacture
+/// another Close or dispatch any further application messages here.
+///
+/// Writer cancellation and receiver completion share a short deadline. This
+/// consumes the writer's join result; callers must not await that handle again.
+async fn complete_peer_close<S, E>(receiver: &mut S, writer: &mut OwnedTask) -> Outcome
+where
+    S: Stream<Item = Result<Message, E>> + Unpin,
+{
+    writer.abort();
+    match tokio::time::timeout(PEER_CLOSE_TIMEOUT, async {
+        let _ = (&mut writer.0).await;
+        loop {
+            match receiver.next().await {
+                None => return Outcome::Ok,
+                Some(Err(_)) => return Outcome::Error,
+                // Keep the deadline enforceable even if buffered frames stay
+                // immediately ready; none may re-enter application dispatch.
+                Some(Ok(_)) => tokio::task::yield_now().await,
+            }
+        }
+    })
+    .await
+    {
+        Ok(outcome) => outcome,
+        Err(_) => Outcome::Timeout,
     }
 }
 
@@ -688,6 +722,7 @@ pub async fn handle_connection(
     let mut credentials_invalidated = false;
     let mut next_auth_check = Instant::now();
     let mut last_frame_received = Instant::now();
+    let mut peer_close_received = false;
 
     loop {
         // The JWT is a connection credential, not only a handshake credential.
@@ -750,6 +785,10 @@ pub async fn handle_connection(
             }
         };
         last_frame_received = Instant::now();
+        // Record this before the rate gate, whose Close shortcut also exits.
+        if matches!(&msg, Message::Close(_)) {
+            peer_close_received = true;
+        }
 
         // Every inbound frame consumes rate-limit capacity. Limiting only text
         // frames lets binary/control-frame floods bypass connection accounting.
@@ -1221,6 +1260,17 @@ pub async fn handle_connection(
         task.abort();
     }
 
+    if peer_close_received {
+        // Finish the transport before account validation can wait on the DB.
+        // This does not change room-leave or retained reconnect semantics.
+        let outcome = complete_peer_close(&mut ws_receiver, &mut send_task).await;
+        debug!(
+            connection_id = diagnostic_connection_id,
+            ?outcome,
+            "Peer WebSocket close finished"
+        );
+    }
+
     if !drain.is_draining()
         && !credentials_invalidated
         && let Some(claims) = authenticated_user.as_ref()
@@ -1360,7 +1410,9 @@ pub async fn handle_connection(
     // _permit dropped here → release semaphore
 
     drop(tx);
-    if drain.is_draining() {
+    if peer_close_received {
+        // The peer-close path has already consumed the writer's join result.
+    } else if drain.is_draining() {
         // Give the independent writer its bounded close attempt before releasing
         // the connection permit. The RAII owner aborts it on cancellation.
         if tokio::time::timeout(
@@ -1386,6 +1438,10 @@ pub async fn handle_connection(
         participant_id
     );
 }
+
+#[cfg(test)]
+#[path = "connection_close_tests.rs"]
+mod close_tests;
 
 /// Attempt to reconnect a participant to their existing session
 async fn handle_reconnect(

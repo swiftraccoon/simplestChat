@@ -65,9 +65,13 @@ function fixture(options = {}) {
       Object.assign(event, { code, wasClean });
       this.dispatchEvent(event);
     }
-    close() {
+    close(code) {
       state.clientClosed = true;
       if (options.closeThrows) throw new Error('Socket close failed');
+      if (code === 1000) {
+        if (!options.noPeerClose) queueMicrotask(() => this.serverClose(options.peerCloseCode ?? 1000, options.peerCloseClean ?? true));
+        return;
+      }
       this.readyState = Socket.CLOSED;
     }
   }
@@ -100,6 +104,7 @@ test('shutdown smoke verifies readiness, unique guest admission, terminal room e
   const first = fixture();
   const result = await first.run();
   assert.equal(result.ready, true);
+  assert.equal(result.peerCloseCode, 1000);
   assert.equal(result.joined, true);
   assert.equal(result.roomClosed, true);
   assert.equal(result.closeCode, 1001);
@@ -163,6 +168,9 @@ for (const [options, expected] of [
   [{ noClose: true }, /exceeded its deadline/],
   [{ closeCode: 1006 }, /clean WebSocket close/],
   [{ cleanClose: false }, /clean WebSocket close/],
+  [{ peerCloseCode: 1006 }, /Peer WebSocket close was not clean/],
+  [{ peerCloseClean: false }, /Peer WebSocket close was not clean/],
+  [{ noPeerClose: true }, /Peer WebSocket close exceeded its deadline/],
   [{ exitCode: 2 }, /was not clean/],
   [{ exitSignal: 'SIGTERM' }, /was not clean/],
   [{ killRefused: true }, /Could not signal owned server/],

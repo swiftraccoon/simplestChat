@@ -30,9 +30,11 @@ node build/shutdown-smoke.mjs --binary "$PWD/target/debug/simplestChat"
 ```
 
 The smoke starts its own guest-only server on unused ports, checks `/ready`,
-joins a room, and sends `SIGTERM` only to that child. It requires the shutdown
-room notice, clean WebSocket close code 1001 and exit status zero within its
-20-second deadline. It never connects to an existing server or database.
+and verifies that a client-initiated close finishes cleanly with code 1000.
+It then opens a separate connection, joins a room, and sends `SIGTERM` only to
+that child. It requires the shutdown room notice, clean WebSocket close code
+1001 and exit status zero within its 20-second deadline. It never connects to
+an existing server or database.
 Native tests separately cover drain races, stalled cleanup and readiness probe
 failures. See [shutdown guarantees and limits](configuration.md#shutdown).
 

@@ -116,18 +116,33 @@ export async function runShutdownSmoke({
       return true;
     }, startupTimeoutMs, 'Owned server did not become ready');
 
-    socket = new WebSocket(`ws://127.0.0.1:${ports.http}/ws`, ['simplestchat']);
-    socket.addEventListener('open', () => { opened = true; });
-    socket.addEventListener('error', () => { socketFailure = new Error('Owned WebSocket failed'); });
-    socket.addEventListener('close', event => { closed = { code: event.code, wasClean: event.wasClean }; });
-    socket.addEventListener('message', event => {
-      let message;
-      try { message = JSON.parse(event.data); }
-      catch { socketFailure = new Error('Owned WebSocket returned invalid JSON'); return; }
-      if (message?.type === 'roomJoined' && typeof message.participantId === 'string' && message.participantId) joined = true;
-      else if (message?.type === 'roomClosed' && message.reason === 'Server shutting down') roomClosed = true;
-      else if (['error', 'roomPasswordRequired', 'lobbyWaiting'].includes(message?.type)) socketFailure = new Error('Owned guest room admission failed');
-    });
+    const openSocket = () => {
+      const owned = new WebSocket(`ws://127.0.0.1:${ports.http}/ws`, ['simplestchat']);
+      owned.addEventListener('open', () => { if (socket === owned) opened = true; });
+      owned.addEventListener('error', () => { if (socket === owned) socketFailure = new Error('Owned WebSocket failed'); });
+      owned.addEventListener('close', event => { if (socket === owned) closed = { code: event.code, wasClean: event.wasClean }; });
+      owned.addEventListener('message', event => {
+        if (socket !== owned) return;
+        let message;
+        try { message = JSON.parse(event.data); }
+        catch { socketFailure = new Error('Owned WebSocket returned invalid JSON'); return; }
+        if (message?.type === 'roomJoined' && typeof message.participantId === 'string' && message.participantId) joined = true;
+        else if (message?.type === 'roomClosed' && message.reason === 'Server shutting down') roomClosed = true;
+        else if (['error', 'roomPasswordRequired', 'lobbyWaiting'].includes(message?.type)) socketFailure = new Error('Owned guest room admission failed');
+      });
+      return owned;
+    };
+    // Exercise the real connection handler before the independent server-drain
+    // path. This guest socket never joins, captures, or sends application data.
+    socket = openSocket();
+    await waitUntil(() => { assertActive(); return opened; }, startupTimeoutMs, 'Owned WebSocket did not open');
+    socket.close(1000, 'Peer close smoke');
+    await waitUntil(() => { assertActive(); return Boolean(closed); }, 5000, 'Peer WebSocket close exceeded its deadline');
+    if (closed.code !== 1000 || !closed.wasClean) throw new Error('Peer WebSocket close was not clean with code 1000');
+    const peerCloseCode = closed.code;
+    opened = false;
+    closed = undefined;
+    socket = openSocket();
     await waitUntil(() => { assertActive(); return opened; }, startupTimeoutMs, 'Owned WebSocket did not open');
     socket.send(JSON.stringify({ type: 'joinRoom', roomId: `shutdown-smoke-${randomUUID()}`, participantName: 'Shutdown smoke' }));
     await waitUntil(() => { assertActive(); return joined; }, startupTimeoutMs, 'Owned guest room was not joined');
@@ -144,7 +159,7 @@ export async function runShutdownSmoke({
     if (!roomClosed) throw new Error('Shutdown did not deliver the terminal roomClosed event');
     if (closed.code !== 1001 || !closed.wasClean) throw new Error('Shutdown did not complete a clean WebSocket close with code 1001');
     if (shutdownMs >= shutdownTimeoutMs) throw new Error('Shutdown exceeded its deadline');
-    result = { ready: true, joined: true, roomClosed: true, closeCode: closed.code, exitCode: exit.code, shutdownMs, ports };
+    result = { ready: true, peerCloseCode, joined: true, roomClosed: true, closeCode: closed.code, exitCode: exit.code, shutdownMs, ports };
   } catch (error) { failure = error instanceof Error ? error : new Error('Shutdown smoke failed'); }
 
   // Only the ChildProcess object created above may be signaled. Cleanup never
