@@ -1,34 +1,47 @@
 # Deny by default so local secrets, test output, editor state, and repository
 # history cannot enter the build context. Add only inputs consumed by Dockerfile.
+# Directory exceptions also admit descendants: re-exclude children before
+# listing required files. The vendored build dependency is intentionally recursive.
 **
 !Dockerfile
 !.dockerignore
 !Cargo.toml
 !Cargo.lock
 !build/
+build/**
 !build/pip-constraints.txt
 !build/install-openssl.sh
 !vendor/
 !vendor/**
 !src/
+src/**
 !src/*.rs
 !src/auth/
+src/auth/**
 !src/auth/*.rs
 !src/media/
+src/media/**
 !src/media/*.rs
 !src/room/
+src/room/**
 !src/room/*.rs
 !src/signaling/
+src/signaling/**
 !src/signaling/*.rs
 !migrations/
+migrations/**
 !migrations/*.sql
 !load_tests/
+load_tests/**
 !load_tests/*.rs
 !load_tests/bin/
+load_tests/bin/**
 !load_tests/bin/*.rs
 !load_tests/clients/
+load_tests/clients/**
 !load_tests/clients/*.rs
 !web/
+web/**
 !web/package.json
 !web/package-lock.json
 !web/tsconfig.json
@@ -38,10 +51,13 @@
 !web/index.html
 !web/bundle-budget.json
 !web/scripts/
+web/scripts/**
 !web/scripts/check-bundle.mjs
 !web/public/
+web/public/**
 !web/public/help.html
 !web/public/help.css
 !web/src/
+web/src/**
 !web/src/*.ts
 !web/src/*.css
