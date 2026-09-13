@@ -607,6 +607,7 @@ export class RoomClient {
     this.recovering = true;
     this.rejectSocialRequests('Connection changed; please retry');
     this.events.onRecoveryState?.('reconnecting');
+    if (generation !== this.generation) return;
 
     console.log('[room] attempting session reconnect...');
     try {
@@ -667,10 +668,14 @@ export class RoomClient {
     // Notify UI to remove all remote tiles before rejoining
     for (const pid of this.participants.keys()) {
       this.events.onParticipantLeft(pid);
+      if (generation !== this.generation) return;
     }
 
-    // Clean up existing media
+    // Refresh controls immediately: a password prompt or failed rejoin must not
+    // leave the stopped session's microphone, camera, or screen marked active.
     this.closeMedia();
+    this.events.onLocalMediaChanged();
+    if (generation !== this.generation) return;
     this.participants.clear();
     this.localId = null;
     this.roomId = null;
@@ -694,7 +699,11 @@ export class RoomClient {
       if (outcome === 'joined') {
         this.recovering = false;
         this.events.onAdmissionComplete();
-        this.events.onRecoveryState?.('connected');
+        if (generation !== this.generation) return;
+        this.events.onRecoveryState?.(
+          'connected',
+          'Room rejoined. Your microphone, camera, and screen sharing are off; turn them on when you are ready.',
+        );
       }
     } catch (e) {
       if (generation !== this.generation) return;

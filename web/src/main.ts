@@ -1463,7 +1463,7 @@ joinBtn.addEventListener(
             connectionStatus.className = 'status connected';
             applyJoinedRoomUI();
             updateLocalTile();
-            showToast('Room connection restored');
+            showToast(message ?? 'Room connection restored');
           } else {
             connectionStatus.textContent =
               state === 'reconnecting' ? 'Rejoining room…' : 'Room recovery failed';
@@ -1823,15 +1823,28 @@ function handleLocalCaptureStopped(kind: 'audio' | 'video'): void {
 async function pttActivate(): Promise<void> {
   if (!room || !room.hasMedia || pttHeld) return;
   const activeRoom = room;
+  const membership = activeRoom.membershipVersion;
   const activation = ++pttActivation;
   pttHeld = true;
   try {
     await activeRoom.unmuteAudio();
-    if (activation !== pttActivation || room !== activeRoom || !pttHeld) return;
+    if (
+      activation !== pttActivation ||
+      room !== activeRoom ||
+      membership !== activeRoom.membershipVersion ||
+      !pttHeld
+    )
+      return;
     updateMicButton(activeRoom.audioEnabled);
     updateLocalTile();
   } catch (error) {
-    if (activation !== pttActivation || room !== activeRoom || !pttHeld) return;
+    if (
+      activation !== pttActivation ||
+      room !== activeRoom ||
+      membership !== activeRoom.membershipVersion ||
+      !pttHeld
+    )
+      return;
     pttHeld = false;
     activeRoom.muteAudio();
     updateMicButton(false);
@@ -1898,14 +1911,15 @@ async function toggleMicrophone(): Promise<void> {
   const activeRoom = room;
   if (!activeRoom?.hasMedia || microphoneTogglePending || micMode !== 'open') return;
   if (!activeRoom.audioEnabled && !canStartBroadcast('microphone')) return;
+  const membership = activeRoom.membershipVersion;
   microphoneTogglePending = true;
   try {
     const enabled = await activeRoom.toggleAudio();
-    if (room !== activeRoom) return;
+    if (room !== activeRoom || membership !== activeRoom.membershipVersion) return;
     updateMicButton(enabled);
     updateLocalTile();
   } catch (error) {
-    if (room !== activeRoom) return;
+    if (room !== activeRoom || membership !== activeRoom.membershipVersion) return;
     updateMicButton(activeRoom.audioEnabled);
     showToast(error instanceof Error ? error.message : 'Could not enable microphone');
   } finally {
@@ -1917,18 +1931,24 @@ async function toggleCamera(): Promise<void> {
   const activeRoom = room;
   if (!activeRoom?.hasMedia || cameraTogglePending) return;
   if (!activeRoom.videoEnabled && !canStartBroadcast('camera')) return;
+  const membership = activeRoom.membershipVersion;
   cameraTogglePending = true;
   try {
     if (!activeRoom.videoEnabled && !mediaControls.hasConfiguredSetup) {
       if (!(await mediaControls.openSetup('camera'))) return;
-      if (room !== activeRoom || !canStartBroadcast('camera')) return;
+      if (
+        room !== activeRoom ||
+        membership !== activeRoom.membershipVersion ||
+        !canStartBroadcast('camera')
+      )
+        return;
     }
     const enabled = await activeRoom.toggleVideo();
-    if (room !== activeRoom) return;
+    if (room !== activeRoom || membership !== activeRoom.membershipVersion) return;
     updateCamButton(enabled);
     updateLocalTile();
   } catch (error) {
-    if (room !== activeRoom) return;
+    if (room !== activeRoom || membership !== activeRoom.membershipVersion) return;
     updateCamButton(activeRoom.videoEnabled);
     showToast(error instanceof Error ? error.message : 'Could not enable camera');
   } finally {
@@ -1939,12 +1959,14 @@ async function toggleCamera(): Promise<void> {
 async function toggleScreenShare(): Promise<void> {
   const activeRoom = room;
   if (!activeRoom?.hasMedia) return;
+  const membership = activeRoom.membershipVersion;
   if (activeRoom.isScreenSharing) {
     activeRoom.stopScreenShare();
     updateScreenButton(false);
   } else if (canStartBroadcast('screen')) {
     const success = await activeRoom.startScreenShare();
-    if (room === activeRoom) updateScreenButton(success);
+    if (room === activeRoom && membership === activeRoom.membershipVersion)
+      updateScreenButton(success);
   }
 }
 

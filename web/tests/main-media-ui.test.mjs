@@ -15,6 +15,26 @@ async function functionSource(name) {
   return declaration.getText(ast);
 }
 
+async function roomEventSource(names) {
+  const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+  const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
+  let roomEvents;
+  function visit(node) {
+    if (ts.isNewExpression(node) && node.expression.getText(ast) === 'RoomClient')
+      roomEvents = node.arguments[1];
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  assert.ok(roomEvents && ts.isObjectLiteralExpression(roomEvents));
+  return names
+    .map((name) => {
+      const property = roomEvents.properties.find((node) => node.name?.getText(ast) === name);
+      assert.ok(property, `${name} must be wired to the room`);
+      return property.getText(ast);
+    })
+    .join(',');
+}
+
 function deferred() {
   let resolve, reject;
   const promise = new Promise((yes, no) => {
@@ -24,13 +44,14 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-for (const scenario of ['cancel', 'leave', 'save']) {
+for (const scenario of ['cancel', 'leave', 'rejoin', 'save']) {
   test(`camera setup ${scenario} honors the current room before publishing`, async () => {
     const pending = deferred();
     let publishes = 0,
       opens = 0;
     const activeRoom = {
       hasMedia: true,
+      membershipVersion: 1,
       videoEnabled: false,
       async toggleVideo() {
         publishes++;
@@ -69,11 +90,97 @@ for (const scenario of ['cancel', 'leave', 'save']) {
     assert.equal(opens, 1, 'repeated activation must not open another dialog');
     assert.equal(publishes, 0);
     if (scenario === 'leave') api.leave();
+    if (scenario === 'rejoin') activeRoom.membershipVersion++;
     pending.resolve(scenario !== 'cancel');
     await activation;
     assert.equal(publishes, scenario === 'save' ? 1 : 0);
   });
 }
+
+for (const action of ['toggleMicrophone', 'toggleCamera', 'toggleScreenShare', 'pttActivate']) {
+  for (const outcome of ['resolve', 'reject']) {
+    test(`${action} ${outcome} cannot update a fresh membership on the same room client`, async () => {
+      const pending = deferred();
+      const updates = [];
+      const activeRoom = {
+        membershipVersion: 1,
+        hasMedia: true,
+        audioEnabled: false,
+        videoEnabled: false,
+        isScreenSharing: false,
+        toggleAudio: () => pending.promise,
+        toggleVideo: () => pending.promise,
+        startScreenShare: () => pending.promise,
+        unmuteAudio: () => pending.promise,
+        muteAudio: () => updates.push('mute'),
+      };
+      const api = evaluateTypeScript(
+        `
+        let room = initialRoom;
+        let micMode = 'open';
+        let microphoneTogglePending = false;
+        let cameraTogglePending = false;
+        let pttHeld = false;
+        let pttActivation = 0;
+        ${await functionSource(action)}
+        export { ${action} as activate };
+      `,
+        {
+          globals: {
+            initialRoom: activeRoom,
+            mediaControls: { hasConfiguredSetup: true },
+            canStartBroadcast: () => true,
+            updateMicButton: () => updates.push('microphone'),
+            updateCamButton: () => updates.push('camera'),
+            updateScreenButton: () => updates.push('screen'),
+            updateLocalTile: () => updates.push('tile'),
+            showToast: () => updates.push('toast'),
+          },
+        },
+      );
+      const activation = api.activate();
+      activeRoom.membershipVersion++;
+      if (outcome === 'reject') pending.reject(new Error('Retired capture'));
+      else pending.resolve(true);
+      if (action === 'toggleScreenShare' && outcome === 'reject')
+        await assert.rejects(activation, /Retired capture/);
+      else await activation;
+      assert.deepEqual(updates, []);
+    });
+  }
+}
+
+test('successful recovery displays fresh-session media guidance and keeps the resumed-session fallback', async () => {
+  const connectionStatus = {};
+  const toasts = [];
+  let joinedUpdates = 0,
+    localUpdates = 0;
+  const api = evaluateTypeScript(
+    `
+    let roomRecovering = true;
+    export const events = { ${await roomEventSource(['onRecoveryState'])} };
+    export function recovering() { return roomRecovering; }
+  `,
+    {
+      globals: {
+        connectionStatus,
+        applyJoinedRoomUI: () => joinedUpdates++,
+        updateLocalTile: () => localUpdates++,
+        showToast: (message) => toasts.push(message),
+      },
+    },
+  );
+  const guidance =
+    'Room rejoined. Your microphone, camera, and screen sharing are off; turn them on when you are ready.';
+  api.events.onRecoveryState('connected', guidance);
+  assert.equal(api.recovering(), false);
+  assert.deepEqual(connectionStatus, { textContent: 'Connected', className: 'status connected' });
+  assert.deepEqual(toasts, [guidance]);
+  api.events.onRecoveryState('connected');
+  assert.deepEqual(toasts, [guidance, 'Room connection restored']);
+  assert.equal(joinedUpdates, 2);
+  assert.equal(localUpdates, 2);
+});
 
 test('room-required PTT does not overwrite the personal microphone mode', async () => {
   const saved = [];
@@ -167,21 +274,7 @@ test('media shortcuts are blocked in dialogs, interactive controls, and modified
 async function captureStoppedUiFixture(initialRoom, mode = 'open', held = false) {
   const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-  let roomEvents;
-  function visit(node) {
-    if (ts.isNewExpression(node) && node.expression.getText(ast) === 'RoomClient')
-      roomEvents = node.arguments[1];
-    ts.forEachChild(node, visit);
-  }
-  visit(ast);
-  assert.ok(roomEvents && ts.isObjectLiteralExpression(roomEvents));
-  const eventSource = ['onLocalMediaChanged', 'onLocalCaptureStopped']
-    .map((name) => {
-      const property = roomEvents.properties.find((node) => node.name?.getText(ast) === name);
-      assert.ok(property, `${name} must be wired to the room`);
-      return property.getText(ast);
-    })
-    .join(',');
+  const eventSource = await roomEventSource(['onLocalMediaChanged', 'onLocalCaptureStopped']);
   const keyboardSource = ast.statements
     .filter(
       (node) =>

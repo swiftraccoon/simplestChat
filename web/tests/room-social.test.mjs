@@ -538,6 +538,105 @@ test('full reconnect retains the room password in memory and prompts for a repla
   assert.equal(h.room.joinPassword, undefined);
 });
 
+test('expired sessions clear local media before a password prompt and rejoin without capture', async () => {
+  const answer = deferred();
+  const mediaChanges = [];
+  let joins = 0;
+  const h = await harness({
+    reconnect: () => ({ type: 'reconnectResult', success: false, participantId: 'local' }),
+    joinReply: () => (++joins === 2 ? { type: 'roomPasswordRequired' } : undefined),
+    events: {
+      onPasswordRequired: () => answer.promise,
+      onLocalMediaChanged: () =>
+        mediaChanges.push({
+          ready: h.room.hasMedia,
+          audio: h.room.audioEnabled,
+          video: h.room.videoEnabled,
+          screen: h.room.isScreenSharing,
+        }),
+    },
+  });
+  await h.room.join('room', 'Local');
+  const original = h.instances[0];
+  original.audioEnabled = original.videoEnabled = original.isScreenSharing = true;
+  const membership = h.room.membershipVersion;
+  const reconnect = h.room.attemptReconnect();
+  await flush();
+  assert.equal(joins, 2, 'password challenge must still be pending');
+  assert.equal(original.closes, 1);
+  assert.deepEqual(mediaChanges, [{ ready: false, audio: false, video: false, screen: false }]);
+  assert.equal(h.room.connected, false);
+  answer.resolve('replacement-password');
+  await reconnect;
+  assert.equal(h.room.connected, true);
+  assert.ok(h.room.membershipVersion > membership);
+  assert.equal(h.instances.length, 2);
+  assert.equal(h.instances[1].closes, 0);
+  assert.deepEqual(
+    [h.room.audioEnabled, h.room.videoEnabled, h.room.isScreenSharing],
+    [false, false, false],
+  );
+  assert.match(h.recovery.at(-1)[1], /microphone, camera, and screen sharing are off/);
+  assert.match(h.recovery.at(-1)[1], /turn them on when you are ready/);
+  // The fixture deliberately supplies no capture methods: joining only sets up
+  // transports. Any attempted publication would fail the connected assertions.
+  assert.ok(h.sent.every(({ type }) => type === 'joinRoom' || type === 'reconnect'));
+});
+
+test('a failed fresh join still clears the expired session media and reports recovery failure', async () => {
+  let joins = 0;
+  const h = await harness({
+    reconnect: () => ({ type: 'reconnectResult', success: false, participantId: 'local' }),
+    joinReply: () =>
+      ++joins === 2 ? { type: 'error', message: 'Room no longer available' } : undefined,
+  });
+  await h.room.join('room', 'Local');
+  h.instances[0].audioEnabled = h.instances[0].videoEnabled = true;
+  await h.room.attemptReconnect();
+  assert.equal(h.instances[0].closes, 1);
+  assert.equal(h.records.localChanges, 1);
+  assert.equal(h.room.hasMedia, false);
+  assert.equal(h.room.localParticipantId, null);
+  assert.equal(h.room.connected, false);
+  assert.deepEqual(h.recovery.at(-1), ['failed', 'Room no longer available']);
+});
+
+for (const notification of [
+  'onRecoveryState',
+  'onParticipantLeft',
+  'onLocalMediaChanged',
+  'onAdmissionComplete',
+]) {
+  test(`leaving from ${notification} retires the expired-session recovery`, async () => {
+    const h = await harness({
+      reconnect: () => ({ type: 'reconnectResult', success: false, participantId: 'local' }),
+      events: {
+        [notification]: () => {
+          void h.room.leave();
+        },
+      },
+    });
+    await h.room.join('room', 'Local');
+    h.room.getParticipants().set('remote', {
+      id: 'remote',
+      name: 'Remote',
+      role: 'user',
+      producers: new Map(),
+    });
+    await h.room.attemptReconnect();
+    assert.equal(h.room.currentRoomId, null);
+    assert.equal(h.room.localParticipantId, null);
+    assert.equal(h.room.hasMedia, false);
+    assert.equal(h.records.admissions, 0);
+    assert.ok(h.recovery.every(([state]) => state !== 'connected' && state !== 'failed'));
+    assert.equal(
+      h.sent.filter(({ type }) => type === 'joinRoom').length,
+      notification === 'onAdmissionComplete' ? 2 : 1,
+      'retired recovery must not start or report a later membership',
+    );
+  });
+}
+
 test('leaving during the reconnect password prompt prevents a late answer from joining', async () => {
   const answer = deferred();
   let joins = 0;
