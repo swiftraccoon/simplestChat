@@ -406,6 +406,29 @@ class Harness:
                 "oomKilled": state["OOMKilled"], "error": state["Error"][:2048],
                 "errorTruncated": len(state["Error"]) > 2048,
             }
+            try:
+                # This exact verified validator runs only the fixed checksum
+                # command without environment files or secret mounts. Its
+                # stderr is useful when execution fails after OCI startup.
+                logs = self.commands.docker("logs", "--tail", "20", value["id"], timeout=10, success=False)
+                require(logs.code == 0, "Validator log retrieval failed")
+                metadata = logs.error.lstat()
+                require(stat.S_ISREG(metadata.st_mode), "Validator stderr must be a regular file")
+                descriptor = os.open(logs.error, os.O_RDONLY | os.O_NOFOLLOW)
+                with os.fdopen(descriptor, "rb") as source:
+                    opened = os.fstat(source.fileno())
+                    require(stat.S_ISREG(opened.st_mode)
+                            and (opened.st_dev, opened.st_ino) == (metadata.st_dev, metadata.st_ino),
+                            "Validator stderr changed during inspection")
+                    stderr = source.read(4097)
+                self.report["validatorStartup"]["runtimeLogs"] = {
+                    "diagnosticUnavailable": False, "stderr": stderr[:4096].decode("utf-8", errors="replace"),
+                    "stderrTruncated": len(stderr) > 4096,
+                }
+            except Exception:
+                # Secondary diagnostics must not erase verified startup state
+                # or publish a failed Docker command's own raw error output.
+                self.report["validatorStartup"]["runtimeLogs"] = {"diagnosticUnavailable": True}
         except Exception:
             # Missing or changed resources are not evidence of a successful
             # validator. Never replace the original failed release result.

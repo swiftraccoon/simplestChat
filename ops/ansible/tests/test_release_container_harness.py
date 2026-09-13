@@ -34,8 +34,9 @@ REVISION = "f" * 40
 
 
 class TextResult:
-    def __init__(self, text="", code=0):
+    def __init__(self, text="", code=0, *, error=None):
         self.value, self.code = text, code
+        self.error = error
 
     def text(self):
         return self.value
@@ -525,7 +526,9 @@ class HarnessValidatorDiagnosticTests(HarnessTestCase):
                  "entrypoint": ["/usr/bin/timeout"], "network": "none", "readOnly": True,
                  "state": {"ExitCode": 128, "Status": "created", "OOMKilled": False,
                            "Error": "failed to create task: exec /usr/bin/timeout: no such file or directory"}}
-        harness.commands.docker.return_value = TextResult(json.dumps(value))
+        stderr = attempt / "validator.stderr"
+        stderr.write_bytes(b"")
+        harness.commands.docker.return_value = TextResult(json.dumps(value), error=stderr)
         return harness, attempt, value
 
     def test_verified_validator_startup_error_is_projected_without_general_logs_or_environment(self):
@@ -535,16 +538,20 @@ class HarnessValidatorDiagnosticTests(HarnessTestCase):
         self.assertEqual(harness.report["validatorStartup"], {
             "diagnosticUnavailable": False, "exitCode": 128, "status": "created", "oomKilled": False,
             "error": value["state"]["Error"], "errorTruncated": False,
+            "runtimeLogs": {"diagnosticUnavailable": False, "stderr": "", "stderrTruncated": False},
         })
         self.assertIs(harness.report["passed"], False)
         self.assertEqual(harness.commands.last_failure, previous_failure)
-        harness.commands.docker.assert_called_once()
-        call = harness.commands.docker.call_args
+        calls = harness.commands.docker.call_args_list
+        self.assertEqual(len(calls), 2)
+        call = calls[0]
         self.assertEqual(call.args[:2], ("inspect", "--format"))
         self.assertEqual(call.args[-1], "scpub-release-validate-" + TOKEN)
         self.assertEqual(call.kwargs, {"timeout": 10, "success": False})
         self.assertNotIn(".Config.Env", call.args[2])
         self.assertNotIn("logs", call.args)
+        self.assertEqual(calls[1].args, ("logs", "--tail", "20", CONTAINER))
+        self.assertEqual(calls[1].kwargs, {"timeout": 10, "success": False})
         self.assertNotIn(IMAGE, json.dumps(harness.report["validatorStartup"]))
 
     def test_missing_symlink_nonregular_oversized_or_invalid_name_never_contacts_docker(self):
@@ -586,6 +593,62 @@ class HarnessValidatorDiagnosticTests(HarnessTestCase):
                 })
                 self.assertNotIn("PRIVATE_ERROR", json.dumps(harness.report))
                 self.assertIs(harness.report["passed"], False)
+                self.assertEqual(harness.commands.docker.call_count, 1, "Unverified containers must never have logs read")
+
+    def test_verified_validator_stderr_is_bounded_and_checksum_stdout_remains_private(self):
+        harness, attempt, value = self.fixture()
+        stderr = attempt / "validator-runtime.stderr"
+        stderr.write_bytes(b"x" * 5000)
+        original_failure = deepcopy(harness.commands.last_failure)
+        inspection = TextResult(json.dumps(value))
+        logs = TextResult("PRIVATE_CHECKSUM_STDOUT", error=stderr)
+        harness.commands.docker.side_effect = [inspection, logs]
+        harness.validator_startup_diagnostic(attempt, {"image": IMAGE})
+        diagnostic = harness.report["validatorStartup"]
+        self.assertEqual(diagnostic["runtimeLogs"], {
+            "diagnosticUnavailable": False, "stderr": "x" * 4096, "stderrTruncated": True,
+        })
+        self.assertEqual(diagnostic["exitCode"], 128)
+        self.assertNotIn("PRIVATE_CHECKSUM_STDOUT", json.dumps(harness.report))
+        self.assertEqual(harness.commands.last_failure, original_failure)
+        self.assertIs(harness.report["passed"], False)
+
+    def test_failed_log_retrieval_preserves_startup_state_and_original_release_failure(self):
+        harness, attempt, value = self.fixture()
+        stderr = attempt / "failed-log-command.stderr"
+        stderr.write_bytes(b"PRIVATE_DOCKER_COMMAND_ERROR")
+        original_failure = deepcopy(harness.commands.last_failure)
+
+        def inspect_or_logs(*args, **_kwargs):
+            if args[0] == "inspect":
+                return TextResult(json.dumps(value))
+            self.assertEqual(args, ("logs", "--tail", "20", CONTAINER))
+            harness.commands.last_failure = {"number": 58, "operation": "docker logs", "exitStatus": 1}
+            return TextResult("PRIVATE_DOCKER_COMMAND_STDOUT", code=1, error=stderr)
+
+        harness.commands.docker.side_effect = inspect_or_logs
+        harness.validator_startup_diagnostic(attempt, {"image": IMAGE})
+        diagnostic = harness.report["validatorStartup"]
+        self.assertIs(diagnostic["diagnosticUnavailable"], False)
+        self.assertEqual(diagnostic["error"], value["state"]["Error"])
+        self.assertEqual(diagnostic["exitCode"], 128)
+        self.assertEqual(diagnostic["runtimeLogs"], {"diagnosticUnavailable": True})
+        self.assertEqual(harness.commands.last_failure, original_failure)
+        self.assertNotIn("PRIVATE_DOCKER_COMMAND", json.dumps(harness.report))
+        self.assertIs(harness.report["passed"], False)
+
+    def test_symlinked_runtime_stderr_is_unavailable_without_losing_verified_state(self):
+        harness, attempt, value = self.fixture()
+        source = attempt / "other.stderr"
+        source.write_bytes(b"PRIVATE_UNVERIFIED_FILE")
+        link = attempt / "linked.stderr"
+        link.symlink_to(source)
+        harness.commands.docker.side_effect = [TextResult(json.dumps(value)), TextResult(error=link)]
+        harness.validator_startup_diagnostic(attempt, {"image": IMAGE})
+        diagnostic = harness.report["validatorStartup"]
+        self.assertIs(diagnostic["diagnosticUnavailable"], False)
+        self.assertEqual(diagnostic["runtimeLogs"], {"diagnosticUnavailable": True})
+        self.assertNotIn("PRIVATE_UNVERIFIED_FILE", json.dumps(harness.report))
 
     def test_state_projection_is_typed_and_error_length_is_bounded(self):
         harness, attempt, value = self.fixture()

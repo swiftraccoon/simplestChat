@@ -201,7 +201,9 @@ def packaged_migrations(runner, image):
     name = 'scpub-release-validate-' + uuid.uuid4().hex
     journal(runner, False, 'validate_image')
     atomic(runner.attempt / 'validation-name.txt', name)
-    container = runner.docker('create', '--name', name, '--network', 'none', '--pull', 'never',
+    # Keep timeout below PID 1: some packaged versions reject an init-parented
+    # child as orphaned. Docker's init also forwards signals and reaps children.
+    container = runner.docker('create', '--name', name, '--init', '--network', 'none', '--pull', 'never',
         '--read-only', '--user', '10001:10001', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
         '--memory', '128m', '--cpus', '0.5', '--pids-limit', '32', '--log-driver', 'local',
         # The local driver's default compression requires more than one file.

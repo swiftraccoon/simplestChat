@@ -266,7 +266,7 @@ class PublicReleaseTests(unittest.TestCase):
     def assert_config_unchanged(self):
         self.assertEqual({name: (self.config / name).read_bytes() for name in PUBLIC.SELECTION}, self.before)
 
-    def test_validator_uses_uncompressed_single_file_logs_without_weakening_isolation(self):
+    def test_validator_uses_init_and_bounded_logs_without_weakening_isolation(self):
         self.assertEqual(PUBLIC.packaged_migrations(self.runner, NEW_IMAGE), MIGRATIONS)
         creates = [(args, kwargs) for kind, args, kwargs in self.runner.calls
                    if kind == 'docker' and args[0] == 'create']
@@ -274,7 +274,7 @@ class PublicReleaseTests(unittest.TestCase):
         args, kwargs = creates[0]
         self.assertRegex(args[2], r'^scpub-release-validate-[a-f0-9]{32}$')
         self.assertEqual(args, (
-            'create', '--name', args[2], '--network', 'none', '--pull', 'never',
+            'create', '--name', args[2], '--init', '--network', 'none', '--pull', 'never',
             '--read-only', '--user', '10001:10001', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
             '--memory', '128m', '--cpus', '0.5', '--pids-limit', '32', '--log-driver', 'local',
             '--log-opt', 'max-size=1m', '--log-opt', 'max-file=1', '--log-opt', 'compress=false',
