@@ -156,6 +156,43 @@ conformance or screen-reader/mobile-browser coverage. CI preserves its separate
 `accessibility-e2e` artifact for seven days. Use a unique `E2E_ARTIFACTS` directory
 to keep local runs separate.
 
+## Repeated-session lifecycle check
+
+After building the server/UI and installing Chromium, run the optional gate with
+fresh owned services:
+
+```sh
+LIFECYCLE_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+  node web/e2e/lifecycle.cjs
+```
+
+Two synthetic-media clients reuse the same pages across join, publish, stop and
+leave cycles. Defaults are six cycles with 30 seconds of measured media per
+cycle. `LIFECYCLE_CYCLES` accepts 3–10; `LIFECYCLE_MEDIA_SECONDS` accepts 30–120.
+This takes several minutes and is not part of `npm test` or default CI.
+
+The check covers signaling resume and actual expiry of the server's unchanged
+30-second grace period. It holds one replacement WebSocket handshake, observes
+membership expiry, then permits the real server response and fresh rejoin.
+It does not simulate a UDP outage, change OS networking or forge protocol replies.
+Rejoining must release old media without automatically recapturing devices.
+
+`lifecycle-results.json` retains bounded native media counters, resource snapshots,
+recovery evidence and server counts. After each leave, media resources and room
+memberships must be released; the join screen intentionally retains one signaling
+socket per page. Server connections must reach zero after browser closure.
+Browser cleanup must observe an unforced, zero-status process exit. Graceful
+closure has a 10-second limit, forced cleanup a further 5 seconds, and finalization
+a 25-second watchdog; any escalation fails the run.
+The helper supplies its own temporary metrics credential; reports do not retain it.
+Use a fresh `E2E_ARTIFACTS` directory and keep reports private.
+
+JS heap, DOM counters and server RSS are informational trends, not hard leak or
+capacity budgets. Sampled decode/playback progress does not prove uninterrupted
+media, and zero membership gauges do not audit every native allocation. Real
+browser/device checks in the [manual checklist](../../docs/testing.md#manual-release-checklist)
+remain necessary.
+
 ## Informational browser/API performance
 
 With the disposable database still running and the UI already built:

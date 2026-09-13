@@ -150,11 +150,21 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# Only the lifecycle gate needs protected server counts. Never inherit an
+# operator credential or publish this disposable token in logs/artifacts.
+test_metrics_environment=("PATH=${PATH}")
+unset TEST_METRICS_TOKEN TEST_SERVER_PID
+if [[ "${LIFECYCLE_E2E:-}" == 1 ]]; then
+  TEST_METRICS_TOKEN="$(env -i PATH="${PATH}" node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+  export TEST_METRICS_TOKEN
+  test_metrics_environment+=("METRICS_TOKEN=${TEST_METRICS_TOKEN}")
+fi
+
 # A clean server environment also prevents inherited rate limits, TURN, passkey,
 # proxy, or account settings from changing the workload. Keep normal defaults.
 (
   cd "${server_workdir}"
-  exec env -i PATH="${PATH}" DATABASE_URL="${DATABASE_URL}" \
+  exec env -i "${test_metrics_environment[@]}" DATABASE_URL="${DATABASE_URL}" \
   BIND_ADDR=127.0.0.1 PORT="${test_port}" ANNOUNCE_IP="${test_announce_ip}" \
   MEDIA_WORKERS=1 WEBRTC_SERVER_PORT_BASE="${media_port}" \
   ALLOWED_ORIGINS="${BASE_URL}" REGISTRATION_ENABLED=true ALLOW_AD_HOC_ROOMS=true \
@@ -162,6 +172,7 @@ trap 'exit 143' TERM
     RUN_MIGRATIONS=true "${server_binary}"
 ) >"${test_artifacts}/server.log" 2>&1 &
 server_pid=$!
+export TEST_SERVER_PID="${server_pid}"
 ready=0
 for ((attempt = 0; attempt < 120; attempt++)); do
   if ! kill -0 "${server_pid}" 2>/dev/null; then

@@ -156,6 +156,21 @@ workflow, or [browser/API measurements](../web/e2e/README.md#informational-brows
 for startup, chat delivery and decoded media. The short CI RTP smoke checks
 delivery correctness; it does not set a performance budget.
 
+### Repeated-session lifecycle check
+
+With the server/UI built and Chromium installed:
+
+```sh
+LIFECYCLE_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+  node web/e2e/lifecycle.cjs
+```
+
+This opt-in check reuses two pages across six media sessions, including reconnect
+and real grace-period expiry. It checks sampled media progress and cleanup while
+retaining bounded diagnostics and informational memory trends. It is not part of
+default CI or a substitute for physical-device checks. See
+[configuration and evidence limits](../web/e2e/README.md#repeated-session-lifecycle-check).
+
 ## Manual release checklist
 
 ### Real-browser targets

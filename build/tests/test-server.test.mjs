@@ -208,6 +208,45 @@ test('helper reports actual graceful exit separately from its requested TERM', a
   assert.throws(() => process.kill(report.serverPid, 0), { code: 'ESRCH' });
 });
 
+test('lifecycle counts use a fresh scoped credential and the owned server PID', async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-metrics-fixture.'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const server = path.join(directory, 'server.mjs');
+  await writeFile(server, `#!/usr/bin/env node
+    import http from 'node:http';
+    const server = http.createServer((request, response) => {
+      if (request.url === '/metrics') {
+        response.statusCode = request.headers.authorization === 'Bearer ' + process.env.METRICS_TOKEN ? 200 : 401;
+      }
+      response.end(JSON.stringify({ enabled: !!process.env.METRICS_TOKEN, pid: process.pid }));
+    });
+    server.listen(Number(process.env.PORT), '127.0.0.1');
+    process.on('SIGTERM', () => server.close());
+  `);
+  await chmod(server, 0o755);
+  for (const enabled of [false, true]) {
+    const result = await run(t, {
+      TEST_SERVER_BINARY: server, LIFECYCLE_E2E: enabled ? '1' : '0',
+      METRICS_TOKEN: 'inherited-private-token', TEST_METRICS_TOKEN: 'inherited-test-token', TEST_SERVER_PID: '1',
+    }, [process.execPath, '--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      const response = await fetch(process.env.BASE_URL + '/metrics', {
+        headers: { Authorization: 'Bearer ' + process.env.TEST_METRICS_TOKEN },
+      });
+      const body = await response.json();
+      assert.equal(body.enabled, ${enabled});
+      assert.equal(body.pid, Number(process.env.TEST_SERVER_PID));
+      assert.ok(body.pid > 1);
+      if (${enabled}) {
+        assert.match(process.env.TEST_METRICS_TOKEN, /^[a-f0-9]{64}$/);
+        assert.equal(response.status, 200);
+      } else assert.equal(process.env.TEST_METRICS_TOKEN, undefined);
+    `]);
+    assert.equal(result.status, 0, result.output);
+    assert.doesNotMatch(result.output, /inherited-private-token|inherited-test-token|[a-f0-9]{64}/);
+  }
+});
+
 for (const [name, behavior, waitStatus, interpretation] of [
   ['nonzero exit', "process.on('SIGTERM', () => process.exit(17));", 17, 'nonzero_exit'],
   ['signal-only exit', '', 143, 'signal_or_high_exit_code'],
