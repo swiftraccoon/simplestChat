@@ -1,0 +1,145 @@
+# Managed by Ansible. Deployment always uses --no-build --pull never.
+name: simplestchat-public
+
+x-bounded-logging: &bounded-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  simplestchat:
+    extends:
+      file: ./compose.base.yml
+      service: simplestchat
+    image: "{{ scpub_server_image }}"
+    user: "10001:10001"
+    env_file:
+      - ./app.env
+    volumes:
+      - "{{ scpub_root }}/postgres-socket:/run/simplestchat-postgres:ro"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *bounded-logging
+
+  postgres:
+    image: "{{ scpub_postgres_image }}"
+    user: "999:999"
+    network_mode: none
+    environment:
+      POSTGRES_DB: simplestchat
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-admin-password
+      POSTGRES_INITDB_ARGS: "--auth-local=peer --auth-host=scram-sha-256"
+    command:
+      - postgres
+      - -c
+      - listen_addresses=
+      - -c
+      # The official entrypoint initializes through its default local socket.
+      # Only the second directory is shared with application containers.
+      - unix_socket_directories=/var/run/postgresql,/run/simplestchat-postgres
+      - -c
+      - unix_socket_permissions=0777
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - max_connections=50
+      - -c
+      - shared_buffers=256MB
+    volumes:
+      # PostgreSQL 18 places PGDATA beneath this version-independent parent.
+      - "{{ scpub_root }}/postgres:/var/lib/postgresql"
+      - "{{ scpub_root }}/postgres-socket:/run/simplestchat-postgres"
+      - "{{ scpub_config }}/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro"
+      - "{{ scpub_config }}/postgres-admin-password:/run/secrets/postgres-admin-password:ro"
+      - "{{ scpub_config }}/init-database.sql:/docker-entrypoint-initdb.d/10-simplestchat.sql:ro"
+    healthcheck:
+      # Do not mistake the entrypoint's temporary initialization server for
+      # the final server: during normal operation postgres itself is PID 1.
+      test:
+        - CMD-SHELL
+        - 'test "$$(cat /proc/1/comm)" = postgres && pg_isready -h /run/simplestchat-postgres -U postgres -d simplestchat'
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,size=1m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: "1.0"
+    shm_size: 256m
+    stop_grace_period: 60s
+    logging: *bounded-logging
+
+  caddy:
+    image: "{{ scpub_caddy_image }}"
+    user: "10001:10001"
+    env_file:
+      - ./proxy.env
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+      - "443:443/udp"
+    volumes:
+      - "{{ scpub_config }}/Caddyfile:/etc/caddy/Caddyfile:ro"
+      - "{{ scpub_root }}/caddy-data:/data"
+      - "{{ scpub_root }}/caddy-config:/config"
+    depends_on:
+      - simplestchat
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+    cap_drop:
+      - ALL
+    # The official binary carries this file capability; removing it from the
+    # bounding set prevents exec even when low ports are unprivileged.
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: "0.5"
+    stop_grace_period: 30s
+    logging: *bounded-logging
+
+  migrate:
+    profiles:
+      - maintenance
+    image: "{{ scpub_server_image }}"
+    user: "10001:10001"
+    network_mode: none
+    env_file:
+      - ./migration.env
+    volumes:
+      - "{{ scpub_root }}/postgres-socket:/run/simplestchat-postgres:ro"
+    restart: "no"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: "1.0"
+    stop_grace_period: 30s
+    logging: *bounded-logging

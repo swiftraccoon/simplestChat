@@ -1,0 +1,211 @@
+---
+- name: Prepare an explicitly authorized public simplestChat deployment
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: true
+  serial: 1
+  pre_tasks:
+    - name: Require explicit public deployment and supported fixed paths
+      ansible.builtin.assert:
+        that:
+          - scpub_enabled | bool
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'x86_64'
+          - scpub_config == '/etc/simplestchat-public'
+          - scpub_root == '/srv/simplestchat-public'
+          - scbench_revision is match('^[a-f0-9]{40}$')
+          - scpub_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+          - scpub_announce_ip is match('^[0-9]{1,3}(?:\.[0-9]{1,3}){3}$')
+          - scpub_postgres_image is match('^docker.io/library/postgres:[a-z0-9.-]+@sha256:[a-f0-9]{64}$')
+          - scpub_caddy_image is match('^docker.io/library/caddy:[a-z0-9.-]+@sha256:[a-f0-9]{64}$')
+        fail_msg: Explicitly configure the public domain, address and immutable images on the prepared Debian host.
+
+    - name: Refuse changes while a benchmark or image build is active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "simplestchat-{{ item }}.service"]
+      loop: [benchmark, image-build]
+      register: scpub_owned_service
+      changed_when: false
+      failed_when: >-
+        scpub_owned_service.rc not in [0, 3, 4] or
+        scpub_owned_service.stdout in ['active', 'activating', 'deactivating', 'reloading']
+      check_mode: false
+
+    - name: Require the public project to be stopped before editing its configuration
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - ps
+          - --quiet
+          - --filter
+          - label=com.docker.compose.project=simplestchat-public
+      register: scpub_active_containers
+      changed_when: false
+      failed_when: scpub_active_containers.rc != 0 or scpub_active_containers.stdout | trim != ''
+      check_mode: false
+
+    - name: Read the previously verified application image manifest
+      ansible.builtin.command:
+        argv:
+          - jq
+          - -er
+          - '.revision == "{{ scbench_revision }}" and .passed == true'
+          - "/srv/simplestchat-bench/artifacts/{{ scbench_revision }}/images.json"
+      changed_when: false
+      check_mode: false
+
+    - name: Select the retained application artifact without rebuilding
+      ansible.builtin.command:
+        argv: [jq, -er, '.serverImage', "/srv/simplestchat-bench/artifacts/{{ scbench_revision }}/images.json"]
+      register: scpub_application_image
+      changed_when: false
+      check_mode: false
+
+    - name: Require a content-addressed application image
+      ansible.builtin.assert:
+        that: scpub_application_image.stdout is match('^sha256:[a-f0-9]{64}$')
+
+    - name: Retain the verified application image selection
+      ansible.builtin.set_fact:
+        scpub_server_image: "{{ scpub_application_image.stdout }}"
+
+  tasks:
+    - name: Create private configuration and persistent deployment directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop: ["{{ scpub_config }}", "{{ scpub_root }}", "{{ scpub_root }}/results", "{{ scpub_root }}/backups"]
+
+    - name: Create separately owned database and certificate storage
+      ansible.builtin.file:
+        path: "{{ scpub_root }}/{{ item.name }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.owner }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - {name: postgres, owner: '999', mode: '0700'}
+        - {name: postgres-socket, owner: '999', mode: '0755'}
+        - {name: caddy-data, owner: '10001', mode: '0700'}
+        - {name: caddy-config, owner: '10001', mode: '0700'}
+
+    - name: Generate independent deployment secrets once without printing them
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - |
+            import json, os, secrets, stat
+            from pathlib import Path
+            path = Path('/etc/simplestchat-public/secrets.json')
+            names = ['postgres_admin_password', 'migration_password', 'database_password',
+                     'jwt_secret', 'metrics_token', 'proxy_secret', 'owner_password']
+            if path.exists() or path.is_symlink():
+                metadata = path.lstat()
+                assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
+                assert stat.S_IMODE(metadata.st_mode) == 0o600 and metadata.st_size < 16384
+                values = json.loads(path.read_text())
+                assert set(values) == set(names)
+                assert all(isinstance(v, str) and len(v) == 64 and all(c in '0123456789abcdef' for c in v) for v in values.values())
+                print('retained')
+            else:
+                values = {name: secrets.token_hex(32) for name in names}
+                with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as output:
+                    json.dump(values, output)
+                print('created')
+      register: scpub_secret_creation
+      changed_when: scpub_secret_creation.stdout == 'created'
+      when: not ansible_check_mode
+
+    - name: Read protected secrets for private configuration rendering
+      ansible.builtin.slurp:
+        src: "{{ scpub_config }}/secrets.json"
+      register: scpub_secret_file
+      no_log: true
+
+    - name: Keep secret values out of logs and persistent fact caches
+      ansible.builtin.set_fact:
+        scpub_secrets: "{{ scpub_secret_file.content | b64decode | from_json }}"
+        cacheable: false
+      no_log: true
+
+    - name: Copy the maintained base runtime and proxy configuration
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../{{ item.source }}"
+        dest: "{{ scpub_config }}/{{ item.destination }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - {source: docker-compose.yml, destination: compose.base.yml}
+        - {source: Caddyfile, destination: Caddyfile}
+
+    - name: Render the private public-service configuration
+      ansible.builtin.template:
+        src: "public-{{ item.source }}.j2"
+        dest: "{{ scpub_config }}/{{ item.destination }}"
+        owner: "{{ item.owner | default('root') }}"
+        group: "{{ item.owner | default('root') }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - {source: compose.yml, destination: compose.public.yml, mode: '0600'}
+        - {source: app.env, destination: app.env, mode: '0600'}
+        - {source: migration.env, destination: migration.env, mode: '0600'}
+        - {source: proxy.env, destination: proxy.env, mode: '0600'}
+        - {source: postgres-admin-password, destination: postgres-admin-password, owner: '999', mode: '0400'}
+        - {source: pg_hba.conf, destination: pg_hba.conf, mode: '0644'}
+        - {source: init-database.sql, destination: init-database.sql, owner: '999', mode: '0400'}
+        - {source: runtime-grants.sql, destination: runtime-grants.sql, mode: '0600'}
+      no_log: true
+
+    - name: Record reviewed source and image identities for deployment checks
+      ansible.builtin.copy:
+        content: >-
+          {{ {'revision': scbench_revision, 'serverImage': scpub_server_image,
+              'postgresImage': scpub_postgres_image, 'caddyImage': scpub_caddy_image} | to_nice_json }}
+        dest: "{{ scpub_config }}/images.json"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Inspect immutable dependency images before pulling
+      ansible.builtin.command:
+        argv: [docker, --host, 'unix:///var/run/docker.sock', image, inspect, --format, '{% raw %}{{.Id}}{% endraw %}', "{{ item }}"]
+      loop: ["{{ scpub_postgres_image }}", "{{ scpub_caddy_image }}"]
+      register: scpub_dependency_images
+      changed_when: false
+      failed_when: scpub_dependency_images.rc not in [0, 1]
+      check_mode: false
+
+    - name: Pull only missing checksum-pinned dependency images
+      ansible.builtin.command:
+        argv: [timeout, 300, docker, --host, 'unix:///var/run/docker.sock', pull, "{{ item.item }}"]
+      loop: "{{ scpub_dependency_images.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.rc == 1
+      changed_when: true
+
+    - name: Install the explicit deployment and Compose commands
+      ansible.builtin.copy:
+        src: "{{ item.source }}"
+        dest: "{{ item.destination }}"
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - {source: public-compose.sh, destination: /usr/local/bin/simplestchat-public}
+        - {source: deploy-public.sh, destination: /usr/local/bin/simplestchat-public-deploy}
+        - {source: seed-public-room.py, destination: /usr/local/libexec/simplestchat-bench/seed-public-room.py}
+
+    - name: Validate Compose privately without printing resolved secrets
+      ansible.builtin.command:
+        argv: [/usr/local/bin/simplestchat-public, config, --quiet]
+      changed_when: false
+      no_log: true

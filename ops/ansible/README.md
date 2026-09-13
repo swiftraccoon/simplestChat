@@ -6,6 +6,11 @@ checks out an exact source commit, and installs separate, opt-in image-build and
 benchmark services. It does not install Rust or Node on the host, publish a chat
 service, configure a database, or change SSH authentication.
 
+For an explicitly public HTTPS site with persistent accounts and a guest lobby,
+use the separate [public deployment guide](PUBLIC.md). Stop that project before
+host maintenance, image builds or private benchmarks; those operations refuse
+to run alongside the public service.
+
 Docker access is root-equivalent. Host orchestration runs as root; application
 and load-generator containers run as UID/GID 10001 with read-only filesystems,
 dropped capabilities and no additional privileges. No user is added to the

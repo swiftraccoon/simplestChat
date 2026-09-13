@@ -1,0 +1,21 @@
+-- Private: the official entrypoint executes this once on a new database only.
+-- An existing database must retain its roles and secrets; do not rerun blindly.
+\set ON_ERROR_STOP on
+BEGIN;
+CREATE ROLE simplestchat_migrate
+  LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS
+  CONNECTION LIMIT 5 PASSWORD '{{ scpub_secrets.migration_password }}';
+CREATE ROLE simplestchat_app
+  LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS
+  CONNECTION LIMIT 25 PASSWORD '{{ scpub_secrets.database_password }}';
+
+REVOKE ALL ON DATABASE simplestchat FROM PUBLIC;
+GRANT CONNECT ON DATABASE simplestchat
+  TO simplestchat_migrate, simplestchat_app;
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT USAGE, CREATE ON SCHEMA public TO simplestchat_migrate;
+GRANT USAGE ON SCHEMA public TO simplestchat_app;
+
+-- Migration 011 can reuse this without granting database CREATE to its role.
+CREATE EXTENSION pg_trgm WITH SCHEMA public;
+COMMIT;

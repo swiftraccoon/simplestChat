@@ -10,9 +10,13 @@ For repeatable VPS preparation and private container benchmarks, see the
 [operations automation](../ops/ansible/README.md). It prepares the host without
 starting a public chat service. The application remains packaged by Docker;
 Ansible does not install a second native Rust/Node build on the host.
+The separate [public VPS playbook](../ops/ansible/PUBLIC.md) adds pinned Caddy,
+socket-only PostgreSQL, protected credentials and an initial guest lobby.
 
-1. Point your domain at the host and replace `simplestchat.example.com` in
-   `Caddyfile`. Set `ALLOWED_ORIGINS` to the exact external HTTPS origin.
+1. Point your domain at the host and set Caddy's `CADDY_DOMAIN` environment
+   variable (or edit its example hostname). Set `ALLOWED_ORIGINS` to the exact
+   external HTTPS origin. `CADDY_UPSTREAM` defaults to `127.0.0.1:3000`; use
+   `simplestchat:3000` for a proxy on the application's Compose network.
 2. Expose TCP 80/443 and the media worker's UDP ports starting at 40000. Keep
    TCP 3000 private. Set `ANNOUNCE_IP` to the address clients can reach.
 3. Keep runtime secrets outside the repository in an owner-readable file

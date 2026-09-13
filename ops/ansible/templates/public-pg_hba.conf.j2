@@ -1,0 +1,8 @@
+# Only the PostgreSQL container's OS postgres user may administer the database.
+# Application containers use separate passwords even across the shared socket.
+local all          postgres             peer
+local simplestchat simplestchat_migrate scram-sha-256
+local simplestchat simplestchat_app     scram-sha-256
+local all          all                  reject
+host  all          all 0.0.0.0/0         reject
+host  all          all ::/0              reject

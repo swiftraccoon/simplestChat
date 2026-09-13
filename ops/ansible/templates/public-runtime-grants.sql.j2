@@ -1,0 +1,12 @@
+-- Run as postgres after the packaged migration ledger has been verified.
+-- Keep this allowlist explicit: the runtime must never edit _sqlx_migrations.
+\set ON_ERROR_STOP on
+BEGIN;
+GRANT SELECT, INSERT, UPDATE
+  ON public.users, public.webauthn_credentials
+  TO simplestchat_app;
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON public.sessions, public.rooms, public.room_roles,
+     public.room_states, public.room_reports
+  TO simplestchat_app;
+COMMIT;

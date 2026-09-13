@@ -1,6 +1,9 @@
-# SimplestChat reverse proxy. Replace the example hostname and point its DNS
-# record at this server. Caddy provisions and renews the TLS certificate.
+# SimplestChat reverse proxy. Set CADDY_DOMAIN and point its DNS record at this
+# server. Caddy provisions and renews the TLS certificate. For the Compose
+# proxy, set CADDY_UPSTREAM=simplestchat:3000; the default is a host-local backend.
 {
+	# Keep Caddy's loopback-only admin endpoint for reloads. Do not publish its
+	# port from a container or override it with a publicly reachable address.
 	servers {
 		# Bound slow request setup and unused keep-alive connections. The idle
 		# timeout applies between HTTP requests, not to upgraded WebSockets.
@@ -13,11 +16,11 @@
 	}
 }
 
-simplestchat.example.com {
-	# Metrics are intentionally absent from the public HTTPS surface. Scrape the
-	# loopback backend directly with its bearer token instead.
-	@metrics path /metrics
-	respond @metrics "Not Found" 404
+{$CADDY_DOMAIN:simplestchat.example.com} {
+	# Operational endpoints stay private, even when enabled on the backend.
+	# Reach the loopback backend directly with its bearer token instead.
+	@private path /metrics /metrics/* /diagnostics /diagnostics/*
+	respond @private "Not Found" 404
 
 	header {
 		Strict-Transport-Security "max-age=31536000"
@@ -31,8 +34,9 @@ simplestchat.example.com {
 		-Server
 	}
 
+	# Do not enable access logging: WebSocket URLs can contain credentials.
 	encode zstd gzip
-	reverse_proxy 127.0.0.1:3000 {
+	reverse_proxy {$CADDY_UPSTREAM:127.0.0.1:3000} {
 		# Authenticates this proxy across Docker's bridge. Caddy's header_up
 		# replaces any client-supplied value. Set the same >=32-byte secret on
 		# Caddy and the application; never write it into this file.
