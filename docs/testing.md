@@ -167,6 +167,33 @@ the UI, database-backed API, account registration and restart. HTTP is published
 only on a random loopback port. Its containers and temporary database data are
 removed afterward. Set `PRODUCTION_IMAGE` to test another built image.
 
+### App-only releases and rollback
+
+CI also runs `build/test-release-container.py` against that existing production
+image, using the real release helper and public deployment templates. It checks
+a successful replacement, failed candidate startup and rollback while requiring
+PostgreSQL and Caddy to stay running.
+
+Run it only as root on a fresh, disposable Linux/amd64 host with a local Docker
+Engine (API 1.48+), Compose, OpenSSL, curl, `nsenter`, `update-ca-certificates`, and the
+[controller Python environment](../ops/ansible/README.md):
+
+```sh
+sudo ops/ansible/.venv/bin/python -B build/test-release-container.py \
+  --disposable-host --image simplestchat-ci:production \
+  --output /tmp/simplestchat-release-check
+```
+
+The output directory must be new. The helper refuses existing public deployment
+paths/containers and occupied fixture ports. It creates private deployment
+fixtures and installs a local test certificate authority; do not use a workstation
+or deployed VPS. Verified owned containers are removed on normal completion;
+an interrupted command leaves uncertain resources untouched and reports failed
+cleanup. Private fixture files and derived test images remain until the disposable
+host is destroyed. CI uploads only sanitized `report.json`,
+never private logs, credentials or database dumps. This does not reboot a host,
+exercise real users/media or establish production outage duration.
+
 [CI](../.github/workflows/ci.yml) also runs formatting, locked Rust builds/tests,
 web tests/build, readiness/shutdown and pinned Chromium integration tests, dependency audits, native
 dependency guards and production-image non-root/loader checks.

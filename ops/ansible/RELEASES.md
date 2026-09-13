@@ -5,6 +5,13 @@ the application. This path is for an already deployed public site with unchanged
 SQL migrations and runtime configuration. Use [public deployment](PUBLIC.md) for
 initial setup or reviewed schema/configuration changes.
 
+CI exercises this path using the real release helper, public templates and an
+already built production image on a disposable Linux host. It checks successful
+replacement and startup-failure rollback without restarting PostgreSQL or Caddy.
+See [release integration checks](../../docs/testing.md#app-only-releases-and-rollback)
+for prerequisites and evidence limits. This is not a deployment or reboot test of
+your VPS; measure the first controlled rollout before relying on its timings.
+
 ## Build on your Mac or CI
 
 Use Python 3.12+, Git, and a running local Docker Engine with Buildx. Docker API

@@ -307,7 +307,7 @@ jobs:
   deployment:
     name: Production image + deployment config
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       PRODUCTION_IMAGE: simplestchat-ci:production
       # Official Caddy image, pinned to the 2.11.4-alpine multi-architecture
@@ -396,6 +396,31 @@ jobs:
         env:
           CONTAINER_TEST_ARTIFACTS: ${{ runner.temp }}/container-smoke
         run: build/test-container.sh
+
+      - name: Install isolated release-container checks
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv openssl curl ca-certificates util-linux
+          python3 -m venv "${RUNNER_TEMP}/release-container-controller"
+          "${RUNNER_TEMP}/release-container-controller/bin/pip" install -r ops/ansible/requirements.txt
+
+      - name: App-only release and rollback on a disposable host
+        timeout-minutes: 10
+        run: |
+          sudo "${RUNNER_TEMP}/release-container-controller/bin/python" -B \
+            build/test-release-container.py --disposable-host \
+            --image "${PRODUCTION_IMAGE}" --output "${RUNNER_TEMP}/release-container"
+
+      - name: Preserve sanitized release-container report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-container
+          # Private fixture data and helper logs may contain credentials or DB data.
+          path: ${{ runner.temp }}/release-container/report.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Preserve container diagnostics
         if: ${{ !cancelled() }}
