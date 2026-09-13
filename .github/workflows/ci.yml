@@ -318,6 +318,28 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install checksum-pinned production Compose
+        timeout-minutes: 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Match the provisioned host: older config --hash omits env_file values.
+          # Digest verified against the official v5.5.1 release asset and checksum.
+          compose_download="$(mktemp -d "${RUNNER_TEMP}/simplestchat-compose.XXXXXXXX")"
+          curl --disable --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            --connect-timeout 10 --max-time 60 \
+            https://github.com/docker/compose/releases/download/v5.5.1/docker-compose-linux-x86_64 \
+            --output "${compose_download}/docker-compose"
+          printf '%s  %s\n' \
+            db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576 \
+            "${compose_download}/docker-compose" | sha256sum --check --strict
+          sudo install -d -m 0755 /usr/local/lib/docker/cli-plugins
+          sudo install -m 0755 "${compose_download}/docker-compose" /usr/local/lib/docker/cli-plugins/docker-compose
+          test "$(timeout --signal=TERM --kill-after=2s 10s docker compose version --short)" = 5.5.1
+          test "$(sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C \
+            timeout --signal=TERM --kill-after=2s 10s /usr/bin/docker --host unix:///var/run/docker.sock \
+            compose version --short)" = 5.5.1
+
       - name: Validate Compose rendering
         env:
           # Reserved example values only; no deployment secret enters CI.

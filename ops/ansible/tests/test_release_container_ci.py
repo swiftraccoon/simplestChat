@@ -8,6 +8,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
+COMPOSE_TOOL = "Install checksum-pinned production Compose"
 PREPARE = "Install isolated release-container checks"
 INTEGRATION = "App-only release and rollback on a disposable host"
 RETENTION = "Preserve sanitized release-container report"
@@ -41,6 +42,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
 
     def test_existing_image_is_built_and_smoked_once_before_release_integration(self):
         expected = [
+            COMPOSE_TOOL, "Validate Compose rendering",
             "Build production container", "Verify production image contents and user",
             "Production startup, migration and database-backed API smoke",
             PREPARE, INTEGRATION, RETENTION,
@@ -52,6 +54,32 @@ class ReleaseContainerCiTests(unittest.TestCase):
         build_steps = [step for step in self.steps
                        if re.search(r"\bdocker\s+(?:build|buildx\s+build)\b", step.get("run", ""))]
         self.assertEqual(build_steps, [self.step("Build production container")])
+
+    def test_compose_is_verified_before_install_and_matches_both_execution_users(self):
+        step = self.step(COMPOSE_TOOL)
+        self.assertEqual(step["timeout-minutes"], "3")
+        self.assertEqual(step["shell"], "bash")
+        self.assertNotIn("continue-on-error", step)
+        self.assertNotIn("if", step)
+        command = step["run"]
+        self.assertTrue(command.startswith("set -euo pipefail\n"))
+        self.assertIn('mktemp -d "${RUNNER_TEMP}/simplestchat-compose.XXXXXXXX"', command)
+        self.assertIn("curl --disable --fail --silent --show-error --location --proto '=https' --tlsv1.2", command)
+        self.assertIn("--connect-timeout 10 --max-time 60", command)
+        self.assertIn("https://github.com/docker/compose/releases/download/v5.5.1/docker-compose-linux-x86_64", command)
+        self.assertIn("db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576", command)
+        self.assertIn('"${compose_download}/docker-compose" | sha256sum --check --strict', command)
+        self.assertIn("sudo install -d -m 0755 /usr/local/lib/docker/cli-plugins", command)
+        installation = 'sudo install -m 0755 "${compose_download}/docker-compose" /usr/local/lib/docker/cli-plugins/docker-compose'
+        self.assertIn(installation, command)
+        self.assertLess(command.index("sha256sum --check --strict"), command.index(installation))
+        self.assertLess(command.index(installation), command.index("docker compose version --short"))
+        self.assertIn('test "$(timeout --signal=TERM --kill-after=2s 10s docker compose version --short)" = 5.5.1', command)
+        self.assertIn('sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C', command)
+        self.assertIn("timeout --signal=TERM --kill-after=2s 10s /usr/bin/docker --host unix:///var/run/docker.sock", command)
+        self.assertEqual(command.count('compose version --short)" = 5.5.1'), 2)
+        self.assertNotRegex(command, r"\b(?:apt|apt-get|systemctl|service|dockerd)\b")
+        self.assertNotRegex(command, r"\b(?:latest|prune|remove|upgrade)\b")
 
     def test_dependencies_use_existing_pinned_controller_requirements_in_an_isolated_venv(self):
         prepare = self.step(PREPARE)
