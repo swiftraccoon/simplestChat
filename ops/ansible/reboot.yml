@@ -1,0 +1,119 @@
+---
+- name: Reboot an explicitly selected prepared public chat host
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: true
+  serial: 1
+  pre_tasks:
+    - name: Require explicit reboot authorization and an existing public deployment
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - scpub_enabled | bool
+          - scpub_reboot | default(false) | bool
+          - scpub_config == '/etc/simplestchat-public'
+          - scpub_root == '/srv/simplestchat-public'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'x86_64'
+        fail_msg: Explicitly set scpub_reboot=true for an already provisioned public host; this interrupts active chat and media.
+
+    - name: Require existing protected public configuration
+      ansible.builtin.stat:
+        path: "{{ scpub_config }}/images.json"
+        follow: false
+      register: scpub_existing_selection
+
+    - name: Refuse to use reboot as initial provisioning
+      ansible.builtin.assert:
+        that:
+          - scpub_existing_selection.stat.isreg | default(false)
+          - scpub_existing_selection.stat.uid == 0
+          - scpub_existing_selection.stat.mode == '0600'
+        fail_msg: Prepare and deploy the public service with public.yml before using reboot.yml.
+
+  tasks:
+    - name: Install the isolated reboot helper directory
+      ansible.builtin.file:
+        path: /usr/local/libexec/simplestchat-public
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install the reboot command and shared release helpers
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: [reboot-public.py, release-public.py, release_artifact.py]
+
+    - name: Prepare, reboot once and recover the same public containers
+      when: not ansible_check_mode
+      block:
+        - name: Prepare the reboot with private evidence and ordered graceful service stops
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - "--unit=simplestchat-reboot-prepare-{{ ansible_facts.date_time.epoch }}"
+              - --property=Type=exec
+              - --property=RuntimeMaxSec=900
+              - --property=TimeoutStopSec=480
+              - --wait
+              - /usr/bin/python3
+              - -B
+              - /usr/local/libexec/simplestchat-public/reboot-public.py
+              - prepare
+          changed_when: true
+
+        - name: Reboot the explicitly authorized host and wait for Docker
+          ansible.builtin.reboot:
+            msg: Explicitly requested simplestChat public-host maintenance
+            connect_timeout: 10
+            reboot_timeout: 600
+            post_reboot_delay: 5
+            test_command: /usr/bin/systemctl is-active docker.service
+
+        - name: Restore the prepared services only after the boot identity changed
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - "--unit=simplestchat-reboot-resume-{{ ansible_facts.date_time.epoch }}"
+              - --property=Type=exec
+              - --property=RuntimeMaxSec=900
+              - --property=TimeoutStopSec=60
+              - --wait
+              - /usr/bin/python3
+              - -B
+              - /usr/local/libexec/simplestchat-public/reboot-public.py
+              - resume
+          changed_when: true
+
+      rescue:
+        - name: Attempt bounded service recovery only if the original boot remains active
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - "--unit=simplestchat-reboot-cancel-{{ ansible_facts.date_time.epoch }}"
+              - --property=Type=exec
+              - --property=RuntimeMaxSec=900
+              - --property=TimeoutStopSec=60
+              - --wait
+              - /usr/bin/python3
+              - -B
+              - /usr/local/libexec/simplestchat-public/reboot-public.py
+              - cancel
+          register: scpub_reboot_cancellation
+          changed_when: scpub_reboot_cancellation.rc | default(1) == 0
+          failed_when: false
+          ignore_unreachable: true
+
+        - name: Preserve the failed reboot result even when original-boot recovery succeeds
+          ansible.builtin.fail:
+            msg: >-
+              Reboot workflow failed at {{ ansible_failed_task.name }}. Same-boot cancellation was attempted if reachable;
+              recovery never converts this failure into success. Inspect {{ scpub_root }}/release-state.json and its
+              private results directory before any further maintenance. A failed post-reboot recovery requires review,
+              not an automatic retry or another reboot.

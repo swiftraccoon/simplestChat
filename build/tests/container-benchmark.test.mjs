@@ -205,6 +205,16 @@ test('public-project refusal precedes private workload state and never changes p
   assert.equal((publicChatGuard.match(/docker_owned /g) ?? []).length, 1);
 });
 
+test('persistent unfinished-release guard runs under the workload lock before Docker access', () => {
+  const guard = runner.indexOf("record = Path('/srv/simplestchat-public/release-state.json')");
+  assert.ok(guard > runner.indexOf('flock --exclusive --nonblock 9'));
+  assert.ok(guard < runner.indexOf('endpoint='));
+  assert.ok(guard < runner.indexOf('mkdir -m 700 -- "$output"'));
+  assert.match(runner, /stat\.S_ISREG\(metadata\.st_mode\) and metadata\.st_uid == 0/);
+  assert.match(runner, /stat\.S_IMODE\(parent\.st_mode\) == 0o700/);
+  assert.match(runner, /value\.get\('schemaVersion'\) == 1 and value\.get\('finalized'\) is True/);
+});
+
 function emergencyFixture(t, preparation = '') {
   const directory = mkdtempSync(path.join(tmpdir(), 'simplestchat-emergency-evidence.'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));

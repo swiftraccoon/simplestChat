@@ -32,6 +32,31 @@
         scpub_owned_service.stdout in ['active', 'activating', 'deactivating', 'reloading']
       check_mode: false
 
+    - name: Refuse public configuration changes while a release remains unfinished
+      tags: [always]
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - |
+            import json
+            import stat
+            from pathlib import Path
+            record = Path('/srv/simplestchat-public/release-state.json')
+            if record.exists() or record.is_symlink():
+                metadata = record.lstat()
+                assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
+                assert stat.S_IMODE(metadata.st_mode) == 0o600 and 0 < metadata.st_size <= 16384
+                parent = record.parent.lstat()
+                assert stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0
+                assert stat.S_IMODE(parent.st_mode) == 0o700
+                value = json.loads(record.read_text())
+                assert isinstance(value, dict) and type(value.get('schemaVersion')) is int
+                assert value.get('schemaVersion') == 1 and value.get('finalized') is True, 'Inspect and recover the unfinished public release first'
+            print('No unfinished public release.')
+      changed_when: false
+      check_mode: false
+
     - name: Require the public project to be stopped before editing its configuration
       ansible.builtin.command:
         argv:
@@ -209,3 +234,28 @@
         argv: [/usr/local/bin/simplestchat-public, config, --quiet]
       changed_when: false
       no_log: true
+
+    - name: Install the isolated routine-release helpers
+      ansible.builtin.file:
+        path: /usr/local/libexec/simplestchat-public
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Copy routine-release commands without starting a release
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: [release-public.py, release_artifact.py, reboot-public.py]
+
+    - name: Create private prebuilt release storage
+      ansible.builtin.file:
+        path: "{{ scpub_root }}/releases"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'

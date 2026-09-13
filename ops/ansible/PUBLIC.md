@@ -5,6 +5,10 @@ This opt-in deployment adds HTTPS, persistent PostgreSQL, and a guest-accessible
 images first; `scbench_revision` must identify their verified manifest. Deployment
 reuses that exact application image and pinned PostgreSQL/Caddy images.
 
+This is the initial/full-maintenance workflow. For routine same-schema updates,
+use [prebuilt app-only releases](RELEASES.md), which keep the database and proxy
+running and do not rebuild on the live VPS.
+
 ## Prepare configuration
 
 Add these host variables to your ignored `inventory.local.yml`:

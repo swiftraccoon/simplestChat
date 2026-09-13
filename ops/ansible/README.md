@@ -11,6 +11,10 @@ use the separate [public deployment guide](PUBLIC.md). Stop that project before
 host maintenance, image builds or private benchmarks; those operations refuse
 to run alongside the public service.
 
+For an existing public site, use [prebuilt app-only releases](RELEASES.md).
+They stage an image while chat is live and leave PostgreSQL/Caddy running during
+application replacement. The same guide covers explicit, ordered host reboots.
+
 Docker access is root-equivalent. Host orchestration runs as root; application
 and load-generator containers run as UID/GID 10001 with read-only filesystems,
 dropped capabilities and no additional privileges. No user is added to the
@@ -135,6 +139,9 @@ Offline checks require ShellCheck and `jq` in addition to the controller tools:
 export PATH="$PWD/ops/ansible/.venv/bin:$PATH"
 export ANSIBLE_CONFIG="$PWD/ops/ansible/ansible.cfg"
 ansible-lint --offline --strict ops/ansible
-ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/site.yml --syntax-check
+for playbook in site public release reboot; do
+  ansible-playbook -i ops/ansible/inventory.example.yml "ops/ansible/$playbook.yml" --syntax-check
+done
+shellcheck ops/ansible/files/*.sh
 python -m unittest discover -s ops/ansible/tests -v
 ```

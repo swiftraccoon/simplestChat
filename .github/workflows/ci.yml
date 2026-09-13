@@ -31,6 +31,8 @@ jobs:
           ansible-lint --offline --strict ops/ansible
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/site.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/public.yml --syntax-check
+          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/release.yml --syntax-check
+          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/reboot.yml --syntax-check
           shellcheck ops/ansible/files/*.sh
           python -m unittest discover -s ops/ansible/tests -v
 
@@ -212,6 +214,21 @@ jobs:
         env:
           E2E_ARTIFACTS: ${{ runner.temp }}/homepage-layout
         run: npm --prefix web/e2e run test:layout
+
+      - name: Automatic room recovery after an owned server restart
+        timeout-minutes: 3
+        run: |
+          node build/restart-browser-smoke.mjs --binary "$PWD/target/debug/simplestChat" \
+            --browser chromium --output "${RUNNER_TEMP}/restart-browser"
+
+      - name: Preserve browser restart diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: restart-browser
+          path: ${{ runner.temp }}/restart-browser
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Preserve homepage layout diagnostics
         if: ${{ !cancelled() }}

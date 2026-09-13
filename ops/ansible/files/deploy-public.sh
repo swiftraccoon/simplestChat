@@ -19,6 +19,23 @@ flock -n 9 || { echo 'A benchmark, image build or deployment is active.' >&2; ex
 if [[ -e /run/simplestchat-bench/current.json ]]; then
   jq -e '.schemaVersion == 1 and .finalized == true' /run/simplestchat-bench/current.json >/dev/null
 fi
+python3 - <<'PY'
+import json
+import stat
+from pathlib import Path
+record = Path('/srv/simplestchat-public/release-state.json')
+if record.exists() or record.is_symlink():
+    metadata = record.lstat()
+    assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
+    assert stat.S_IMODE(metadata.st_mode) == 0o600 and 0 < metadata.st_size <= 16384
+    parent = record.parent.lstat()
+    assert stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0
+    assert stat.S_IMODE(parent.st_mode) == 0o700
+    value = json.loads(record.read_text())
+    assert isinstance(value, dict) and type(value.get('schemaVersion')) is int
+    assert value.get('schemaVersion') == 1 and value.get('finalized') is True, 'Inspect and recover the unfinished public release first'
+print('No unfinished public release.')
+PY
 compose() { timeout --signal=TERM --kill-after=5s 180s /usr/local/bin/simplestchat-public "$@"; }
 docker_owned() { timeout --signal=TERM --kill-after=2s 15s docker "$@"; }
 # Deployment may retain an already-running private DB, but never migrates under

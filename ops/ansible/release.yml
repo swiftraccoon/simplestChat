@@ -1,0 +1,156 @@
+---
+- name: Stage a prebuilt production release without host maintenance
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: true
+  serial: 1
+  pre_tasks:
+    - name: Require an explicitly selected artifact and prepared public host
+      ansible.builtin.assert:
+        that:
+          - scpub_enabled | bool
+          - scpub_release_directory is defined
+          - scpub_release_directory is match('^/')
+          - scpub_config == '/etc/simplestchat-public'
+          - scpub_root == '/srv/simplestchat-public'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'x86_64'
+        fail_msg: Select an absolute controller artifact directory and an already provisioned public host.
+
+    - name: Validate artifact integrity on the controller before transfer
+      ansible.builtin.command:
+        argv:
+          - "{{ ansible_playbook_python }}"
+          - -B
+          - -c
+          - |
+            import json, sys
+            from pathlib import Path
+            sys.path.insert(0, sys.argv[1])
+            from release_artifact import sha256_file, validate_manifest, verify_archive
+            root = Path(sys.argv[2])
+            manifest = validate_manifest(root / 'release.json')
+            verify_archive(root / 'image.tar', manifest)
+            print(json.dumps({'revision': manifest['revision'], 'image.tar': manifest['archiveSha256'],
+                              'release.json': sha256_file(root / 'release.json')}))
+          - "{{ playbook_dir }}/files"
+          - "{{ scpub_release_directory }}"
+      delegate_to: localhost
+      become: false
+      register: scpub_validated_release
+      changed_when: false
+      check_mode: false
+
+    - name: Select the verified source revision
+      ansible.builtin.set_fact:
+        scpub_release_revision: "{{ (scpub_validated_release.stdout | from_json).revision }}"
+
+    - name: Require existing public configuration without exposing it
+      ansible.builtin.stat:
+        path: "{{ scpub_config }}/images.json"
+        follow: false
+      register: scpub_existing_selection
+
+    - name: Refuse to use routine release as initial provisioning
+      ansible.builtin.assert:
+        that:
+          - scpub_existing_selection.stat.isreg | default(false)
+          - scpub_existing_selection.stat.uid == 0
+          - scpub_existing_selection.stat.mode == '0600'
+        fail_msg: Prepare and deploy the public service with public.yml before routine releases.
+
+  tasks:
+    - name: Install the isolated release helper directory
+      ansible.builtin.file:
+        path: /usr/local/libexec/simplestchat-public
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install the release command and shared artifact validator
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: [release-public.py, release_artifact.py, reboot-public.py]
+
+    - name: Create private immutable release storage
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - "{{ scpub_root }}/releases"
+        - "{{ scpub_root }}/releases/{{ scpub_release_revision }}"
+
+    - name: Transfer artifact files without overwriting retained releases
+      ansible.builtin.copy:
+        src: "{{ scpub_release_directory }}/{{ item }}"
+        dest: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      loop: [release.json, image.tar]
+
+    - name: Verify retained destination bytes match this exact controller artifact
+      ansible.builtin.stat:
+        path: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: [release.json, image.tar]
+      register: scpub_transferred_files
+
+    - name: Refuse a different retained artifact for the same commit
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - item.stat.uid == 0
+          - item.stat.mode == '0600'
+          - item.stat.checksum == (scpub_validated_release.stdout | from_json)[item.item]
+        fail_msg: This commit already has different retained artifact bytes; inspect them rather than overwrite a tested release.
+      loop: "{{ scpub_transferred_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Import and verify the image while the public service remains running
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - "--unit=simplestchat-stage-{{ scpub_release_revision[:12] }}-{{ ansible_facts.date_time.epoch }}"
+          - --property=Type=exec
+          - --property=RuntimeMaxSec=600
+          - --property=TimeoutStopSec=60
+          - --wait
+          - /usr/bin/python3
+          - -B
+          - /usr/local/libexec/simplestchat-public/release-public.py
+          - stage
+          - "{{ scpub_release_revision }}"
+      changed_when: true
+      when: not ansible_check_mode
+
+    - name: Replace only the application when deployment was explicitly selected
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - "--unit=simplestchat-release-{{ scpub_release_revision[:12] }}-{{ ansible_facts.date_time.epoch }}"
+          - --property=Type=exec
+          - --property=RuntimeMaxSec=900
+          - --property=TimeoutStopSec=240
+          - --wait
+          - /usr/bin/python3
+          - -B
+          - /usr/local/libexec/simplestchat-public/release-public.py
+          - deploy
+          - "{{ scpub_release_revision }}"
+      changed_when: true
+      when:
+        - not ansible_check_mode
+        - scpub_release_deploy | default(false) | bool

@@ -1,11 +1,17 @@
 """Offline automation checks; never connect to a host or start Docker."""
 
 import json
+from contextlib import redirect_stdout
+import io
 import os
 from pathlib import Path
+import re
+import stat
 import subprocess
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from jinja2 import Environment, StrictUndefined
 import yaml
@@ -63,6 +69,7 @@ class AutomationTests(unittest.TestCase):
         for guard in [
             "Require the supported host", "Refuse provisioning during an active benchmark",
             "Refuse provisioning during an active image build", "Refuse provisioning while container cleanup remains uncertain",
+            "Refuse provisioning while a public release remains unfinished",
         ]:
             self.assertIn(guard, result.stdout)
         self.assertLess(result.stdout.index("Refuse provisioning"), result.stdout.index("Install the owned container lifecycle helpers"))
@@ -120,6 +127,69 @@ class AutomationTests(unittest.TestCase):
         self.assertLess(script.index(".finalized == true"), start)
         self.assertLess(end, script.index("verify_images()"))
         self.assertLess(end, script.index("docker build --pull"))
+
+    def test_persistent_release_guards_are_identical_and_precede_work(self):
+        scripts = [render(name) for name in ("build-images.sh.j2", "run-benchmark.sh.j2")]
+        scripts.append((ROOT.parents[1] / "build/benchmark-container.sh").read_text())
+        scripts.append((ROOT / "files/deploy-public.sh").read_text())
+        guards = [re.search(r"python3 - <<'PY'\n(.*?)\nPY", script, re.DOTALL).group(1) for script in scripts]
+        for filename in ("site.yml", "public.yml"):
+            play = yaml.safe_load((ROOT / filename).read_text())[0]
+            task = next(task for task in play["pre_tasks"]
+                        if "release-state.json" in str(task.get("ansible.builtin.command", {})))
+            self.assertEqual(task["tags"], ["always"])
+            self.assertIs(task["changed_when"], False)
+            self.assertIs(task["check_mode"], False)
+            guards.append(task["ansible.builtin.command"]["argv"][-1].rstrip())
+        self.assertTrue(all(guard == guards[0] for guard in guards))
+        for script, before, after in [
+            (scripts[0], "flock -n 9", "running_public=$("),
+            (scripts[2], "flock --exclusive --nonblock 9", "endpoint="),
+            (scripts[3], "flock -n 9", "compose()"),
+        ]:
+            self.assertLess(script.index(before), script.index(guards[0]))
+            self.assertLess(script.index(guards[0]), script.index(after))
+        self.assertLess(scripts[1].index(guards[0]), scripts[1].index("manifest="))
+
+    def test_persistent_release_guard_rejects_unfinished_or_unprotected_records(self):
+        guard = re.search(r"python3 - <<'PY'\n(.*?)\nPY", render("run-benchmark.sh.j2"), re.DOTALL).group(1)
+        completed = {"schemaVersion": 1, "finalized": True}
+        cases = [
+            ({}, True), ({"exists": False}, True),
+            ({"value": dict(completed, finalized=False)}, False),
+            ({"value": dict(completed, finalized=1)}, False),
+            ({"value": dict(completed, finalized="true")}, False),
+            ({"value": dict(completed, schemaVersion=True)}, False),
+            ({"value": dict(completed, schemaVersion=2)}, False),
+            ({"value": []}, False), ({"value": {}}, False),
+            ({"text": "invalid JSON"}, False),
+            ({"uid": 501}, False), ({"mode": stat.S_IFREG | 0o644}, False),
+            ({"mode": stat.S_IFDIR | 0o600}, False),
+            ({"mode": stat.S_IFIFO | 0o600}, False),
+            ({"mode": stat.S_IFLNK | 0o600}, False),
+            ({"exists": False, "symlink": True, "mode": stat.S_IFLNK | 0o600}, False),
+            ({"size": 0}, False), ({"size": 16385}, False),
+            ({"parent_uid": 501}, False),
+            ({"parent_mode": stat.S_IFDIR | 0o755}, False),
+            ({"parent_mode": stat.S_IFLNK | 0o700}, False),
+        ]
+        for changes, permitted in cases:
+            with self.subTest(changes=changes):
+                metadata = SimpleNamespace(st_uid=changes.get("uid", 0),
+                    st_mode=changes.get("mode", stat.S_IFREG | 0o600), st_size=changes.get("size", 100))
+                parent = SimpleNamespace(st_uid=changes.get("parent_uid", 0),
+                    st_mode=changes.get("parent_mode", stat.S_IFDIR | 0o700))
+                record = SimpleNamespace(exists=lambda: changes.get("exists", True),
+                    is_symlink=lambda: changes.get("symlink", False), lstat=lambda: metadata,
+                    parent=SimpleNamespace(lstat=lambda: parent),
+                    read_text=lambda: changes.get("text", json.dumps(changes.get("value", completed))))
+                with patch("pathlib.Path", return_value=record) as factory, redirect_stdout(io.StringIO()):
+                    if permitted:
+                        exec(compile(guard, "<release-guard>", "exec"), {})
+                    else:
+                        with self.assertRaises((AssertionError, ValueError)):
+                            exec(compile(guard, "<release-guard>", "exec"), {})
+                    factory.assert_called_once_with("/srv/simplestchat-public/release-state.json")
 
     def test_static_units_are_inspected_without_repeated_disable_changes(self):
         tasks = yaml.safe_load((ROOT / "tasks/benchmark.yml").read_text())

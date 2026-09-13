@@ -53,6 +53,20 @@ class PublicDeploymentTests(unittest.TestCase):
         self.assertIn('cacheable: false', text)
         self.assertIn('no_log: true', text)
 
+    def test_unfinished_release_preflight_precedes_public_configuration(self):
+        play = yaml.safe_load((ROOT / 'public.yml').read_text())[0]
+        guards = play['pre_tasks']
+        release = next(task for task in guards if 'release-state.json' in str(task))
+        stopped = next(task for task in guards if 'scpub_active_containers' == task.get('register'))
+        self.assertLess(guards.index(release), guards.index(stopped))
+        self.assertEqual(release['tags'], ['always'])
+        self.assertIs(release['changed_when'], False)
+        self.assertIs(release['check_mode'], False)
+        script = (ROOT / 'files/deploy-public.sh').read_text()
+        journal = script.index("record = Path('/srv/simplestchat-public/release-state.json')")
+        self.assertLess(script.index('flock -n 9'), journal)
+        self.assertLess(journal, script.index('compose()'))
+
 
 if __name__ == '__main__':
     unittest.main()

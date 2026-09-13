@@ -2,6 +2,23 @@
 set -euo pipefail
 umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+python3 - <<'PY'
+import json
+import stat
+from pathlib import Path
+record = Path('/srv/simplestchat-public/release-state.json')
+if record.exists() or record.is_symlink():
+    metadata = record.lstat()
+    assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
+    assert stat.S_IMODE(metadata.st_mode) == 0o600 and 0 < metadata.st_size <= 16384
+    parent = record.parent.lstat()
+    assert stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0
+    assert stat.S_IMODE(parent.st_mode) == 0o700
+    value = json.loads(record.read_text())
+    assert isinstance(value, dict) and type(value.get('schemaVersion')) is int
+    assert value.get('schemaVersion') == 1 and value.get('finalized') is True, 'Inspect and recover the unfinished public release first'
+print('No unfinished public release.')
+PY
 manifest='{{ scbench_root }}/artifacts/{{ scbench_revision }}/images.json'
 config=/etc/simplestchat-bench/benchmark.json
 jq -e --arg revision '{{ scbench_revision }}' '.schemaVersion==1 and .revision==$revision and .passed==true' "$manifest" >/dev/null
