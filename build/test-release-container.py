@@ -364,6 +364,55 @@ class Harness:
         for kind in ("candidate", "failed"):
             self.artifact(self.fixture_images[kind])
 
+    def validator_startup_diagnostic(self, attempt, candidate):
+        """Expose only the fixed, secret-free validator's verified startup state."""
+        original_failure = self.commands.last_failure
+        unavailable = "ValidatorNameUnavailable"
+        try:
+            path = attempt / "validation-name.txt"
+            metadata = path.lstat()
+            require(stat.S_ISREG(metadata.st_mode) and 0 < metadata.st_size <= 128,
+                    "Validator name must be a bounded regular file")
+            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(descriptor, "r", encoding="utf-8") as source:
+                opened = os.fstat(source.fileno())
+                require(stat.S_ISREG(opened.st_mode) and opened.st_size <= 128
+                        and (opened.st_dev, opened.st_ino) == (metadata.st_dev, metadata.st_ino),
+                        "Validator name changed during inspection")
+                name = source.read(129).strip()
+            require(re.fullmatch(r"scpub-release-validate-[a-f0-9]{32}", name), "Invalid validator name")
+            unavailable = "ValidatorInspectionUnavailable"
+            result = self.commands.docker("inspect", "--format",
+                '{"id":{{json .Id}},"name":{{json .Name}},"image":{{json .Image}},'
+                '"user":{{json .Config.User}},"entrypoint":{{json .Config.Entrypoint}},'
+                '"network":{{json .HostConfig.NetworkMode}},"readOnly":{{json .HostConfig.ReadonlyRootfs}},'
+                '"state":{{json .State}}}', name, timeout=10, success=False)
+            require(result.code == 0, "Validator inspection failed")
+            value = json.loads(result.text())
+            unavailable = "ValidatorOwnershipMismatch"
+            require(isinstance(value.get("id"), str) and ID.fullmatch(value["id"])
+                    and value.get("name") == "/" + name and value.get("image") == candidate["image"]
+                    and value.get("user") == "10001:10001" and value.get("entrypoint") == ["/usr/bin/timeout"]
+                    and value.get("network") == "none" and value.get("readOnly") is True,
+                    "Validator ownership does not match the failed release")
+            unavailable = "ValidatorStateUnavailable"
+            state = value["state"]
+            require(type(state.get("ExitCode")) is int and 0 <= state["ExitCode"] <= 255
+                    and type(state.get("OOMKilled")) is bool and isinstance(state.get("Error"), str)
+                    and state.get("Status") in ("created", "running", "paused", "restarting", "removing", "exited", "dead"),
+                    "Validator startup state is malformed")
+            self.report["validatorStartup"] = {
+                "diagnosticUnavailable": False, "exitCode": state["ExitCode"], "status": state["Status"],
+                "oomKilled": state["OOMKilled"], "error": state["Error"][:2048],
+                "errorTruncated": len(state["Error"]) > 2048,
+            }
+        except Exception:
+            # Missing or changed resources are not evidence of a successful
+            # validator. Never replace the original failed release result.
+            self.report["validatorStartup"] = {"diagnosticUnavailable": True, "reason": unavailable}
+        finally:
+            self.commands.last_failure = original_failure
+
     def invoke_release(self, action, candidate, *, failure=False):
         before = set((ROOT / "results").glob("release.*"))
         command = self.commands.run([sys.executable, "-B", str(FILES / "release-public.py"), action,
@@ -375,6 +424,8 @@ class Harness:
         self.report["lastRelease"] = {key: outcome[key] for key in (
             "action", "revision", "phase", "passed", "failure", "rollbackAttempted", "rollbackPassed",
         ) if key in outcome}
+        if command.code != 0:
+            self.validator_startup_diagnostic(attempt, candidate)
         require(outcome["action"] == action and outcome["revision"] == candidate["revision"], "Release evidence identity mismatch")
         require((command.code != 0 if failure else command.code == 0)
                 and outcome["passed"] is (not failure), "Release exit status and original outcome disagree")

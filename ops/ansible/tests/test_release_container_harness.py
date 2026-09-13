@@ -512,6 +512,145 @@ class HarnessEvidenceTests(HarnessTestCase):
                 self.assertEqual(stat.S_IMODE((output / "private").stat().st_mode), 0o700)
 
 
+class HarnessValidatorDiagnosticTests(HarnessTestCase):
+    def fixture(self):
+        harness = self.harness()
+        harness.commands = Mock()
+        harness.commands.last_failure = {"number": 56, "operation": "release-public.py stage", "exitStatus": 1}
+        attempt = harness.private / "release-attempt"
+        attempt.mkdir(mode=0o700)
+        name = "scpub-release-validate-" + TOKEN
+        (attempt / "validation-name.txt").write_text(name)
+        value = {"id": CONTAINER, "name": "/" + name, "image": IMAGE, "user": "10001:10001",
+                 "entrypoint": ["/usr/bin/timeout"], "network": "none", "readOnly": True,
+                 "state": {"ExitCode": 128, "Status": "created", "OOMKilled": False,
+                           "Error": "failed to create task: exec /usr/bin/timeout: no such file or directory"}}
+        harness.commands.docker.return_value = TextResult(json.dumps(value))
+        return harness, attempt, value
+
+    def test_verified_validator_startup_error_is_projected_without_general_logs_or_environment(self):
+        harness, attempt, value = self.fixture()
+        previous_failure = deepcopy(harness.commands.last_failure)
+        harness.validator_startup_diagnostic(attempt, {"image": IMAGE})
+        self.assertEqual(harness.report["validatorStartup"], {
+            "diagnosticUnavailable": False, "exitCode": 128, "status": "created", "oomKilled": False,
+            "error": value["state"]["Error"], "errorTruncated": False,
+        })
+        self.assertIs(harness.report["passed"], False)
+        self.assertEqual(harness.commands.last_failure, previous_failure)
+        harness.commands.docker.assert_called_once()
+        call = harness.commands.docker.call_args
+        self.assertEqual(call.args[:2], ("inspect", "--format"))
+        self.assertEqual(call.args[-1], "scpub-release-validate-" + TOKEN)
+        self.assertEqual(call.kwargs, {"timeout": 10, "success": False})
+        self.assertNotIn(".Config.Env", call.args[2])
+        self.assertNotIn("logs", call.args)
+        self.assertNotIn(IMAGE, json.dumps(harness.report["validatorStartup"]))
+
+    def test_missing_symlink_nonregular_oversized_or_invalid_name_never_contacts_docker(self):
+        for kind in ("missing", "symlink", "directory", "oversized", "invalid", "multiline"):
+            with self.subTest(kind=kind):
+                harness, attempt, _ = self.fixture()
+                path = attempt / "validation-name.txt"
+                path.unlink()
+                if kind == "symlink":
+                    target = attempt / "other"
+                    target.write_text("scpub-release-validate-" + TOKEN)
+                    path.symlink_to(target)
+                elif kind == "directory":
+                    path.mkdir()
+                elif kind == "oversized":
+                    path.write_text("x" * 129)
+                elif kind == "invalid":
+                    path.write_text("unrelated-container")
+                elif kind == "multiline":
+                    path.write_text("scpub-release-validate-" + TOKEN + "\nother")
+                harness.validator_startup_diagnostic(attempt, {"image": IMAGE})
+                self.assertEqual(harness.report["validatorStartup"], {
+                    "diagnosticUnavailable": True, "reason": "ValidatorNameUnavailable",
+                })
+                harness.commands.docker.assert_not_called()
+
+    def test_every_identity_constraint_is_required_before_startup_error_is_published(self):
+        for key, replacement in (("id", "a" * 12), ("name", "/other"), ("image", FAILED_IMAGE),
+                                 ("user", "0:0"), ("entrypoint", ["/bin/sh"]), ("network", "bridge"),
+                                 ("readOnly", False)):
+            with self.subTest(key=key):
+                harness, attempt, value = self.fixture()
+                value[key] = replacement
+                value["state"]["Error"] = "PRIVATE_ERROR_FROM_UNVERIFIED_CONTAINER"
+                harness.commands.docker.return_value = TextResult(json.dumps(value))
+                harness.validator_startup_diagnostic(attempt, {"image": IMAGE})
+                self.assertEqual(harness.report["validatorStartup"], {
+                    "diagnosticUnavailable": True, "reason": "ValidatorOwnershipMismatch",
+                })
+                self.assertNotIn("PRIVATE_ERROR", json.dumps(harness.report))
+                self.assertIs(harness.report["passed"], False)
+
+    def test_state_projection_is_typed_and_error_length_is_bounded(self):
+        harness, attempt, value = self.fixture()
+        value["state"]["Error"] = "x" * 4096
+        value["state"]["Other"] = "PRIVATE_UNSELECTED_STATE"
+        value["environment"] = ["SECRET=PRIVATE_UNSELECTED_ENVIRONMENT"]
+        harness.commands.docker.return_value = TextResult(json.dumps(value))
+        harness.validator_startup_diagnostic(attempt, {"image": IMAGE})
+        diagnostic = harness.report["validatorStartup"]
+        self.assertEqual(diagnostic["error"], "x" * 2048)
+        self.assertIs(diagnostic["errorTruncated"], True)
+        self.assertNotIn("PRIVATE_UNSELECTED", json.dumps(diagnostic))
+        for key, replacement in (("ExitCode", True), ("ExitCode", -1), ("OOMKilled", 0),
+                                 ("Status", "PRIVATE_UNEXPECTED_STATUS"), ("Error", {"private": "data"})):
+            with self.subTest(key=key, replacement=replacement):
+                harness, attempt, value = self.fixture()
+                value["state"][key] = replacement
+                harness.commands.docker.return_value = TextResult(json.dumps(value))
+                harness.validator_startup_diagnostic(attempt, {"image": IMAGE})
+                self.assertEqual(harness.report["validatorStartup"], {
+                    "diagnosticUnavailable": True, "reason": "ValidatorStateUnavailable",
+                })
+
+    def test_failed_or_malformed_inspection_is_unavailable_without_masking_original_command(self):
+        for result in (TextResult("PRIVATE_DAEMON_ERROR", code=1), TextResult("malformed-json")):
+            with self.subTest(code=result.code):
+                harness, attempt, _ = self.fixture()
+                previous_failure = deepcopy(harness.commands.last_failure)
+
+                def inspect(*_args, **_kwargs):
+                    harness.commands.last_failure = {"number": 57, "operation": "docker inspect", "exitStatus": 1}
+                    return result
+
+                harness.commands.docker.side_effect = inspect
+                harness.validator_startup_diagnostic(attempt, {"image": IMAGE})
+                self.assertEqual(harness.report["validatorStartup"], {
+                    "diagnosticUnavailable": True, "reason": "ValidatorInspectionUnavailable",
+                })
+                self.assertEqual(harness.commands.last_failure, previous_failure)
+                self.assertNotIn("PRIVATE_DAEMON_ERROR", json.dumps(harness.report))
+
+    def test_failed_release_retains_validator_evidence_before_the_existing_failure_assertion(self):
+        harness, original_attempt, value = self.fixture()
+        root = self.directory / "service"
+        (root / "results").mkdir(parents=True)
+        outcome = {"action": "stage", "revision": REVISION, "phase": "stage", "passed": False,
+                   "failure": "Command 004 failed; inspect private output"}
+
+        def invoke(_args, **_kwargs):
+            attempt = root / "results" / "release.owned"
+            attempt.mkdir()
+            (attempt / "outcome.json").write_text(json.dumps(outcome))
+            (attempt / "validation-name.txt").write_bytes((original_attempt / "validation-name.txt").read_bytes())
+            return TextResult(code=1)
+
+        harness.commands.run.side_effect = invoke
+        with patch.object(HARNESS, "ROOT", root), \
+                self.assertRaisesRegex(HARNESS.CheckError, "Release exit status and original outcome disagree"):
+            harness.invoke_release("stage", {"revision": REVISION, "image": IMAGE})
+        self.assertEqual(harness.report["lastRelease"], outcome)
+        self.assertEqual(harness.report["validatorStartup"]["error"], value["state"]["Error"])
+        self.assertIs(harness.report["passed"], False)
+        self.assertEqual(json.loads((root / "results/release.owned/outcome.json").read_text()), outcome)
+
+
 class HarnessCommandTests(HarnessTestCase):
     def test_nonzero_command_summary_excludes_private_arguments_and_environment(self):
         private_value = "PRIVATE_DATABASE_PASSWORD_AND_BACKUP_CONTENT"
