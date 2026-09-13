@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -34,6 +35,10 @@ NEW_IMAGE = 'sha256:' + 'c' * 64
 OLD_IMAGE = 'sha256:' + 'd' * 64
 TAG = f'simplestchat-release/production:{REVISION}'
 MIGRATIONS = {'1': hashlib.sha384(b'SELECT 1;\n').hexdigest()}
+IMAGE_TEMPLATE = (
+    '{"id":{{json .Id}},"os":{{json .Os}},"architecture":{{json .Architecture}},"user":{{json .Config.User}},'
+    '"labels":{{json .Config.Labels}},"cmd":{{json .Config.Cmd}},"entrypoint":{{json (index .Config "Entrypoint")}}}'
+)
 
 
 def write_fixture_artifact(directory):
@@ -209,6 +214,112 @@ class FixtureRunner:
                 assert supplied == b'PGDMP-fixture-only'
                 return b'fixture validated archive table of contents\n'
         raise AssertionError(f'Unexpected Docker command: {args}')
+
+
+class PublicImageIdentityTests(unittest.TestCase):
+    def metadata(self):
+        return {
+            'id': NEW_IMAGE, 'os': 'linux', 'architecture': 'amd64', 'user': '10001:10001',
+            'labels': {'org.opencontainers.image.revision': REVISION},
+            'cmd': ['/app/simplestChat'], 'entrypoint': None,
+        }
+
+    def test_only_optional_entrypoint_uses_safe_map_lookup(self):
+        runner = Mock()
+        runner.docker.return_value = json.dumps(self.metadata()).encode()
+        self.assertEqual(PUBLIC.image_identity(runner, TAG, REVISION), NEW_IMAGE)
+        runner.docker.assert_called_once_with('image', 'inspect', '--format', IMAGE_TEMPLATE, TAG)
+        self.assertEqual(IMAGE_TEMPLATE.count('index '), 1)
+        self.assertNotIn('.Config.Entrypoint', IMAGE_TEMPLATE)
+
+    def test_empty_entrypoint_forms_are_allowed_but_nonempty_or_malformed_values_are_rejected(self):
+        for entrypoint in (None, [], ['/bin/sh'], ['/app/simplestChat'], '', False, {}):
+            with self.subTest(entrypoint=entrypoint):
+                value = self.metadata()
+                value['entrypoint'] = entrypoint
+                runner = Mock()
+                runner.docker.return_value = json.dumps(value).encode()
+                if entrypoint is None or entrypoint == []:
+                    self.assertEqual(PUBLIC.image_identity(runner, TAG, REVISION), NEW_IMAGE)
+                else:
+                    with self.assertRaisesRegex(PUBLIC.ReleaseError, 'Unexpected image entrypoint'):
+                        PUBLIC.image_identity(runner, TAG, REVISION)
+
+    def test_required_runtime_identity_and_revision_remain_strict(self):
+        for key, replacement, reason in (
+            ('id', 'c' * 64, 'content-addressed'), ('os', 'windows', 'platform or runtime user'),
+            ('architecture', 'arm64', 'platform or runtime user'), ('user', '0:0', 'platform or runtime user'),
+            ('labels', {}, 'revision mismatch'), ('labels', {'org.opencontainers.image.revision': OLD_REVISION}, 'revision mismatch'),
+            ('cmd', [], 'entrypoint'), ('cmd', ['/bin/sh'], 'entrypoint'),
+        ):
+            with self.subTest(key=key, replacement=replacement):
+                value = self.metadata()
+                value[key] = replacement
+                runner = Mock()
+                runner.docker.return_value = json.dumps(value).encode()
+                with self.assertRaisesRegex(PUBLIC.ReleaseError, reason):
+                    PUBLIC.image_identity(runner, TAG, REVISION)
+
+    @unittest.skipUnless(shutil.which('go'), 'Optional Go template check requires local Go; no Docker daemon is used')
+    def test_actual_go_template_tolerates_only_the_optional_absent_entrypoint(self):
+        source = r'''package main
+import ("encoding/json"; "fmt"; "os"; "text/template")
+func main() {
+    var input struct { Format string; Value any }
+    if err := json.NewDecoder(os.Stdin).Decode(&input); err != nil { panic(err) }
+    functions := template.FuncMap{"json": func(value any) (string, error) {
+        result, err := json.Marshal(value); return string(result), err
+    }}
+    rendered, err := template.New("inspect").Option("missingkey=error").Funcs(functions).Parse(input.Format)
+    if err == nil { err = rendered.Execute(os.Stdout, input.Value) }
+    if err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
+}
+'''
+        with tempfile.TemporaryDirectory(prefix='simplestchat-image-template.') as temporary:
+            directory = Path(temporary)
+            code, executable = directory / 'inspect.go', directory / 'inspect'
+            code.write_text(source)
+            environment = dict(os.environ, GOTOOLCHAIN='local', GOPROXY='off', GOSUMDB='off', GOWORK='off', CGO_ENABLED='0')
+            build = subprocess.run([shutil.which('go'), 'build', '-o', str(executable), str(code)],
+                                   env=environment, capture_output=True, text=True, timeout=60, check=False)
+            self.assertEqual(build.returncode, 0, build.stderr)
+            captured = Mock()
+            captured.docker.return_value = json.dumps(self.metadata()).encode()
+            PUBLIC.image_identity(captured, TAG, REVISION)
+            actual_template = captured.docker.call_args.args[3]
+            value = {'Id': NEW_IMAGE, 'Os': 'linux', 'Architecture': 'amd64', 'Config': {
+                'User': '10001:10001', 'Labels': {'org.opencontainers.image.revision': REVISION},
+                'Cmd': ['/app/simplestChat'],
+            }}
+
+            def render(data, template=actual_template):
+                return subprocess.run([str(executable)], input=json.dumps({'Format': template, 'Value': data}),
+                                      capture_output=True, text=True, timeout=5, check=False)
+
+            for form, entrypoint in (('omitted', None), ('null', None), ('empty', []), ('nonempty', ['/bin/sh'])):
+                with self.subTest(form=form):
+                    data = deepcopy(value)
+                    if form != 'omitted':
+                        data['Config']['Entrypoint'] = entrypoint
+                    result = render(data)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(json.loads(result.stdout)['entrypoint'], entrypoint)
+                    runner = Mock()
+                    runner.docker.return_value = result.stdout.encode()
+                    if form == 'nonempty':
+                        with self.assertRaisesRegex(PUBLIC.ReleaseError, 'Unexpected image entrypoint'):
+                            PUBLIC.image_identity(runner, TAG, REVISION)
+                    else:
+                        self.assertEqual(PUBLIC.image_identity(runner, TAG, REVISION), NEW_IMAGE)
+            # Demonstrate the original Docker failure and retain strict Go
+            # lookup behavior for every mandatory Config identity field.
+            broken = actual_template.replace('(index .Config "Entrypoint")', '.Config.Entrypoint')
+            self.assertNotEqual(render(value, broken).returncode, 0)
+            for required in ('User', 'Labels', 'Cmd'):
+                data = deepcopy(value)
+                del data['Config'][required]
+                with self.subTest(missing=required):
+                    self.assertNotEqual(render(data).returncode, 0)
 
 
 class PublicReleaseTests(unittest.TestCase):

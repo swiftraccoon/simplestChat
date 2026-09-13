@@ -185,9 +185,11 @@ def workload_lock(*, after_reboot=False, cancel_reboot=False):
 
 
 def image_identity(runner, selector, revision):
+    # Docker may omit an unset optional Entrypoint from the image Config map.
+    # Keep required fields strict; index only this optional value to obtain null.
     value = json.loads(runner.docker('image', 'inspect', '--format',
         '{"id":{{json .Id}},"os":{{json .Os}},"architecture":{{json .Architecture}},"user":{{json .Config.User}},'
-        '"labels":{{json .Config.Labels}},"cmd":{{json .Config.Cmd}},"entrypoint":{{json .Config.Entrypoint}}}', selector))
+        '"labels":{{json .Config.Labels}},"cmd":{{json .Config.Cmd}},"entrypoint":{{json (index .Config "Entrypoint")}}}', selector))
     require(isinstance(value['id'], str) and ID.fullmatch(value['id']), 'Missing local content-addressed image ID')
     require(value['os'] == 'linux' and value['architecture'] == 'amd64' and value['user'] == '10001:10001',
             'Unexpected image platform or runtime user')

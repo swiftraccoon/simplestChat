@@ -195,6 +195,39 @@ class HarnessInputTests(HarnessTestCase):
 
 
 class HarnessPreflightTests(HarnessTestCase):
+    def test_base_image_inspection_handles_only_optional_entrypoint_with_map_lookup(self):
+        harness = self.harness()
+        harness.commands = Mock()
+        replies = {
+            ('ps', '--all', '--quiet'): '',
+            ('network', 'ls', '--quiet', '--filter', 'label=com.docker.compose.project=simplestchat-public'): '',
+            ('image', 'save', '--help'): 'Options:\n      --platform string   Export a specific platform\n',
+            ('version', '--format', '{{.Server.APIVersion}}'): '1.55',
+            ('buildx', 'inspect', 'default'): 'Name: default\nDriver: docker\n',
+        }
+
+        class InspectionCaptured(Exception):
+            pass
+
+        def inspect(*args, **kwargs):
+            self.assertEqual(kwargs, {})
+            if args[:2] == ('image', 'inspect'):
+                self.assertEqual(args, (
+                    'image', 'inspect', '--format',
+                    '{"id":{{json .Id}},"os":{{json .Os}},"architecture":{{json .Architecture}},"user":{{json .Config.User}},'
+                    '"cmd":{{json .Config.Cmd}},"entrypoint":{{json (index .Config "Entrypoint")}}}',
+                    'simplestchat-ci:production',
+                ))
+                raise InspectionCaptured
+            self.assertIn(args, replies, 'Stop before any fixture image or host mutation')
+            return TextResult(replies[args])
+
+        harness.commands.docker.side_effect = inspect
+        with patch.object(HARNESS, 'host_preflight'), self.assertRaises(InspectionCaptured):
+            harness.setup()
+        self.assertEqual(harness.commands.docker.call_count, 6)
+        self.assertIs(harness.created_paths, False)
+
     def test_wrong_platform_architecture_or_uid_refuses_before_tool_or_socket_checks(self):
         for platform, machine, uid in (("darwin", "arm64", 0), ("linux", "aarch64", 0), ("linux", "x86_64", 501)):
             with self.subTest(platform=platform, machine=machine, uid=uid), ExitStack() as stack:

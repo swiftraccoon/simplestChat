@@ -313,7 +313,7 @@ class Harness:
                 "Fixture builds require the default local Docker builder")
         metadata = json.loads(self.commands.docker("image", "inspect", "--format",
             '{"id":{{json .Id}},"os":{{json .Os}},"architecture":{{json .Architecture}},"user":{{json .Config.User}},'
-            '"cmd":{{json .Config.Cmd}},"entrypoint":{{json .Config.Entrypoint}}}', self.image).text())
+            '"cmd":{{json .Config.Cmd}},"entrypoint":{{json (index .Config "Entrypoint")}}}', self.image).text())
         require(metadata["os"] == "linux" and metadata["architecture"] == "amd64" and metadata["user"] == "10001:10001"
                 and metadata["cmd"] == ["/app/simplestChat"] and metadata["entrypoint"] in (None, [])
                 and RELEASE.ID.fullmatch(metadata["id"]), "Select the already-built Linux/amd64 production image")
