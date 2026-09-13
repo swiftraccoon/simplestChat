@@ -32,8 +32,16 @@
 !web/package.json
 !web/package-lock.json
 !web/tsconfig.json
+!web/tsconfig.app.json
+!web/tsconfig.tools.json
 !web/vite.config.ts
 !web/index.html
+!web/bundle-budget.json
+!web/scripts/
+!web/scripts/check-bundle.mjs
+!web/public/
+!web/public/help.html
+!web/public/help.css
 !web/src/
 !web/src/*.ts
 !web/src/*.css
