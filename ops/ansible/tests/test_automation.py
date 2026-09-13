@@ -105,6 +105,22 @@ class AutomationTests(unittest.TestCase):
         self.assertLess(tasks.index("docker.preferences.j2"), tasks.index("docker-ce={{"))
         self.assertIn("allow_downgrade: false", tasks)
 
+    def test_image_build_refuses_a_running_public_project_before_image_work(self):
+        script = render("build-images.sh.j2")
+        start = script.index("running_public=$(timeout --signal=TERM --kill-after=1s 8s docker ps --quiet")
+        end = script.index('cd "$source_root"')
+        guard = script[start:end]
+        self.assertIn("--filter 'label=com.docker.compose.project=simplestchat-public'", guard)
+        self.assertIn("Cannot verify whether public chat is running", guard)
+        self.assertIn('[[ -z "$running_public" ]] || {', guard)
+        self.assertIn("Public chat is running; stop it explicitly", guard)
+        self.assertEqual(guard.count("exit 1;"), 2, "Both unknown and running public states must fail closed")
+        self.assertEqual(guard.count("docker "), 1, "The public preflight may only inspect containers")
+        self.assertLess(script.index("flock -n 9"), start)
+        self.assertLess(script.index(".finalized == true"), start)
+        self.assertLess(end, script.index("verify_images()"))
+        self.assertLess(end, script.index("docker build --pull"))
+
     def test_static_units_are_inspected_without_repeated_disable_changes(self):
         tasks = yaml.safe_load((ROOT / "tasks/benchmark.yml").read_text())
         inspection = next(task for task in tasks if task.get("register") == "scbench_unit_enablement")

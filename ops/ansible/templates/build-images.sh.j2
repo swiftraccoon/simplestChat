@@ -22,6 +22,13 @@ if [[ -e /run/simplestchat-bench/current.json ]]; then
   [[ ! -L /run/simplestchat-bench/current.json && $(stat -c '%u:%a' /run/simplestchat-bench/current.json) == 0:600 ]]
   jq -e '.schemaVersion == 1 and .finalized == true' /run/simplestchat-bench/current.json >/dev/null
 fi
+running_public=$(timeout --signal=TERM --kill-after=1s 8s docker ps --quiet \
+  --filter 'label=com.docker.compose.project=simplestchat-public') || {
+  echo 'Cannot verify whether public chat is running; refusing the image build.' >&2; exit 1;
+}
+[[ -z "$running_public" ]] || {
+  echo 'Public chat is running; stop it explicitly before starting an image build.' >&2; exit 1;
+}
 cd "$source_root"
 [[ $(git rev-parse HEAD) == "$revision" ]]
 [[ -z $(git status --porcelain --untracked-files=all) ]]

@@ -35,6 +35,16 @@ endpoint="${DOCKER_HOST:-$(docker context inspect --format '{{.Endpoints.docker.
 [[ "$endpoint" =~ ^unix:///[^[:cntrl:]]+$ ]]
 unset DOCKER_CONTEXT DOCKER_HOST DOCKER_TLS_VERIFY DOCKER_CERT_PATH
 docker_owned() { timeout --signal=TERM --kill-after=1s 8s docker --host "$endpoint" "$@"; }
+require_public_chat_stopped() {
+  local running_public
+  running_public=$(docker_owned ps --quiet --filter 'label=com.docker.compose.project=simplestchat-public') || {
+    echo 'Cannot verify whether public chat is running; refusing the private benchmark.' >&2; return 1;
+  }
+  [[ -z "$running_public" ]] || {
+    echo 'Public chat is running; stop it explicitly before starting a private benchmark.' >&2; return 1;
+  }
+}
+require_public_chat_stopped
 for image in "$server_image" "$generator_image"; do
   [[ $(docker_owned image inspect --format '{{.Id}}' "$image") == "$image" ]]
   [[ $(docker_owned image inspect --format '{{.Config.User}}' "$image") == 10001:10001 ]]

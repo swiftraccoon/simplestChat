@@ -19,6 +19,7 @@ const countFilter = extract(runner, /zero_counts\(\) \{\s+awk '([\s\S]*?)' "\$1"
 const ownershipFilter = extract(cleanup, /'(\.id == \$id and \.image == \$image[^']*)'/);
 const exitFilter = extract(runner, /jq -e '(\.Running == false and \.ExitCode == 0[^']*)'/);
 const boundedFunction = extract(runner, /^(bounded\(\) \{[^\n]+\})$/m);
+const publicChatGuard = extract(runner, /^(require_public_chat_stopped\(\) \{[\s\S]*?^\})$/m);
 const emergencyBlock = extract(cleanup, /(if \[\[ "\$mode" == --emergency \]\]; then\n  retained_result=''[\s\S]*?\nfi)\nfor role/);
 const invoke = (command, args, input = '') => {
   const result = spawnSync(command, args, {
@@ -168,6 +169,40 @@ test('bounded option validator rejects malformed numbers before arithmetic evalu
     assert.notEqual(result.status, 0, value);
     assert.equal(result.stdout, '');
   }
+});
+
+test('private benchmark permits an idle public project and refuses active or unknown public state', () => {
+  const script = `set -eu
+fixture_containers=$1
+fixture_status=$2
+docker_owned() {
+  [[ $# == 4 && $1 == ps && $2 == --quiet && $3 == --filter && $4 == label=com.docker.compose.project=simplestchat-public ]] || return 97
+  printf '%s' "$fixture_containers"
+  return "$fixture_status"
+}
+${publicChatGuard}
+require_public_chat_stopped`;
+  for (const [containers, status, permitted] of [
+    ['', 0, true], ['a'.repeat(12), 0, false], ['a'.repeat(12) + '\n' + 'b'.repeat(12), 0, false],
+    [' ', 0, false], ['unknown output', 0, false], ['', 1, false], ['', 124, false],
+    ['a'.repeat(12), 1, false],
+  ]) {
+    const result = invoke('bash', ['-c', script, 'fixture', containers, String(status)]);
+    assert.equal(result.status === 0, permitted, `containers=${JSON.stringify(containers)}, status=${status}`);
+    assert.equal(result.stdout, '', 'The guard must not expose container identities');
+    if (!permitted) assert.match(result.stderr, /Public chat is running|Cannot verify whether public chat is running/);
+  }
+});
+
+test('public-project refusal precedes private workload state and never changes public containers', () => {
+  const invocation = runner.indexOf('\nrequire_public_chat_stopped\n');
+  assert.ok(invocation > runner.indexOf('flock --exclusive --nonblock 9'));
+  assert.ok(invocation < runner.indexOf('for image in "$server_image" "$generator_image"'));
+  assert.ok(invocation < runner.indexOf('mkdir -m 700 -- "$output"'));
+  assert.ok(invocation < runner.indexOf('run_id='));
+  assert.match(runner, /docker_owned\(\) \{ timeout --signal=TERM --kill-after=1s 8s docker/);
+  assert.doesNotMatch(publicChatGuard, /\b(?:stop|kill|restart|rm|compose|prune)\s+--/);
+  assert.equal((publicChatGuard.match(/docker_owned /g) ?? []).length, 1);
 });
 
 function emergencyFixture(t, preparation = '') {

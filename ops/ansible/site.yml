@@ -76,6 +76,25 @@
       changed_when: false
       check_mode: false
 
+    - name: Refuse host maintenance while the public application is running
+      tags: [always]
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - |
+            from pathlib import Path
+            import subprocess
+            if Path('/var/run/docker.sock').exists():
+                result = subprocess.run(
+                    ['/usr/bin/docker', '--host', 'unix:///var/run/docker.sock', 'ps', '--quiet',
+                     '--filter', 'label=com.docker.compose.project=simplestchat-public'],
+                    check=True, capture_output=True, text=True, timeout=15)
+                assert not result.stdout.strip(), 'Stop the public project before host maintenance'
+            print('No running public project would be interrupted by host maintenance.')
+      changed_when: false
+      check_mode: false
+
   tasks:
     - name: Prepare OS packages and private directories
       ansible.builtin.import_tasks: tasks/host.yml
