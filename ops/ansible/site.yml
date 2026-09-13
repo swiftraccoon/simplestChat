@@ -1,0 +1,99 @@
+---
+- name: Prepare a private simplestChat benchmark host
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: true
+  serial: 1
+  pre_tasks:
+    - name: Require the supported host and bounded installation paths
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'x86_64'
+          - ansible_facts.service_mgr == 'systemd'
+          - scbench_revision is defined
+          - scbench_revision is match('^[a-f0-9]{40}$')
+          - scbench_root == '/srv/simplestchat-bench'
+          - scbench_release_dir == scbench_root + '/sources/' + scbench_revision
+          - scbench_repository is match('^https://github.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git$')
+        fail_msg: Use Debian 13 x86_64 with systemd and an exact reviewed source commit.
+
+    - name: Inspect the owned benchmark service before changing build inputs
+      tags: [always]
+      ansible.builtin.command:
+        argv: [systemctl, is-active, simplestchat-benchmark.service]
+      register: scbench_active
+      changed_when: false
+      failed_when: scbench_active.rc not in [0, 3, 4]
+      check_mode: false
+
+    - name: Refuse provisioning during an active benchmark
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - scbench_active.stdout not in ['active', 'activating', 'deactivating', 'reloading']
+        fail_msg: Wait for the owned benchmark to finish before changing its host or inputs.
+
+    - name: Inspect the owned image builder before changing its host
+      tags: [always]
+      ansible.builtin.command:
+        argv: [systemctl, is-active, simplestchat-image-build.service]
+      register: scbench_builder_active
+      changed_when: false
+      failed_when: scbench_builder_active.rc not in [0, 3, 4]
+      check_mode: false
+
+    - name: Refuse provisioning during an active image build
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - scbench_builder_active.stdout not in ['active', 'activating', 'deactivating', 'reloading']
+        fail_msg: Wait for the owned image build before changing its inputs.
+
+    - name: Refuse provisioning while container cleanup remains uncertain
+      tags: [always]
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - |
+            import json
+            import stat
+            from pathlib import Path
+            record = Path('/run/simplestchat-bench/current.json')
+            if record.exists() or record.is_symlink():
+                metadata = record.lstat()
+                assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
+                assert stat.S_IMODE(metadata.st_mode) == 0o600 and metadata.st_size <= 16384
+                parent = record.parent.lstat()
+                assert stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0
+                assert stat.S_IMODE(parent.st_mode) == 0o700
+                value = json.loads(record.read_text())
+                assert value.get('schemaVersion') == 1 and value.get('finalized') is True, 'Finish owned container cleanup first'
+            print('No unfinished owned container cleanup.')
+      changed_when: false
+      check_mode: false
+
+  tasks:
+    - name: Prepare OS packages and private directories
+      ansible.builtin.import_tasks: tasks/host.yml
+      tags: [host]
+
+    - name: Install the pinned container runtime
+      ansible.builtin.import_tasks: tasks/docker.yml
+      tags: [docker]
+
+    - name: Obtain the exact application source
+      ansible.builtin.import_tasks: tasks/source.yml
+      tags: [source]
+
+    - name: Install opt-in image build and private benchmark services
+      ansible.builtin.import_tasks: tasks/benchmark.yml
+      tags: [benchmark]
+
+  handlers:
+    - name: Reload systemd units
+      ansible.builtin.systemd_service:
+        daemon_reload: true

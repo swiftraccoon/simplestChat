@@ -1,0 +1,186 @@
+---
+# Follow Docker's signed Debian repository installation, never a convenience
+# script. Existing runtimes and daemon policy require review, not replacement.
+# https://docs.docker.com/engine/install/debian/
+- name: Read the installed package inventory before changing the runtime
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/dpkg-query
+      - --show
+      - '--showformat=${db:Status-Status}'
+      - "{{ item }}"
+  loop: [docker.io, docker-compose, docker-doc, docker-buildx, podman-docker, containerd, runc]
+  register: scbench_conflicting_packages
+  changed_when: false
+  failed_when: scbench_conflicting_packages.rc not in [0, 1]
+  check_mode: false
+  tags: [always]
+
+- name: Refuse conflicting distribution container packages
+  ansible.builtin.assert:
+    that:
+      - item.stdout | trim != 'installed'
+    fail_msg: "Existing {{ item.item }} requires an explicit migration; provisioning will not remove it."
+  loop: "{{ scbench_conflicting_packages.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  tags: [always]
+
+- name: Inspect existing Docker daemon configuration without following links
+  ansible.builtin.stat:
+    path: /etc/docker/daemon.json
+    follow: false
+    get_checksum: false
+    get_mime: false
+  register: scbench_docker_daemon_file
+  tags: [always]
+
+- name: Require existing daemon configuration to be an ordinary protected file
+  ansible.builtin.assert:
+    that:
+      - not scbench_docker_daemon_file.stat.exists or scbench_docker_daemon_file.stat.isreg
+      - not scbench_docker_daemon_file.stat.exists or scbench_docker_daemon_file.stat.uid == 0
+      - not scbench_docker_daemon_file.stat.exists or scbench_docker_daemon_file.stat.size <= 65536
+      - not scbench_docker_daemon_file.stat.exists or scbench_docker_daemon_file.stat.mode in ['0600', '0640', '0644']
+    fail_msg: Existing Docker daemon configuration needs review and will not be overwritten.
+  tags: [always]
+
+- name: Read existing daemon configuration without modifying it
+  ansible.builtin.slurp:
+    src: /etc/docker/daemon.json
+  register: scbench_docker_daemon_content
+  when: scbench_docker_daemon_file.stat.exists
+  no_log: true
+  tags: [always]
+
+- name: Keep daemon host bindings under the packaged Unix-socket service
+  ansible.builtin.assert:
+    that:
+      - (scbench_docker_daemon_content.content | b64decode | from_json) is mapping
+      - "'hosts' not in (scbench_docker_daemon_content.content | b64decode | from_json)"
+    fail_msg: An existing Docker hosts override requires review; remote API listeners are not configured here.
+  when: scbench_docker_daemon_file.stat.exists
+  no_log: true
+  tags: [always]
+
+- name: Verify that existing Docker service and socket definitions remain local
+  ansible.builtin.command: &scbench_docker_unit_inspection
+    argv:
+      - /usr/bin/python3
+      - -c
+      - |
+        import subprocess
+        import sys
+
+        expected_command = "/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock"
+        for unit in ("docker.service", "docker.socket"):
+            result = subprocess.run(
+                ["/usr/bin/systemctl", "show", unit, "--property=LoadState",
+                 "--property=FragmentPath", "--property=DropInPaths",
+                 "--property=ExecStart", "--property=Listen"],
+                check=False, capture_output=True, text=True, timeout=15,
+            )
+            fields = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+            if fields.get("LoadState") == "not-found" and result.returncode in (0, 1, 4):
+                continue
+            if result.returncode != 0 or fields.get("LoadState") != "loaded":
+                sys.exit(f"Cannot inspect {unit}; its current listener configuration is unknown.")
+            permitted_paths = (f"/usr/lib/systemd/system/{unit}", f"/lib/systemd/system/{unit}")
+            if fields.get("FragmentPath") not in permitted_paths or fields.get("DropInPaths"):
+                sys.exit(f"Custom {unit} configuration requires review; no changes were made.")
+            if unit == "docker.service":
+                command = fields.get("ExecStart", "")
+                if f"argv[]={expected_command} ;" not in command or command.count("argv[]=") != 1:
+                    sys.exit("Docker must use its packaged Unix-socket command without extra host options.")
+            elif fields.get("Listen") not in ("/run/docker.sock (Stream)", "/var/run/docker.sock (Stream)"):
+                sys.exit("Docker socket must listen only on its local Unix socket.")
+        print("Docker service definitions have no custom API listener.")
+  changed_when: false
+  check_mode: false
+  tags: [always]
+
+- name: Create the root-controlled apt signing-key directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install the checksum-pinned official Docker signing key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/debian/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    checksum: "sha256:{{ scbench_docker_gpg_sha256 }}"
+    owner: root
+    group: root
+    mode: '0644'
+    timeout: 30
+    validate_certs: true
+
+- name: Configure only the signed stable Debian Docker repository
+  ansible.builtin.template:
+    src: docker.sources.j2
+    dest: /etc/apt/sources.list.d/docker.sources
+    owner: root
+    group: root
+    mode: '0644'
+  register: scbench_docker_repository
+
+- name: Keep Docker maintenance updates on the reviewed inventory versions
+  ansible.builtin.template:
+    src: docker.preferences.j2
+    dest: /etc/apt/preferences.d/simplestchat-docker
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install the explicitly pinned Docker runtime and CLI plugins
+  ansible.builtin.apt:
+    name:
+      - "docker-ce={{ scbench_docker_engine_version }}"
+      - "docker-ce-cli={{ scbench_docker_cli_version }}"
+      - "containerd.io={{ scbench_containerd_version }}"
+      - "docker-buildx-plugin={{ scbench_docker_buildx_version }}"
+      - "docker-compose-plugin={{ scbench_docker_compose_version }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ 0 if scbench_docker_repository.changed else 3600 }}"
+    install_recommends: false
+    fail_on_autoremove: true
+    allow_downgrade: false
+    # Do not start a newly installed daemon until its service/socket are checked.
+    policy_rc_d: 101
+
+- name: Verify the packaged service and socket before enabling Docker
+  ansible.builtin.command: *scbench_docker_unit_inspection
+  changed_when: false
+  check_mode: false
+
+- name: Enable Docker using its local Unix socket without daemon policy overrides
+  ansible.builtin.systemd_service:
+    name: docker.service
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Confirm the daemon responds through its local Unix socket
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - --host
+      - unix:///var/run/docker.sock
+      - info
+      - --format
+      - '{% raw %}{{.ServerVersion}}{% endraw %}'
+  register: scbench_docker_running_version
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Require the running daemon to match the selected package version
+  ansible.builtin.assert:
+    that:
+      - scbench_docker_running_version.stdout | trim == (scbench_docker_engine_version.split(':')[-1].split('-')[0])
+    fail_msg: The running Docker daemon differs from its package pin; review and restart it before benchmarking.
+  when: not ansible_check_mode

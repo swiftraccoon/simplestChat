@@ -9,6 +9,29 @@ permissions:
   contents: read
 
 jobs:
+  automation:
+    name: Operations automation lint and safety checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install isolated controller checks
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv shellcheck jq
+          python3 -m venv "${RUNNER_TEMP}/ansible-controller"
+          "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r ops/ansible/requirements.txt
+          echo "${RUNNER_TEMP}/ansible-controller/bin" >> "${GITHUB_PATH}"
+      - name: Validate automation without contacting any host
+        env:
+          ANSIBLE_CONFIG: ${{ github.workspace }}/ops/ansible/ansible.cfg
+        run: |
+          ansible-lint --offline --strict ops/ansible
+          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/site.yml --syntax-check
+          python -m unittest discover -s ops/ansible/tests -v
+
   rust:
     name: Rust + PostgreSQL + browser integration
     runs-on: ubuntu-24.04
@@ -45,7 +68,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config shellcheck
+          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config shellcheck jq
 
       - name: Install pinned Rust toolchain
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-09)

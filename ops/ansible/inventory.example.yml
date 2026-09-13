@@ -1,0 +1,13 @@
+---
+benchmark_hosts:
+  hosts:
+    benchmark:
+      ansible_host: 192.0.2.10
+      ansible_user: root
+      ansible_ssh_private_key_file: /absolute/path/to/your/private-key
+      # Use an exact, reviewed commit, never a moving branch or tag.
+      scbench_revision: REPLACE_WITH_FULL_40_CHARACTER_COMMIT
+      # Fresh hosts should be patched and rebooted before measurements.
+      # These are maintenance actions, so ordinary reapplication defaults off.
+      scbench_upgrade_packages: false
+      scbench_reboot: false

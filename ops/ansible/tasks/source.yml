@@ -1,0 +1,18 @@
+---
+- name: Check out an exact source revision without overwriting local modifications
+  ansible.builtin.git:
+    repo: "{{ scbench_repository }}"
+    dest: "{{ scbench_release_dir }}"
+    version: "{{ scbench_revision }}"
+    force: false
+    recursive: false
+    accept_hostkey: false
+
+- name: Verify the checked-out source identity
+  ansible.builtin.command:
+    argv: [git, rev-parse, HEAD]
+    chdir: "{{ scbench_release_dir }}"
+  register: scbench_source_commit
+  changed_when: false
+  failed_when: scbench_source_commit.stdout != scbench_revision
+  when: not ansible_check_mode

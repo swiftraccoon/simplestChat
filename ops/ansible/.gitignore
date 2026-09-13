@@ -1,0 +1,5 @@
+.venv/
+inventory.local.*
+*.retry
+__pycache__/
+*.pyc

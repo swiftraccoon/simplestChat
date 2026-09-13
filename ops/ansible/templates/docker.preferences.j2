@@ -1,0 +1,24 @@
+# Managed by simplestChat benchmark provisioning. Change inventory pins when
+# reviewing runtime updates; do not hold packages or alter unrelated apt policy.
+# Priority 1000 prefers these exact versions over normal repository candidates.
+# https://manpages.debian.org/trixie/apt/apt_preferences.5.en.html
+
+Package: docker-ce
+Pin: version {{ scbench_docker_engine_version }}
+Pin-Priority: 1000
+
+Package: docker-ce-cli
+Pin: version {{ scbench_docker_cli_version }}
+Pin-Priority: 1000
+
+Package: containerd.io
+Pin: version {{ scbench_containerd_version }}
+Pin-Priority: 1000
+
+Package: docker-buildx-plugin
+Pin: version {{ scbench_docker_buildx_version }}
+Pin-Priority: 1000
+
+Package: docker-compose-plugin
+Pin: version {{ scbench_docker_compose_version }}
+Pin-Priority: 1000

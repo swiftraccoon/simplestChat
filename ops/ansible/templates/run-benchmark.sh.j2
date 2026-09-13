@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+manifest='{{ scbench_root }}/artifacts/{{ scbench_revision }}/images.json'
+config=/etc/simplestchat-bench/benchmark.json
+jq -e --arg revision '{{ scbench_revision }}' '.schemaVersion==1 and .revision==$revision and .passed==true' "$manifest" >/dev/null
+server_image=$(jq -er '.serverImage | select(test("^sha256:[a-f0-9]{64}$"))' "$manifest")
+generator_image=$(jq -er '.generatorImage | select(test("^sha256:[a-f0-9]{64}$"))' "$manifest")
+run_root=$(mktemp -d '{{ scbench_root }}/results/run.XXXXXXXX')
+cp "$manifest" "$run_root/images.json"
+cp "$config" "$run_root/configuration.json"
+exec /usr/local/libexec/simplestchat-bench/benchmark-container.sh \
+  --server-image "$server_image" --generator-image "$generator_image" --output "$run_root/workload" \
+  --clients "$(jq -er .clients "$config")" --rooms "$(jq -er .rooms "$config")" \
+  --workers "$(jq -er .workers "$config")" --duration "$(jq -er .duration "$config")" \
+  --ramp-up "$(jq -er .rampUp "$config")" --warmup "$(jq -er .warmup "$config")"

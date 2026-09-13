@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Build the reviewed Dockerfile once; reuse verified content-addressed images.
+set -euo pipefail
+umask 077
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+unset DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_CONFIG
+export DOCKER_HOST=unix:///var/run/docker.sock
+[[ $(id -u) == 0 ]]
+source_root='{{ scbench_release_dir }}'
+revision='{{ scbench_revision }}'
+artifact_root='{{ scbench_root }}/artifacts/{{ scbench_revision }}'
+mkdir -p "$artifact_root"
+if [[ -e /run/simplestchat-bench ]]; then
+  [[ ! -L /run/simplestchat-bench && -d /run/simplestchat-bench ]]
+  [[ $(stat -c '%u:%a' /run/simplestchat-bench) == 0:700 ]]
+else mkdir -m 700 /run/simplestchat-bench; fi
+[[ ! -L /run/simplestchat-bench/workload.lock ]]
+exec 9<>/run/simplestchat-bench/workload.lock
+[[ -f /run/simplestchat-bench/workload.lock && $(stat -c '%u:%a' /run/simplestchat-bench/workload.lock) == 0:600 ]]
+flock -n 9 || { echo 'Another simplestChat build or benchmark is active.' >&2; exit 1; }
+if [[ -e /run/simplestchat-bench/current.json ]]; then
+  [[ ! -L /run/simplestchat-bench/current.json && $(stat -c '%u:%a' /run/simplestchat-bench/current.json) == 0:600 ]]
+  jq -e '.schemaVersion == 1 and .finalized == true' /run/simplestchat-bench/current.json >/dev/null
+fi
+cd "$source_root"
+[[ $(git rev-parse HEAD) == "$revision" ]]
+[[ -z $(git status --porcelain --untracked-files=all) ]]
+image_manifest="$artifact_root/images.json"
+verify_images() {
+  local manifest=$1
+  jq -e --arg revision "$revision" '.schemaVersion == 1 and .revision == $revision and .passed == true' "$manifest" >/dev/null
+  for role in server generator; do
+    image_id=$(jq -er --arg role "$role" '.[$role + "Image"] | select(test("^sha256:[a-f0-9]{64}$"))' "$manifest")
+    [[ $(docker image inspect --format '{% raw %}{{.Id}}{% endraw %}' "$image_id") == "$image_id" ]]
+    [[ $(docker image inspect --format '{% raw %}{{.Config.User}}{% endraw %}' "$image_id") == 10001:10001 ]]
+  done
+}
+if [[ -e "$image_manifest" ]]; then
+  verify_images "$image_manifest"
+  echo "Reusing verified image IDs from $image_manifest"
+  exit 0
+fi
+attempt=$(mktemp -d "$artifact_root/build.XXXXXXXX")
+started=$(date -u +%FT%TZ)
+finish() {
+  status=$?
+  trap - EXIT
+  jq -n --arg started "$started" --arg finished "$(date -u +%FT%TZ)" --argjson status "$status" \
+    '{startedAt:$started,finishedAt:$finished,exitStatus:$status,passed:($status==0)}' >"$attempt/outcome.json"
+  echo "Image build evidence: $attempt"
+  exit "$status"
+}
+trap finish EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+docker version >"$attempt/docker-version.txt"
+uname -a >"$attempt/kernel.txt"
+dpkg-query -W >"$attempt/host-packages.txt"
+git rev-parse HEAD >"$attempt/source-revision.txt"
+sha256sum Dockerfile .dockerignore Cargo.lock web/package-lock.json build/pip-constraints.txt >"$attempt/source-inputs.sha256"
+for target in production loadtest; do
+  timeout --signal=TERM --kill-after=60s 50m docker build --pull --progress plain \
+    --target "$target" --label "org.opencontainers.image.revision=$revision" \
+    --iidfile "$attempt/$target.iid" --tag "simplestchat-bench/$target:$revision" . \
+    >"$attempt/$target.log" 2>&1
+done
+server_image=$(<"$attempt/production.iid")
+generator_image=$(<"$attempt/loadtest.iid")
+[[ "$server_image" =~ ^sha256:[a-f0-9]{64}$ && "$generator_image" =~ ^sha256:[a-f0-9]{64}$ ]]
+for image_id in "$server_image" "$generator_image"; do
+  [[ $(docker image inspect --format '{% raw %}{{.Config.User}}{% endraw %}' "$image_id") == 10001:10001 ]]
+done
+# The Dockerfile validates native patches and loader dependencies during build.
+# Inspect image identity here; no daemon-owned verification process is started.
+for role in server generator; do
+  image_id=$server_image
+  [[ "$role" == server ]] || image_id=$generator_image
+  docker image inspect "$image_id" | jq '.[0] | {Id,Architecture,Os,User:.Config.User,Labels:.Config.Labels}' \
+    >"$attempt/$role-image.json"
+done
+[[ -z $(git status --porcelain --untracked-files=all) ]]
+sha256sum --check "$attempt/source-inputs.sha256" >"$attempt/source-verified.txt"
+jq -n --arg revision "$revision" --arg server "$server_image" --arg generator "$generator_image" \
+  --arg attempt "$attempt" --arg finished "$(date -u +%FT%TZ)" \
+  '{schemaVersion:1,revision:$revision,serverImage:$server,generatorImage:$generator,
+    builtAt:$finished,evidence:$attempt,passed:true,
+    identityKind:"local content-addressed image IDs; no registry manifest was published"}' >"$attempt/images.json"
+verify_images "$attempt/images.json"
+ln "$attempt/images.json" "$image_manifest"

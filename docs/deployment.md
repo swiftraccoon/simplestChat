@@ -6,6 +6,11 @@ process-local; multiple replicas require a shared-state and routing design.
 
 ## Production setup
 
+For repeatable VPS preparation and private container benchmarks, see the
+[operations automation](../ops/ansible/README.md). It prepares the host without
+starting a public chat service. The application remains packaged by Docker;
+Ansible does not install a second native Rust/Node build on the host.
+
 1. Point your domain at the host and replace `simplestchat.example.com` in
    `Caddyfile`. Set `ALLOWED_ORIGINS` to the exact external HTTPS origin.
 2. Expose TCP 80/443 and the media worker's UDP ports starting at 40000. Keep

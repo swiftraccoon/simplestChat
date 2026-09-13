@@ -1,0 +1,64 @@
+---
+- name: Refresh the signed Debian package indexes
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Apply explicitly requested operating system updates
+  ansible.builtin.apt:
+    upgrade: dist
+    fail_on_autoremove: true
+  when: scbench_upgrade_packages | bool
+  register: scbench_os_upgrade
+
+- name: Reboot after an explicitly requested maintenance upgrade
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+    connect_timeout: 10
+  when:
+    - scbench_reboot | bool
+    - scbench_os_upgrade is changed
+
+- name: Install the host administration prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - coreutils
+      - curl
+      - git
+      - procps
+      - python3
+      - sudo
+      - jq
+      - util-linux
+    state: present
+    install_recommends: false
+    fail_on_autoremove: true
+
+- name: Reserve a narrowly scoped installation root
+  ansible.builtin.file:
+    path: "{{ scbench_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: Create private source, artifact, and result directories
+  ansible.builtin.file:
+    path: "{{ scbench_root }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  loop: [sources, artifacts, results]
+
+- name: Create root-controlled configuration and launcher directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/simplestchat-bench
+    - /usr/local/libexec/simplestchat-bench

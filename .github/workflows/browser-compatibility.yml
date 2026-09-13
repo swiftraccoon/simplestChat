@@ -42,7 +42,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config iproute2
+          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config iproute2 jq
           # The Ubuntu 24.04 image includes PostgreSQL 16, with its service stopped.
           test -x /usr/lib/postgresql/16/bin/initdb
           echo '/usr/lib/postgresql/16/bin' >> "${GITHUB_PATH}"
@@ -50,7 +50,7 @@ jobs:
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: |
-          brew install postgresql@18
+          brew install postgresql@18 jq
           postgres_prefix="$(brew --prefix postgresql@18)"
           echo "${postgres_prefix}/bin" >> "${GITHUB_PATH}"
 

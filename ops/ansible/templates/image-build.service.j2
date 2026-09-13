@@ -1,0 +1,17 @@
+[Unit]
+Description=Build pinned simplestChat container images (explicit invocation only)
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=exec
+User=root
+UMask=0077
+ExecStart=/usr/local/libexec/simplestchat-bench/build-images
+RuntimeMaxSec=6300
+TimeoutStopSec=90
+KillMode=control-group
+Restart=no
+LimitCORE=0
+StandardOutput=journal
+StandardError=journal

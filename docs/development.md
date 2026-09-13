@@ -12,6 +12,7 @@ Run commands from the repository root.
 - PostgreSQL if you want accounts and persistent rooms.
 - ShellCheck for the helper-script quality gate (`brew install shellcheck` on
   macOS, or your Linux package manager).
+- `jq` for container benchmark validation tests (`brew install jq` on macOS).
 
 ## Guest-only local UI
 

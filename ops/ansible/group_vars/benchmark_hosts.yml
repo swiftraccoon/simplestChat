@@ -1,0 +1,20 @@
+---
+scbench_root: /srv/simplestchat-bench
+scbench_repository: https://github.com/swiftraccoon/simplestChat.git
+scbench_release_dir: "{{ scbench_root }}/sources/{{ scbench_revision }}"
+# Official Docker Debian repository versions and key verified 2026-09-13.
+scbench_docker_gpg_sha256: 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570
+scbench_docker_engine_version: 5:29.8.0-1~debian.13~trixie
+scbench_docker_cli_version: 5:29.8.0-1~debian.13~trixie
+scbench_containerd_version: 2.3.5-1~debian.13~trixie
+scbench_docker_buildx_version: 0.37.1-1~debian.13~trixie
+scbench_docker_compose_version: 5.5.1-1~debian.13~trixie
+scbench_upgrade_packages: false
+scbench_reboot: false
+scbench_workload:
+  clients: 10
+  rooms: 1
+  rampUp: 5
+  warmup: 10
+  duration: 60
+  workers: 1

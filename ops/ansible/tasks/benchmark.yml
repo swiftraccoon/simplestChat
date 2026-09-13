@@ -1,0 +1,71 @@
+---
+- name: Retain the bounded workload configuration
+  ansible.builtin.copy:
+    content: "{{ scbench_workload | to_nice_json }}\n"
+    dest: /etc/simplestchat-bench/benchmark.json
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Install the owned container lifecycle helpers
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../build/{{ item }}"
+    dest: "/usr/local/libexec/simplestchat-bench/{{ item }}"
+    owner: root
+    group: root
+    mode: '0755'
+    validate: /bin/bash -n %s
+  loop: [benchmark-container.sh, cleanup-container-benchmark.sh]
+
+- name: Install the image and benchmark launchers
+  ansible.builtin.template:
+    src: "{{ item }}.sh.j2"
+    dest: "/usr/local/libexec/simplestchat-bench/{{ item }}"
+    owner: root
+    group: root
+    mode: '0755'
+    validate: /bin/bash -n %s
+  loop: [build-images, run-benchmark]
+
+- name: Install the opt-in service units
+  ansible.builtin.template:
+    src: "{{ item }}.service.j2"
+    dest: "/etc/systemd/system/simplestchat-{{ item }}.service"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: [image-build, benchmark]
+  notify: Reload systemd units
+
+- name: Load installed unit definitions before inspecting boot enablement
+  ansible.builtin.meta: flush_handlers
+
+- name: Inspect boot enablement of the explicitly invoked service units
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - is-enabled
+      - "simplestchat-{{ item }}.service"
+  loop: [image-build, benchmark]
+  register: scbench_unit_enablement
+  changed_when: false
+  failed_when: scbench_unit_enablement.rc not in [0, 1]
+  check_mode: false
+
+- name: Require a known service enablement state before changing boot policy
+  ansible.builtin.assert:
+    that:
+      - item.stdout | trim in ['enabled', 'enabled-runtime', 'disabled', 'static']
+    fail_msg: Unexpected service enablement requires review; provisioning will not unmask or replace unit links.
+  loop: "{{ scbench_unit_enablement.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Disable only service units that are actually enabled at boot
+  ansible.builtin.systemd_service:
+    name: "simplestchat-{{ item.item }}.service"
+    enabled: false
+  when: item.stdout | trim in ['enabled', 'enabled-runtime']
+  loop: "{{ scbench_unit_enablement.results }}"
+  loop_control:
+    label: "{{ item.item }}"
