@@ -204,7 +204,9 @@ def packaged_migrations(runner, image):
     container = runner.docker('create', '--name', name, '--network', 'none', '--pull', 'never',
         '--read-only', '--user', '10001:10001', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
         '--memory', '128m', '--cpus', '0.5', '--pids-limit', '32', '--log-driver', 'local',
-        '--log-opt', 'max-size=1m', '--log-opt', 'max-file=1', '--entrypoint', '/usr/bin/timeout', image,
+        # The local driver's default compression requires more than one file.
+        '--log-opt', 'max-size=1m', '--log-opt', 'max-file=1', '--log-opt', 'compress=false',
+        '--entrypoint', '/usr/bin/timeout', image,
         '--signal=TERM', '--kill-after=2s', '10s', '/bin/sh',
         '-c', 'for file in /app/migrations/*.sql; do sha384sum "$file" || exit; done').decode().strip()
     require(re.fullmatch(r'[a-f0-9]{64}', container), 'Uncertain validation container creation')

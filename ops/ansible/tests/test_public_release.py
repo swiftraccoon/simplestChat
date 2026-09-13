@@ -266,6 +266,26 @@ class PublicReleaseTests(unittest.TestCase):
     def assert_config_unchanged(self):
         self.assertEqual({name: (self.config / name).read_bytes() for name in PUBLIC.SELECTION}, self.before)
 
+    def test_validator_uses_uncompressed_single_file_logs_without_weakening_isolation(self):
+        self.assertEqual(PUBLIC.packaged_migrations(self.runner, NEW_IMAGE), MIGRATIONS)
+        creates = [(args, kwargs) for kind, args, kwargs in self.runner.calls
+                   if kind == 'docker' and args[0] == 'create']
+        self.assertEqual(len(creates), 1)
+        args, kwargs = creates[0]
+        self.assertRegex(args[2], r'^scpub-release-validate-[a-f0-9]{32}$')
+        self.assertEqual(args, (
+            'create', '--name', args[2], '--network', 'none', '--pull', 'never',
+            '--read-only', '--user', '10001:10001', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+            '--memory', '128m', '--cpus', '0.5', '--pids-limit', '32', '--log-driver', 'local',
+            '--log-opt', 'max-size=1m', '--log-opt', 'max-file=1', '--log-opt', 'compress=false',
+            '--entrypoint', '/usr/bin/timeout', NEW_IMAGE, '--signal=TERM', '--kill-after=2s', '10s', '/bin/sh',
+            '-c', 'for file in /app/migrations/*.sql; do sha384sum "$file" || exit; done',
+        ))
+        self.assertEqual(kwargs, {})
+        self.assertTrue(json.loads((self.root / 'release-state.json').read_text())['finalized'])
+        self.assertEqual(self.app_mutations(), [])
+        self.assert_config_unchanged()
+
     def test_stage_validates_image_and_migrations_then_reuses_target_local_identity(self):
         staged = self.stage()
         self.assertEqual(staged['serverImage'], NEW_IMAGE)
