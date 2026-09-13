@@ -1,5 +1,8 @@
 services:
   simplestchat:
+    # Set an immutable image ID or registry digest and use --no-build to deploy
+    # exactly the artifact already tested. Local development can still build.
+    image: "${SIMPLESTCHAT_IMAGE:-simplestchat:local}"
     build:
       context: .
       dockerfile: Dockerfile

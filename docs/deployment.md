@@ -54,6 +54,14 @@ docker compose \
   up --build -d
 ```
 
+For deployment of an already-tested image, set `SIMPLESTCHAT_IMAGE` in the private
+runtime environment to its registry digest (`repository@sha256:...`) or an exact
+local image ID (`sha256:...`). Use the same Compose files with
+`up --detach --no-build --pull never`. The image must already exist on that host;
+pull or load the chosen immutable artifact explicitly beforehand. This preserves
+the tested artifact instead of rebuilding it during deployment. Registry tags
+alone, including commit-named tags, are not immutable identities.
+
 The supplied Compose service runs unprivileged with a read-only filesystem.
 HTTP/WebSocket is published only on host loopback; media UDP is public.
 Compose requires `ALLOWED_ORIGINS` and `TRUSTED_PROXY_SECRET` because the backend
