@@ -122,6 +122,39 @@ present and identical. Budget disk space for both; no retained evidence is
 automatically deleted. Check mode skips the download and does not validate GitHub
 access or remote runtime behavior.
 
+### Faster runs on a prepared host
+
+After a successful staging run, add `-e scpub_release_prepared=true` to either
+release command. This skips helper installation and checks every required helper
+against the exact SHA-256 of your controller checkout, including file types,
+ownership and permissions. A missing or changed helper fails before transfer or
+staging; it is never silently reused. GitHub fetching creates its new private
+release directory itself. Local archives still use the verified SSH-copy path.
+
+If helpers need updating, review the mismatch, then run the same stage-only
+command without prepared mode. This reconciles the helpers and release storage;
+it does not require rerunning public provisioning or stopping chat. Run only one
+release, helper update, or maintenance operation at a time. The prepared check is
+a snapshot; runtime workload locks and unfinished-operation journals remain the
+authority for staging and deployment.
+
+The release playbook uses a focused Debian/platform/configuration check instead
+of broad fact gathering, and enables
+[SSH pipelining](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/ssh_connection.html#parameter-pipelining)
+to reduce module-transfer round trips. Sudo configurations that require a TTY
+may need `-e ansible_pipelining=false`; the playbook does not modify sudo policy.
+Host-key and artifact checks stay enabled in either mode.
+
+To measure your own run, set `ANSIBLE_CALLBACKS_ENABLED=release_timing` alongside
+`ANSIBLE_CONFIG` in the command's environment. The optional callback reports
+bounded JSON task/playbook durations and completion status, without arguments,
+command output, inventory names or credentials. Timings include controller and
+transport overhead; they are not service downtime or an availability guarantee.
+Check mode performs the read-only host/helper checks but skips download, staging
+and deployment. Local-archive check mode requires an already-retained matching
+artifact, since it does not copy files. Normal prepared mode still stages only
+unless deployment is explicitly enabled.
+
 ## Deploy explicitly
 
 Repeat the command above with `-e scpub_release_deploy=true`. Alternatively, use

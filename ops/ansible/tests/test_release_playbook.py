@@ -1,6 +1,7 @@
 """Release wiring and real Compose rendering; never contact a Docker daemon."""
 
 from copy import deepcopy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -13,6 +14,9 @@ import unittest
 from unittest.mock import patch
 
 import yaml
+from ansible.parsing.dataloader import DataLoader
+from ansible.plugins.loader import init_plugin_loader
+from ansible.template import Templar, trust_as_template
 from jinja2 import Environment, StrictUndefined, UndefinedError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +39,10 @@ finally:
 
 
 class ReleasePlaybookTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        init_plugin_loader()
+
     def setUp(self):
         self.play = yaml.safe_load((ROOT / "release.yml").read_text())[0]
         self.tasks = self.play["tasks"]
@@ -136,7 +144,8 @@ class ReleasePlaybookTests(unittest.TestCase):
             "src": "fetch-release.py", "dest": "/usr/local/libexec/simplestchat-public/fetch-release.py",
             "owner": "root", "group": "root", "mode": "0644",
         })
-        self.assertEqual(receiver["when"], "scpub_release_artifact_id is defined")
+        self.assertEqual(receiver["when"], ["scpub_release_artifact_id is defined",
+                                           "not (scpub_release_prepared | default(false) | bool)"])
         self.assertLess(self.tasks.index(receiver), self.tasks.index(fetch))
         self.assertLess(self.tasks.index(fetch), self.tasks.index(self.command("stage")))
 
@@ -161,6 +170,11 @@ class ReleasePlaybookTests(unittest.TestCase):
                 action, "{{ scpub_release_revision }}",
             ])
         self.assertEqual(self.play["serial"], 1)
+        for task in (stage, deploy):
+            self.assertEqual(task["vars"]["ansible_python_interpreter"], "/usr/bin/python3")
+            unit = task["ansible.builtin.command"]["argv"][1]
+            self.assertIn("(scpub_release_preflight.stdout | from_json).runId", unit)
+            self.assertNotIn("ansible_facts", unit)
 
     def test_routine_release_has_no_host_maintenance_or_configuration_rendering(self):
         allowed = {"ansible.builtin.assert", "ansible.builtin.command", "ansible.builtin.copy",
@@ -178,10 +192,13 @@ class ReleasePlaybookTests(unittest.TestCase):
         self.assertIn("scpub_release_directory is match('^/')", local_source["ansible.builtin.assert"]["that"])
         self.assertIn("scpub_config == '/etc/simplestchat-public'", assertions)
         self.assertIn("scpub_root == '/srv/simplestchat-public'", assertions)
-        self.assertIn("ansible_facts.architecture == 'x86_64'", assertions)
-        selection = next(task for task in self.play["pre_tasks"]
-                         if task.get("register") == "scpub_existing_selection")
-        self.assertFalse(selection["ansible.builtin.stat"]["follow"])
+        self.assertIs(self.play["gather_facts"], False)
+        preflight = self.pre_task("Verify the host and exact prepared helpers without broad fact gathering")
+        self.assertIs(preflight["check_mode"], False)
+        self.assertIs(preflight["changed_when"], False)
+        self.assertEqual(preflight["timeout"], 60)
+        self.assertEqual(preflight["vars"]["ansible_python_interpreter"], "/usr/bin/python3")
+        self.assertEqual(preflight["ansible.builtin.command"]["argv"][:3], ["/usr/bin/python3", "-B", "-c"])
 
     def test_no_overwrite_is_paired_with_exact_controller_and_destination_identity(self):
         validation = next(task for task in self.play["pre_tasks"]
@@ -229,6 +246,43 @@ class ReleasePlaybookTests(unittest.TestCase):
             "{{ scpub_root }}/releases", "{{ scpub_root }}/releases/{{ scpub_release_revision }}",
         ])
         self.assertEqual(storage["ansible.builtin.file"]["mode"], "0700")
+
+    def test_prepared_mode_skips_helper_writes_but_keeps_local_release_storage(self):
+        for task in self.tasks:
+            if task["name"].startswith("Install "):
+                condition = task["when"]
+                if isinstance(condition, list):
+                    self.assertIn("not (scpub_release_prepared | default(false) | bool)", condition)
+                else:
+                    self.assertEqual(condition, "not (scpub_release_prepared | default(false) | bool)")
+        storage = next(task for task in self.tasks if task["name"] == "Create private immutable release storage")
+        self.assertEqual(storage["when"],
+                         "not (scpub_release_prepared | default(false) | bool) or scpub_release_directory is defined")
+        self.assertIs(self.play["vars"]["ansible_pipelining"], True)
+        # Do not override the delegated controller's Python with Debian's path.
+        self.assertNotIn("ansible_python_interpreter", self.play["vars"])
+
+    def test_real_ansible_lookup_preserves_source_bytes_and_selects_complete_helper_sets(self):
+        task = self.pre_task("Verify the host and exact prepared helpers without broad fact gathering")
+        argv = task["ansible.builtin.command"]["argv"]
+        base = {name: hashlib.sha256((ROOT / "files" / name).read_bytes()).hexdigest()
+                for name in ("release-public.py", "release_artifact.py", "reboot-public.py")}
+        for prepared, github in ((None, False), (False, True), (True, False), (True, True)):
+            values = {"playbook_dir": str(ROOT)}
+            if prepared is not None:
+                values["scpub_release_prepared"] = prepared
+            if github:
+                values["scpub_release_artifact_id"] = 123
+            templar = Templar(loader=DataLoader(), variables=values)
+            with self.subTest(prepared=prepared, github=github):
+                code = templar.template(trust_as_template(argv[3]))
+                self.assertEqual(code.encode(), (ROOT / "files/release_preflight.py").read_bytes())
+                expected = dict(base) if prepared else {}
+                if prepared and github:
+                    expected["fetch-release.py"] = hashlib.sha256((ROOT / "files/fetch-release.py").read_bytes()).hexdigest()
+                result = templar.template(trust_as_template(argv[4]))
+                self.assertIsInstance(result, str)
+                self.assertEqual(json.loads(result), expected)
 
     @unittest.skipUnless(shutil.which("docker"), "Optional offline Compose renderer requires the Docker CLI")
     def test_real_compose_preview_and_installed_selection_change_only_images_and_image_metadata(self):

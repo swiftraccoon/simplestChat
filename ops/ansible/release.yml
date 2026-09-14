@@ -2,8 +2,10 @@
 - name: Stage a prebuilt production release without host maintenance
   hosts: benchmark_hosts
   become: true
-  gather_facts: true
+  gather_facts: false
   serial: 1
+  vars:
+    ansible_pipelining: true
   pre_tasks:
     - name: Require an explicitly selected artifact and prepared public host
       ansible.builtin.assert:
@@ -12,9 +14,6 @@
           - (scpub_release_directory is defined) != (scpub_release_artifact_id is defined)
           - scpub_config == '/etc/simplestchat-public'
           - scpub_root == '/srv/simplestchat-public'
-          - ansible_facts.distribution == 'Debian'
-          - ansible_facts.distribution_major_version == '13'
-          - ansible_facts.architecture == 'x86_64'
         fail_msg: Select exactly one local artifact directory or GitHub artifact ID and an already provisioned public host.
 
     - name: Require an absolute local artifact directory
@@ -93,19 +92,34 @@
         scpub_release_revision: "{{ scpub_release_expected_revision }}"
       when: scpub_release_artifact_id is defined
 
-    - name: Require existing public configuration without exposing it
-      ansible.builtin.stat:
-        path: "{{ scpub_config }}/images.json"
-        follow: false
-      register: scpub_existing_selection
+    - name: Verify the host and exact prepared helpers without broad fact gathering
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/release_preflight.py', rstrip=false) }}"
+          - >-
+            {{ (({
+              'release-public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release-public.py', rstrip=false) | hash('sha256'),
+              'release_artifact.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_artifact.py', rstrip=false) | hash('sha256'),
+              'reboot-public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/reboot-public.py', rstrip=false) | hash('sha256')
+            } | combine(({
+              'fetch-release.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/fetch-release.py', rstrip=false) | hash('sha256')
+            }) if scpub_release_artifact_id is defined else {}))
+            if scpub_release_prepared | default(false) | bool else {}) | to_json }}
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+      register: scpub_release_preflight
+      changed_when: false
+      check_mode: false
+      timeout: 60
 
-    - name: Refuse to use routine release as initial provisioning
+    - name: Require a fresh facts-free release unit identity
       ansible.builtin.assert:
         that:
-          - scpub_existing_selection.stat.isreg | default(false)
-          - scpub_existing_selection.stat.uid == 0
-          - scpub_existing_selection.stat.mode == '0600'
-        fail_msg: Prepare and deploy the public service with public.yml before routine releases.
+          - (scpub_release_preflight.stdout | from_json).schemaVersion == 1
+          - (scpub_release_preflight.stdout | from_json).runId is match('^[a-f0-9]{32}$')
 
   tasks:
     - name: Install the isolated release helper directory
@@ -115,6 +129,7 @@
         owner: root
         group: root
         mode: '0755'
+      when: not (scpub_release_prepared | default(false) | bool)
 
     - name: Install the release command and shared artifact validator
       ansible.builtin.copy:
@@ -124,6 +139,7 @@
         group: root
         mode: '0644'
       loop: [release-public.py, release_artifact.py, reboot-public.py]
+      when: not (scpub_release_prepared | default(false) | bool)
 
     - name: Install the bounded GitHub artifact receiver
       ansible.builtin.copy:
@@ -132,7 +148,9 @@
         owner: root
         group: root
         mode: '0644'
-      when: scpub_release_artifact_id is defined
+      when:
+        - scpub_release_artifact_id is defined
+        - not (scpub_release_prepared | default(false) | bool)
 
     - name: Create private immutable release storage
       ansible.builtin.file:
@@ -144,6 +162,7 @@
       loop:
         - "{{ scpub_root }}/releases"
         - "{{ scpub_root }}/releases/{{ scpub_release_revision }}"
+      when: not (scpub_release_prepared | default(false) | bool) or scpub_release_directory is defined
 
     - name: Verify the exact GitHub release and fetch it directly onto the prepared host
       ansible.builtin.command:
@@ -211,10 +230,12 @@
       when: scpub_release_directory is defined
 
     - name: Import and verify the image while the public service remains running
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
       ansible.builtin.command:
         argv:
           - systemd-run
-          - "--unit=simplestchat-stage-{{ scpub_release_revision[:12] }}-{{ ansible_facts.date_time.epoch }}"
+          - "--unit=simplestchat-stage-{{ scpub_release_revision[:12] }}-{{ (scpub_release_preflight.stdout | from_json).runId }}"
           - --property=Type=exec
           - --property=RuntimeMaxSec=600
           - --property=TimeoutStopSec=60
@@ -228,10 +249,12 @@
       when: not ansible_check_mode
 
     - name: Replace only the application when deployment was explicitly selected
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
       ansible.builtin.command:
         argv:
           - systemd-run
-          - "--unit=simplestchat-release-{{ scpub_release_revision[:12] }}-{{ ansible_facts.date_time.epoch }}"
+          - "--unit=simplestchat-release-{{ scpub_release_revision[:12] }}-{{ (scpub_release_preflight.stdout | from_json).runId }}"
           - --property=Type=exec
           - --property=RuntimeMaxSec=900
           - --property=TimeoutStopSec=240
