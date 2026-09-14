@@ -66,10 +66,15 @@ Refreshing an HTTP session updates the browser's token for its **next** handshak
 it does not reauthenticate the existing WebSocket.
 
 The server limits inbound frames/messages to 64 KiB and closes connections after
-five minutes without an inbound frame. WebSocket ping/pong is handled by the
-socket implementation; there is no application `ping` message. Rate limits and
-bounded outgoing queues also apply. A connected WebSocket means neither room
-admission nor working media.
+five minutes without an inbound frame. For quiet, currently bound room or lobby
+members, it checks every 30 seconds whether a protocol Ping is needed. Browsers
+reply with Pong automatically; native clients must continue polling their socket
+to service control frames. There is no application `ping` message or browser
+timer requirement. Sending Ping does not renew the idle deadline: only received
+frames do. Unjoined, removed and nonresponsive clients still expire; heartbeat
+does not extend credentials or reconnect grace. Rate limits and bounded outgoing
+queues also apply. A connected WebSocket means neither room admission nor
+working media.
 
 When a peer sends a WebSocket Close frame, the server stops application writes
 and allows up to one second to flush the protocol's close reply. For valid close

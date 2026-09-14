@@ -15,8 +15,8 @@ use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::mpsc;
+use tokio::sync::{Notify, OwnedSemaphorePermit};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -81,7 +81,30 @@ where
 /// Idle timeout — close connection if no message received within this duration.
 /// Prevents Slowloris-style attacks that hold semaphore permits indefinitely.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(300); // 5 minutes
+/// Protocol Ping keeps quiet joined browsers responsive without relying on
+/// background-tab JavaScript timers. Unjoined sockets retain the idle cutoff.
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
+const HEARTBEAT_MEMBERSHIP_TIMEOUT: Duration = Duration::from_millis(100);
 const AUTH_REVALIDATE_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Internal timing policy keeps short socket regressions independent of process
+/// environment. Production always uses the fixed five-minute idle deadline.
+#[derive(Clone, Copy)]
+struct ConnectionTiming {
+    idle_timeout: Duration,
+    heartbeat_interval: Duration,
+    membership_timeout: Duration,
+}
+
+impl Default for ConnectionTiming {
+    fn default() -> Self {
+        Self {
+            idle_timeout: IDLE_TIMEOUT,
+            heartbeat_interval: HEARTBEAT_INTERVAL,
+            membership_timeout: HEARTBEAT_MEMBERSHIP_TIMEOUT,
+        }
+    }
+}
 
 /// Token bucket rate limiter: max tokens (burst capacity).
 const RATE_LIMIT_MAX_TOKENS: u64 = 100;
@@ -489,6 +512,7 @@ async fn write_message<S: Sink<Message> + Unpin>(
     deadline: tokio::time::Instant,
     kind: OperationKind,
 ) -> Result<(), Outcome> {
+    let is_application_text = matches!(&message, Message::Text(_));
     let operation = metrics.diagnostics().operation(kind, connection_id);
     let result = operation
         .scope(diagnostics::measure_result(Stage::SocketWrite, async {
@@ -501,11 +525,15 @@ async fn write_message<S: Sink<Message> + Unpin>(
         .await;
     let outcome = match result {
         Ok(()) => {
-            metrics.inc_messages_sent();
+            if is_application_text {
+                metrics.inc_messages_sent();
+            }
             Outcome::Ok
         }
         Err(outcome) => {
-            metrics.inc_message_send_failed();
+            if is_application_text {
+                metrics.inc_message_send_failed();
+            }
             outcome
         }
     };
@@ -601,7 +629,40 @@ pub async fn handle_connection(
     authenticated_user: Option<Claims>,
     client_ip: Option<std::net::IpAddr>,
     db_pool: Option<sqlx::PgPool>,
+    auth_revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
+) {
+    handle_connection_with_timing(
+        socket,
+        room_manager,
+        turn_config,
+        grace_periods,
+        metrics,
+        _permit,
+        authenticated_user,
+        client_ip,
+        db_pool,
+        auth_revocations,
+        ConnectionTiming::default(),
+    )
+    .await;
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "connection boundary retains explicit resources and an internal test timing policy"
+)]
+async fn handle_connection_with_timing(
+    socket: WebSocket,
+    room_manager: Arc<RoomManager>,
+    turn_config: Option<Arc<TurnConfig>>,
+    grace_periods: GracePeriodMap,
+    metrics: ServerMetrics,
+    _permit: OwnedSemaphorePermit,
+    authenticated_user: Option<Claims>,
+    client_ip: Option<std::net::IpAddr>,
+    db_pool: Option<sqlx::PgPool>,
     mut auth_revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
+    timing: ConnectionTiming,
 ) {
     // Use authenticated user ID if available, otherwise generate anonymous UUID
     let mut participant_id = authenticated_user
@@ -635,6 +696,11 @@ pub async fn handle_connection(
     let send_metrics = metrics.clone();
     let drain = room_manager.drain_signal();
     let writer_drain = drain.clone();
+    // Notify retains at most one pending permit: a slow writer cannot build an
+    // unbounded queue of stale heartbeat requests. Only this writer owns the
+    // sink, for both application text and protocol control frames.
+    let heartbeat = Arc::new(Notify::new());
+    let writer_heartbeat = heartbeat.clone();
 
     // Drain interrupts both an idle writer and a slow ordinary send, independent
     // of a reader currently awaiting database/media work. Notification is best
@@ -644,9 +710,17 @@ pub async fn handle_connection(
             biased;
             _ = writer_drain.wait() => {},
             _ = async {
-                while let Some(json) = rx.recv().await {
+                loop {
+                    let message = tokio::select! {
+                        biased;
+                        _ = writer_heartbeat.notified() => Message::Ping(bytes::Bytes::new()),
+                        json = rx.recv() => match json {
+                            Some(json) => Message::Text((*json).clone().into()),
+                            None => break,
+                        },
+                    };
                     match write_message(
-                        &mut ws_sender, Message::Text((*json).clone().into()),
+                        &mut ws_sender, message,
                         &send_metrics, diagnostic_connection_id, tokio::time::Instant::now() + SEND_TIMEOUT, OperationKind::SocketWrite,
                     ).await {
                         Ok(()) => {},
@@ -722,6 +796,7 @@ pub async fn handle_connection(
     let mut credentials_invalidated = false;
     let mut next_auth_check = Instant::now();
     let mut last_frame_received = Instant::now();
+    let mut next_heartbeat = Instant::now() + timing.heartbeat_interval;
     let mut peer_close_received = false;
 
     loop {
@@ -736,10 +811,17 @@ pub async fn handle_connection(
             credentials_invalidated = true;
             break;
         }
-        let idle_remaining = IDLE_TIMEOUT.saturating_sub(last_frame_received.elapsed());
+        let idle_remaining = timing
+            .idle_timeout
+            .saturating_sub(last_frame_received.elapsed());
+        if idle_remaining.is_zero() {
+            warn!("Idle timeout for participant {}", participant_id);
+            break;
+        }
         let receive_timeout = auth_exp
             .map(|exp| Duration::from_secs(exp.saturating_sub(now_unix)))
             .map_or(idle_remaining, |remaining| remaining.min(idle_remaining));
+        let receive_deadline = tokio::time::Instant::now() + receive_timeout;
 
         let receive_result = tokio::select! {
             biased;
@@ -767,7 +849,53 @@ pub async fn handle_connection(
                 next_auth_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
                 continue;
             }
-            result = tokio::time::timeout(receive_timeout, ws_receiver.next()) => result,
+            result = tokio::time::timeout_at(receive_deadline, ws_receiver.next()) => result,
+            _ = tokio::time::sleep_until(next_heartbeat.into()), if current_room_id.is_some() => {
+                // Schedule from now, not a missed-tick backlog. A membership
+                // lookup never renews liveness or delays drain; only a received
+                // frame (normally the protocol Pong) renews the idle deadline.
+                next_heartbeat = Instant::now() + timing.heartbeat_interval;
+                if last_frame_received.elapsed() >= timing.heartbeat_interval
+                    && let Some(room_id) = current_room_id.as_deref()
+                {
+                    // The timer may have consumed most of the receive budget.
+                    // Preserve its absolute deadline instead of reusing the
+                    // relative timeout calculated before that wait.
+                    let mut lookup_deadline = (tokio::time::Instant::now()
+                        + timing.membership_timeout).min(receive_deadline);
+                    if is_authenticated {
+                        lookup_deadline = lookup_deadline.min(next_auth_check.into());
+                    }
+                    let bound = tokio::select! {
+                        biased;
+                        _ = drain.wait() => break,
+                        _ = tx.closed() => break,
+                        notice = auth_revocations.recv(), if is_authenticated => {
+                            match notice {
+                                Ok((subject, minimum_version)) if authenticated_user.as_ref().is_some_and(|claims| claims.sub == subject && claims.auth_version < minimum_version) => {
+                                    credentials_invalidated = true;
+                                    break;
+                                }
+                                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => next_auth_check = Instant::now(),
+                                Err(tokio::sync::broadcast::error::RecvError::Closed) => { credentials_invalidated = true; break; }
+                                _ => {}
+                            }
+                            continue;
+                        }
+                        result = tokio::time::timeout_at(
+                            lookup_deadline,
+                            room_manager.is_bound_participant(room_id, &participant_id, &tx),
+                        ) => matches!(result, Ok(true)),
+                    };
+                    // Local room state can be stale after a kick, deletion, or
+                    // sender rebind. The authoritative check also admits lobby
+                    // members; it never creates membership or bypasses policy.
+                    if bound && tokio::time::Instant::now() < lookup_deadline {
+                        heartbeat.notify_one();
+                    }
+                }
+                continue;
+            }
         };
         let msg = match receive_result {
             Ok(Some(Ok(message))) => message,
@@ -1442,6 +1570,10 @@ pub async fn handle_connection(
 #[cfg(test)]
 #[path = "connection_close_tests.rs"]
 mod close_tests;
+
+#[cfg(test)]
+#[path = "connection_heartbeat_tests.rs"]
+mod heartbeat_tests;
 
 /// Attempt to reconnect a participant to their existing session
 async fn handle_reconnect(

@@ -1150,6 +1150,24 @@ impl RoomManager {
         &self.media_server
     }
 
+    /// Isolated real-socket connection regressions need an explicitly enabled
+    /// ad-hoc room without mutating process-wide environment or binding a fixed
+    /// native port. This constructor does not exist in production builds.
+    #[cfg(test)]
+    pub(crate) async fn new_for_connection_tests(metrics: ServerMetrics) -> Self {
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 1;
+        config.webrtc_server_port_base = 0;
+        let mut manager = Self::new(config, metrics, None).await.unwrap();
+        manager.allow_ad_hoc_rooms = true;
+        manager
+    }
+
+    #[cfg(test)]
+    pub(crate) fn room_for_connection_tests(&self, room_id: &str) -> Arc<TokioRwLock<Room>> {
+        self.get_room(room_id).unwrap()
+    }
+
     /// Shared one-way admission and shutdown notification for this process.
     pub fn drain_signal(&self) -> DrainSignal {
         self.drain.clone()
