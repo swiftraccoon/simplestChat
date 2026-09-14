@@ -4,6 +4,7 @@ from copy import deepcopy
 import importlib.util
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -12,6 +13,7 @@ import unittest
 from unittest.mock import patch
 
 import yaml
+from jinja2 import Environment, StrictUndefined, UndefinedError
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = ROOT.parents[1]
@@ -40,6 +42,103 @@ class ReleasePlaybookTests(unittest.TestCase):
     def command(self, action):
         return next(task for task in self.tasks
                     if action in task.get("ansible.builtin.command", {}).get("argv", []))
+
+    def pre_task(self, name):
+        return next(task for task in self.play["pre_tasks"] if task["name"] == name)
+
+    @staticmethod
+    def assertions_pass(task, values):
+        environment = Environment(undefined=StrictUndefined)
+        environment.tests["match"] = lambda value, pattern: re.match(pattern, str(value)) is not None
+        try:
+            return all(environment.compile_expression(expression)(**values)
+                       for expression in task["ansible.builtin.assert"]["that"])
+        except (UndefinedError, TypeError):
+            return False
+
+    def github_values(self):
+        return {
+            "scpub_release_repository": "example/simplestChat",
+            "scpub_release_artifact_id": 1234,
+            "scpub_release_expected_revision": "a" * 40,
+            "scpub_release_ci_run": 5678,
+            "ansible_host": "chat.example.test",
+            "ansible_user": "root",
+            "ansible_ssh_private_key_file": "/private/controller key",
+        }
+
+    def test_artifact_sources_are_mutually_exclusive_and_select_their_own_revision(self):
+        expression = "(scpub_release_directory is defined) != (scpub_release_artifact_id is defined)"
+        assertions = self.play["pre_tasks"][0]["ansible.builtin.assert"]["that"]
+        self.assertIn(expression, assertions)
+        evaluate = Environment(undefined=StrictUndefined).compile_expression(expression)
+        self.assertFalse(evaluate())
+        self.assertTrue(evaluate(scpub_release_directory="/release"))
+        self.assertTrue(evaluate(scpub_release_artifact_id=1234))
+        self.assertFalse(evaluate(scpub_release_directory="/release", scpub_release_artifact_id=1234))
+        local = self.pre_task("Select the verified local source revision")
+        remote = self.pre_task("Select the explicitly pinned GitHub revision")
+        self.assertEqual(local["when"], "scpub_release_directory is defined")
+        self.assertEqual(remote["when"], "scpub_release_artifact_id is defined")
+        self.assertEqual(local["ansible.builtin.set_fact"]["scpub_release_revision"],
+                         "{{ (scpub_validated_release.stdout | from_json).revision }}")
+        self.assertEqual(remote["ansible.builtin.set_fact"]["scpub_release_revision"],
+                         "{{ scpub_release_expected_revision }}")
+
+    def test_github_source_requires_exact_identities_and_explicit_supported_ssh(self):
+        task = self.pre_task("Require an exact GitHub source and supported key-based SSH connection")
+        self.assertEqual(task["when"], "scpub_release_artifact_id is defined")
+        self.assertTrue(self.assertions_pass(task, self.github_values()))
+        self.assertTrue(self.assertions_pass(task, dict(self.github_values(), ansible_user="deploy",
+                                                      ansible_host="chat-alias", ansible_port="2222")))
+        for key in self.github_values():
+            values = self.github_values()
+            del values[key]
+            with self.subTest(missing=key):
+                self.assertFalse(self.assertions_pass(task, values))
+        for key, value in (
+            ("scpub_release_repository", "https://github.com/example/repo"),
+            ("scpub_release_repository", "example/repo/extra"), ("scpub_release_repository", "example/"),
+            ("scpub_release_artifact_id", 0), ("scpub_release_artifact_id", True),
+            ("scpub_release_artifact_id", "01"), ("scpub_release_ci_run", -1), ("scpub_release_ci_run", "1.0"),
+            ("scpub_release_expected_revision", "main"), ("scpub_release_expected_revision", "A" * 40),
+            ("ansible_connection", "local"), ("ansible_connection", "paramiko"),
+            ("ansible_host", ""), ("ansible_host", "2001:db8::1"), ("ansible_host", "-oProxyCommand=command"),
+            ("ansible_user", ""), ("ansible_ssh_private_key_file", "~/.ssh/id_ed25519"),
+            ("ansible_port", 0), ("ansible_port", 65536), ("ansible_port", True),
+            ("ansible_password", ""), ("ansible_ssh_pass", ""), ("ansible_ssh_password", ""),
+            ("ansible_become_password", ""), ("ansible_become_pass", ""),
+            ("ansible_ssh_common_args", "-J jump.example.test"), ("ansible_ssh_extra_args", "-F custom.conf"),
+        ):
+            with self.subTest(key=key, value=value):
+                self.assertFalse(self.assertions_pass(task, dict(self.github_values(), **{key: value})))
+
+    def test_github_fetch_is_bounded_controller_only_and_precedes_common_stage(self):
+        fetch = self.command("--artifact-id")
+        argv = fetch["ansible.builtin.command"]["argv"]
+        self.assertEqual(argv, [
+            "{{ ansible_playbook_python }}", "-B", "{{ playbook_dir }}/../../build/fetch-release.py",
+            "--repository", "{{ scpub_release_repository }}", "--artifact-id", "{{ scpub_release_artifact_id }}",
+            "--revision", "{{ scpub_release_revision }}", "--ci-run", "{{ scpub_release_ci_run }}",
+            "--host", "{{ ansible_host }}", "--user", "{{ ansible_user }}",
+            "--port", "{{ ansible_port | default(22) }}", "--identity", "{{ ansible_ssh_private_key_file }}",
+            "--output-parent", "{{ (playbook_dir ~ '/../../results') | realpath }}",
+        ])
+        self.assertEqual(fetch["delegate_to"], "localhost")
+        self.assertIs(fetch["become"], False)
+        self.assertEqual(fetch["timeout"], 450)
+        self.assertEqual(fetch["when"], ["not ansible_check_mode", "scpub_release_artifact_id is defined"])
+        self.assertNotIn("--deploy", argv)
+        self.assertNotIn("no_log", fetch)
+        receiver = next(task for task in self.tasks
+                        if task.get("ansible.builtin.copy", {}).get("src") == "fetch-release.py")
+        self.assertEqual(receiver["ansible.builtin.copy"], {
+            "src": "fetch-release.py", "dest": "/usr/local/libexec/simplestchat-public/fetch-release.py",
+            "owner": "root", "group": "root", "mode": "0644",
+        })
+        self.assertEqual(receiver["when"], "scpub_release_artifact_id is defined")
+        self.assertLess(self.tasks.index(receiver), self.tasks.index(fetch))
+        self.assertLess(self.tasks.index(fetch), self.tasks.index(self.command("stage")))
 
     def test_stage_is_default_and_deployment_is_an_explicit_separate_job(self):
         stage = self.command("stage")
@@ -74,7 +173,9 @@ class ReleasePlaybookTests(unittest.TestCase):
             self.assertTrue({"apt", "reboot", "stop", "restart", "up", "down", "build", "pull"}.isdisjoint(argv))
         assertions = self.play["pre_tasks"][0]["ansible.builtin.assert"]["that"]
         self.assertIn("scpub_enabled | bool", assertions)
-        self.assertIn("scpub_release_directory is match('^/')", assertions)
+        local_source = self.pre_task("Require an absolute local artifact directory")
+        self.assertEqual(local_source["when"], "scpub_release_directory is defined")
+        self.assertIn("scpub_release_directory is match('^/')", local_source["ansible.builtin.assert"]["that"])
         self.assertIn("scpub_config == '/etc/simplestchat-public'", assertions)
         self.assertIn("scpub_root == '/srv/simplestchat-public'", assertions)
         self.assertIn("ansible_facts.architecture == 'x86_64'", assertions)
@@ -88,6 +189,7 @@ class ReleasePlaybookTests(unittest.TestCase):
         self.assertEqual(validation["delegate_to"], "localhost")
         self.assertIs(validation["become"], False)
         self.assertIs(validation["changed_when"], False)
+        self.assertEqual(validation["when"], "scpub_release_directory is defined")
         code = validation["ansible.builtin.command"]["argv"][3]
         self.assertIn("validate_manifest(root / 'release.json')", code)
         self.assertIn("verify_archive(root / 'image.tar', manifest)", code)
@@ -103,7 +205,7 @@ class ReleasePlaybookTests(unittest.TestCase):
         self.assertEqual(inspection["ansible.builtin.stat"]["checksum_algorithm"], "sha256")
         self.assertIs(inspection["ansible.builtin.stat"]["follow"], False)
         comparison = next(task for task in self.tasks if "ansible.builtin.assert" in task)
-        self.assertEqual(comparison["loop"], "{{ scpub_transferred_files.results }}")
+        self.assertEqual(comparison["loop"], "{{ scpub_transferred_files.results | default([]) }}")
         assertions = comparison["ansible.builtin.assert"]["that"]
         for assertion in ["item.stat.isreg | default(false)", "item.stat.uid == 0", "item.stat.mode == '0600'",
                           "item.stat.checksum == (scpub_validated_release.stdout | from_json)[item.item]"]:
@@ -111,6 +213,8 @@ class ReleasePlaybookTests(unittest.TestCase):
         self.assertLess(self.tasks.index(transfer), self.tasks.index(inspection))
         self.assertLess(self.tasks.index(inspection), self.tasks.index(comparison))
         self.assertLess(self.tasks.index(comparison), self.tasks.index(self.command("stage")))
+        for task in (transfer, inspection, comparison):
+            self.assertEqual(task["when"], "scpub_release_directory is defined")
 
     def test_python_helper_and_shared_module_are_installed_together(self):
         for filename in ("release.yml", "public.yml"):

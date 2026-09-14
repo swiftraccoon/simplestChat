@@ -25,8 +25,9 @@ Linux/amd64 on Apple Silicon using emulation; a native Linux/amd64 CI runner is
 usually faster. No registry or additional VPS is required.
 
 The manual **Build production release artifact** GitHub Actions workflow runs
-this same builder on Linux. Select the reviewed commit/branch, require the normal
-CI checks to pass, then download its `simplestchat-production-<commit>` artifact.
+this same builder on Linux. Select the reviewed commit/branch and require the
+normal CI checks to pass. Download its `simplestchat-production-<commit>` artifact
+or use the direct GitHub transfer below.
 It has no registry credentials, push permission, SSH access, or deployment step.
 Before staging, check that `outcome.json` reports `passed: true` and the artifact
 contains `release.json`. Failed build evidence may also be retained by the
@@ -66,6 +67,60 @@ and packaged SQL checksums. Importing an image uses disk and CPU but does not
 stop public containers. Reusing a commit with different artifact bytes is refused.
 Nothing is published to a registry. The destination's own immutable image ID is
 recorded; image IDs need not be portable between Docker image stores.
+
+### Fetch a GitHub artifact directly onto the VPS
+
+This avoids sending the image archive through your controller's SSH connection.
+Use Python 3.12+ and GitHub CLI on the controller, authenticated with
+`gh auth login --hostname github.com`. Only GitHub.com is supported; no GitHub
+token is installed on the VPS.
+
+Select the exact artifact ID, reviewed 40-character commit, and successful push CI run
+ID for that commit. Review the repository's build and CI workflows before trusting
+their results. The controller verifies the artifact identity and successful build
+and CI runs before requesting a short-lived download URL. To list artifact IDs
+from the selected build run:
+
+```sh
+gh api repos/OWNER/REPOSITORY/actions/runs/BUILD_RUN_ID/artifacts \
+  --jq '.artifacts[] | {id, name}'
+```
+
+Replace the uppercase placeholders, and omit `scpub_release_directory`:
+
+```sh
+ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
+  ops/ansible/.venv/bin/ansible-playbook \
+  -i ops/ansible/inventory.local.yml ops/ansible/release.yml \
+  -e scpub_release_repository=OWNER/REPOSITORY \
+  -e scpub_release_artifact_id=ARTIFACT_ID \
+  -e scpub_release_expected_revision=COMMIT_SHA \
+  -e scpub_release_ci_run=CI_RUN_ID
+```
+
+The inventory must use OpenSSH with explicit `ansible_host`, `ansible_user`, and
+an absolute private-key file in `ansible_ssh_private_key_file`; `ansible_port`
+defaults to 22. Hosts may be DNS names, IPv4 addresses, or SSH aliases, not IPv6.
+Use root SSH or passwordless `sudo -n`. Password authentication, other Ansible
+connection plugins, and nonempty `ansible_ssh_common_args`/`ansible_ssh_extra_args`
+are unsupported. Normal OpenSSH host aliases work, but proxy/jump commands, local
+commands, forwarding, and connection sharing are disabled. The controller does
+not use Ansible's global `ansible_ssh_args`. Host-key checking remains strict.
+
+The URL is sent only over SSH after the receiver is ready; the API token remains
+on the controller. The receiver has a 300-second deadline and the controller a
+420-second deadline. Downloaded ZIP and image bytes are verified before the common
+image-staging checks run. Existing release bytes are never overwritten. Private
+evidence is retained under the controller's `results/` and the VPS's release
+storage; console output omits credentials and signed URLs. This still stages only:
+deployment requires the explicit choice below. Inspect any failure before another
+attempt; a timeout is not proof that remote work has stopped.
+
+ZIP archives and images are each limited to 2 GiB. Every attempt keeps its ZIP
+and extracted image for inspection, even when the selected release is already
+present and identical. Budget disk space for both; no retained evidence is
+automatically deleted. Check mode skips the download and does not validate GitHub
+access or remote runtime behavior.
 
 ## Deploy explicitly
 

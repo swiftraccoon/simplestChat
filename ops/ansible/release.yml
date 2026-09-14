@@ -9,14 +9,54 @@
       ansible.builtin.assert:
         that:
           - scpub_enabled | bool
-          - scpub_release_directory is defined
-          - scpub_release_directory is match('^/')
+          - (scpub_release_directory is defined) != (scpub_release_artifact_id is defined)
           - scpub_config == '/etc/simplestchat-public'
           - scpub_root == '/srv/simplestchat-public'
           - ansible_facts.distribution == 'Debian'
           - ansible_facts.distribution_major_version == '13'
           - ansible_facts.architecture == 'x86_64'
-        fail_msg: Select an absolute controller artifact directory and an already provisioned public host.
+        fail_msg: Select exactly one local artifact directory or GitHub artifact ID and an already provisioned public host.
+
+    - name: Require an absolute local artifact directory
+      ansible.builtin.assert:
+        that:
+          - scpub_release_directory is string
+          - scpub_release_directory is match('^/')
+        fail_msg: Select an absolute controller artifact directory.
+      when: scpub_release_directory is defined
+
+    - name: Require an exact GitHub source and supported key-based SSH connection
+      ansible.builtin.assert:
+        that:
+          - scpub_release_repository is defined
+          - scpub_release_repository is match('^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$')
+          - scpub_release_artifact_id | string is match('^[1-9][0-9]*$')
+          - scpub_release_expected_revision is defined
+          - scpub_release_expected_revision is match('^[a-f0-9]{40}$')
+          - scpub_release_ci_run is defined
+          - scpub_release_ci_run | string is match('^[1-9][0-9]*$')
+          - ansible_connection | default('ssh') == 'ssh'
+          - ansible_host is defined
+          - ansible_host is string
+          - ansible_host is match('^[A-Za-z0-9][A-Za-z0-9._-]*$')
+          - ansible_user is defined
+          - ansible_user is string
+          - ansible_user | length > 0
+          - ansible_ssh_private_key_file is defined
+          - ansible_ssh_private_key_file is match('^/')
+          - ansible_port | default(22) | string is match('^[1-9][0-9]*$')
+          - ansible_port | default(22) | int <= 65535
+          - ansible_password is not defined
+          - ansible_ssh_pass is not defined
+          - ansible_ssh_password is not defined
+          - ansible_become_password is not defined
+          - ansible_become_pass is not defined
+          - ansible_ssh_common_args | default('') | length == 0
+          - ansible_ssh_extra_args | default('') | length == 0
+        fail_msg: >-
+          GitHub fetching requires exact repository/artifact/revision/CI identities and direct OpenSSH
+          with an explicit host, user, absolute private key, and root or passwordless sudo.
+      when: scpub_release_artifact_id is defined
 
     - name: Validate artifact integrity on the controller before transfer
       ansible.builtin.command:
@@ -41,10 +81,17 @@
       register: scpub_validated_release
       changed_when: false
       check_mode: false
+      when: scpub_release_directory is defined
 
-    - name: Select the verified source revision
+    - name: Select the verified local source revision
       ansible.builtin.set_fact:
         scpub_release_revision: "{{ (scpub_validated_release.stdout | from_json).revision }}"
+      when: scpub_release_directory is defined
+
+    - name: Select the explicitly pinned GitHub revision
+      ansible.builtin.set_fact:
+        scpub_release_revision: "{{ scpub_release_expected_revision }}"
+      when: scpub_release_artifact_id is defined
 
     - name: Require existing public configuration without exposing it
       ansible.builtin.stat:
@@ -78,6 +125,15 @@
         mode: '0644'
       loop: [release-public.py, release_artifact.py, reboot-public.py]
 
+    - name: Install the bounded GitHub artifact receiver
+      ansible.builtin.copy:
+        src: fetch-release.py
+        dest: /usr/local/libexec/simplestchat-public/fetch-release.py
+        owner: root
+        group: root
+        mode: '0644'
+      when: scpub_release_artifact_id is defined
+
     - name: Create private immutable release storage
       ansible.builtin.file:
         path: "{{ item }}"
@@ -89,6 +145,38 @@
         - "{{ scpub_root }}/releases"
         - "{{ scpub_root }}/releases/{{ scpub_release_revision }}"
 
+    - name: Verify the exact GitHub release and fetch it directly onto the prepared host
+      ansible.builtin.command:
+        argv:
+          - "{{ ansible_playbook_python }}"
+          - -B
+          - "{{ playbook_dir }}/../../build/fetch-release.py"
+          - --repository
+          - "{{ scpub_release_repository }}"
+          - --artifact-id
+          - "{{ scpub_release_artifact_id }}"
+          - --revision
+          - "{{ scpub_release_revision }}"
+          - --ci-run
+          - "{{ scpub_release_ci_run }}"
+          - --host
+          - "{{ ansible_host }}"
+          - --user
+          - "{{ ansible_user }}"
+          - --port
+          - "{{ ansible_port | default(22) }}"
+          - --identity
+          - "{{ ansible_ssh_private_key_file }}"
+          - --output-parent
+          - "{{ (playbook_dir ~ '/../../results') | realpath }}"
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      timeout: 450
+      when:
+        - not ansible_check_mode
+        - scpub_release_artifact_id is defined
+
     - name: Transfer artifact files without overwriting retained releases
       ansible.builtin.copy:
         src: "{{ scpub_release_directory }}/{{ item }}"
@@ -98,6 +186,7 @@
         mode: '0600'
         force: false
       loop: [release.json, image.tar]
+      when: scpub_release_directory is defined
 
     - name: Verify retained destination bytes match this exact controller artifact
       ansible.builtin.stat:
@@ -106,6 +195,7 @@
         checksum_algorithm: sha256
       loop: [release.json, image.tar]
       register: scpub_transferred_files
+      when: scpub_release_directory is defined
 
     - name: Refuse a different retained artifact for the same commit
       ansible.builtin.assert:
@@ -115,9 +205,10 @@
           - item.stat.mode == '0600'
           - item.stat.checksum == (scpub_validated_release.stdout | from_json)[item.item]
         fail_msg: This commit already has different retained artifact bytes; inspect them rather than overwrite a tested release.
-      loop: "{{ scpub_transferred_files.results }}"
+      loop: "{{ scpub_transferred_files.results | default([]) }}"
       loop_control:
         label: "{{ item.item }}"
+      when: scpub_release_directory is defined
 
     - name: Import and verify the image while the public service remains running
       ansible.builtin.command:
