@@ -150,11 +150,11 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# Only the lifecycle gate needs protected server counts. Never inherit an
+# Lifecycle and product-load checks need protected server counts. Never inherit an
 # operator credential or publish this disposable token in logs/artifacts.
 test_metrics_environment=("PATH=${PATH}")
 unset TEST_METRICS_TOKEN TEST_SERVER_PID
-if [[ "${LIFECYCLE_E2E:-}" == 1 ]]; then
+if [[ "${LIFECYCLE_E2E:-}" == 1 || "${UI_STRESS_E2E:-}" == 1 ]]; then
   TEST_METRICS_TOKEN="$(env -i PATH="${PATH}" node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
   export TEST_METRICS_TOKEN
   test_metrics_environment+=("METRICS_TOKEN=${TEST_METRICS_TOKEN}")
@@ -194,6 +194,8 @@ kill -0 "${server_pid}" 2>/dev/null
 
 export COMMUNITY_E2E=1
 export TEST_DATABASE_URL="${DATABASE_URL}"
+# Reports identify the actual selected binary/assets even when defaults were used.
+export TEST_SERVER_BINARY="${server_binary}" TEST_SERVER_WORKDIR="${server_workdir}"
 "$@"
 if ! kill -0 "${server_pid}" 2>/dev/null; then
   echo 'Test server exited while the test command was running.' >&2

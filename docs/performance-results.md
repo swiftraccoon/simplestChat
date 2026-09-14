@@ -1,5 +1,78 @@
 # Performance results
 
+## 100-client media reliability — 2026-09-14
+
+The original build passed all 800 media-subscription checks but recorded three
+signaling resets during a 335-second session. A short real-socket regression
+reproduced quiet-member idle expiry. After adding bounded, membership-gated
+protocol keepalives, two identical-build repeats passed all **200 client attempts
+and 1,600 subscriptions**, with no signaling resets or skipped coverage. The old
+reset timestamps fit idle expiry, but the original error-only logs do not prove
+that attribution directly.
+
+Each repeat used four rooms, 100 synthetic publishers, one worker, 480p/30fps,
+four audio plus four video subscriptions per client, a 205-second ramp,
+10-second warmup and 120-second measurement. All expected consumers received
+packets in every measured second. On the local host described below:
+
+| Measurement | Range across two repeats |
+| --- | ---: |
+| Received packets/second | 69,199.79–69,200.08 |
+| Receive-ready P99 | 413 ms |
+| Server CPU, percent of one core | 64.42–66.98% |
+| Server sampled peak RSS | 568.20–571.59 MiB |
+| Post-workload membership cleanup | 29.67–30.19 s |
+
+Both servers/generators exited zero, with zero remaining rooms, participants and
+connections. **Teardown is not error-free:** the runs logged 751 / 939 native
+[bitrate-clamping errors](diagnostics.md#native-bitrate-clamping-messages), all
+28–30 seconds after workload completion, and each recorded 1,200 closed-queue
+attempts during departure fan-out to disconnected grace sessions. These remain
+core-server follow-up work; general worker logs are not included in the signaling
+error counter.
+
+Server `e868474041a3a00f` and unchanged generator `b40d5a6cb8cff135` were frozen
+for both repeats. No builds or other owned workloads overlapped. These are
+same-build reliability observations, not a CPU comparison against the failed
+original, all-to-all media, browser quality or VPS capacity. The local runner's
+WebSocket admission overrides were 128 connections/IP and 600 handshakes/minute;
+room-join quotas remained unchanged. See [workload setup](performance.md#choose-a-workload).
+
+## Populated chat and history replay — 2026-09-14
+
+One local before/after pair compared the `fe05fe2` UI with batched replay and
+incremental message rows. Each run used two authenticated Chromium observers
+(1440px and 375px), 38 protocol guests, 960 messages at up to eight per second,
+300-message history rollover and one retained-session reconnect. Both used the
+same heartbeat-fixed release server, browser and harness, with fresh databases
+and no competing builds/tests.
+
+| Instrumented UI measurement | Before | After |
+| --- | ---: | ---: |
+| 300-entry replay, snapshot arrival → post-dispatch DOM | 3,465.7 ms | 63.6 ms |
+| Main-thread task time, both pages during traffic | 46.41 s | 19.02 s |
+| Full-backlog live arrival → DOM P95, desktop / 375px | 15.7 / 15.8 ms | 3.0 / 3.0 ms |
+| Full-backlog trusted input → animation frame P95, desktop / 375px | 17.4 / 16.7 ms | 15.0 / 17.0 ms |
+
+Both runs passed exact message content/identity checks for all recipients,
+history bounds, drafts, scrollback, settings and cleanup. The reconnect recovered
+37 / 36 missed messages; those intentional closed-queue attempts were confined
+to the reconnect gap. There were no unexpected disconnects, server errors,
+failed writes or full queues. Browser/server processes exited cleanly.
+
+The task-time window excludes ramp and teardown; sends lasted 120.66 / 121.11
+seconds. Replay is one observation per build, and live P95 covers the post-replay
+full-backlog phase. The candidate still recorded a 64 ms replay long task.
+These are encouraging local observations, not stable regression thresholds,
+INP, paint guarantees or production capacity. No physical devices or capture
+were used; sampled heap/DOM counts do not establish leak freedom.
+
+Inputs: Apple M5 Max, 18 CPUs, 128 GiB RAM, Darwin 27; Chromium 153.0.8010.12,
+Playwright 1.63.0, Node 26.8.1, PostgreSQL 15.19, Rust 1.98.1/static OpenSSL 3.5.8.
+Frozen SHA-256 prefixes: server `e868474041a3a00f`; UI `ae224eeecddf94d9` /
+`d06fa916a5ecc5a4`; harness `4594ecfdffcd74c4`.
+See [the repeatable workload](performance.md#populated-room-ui-stress).
+
 ## Current-build baseline — 2026-09-12
 
 These are repeatability measurements, **not a before/after comparison**. Native runs

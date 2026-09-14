@@ -89,6 +89,13 @@ recovery with retained media separately.
 The local runner supports up to 100 clients, four workers, five repetitions, and
 180 seconds per measurement. It tests guest media without a database.
 
+For a larger sustained test, use the comparison command above with
+`--clients 100 --scenarios multi-room --ramp-up 205 --warmup 10 --duration 120`.
+This creates four rooms with 25 publishers each and validates up to four audio
+and four video subscriptions per client. It is not all-to-all media. The local
+runner raises only its test server's WebSocket admission limits; room join
+quotas remain unchanged. Stop and investigate failed runs before increasing load.
+
 ## Reading results
 
 Compare the medians and ranges in `comparison.json`, then inspect individual
@@ -140,6 +147,27 @@ bundle size, account/room requests, chat delivery, and fake-camera decoding.
 For an A/B comparison, use the same browser and harness, fresh databases, and
 at least three alternating pairs. Local results help compare changes;
 production sizing needs a representative deployment, network, and client workload.
+
+### Populated-room UI stress
+
+With release server/UI builds and the pinned Chromium tooling installed:
+
+```sh
+UI_STRESS_E2E=1 TEST_SERVER_BINARY="$PWD/target/release/simplestChat" \
+  build/with-test-postgres.sh build/with-test-server.sh \
+  npm --prefix web/e2e run test:stress
+```
+
+The full profile uses two authenticated browser observers and 38 protocol guests,
+then sends 960 messages over at least two minutes. It checks every recipient,
+300-message history rollover, retained-session reconnect/replay, drafts, scrollback,
+settings and mobile-width containment. No camera or microphone is activated.
+Joins are paced within the unchanged room quotas; allow about seven minutes.
+
+Use `UI_STRESS_PROFILE=smoke` for six participants and 48 messages when checking
+the harness. Smoke does not cover history rollover or long quiet sessions.
+See [browser stress coverage](../web/e2e/README.md#populated-room-ui-stress) for
+reports, cleanup gates and measurement limits.
 
 ## Diagnosing missing media
 

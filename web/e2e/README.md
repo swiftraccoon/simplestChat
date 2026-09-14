@@ -214,6 +214,44 @@ media, and zero membership gauges do not audit every native allocation. Real
 browser/device checks in the [manual checklist](../../docs/testing.md#manual-release-checklist)
 remain necessary.
 
+## Populated-room UI stress
+
+Build the release server/UI and install Chromium, then run with fresh services:
+
+```sh
+UI_STRESS_E2E=1 TEST_SERVER_BINARY="$PWD/target/release/simplestChat" \
+  build/with-test-postgres.sh build/with-test-server.sh \
+  npm --prefix web/e2e run test:stress
+```
+
+The default full profile joins two authenticated browser users and 38 protocol
+guests to one stored room. It sends 960 messages at up to eight per second,
+exercises the 300-message history bound, and holds one owned replacement signaling
+handshake while chat continues. Every participant must receive the expected
+messages; the reconnecting browser must recover unseen text without a full rejoin.
+Both desktop and 375px Chromium views exercise typing, preserved drafts,
+scrollback and keyboard-operated settings. Capture is blocked and any request
+for it fails the test. This is not 40 full browsers or physical-mobile coverage.
+
+Joins are spaced 6.3 seconds apart without changing production admission or chat
+limits. Allow about seven minutes. `UI_STRESS_PROFILE=smoke` instead uses two
+browser users, four guests and 48 messages; it checks the harness, not history
+rollover or long-session reliability. CI runs smoke and retains its diagnostics;
+the full profile is manual. Neither profile runs under `npm test`.
+
+`ui-stress-results.json` records delivery/replay correctness, browser errors,
+main-thread timings, JS heap/DOM counters and server RSS/counts. Unexpected
+signaling disconnects fail even if automatic recovery succeeds. Explicit leaves,
+owned-room deletion, zero remaining server memberships/connections and clean
+browser/server exits are required. The helper supplies a private, temporary
+metrics credential; reports exclude passwords, tokens and message contents.
+
+Timings are informational, not INP, capacity or memory-leak guarantees. Animation
+frame callbacks do not prove paint. Compare identical harnesses and workloads
+with frozen assets, fresh databases and no competing builds; use multiple
+alternating pairs before setting regression thresholds. Use a fresh
+`E2E_ARTIFACTS` directory for each run and retain failed reports separately.
+
 ## Informational browser/API performance
 
 With the disposable database still running and the UI already built:

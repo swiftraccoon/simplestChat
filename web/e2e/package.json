@@ -8,6 +8,7 @@
   "scripts": {
     "test": "node community.cjs",
     "test:layout": "node homepage-layout.cjs",
+    "test:stress": "node ui-stress.cjs",
     "install:browser": "playwright install chromium",
     "install:browsers": "playwright install chromium firefox webkit"
   },

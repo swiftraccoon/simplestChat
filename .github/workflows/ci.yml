@@ -245,6 +245,25 @@ jobs:
           E2E_ARTIFACTS: ${{ runner.temp }}/community-e2e
         run: build/with-test-server.sh npm --prefix web/e2e test
 
+      - name: Chat delivery and UI stress harness smoke
+        timeout-minutes: 4
+        env:
+          UI_STRESS_E2E: "1"
+          UI_STRESS_PROFILE: smoke
+          E2E_ARTIFACTS: ${{ runner.temp }}/ui-stress
+          SERVER_REVISION: ${{ github.sha }}
+          FRONTEND_REVISION: ${{ github.sha }}
+        run: build/with-test-server.sh npm --prefix web/e2e run test:stress
+
+      - name: Preserve UI stress diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-stress
+          path: ${{ runner.temp }}/ui-stress
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Accessibility rules and keyboard smoke
         timeout-minutes: 5
         env:

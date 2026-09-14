@@ -208,7 +208,7 @@ test('helper reports actual graceful exit separately from its requested TERM', a
   assert.throws(() => process.kill(report.serverPid, 0), { code: 'ESRCH' });
 });
 
-test('lifecycle counts use a fresh scoped credential and the owned server PID', async t => {
+test('lifecycle and UI stress counts use a fresh scoped credential and the owned server PID', async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-metrics-fixture.'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const server = path.join(directory, 'server.mjs');
@@ -224,9 +224,11 @@ test('lifecycle counts use a fresh scoped credential and the owned server PID', 
     process.on('SIGTERM', () => server.close());
   `);
   await chmod(server, 0o755);
-  for (const enabled of [false, true]) {
+  for (const profile of ['disabled', 'lifecycle', 'ui-stress']) {
+    const enabled = profile !== 'disabled';
     const result = await run(t, {
-      TEST_SERVER_BINARY: server, LIFECYCLE_E2E: enabled ? '1' : '0',
+      TEST_SERVER_BINARY: server, LIFECYCLE_E2E: profile === 'lifecycle' ? '1' : '0',
+      UI_STRESS_E2E: profile === 'ui-stress' ? '1' : '0',
       METRICS_TOKEN: 'inherited-private-token', TEST_METRICS_TOKEN: 'inherited-test-token', TEST_SERVER_PID: '1',
     }, [process.execPath, '--input-type=module', '-e', `
       import assert from 'node:assert/strict';
@@ -237,6 +239,8 @@ test('lifecycle counts use a fresh scoped credential and the owned server PID', 
       assert.equal(body.enabled, ${enabled});
       assert.equal(body.pid, Number(process.env.TEST_SERVER_PID));
       assert.ok(body.pid > 1);
+      assert.equal(process.env.TEST_SERVER_BINARY, ${JSON.stringify(server)});
+      assert.equal(process.env.TEST_SERVER_WORKDIR, ${JSON.stringify(path.resolve(repoRoot))});
       if (${enabled}) {
         assert.match(process.env.TEST_METRICS_TOKEN, /^[a-f0-9]{64}$/);
         assert.equal(response.status, 200);
