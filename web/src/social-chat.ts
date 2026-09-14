@@ -1,6 +1,6 @@
 import type { RoomClient } from './room';
 import type { ChatEntry, ServerMessage } from './protocol';
-import { ChatStore, ConversationInputs } from './chat-store';
+import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
 import { asyncButton, button, busy, el, field, modal } from './ui';
 
 type Preferences = {
@@ -15,6 +15,7 @@ type Options = {
   notify: (message: string) => void;
   participantAction: (id: string, name: string, x: number, y: number) => void;
 };
+type MessageRow = { node: HTMLElement; fingerprint: string };
 
 export class SocialChat {
   private readonly store = new ChatStore(300, 256 * 1024);
@@ -27,6 +28,8 @@ export class SocialChat {
   private readonly closeButton = button('Close PM', () => this.closePrivate());
   private readonly emojiPanel = el('div', undefined, 'emoji-panel');
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
+  // Only the active conversation's visible, retained messages own DOM nodes.
+  private readonly rows = new Map<string, MessageRow>();
   private preferences: Preferences = {
     allowPrivateMessages: true,
     sounds: false,
@@ -210,6 +213,8 @@ export class SocialChat {
     for (const timer of this.pending.values()) clearTimeout(timer);
     this.pending.clear();
     this.store.reset();
+    for (const row of this.rows.values()) row.node.remove();
+    this.rows.clear();
     this.composition.reset();
     this.temporaryIgnored.clear();
     this.scope = '';
@@ -253,7 +258,9 @@ export class SocialChat {
       this.render();
     } else if (message.type === 'socialResponse' && message.action === 'getRoomSnapshot') {
       const snapshot = message.data;
-      for (const entry of snapshot.messages) this.receive(entry, true);
+      // Ingest synchronously so replay retains the same ordering, privacy and
+      // acknowledgement semantics, then reconcile the bounded view just once.
+      for (const entry of snapshot.messages) this.ingest(entry, true);
       this.render();
     } else if (message.type === 'nicknameChanged') {
       if (this.store.names.has(message.participantId))
@@ -333,13 +340,17 @@ export class SocialChat {
   }
 
   private receive(message: ChatEntry, replay = false): void {
-    if (!this.store.localId || this.isIgnored(message.participantId)) return;
+    if (this.ingest(message, replay)) this.render();
+  }
+
+  private ingest(message: ChatEntry, replay: boolean): boolean {
+    if (!this.store.localId || this.isIgnored(message.participantId)) return false;
     if (
       message.recipientId &&
       message.participantId !== this.store.localId &&
       !this.preferences.allowPrivateMessages
     )
-      return;
+      return false;
     const added = this.store.receive(message, replay);
     if (message.participantId === this.store.localId) this.clearPending(message.clientMessageId);
     if (added && message.participantId !== this.store.localId) {
@@ -350,7 +361,7 @@ export class SocialChat {
         this.store.markUnread(message);
       if (!replay && this.preferences.sounds) this.playSound(message.recipientId ? 700 : 440);
     }
-    this.render();
+    return true;
   }
 
   private send(): void {
@@ -455,68 +466,30 @@ export class SocialChat {
         ? 'Write a private message…'
         : 'Type a message…';
     this.messages.classList.toggle('large-chat-text', this.preferences.largeText);
-    this.messages.replaceChildren();
+    const visible = this.store.messages.filter(
+      (message) =>
+        this.store.conversation(message) === this.store.active &&
+        !this.isIgnored(message.participantId),
+    );
+    const keys = new Set(visible.map((message) => this.rowKey(message)));
+    for (const [key, row] of this.rows) {
+      if (!keys.has(key)) {
+        row.node.remove();
+        this.rows.delete(key);
+      }
+    }
     let previousSender: string | undefined;
     let previousTime = 0;
-    for (const message of this.store.messages) {
-      if (
-        this.store.conversation(message) !== this.store.active ||
-        this.isIgnored(message.participantId)
-      )
-        continue;
-      const node = el('div', undefined, `chat-msg${message.participantId ? '' : ' system'}`);
-      node.dataset['messageId'] = message.messageId;
+    let position = this.messages.firstChild;
+    for (const message of visible) {
+      const node = this.messageRow(message, room?.nickname);
       const time = Date.parse(message.sentAt);
       const grouped = previousSender === message.participantId && time - previousTime < 120_000;
-      node.classList.toggle('grouped', grouped);
-      if (message.participantId) {
-        const sender = button(
-          message.participantId === this.store.localId ? 'You' : message.participantName,
-          () => {
-            const rect = sender.getBoundingClientRect();
-            this.options.participantAction(
-              message.participantId,
-              message.participantName,
-              rect.left,
-              rect.bottom,
-            );
-          },
-          'sender chat-sender-button',
-        );
-        node.append(sender);
-      }
-      const text = el('div', undefined, 'msg-text');
-      appendLinkedText(text, message.content);
-      const nickname = room?.nickname;
-      if (
-        nickname &&
-        message.participantId !== this.store.localId &&
-        message.content.toLowerCase().includes(`@${nickname.toLowerCase()}`)
-      )
-        node.classList.add('mentioned');
-      node.append(text);
-      if (message.participantId) {
-        const meta = el('div', undefined, 'msg-time');
-        const date = new Date(message.sentAt);
-        meta.textContent = `${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${message.status === 'pending' ? ' · Sending…' : message.status === 'failed' ? ` · ${message.error}` : ''}`;
-        meta.title = date.toLocaleString();
-        if (message.status === 'failed') {
-          meta.classList.add('delivery-error');
-          meta.append(
-            button(
-              'Edit & resend',
-              () => {
-                this.input.value = message.content;
-                this.composition.save(this.store.active, message.content);
-                this.input.focus();
-              },
-              'auth-link-btn',
-            ),
-          );
-        }
-        node.append(meta);
-      }
-      this.messages.append(node);
+      if (node.classList.contains('grouped') !== grouped) node.classList.toggle('grouped', grouped);
+      // Keep unchanged rows in place. insertBefore also handles the uncommon
+      // chronological move when an acknowledgement updates a pending timestamp.
+      if (node === position) position = position.nextSibling;
+      else this.messages.insertBefore(node, position);
       previousSender = message.participantId;
       previousTime = time;
     }
@@ -524,6 +497,81 @@ export class SocialChat {
     if (forceScroll) this.seenAtBottom = true;
     if (this.seenAtBottom && this.isVisible()) this.store.markRead(this.store.active);
     this.updateBadges();
+  }
+
+  private rowKey(message: ChatEntry): string {
+    // Match the store's correlation identity: the server replaces the provisional
+    // message ID on acknowledgement without replacing this visible message.
+    return JSON.stringify([
+      message.participantId,
+      message.clientMessageId,
+      message.recipientId ?? 'public',
+    ]);
+  }
+
+  private messageRow(message: ChatItem, nickname: string | undefined): HTMLElement {
+    const { messageId, participantId, participantName, content, sentAt, status, error } = message;
+    const local = participantId === this.store.localId;
+    const mentioned = Boolean(
+      nickname && !local && content.toLowerCase().includes(`@${nickname.toLowerCase()}`),
+    );
+    // ChatStore updates objects in place. Compare immutable display/action values,
+    // never object identity; grouping depends on adjacent visible rows instead.
+    const fingerprint = JSON.stringify([
+      messageId,
+      participantId,
+      participantName,
+      content,
+      sentAt,
+      status,
+      error,
+      local,
+      mentioned,
+    ]);
+    const key = this.rowKey(message);
+    const previous = this.rows.get(key);
+    if (previous?.fingerprint === fingerprint) return previous.node;
+    const node = previous?.node ?? el('div');
+    node.className = `chat-msg${participantId ? '' : ' system'}${mentioned ? ' mentioned' : ''}`;
+    node.dataset['messageId'] = messageId;
+    node.replaceChildren();
+    if (participantId) {
+      const sender = button(
+        local ? 'You' : participantName,
+        () => {
+          const rect = sender.getBoundingClientRect();
+          this.options.participantAction(participantId, participantName, rect.left, rect.bottom);
+        },
+        'sender chat-sender-button',
+      );
+      node.append(sender);
+    }
+    const text = el('div', undefined, 'msg-text');
+    appendLinkedText(text, content);
+    node.append(text);
+    if (participantId) {
+      const meta = el('div', undefined, 'msg-time');
+      const date = new Date(sentAt);
+      meta.textContent = `${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${status === 'pending' ? ' · Sending…' : status === 'failed' ? ` · ${error}` : ''}`;
+      meta.title = date.toLocaleString();
+      if (status === 'failed') {
+        meta.classList.add('delivery-error');
+        meta.append(
+          button(
+            'Edit & resend',
+            () => {
+              this.input.value = content;
+              this.composition.save(this.store.active, content);
+              this.input.focus();
+            },
+            'auth-link-btn',
+          ),
+        );
+      }
+      node.append(meta);
+    }
+    this.rows.set(key, { node, fingerprint });
+    return node;
   }
 
   private updateBadges(): void {

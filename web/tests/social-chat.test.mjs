@@ -52,7 +52,9 @@ async function fixture() {
   f.Node.prototype.before = function (...nodes) {
     this.parentNode?.append(...nodes);
   };
-  f.Node.prototype.focus = function () {};
+  f.Node.prototype.focus = function () {
+    f.document.activeElement = this;
+  };
   f.Node.prototype.setRangeText = function (text, start, end) {
     this.value = this.value.slice(0, start) + text + this.value.slice(end);
     this.selectionStart = this.selectionEnd = start + text.length;
@@ -90,6 +92,7 @@ async function fixture() {
     requests: [],
     sent: [],
     notifications: [],
+    actions: [],
     storage: new Map(),
     handle: async () => ({}),
     audioCreates: 0,
@@ -161,10 +164,298 @@ async function fixture() {
     getRoom: () => state.room,
     getViewerKey: () => state.viewer,
     notify: (text) => state.notifications.push(text),
-    participantAction() {},
+    participantAction(...args) {
+      state.actions.push(args);
+    },
   });
   return { ...f, state, chat, tab, participants, documentListeners, timers };
 }
+
+function snapshot(messages) {
+  return { type: 'socialResponse', action: 'getRoomSnapshot', data: { messages } };
+}
+
+function observeRows(f) {
+  const changes = { renders: 0, insertions: 0 };
+  const render = f.chat.render.bind(f.chat);
+  f.chat.render = (...args) => {
+    changes.renders++;
+    return render(...args);
+  };
+  const insertBefore = f.chat.messages.insertBefore.bind(f.chat.messages);
+  f.chat.messages.insertBefore = (...args) => {
+    changes.insertions++;
+    return insertBefore(...args);
+  };
+  f.chat.messages.replaceChildren = () => {
+    throw new Error('Message reconciliation must not replace all rows');
+  };
+  f.chat.messages.append = () => {
+    throw new Error('Message reconciliation must not reappend all rows');
+  };
+  return changes;
+}
+
+const rows = (f) => [...f.chat.messages.children];
+const contents = (f) => rows(f).map((node) => node.querySelector('.msg-text').textContent);
+const createdRows = (f) => f.created.filter((node) => node.classList.contains('chat-msg'));
+
+test('a full snapshot renders once and unchanged replay performs no row allocation or insertion', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const changes = observeRows(f);
+  const history = Array.from({ length: 300 }, (_, index) => entry(index));
+  f.chat.handleEvent(snapshot(history));
+  assert.equal(changes.renders, 1);
+  assert.equal(changes.insertions, 300);
+  assert.equal(f.chat.rows.size, 300);
+  assert.equal(createdRows(f).length, 300);
+  assert.deepEqual(
+    contents(f),
+    history.map((message) => message.content),
+  );
+  const retained = rows(f);
+  f.chat.handleEvent(snapshot(history.map((message) => ({ ...message }))));
+  assert.equal(changes.renders, 2);
+  assert.equal(changes.insertions, 300);
+  assert.equal(createdRows(f).length, 300);
+  assert.deepEqual(rows(f), retained);
+  f.chat.participantsChanged();
+  assert.equal(changes.insertions, 300, 'roster changes leave unchanged chat rows attached');
+  assert.deepEqual(rows(f), retained);
+});
+
+test('live append evicts only the oldest row and updates the new first-row grouping', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.handleEvent(snapshot(Array.from({ length: 300 }, (_, index) => entry(index))));
+  const retained = rows(f);
+  assert.equal(retained[0].classList.contains('grouped'), false);
+  assert.equal(retained[1].classList.contains('grouped'), true);
+  const changes = observeRows(f);
+  f.chat.receive(entry(300));
+  assert.equal(changes.insertions, 1);
+  assert.equal(createdRows(f).length, 301);
+  assert.equal(f.chat.rows.size, 300);
+  assert.equal(retained[0].isConnected, false);
+  assert.deepEqual(rows(f).slice(0, 299), retained.slice(1));
+  assert.equal(retained[1].classList.contains('grouped'), false);
+  assert.equal(rows(f).at(-1).classList.contains('grouped'), true);
+  assert.deepEqual(
+    contents(f),
+    Array.from({ length: 300 }, (_, index) => `Message ${index + 1}`),
+  );
+});
+
+test('chronological insertion and acknowledgement moves preserve row identity and adjacent grouping', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const instant = Date.now();
+  const at = (offset) => new Date(instant + offset).toISOString();
+  f.chat.receive(entry('later', { sentAt: at(120_000) }));
+  const later = rows(f)[0];
+  f.chat.receive(entry('earlier', { sentAt: at(-120_000) }));
+  const earlier = rows(f)[0];
+  assert.deepEqual(contents(f), ['Message earlier', 'Message later']);
+  assert.equal(rows(f)[1], later);
+  assert.equal(later.classList.contains('grouped'), false, 'two-minute gaps start a group');
+  f.chat.input.value = 'pending between';
+  f.chat.send();
+  const pending = f.chat.store.messages.find((message) => message.status === 'pending');
+  const pendingRow = rows(f)[1];
+  assert.deepEqual(contents(f), ['Message earlier', 'pending between', 'Message later']);
+  const changes = observeRows(f);
+  f.chat.handleEvent({
+    type: 'messageAck',
+    message: { ...pending, messageId: 'ack-first', sentAt: at(-180_000) },
+  });
+  assert.deepEqual(rows(f), [pendingRow, earlier, later]);
+  assert.equal(changes.insertions, 1, 'only the acknowledged row changes chronological position');
+  assert.equal(pendingRow.dataset.messageId, 'ack-first');
+  assert.equal(f.chat.pending.size, 0);
+  assert.equal(f.timers.size, 0);
+  assert.equal(
+    earlier.classList.contains('grouped'),
+    false,
+    'different adjacent senders start groups',
+  );
+});
+
+test('mutable acknowledgement and failure fields update the retained row without touching drafts or focus', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.input.value = 'original draft';
+  f.chat.send();
+  const pending = f.chat.store.messages[0];
+  const row = rows(f)[0];
+  assert.match(row.textContent, /Sending/);
+  f.chat.input.value = 'another unsent draft';
+  f.chat.input.focus();
+  f.chat.handleEvent({
+    type: 'socialError',
+    clientMessageId: pending.clientMessageId,
+    message: 'Delivery rejected',
+  });
+  assert.equal(rows(f)[0], row);
+  assert.match(row.textContent, /Delivery rejected/);
+  assert.equal(row.querySelector('.delivery-error') !== null, true);
+  assert.equal(f.chat.input.value, 'another unsent draft');
+  assert.equal(f.document.activeElement, f.chat.input);
+  row
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Edit & resend')
+    .click();
+  assert.equal(f.chat.input.value, 'original draft');
+  assert.equal(f.chat.composition.draft('public'), 'original draft');
+  f.chat.handleEvent({
+    type: 'messageAck',
+    message: { ...pending, messageId: 'confirmed', participantName: 'Updated local name' },
+  });
+  assert.equal(rows(f)[0], row);
+  assert.equal(row.dataset.messageId, 'confirmed');
+  assert.doesNotMatch(row.textContent, /Delivery rejected|Edit & resend|Sending/);
+  assert.equal(row.querySelector('.delivery-error'), null);
+  assert.equal(f.chat.input.value, 'original draft');
+  assert.equal(f.document.activeElement, f.chat.input);
+  row.querySelector('.sender').click();
+  assert.deepEqual(f.state.actions.at(-1).slice(0, 2), ['local', 'Updated local name']);
+  assert.equal(f.chat.pending.size, 0);
+  assert.equal(f.timers.size, 0);
+});
+
+test('immutable view fingerprints refresh edited text, sender actions and local nickname mentions', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const message = entry('view', { content: 'Hello @Local' });
+  f.chat.receive(message);
+  const row = rows(f)[0];
+  const stored = f.chat.store.messages[0];
+  assert.equal(row.classList.contains('mentioned'), true);
+  f.state.room.nickname = 'SomeoneElse';
+  f.chat.participantsChanged();
+  assert.equal(rows(f)[0], row);
+  assert.equal(row.classList.contains('mentioned'), false);
+  f.chat.receive({ ...message, content: 'Hello @SomeoneElse', participantName: 'Renamed Alice' });
+  assert.equal(
+    f.chat.store.messages[0],
+    stored,
+    'the store really mutates the cached message object',
+  );
+  assert.equal(rows(f)[0], row);
+  assert.equal(row.classList.contains('mentioned'), true);
+  assert.equal(row.querySelector('.msg-text').textContent, 'Hello @SomeoneElse');
+  row.querySelector('.sender').click();
+  assert.deepEqual(f.state.actions.at(-1).slice(0, 2), ['alice', 'Renamed Alice']);
+});
+
+test('snapshot batching preserves privacy, acknowledgement cleanup and replay sound suppression', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.preferences.allowPrivateMessages = false;
+  f.chat.preferences.sounds = true;
+  f.chat.preferences.ignored = [{ id: 'ignored', name: 'Ignored' }];
+  f.chat.playSound = () => assert.fail('Replay must not play sounds');
+  f.chat.input.value = 'own pending';
+  f.chat.send();
+  const pending = { ...f.chat.store.messages[0], messageId: 'acknowledged' };
+  const publicMessage = entry('accepted');
+  const changes = observeRows(f);
+  f.chat.handleEvent(
+    snapshot([
+      pending,
+      entry('ignored', { participantId: 'ignored' }),
+      entry('private', { recipientId: 'local' }),
+      publicMessage,
+      publicMessage,
+    ]),
+  );
+  assert.equal(changes.renders, 1);
+  assert.equal(f.chat.pending.size, 0);
+  assert.equal(f.timers.size, 0);
+  assert.deepEqual(contents(f), ['Message accepted', 'own pending']);
+  assert.equal(f.chat.rows.size, 2);
+  assert.equal(f.chat.store.names.size, 0);
+  f.chat.input.value = 'evicted pending';
+  f.chat.send();
+  const afterPending = Date.now() + 10_000;
+  f.chat.handleEvent(
+    snapshot(
+      Array.from({ length: 305 }, (_, index) =>
+        entry(`new-${index}`, {
+          sentAt: new Date(afterPending + index).toISOString(),
+        }),
+      ),
+    ),
+  );
+  assert.equal(f.chat.rows.size, 300);
+  assert.equal(f.chat.pending.size, 0, 'batched eviction clears pending delivery timers');
+  assert.equal(f.timers.size, 0);
+  assert.equal(contents(f)[0], 'Message new-5');
+});
+
+test('hidden conversations, ignore changes and privacy resets discard cached DOM rows', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.receive(entry('public'));
+  f.chat.receive(entry('bob', { participantId: 'bob', participantName: 'Bob' }));
+  const [alice, bob] = rows(f);
+  await f.chat.toggleIgnore('alice', 'Alice', true);
+  assert.deepEqual(rows(f), [bob]);
+  assert.equal(alice.isConnected, false);
+  assert.equal(f.chat.rows.size, 1);
+  await f.chat.toggleIgnore('alice', 'Alice', true);
+  assert.notEqual(
+    rows(f)[0],
+    alice,
+    'unignore builds a fresh row instead of retaining hidden nodes',
+  );
+  assert.equal(rows(f)[1], bob);
+  const publicRows = rows(f);
+  f.chat.receive(entry('private', { recipientId: 'local' }));
+  f.chat.openPrivate('alice', 'Alice');
+  const privateRow = rows(f)[0];
+  assert.equal(f.chat.rows.size, 1);
+  assert.ok(publicRows.every((node) => !node.isConnected));
+  f.chat.closePrivate();
+  assert.equal(privateRow.isConnected, false);
+  assert.equal(f.chat.rows.size, 2);
+  const beforeReset = rows(f);
+  f.chat.reset();
+  assert.equal(f.chat.rows.size, 0);
+  assert.equal(f.chat.messages.children.length, 0);
+  assert.ok(beforeReset.every((node) => !node.isConnected));
+});
+
+test('batched replay preserves unread counts, scroll position, input focus and drafts', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.messages.scrollHeight = 1000;
+  f.chat.messages.scrollTop = 40;
+  f.chat.messages.emit('scroll');
+  f.chat.input.value = 'unsent draft while reading';
+  f.chat.input.focus();
+  const history = Array.from({ length: 300 }, (_, index) => entry(index));
+  f.chat.handleEvent(snapshot(history));
+  const retained = rows(f);
+  assert.equal(f.chat.messages.scrollTop, 40);
+  assert.equal(f.chat.store.unread.get('public'), 300);
+  assert.equal(f.document.title, '(300) SimplestChat');
+  f.chat.handleEvent(snapshot(history));
+  assert.equal(f.chat.store.unread.get('public'), 300);
+  assert.deepEqual(rows(f), retained);
+  assert.equal(f.chat.input.value, 'unsent draft while reading');
+  assert.equal(f.document.activeElement, f.chat.input);
+  f.document.getElementById('scroll-bottom-btn').click();
+  assert.equal(f.chat.messages.scrollTop, 1000);
+  assert.equal(f.chat.store.unread.size, 0);
+  assert.equal(f.document.title, 'SimplestChat');
+  f.document.getElementById('chat-panel').className = '';
+  f.chat.handleEvent(snapshot([entry(300)]));
+  assert.equal(f.chat.store.unread.get('public'), 1, 'a hidden panel must not mark replay as read');
+  f.document.getElementById('chat-panel').className = 'active';
+  f.chat.participantsChanged();
+  assert.equal(f.chat.store.unread.size, 0);
+});
 
 test('private drafts, generated text, and sent recall stay isolated from public chat', async () => {
   const f = await fixture();

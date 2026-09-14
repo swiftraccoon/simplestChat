@@ -54,6 +54,23 @@ export function createDOM() {
       this.append(node);
       return node;
     }
+    get firstChild() {
+      return this.children[0] ?? null;
+    }
+    get nextSibling() {
+      if (!this.parentNode) return null;
+      return this.parentNode.children[this.parentNode.children.indexOf(this) + 1] ?? null;
+    }
+    insertBefore(node, reference) {
+      if (reference !== null && reference.parentNode !== this)
+        throw new Error('Reference is not a child');
+      if (node === reference) return node;
+      node.remove();
+      const index = reference === null ? this.children.length : this.children.indexOf(reference);
+      this.children.splice(index, 0, node);
+      node.parentNode = this;
+      return node;
+    }
     replaceChildren(...nodes) {
       for (const node of this.children) node.parentNode = null;
       this.children = [];
