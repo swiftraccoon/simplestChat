@@ -428,25 +428,30 @@ test('subscription graph options are explicit, bounded and leave FIFO invocation
   assert.equal(defaultOptions.subscriptionSeed, null);
   assert.deepEqual(subscriptionArguments(defaultOptions), []);
   assert.deepEqual(subscriptionArguments(parseOptions([...localRunnerArgs, '--subscription-plan', 'fifo'])), []);
-  for (const seed of ['0', '17', '4294967295']) {
-    const options = parseOptions([...localRunnerArgs, '--subscription-plan', 'ring-v1', '--subscription-seed', seed]);
+  for (const mode of ['ring-v1', 'hotspot-v1']) for (const seed of ['0', '17', '4294967295']) {
+    const options = parseOptions([...localRunnerArgs, '--subscription-plan', mode, '--subscription-seed', seed]);
     assert.equal(options.subscriptionSeed, Number(seed));
-    assert.deepEqual(subscriptionArguments(options), ['--subscription-plan', 'ring-v1', '--subscription-seed', seed]);
+    assert.deepEqual(subscriptionArguments(options), ['--subscription-plan', mode, '--subscription-seed', seed]);
   }
-  for (const flags of [['--subscription-plan', 'ring-v2'], ['--subscription-plan', 'ring-v1'],
+  for (const flags of [['--subscription-plan', 'ring-v2'], ['--subscription-plan', 'hotspot-v2'],
+    ['--subscription-plan', 'ring-v1'], ['--subscription-plan', 'hotspot-v1'],
     ['--subscription-seed', '0'], ['--subscription-plan', 'fifo', '--subscription-seed', '0']]) {
     assert.throws(() => parseOptions([...localRunnerArgs, ...flags]), /subscription/);
   }
-  for (const seed of ['-1', '4294967296', '1.5', '1e2', '0x10', '+1', ' 1', '1 ', '01', 'Infinity', 'NaN']) {
-    assert.throws(() => parseOptions([...localRunnerArgs, '--subscription-plan', 'ring-v1', '--subscription-seed', seed]), /subscription-seed/);
+  for (const mode of ['ring-v1', 'hotspot-v1']) for (const seed of ['-1', '4294967296', '1.5', '1e2', '0x10', '+1', ' 1', '1 ', '01', 'Infinity', 'NaN']) {
+    assert.throws(() => parseOptions([...localRunnerArgs, '--subscription-plan', mode, '--subscription-seed', seed]), /subscription-seed/);
   }
   assert.throws(() => parseOptions([...localRunnerArgs, '--subscription-plan', 'ring-v1', '--subscription-seed', '0', '--subscription-seed', '1']), /duplicate/);
+  for (const options of [{ subscriptionPlan: 'unknown' }, { subscriptionPlan: 'fifo', subscriptionSeed: 0 },
+    { subscriptionPlan: 'hotspot-v1' }, { subscriptionPlan: 'hotspot-v1', subscriptionSeed: '17' }]) {
+    assert.throws(() => subscriptionArguments(options), /subscription/);
+  }
 });
 
-test('ring plans accept only stable all-publisher scenarios without weakening admission or workload bounds', () => {
-  const flags = ['--subscription-plan', 'ring-v1', '--subscription-seed', '17'];
+for (const mode of ['ring-v1', 'hotspot-v1']) test(`${mode} accepts only stable all-publisher scenarios without weakening admission or workload bounds`, () => {
+  const flags = ['--subscription-plan', mode, '--subscription-seed', '17'];
   for (const scenarios of ['conference', 'multi-room', 'audio', 'conference,multi-room,audio']) {
-    assert.equal(parseOptions([...localRunnerArgs, ...flags, '--scenarios', scenarios]).subscriptionPlan, 'ring-v1');
+    assert.equal(parseOptions([...localRunnerArgs, ...flags, '--scenarios', scenarios]).subscriptionPlan, mode);
   }
   for (const scenarios of ['churn', 'webinar', 'conference,webinar', 'audio,churn']) {
     assert.throws(() => parseOptions([...localRunnerArgs, ...flags, '--clients', '5', '--scenarios', scenarios]), /all-publisher/);
@@ -457,12 +462,12 @@ test('ring plans accept only stable all-publisher scenarios without weakening ad
   assert.equal(parseOptions([...localRunnerArgs, ...flags, '--clients', '100', '--scenarios', 'multi-room', '--ramp-up', '205']).scenarios[0].clients, 100);
 });
 
-function plannedSubscriptionFixture(scenarioName = 'multi-room') {
+function plannedSubscriptionFixture(scenarioName = 'multi-room', mode = 'ring-v1') {
   const options = parseOptions([...localRunnerArgs, '--clients', '6', '--scenarios', scenarioName,
-    '--subscription-plan', 'ring-v1', '--subscription-seed', '17', '--duration', '8']);
+    '--subscription-plan', mode, '--subscription-seed', '17', '--duration', '8']);
   const scenario = options.scenarios[0];
   const plan = expectedSubscriptionPlan(options, scenario);
-  const summary = { run: { configuration: { subscriptionPlan: 'ring-v1', subscriptionSeed: 17,
+  const summary = { run: { configuration: { subscriptionPlan: mode, subscriptionSeed: 17,
     numClients: scenario.clients, numRooms: scenario.rooms, roomId: 'owned-local-room', publishRatio: 1, churnRate: 0,
     durationSecs: options.duration, warmupSecs: options.warmup, rampUpSecs: options.rampUp,
     maxAudioConsumers: 4, maxVideoConsumers: 4,
@@ -483,19 +488,49 @@ function plannedSubscriptionFixture(scenarioName = 'multi-room') {
 
 test('ring-v1 graph matches the native cross-language hash and target vector', () => {
   const scenario = { clients: 6, rooms: 2, extra: [] };
-  const plan = expectedSubscriptionPlan({ subscriptionSeed: 17 }, scenario);
+  const plan = expectedSubscriptionPlan({ subscriptionPlan: 'ring-v1', subscriptionSeed: 17 }, scenario);
   assert.equal(plan.sha256, '95bb99692aa6be29d2c1e21b3a00ad24e56f91164c4ae6d97c089c921824bfdc');
   const targets = [[4, 2], [5, 3], [0, 4], [1, 5], [2, 0], [3, 1]];
   assert.deepEqual(plan.clients, targets.map((peers, index) => ({ clientId: `client-${index}`, room: index % 2,
     targets: { audio: peers.map(peer => `client-${peer}`), video: peers.map(peer => `client-${peer}`) } })));
-  assert.notEqual(expectedSubscriptionPlan({ subscriptionSeed: 18 }, scenario).sha256, plan.sha256);
+  assert.notEqual(expectedSubscriptionPlan({ subscriptionPlan: 'ring-v1', subscriptionSeed: 18 }, scenario).sha256, plan.sha256);
 });
 
-test('planned graph verification supports room isolation, audio-only and result order independent of launch order', () => {
+test('hotspot-v1 matches cross-language vectors and concentrates four subscriptions per kind on early room-local hubs', () => {
+  const options = { subscriptionPlan: 'hotspot-v1', subscriptionSeed: 17 };
+  const small = expectedSubscriptionPlan(options, { clients: 5, rooms: 2, extra: [] });
+  assert.equal(small.sha256, 'c0a2a4f1efa8664e5f283a53a4fb46a86880985b3d129534e4c170908bb41317');
+  const targets = [[2, 4], [3], [0, 4], [1], [0, 2]];
+  assert.deepEqual(small.clients, targets.map((peers, index) => ({ clientId: `client-${index}`, room: index % 2,
+    targets: { audio: peers.map(peer => `client-${peer}`), video: peers.map(peer => `client-${peer}`) } })));
+  const scenario = { clients: 100, rooms: 4, extra: [] };
+  const plan = expectedSubscriptionPlan(options, scenario);
+  assert.equal(plan.sha256, 'd5879adc2be169085e765384b14f3ac90b1f2563e51d55553990eb84dd9a352d');
+  assert.equal(plan.clients.reduce((sum, client) => sum + client.targets.audio.length + client.targets.video.length, 0), 800);
+  for (let room = 0; room < 4; room++) for (const kind of ['audio', 'video']) {
+    const clients = plan.clients.filter(client => client.room === room);
+    const fanout = new Map(clients.map(client => [client.clientId, 0]));
+    for (const client of clients) {
+      assert.equal(client.targets[kind].length, 4);
+      assert.equal(new Set(client.targets[kind]).size, 4);
+      assert.equal(client.targets[kind].includes(client.clientId), false);
+      for (const target of client.targets[kind]) {
+        assert.equal(Number(target.slice(7)) % 4, room);
+        assert.ok(Number(target.slice(7)) < 20, 'only the first five arrivals per room may be hubs');
+        fanout.set(target, fanout.get(target) + 1);
+      }
+    }
+    assert.deepEqual([...fanout.values()].sort((a, b) => b - a), [24, 24, 24, 24, 4, ...Array(20).fill(0)]);
+  }
+  assert.notEqual(expectedSubscriptionPlan({ ...options, subscriptionSeed: 18 }, scenario).sha256, plan.sha256);
+  assert.notEqual(expectedSubscriptionPlan({ ...options, subscriptionPlan: 'ring-v1' }, scenario).sha256, plan.sha256);
+});
+
+for (const mode of ['ring-v1', 'hotspot-v1']) test(`${mode} verification supports room isolation, audio-only and result order independent of launch order`, () => {
   for (const name of ['conference', 'multi-room', 'audio']) {
-    const f = plannedSubscriptionFixture(name);
+    const f = plannedSubscriptionFixture(name, mode);
     assert.deepEqual(verifySubscriptionReport(f.summary, f.results.reverse(), f.options, f.scenario), {
-      subscriptionPlan: 'ring-v1', subscriptionSeed: 17, subscriptionPlanSha256: f.summary.subscriptionPlan.sha256,
+      subscriptionPlan: mode, subscriptionSeed: 17, subscriptionPlanSha256: f.summary.subscriptionPlan.sha256,
     });
     for (const client of f.summary.subscriptionPlan.clients) {
       assert.equal(client.targets.audio.includes(client.clientId), false);
@@ -515,30 +550,32 @@ test('legacy FIFO reports remain compatible but cannot conceal a requested or un
     assert.throws(() => verifySubscriptionReport(summary, f.results, f.options, f.scenario), /graph report/);
   }
   for (const summary of [f.summary, { subscriptionPlan: {} }, { run: { configuration: { subscriptionPlan: 'ring-v1' } } },
+    { run: { configuration: { subscriptionPlan: 'hotspot-v1' } } },
     { run: { configuration: { subscriptionSeed: 0 } } }]) {
     assert.throws(() => verifySubscriptionReport(summary, null, fifo, f.scenario), /FIFO workload/);
   }
 });
 
-test('diagnostic timeline cannot use another subscription mode or seed as workload evidence', () => {
-  const f = plannedSubscriptionFixture();
+for (const mode of ['ring-v1', 'hotspot-v1']) test(`${mode} diagnostic timeline cannot use another subscription mode or seed as workload evidence`, () => {
+  const f = plannedSubscriptionFixture('multi-room', mode);
   const generatorSha256 = 'a'.repeat(64);
   f.options.departure = 'abrupt';
   f.summary.schemaVersion = 2;
   Object.assign(f.summary.run, { completed: true, startedAt: 'start', finishedAt: 'finish', provenance: { generatorBinarySha256: generatorSha256 } });
   Object.assign(f.summary.run.configuration, { diagnostics: true, departure: 'abrupt' });
   assert.notEqual(lifecycleWorkload(f.summary, f.options, generatorSha256), null);
-  for (const override of [{ subscriptionPlan: undefined }, { subscriptionPlan: 'fifo' }, { subscriptionSeed: undefined }, { subscriptionSeed: 18 }]) {
+  for (const override of [{ subscriptionPlan: undefined }, { subscriptionPlan: 'fifo' },
+    { subscriptionPlan: mode === 'ring-v1' ? 'hotspot-v1' : 'ring-v1' }, { subscriptionSeed: undefined }, { subscriptionSeed: 18 }]) {
     const summary = structuredClone(f.summary);
     Object.assign(summary.run.configuration, override);
     assert.equal(lifecycleWorkload(summary, f.options, generatorSha256), null);
   }
 });
 
-test('graph validation failure retains matching diagnostic evidence and completes failure finalizers', async t => {
+for (const mode of ['ring-v1', 'hotspot-v1']) test(`${mode} validation failure retains matching diagnostic evidence and completes failure finalizers`, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'simplestchat-graph-failure.'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const f = plannedSubscriptionFixture();
+  const f = plannedSubscriptionFixture('multi-room', mode);
   const generatorSha256 = 'a'.repeat(64);
   Object.assign(f.options, { purpose: 'diagnostic', diagnosticDetail: 'full', departure: 'abrupt' });
   Object.assign(f.summary, { schemaVersion: 2, diagnosticFailures: 0 });
@@ -589,10 +626,11 @@ test('graph validation failure retains matching diagnostic evidence and complete
   await assert.rejects(readFile(join(directory, 'result.json')), { code: 'ENOENT' });
 });
 
-test('ring reports require the exact requested configuration, deterministic graph and complete client set', () => {
+for (const mode of ['ring-v1', 'hotspot-v1']) test(`${mode} reports require the exact requested configuration, deterministic graph and complete client set`, () => {
   const mutations = [
     f => { f.summary.subscriptionPlan = null; },
     f => { f.summary.subscriptionPlan.version = 'ring-v2'; },
+    f => { f.summary.subscriptionPlan.version = mode === 'ring-v1' ? 'hotspot-v1' : 'ring-v1'; },
     f => { f.summary.subscriptionPlan.seed++; },
     f => { f.summary.subscriptionPlan.sha256 = 'a'.repeat(64); },
     f => { f.summary.subscriptionPlan.sha256 = f.summary.subscriptionPlan.sha256.toUpperCase(); },
@@ -601,6 +639,7 @@ test('ring reports require the exact requested configuration, deterministic grap
     f => { f.summary.subscriptionPlan.clients[0].room++; },
     f => { f.summary.subscriptionPlan.clients[0].targets.audio = ['client-0']; },
     f => { f.summary.run.configuration.subscriptionPlan = 'fifo'; },
+    f => { f.summary.run.configuration.subscriptionPlan = mode === 'ring-v1' ? 'hotspot-v1' : 'ring-v1'; },
     f => { f.summary.run.configuration.subscriptionSeed = '17'; },
     f => { f.summary.run.configuration.numRooms++; },
     f => { f.summary.run.configuration.numClients--; },
@@ -620,12 +659,12 @@ test('ring reports require the exact requested configuration, deterministic grap
     f => { f.results[0].connectionAttempts.push(f.results[0].connectionAttempts[0]); },
   ];
   for (const mutate of mutations) {
-    const f = plannedSubscriptionFixture(); mutate(f);
+    const f = plannedSubscriptionFixture('multi-room', mode); mutate(f);
     assert.throws(() => verifySubscriptionReport(f.summary, f.results, f.options, f.scenario), /subscription graph|Subscription graph/);
   }
 });
 
-test('ring coverage cannot pass on a boolean with missing, duplicate, foreign or failed consumer delivery', () => {
+for (const mode of ['ring-v1', 'hotspot-v1']) test(`${mode} coverage cannot pass on a boolean with missing, duplicate, foreign or failed consumer delivery`, () => {
   const mutations = [
     (coverage, planned) => { planned.passed = false; },
     coverage => { coverage.plannedSubscriptions = undefined; },
@@ -650,22 +689,23 @@ test('ring coverage cannot pass on a boolean with missing, duplicate, foreign or
     (coverage, planned, client) => { client.consumerDelivery[0].eligibleSeconds--; },
   ];
   for (const mutate of mutations) {
-    const f = plannedSubscriptionFixture();
+    const f = plannedSubscriptionFixture('multi-room', mode);
     const client = f.results[0], coverage = client.connectionAttempts[0].coverage;
     mutate(coverage, coverage.plannedSubscriptions, client);
     assert.throws(() => verifySubscriptionReport(f.summary, f.results, f.options, f.scenario), /subscription|consumers/);
   }
 });
 
-test('comparison refuses missing, malformed, mixed or unequal graph identity while accepting legacy FIFO', () => {
+for (const mode of ['ring-v1', 'hotspot-v1']) test(`${mode} comparison refuses missing, malformed, mixed or unequal graph identity while accepting legacy FIFO`, () => {
   const fields = Object.fromEntries(['joinP99Ms', 'sendReadyP99Ms', 'receiveReadyP99Ms', 'receivedPacketsPerSecond',
     'serverCpuPercent', 'serverPeakRssMiB', 'generatorCpuPercent', 'generatorPeakRssMiB'].map(field => [field, 1]));
-  const f = plannedSubscriptionFixture();
+  const f = plannedSubscriptionFixture('multi-room', mode);
   const identity = verifySubscriptionReport(f.summary, f.results, f.options, f.scenario);
   const rows = ['baseline', 'candidate'].map(variant => ({ scenario: 'multi-room-6', variant, workloadPassed: true,
     serverExit: { code: 0, signal: null }, ...identity, ...fields }));
   assert.equal(comparison(rows)['multi-room-6'].serverCpuPercent.delta, 0);
   for (const override of [{ subscriptionPlan: undefined }, { subscriptionPlan: 'fifo' }, { subscriptionPlan: 'ring-v2' },
+    { subscriptionPlan: mode === 'ring-v1' ? 'hotspot-v1' : 'ring-v1' },
     { subscriptionSeed: null }, { subscriptionSeed: '17' }, { subscriptionSeed: 18 },
     { subscriptionPlanSha256: undefined }, { subscriptionPlanSha256: 'a'.repeat(64) }, { subscriptionPlanSha256: 'invalid' }]) {
     assert.throws(() => comparison([rows[0], { ...rows[1], ...override }]), /subscription graph|Subscription graph/);
@@ -673,6 +713,11 @@ test('comparison refuses missing, malformed, mixed or unequal graph identity whi
   const legacy = rows.map(({ subscriptionPlan, subscriptionSeed, subscriptionPlanSha256, ...row }) => row);
   assert.equal(comparison(legacy)['multi-room-6'].serverCpuPercent.delta, 0);
   assert.throws(() => comparison([rows[0], legacy[1]]), /Subscription graph mismatch/);
+  const other = plannedSubscriptionFixture('conference', mode === 'ring-v1' ? 'hotspot-v1' : 'ring-v1');
+  const otherIdentity = verifySubscriptionReport(other.summary, other.results, other.options, other.scenario);
+  const otherRows = rows.map(row => ({ ...row, scenario: 'conference-6', ...otherIdentity }));
+  assert.deepEqual(Object.keys(comparison([...rows, ...otherRows])), ['multi-room-6', 'conference-6'],
+    'independent scenarios may use different graphs; every A/B pair must still match');
 });
 
 test('realized graph cannot remap one native producer to multiple owners or replace a stable publisher', () => {

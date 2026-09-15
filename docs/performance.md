@@ -65,7 +65,10 @@ To hold publisher selection fixed, append
 Use this opt-in mode with `conference`, `multi-room`, or `audio`: it supports
 stable, all-publisher workloads on the runner's owned loopback servers, not churn.
 The same seed, room assignment, media kinds and caps produce the same graph;
-FIFO discovery remains the default.
+FIFO discovery remains the default. Replace `ring-v1` with `hotspot-v1` to
+concentrate subscriptions on early-joining publishers instead of balancing fan-out.
+Both modes require the same exact full-window delivery proof; compare repetitions
+of the same graph, not ring and hotspot as equivalent workloads.
 
 ### Choose a workload
 
@@ -132,7 +135,7 @@ Historical reports without it do not establish per-attempt coverage. Dynamic
 streams occupying consumer caps can leave this scoped proof incomplete without
 establishing an application regression; full dynamic fan-out is not measured.
 
-For `ring-v1`, the runner also verifies the planned graph and realized
+For either fixed graph, the runner also verifies the planned graph and realized
 publisher/kind mappings, records `subscriptionPlanSha256`, and requires matching
 graph identities for comparisons. Every planned edge must deliver in every
 complete measurement second, with publisher and consumer lifetimes covering

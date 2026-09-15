@@ -65,17 +65,20 @@ export function comparison(rows) {
 
 const unsigned32 = value => Number.isInteger(value) && value >= 0 && value <= 0xffffffff;
 const sha256 = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+const plannedSubscriptionModes = new Set(['ring-v1', 'hotspot-v1']);
 
 /** Preserve the original generator invocation unless the fixed graph is requested. */
 export function subscriptionArguments(options) {
-  return options.subscriptionPlan === 'ring-v1'
-    ? ['--subscription-plan', 'ring-v1', '--subscription-seed', String(options.subscriptionSeed)] : [];
+  const mode = options.subscriptionPlan ?? 'fifo';
+  if (mode === 'fifo' && options.subscriptionSeed == null) return [];
+  if (!plannedSubscriptionModes.has(mode) || !unsigned32(options.subscriptionSeed)) throw new Error('Invalid subscription plan or seed');
+  return ['--subscription-plan', mode, '--subscription-seed', String(options.subscriptionSeed)];
 }
 
 function subscriptionComparisonIdentity(row) {
   const mode = row.subscriptionPlan ?? 'fifo';
   if (mode === 'fifo' && row.subscriptionSeed == null && row.subscriptionPlanSha256 == null) return 'fifo';
-  if (mode !== 'ring-v1' || !unsigned32(row.subscriptionSeed) || !sha256(row.subscriptionPlanSha256)) {
+  if (!plannedSubscriptionModes.has(mode) || !unsigned32(row.subscriptionSeed) || !sha256(row.subscriptionPlanSha256)) {
     throw new Error('Missing or malformed subscription graph identity');
   }
   return `${mode}:${row.subscriptionSeed}:${row.subscriptionPlanSha256}`;
@@ -83,27 +86,35 @@ function subscriptionComparisonIdentity(row) {
 
 /** Independently reproduce the versioned graph, without runtime/native identities.
  * The permutation is SHA-256(domain, seed, room, client), with all integers u32 BE.
- * The JSON field order is part of ring-v1's cross-language hash specification.
+ * The JSON field order is part of the cross-language hash specification.
+ * Hotspot hubs are drawn from early joiners; setup completion is still measured.
+ * The runner fixes both per-kind consumer caps at four.
  */
 export function expectedSubscriptionPlan(options, scenario) {
+  const mode = options.subscriptionPlan;
+  if (!plannedSubscriptionModes.has(mode) || !unsigned32(options.subscriptionSeed)) throw new Error('Invalid subscription plan or seed');
   const clients = Array.from({ length: scenario.clients }, (_, index) => ({ clientId: `client-${index}`,
     room: index % scenario.rooms, targets: { audio: [], video: [] } }));
   for (let room = 0; room < scenario.rooms; room++) {
-    const ring = clients.flatMap((client, index) => {
-      if (client.room !== room) return [];
+    const members = clients.flatMap((client, index) => client.room === room ? [{ client, index }] : []);
+    const pool = mode === 'hotspot-v1' ? members.slice(0, 5) : members;
+    const ranked = pool.map(({ client, index }) => {
       const input = Buffer.alloc(12);
       input.writeUInt32BE(options.subscriptionSeed, 0);
       input.writeUInt32BE(room, 4);
       input.writeUInt32BE(index, 8);
-      return [{ client, index, order: hash(Buffer.concat([Buffer.from('simplestchat:ring-v1:permutation\0'), input])) }];
+      return { client, index, order: hash(Buffer.concat([Buffer.from(`simplestchat:${mode}:permutation\0`), input])) };
     }).sort((left, right) => (left.order < right.order ? -1 : left.order > right.order ? 1 : left.index - right.index));
-    for (const [position, entry] of ring.entries()) {
-      const targets = Array.from({ length: Math.min(4, ring.length - 1) }, (_, offset) => ring[(position + offset + 1) % ring.length].client.clientId);
+    for (const entry of members) {
+      const position = ranked.findIndex(peer => peer.index === entry.index);
+      const targets = mode === 'hotspot-v1'
+        ? ranked.filter(peer => peer.index !== entry.index).slice(0, 4).map(peer => peer.client.clientId)
+        : Array.from({ length: Math.min(4, ranked.length - 1) }, (_, offset) => ranked[(position + offset + 1) % ranked.length].client.clientId);
       entry.client.targets.audio = targets;
       entry.client.targets.video = scenario.extra.includes('--audio-only') ? [] : [...targets];
     }
   }
-  const plan = { version: 'ring-v1', seed: options.subscriptionSeed, clients };
+  const plan = { version: mode, seed: options.subscriptionSeed, clients };
   return { ...plan, sha256: hash(JSON.stringify(plan)) };
 }
 
@@ -123,7 +134,7 @@ export function verifySubscriptionReport(summary, results, options, scenario) {
   }
   const expected = expectedSubscriptionPlan(options, scenario);
   const plan = summary?.subscriptionPlan;
-  if (mode !== 'ring-v1' || config?.subscriptionPlan !== mode || config.subscriptionSeed !== options.subscriptionSeed ||
+  if (!plannedSubscriptionModes.has(mode) || config?.subscriptionPlan !== mode || config.subscriptionSeed !== options.subscriptionSeed ||
       config.numClients !== scenario.clients || config.numRooms !== scenario.rooms || config.publishRatio !== 1 ||
       typeof config.roomId !== 'string' || !config.roomId ||
       config.durationSecs !== options.duration || config.warmupSecs !== options.warmup || config.rampUpSecs !== options.rampUp ||
@@ -533,7 +544,7 @@ async function runOne(options, variant, scenario, repetition, manifest) {
     if (diagnostics.requireSnapshots && (summary.run.configuration?.diagnostics !== true || summary.diagnosticFailures !== 0)) throw new Error('Missing or failing generator diagnostics');
     if (diagnostics.requireSnapshots && summary.run.configuration?.departure !== options.departure) throw new Error('Generator departure mode does not match the requested diagnostic run');
     if (summary.run.provenance?.generatorBinarySha256 !== manifest.generator.binarySha256) throw new Error('Generator report does not match the frozen executable');
-    const subscription = verifySubscriptionReport(summary, options.subscriptionPlan === 'ring-v1'
+    const subscription = verifySubscriptionReport(summary, plannedSubscriptionModes.has(options.subscriptionPlan)
       ? await readGeneratorResults(join(directory, 'load_test_results.json')) : null, options, scenario);
     const finish = await metrics(origin, token); await writeFile(join(directory, 'metrics-finish.txt'), finish.raw, { flag: 'wx' });
     let cleaned = false;
@@ -699,14 +710,14 @@ export function parseOptions(args) {
   }
   options.generatorSourceRoot = resolve(raw['generator-source-root'] ?? options.candidateRoot);
   options.subscriptionPlan = raw['subscription-plan'] ?? 'fifo';
-  if (!['fifo', 'ring-v1'].includes(options.subscriptionPlan)) throw new Error('--subscription-plan must be fifo or ring-v1');
+  if (options.subscriptionPlan !== 'fifo' && !plannedSubscriptionModes.has(options.subscriptionPlan)) throw new Error('--subscription-plan must be fifo, ring-v1 or hotspot-v1');
   options.subscriptionSeed = null;
-  if (options.subscriptionPlan === 'ring-v1') {
+  if (plannedSubscriptionModes.has(options.subscriptionPlan)) {
     if (!/^(0|[1-9][0-9]*)$/.test(raw['subscription-seed'] ?? '') || !unsigned32(Number(raw['subscription-seed']))) {
-      throw new Error('--subscription-seed is required for ring-v1 and must be an unsigned 32-bit decimal integer');
+      throw new Error('--subscription-seed is required for ring-v1 and hotspot-v1 and must be an unsigned 32-bit decimal integer');
     }
     options.subscriptionSeed = Number(raw['subscription-seed']);
-  } else if (raw['subscription-seed'] !== undefined) throw new Error('--subscription-seed requires --subscription-plan ring-v1');
+  } else if (raw['subscription-seed'] !== undefined) throw new Error('--subscription-seed requires --subscription-plan ring-v1 or hotspot-v1');
   options.purpose = raw.purpose ?? 'performance';
   if (!['performance', 'diagnostic'].includes(options.purpose)) throw new Error('--purpose must be performance or diagnostic');
   options.captureInterface = raw['capture-interface'];
@@ -733,8 +744,8 @@ export function parseOptions(args) {
   if (!options.clients.length || options.clients.some(v => !Number.isInteger(v) || v < 2 || v > 100) || new Set(options.clients).size !== options.clients.length) throw new Error('--clients must be unique counts between2 and100');
   const scenarios = (raw.scenarios ?? 'conference').split(',');
   if (scenarios.some(s => !['conference', 'multi-room', 'webinar', 'audio', 'churn'].includes(s)) || new Set(scenarios).size !== scenarios.length) throw new Error('Unknown/duplicate scenario');
-  if (options.subscriptionPlan === 'ring-v1' && scenarios.some(name => !['conference', 'multi-room', 'audio'].includes(name))) {
-    throw new Error('ring-v1 requires an all-publisher conference, multi-room or audio scenario without churn');
+  if (plannedSubscriptionModes.has(options.subscriptionPlan) && scenarios.some(name => !['conference', 'multi-room', 'audio'].includes(name))) {
+    throw new Error(`${options.subscriptionPlan} requires an all-publisher conference, multi-room or audio scenario without churn`);
   }
   options.scenarios = options.clients.flatMap(clients => scenarios.map(name => ({ name: `${name}-${clients}`, clients,
     rooms: name === 'multi-room' ? Math.min(4, Math.floor(clients / 2)) : 1,

@@ -1,5 +1,33 @@
 # Performance results
 
+## Concentrated publisher load — 2026-09-14
+
+Two `hotspot-v1` repeats passed all **200 client attempts and 1,600 subscriptions**,
+with delivery in every measured second and identical realized graphs. Each run
+used 100 publishers across four rooms. Four early publishers per room each served
+24 subscribers per kind; a fifth served four. This concentrates the same 800
+subscriptions on fewer publishers than the balanced ring workload.
+
+| Measurement | Range across two repeats |
+| --- | ---: |
+| Received packets/second | 69,199.91–69,200.17 |
+| Receive-ready P99 | 412–413 ms |
+| Server CPU, percent of one core | 66.25–66.67% |
+| Server sampled peak RSS | 560.33–560.36 MiB |
+
+Both runs recorded zero generator errors, skipped coverage, full/closed-queue send
+rejections and final rooms, participants or connections. Cleanup took 30.17 seconds
+and all processes exited cleanly. Native bitrate-clamping teardown logs remain
+(900 / 905); bitrate policy is unchanged. Two ten-client hotspot runs also passed
+with complete server/media/lifecycle diagnostics.
+
+Inputs: seed 17, one worker, a 205-second ramp, ten-second warmup and 120-second
+measurement on the same local Mac. Frozen server `d54792e46079c795`, generator
+`c8606b697acdb1c9`, graph `d5879adc2be169085`; no competing owned workloads or
+builds. These are same-build concentrated-load observations, not a speedup over
+ring or a capacity claim. Earlier intermittent readiness failures did not recur
+and remain unresolved. See [fixed graphs](../load_tests/README.md#fixed-subscription-graphs).
+
 ## Reproducible 100-client baseline — 2026-09-14
 
 Two same-build repeats passed all **200 client attempts and 1,600 subscriptions**,

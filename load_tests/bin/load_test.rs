@@ -99,6 +99,8 @@ enum SubscriptionMode {
     Fifo,
     #[serde(rename = "ring-v1")]
     RingV1,
+    #[serde(rename = "hotspot-v1")]
+    HotspotV1,
 }
 
 impl SubscriptionMode {
@@ -106,7 +108,8 @@ impl SubscriptionMode {
         match value {
             "fifo" => Ok(Self::Fifo),
             "ring-v1" => Ok(Self::RingV1),
-            _ => anyhow::bail!("--subscription-plan must be fifo or ring-v1"),
+            "hotspot-v1" => Ok(Self::HotspotV1),
+            _ => anyhow::bail!("--subscription-plan must be fifo, ring-v1 or hotspot-v1"),
         }
     }
 }
@@ -172,28 +175,33 @@ impl TestConfig {
             SubscriptionMode::Fifo => {
                 anyhow::ensure!(
                     self.subscription_seed.is_none(),
-                    "--subscription-seed requires ring-v1"
+                    "--subscription-seed requires ring-v1 or hotspot-v1"
                 );
                 Ok(None)
             }
-            SubscriptionMode::RingV1 => {
+            mode @ (SubscriptionMode::RingV1 | SubscriptionMode::HotspotV1) => {
                 let seed = self
                     .subscription_seed
-                    .context("ring-v1 requires --subscription-seed")?;
+                    .context("Planned subscriptions require --subscription-seed")?;
                 let url = url::Url::parse(&self.server_url)?;
                 anyhow::ensure!(
                     matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "[::1]")),
-                    "ring-v1 requires an owned loopback server"
+                    "Planned subscriptions require an owned loopback server"
                 );
                 anyhow::ensure!(
                     self.publish_ratio == 1.0 && self.churn_rate == 0.0,
-                    "ring-v1 requires stable, all-publisher conference clients"
+                    "Planned subscriptions require stable, all-publisher conference clients"
                 );
                 anyhow::ensure!(
                     self.media_config.audio_enabled || self.media_config.video_enabled,
-                    "ring-v1 requires at least one enabled media kind"
+                    "Planned subscriptions require at least one enabled media kind"
                 );
-                SubscriptionPlan::ring(
+                let build_plan = if mode == SubscriptionMode::RingV1 {
+                    SubscriptionPlan::ring
+                } else {
+                    SubscriptionPlan::hotspot
+                };
+                build_plan(
                     self.num_clients,
                     self.num_rooms,
                     if self.media_config.audio_enabled {
@@ -3219,8 +3227,10 @@ fn print_usage() {
     println!(
         "  --departure <MODE>         abrupt (default) or explicit-leave (requires --diagnostics)"
     );
-    println!("  --subscription-plan <MODE> fifo (default) or ring-v1 (stable owned loopback)");
-    println!("  --subscription-seed <U32>  Required with ring-v1; fixed per-room graph seed");
+    println!("  --subscription-plan <MODE> fifo (default), ring-v1 or hotspot-v1 (owned loopback)");
+    println!(
+        "  --subscription-seed <U32>  Required for planned subscriptions; per-room graph seed"
+    );
     println!("  --run-label <LABEL>        Human-readable run identifier");
     println!("  --server-revision <SHA>    Server source revision supplied by the runner");
     println!("  --generator-revision <SHA> Generator source revision supplied by the runner");
@@ -3280,36 +3290,46 @@ mod subscription_mode_tests {
         assert!(config.planned_subscriptions().unwrap().is_none());
         config.subscription_seed = Some(7);
         assert!(config.planned_subscriptions().is_err());
-        config.subscription_plan = SubscriptionMode::RingV1;
-        let first = config.planned_subscriptions().unwrap().unwrap();
-        let repeated = config.planned_subscriptions().unwrap().unwrap();
-        assert_eq!(first.sha256, repeated.sha256);
-        assert_eq!(first.targets(0).audio.len(), 4);
-        for origin in [
-            "ws://127.0.0.1:3129/ws",
-            "ws://localhost:3129/ws",
-            "ws://[::1]:3129/ws",
-        ] {
-            config.server_url = origin.into();
-            assert!(config.planned_subscriptions().is_ok());
+        for mode in [SubscriptionMode::RingV1, SubscriptionMode::HotspotV1] {
+            let mut config = TestConfig {
+                subscription_plan: mode,
+                subscription_seed: Some(7),
+                ..TestConfig::default()
+            };
+            let first = config.planned_subscriptions().unwrap().unwrap();
+            let repeated = config.planned_subscriptions().unwrap().unwrap();
+            assert_eq!(first.sha256, repeated.sha256);
+            assert_eq!(first.targets(0).audio.len(), 4);
+            assert_eq!(
+                serde_json::to_value(&config).unwrap()["subscriptionPlan"],
+                first.version
+            );
+            for origin in [
+                "ws://127.0.0.1:3129/ws",
+                "ws://localhost:3129/ws",
+                "ws://[::1]:3129/ws",
+            ] {
+                config.server_url = origin.into();
+                assert!(config.planned_subscriptions().is_ok());
+            }
+            config.server_url = "wss://example.com/ws".into();
+            assert!(config.planned_subscriptions().is_err());
+            config.server_url = TestConfig::default().server_url;
+            config.publish_ratio = 0.5;
+            assert!(config.planned_subscriptions().is_err());
+            config.publish_ratio = 1.0;
+            config.churn_rate = 0.1;
+            assert!(config.planned_subscriptions().is_err());
+            config.churn_rate = 0.0;
+            config.subscription_seed = None;
+            assert!(config.planned_subscriptions().is_err());
         }
-        config.server_url = "wss://example.com/ws".into();
-        assert!(config.planned_subscriptions().is_err());
-        config.server_url = TestConfig::default().server_url;
-        config.publish_ratio = 0.5;
-        assert!(config.planned_subscriptions().is_err());
-        config.publish_ratio = 1.0;
-        config.churn_rate = 0.1;
-        assert!(config.planned_subscriptions().is_err());
-        config.churn_rate = 0.0;
-        config.subscription_seed = None;
-        assert!(config.planned_subscriptions().is_err());
     }
 
     #[test]
     fn cli_rejects_invalid_plan_and_seed_before_running() {
         for (option, values) in [
-            ("--subscription-plan", vec!["fifo", "ring-v1"]),
+            ("--subscription-plan", vec!["fifo", "ring-v1", "hotspot-v1"]),
             ("--subscription-seed", vec!["0", "4294967295"]),
         ] {
             for value in values {

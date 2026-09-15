@@ -55,8 +55,8 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 | `--mode MODE` | Publisher preset: `conference` (100%), `webinar` (1%), `panel` (10%), `classroom` (20%) |
 | `--publish-ratio RATIO` | Publisher fraction; 1.0, at least one publisher overall |
 | `--max-audio N`, `--max-video N` | Consumer caps per client; 4 each |
-| `--subscription-plan MODE` | Discovery-order `fifo` (default), or fixed owned `ring-v1` graph |
-| `--subscription-seed N` | Required for `ring-v1`; unsigned 32-bit integer, held constant across comparisons |
+| `--subscription-plan MODE` | Discovery-order `fifo` (default), balanced `ring-v1`, or concentrated `hotspot-v1` |
+| `--subscription-seed N` | Required for fixed graphs; unsigned 32-bit integer, held constant across comparisons |
 | `--churn-rate N` | Select `min(clients, floor(N × duration))` clients to repeatedly join; 0 |
 | `--audio-only`, `--video-only` | Generate only the selected media kind |
 | `--quality PRESET`, `--fps FPS` | `480p`/`720p`/`1080p`, 15/30/60 fps; defaults 480p/30 |
@@ -88,7 +88,7 @@ change consumer caps, coverage thresholds, keyframe cadence, or session lengths.
 
 Add `--subscription-plan ring-v1 --subscription-seed 17` to select the same
 publisher/kind edges across runs, independent of discovery order and server IDs.
-This mode requires an owned loopback server, all clients publishing, no churn,
+Fixed graphs require an owned loopback server, all clients publishing, no churn,
 at most 100 clients, and caps of at most 16 subscriptions per kind. Targets stay
 within each room and are capped by its available peers.
 
@@ -97,7 +97,13 @@ A missing peer is never replaced by another publisher. Keep the seed, room
 assignment, media kinds and caps fixed for comparisons. FIFO remains the default;
 its churn behavior is unchanged.
 The ring balances publisher fan-out and may wait for later arrivals during ramp-up.
-It does not replace discovery-order tests for concentrated load or churn.
+Use `hotspot-v1` instead to concentrate load on early publishers. Its per-room hub
+pool is the first `max(audio cap, video cap) + 1` clients in numeric launch order,
+ranked by the seed. Each subscriber takes the first capped hubs excluding itself.
+At 100 clients/four rooms/default caps, four publishers per room each serve 24
+subscribers per kind, while a fifth serves four; there are still 800 subscriptions.
+The same exact-delivery checks apply. Neither fixed mode replaces churn testing,
+and different graph modes must not be treated as equivalent comparisons.
 
 ## What constitutes success
 
@@ -132,7 +138,7 @@ rooms without a stable counterpart, and zero effective consumer caps cannot
 establish measured churn. Earlier successful attempts cannot cover a later
 attempt's missing delivery.
 
-For `ring-v1`, every planned publisher/kind edge must have exactly one consumer
+For either fixed graph, every planned publisher/kind edge must have exactly one consumer
 with packets in every complete second of the shared measurement window. Both
 publisher and consumer lifetimes must cover that entire window. Late setup,
 early closure, missing peers, unknown ownership, duplicate or extra edges fail;
