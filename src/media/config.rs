@@ -270,6 +270,9 @@ impl RouterConfig {
 pub struct WebRtcTransportConfig {
     pub listen_ips: Vec<ListenInfo>,
     pub initial_available_outgoing_bitrate: u32,
+    /// Application-imposed outgoing floor in bits per second. Zero leaves the
+    /// native congestion controller's minimum unchanged; a positive override
+    /// can exceed its estimate during congestion or network unavailability.
     pub min_outgoing_bitrate: u32,
     pub max_outgoing_bitrate: u32,
     pub max_incoming_bitrate: Option<u32>,
@@ -342,6 +345,15 @@ use std::num::NonZeroU32;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_bitrate_policy_preserves_existing_limits() {
+        let config = WebRtcTransportConfig::default();
+        assert_eq!(config.min_outgoing_bitrate, 100_000);
+        assert_eq!(config.initial_available_outgoing_bitrate, 600_000);
+        assert_eq!(config.max_outgoing_bitrate, 3_000_000);
+        assert_eq!(config.max_incoming_bitrate, Some(1_500_000));
+    }
 
     #[test]
     fn media_worker_count_is_bounded() {

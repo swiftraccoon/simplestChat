@@ -1378,12 +1378,69 @@ mod tests {
             .create_recv_transport(
                 participant_id.clone(),
                 &router,
-                webrtc_server,
+                webrtc_server.clone(),
                 &config.webrtc_transport_config,
             )
             .await;
 
         assert!(recv_transport.is_ok());
+
+        // Read the real worker's applied policy, not only the Rust configuration.
+        // The outgoing floor and both directional ceilings must remain applied.
+        {
+            let participant = transport_manager
+                .get_participant_lock(&participant_id)
+                .unwrap();
+            let participant = participant.lock().await;
+            let sent = participant
+                .send_transport
+                .as_ref()
+                .unwrap()
+                .get_stats()
+                .await
+                .unwrap();
+            let received = participant
+                .recv_transport
+                .as_ref()
+                .unwrap()
+                .get_stats()
+                .await
+                .unwrap();
+            assert_eq!(sent.len(), 1);
+            assert_eq!(received.len(), 1);
+            assert_eq!(sent[0].max_incoming_bitrate, Some(1_500_000));
+            assert_eq!(received[0].max_outgoing_bitrate, Some(3_000_000));
+            assert_eq!(received[0].min_outgoing_bitrate, Some(100_000));
+        }
+
+        // Programmatic overrides must reach the worker without losing its cap.
+        let override_id = "explicit-minimum".to_string();
+        let mut overridden = config.webrtc_transport_config.clone();
+        overridden.min_outgoing_bitrate = 60_000;
+        transport_manager
+            .create_recv_transport(override_id.clone(), &router, webrtc_server, &overridden)
+            .await
+            .unwrap();
+        {
+            let participant = transport_manager
+                .get_participant_lock(&override_id)
+                .unwrap();
+            let participant = participant.lock().await;
+            let stats = participant
+                .recv_transport
+                .as_ref()
+                .unwrap()
+                .get_stats()
+                .await
+                .unwrap();
+            assert_eq!(stats.len(), 1);
+            assert_eq!(stats[0].min_outgoing_bitrate, Some(60_000));
+            assert_eq!(stats[0].max_outgoing_bitrate, Some(3_000_000));
+        }
+        transport_manager
+            .remove_participant(&override_id)
+            .await
+            .unwrap();
 
         let producer = transport_manager
             .create_producer(
