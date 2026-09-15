@@ -93,6 +93,25 @@ For browser tests, replace the Cargo test command with
 `npm --prefix web/e2e test` after the [browser installation steps](../web/e2e/README.md).
 Build the UI first; do not rebuild assets during a browser run.
 
+### Authenticated chat continuity
+
+Run the opt-in 20-minute session soak against a fresh local database and server:
+
+```sh
+SESSION_SOAK_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+  npm --prefix web/e2e run test:session-soak
+```
+
+Two separately registered accounts send through the real chat UI across scheduled
+token refresh and original token expiry. The test checks delivery, drafts, room
+membership and cleanup; an automatic full rejoin does not count as uninterrupted
+service. Production token lifetimes and rate limits stay unchanged. Reports retain
+timings and outcomes, never tokens, passwords or cookies.
+
+Add `SESSION_SOAK_PROFILE=smoke` for a 30-second harness check; it does **not** test
+refresh or expiry. Both profiles use desktop and 375px Chromium viewports, with
+capture denied. They do not establish physical mobile or media continuity.
+
 ### Automated accessibility smoke
 
 After installing the browser tooling and building the UI:

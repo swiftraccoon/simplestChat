@@ -208,7 +208,7 @@ test('helper reports actual graceful exit separately from its requested TERM', a
   assert.throws(() => process.kill(report.serverPid, 0), { code: 'ESRCH' });
 });
 
-test('lifecycle and UI stress counts use a fresh scoped credential and the owned server PID', async t => {
+test('lifecycle, UI stress and session soak counts use a fresh scoped credential and the owned server PID', async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-metrics-fixture.'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const server = path.join(directory, 'server.mjs');
@@ -224,11 +224,12 @@ test('lifecycle and UI stress counts use a fresh scoped credential and the owned
     process.on('SIGTERM', () => server.close());
   `);
   await chmod(server, 0o755);
-  for (const profile of ['disabled', 'lifecycle', 'ui-stress']) {
+  for (const profile of ['disabled', 'lifecycle', 'ui-stress', 'session-soak']) {
     const enabled = profile !== 'disabled';
     const result = await run(t, {
       TEST_SERVER_BINARY: server, LIFECYCLE_E2E: profile === 'lifecycle' ? '1' : '0',
       UI_STRESS_E2E: profile === 'ui-stress' ? '1' : '0',
+      SESSION_SOAK_E2E: profile === 'session-soak' ? '1' : '0',
       METRICS_TOKEN: 'inherited-private-token', TEST_METRICS_TOKEN: 'inherited-test-token', TEST_SERVER_PID: '1',
     }, [process.execPath, '--input-type=module', '-e', `
       import assert from 'node:assert/strict';

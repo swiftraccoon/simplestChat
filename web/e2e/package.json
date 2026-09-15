@@ -9,6 +9,7 @@
     "test": "node community.cjs",
     "test:layout": "node homepage-layout.cjs",
     "test:stress": "node ui-stress.cjs",
+    "test:session-soak": "node session-soak.cjs",
     "install:browser": "playwright install chromium",
     "install:browsers": "playwright install chromium firefox webkit"
   },
