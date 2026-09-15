@@ -51,9 +51,11 @@ pub struct AttemptPlan {
     pub expected_audio: usize,
     pub expected_video: usize,
     pub is_publisher: bool,
+    /// Exact owner/kind edges for repeatable non-churning workloads.
+    pub planned_targets: Option<crate::subscription_plan::PlannedTargets>,
 }
 
-/// A capped floor of distinct stable peers, not complete dynamic-publisher fan-out.
+/// A stable-peer floor for discovery workloads, or exact planned graph coverage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AttemptCoverage {
@@ -66,6 +68,38 @@ pub struct AttemptCoverage {
     pub passed: bool,
     pub skipped_short_tail: bool,
     pub failure_reasons: Vec<String>,
+    /// Absent for historical artifacts and discovery-based workloads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub planned_subscriptions: Option<PlannedSubscriptionCoverage>,
+}
+
+/// Exact directed subscriptions observed against the frozen workload graph.
+/// A passing graph requires each planned edge for the complete shared window;
+/// this is bucketed receipt evidence, not a packet-loss measurement.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlannedSubscriptionCoverage {
+    pub targets: crate::subscription_plan::PlannedTargets,
+    /// All consumers with known publisher ownership, including invalid edges.
+    /// Unknown ownership is a separate attempt failure, never a fallback edge.
+    pub realized: Vec<PlannedSubscriptionEdge>,
+    pub passed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlannedSubscriptionEdge {
+    pub publisher_client_id: String,
+    pub producer_id: String,
+    pub consumer_id: String,
+    pub is_audio: bool,
+}
+
+struct PlannedCoverageEvaluation {
+    report: PlannedSubscriptionCoverage,
+    validated_audio: usize,
+    validated_video: usize,
+    failure_reasons: Vec<String>,
 }
 
 struct AttemptState {
@@ -126,6 +160,8 @@ struct ConsumerState {
     attempt: usize,
     is_audio: Option<bool>,
     planned_end: Option<Instant>,
+    // Frozen at registration; packet accounting needs no new lookup or lock.
+    full_window: bool,
     created: Instant,
     closed: Option<Instant>,
     packets_by_second: Vec<u64>,
@@ -360,14 +396,13 @@ impl Measurements {
     }
 
     pub fn record_consumer(&self, consumer_id: &str, producer_id: &str, ssrc: u32) {
-        let (attempt, planned_end) = {
+        let (attempt, planned_end, full_window) = {
             let attempts = self.attempts.lock().unwrap();
+            let plan = attempts.last().and_then(|attempt| attempt.plan.as_ref());
             (
                 attempts.len(),
-                attempts
-                    .last()
-                    .and_then(|a| a.plan.as_ref())
-                    .map(|p| p.deadline),
+                plan.map(|plan| plan.deadline),
+                plan.is_some_and(|plan| plan.planned_targets.is_some()),
             )
         };
         let is_audio = self.subscriptions.lock().unwrap().get(producer_id).copied();
@@ -378,6 +413,7 @@ impl Measurements {
             attempt,
             is_audio,
             planned_end,
+            full_window,
             created: Instant::now(),
             closed: None,
             packets_by_second: vec![
@@ -460,6 +496,23 @@ impl Measurements {
                     consumer_eligible_buckets(&self.window, consumer, publisher, self.window.end);
                 let eligible = consumer.packets_by_second.get(range).unwrap_or_default();
                 let (seconds_with_packets, longest_gap_seconds) = delivery_coverage(eligible);
+                let passed = if consumer.full_window {
+                    !eligible.is_empty()
+                        && seconds_with_packets == eligible.len()
+                        && consumer.created <= self.window.start
+                        && consumer
+                            .closed
+                            .is_none_or(|closed| closed >= self.window.end)
+                        && consumer
+                            .planned_end
+                            .is_some_and(|end| end >= self.window.end)
+                        && publisher.is_some_and(|(created, closed)| {
+                            *created <= self.window.start
+                                && closed.is_none_or(|closed| closed >= self.window.end)
+                        })
+                } else {
+                    !eligible.is_empty() && seconds_with_packets > 0 && longest_gap_seconds <= 2
+                };
                 ConsumerDelivery {
                     consumer_id: consumer.consumer_id.clone(),
                     producer_id: consumer.producer_id.clone(),
@@ -470,10 +523,8 @@ impl Measurements {
                     eligible_seconds: eligible.len(),
                     seconds_with_packets,
                     longest_gap_seconds,
-                    passed: !eligible.is_empty()
-                        && seconds_with_packets > 0
-                        && longest_gap_seconds <= 2,
-                    skipped_short_lived: eligible.is_empty(),
+                    passed,
+                    skipped_short_lived: !consumer.full_window && eligible.is_empty(),
                 }
             })
             .collect()
@@ -491,7 +542,11 @@ impl Measurements {
                 let begin_bucket = start.saturating_duration_since(self.window.start)
                     .as_millis().div_ceil(1000) as usize;
                 let end_bucket = end.saturating_duration_since(self.window.start).as_secs() as usize;
-                let planned_eligible_seconds = end_bucket.saturating_sub(begin_bucket);
+                let planned_eligible_seconds = if plan.planned_targets.is_some() {
+                    self.window.end.duration_since(self.window.start).as_secs() as usize
+                } else {
+                    end_bucket.saturating_sub(begin_bucket)
+                };
                 let validated = |is_audio| delivery.iter()
                     .filter(|consumer| consumer.attempt == Some(index + 1) && consumer.passed
                         && consumer.is_audio == Some(is_audio))
@@ -499,8 +554,18 @@ impl Measurements {
                     .filter(|(owner, kind)| *kind == is_audio && *owner != self.client_id && plan.stable_publishers.contains(owner))
                     .map(|(owner, _)| owner)
                     .collect::<std::collections::HashSet<_>>().len();
-                let validated_audio = validated(true);
-                let validated_video = validated(false);
+                let planned = plan.planned_targets.as_ref().map(|targets| {
+                    planned_subscription_coverage(
+                        &self.client_id,
+                        index + 1,
+                        targets,
+                        delivery,
+                        &owners,
+                        planned_eligible_seconds,
+                    )
+                });
+                let validated_audio = planned.as_ref().map_or_else(|| validated(true), |coverage| coverage.validated_audio);
+                let validated_video = planned.as_ref().map_or_else(|| validated(false), |coverage| coverage.validated_video);
                 let packets_queued = measurement.queued_by_attempt.get(&(index + 1))
                     .map_or(0, |queued| queued.packets);
                 let mut failure_reasons = Vec::new();
@@ -510,6 +575,29 @@ impl Measurements {
                 if state.failed {
                     failure_reasons.push("A client, signaling or media error was recorded for this attempt".into());
                 }
+                let planned_subscriptions = planned.map(|mut evaluation| {
+                    if planned_eligible_seconds == 0 {
+                        evaluation.failure_reasons.push("The planned graph has no complete measurement seconds".into());
+                    }
+                    if state.started > self.window.start
+                        || report.room_join_ms.is_some_and(|elapsed| {
+                            state.started + std::time::Duration::from_millis(elapsed) > self.window.start
+                        })
+                    {
+                        evaluation.failure_reasons.push("Planned room admission completed after the shared measurement window began".into());
+                    }
+                    if plan.deadline < self.window.end {
+                        evaluation.failure_reasons.push("Planned attempt lifetime does not cover the full shared measurement window".into());
+                    }
+                    if evaluation.report.targets.audio.len() != plan.expected_audio
+                        || evaluation.report.targets.video.len() != plan.expected_video
+                    {
+                        evaluation.failure_reasons.push("Planned subscription counts disagree with attempt expectations".into());
+                    }
+                    evaluation.report.passed = evaluation.failure_reasons.is_empty();
+                    failure_reasons.extend(evaluation.failure_reasons);
+                    evaluation.report
+                });
                 if planned_eligible_seconds > 0 {
                     for (kind, expected, observed) in [
                         ("audio", plan.expected_audio, validated_audio),
@@ -525,7 +613,8 @@ impl Measurements {
                         failure_reasons.push("Publisher queued no media in this attempt's measurement interval".into());
                     }
                 }
-                let skipped_short_tail = planned_eligible_seconds == 0 && failure_reasons.is_empty();
+                let skipped_short_tail = plan.planned_targets.is_none()
+                    && planned_eligible_seconds == 0 && failure_reasons.is_empty();
                 report.coverage = Some(AttemptCoverage {
                     planned_eligible_seconds,
                     expected_audio: plan.expected_audio,
@@ -536,6 +625,7 @@ impl Measurements {
                     passed: planned_eligible_seconds > 0 && failure_reasons.is_empty(),
                     skipped_short_tail,
                     failure_reasons,
+                    planned_subscriptions,
                 });
             }
             report
@@ -543,14 +633,152 @@ impl Measurements {
     }
 }
 
-/// Allow subscription/renegotiation to settle, then inspect complete seconds
-/// only. Owned departures end eligibility without waiting for reconnect grace.
+fn planned_subscription_coverage(
+    client_id: &str,
+    ordinal: usize,
+    targets: &crate::subscription_plan::PlannedTargets,
+    delivery: &[ConsumerDelivery],
+    owners: &HashMap<String, (String, bool)>,
+    planned_seconds: usize,
+) -> PlannedCoverageEvaluation {
+    let mut failure_reasons = Vec::new();
+    let mut expected = std::collections::BTreeSet::new();
+    for (is_audio, publishers) in [(true, &targets.audio), (false, &targets.video)] {
+        for publisher in publishers {
+            if publisher == client_id || !expected.insert((publisher.clone(), is_audio)) {
+                failure_reasons.push(format!(
+                    "Invalid self or duplicate planned {} target {publisher}",
+                    media_kind(is_audio),
+                ));
+            }
+        }
+    }
+
+    let mut realized = Vec::new();
+    let mut observed = std::collections::BTreeMap::<_, Vec<&ConsumerDelivery>>::new();
+    let mut consumer_ids = std::collections::HashSet::new();
+    for consumer in delivery
+        .iter()
+        .filter(|consumer| consumer.attempt == Some(ordinal))
+    {
+        if !consumer_ids.insert(&consumer.consumer_id) {
+            failure_reasons.push(format!(
+                "Duplicate planned consumer identifier {}",
+                consumer.consumer_id,
+            ));
+        }
+        let Some((publisher, is_audio)) = owners.get(&consumer.producer_id) else {
+            failure_reasons.push(format!(
+                "Unknown publisher owner for consumer {} and producer {}",
+                consumer.consumer_id, consumer.producer_id,
+            ));
+            continue;
+        };
+        realized.push(PlannedSubscriptionEdge {
+            publisher_client_id: publisher.clone(),
+            producer_id: consumer.producer_id.clone(),
+            consumer_id: consumer.consumer_id.clone(),
+            is_audio: *is_audio,
+        });
+        if consumer.is_audio != Some(*is_audio) {
+            failure_reasons.push(format!(
+                "Consumer {} media kind does not match owned {} producer {}",
+                consumer.consumer_id,
+                media_kind(*is_audio),
+                consumer.producer_id,
+            ));
+        }
+        let edge = (publisher.clone(), *is_audio);
+        if !expected.contains(&edge) {
+            failure_reasons.push(format!(
+                "Unexpected planned {} edge from {publisher}",
+                media_kind(*is_audio),
+            ));
+        }
+        observed.entry(edge).or_default().push(consumer);
+    }
+
+    let mut validated_audio = 0;
+    let mut validated_video = 0;
+    for (publisher, is_audio) in &expected {
+        let consumers = observed
+            .get(&(publisher.clone(), *is_audio))
+            .map_or(&[][..], Vec::as_slice);
+        if consumers.len() != 1 {
+            failure_reasons.push(format!(
+                "Expected exactly one planned {} edge from {publisher}, observed {}",
+                media_kind(*is_audio),
+                consumers.len(),
+            ));
+            continue;
+        }
+        let consumer = consumers[0];
+        if !consumer.passed
+            || consumer.skipped_short_lived
+            || consumer.is_audio != Some(*is_audio)
+            || consumer.eligible_seconds != planned_seconds
+            || consumer.packets_by_second.len() != planned_seconds
+            || consumer.packets_by_second.contains(&0)
+        {
+            failure_reasons.push(format!(
+                "Planned {} edge from {publisher} did not deliver in every shared measurement second with a full-window owned lifetime",
+                media_kind(*is_audio),
+            ));
+            continue;
+        }
+        if *is_audio {
+            validated_audio += 1;
+        } else {
+            validated_video += 1;
+        }
+    }
+    realized.sort_unstable_by(|left, right| {
+        (
+            &left.publisher_client_id,
+            !left.is_audio,
+            &left.producer_id,
+            &left.consumer_id,
+        )
+            .cmp(&(
+                &right.publisher_client_id,
+                !right.is_audio,
+                &right.producer_id,
+                &right.consumer_id,
+            ))
+    });
+    failure_reasons.sort_unstable();
+    failure_reasons.dedup();
+    PlannedCoverageEvaluation {
+        report: PlannedSubscriptionCoverage {
+            targets: targets.clone(),
+            realized,
+            passed: failure_reasons.is_empty(),
+        },
+        validated_audio,
+        validated_video,
+        failure_reasons,
+    }
+}
+
+fn media_kind(is_audio: bool) -> &'static str {
+    if is_audio { "audio" } else { "video" }
+}
+
+/// Planned graphs inspect the entire shared window without lifetime exemptions.
+/// Discovery workloads allow subscription/renegotiation to settle, then inspect
+/// complete seconds; owned departures end their eligibility without grace.
 fn consumer_eligible_buckets(
     window: &MeasurementWindow,
     consumer: &ConsumerState,
     publisher: Option<&(Instant, Option<Instant>)>,
     observed_until: Instant,
 ) -> std::ops::Range<usize> {
+    if consumer.full_window {
+        return 0..observed_until
+            .min(window.end)
+            .saturating_duration_since(window.start)
+            .as_secs() as usize;
+    }
     let start = (consumer.created + std::time::Duration::from_secs(3)).max(window.start);
     let start = publisher.map_or(start, |(created, _)| {
         start.max(*created + std::time::Duration::from_secs(3))
@@ -589,6 +817,356 @@ fn delivery_coverage(buckets: &[u64]) -> (usize, usize) {
 }
 
 #[cfg(test)]
+mod planned_subscription_tests {
+    use super::*;
+    use crate::subscription_plan::PlannedTargets;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    fn fixture() -> (Measurements, Instant) {
+        let start = Instant::now() - Duration::from_secs(20);
+        let observations = Measurements::new(
+            "viewer".into(),
+            Arc::new(MeasurementWindow::new(start, Duration::from_secs(20))),
+        );
+        observations.begin_planned_attempt(AttemptPlan {
+            deadline: start + Duration::from_secs(20),
+            stable_publishers: Arc::default(),
+            expected_audio: 1,
+            expected_video: 1,
+            is_publisher: false,
+            planned_targets: Some(PlannedTargets {
+                audio: vec!["audio-peer".into()],
+                video: vec!["video-peer".into()],
+            }),
+        });
+        let mut attempts = observations.attempts.lock().unwrap();
+        attempts[0].started = start - Duration::from_secs(5);
+        attempts[0].report.room_join_ms = Some(1);
+        drop(attempts);
+        (observations, start)
+    }
+
+    fn edge(observations: &Measurements, producer: &str, publisher: &str, is_audio: bool) {
+        let created = observations.window.start - Duration::from_secs(3);
+        observations
+            .window
+            .publisher_owners
+            .lock()
+            .unwrap()
+            .insert(producer.into(), (publisher.into(), is_audio));
+        observations
+            .window
+            .publishers
+            .lock()
+            .unwrap()
+            .insert(producer.into(), (created, None));
+        observations.subscribe(producer, is_audio);
+        observations.record_consumer(producer, producer, 123);
+        let mut consumers = observations.consumers.lock().unwrap();
+        let consumer = consumers.last_mut().unwrap();
+        consumer.created = created;
+        consumer.packets_by_second.fill(1);
+    }
+
+    fn complete_graph(observations: &Measurements) {
+        // Deliberately register in reverse canonical report order.
+        edge(observations, "video", "video-peer", false);
+        edge(observations, "audio", "audio-peer", true);
+    }
+
+    fn coverage(observations: &Measurements) -> AttemptCoverage {
+        observations.attempt_report(&observations.delivery_report())[0]
+            .coverage
+            .clone()
+            .unwrap()
+    }
+
+    fn assert_failed(observations: &Measurements) -> AttemptCoverage {
+        let report = coverage(observations);
+        assert!(!report.passed && !report.skipped_short_tail);
+        assert_eq!(report.planned_eligible_seconds, 20);
+        assert!(!report.planned_subscriptions.as_ref().unwrap().passed);
+        assert!(!report.failure_reasons.is_empty());
+        report
+    }
+
+    #[test]
+    fn exact_graph_requires_full_window_delivery_and_serializes_canonical_evidence() {
+        let (observations, _) = fixture();
+        complete_graph(&observations);
+        let report = coverage(&observations);
+        assert!(report.passed && !report.skipped_short_tail);
+        assert_eq!((report.validated_audio, report.validated_video), (1, 1));
+        assert_eq!(report.planned_eligible_seconds, 20);
+        let graph = report.planned_subscriptions.as_ref().unwrap();
+        assert!(graph.passed);
+        assert_eq!(graph.realized.len(), 2);
+        assert_eq!(graph.realized[0].publisher_client_id, "audio-peer");
+        assert_eq!(graph.realized[1].publisher_client_id, "video-peer");
+        for delivery in observations.delivery_report() {
+            assert!(delivery.passed && !delivery.skipped_short_lived);
+            assert_eq!(delivery.eligible_seconds, 20);
+            assert_eq!(delivery.seconds_with_packets, 20);
+        }
+        let value = serde_json::to_value(&report).unwrap();
+        assert_eq!(
+            value["plannedSubscriptions"]["targets"]["audio"][0],
+            "audio-peer"
+        );
+        assert_eq!(
+            value["plannedSubscriptions"]["realized"][0]["consumerId"],
+            "audio"
+        );
+        assert_eq!(
+            value["plannedSubscriptions"]["realized"][0]["producerId"],
+            "audio"
+        );
+        assert_eq!(
+            value["plannedSubscriptions"]["realized"][0]["isAudio"],
+            true
+        );
+        let restored: AttemptCoverage = serde_json::from_value(value).unwrap();
+        assert!(restored.planned_subscriptions.unwrap().passed);
+    }
+
+    #[test]
+    fn correct_subscription_count_with_wrong_target_is_not_coverage() {
+        let (observations, _) = fixture();
+        edge(&observations, "audio", "different-peer", true);
+        edge(&observations, "video", "video-peer", false);
+        let report = assert_failed(&observations);
+        assert_eq!((report.validated_audio, report.validated_video), (0, 1));
+        assert_eq!(report.planned_subscriptions.unwrap().realized.len(), 2);
+        assert!(
+            report
+                .failure_reasons
+                .iter()
+                .any(|reason| reason.contains("Unexpected planned audio edge"))
+        );
+        assert!(
+            report
+                .failure_reasons
+                .iter()
+                .any(|reason| reason.contains("audio-peer, observed 0"))
+        );
+    }
+
+    #[test]
+    fn unknown_owner_has_no_fallback_and_keeps_an_explicit_failure() {
+        let (observations, _) = fixture();
+        complete_graph(&observations);
+        observations
+            .window
+            .publisher_owners
+            .lock()
+            .unwrap()
+            .remove("audio");
+        let report = assert_failed(&observations);
+        assert_eq!(report.planned_subscriptions.unwrap().realized.len(), 1);
+        assert!(
+            report
+                .failure_reasons
+                .iter()
+                .any(|reason| reason.contains("Unknown publisher owner for consumer audio"))
+        );
+    }
+
+    #[test]
+    fn consumer_kind_must_match_authoritative_owned_producer_kind() {
+        let (observations, _) = fixture();
+        complete_graph(&observations);
+        observations.consumers.lock().unwrap()[1].is_audio = Some(false);
+        let report = assert_failed(&observations);
+        assert_eq!((report.validated_audio, report.validated_video), (0, 1));
+        assert!(
+            report
+                .failure_reasons
+                .iter()
+                .any(|reason| reason.contains("media kind does not match"))
+        );
+    }
+
+    #[test]
+    fn duplicate_and_extra_edges_fail_even_when_expected_counts_are_available() {
+        let (observations, _) = fixture();
+        complete_graph(&observations);
+        edge(&observations, "duplicate-audio", "audio-peer", true);
+        let duplicate = assert_failed(&observations);
+        assert_eq!(
+            (duplicate.validated_audio, duplicate.validated_video),
+            (0, 1)
+        );
+        assert_eq!(duplicate.planned_subscriptions.unwrap().realized.len(), 3);
+        assert!(
+            duplicate
+                .failure_reasons
+                .iter()
+                .any(|reason| reason.contains("audio-peer, observed 2"))
+        );
+
+        let (observations, _) = fixture();
+        complete_graph(&observations);
+        edge(&observations, "extra", "extra-peer", true);
+        let extra = assert_failed(&observations);
+        assert_eq!((extra.validated_audio, extra.validated_video), (1, 1));
+        assert_eq!(extra.planned_subscriptions.unwrap().realized.len(), 3);
+    }
+
+    #[test]
+    fn absent_publishers_and_failed_setup_do_not_remove_planned_expectations() {
+        let (observations, _) = fixture();
+        let absent = assert_failed(&observations);
+        assert_eq!((absent.expected_audio, absent.expected_video), (1, 1));
+        assert_eq!((absent.validated_audio, absent.validated_video), (0, 0));
+        assert!(absent.planned_subscriptions.unwrap().realized.is_empty());
+        observations.attempts.lock().unwrap()[0].report.room_join_ms = None;
+        let failed_setup = assert_failed(&observations);
+        assert!(
+            failed_setup
+                .failure_reasons
+                .iter()
+                .any(|reason| reason == "Room admission did not complete")
+        );
+    }
+
+    #[test]
+    fn late_attempt_and_late_admission_cannot_shorten_the_measurement_window() {
+        for late_start in [false, true] {
+            let (observations, start) = fixture();
+            complete_graph(&observations);
+            {
+                let mut attempts = observations.attempts.lock().unwrap();
+                if late_start {
+                    attempts[0].started = start + Duration::from_secs(19);
+                } else {
+                    attempts[0].report.room_join_ms = Some(5001);
+                }
+            }
+            let report = assert_failed(&observations);
+            assert!(
+                report
+                    .failure_reasons
+                    .iter()
+                    .any(|reason| reason.contains("admission completed after"))
+            );
+        }
+    }
+
+    #[test]
+    fn late_consumer_or_late_publisher_cannot_pass_using_a_shorter_lifetime() {
+        for late_publisher in [false, true] {
+            let (observations, start) = fixture();
+            complete_graph(&observations);
+            if late_publisher {
+                observations
+                    .window
+                    .publishers
+                    .lock()
+                    .unwrap()
+                    .get_mut("audio")
+                    .unwrap()
+                    .0 = start + Duration::from_secs(19);
+            } else {
+                observations.consumers.lock().unwrap()[1].created = start + Duration::from_secs(19);
+            }
+            assert_failed(&observations);
+            let report = observations.delivery_report();
+            assert!(!report[1].passed && !report[1].skipped_short_lived);
+            assert_eq!(report[1].eligible_seconds, 20);
+        }
+    }
+
+    #[test]
+    fn early_consumer_publisher_or_attempt_departure_cannot_excuse_missing_tail() {
+        for early_boundary in ["consumer", "publisher", "attempt"] {
+            let (observations, start) = fixture();
+            complete_graph(&observations);
+            let early_end = start + Duration::from_secs(1);
+            match early_boundary {
+                "consumer" => observations.consumers.lock().unwrap()[1].closed = Some(early_end),
+                "publisher" => {
+                    observations
+                        .window
+                        .publishers
+                        .lock()
+                        .unwrap()
+                        .get_mut("audio")
+                        .unwrap()
+                        .1 = Some(early_end)
+                }
+                "attempt" => {
+                    observations.consumers.lock().unwrap()[1].planned_end = Some(early_end);
+                    observations.attempts.lock().unwrap()[0]
+                        .plan
+                        .as_mut()
+                        .unwrap()
+                        .deadline = early_end;
+                }
+                _ => unreachable!(),
+            }
+            assert_failed(&observations);
+            assert_eq!(observations.delivery_report()[1].eligible_seconds, 20);
+        }
+    }
+
+    #[test]
+    fn one_empty_bucket_at_any_position_fails_the_strict_graph() {
+        for empty_bucket in [0, 9, 19] {
+            let (observations, _) = fixture();
+            complete_graph(&observations);
+            observations.consumers.lock().unwrap()[1].packets_by_second[empty_bucket] = 0;
+            assert_failed(&observations);
+            let report = observations.delivery_report();
+            assert!(!report[1].passed && !report[1].skipped_short_lived);
+            assert_eq!(report[1].longest_gap_seconds, 1);
+            assert_eq!(report[1].seconds_with_packets, 19);
+        }
+    }
+
+    #[test]
+    fn same_peer_can_have_one_audio_and_one_video_edge_but_not_reused_consumer_ids() {
+        let (observations, _) = fixture();
+        observations.attempts.lock().unwrap()[0]
+            .plan
+            .as_mut()
+            .unwrap()
+            .planned_targets
+            .as_mut()
+            .unwrap()
+            .video = vec!["audio-peer".into()];
+        edge(&observations, "video", "audio-peer", false);
+        edge(&observations, "audio", "audio-peer", true);
+        let graph = coverage(&observations).planned_subscriptions.unwrap();
+        assert!(graph.passed);
+        assert!(graph.realized[0].is_audio);
+        assert!(!graph.realized[1].is_audio);
+        observations.consumers.lock().unwrap()[1].consumer_id = "video".into();
+        let report = assert_failed(&observations);
+        assert!(
+            report
+                .failure_reasons
+                .iter()
+                .any(|reason| reason.contains("Duplicate planned consumer identifier"))
+        );
+    }
+
+    #[test]
+    fn unplanned_artifacts_omit_exact_graph_evidence_without_inventing_it() {
+        let (observations, _) = fixture();
+        observations.attempts.lock().unwrap()[0]
+            .plan
+            .as_mut()
+            .unwrap()
+            .planned_targets = None;
+        let value = serde_json::to_value(coverage(&observations)).unwrap();
+        assert!(value.get("plannedSubscriptions").is_none());
+        let restored: AttemptCoverage = serde_json::from_value(value).unwrap();
+        assert!(restored.planned_subscriptions.is_none());
+    }
+}
+
+#[cfg(test)]
 mod receiver_stall_tests {
     use super::*;
     use std::sync::Arc;
@@ -611,6 +1189,7 @@ mod receiver_stall_tests {
             expected_audio: 1,
             expected_video: 1,
             is_publisher: false,
+            planned_targets: None,
         });
     }
 

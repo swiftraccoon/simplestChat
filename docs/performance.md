@@ -60,6 +60,13 @@ Keep the generator, worker count, subscription caps, and workload identical.
 Run without competing builds or other benchmarks. If the generator comes from
 another checkout, set `--generator-source-root` to that source tree.
 
+To hold publisher selection fixed, append
+`--subscription-plan ring-v1 --subscription-seed 17` to the comparison command.
+Use this opt-in mode with `conference`, `multi-room`, or `audio`: it supports
+stable, all-publisher workloads on the runner's owned loopback servers, not churn.
+The same seed, room assignment, media kinds and caps produce the same graph;
+FIFO discovery remains the default.
+
 ### Choose a workload
 
 | Scenario | Workload |
@@ -124,6 +131,14 @@ New summaries include `attemptCoverage` version 1 (`stable-publishers` scope).
 Historical reports without it do not establish per-attempt coverage. Dynamic
 streams occupying consumer caps can leave this scoped proof incomplete without
 establishing an application regression; full dynamic fan-out is not measured.
+
+For `ring-v1`, the runner also verifies the planned graph and realized
+publisher/kind mappings, records `subscriptionPlanSha256`, and requires matching
+graph identities for comparisons. Every planned edge must deliver in every
+complete measurement second, with publisher and consumer lifetimes covering
+the full window. Missing peers cannot be substituted or skipped. See
+[fixed subscription graphs](../load_tests/README.md#fixed-subscription-graphs)
+for bounds and report fields.
 
 Synthetic RTP exercises forwarding, not browser encoding or visual quality.
 Receive/send totals are not a packet-loss estimate because streams fan out to

@@ -1,5 +1,38 @@
 # Performance results
 
+## Reproducible 100-client baseline — 2026-09-14
+
+Two same-build repeats passed all **200 client attempts and 1,600 subscriptions**,
+with packets in every one of the 120 measured seconds. Both used the same
+realized publisher/subscriber graph: four rooms, 25 publishers per room, four
+audio and four video targets per client, and fan-out exactly four per producer.
+The [fixed-graph workload](../load_tests/README.md#fixed-subscription-graphs) used
+`ring-v1`, seed 17, one worker, a 205-second ramp and ten-second warmup.
+
+| Measurement | Range across two repeats |
+| --- | ---: |
+| Received packets/second | 69,199.18–69,200.22 |
+| Receive-ready P99 | 411–417 ms |
+| Server CPU, percent of one core | 67.99–69.01% |
+| Server sampled peak RSS | 593.53–594.27 MiB |
+
+Both runs had zero generator errors, skipped coverage, full/closed-queue send
+rejections and remaining rooms, participants or connections. All processes exited
+cleanly; cleanup took 29.66–29.67 seconds. Native bitrate-clamping teardown logs
+remain (908 / 812 messages); the minimum bitrate is unchanged.
+
+Separate ten-client diagnostic repeats passed all 160 subscriptions with complete
+server/media/lifecycle evidence and identical realized graphs. The new bounded
+[setup-failure capture](diagnostics.md#capture-send-readiness-failures) passed
+injected-future tests; no native readiness timeout occurred in these runs.
+
+Inputs were the local Mac described below, frozen server `d54792e46079c795`,
+generator `9e01a62747614d41`, and graph `b916f569a92ea0ab`. No competing builds or
+owned workloads overlapped measurement. Generator CPU varied from 126.17–136.28%
+and RSS from 271.47–398.16 MiB. This is a balanced-load baseline, not an improvement
+over FIFO, a production-capacity claim, or a fix for earlier intermittent setup
+failures. Concentrated fan-out and churn need separate checks.
+
 ## Departure fan-out — 2026-09-14
 
 The accepted change skips departure notifications to already-closed signaling

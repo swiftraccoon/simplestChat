@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cpuSeconds, resourceSummary, comparison, parseOptions, command, captureArguments, finishCapture, diagnosticPolicy, createLifecycleTimeline, lifecycleWorkload, serverDiagnosticEnvironment, diagnosticRunStatus, performanceRunStatus, runFinalizers, collectServerDiagnostics, verifyExecutable, generatorSourceIdentity, sourceTreeIdentity, identity, serverRevisionLabel, stop, SERVER_SHUTDOWN_GRACE_MS } from './benchmark-local.mjs';
+import { cpuSeconds, resourceSummary, comparison, parseOptions, command, captureArguments, finishCapture, diagnosticPolicy, createLifecycleTimeline, lifecycleWorkload, serverDiagnosticEnvironment, diagnosticRunStatus, performanceRunStatus, runFinalizers, collectServerDiagnostics, verifyExecutable, generatorSourceIdentity, sourceTreeIdentity, identity, serverRevisionLabel, stop, SERVER_SHUTDOWN_GRACE_MS, subscriptionArguments, expectedSubscriptionPlan, verifySubscriptionReport, admitsDiagnosticEvidence, collectReceiverStallDiagnostics } from './benchmark-local.mjs';
 import { DIAGNOSTIC_LIMITS, readDiagnosticReport } from './diagnostic-report.mjs';
 import { MEDIA_BODY_LIMIT, MEDIA_SAMPLE_LATENESS_MS, validateMediaSnapshot, mediaReference, fetchMediaSnapshot,
   mediaSampleSchedule, createMediaSampler, readGeneratorResults, correlateMediaDiagnostics } from './media-diagnostic-report.mjs';
@@ -420,6 +420,279 @@ test('bounded local orchestrator rejects unknown options and excessive load', ()
   assert.equal(parseOptions([...required, '--clients', '50', '--scenarios', 'multi-room', '--ramp-up', '101']).clients[0], 50);
 });
 
+const localRunnerArgs = ['--baseline-root', '/tmp/b', '--baseline-bin', '/tmp/b/server', '--candidate-root', '/tmp/c', '--candidate-bin', '/tmp/c/server', '--generator', '/tmp/generator', '--output', '/tmp/results'];
+
+test('subscription graph options are explicit, bounded and leave FIFO invocation unchanged', () => {
+  const defaultOptions = parseOptions(localRunnerArgs);
+  assert.equal(defaultOptions.subscriptionPlan, 'fifo');
+  assert.equal(defaultOptions.subscriptionSeed, null);
+  assert.deepEqual(subscriptionArguments(defaultOptions), []);
+  assert.deepEqual(subscriptionArguments(parseOptions([...localRunnerArgs, '--subscription-plan', 'fifo'])), []);
+  for (const seed of ['0', '17', '4294967295']) {
+    const options = parseOptions([...localRunnerArgs, '--subscription-plan', 'ring-v1', '--subscription-seed', seed]);
+    assert.equal(options.subscriptionSeed, Number(seed));
+    assert.deepEqual(subscriptionArguments(options), ['--subscription-plan', 'ring-v1', '--subscription-seed', seed]);
+  }
+  for (const flags of [['--subscription-plan', 'ring-v2'], ['--subscription-plan', 'ring-v1'],
+    ['--subscription-seed', '0'], ['--subscription-plan', 'fifo', '--subscription-seed', '0']]) {
+    assert.throws(() => parseOptions([...localRunnerArgs, ...flags]), /subscription/);
+  }
+  for (const seed of ['-1', '4294967296', '1.5', '1e2', '0x10', '+1', ' 1', '1 ', '01', 'Infinity', 'NaN']) {
+    assert.throws(() => parseOptions([...localRunnerArgs, '--subscription-plan', 'ring-v1', '--subscription-seed', seed]), /subscription-seed/);
+  }
+  assert.throws(() => parseOptions([...localRunnerArgs, '--subscription-plan', 'ring-v1', '--subscription-seed', '0', '--subscription-seed', '1']), /duplicate/);
+});
+
+test('ring plans accept only stable all-publisher scenarios without weakening admission or workload bounds', () => {
+  const flags = ['--subscription-plan', 'ring-v1', '--subscription-seed', '17'];
+  for (const scenarios of ['conference', 'multi-room', 'audio', 'conference,multi-room,audio']) {
+    assert.equal(parseOptions([...localRunnerArgs, ...flags, '--scenarios', scenarios]).subscriptionPlan, 'ring-v1');
+  }
+  for (const scenarios of ['churn', 'webinar', 'conference,webinar', 'audio,churn']) {
+    assert.throws(() => parseOptions([...localRunnerArgs, ...flags, '--clients', '5', '--scenarios', scenarios]), /all-publisher/);
+  }
+  for (const extra of [['--clients', '100'], ['--clients', '100', '--scenarios', 'multi-room'], ['--duration', '181']]) {
+    assert.throws(() => parseOptions([...localRunnerArgs, ...flags, ...extra]), /join admission|duration/);
+  }
+  assert.equal(parseOptions([...localRunnerArgs, ...flags, '--clients', '100', '--scenarios', 'multi-room', '--ramp-up', '205']).scenarios[0].clients, 100);
+});
+
+function plannedSubscriptionFixture(scenarioName = 'multi-room') {
+  const options = parseOptions([...localRunnerArgs, '--clients', '6', '--scenarios', scenarioName,
+    '--subscription-plan', 'ring-v1', '--subscription-seed', '17', '--duration', '8']);
+  const scenario = options.scenarios[0];
+  const plan = expectedSubscriptionPlan(options, scenario);
+  const summary = { run: { configuration: { subscriptionPlan: 'ring-v1', subscriptionSeed: 17,
+    numClients: scenario.clients, numRooms: scenario.rooms, roomId: 'owned-local-room', publishRatio: 1, churnRate: 0,
+    durationSecs: options.duration, warmupSecs: options.warmup, rampUpSecs: options.rampUp,
+    maxAudioConsumers: 4, maxVideoConsumers: 4,
+    mediaConfig: { audioEnabled: true, videoEnabled: scenarioName !== 'audio' } } }, subscriptionPlan: plan };
+  const results = plan.clients.map(client => {
+    const realized = ['audio', 'video'].flatMap(kind => client.targets[kind].map(publisherClientId => ({ publisherClientId,
+      producerId: `${publisherClientId}-${kind}`, consumerId: `${client.clientId}-${publisherClientId}-${kind}`, isAudio: kind === 'audio' })));
+    return { clientId: client.clientId, roomId: scenario.rooms === 1 ? 'owned-local-room' : `owned-local-room-${client.room}`,
+      connectionAttempts: [{ coverage: { passed: true, skippedShortTail: false,
+        expectedAudio: client.targets.audio.length, expectedVideo: client.targets.video.length,
+        plannedSubscriptions: { targets: structuredClone(client.targets), realized, passed: true } } }],
+      consumerDelivery: realized.map(record => ({ consumerId: record.consumerId, producerId: record.producerId,
+        isAudio: record.isAudio, attempt: 1, passed: true, skippedShortLived: false, eligibleSeconds: options.duration,
+        secondsWithPackets: options.duration, longestGapSeconds: 0, packetsBySecond: Array(options.duration).fill(50) })) };
+  });
+  return { options, scenario, summary, results };
+}
+
+test('ring-v1 graph matches the native cross-language hash and target vector', () => {
+  const scenario = { clients: 6, rooms: 2, extra: [] };
+  const plan = expectedSubscriptionPlan({ subscriptionSeed: 17 }, scenario);
+  assert.equal(plan.sha256, '95bb99692aa6be29d2c1e21b3a00ad24e56f91164c4ae6d97c089c921824bfdc');
+  const targets = [[4, 2], [5, 3], [0, 4], [1, 5], [2, 0], [3, 1]];
+  assert.deepEqual(plan.clients, targets.map((peers, index) => ({ clientId: `client-${index}`, room: index % 2,
+    targets: { audio: peers.map(peer => `client-${peer}`), video: peers.map(peer => `client-${peer}`) } })));
+  assert.notEqual(expectedSubscriptionPlan({ subscriptionSeed: 18 }, scenario).sha256, plan.sha256);
+});
+
+test('planned graph verification supports room isolation, audio-only and result order independent of launch order', () => {
+  for (const name of ['conference', 'multi-room', 'audio']) {
+    const f = plannedSubscriptionFixture(name);
+    assert.deepEqual(verifySubscriptionReport(f.summary, f.results.reverse(), f.options, f.scenario), {
+      subscriptionPlan: 'ring-v1', subscriptionSeed: 17, subscriptionPlanSha256: f.summary.subscriptionPlan.sha256,
+    });
+    for (const client of f.summary.subscriptionPlan.clients) {
+      assert.equal(client.targets.audio.includes(client.clientId), false);
+      assert.equal(client.targets.video.length, name === 'audio' ? 0 : client.targets.audio.length);
+      for (const target of client.targets.audio) assert.equal(Number(target.slice(7)) % f.scenario.rooms, client.room);
+    }
+  }
+});
+
+test('legacy FIFO reports remain compatible but cannot conceal a requested or unrequested graph', () => {
+  const f = plannedSubscriptionFixture();
+  const fifo = { subscriptionPlan: 'fifo' };
+  const identity = { subscriptionPlan: 'fifo', subscriptionSeed: null, subscriptionPlanSha256: null };
+  for (const summary of [{}, { run: { configuration: {} } },
+    { run: { configuration: { subscriptionPlan: 'fifo', subscriptionSeed: null } }, subscriptionPlan: null }]) {
+    assert.deepEqual(verifySubscriptionReport(summary, null, fifo, f.scenario), identity);
+    assert.throws(() => verifySubscriptionReport(summary, f.results, f.options, f.scenario), /graph report/);
+  }
+  for (const summary of [f.summary, { subscriptionPlan: {} }, { run: { configuration: { subscriptionPlan: 'ring-v1' } } },
+    { run: { configuration: { subscriptionSeed: 0 } } }]) {
+    assert.throws(() => verifySubscriptionReport(summary, null, fifo, f.scenario), /FIFO workload/);
+  }
+});
+
+test('diagnostic timeline cannot use another subscription mode or seed as workload evidence', () => {
+  const f = plannedSubscriptionFixture();
+  const generatorSha256 = 'a'.repeat(64);
+  f.options.departure = 'abrupt';
+  f.summary.schemaVersion = 2;
+  Object.assign(f.summary.run, { completed: true, startedAt: 'start', finishedAt: 'finish', provenance: { generatorBinarySha256: generatorSha256 } });
+  Object.assign(f.summary.run.configuration, { diagnostics: true, departure: 'abrupt' });
+  assert.notEqual(lifecycleWorkload(f.summary, f.options, generatorSha256), null);
+  for (const override of [{ subscriptionPlan: undefined }, { subscriptionPlan: 'fifo' }, { subscriptionSeed: undefined }, { subscriptionSeed: 18 }]) {
+    const summary = structuredClone(f.summary);
+    Object.assign(summary.run.configuration, override);
+    assert.equal(lifecycleWorkload(summary, f.options, generatorSha256), null);
+  }
+});
+
+test('graph validation failure retains matching diagnostic evidence and completes failure finalizers', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'simplestchat-graph-failure.'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const f = plannedSubscriptionFixture();
+  const generatorSha256 = 'a'.repeat(64);
+  Object.assign(f.options, { purpose: 'diagnostic', diagnosticDetail: 'full', departure: 'abrupt' });
+  Object.assign(f.summary, { schemaVersion: 2, diagnosticFailures: 0 });
+  Object.assign(f.summary.run, { completed: true, passed: false, startedAt: 'start', finishedAt: 'finish', provenance: { generatorBinarySha256: generatorSha256 } });
+  Object.assign(f.summary.run.configuration, { diagnostics: true, departure: 'abrupt' });
+  f.summary.subscriptionPlan.sha256 = 'invalid';
+  const retained = { 'load_test_summary.json': JSON.stringify(f.summary), 'load_test_results.json': JSON.stringify(f.results) };
+  for (const [name, content] of Object.entries(retained)) await writeFile(join(directory, name), content, { mode: 0o600 });
+  const events = [], errors = [];
+  let primary, complete;
+  const server = { completion: new Promise(resolve => { complete = resolve; }), kill(signal) { events.push(signal); } };
+  const generator = { result: { code: 0, signal: null } };
+  const artifactError = new Error('unrelated diagnostic artifact failed');
+  const run = async () => {
+    try { verifySubscriptionReport(f.summary, f.results, f.options, f.scenario); }
+    catch (error) {
+      primary = error;
+      await runFinalizers(primary, [() => writeFile(join(directory, 'failure.json'), JSON.stringify({ error: error.message }), { flag: 'wx' })], error => errors.push(error));
+      throw error;
+    } finally {
+      await runFinalizers(primary, [
+        () => { events.push('metrics-stop'); },
+        () => stop(server, SERVER_SHUTDOWN_GRACE_MS, async () => {
+          server.result = { code: 0, signal: null }; complete(server.result);
+        }),
+        () => writeFile(join(directory, 'server-exit.json'), JSON.stringify(server.result), { flag: 'wx' }),
+        () => writeFile(join(directory, 'generator-exit.json'), JSON.stringify(generator.result), { flag: 'wx' }),
+        async () => {
+          const summary = await readGeneratorResults(join(directory, 'load_test_summary.json'));
+          assert.equal(admitsDiagnosticEvidence(summary, f.options, generatorSha256, false), true);
+          const results = await readGeneratorResults(join(directory, 'load_test_results.json'));
+          await collectReceiverStallDiagnostics(f.options, directory, server, generator, [], results);
+          events.push('stall report retained');
+        },
+        () => { throw artifactError; },
+        () => writeFile(join(directory, 'resources.json'), '[]', { flag: 'wx' }),
+      ], error => errors.push(error));
+    }
+  };
+  await assert.rejects(run(), error => error === primary && /subscription graph report/.test(error.message));
+  assert.deepEqual(events, ['metrics-stop', 'SIGTERM', 'stall report retained']);
+  assert.deepEqual(errors, [artifactError]);
+  for (const [name, content] of Object.entries(retained)) assert.equal(await readFile(join(directory, name), 'utf8'), content);
+  for (const name of ['failure.json', 'server-exit.json', 'generator-exit.json', 'receiver-stall-report.json', 'resources.json']) {
+    const raw = await readFile(join(directory, name), 'utf8');
+    assert.doesNotThrow(() => JSON.parse(raw));
+  }
+  await assert.rejects(readFile(join(directory, 'result.json')), { code: 'ENOENT' });
+});
+
+test('ring reports require the exact requested configuration, deterministic graph and complete client set', () => {
+  const mutations = [
+    f => { f.summary.subscriptionPlan = null; },
+    f => { f.summary.subscriptionPlan.version = 'ring-v2'; },
+    f => { f.summary.subscriptionPlan.seed++; },
+    f => { f.summary.subscriptionPlan.sha256 = 'a'.repeat(64); },
+    f => { f.summary.subscriptionPlan.sha256 = f.summary.subscriptionPlan.sha256.toUpperCase(); },
+    f => { f.summary.subscriptionPlan.clients.pop(); },
+    f => { f.summary.subscriptionPlan.clients.reverse(); },
+    f => { f.summary.subscriptionPlan.clients[0].room++; },
+    f => { f.summary.subscriptionPlan.clients[0].targets.audio = ['client-0']; },
+    f => { f.summary.run.configuration.subscriptionPlan = 'fifo'; },
+    f => { f.summary.run.configuration.subscriptionSeed = '17'; },
+    f => { f.summary.run.configuration.numRooms++; },
+    f => { f.summary.run.configuration.numClients--; },
+    f => { f.summary.run.configuration.roomId = ''; },
+    f => { f.summary.run.configuration.publishRatio = 0.5; },
+    f => { f.summary.run.configuration.churnRate = 0.1; },
+    f => { f.summary.run.configuration.maxAudioConsumers = 3; },
+    f => { f.summary.run.configuration.maxVideoConsumers = 3; },
+    f => { f.summary.run.configuration.mediaConfig.videoEnabled = false; },
+    f => { f.summary.run.configuration.durationSecs++; },
+    f => { f.results = undefined; },
+    f => { f.results.pop(); },
+    f => { f.results[1] = f.results[0]; },
+    f => { f.results[0].clientId = 'foreign-client'; },
+    f => { f.results[0].roomId = 'foreign-room'; },
+    f => { f.results[0].connectionAttempts = []; },
+    f => { f.results[0].connectionAttempts.push(f.results[0].connectionAttempts[0]); },
+  ];
+  for (const mutate of mutations) {
+    const f = plannedSubscriptionFixture(); mutate(f);
+    assert.throws(() => verifySubscriptionReport(f.summary, f.results, f.options, f.scenario), /subscription graph|Subscription graph/);
+  }
+});
+
+test('ring coverage cannot pass on a boolean with missing, duplicate, foreign or failed consumer delivery', () => {
+  const mutations = [
+    (coverage, planned) => { planned.passed = false; },
+    coverage => { coverage.plannedSubscriptions = undefined; },
+    coverage => { coverage.passed = false; },
+    coverage => { coverage.skippedShortTail = true; },
+    coverage => { coverage.expectedAudio++; },
+    (coverage, planned) => { planned.targets.audio = ['client-0']; },
+    (coverage, planned) => { planned.realized.pop(); },
+    (coverage, planned) => { planned.realized.push(planned.realized[0]); },
+    (coverage, planned) => { planned.realized[0].publisherClientId = 'client-0'; },
+    (coverage, planned) => { planned.realized[0].producerId = 'foreign-producer'; },
+    (coverage, planned) => { planned.realized[0].consumerId = ''; },
+    (coverage, planned) => { planned.realized[0].isAudio = null; },
+    (coverage, planned, client) => { client.consumerDelivery.pop(); },
+    (coverage, planned, client) => { client.consumerDelivery.push(client.consumerDelivery[0]); },
+    (coverage, planned, client) => { client.consumerDelivery[0].passed = false; },
+    (coverage, planned, client) => { client.consumerDelivery[0].skippedShortLived = true; },
+    (coverage, planned, client) => { client.consumerDelivery[0].attempt = 2; },
+    (coverage, planned, client) => { client.consumerDelivery[0].isAudio = false; },
+    (coverage, planned, client) => { client.consumerDelivery[0].packetsBySecond[0] = 0; },
+    (coverage, planned, client) => { client.consumerDelivery[0].packetsBySecond.pop(); },
+    (coverage, planned, client) => { client.consumerDelivery[0].eligibleSeconds--; },
+  ];
+  for (const mutate of mutations) {
+    const f = plannedSubscriptionFixture();
+    const client = f.results[0], coverage = client.connectionAttempts[0].coverage;
+    mutate(coverage, coverage.plannedSubscriptions, client);
+    assert.throws(() => verifySubscriptionReport(f.summary, f.results, f.options, f.scenario), /subscription|consumers/);
+  }
+});
+
+test('comparison refuses missing, malformed, mixed or unequal graph identity while accepting legacy FIFO', () => {
+  const fields = Object.fromEntries(['joinP99Ms', 'sendReadyP99Ms', 'receiveReadyP99Ms', 'receivedPacketsPerSecond',
+    'serverCpuPercent', 'serverPeakRssMiB', 'generatorCpuPercent', 'generatorPeakRssMiB'].map(field => [field, 1]));
+  const f = plannedSubscriptionFixture();
+  const identity = verifySubscriptionReport(f.summary, f.results, f.options, f.scenario);
+  const rows = ['baseline', 'candidate'].map(variant => ({ scenario: 'multi-room-6', variant, workloadPassed: true,
+    serverExit: { code: 0, signal: null }, ...identity, ...fields }));
+  assert.equal(comparison(rows)['multi-room-6'].serverCpuPercent.delta, 0);
+  for (const override of [{ subscriptionPlan: undefined }, { subscriptionPlan: 'fifo' }, { subscriptionPlan: 'ring-v2' },
+    { subscriptionSeed: null }, { subscriptionSeed: '17' }, { subscriptionSeed: 18 },
+    { subscriptionPlanSha256: undefined }, { subscriptionPlanSha256: 'a'.repeat(64) }, { subscriptionPlanSha256: 'invalid' }]) {
+    assert.throws(() => comparison([rows[0], { ...rows[1], ...override }]), /subscription graph|Subscription graph/);
+  }
+  const legacy = rows.map(({ subscriptionPlan, subscriptionSeed, subscriptionPlanSha256, ...row }) => row);
+  assert.equal(comparison(legacy)['multi-room-6'].serverCpuPercent.delta, 0);
+  assert.throws(() => comparison([rows[0], legacy[1]]), /Subscription graph mismatch/);
+});
+
+test('realized graph cannot remap one native producer to multiple owners or replace a stable publisher', () => {
+  const f = plannedSubscriptionFixture('conference');
+  const first = f.results[0].connectionAttempts[0].coverage.plannedSubscriptions.realized[0];
+  const client = f.results.slice(1).find(result => result.connectionAttempts[0].coverage.plannedSubscriptions.realized.some(edge =>
+    edge.publisherClientId === first.publisherClientId && edge.isAudio === first.isAudio));
+  const edge = client.connectionAttempts[0].coverage.plannedSubscriptions.realized.find(edge => edge.publisherClientId === first.publisherClientId && edge.isAudio === first.isAudio);
+  const delivery = client.consumerDelivery.find(record => record.consumerId === edge.consumerId);
+  edge.producerId = 'replacement-producer';
+  delivery.producerId = edge.producerId;
+  assert.throws(() => verifySubscriptionReport(f.summary, f.results, f.options, f.scenario), /native identity/);
+
+  const g = plannedSubscriptionFixture();
+  const planned = g.results[0].connectionAttempts[0].coverage.plannedSubscriptions;
+  planned.realized[1].producerId = planned.realized[0].producerId;
+  g.results[0].consumerDelivery[1].producerId = planned.realized[0].producerId;
+  assert.throws(() => verifySubscriptionReport(g.summary, g.results, g.options, g.scenario), /native identity/);
+});
+
 test('optional capture is header-limited and scoped to owned loopback media ports', () => {
   const args = captureArguments({ purpose: 'diagnostic', captureInterface: 'lo0', udpPort: 41100, workers: 2 }, '/tmp/probe');
   assert.deepEqual(args, ['-i', 'lo0', '-p', '-nn', '-s', '64', '-B', '4096', '-U', '-c', '500000',
@@ -459,6 +732,7 @@ test('generator source identity includes subscription and stall policies and req
   const paths = ['load_tests/bin/load_test.rs', 'load_tests/clients/metrics.rs',
     'load_tests/clients/measurement.rs', 'load_tests/clients/media_generator.rs',
     'load_tests/clients/webrtc_client.rs', 'load_tests/clients/subscriptions.rs',
+    'load_tests/clients/subscription_plan.rs',
     'load_tests/clients/receiver_stall.rs'];
   const contents = paths.map(file => `// owned source fixture: ${file}\n`);
   for (const [index, file] of paths.entries()) {
@@ -480,6 +754,12 @@ test('generator source identity includes subscription and stall policies and req
   await rm(receiverStall);
   await assert.rejects(generatorSourceIdentity(directory), /ENOENT/);
   await writeFile(receiverStall, '// restored required input\n');
+  const subscriptionPlan = join(directory, 'load_tests/clients/subscription_plan.rs');
+  await writeFile(subscriptionPlan, '// changed deterministic graph policy\n');
+  assert.notEqual(await generatorSourceIdentity(directory), observed, 'planned graph changes must alter generator provenance');
+  await rm(subscriptionPlan);
+  await assert.rejects(generatorSourceIdentity(directory), /ENOENT/);
+  await writeFile(subscriptionPlan, '// restored required graph input\n');
   await rm(subscriptions);
   await assert.rejects(generatorSourceIdentity(directory), /ENOENT/);
 });

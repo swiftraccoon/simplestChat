@@ -36,6 +36,10 @@ mod subscriptions {
     include!("../clients/subscriptions.rs");
 }
 
+mod subscription_plan {
+    include!("../clients/subscription_plan.rs");
+}
+
 mod receiver_stall {
     include!("../clients/receiver_stall.rs");
 }
@@ -49,6 +53,7 @@ use media_generator::{MediaConfig, MediaGenerator};
 use metrics::{AttemptPlan, ClientMetrics, MeasurementWindow, MetricsCollector, TestSummary};
 use rtc::shared::marshal::Unmarshal;
 use std::num::{NonZeroU8, NonZeroU32};
+use subscription_plan::{OwnedParticipants, PlannedTargets, SubscriptionPlan};
 use subscriptions::Subscriptions;
 use tokio::sync::Mutex;
 use webrtc::media_stream::track_local::TrackLocal;
@@ -82,6 +87,31 @@ impl Departure {
 }
 
 #[derive(Debug, Clone)]
+struct PlannedClientSubscriptions {
+    targets: PlannedTargets,
+    owners: Arc<OwnedParticipants>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum SubscriptionMode {
+    #[default]
+    Fifo,
+    #[serde(rename = "ring-v1")]
+    RingV1,
+}
+
+impl SubscriptionMode {
+    fn parse(value: &str) -> Result<Self> {
+        match value {
+            "fifo" => Ok(Self::Fifo),
+            "ring-v1" => Ok(Self::RingV1),
+            _ => anyhow::bail!("--subscription-plan must be fifo or ring-v1"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 struct ClientConfig {
     server_url: String,
     room_id: String,
@@ -94,6 +124,7 @@ struct ClientConfig {
     is_churner: bool,
     /// Shared owned non-churning publishers in this room; expectations exclude self.
     stable_publishers: Arc<HashSet<String>>,
+    planned_subscriptions: Option<PlannedClientSubscriptions>,
     churn_session_min_secs: u64,
     churn_session_max_secs: u64,
     max_audio_consumers: usize,
@@ -129,9 +160,59 @@ struct TestConfig {
     generator_revision: String,
     diagnostics: bool,
     departure: Departure,
+    subscription_plan: SubscriptionMode,
+    subscription_seed: Option<u32>,
 }
 
 impl TestConfig {
+    /// An opt-in, owned-loopback workload. Default FIFO/churn semantics do not
+    /// change, and a failed planned peer must never be replaced by another one.
+    fn planned_subscriptions(&self) -> Result<Option<SubscriptionPlan>> {
+        match self.subscription_plan {
+            SubscriptionMode::Fifo => {
+                anyhow::ensure!(
+                    self.subscription_seed.is_none(),
+                    "--subscription-seed requires ring-v1"
+                );
+                Ok(None)
+            }
+            SubscriptionMode::RingV1 => {
+                let seed = self
+                    .subscription_seed
+                    .context("ring-v1 requires --subscription-seed")?;
+                let url = url::Url::parse(&self.server_url)?;
+                anyhow::ensure!(
+                    matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "[::1]")),
+                    "ring-v1 requires an owned loopback server"
+                );
+                anyhow::ensure!(
+                    self.publish_ratio == 1.0 && self.churn_rate == 0.0,
+                    "ring-v1 requires stable, all-publisher conference clients"
+                );
+                anyhow::ensure!(
+                    self.media_config.audio_enabled || self.media_config.video_enabled,
+                    "ring-v1 requires at least one enabled media kind"
+                );
+                SubscriptionPlan::ring(
+                    self.num_clients,
+                    self.num_rooms,
+                    if self.media_config.audio_enabled {
+                        self.max_audio_consumers
+                    } else {
+                        0
+                    },
+                    if self.media_config.video_enabled {
+                        self.max_video_consumers
+                    } else {
+                        0
+                    },
+                    seed,
+                )
+                .map(Some)
+            }
+        }
+    }
+
     fn validate_departure(&self) -> Result<()> {
         anyhow::ensure!(
             self.departure == Departure::Abrupt || self.diagnostics,
@@ -407,6 +488,8 @@ impl Default for TestConfig {
             generator_revision: "unknown".to_string(),
             diagnostics: false,
             departure: Departure::Abrupt,
+            subscription_plan: SubscriptionMode::Fifo,
+            subscription_seed: None,
         }
     }
 }
@@ -437,6 +520,14 @@ async fn main() -> Result<()> {
             }
             "--departure" => {
                 config.departure = Departure::parse(&args[i + 1])?;
+                i += 2;
+            }
+            "--subscription-plan" => {
+                config.subscription_plan = SubscriptionMode::parse(&args[i + 1])?;
+                i += 2;
+            }
+            "--subscription-seed" => {
+                config.subscription_seed = Some(args[i + 1].parse()?);
                 i += 2;
             }
             "--warmup"
@@ -680,6 +771,14 @@ fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
         "--departure" => {
             Departure::parse(value)?;
         }
+        "--subscription-plan" => {
+            SubscriptionMode::parse(value)?;
+        }
+        "--subscription-seed" => {
+            value
+                .parse::<u32>()
+                .context("--subscription-seed must be an unsigned 32-bit integer")?;
+        }
         "--server" | "-s" => {
             let url = url::Url::parse(value)?;
             anyhow::ensure!(
@@ -702,6 +801,10 @@ fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
 
 async fn run_load_test(config: TestConfig) -> Result<()> {
     config.validate_departure()?;
+    let subscription_plan = config.planned_subscriptions()?;
+    let owned_participants = subscription_plan
+        .as_ref()
+        .map(|_| Arc::new(OwnedParticipants::new(config.num_clients)));
     anyhow::ensure!(
         config.num_clients > 0 && config.num_clients <= 10_000,
         "--clients must be between 1 and 10000"
@@ -854,6 +957,16 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
                     .get(&(i % config.num_rooms.max(1)))
                     .unwrap_or(&no_stable_publishers),
             ),
+            planned_subscriptions: subscription_plan.as_ref().map(|plan| {
+                PlannedClientSubscriptions {
+                    targets: plan.targets(i),
+                    owners: Arc::clone(
+                        owned_participants
+                            .as_ref()
+                            .expect("A plan owns its participant registry"),
+                    ),
+                }
+            }),
             churn_session_min_secs: 5,
             churn_session_max_secs: 30,
             max_audio_consumers: config.max_audio_consumers,
@@ -919,6 +1032,7 @@ fn write_timeout_results(
 ) -> Result<()> {
     let report = serde_json::json!({
         "schemaVersion": 2,
+        "subscriptionPlan": config.planned_subscriptions()?,
         "attemptCoverage": {
             "version": 1, "scope": "stable-publishers", "available": false,
             "attempts": 0, "passedAttempts": 0, "failedAttempts": 0,
@@ -1014,6 +1128,7 @@ fn write_results_sync(
     let mut report = serde_json::to_value(&summary)?;
     report["schemaVersion"] = serde_json::json!(2);
     report["attemptCoverage"] = serde_json::to_value(attempt_coverage)?;
+    report["subscriptionPlan"] = serde_json::to_value(config.planned_subscriptions()?)?;
     report["run"] = serde_json::json!({
         "completed": completed, "passed": passed, "failureReasons": failures,
         "startedAt": started_at, "finishedAt": chrono::Utc::now().to_rfc3339(),
@@ -1166,6 +1281,10 @@ async fn run_client_inner(
         },
         stable_publishers: Arc::clone(&config.stable_publishers),
         is_publisher: config.is_publisher,
+        planned_targets: config
+            .planned_subscriptions
+            .as_ref()
+            .map(|plan| plan.targets.clone()),
     });
 
     // Connect to WebSocket signaling server
@@ -1199,6 +1318,11 @@ async fn run_client_inner(
             participants,
             ..
         } => {
+            if let Some(plan) = &config.planned_subscriptions {
+                // Register before any Produce request: another client's live
+                // notification can arrive before this client's producer ack.
+                plan.owners.register(&participant_id, &client_id)?;
+            }
             metrics.record_signaling_latency("join_room", t.elapsed().as_millis() as u64);
             tracing::info!(
                 "{}: Joined room as {}, {} other participants",
@@ -1520,7 +1644,14 @@ async fn run_client_inner(
     // write_rtp in webrtc 0.20 only enqueues. Wait before generating media so
     // the first keyframe and packet counters start after the SRTP handshake.
     if config.is_publisher {
-        webrtc_session.lock().await.wait_send_connected().await?;
+        await_send_readiness_with_diagnostics(
+            &metrics,
+            attempt,
+            async { webrtc_session.lock().await.wait_send_connected().await },
+            async { webrtc_session.lock().await.diagnostic_snapshot().await },
+            SEND_READINESS_SNAPSHOT_LIMIT,
+        )
+        .await?;
     }
     if !config.is_churner && Instant::now() > config.measurement_start {
         metrics.record_error("Setup exceeded shared ramp-up/warmup window; increase warmup before comparing performance".into());
@@ -1566,6 +1697,7 @@ async fn run_client_inner(
 
     let max_audio = config.max_audio_consumers;
     let max_video = config.max_video_consumers;
+    let planned_subscriptions = config.planned_subscriptions.clone();
     let (departure_request, departure_receiver) = if config.departure == Departure::ExplicitLeave {
         let (request, receiver) = tokio::sync::oneshot::channel();
         (Some(request), Some(receiver))
@@ -1585,6 +1717,7 @@ async fn run_client_inner(
             max_video,
             existing_producer_events,
             departure_receiver,
+            planned_subscriptions,
         )
         .await;
     });
@@ -1655,6 +1788,204 @@ async fn run_client_inner(
     }
 
     Ok(())
+}
+
+const SEND_READINESS_SNAPSHOT_LIMIT: Duration = Duration::from_secs(2);
+
+/// Take one opt-in failure observation before setup drops the owned peers.
+/// Readiness and capture are separate futures so its session guard is released
+/// before the bounded snapshot reacquires it. Capture never retries readiness,
+/// polls on the success/disabled paths, or replaces the original setup error.
+async fn await_send_readiness_with_diagnostics(
+    metrics: &MetricsCollector,
+    attempt: usize,
+    readiness: impl std::future::Future<Output = Result<()>>,
+    snapshot: impl std::future::Future<Output = Result<serde_json::Value>>,
+    snapshot_limit: Duration,
+) -> Result<()> {
+    let Err(readiness_error) = readiness.await else {
+        return Ok(());
+    };
+    if metrics.diagnostics_enabled() {
+        let triggered_elapsed_ms = metrics.diagnostic_elapsed_ms();
+        metrics.diagnostic_event_for_attempt(
+            attempt,
+            "send-readiness-failed",
+            serde_json::json!({"phase": "setup"}),
+        );
+        match tokio::time::timeout(snapshot_limit.min(SEND_READINESS_SNAPSHOT_LIMIT), snapshot)
+            .await
+        {
+            Ok(Ok(snapshot)) => metrics.diagnostic_send_readiness_snapshot_for_attempt(
+                attempt,
+                triggered_elapsed_ms,
+                snapshot,
+            ),
+            Ok(Err(_)) => metrics.diagnostic_failure_for_attempt(
+                attempt,
+                "Send-readiness failure snapshot could not be captured; evidence is incomplete",
+            ),
+            Err(_) => metrics.diagnostic_failure_for_attempt(
+                attempt,
+                "Send-readiness failure snapshot timed out; evidence is incomplete",
+            ),
+        }
+    }
+    Err(readiness_error)
+}
+
+#[cfg(test)]
+mod readiness_diagnostic_tests {
+    use super::*;
+
+    fn original_error() -> anyhow::Error {
+        anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::TimedOut))
+            .context("original readiness failure")
+    }
+
+    fn assert_original(error: anyhow::Error) {
+        assert_eq!(error.to_string(), "original readiness failure");
+        assert_eq!(
+            error.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::TimedOut
+        );
+    }
+
+    fn collector() -> MetricsCollector {
+        let metrics = MetricsCollector::new("readiness-test".into());
+        metrics.begin_connection_attempt();
+        metrics
+    }
+
+    #[tokio::test]
+    async fn disabled_diagnostics_never_poll_failure_snapshot() {
+        let metrics = collector();
+        let result = await_send_readiness_with_diagnostics(
+            &metrics,
+            1,
+            async { Err(original_error()) },
+            async { panic!("disabled capture must not be polled") },
+            SEND_READINESS_SNAPSHOT_LIMIT,
+        )
+        .await;
+        assert_original(result.unwrap_err());
+        assert!(metrics.generate_report().diagnostics.is_none());
+    }
+
+    #[tokio::test]
+    async fn successful_readiness_never_polls_snapshot() {
+        let metrics = collector();
+        metrics.enable_diagnostics();
+        await_send_readiness_with_diagnostics(
+            &metrics,
+            1,
+            async { Ok(()) },
+            async { panic!("successful readiness must not capture") },
+            SEND_READINESS_SNAPSHOT_LIMIT,
+        )
+        .await
+        .unwrap();
+        let report = metrics.generate_report().diagnostics.unwrap();
+        assert!(
+            report.events.is_empty() && report.snapshots.is_empty() && report.failures.is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn failure_capture_releases_readiness_guard_and_keeps_phase_and_error() {
+        let metrics = collector();
+        metrics.enable_diagnostics();
+        let lock = Mutex::new(());
+        let result = await_send_readiness_with_diagnostics(
+            &metrics,
+            1,
+            async {
+                let _guard = lock.lock().await;
+                Err(original_error())
+            },
+            async {
+                let _guard = lock.lock().await;
+                Ok(serde_json::json!({"transports": []}))
+            },
+            SEND_READINESS_SNAPSHOT_LIMIT,
+        )
+        .await;
+        assert_original(result.unwrap_err());
+        let report = metrics.generate_report().diagnostics.unwrap();
+        assert_eq!(report.events.len(), 1);
+        assert_eq!(report.events[0].kind, "send-readiness-failed");
+        assert_eq!(report.snapshots.len(), 1);
+        let snapshot = &report.snapshots[0];
+        assert_eq!(snapshot.attempt, 1);
+        assert_eq!(snapshot.kind, "send-readiness-failure");
+        assert_eq!(snapshot.details["phase"], "setup");
+        assert_eq!(
+            snapshot.details["snapshot"],
+            serde_json::json!({"transports": []})
+        );
+        assert!(snapshot.details["triggerElapsedMs"].as_u64().unwrap() <= snapshot.elapsed_ms);
+        assert!(report.failures.is_empty());
+        assert!(lock.try_lock().is_ok());
+    }
+
+    #[tokio::test]
+    async fn snapshot_error_cannot_replace_readiness_or_expose_raw_native_error() {
+        let metrics = collector();
+        metrics.enable_diagnostics();
+        let result = await_send_readiness_with_diagnostics(
+            &metrics,
+            1,
+            async { Err(original_error()) },
+            async { anyhow::bail!("raw-private-native-error") },
+            SEND_READINESS_SNAPSHOT_LIMIT,
+        )
+        .await;
+        assert_original(result.unwrap_err());
+        let report = metrics.generate_report().diagnostics.unwrap();
+        assert!(report.snapshots.is_empty());
+        assert_eq!(report.failures.len(), 1);
+        assert!(report.failures[0].contains("could not be captured"));
+        assert!(
+            !serde_json::to_string(&report)
+                .unwrap()
+                .contains("raw-private-native-error")
+        );
+    }
+
+    #[tokio::test]
+    async fn snapshot_timeout_bounds_lock_acquisition_and_cancels_locked_capture() {
+        assert_eq!(SEND_READINESS_SNAPSHOT_LIMIT, Duration::from_secs(2));
+        for blocked in [false, true] {
+            let metrics = collector();
+            metrics.enable_diagnostics();
+            let lock = Mutex::new(());
+            let held = if blocked {
+                Some(lock.lock().await)
+            } else {
+                None
+            };
+            let started = Instant::now();
+            let result = await_send_readiness_with_diagnostics(
+                &metrics,
+                1,
+                async { Err(original_error()) },
+                async {
+                    let _guard = lock.lock().await;
+                    std::future::pending().await
+                },
+                Duration::from_millis(10),
+            )
+            .await;
+            assert_original(result.unwrap_err());
+            assert!(started.elapsed() < Duration::from_secs(1));
+            drop(held);
+            assert!(lock.try_lock().is_ok());
+            let report = metrics.generate_report().diagnostics.unwrap();
+            assert!(report.snapshots.is_empty());
+            assert_eq!(report.failures.len(), 1);
+            assert!(report.failures[0].contains("timed out"));
+        }
+    }
 }
 
 /// Include lock acquisition and both peers in the diagnostic timeout. This
@@ -2225,6 +2556,8 @@ mod watchdog_tests {
         std::fs::create_dir(&directory).unwrap();
         let config = TestConfig {
             output_dir: directory.clone(),
+            subscription_plan: SubscriptionMode::RingV1,
+            subscription_seed: Some(7),
             ..Default::default()
         };
         write_timeout_results(&config, "test-start", &serde_json::json!({ "test": true })).unwrap();
@@ -2235,6 +2568,15 @@ mod watchdog_tests {
             assert_eq!(report["run"]["completed"], false);
             assert_eq!(report["run"]["passed"], false);
             assert_eq!(report["run"]["configuration"]["numClients"], 5);
+            assert_eq!(report["subscriptionPlan"]["version"], "ring-v1");
+            assert_eq!(report["subscriptionPlan"]["seed"], 7);
+            assert_eq!(
+                report["subscriptionPlan"]["clients"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                5
+            );
             std::fs::remove_file(path).unwrap();
         }
         std::fs::remove_dir(directory).unwrap();
@@ -2275,6 +2617,7 @@ async fn receive_messages_loop(
     max_video: usize,
     existing_producer_events: Vec<ServerMessage>,
     mut departure_receiver: Option<tokio::sync::oneshot::Receiver<DepartureRequest>>,
+    planned_subscriptions: Option<PlannedClientSubscriptions>,
 ) {
     let deadline = tokio::time::Instant::now() + timeout;
     let mut needs_renegotiation = false;
@@ -2282,7 +2625,18 @@ async fn receive_messages_loop(
     let mut renegotiation_since: Option<tokio::time::Instant> = None;
     let mut total_resumed: usize = 0;
 
-    let mut subscriptions = Subscriptions::new(max_audio, max_video);
+    let mut subscriptions = match planned_subscriptions {
+        Some(plan) => {
+            match Subscriptions::with_plan(max_audio, max_video, plan.targets, plan.owners) {
+                Ok(subscriptions) => subscriptions,
+                Err(error) => {
+                    metrics.record_error(format!("Invalid planned subscriptions: {error}"));
+                    return;
+                }
+            }
+        }
+        None => Subscriptions::new(max_audio, max_video),
+    };
     for event in existing_producer_events {
         handle_server_message(
             event,
@@ -2594,13 +2948,15 @@ async fn handle_server_message(
 ) {
     match msg {
         ServerMessage::NewProducer {
-            participant_id: _,
+            participant_id,
             producer_id,
             kind,
             ..
         } => {
             let retired = metrics.producer_retired(&producer_id);
-            if let Err(error) = subscriptions.discover(producer_id, kind, retired) {
+            if let Err(error) =
+                subscriptions.discover_from(&participant_id, producer_id, kind, retired)
+            {
                 metrics.record_error(format!("Producer discovery failed: {error}"));
             }
         }
@@ -2858,11 +3214,13 @@ fn print_usage() {
     );
     println!("  --output-dir <PATH>        Directory for both JSON reports (default: .)");
     println!(
-        "  --diagnostics              Bounded pre-close/stalled-receiver RTC stats and lifecycle events"
+        "  --diagnostics              Bounded setup-failure/pre-close/stalled RTC stats and lifecycle events"
     );
     println!(
         "  --departure <MODE>         abrupt (default) or explicit-leave (requires --diagnostics)"
     );
+    println!("  --subscription-plan <MODE> fifo (default) or ring-v1 (stable owned loopback)");
+    println!("  --subscription-seed <U32>  Required with ring-v1; fixed per-room graph seed");
     println!("  --run-label <LABEL>        Human-readable run identifier");
     println!("  --server-revision <SHA>    Server source revision supplied by the runner");
     println!("  --generator-revision <SHA> Generator source revision supplied by the runner");
@@ -2910,6 +3268,96 @@ fn print_usage() {
     println!("\nEnvironment Variables:");
     println!("  RUST_LOG=debug          Enable debug logging");
     println!("  RUST_LOG=info           Enable info logging (default)");
+}
+
+#[cfg(test)]
+mod subscription_mode_tests {
+    use super::*;
+
+    #[test]
+    fn planned_mode_is_explicit_seeded_stable_and_loopback_only() {
+        let mut config = TestConfig::default();
+        assert!(config.planned_subscriptions().unwrap().is_none());
+        config.subscription_seed = Some(7);
+        assert!(config.planned_subscriptions().is_err());
+        config.subscription_plan = SubscriptionMode::RingV1;
+        let first = config.planned_subscriptions().unwrap().unwrap();
+        let repeated = config.planned_subscriptions().unwrap().unwrap();
+        assert_eq!(first.sha256, repeated.sha256);
+        assert_eq!(first.targets(0).audio.len(), 4);
+        for origin in [
+            "ws://127.0.0.1:3129/ws",
+            "ws://localhost:3129/ws",
+            "ws://[::1]:3129/ws",
+        ] {
+            config.server_url = origin.into();
+            assert!(config.planned_subscriptions().is_ok());
+        }
+        config.server_url = "wss://example.com/ws".into();
+        assert!(config.planned_subscriptions().is_err());
+        config.server_url = TestConfig::default().server_url;
+        config.publish_ratio = 0.5;
+        assert!(config.planned_subscriptions().is_err());
+        config.publish_ratio = 1.0;
+        config.churn_rate = 0.1;
+        assert!(config.planned_subscriptions().is_err());
+        config.churn_rate = 0.0;
+        config.subscription_seed = None;
+        assert!(config.planned_subscriptions().is_err());
+    }
+
+    #[test]
+    fn cli_rejects_invalid_plan_and_seed_before_running() {
+        for (option, values) in [
+            ("--subscription-plan", vec!["fifo", "ring-v1"]),
+            ("--subscription-seed", vec!["0", "4294967295"]),
+        ] {
+            for value in values {
+                assert!(
+                    validate_cli_value(&["load_test".into(), option.into(), value.into()], 1)
+                        .is_ok()
+                );
+            }
+        }
+        for (option, value) in [
+            ("--subscription-plan", "ring"),
+            ("--subscription-seed", "-1"),
+            ("--subscription-seed", "4294967296"),
+            ("--subscription-seed", "1.5"),
+            ("--subscription-seed", "--diagnostics"),
+        ] {
+            assert!(
+                validate_cli_value(&["load_test".into(), option.into(), value.into()], 1).is_err()
+            );
+        }
+        assert!(
+            validate_cli_value(&["load_test".into(), "--subscription-seed".into()], 1).is_err()
+        );
+    }
+
+    #[test]
+    fn planned_report_includes_graph_and_default_report_does_not() {
+        let config = TestConfig::default();
+        let serialized = serde_json::to_value(&config).unwrap();
+        assert_eq!(serialized["subscriptionPlan"], "fifo");
+        assert!(serialized["subscriptionSeed"].is_null());
+        let config = TestConfig {
+            subscription_plan: SubscriptionMode::RingV1,
+            subscription_seed: Some(0),
+            ..config
+        };
+        let serialized = serde_json::to_value(config.planned_subscriptions().unwrap()).unwrap();
+        assert_eq!(serialized["version"], "ring-v1");
+        assert_eq!(serialized["clients"].as_array().unwrap().len(), 5);
+        assert_eq!(
+            serialized["clients"][0]["targets"]["audio"]
+                .as_array()
+                .unwrap()
+                .len(),
+            4
+        );
+        assert_eq!(serialized["sha256"].as_str().unwrap().len(), 64);
+    }
 }
 
 #[cfg(test)]
@@ -2980,6 +3428,7 @@ mod departure_tests {
                 4,
                 Vec::new(),
                 Some(receiver),
+                None,
             ));
             request_explicit_leave(request, Duration::from_secs(1)).await?;
             // No server response is sent: the completion must be a write
@@ -3175,6 +3624,7 @@ mod incremental_receive_tests {
                     kind: MediaKind::Audio,
                     source: None,
                 }],
+                None,
                 None,
             )))));
 
@@ -3378,6 +3828,7 @@ mod subscription_loop_tests {
                 max_video,
                 events,
                 Some(receiver),
+                None,
             ));
             Ok(Self {
                 server,

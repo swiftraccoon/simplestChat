@@ -47,6 +47,8 @@ export function comparison(rows) {
   const fields = ['joinP99Ms', 'sendReadyP99Ms', 'receiveReadyP99Ms', 'receivedPacketsPerSecond', 'serverCpuPercent', 'serverPeakRssMiB', 'generatorCpuPercent', 'generatorPeakRssMiB'];
   const result = {};
   for (const scenario of new Set(rows.map(r => r.scenario))) {
+    const identities = rows.filter(row => row.scenario === scenario).map(subscriptionComparisonIdentity);
+    if (new Set(identities).size !== 1) throw new Error(`Subscription graph mismatch: ${scenario}`);
     result[scenario] = {};
     for (const field of fields) {
       const baseline = rows.filter(r => r.scenario === scenario && r.variant === 'baseline').map(r => r[field]);
@@ -59,6 +61,129 @@ export function comparison(rows) {
     }
   }
   return result;
+}
+
+const unsigned32 = value => Number.isInteger(value) && value >= 0 && value <= 0xffffffff;
+const sha256 = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+
+/** Preserve the original generator invocation unless the fixed graph is requested. */
+export function subscriptionArguments(options) {
+  return options.subscriptionPlan === 'ring-v1'
+    ? ['--subscription-plan', 'ring-v1', '--subscription-seed', String(options.subscriptionSeed)] : [];
+}
+
+function subscriptionComparisonIdentity(row) {
+  const mode = row.subscriptionPlan ?? 'fifo';
+  if (mode === 'fifo' && row.subscriptionSeed == null && row.subscriptionPlanSha256 == null) return 'fifo';
+  if (mode !== 'ring-v1' || !unsigned32(row.subscriptionSeed) || !sha256(row.subscriptionPlanSha256)) {
+    throw new Error('Missing or malformed subscription graph identity');
+  }
+  return `${mode}:${row.subscriptionSeed}:${row.subscriptionPlanSha256}`;
+}
+
+/** Independently reproduce the versioned graph, without runtime/native identities.
+ * The permutation is SHA-256(domain, seed, room, client), with all integers u32 BE.
+ * The JSON field order is part of ring-v1's cross-language hash specification.
+ */
+export function expectedSubscriptionPlan(options, scenario) {
+  const clients = Array.from({ length: scenario.clients }, (_, index) => ({ clientId: `client-${index}`,
+    room: index % scenario.rooms, targets: { audio: [], video: [] } }));
+  for (let room = 0; room < scenario.rooms; room++) {
+    const ring = clients.flatMap((client, index) => {
+      if (client.room !== room) return [];
+      const input = Buffer.alloc(12);
+      input.writeUInt32BE(options.subscriptionSeed, 0);
+      input.writeUInt32BE(room, 4);
+      input.writeUInt32BE(index, 8);
+      return [{ client, index, order: hash(Buffer.concat([Buffer.from('simplestchat:ring-v1:permutation\0'), input])) }];
+    }).sort((left, right) => (left.order < right.order ? -1 : left.order > right.order ? 1 : left.index - right.index));
+    for (const [position, entry] of ring.entries()) {
+      const targets = Array.from({ length: Math.min(4, ring.length - 1) }, (_, offset) => ring[(position + offset + 1) % ring.length].client.clientId);
+      entry.client.targets.audio = targets;
+      entry.client.targets.video = scenario.extra.includes('--audio-only') ? [] : [...targets];
+    }
+  }
+  const plan = { version: 'ring-v1', seed: options.subscriptionSeed, clients };
+  return { ...plan, sha256: hash(JSON.stringify(plan)) };
+}
+
+/** Passing booleans alone do not establish a reproducible subscription workload.
+ * Match the requested graph and each realized native consumer's delivery proof.
+ * Historical FIFO reports may omit these newly introduced fields entirely.
+ */
+export function verifySubscriptionReport(summary, results, options, scenario) {
+  const mode = options.subscriptionPlan ?? 'fifo';
+  const config = summary?.run?.configuration;
+  if (mode === 'fifo') {
+    if ((config?.subscriptionPlan != null && config.subscriptionPlan !== 'fifo') ||
+        config?.subscriptionSeed != null || summary?.subscriptionPlan != null) {
+      throw new Error('Generator subscription plan does not match the requested FIFO workload');
+    }
+    return { subscriptionPlan: 'fifo', subscriptionSeed: null, subscriptionPlanSha256: null };
+  }
+  const expected = expectedSubscriptionPlan(options, scenario);
+  const plan = summary?.subscriptionPlan;
+  if (mode !== 'ring-v1' || config?.subscriptionPlan !== mode || config.subscriptionSeed !== options.subscriptionSeed ||
+      config.numClients !== scenario.clients || config.numRooms !== scenario.rooms || config.publishRatio !== 1 ||
+      typeof config.roomId !== 'string' || !config.roomId ||
+      config.durationSecs !== options.duration || config.warmupSecs !== options.warmup || config.rampUpSecs !== options.rampUp ||
+      config.churnRate !== 0 || config.maxAudioConsumers !== 4 || config.maxVideoConsumers !== 4 ||
+      config.mediaConfig?.audioEnabled !== true || config.mediaConfig?.videoEnabled !== !scenario.extra.includes('--audio-only') ||
+      plan?.version !== expected.version || plan.seed !== expected.seed || plan.sha256 !== expected.sha256 ||
+      !Array.isArray(plan.clients) || plan.clients.length !== expected.clients.length ||
+      !Array.isArray(results) || results.length !== expected.clients.length) {
+    throw new Error('Missing, malformed or mismatched subscription graph report');
+  }
+  const resultMap = new Map(results.map(client => [client?.clientId, client]));
+  if (resultMap.size !== expected.clients.length) throw new Error('Duplicate subscription graph client report');
+  const producerOwners = new Map(), ownerProducers = new Map(), allConsumers = new Set();
+  for (const [index, clientPlan] of expected.clients.entries()) {
+    const reportedPlan = plan.clients[index];
+    const client = resultMap.get(clientPlan.clientId);
+    const targetsMatch = targets => targets && ['audio', 'video'].every(kind =>
+      Array.isArray(targets[kind]) && targets[kind].length === clientPlan.targets[kind].length &&
+      targets[kind].every((target, offset) => target === clientPlan.targets[kind][offset]));
+    if (reportedPlan?.clientId !== clientPlan.clientId || reportedPlan.room !== clientPlan.room || !targetsMatch(reportedPlan.targets) ||
+        !client || client.roomId !== (scenario.rooms === 1 ? config.roomId : `${config.roomId}-${clientPlan.room}`) ||
+        !Array.isArray(client.connectionAttempts) || client.connectionAttempts.length !== 1 ||
+        !Array.isArray(client.consumerDelivery)) throw new Error('Missing or mismatched subscription graph client');
+    const coverage = client.connectionAttempts[0]?.coverage;
+    const planned = coverage?.plannedSubscriptions;
+    if (coverage?.passed !== true || coverage.skippedShortTail !== false || planned?.passed !== true || !targetsMatch(planned.targets) ||
+        coverage.expectedAudio !== clientPlan.targets.audio.length || coverage.expectedVideo !== clientPlan.targets.video.length ||
+        !Array.isArray(planned.realized) || planned.realized.length !== clientPlan.targets.audio.length + clientPlan.targets.video.length) {
+      throw new Error('Incomplete planned subscription coverage');
+    }
+    const realizedTargets = new Set(), consumers = new Set();
+    for (const realized of planned.realized) {
+      if (!realized || typeof realized.isAudio !== 'boolean' || typeof realized.consumerId !== 'string' || !realized.consumerId ||
+          typeof realized.producerId !== 'string' || !realized.producerId || consumers.has(realized.consumerId)) {
+        throw new Error('Malformed realized subscription proof');
+      }
+      const kind = realized.isAudio ? 'audio' : 'video';
+      const target = `${kind}:${realized.publisherClientId}`;
+      const delivery = client.consumerDelivery.filter(record => record?.consumerId === realized.consumerId);
+      if ((producerOwners.has(realized.producerId) && producerOwners.get(realized.producerId) !== target) ||
+          (ownerProducers.has(target) && ownerProducers.get(target) !== realized.producerId) || allConsumers.has(realized.consumerId)) {
+        throw new Error('Inconsistent native identity in realized subscription graph');
+      }
+      if (!clientPlan.targets[kind].includes(realized.publisherClientId) || realizedTargets.has(target) || delivery.length !== 1 ||
+          delivery[0].producerId !== realized.producerId || delivery[0].isAudio !== realized.isAudio || delivery[0].attempt !== 1 ||
+          delivery[0].passed !== true || delivery[0].skippedShortLived !== false || delivery[0].eligibleSeconds !== options.duration ||
+          delivery[0].secondsWithPackets !== options.duration || delivery[0].longestGapSeconds !== 0 ||
+          !Array.isArray(delivery[0].packetsBySecond) || delivery[0].packetsBySecond.length !== options.duration ||
+          !delivery[0].packetsBySecond.every(count => Number.isSafeInteger(count) && count > 0)) {
+        throw new Error('Realized subscription does not match its target or delivery proof');
+      }
+      realizedTargets.add(target);
+      consumers.add(realized.consumerId);
+      allConsumers.add(realized.consumerId);
+      producerOwners.set(realized.producerId, target);
+      ownerProducers.set(target, realized.producerId);
+    }
+    if (client.consumerDelivery.length !== consumers.size) throw new Error('Unexpected consumers outside the planned subscription graph');
+  }
+  return { subscriptionPlan: expected.version, subscriptionSeed: expected.seed, subscriptionPlanSha256: expected.sha256 };
 }
 
 async function availablePorts(port, udpPort, workers) {
@@ -180,6 +305,8 @@ export function lifecycleWorkload(summary, options, generatorSha256) {
   const config = run?.configuration;
   if (summary?.schemaVersion !== 2 || run?.completed !== true || config?.diagnostics !== true ||
       run?.provenance?.generatorBinarySha256 !== generatorSha256 || config.departure !== options.departure ||
+      (config.subscriptionPlan ?? 'fifo') !== (options.subscriptionPlan ?? 'fifo') ||
+      (config.subscriptionSeed ?? null) !== (options.subscriptionSeed ?? null) ||
       config.rampUpSecs !== options.rampUp || config.warmupSecs !== options.warmup || config.durationSecs !== options.duration) return null;
   return { startedAt: run.startedAt, finishedAt: run.finishedAt,
     rampUpSecs: config.rampUpSecs, warmupSecs: config.warmupSecs, durationSecs: config.durationSecs };
@@ -255,6 +382,7 @@ export async function generatorSourceIdentity(root) {
   const sources = await Promise.all(['load_tests/bin/load_test.rs', 'load_tests/clients/metrics.rs',
     'load_tests/clients/measurement.rs', 'load_tests/clients/media_generator.rs',
     'load_tests/clients/webrtc_client.rs', 'load_tests/clients/subscriptions.rs',
+    'load_tests/clients/subscription_plan.rs',
     'load_tests/clients/receiver_stall.rs']
     .map(file => readFile(join(root, file))));
   return `sha256:${hash(Buffer.concat(sources))}`;
@@ -370,7 +498,7 @@ async function runOne(options, variant, scenario, repetition, manifest) {
       '--mode', scenario.mode, '--quality', '480p', '--fps', '30', '--max-audio', '4', '--max-video', '4',
       '--output-dir', directory, '--run-label', name, '--server-revision', serverRevisionLabel(identity),
       '--generator-revision', manifest.generator.sourceIdentity, ...scenario.extra,
-      ...diagnostics.generatorArgs];
+      ...subscriptionArguments(options), ...diagnostics.generatorArgs];
     await json(join(directory, 'invocation.json'), { startedAt, variant, scenario, repetition, args, serverConfiguration: Object.fromEntries(Object.entries(env).filter(([k]) => !['METRICS_TOKEN', 'PATH', 'TMPDIR'].includes(k))) });
     const start = performance.now();
     lifecycle?.mark('generator_started');
@@ -405,6 +533,8 @@ async function runOne(options, variant, scenario, repetition, manifest) {
     if (diagnostics.requireSnapshots && (summary.run.configuration?.diagnostics !== true || summary.diagnosticFailures !== 0)) throw new Error('Missing or failing generator diagnostics');
     if (diagnostics.requireSnapshots && summary.run.configuration?.departure !== options.departure) throw new Error('Generator departure mode does not match the requested diagnostic run');
     if (summary.run.provenance?.generatorBinarySha256 !== manifest.generator.binarySha256) throw new Error('Generator report does not match the frozen executable');
+    const subscription = verifySubscriptionReport(summary, options.subscriptionPlan === 'ring-v1'
+      ? await readGeneratorResults(join(directory, 'load_test_results.json')) : null, options, scenario);
     const finish = await metrics(origin, token); await writeFile(join(directory, 'metrics-finish.txt'), finish.raw, { flag: 'wx' });
     let cleaned = false;
     let final;
@@ -421,7 +551,7 @@ async function runOne(options, variant, scenario, repetition, manifest) {
     if (options.purpose === 'diagnostic') {
       diagnosticRow = { purpose: 'diagnostic', diagnosticDetail: options.diagnosticDetail, departure: options.departure, scenario: scenario.name, variant, repetition, startedAt,
         completedAt: new Date().toISOString(), cleanupMs: performance.now() - cleanupStart,
-        workloadPassed: true,
+        workloadPassed: true, ...subscription,
         media: { validatedConsumers: summary.validatedConsumers, failedConsumers: summary.failedConsumers,
           skippedShortLivedConsumers: summary.skippedShortLivedConsumers } };
       // The finally block adds recorder coverage only after stopping the server.
@@ -432,7 +562,7 @@ async function runOne(options, variant, scenario, repetition, manifest) {
     const serverResources = resourceSummary(samples, 'server', windowStart, windowEnd);
     const generatorResources = resourceSummary(samples, 'generator', windowStart, windowEnd);
     performanceRow = { purpose: 'performance', scenario: scenario.name, variant, repetition, startedAt,
-      workloadPassed: true,
+      workloadPassed: true, ...subscription,
       joinP99Ms: summary.p99ConnectionTimeMs, sendReadyP99Ms: summary.sendMediaReady.p99Ms,
       receiveReadyP99Ms: summary.receiveMediaReady.p99Ms,
       receivedPacketsPerSecond: summary.measurement.packetsReceived / (summary.measurement.durationMs / 1000),
@@ -556,7 +686,7 @@ async function runOne(options, variant, scenario, repetition, manifest) {
 
 export function parseOptions(args) {
   const raw = {};
-  const keys = new Set(['baseline-root', 'baseline-bin', 'candidate-root', 'candidate-bin', 'generator', 'generator-source-root', 'output', 'clients', 'duration', 'warmup', 'ramp-up', 'repetitions', 'workers', 'port', 'udp-port', 'scenarios', 'purpose', 'capture-interface', 'diagnostic-detail', 'departure']);
+  const keys = new Set(['baseline-root', 'baseline-bin', 'candidate-root', 'candidate-bin', 'generator', 'generator-source-root', 'output', 'clients', 'duration', 'warmup', 'ramp-up', 'repetitions', 'workers', 'port', 'udp-port', 'scenarios', 'purpose', 'capture-interface', 'diagnostic-detail', 'departure', 'subscription-plan', 'subscription-seed']);
   for (let i = 0; i < args.length; i += 2) {
     const key = args[i]?.replace(/^--/, '');
     if (!args[i]?.startsWith('--') || !keys.has(key) || !args[i + 1] || args[i + 1].startsWith('--') || raw[key]) throw new Error(`Unknown, duplicate or incomplete option: ${args[i]}`);
@@ -568,6 +698,15 @@ export function parseOptions(args) {
     options[key.replace(/-([a-z])/g, (_, l) => l.toUpperCase())] = resolve(raw[key]);
   }
   options.generatorSourceRoot = resolve(raw['generator-source-root'] ?? options.candidateRoot);
+  options.subscriptionPlan = raw['subscription-plan'] ?? 'fifo';
+  if (!['fifo', 'ring-v1'].includes(options.subscriptionPlan)) throw new Error('--subscription-plan must be fifo or ring-v1');
+  options.subscriptionSeed = null;
+  if (options.subscriptionPlan === 'ring-v1') {
+    if (!/^(0|[1-9][0-9]*)$/.test(raw['subscription-seed'] ?? '') || !unsigned32(Number(raw['subscription-seed']))) {
+      throw new Error('--subscription-seed is required for ring-v1 and must be an unsigned 32-bit decimal integer');
+    }
+    options.subscriptionSeed = Number(raw['subscription-seed']);
+  } else if (raw['subscription-seed'] !== undefined) throw new Error('--subscription-seed requires --subscription-plan ring-v1');
   options.purpose = raw.purpose ?? 'performance';
   if (!['performance', 'diagnostic'].includes(options.purpose)) throw new Error('--purpose must be performance or diagnostic');
   options.captureInterface = raw['capture-interface'];
@@ -594,6 +733,9 @@ export function parseOptions(args) {
   if (!options.clients.length || options.clients.some(v => !Number.isInteger(v) || v < 2 || v > 100) || new Set(options.clients).size !== options.clients.length) throw new Error('--clients must be unique counts between2 and100');
   const scenarios = (raw.scenarios ?? 'conference').split(',');
   if (scenarios.some(s => !['conference', 'multi-room', 'webinar', 'audio', 'churn'].includes(s)) || new Set(scenarios).size !== scenarios.length) throw new Error('Unknown/duplicate scenario');
+  if (options.subscriptionPlan === 'ring-v1' && scenarios.some(name => !['conference', 'multi-room', 'audio'].includes(name))) {
+    throw new Error('ring-v1 requires an all-publisher conference, multi-room or audio scenario without churn');
+  }
   options.scenarios = options.clients.flatMap(clients => scenarios.map(name => ({ name: `${name}-${clients}`, clients,
     rooms: name === 'multi-room' ? Math.min(4, Math.floor(clients / 2)) : 1,
     mode: name === 'webinar' ? 'webinar' : 'conference', extra: name === 'audio' ? ['--audio-only'] : name === 'churn' ? ['--churn-rate', String(Math.ceil(clients / 5) / options.duration)] : [] })));

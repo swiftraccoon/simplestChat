@@ -185,6 +185,28 @@ impl MetricsCollector {
         }
     }
 
+    /// A failed setup is not normal pre-close coverage. Use the same bounded
+    /// snapshot inventory, sanitized payload and immutable attempt attribution.
+    pub fn diagnostic_send_readiness_snapshot_for_attempt(
+        &self,
+        attempt: usize,
+        triggered_elapsed_ms: u64,
+        snapshot: serde_json::Value,
+    ) {
+        if self.diagnostics_enabled() {
+            self.push_diagnostic(
+                attempt,
+                "send-readiness-failure",
+                serde_json::json!({
+                    "phase": "setup",
+                    "triggerElapsedMs": triggered_elapsed_ms,
+                    "snapshot": snapshot,
+                }),
+                true,
+            );
+        }
+    }
+
     /// Retain a bounded, sanitized receiver snapshot without consuming pre-close
     /// slots. The caller records a failed capture if this independent quota or
     /// serialized-size bound rejects the result. No raw native errors are stored.
@@ -1115,6 +1137,7 @@ mod measurement_tests {
             expected_audio: 1,
             expected_video: 1,
             is_publisher: false,
+            planned_targets: None,
         });
         metrics.attempts.lock().unwrap()[attempt - 1].started = start;
         metrics.mark_connection_successful();
@@ -1369,6 +1392,7 @@ mod measurement_tests {
             expected_audio: 0,
             expected_video: 0,
             is_publisher: true,
+            planned_targets: None,
         };
         let first = metrics.begin_planned_attempt(plan.clone());
         assert!(metrics.attempt_accepts_work(first));
@@ -1469,6 +1493,7 @@ mod measurement_tests {
             expected_audio: 0,
             expected_video: 0,
             is_publisher: true,
+            planned_targets: None,
         });
         metrics.attempts.lock().unwrap()[0].started = now - Duration::from_secs(10);
         assert!(!metrics.attempt_accepts_work(attempt));

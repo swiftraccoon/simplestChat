@@ -218,6 +218,16 @@ keep their server/worker clocks. Do not subtract them to infer before/after orde
 or a cause. Scheduled sampling can miss short sessions and transient faults;
 this report does not replace the existing native-coverage or delivery gates.
 
+## Capture send-readiness failures
+
+For an owned generator run with `--diagnostics`, a failed send-readiness wait
+records `send-readiness-failed` and attempts one sanitized RTC snapshot, bounded
+to two seconds including lock acquisition. The `send-readiness-failure` snapshot
+records setup state after the failure, not necessarily state at the exact timeout;
+compare its timestamp with `triggerElapsedMs` and the preceding ICE/peer events.
+It does not retry setup, replace the original error, or count as normal pre-close
+coverage. Disabled diagnostics and successful readiness do not take this snapshot.
+
 ## Native bitrate-clamping messages
 
 The pinned media stack can log `start bitrate smaller than min bitrate` after

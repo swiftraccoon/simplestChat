@@ -55,6 +55,8 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 | `--mode MODE` | Publisher preset: `conference` (100%), `webinar` (1%), `panel` (10%), `classroom` (20%) |
 | `--publish-ratio RATIO` | Publisher fraction; 1.0, at least one publisher overall |
 | `--max-audio N`, `--max-video N` | Consumer caps per client; 4 each |
+| `--subscription-plan MODE` | Discovery-order `fifo` (default), or fixed owned `ring-v1` graph |
+| `--subscription-seed N` | Required for `ring-v1`; unsigned 32-bit integer, held constant across comparisons |
 | `--churn-rate N` | Select `min(clients, floor(N × duration))` clients to repeatedly join; 0 |
 | `--audio-only`, `--video-only` | Generate only the selected media kind |
 | `--quality PRESET`, `--fps FPS` | `480p`/`720p`/`1080p`, 15/30/60 fps; defaults 480p/30 |
@@ -74,13 +76,28 @@ Each iteration performs a fresh room join with new media transports; it does not
 exercise credential-based signaling reconnection. With abrupt departure, the old
 membership can remain in reconnect grace while the new session joins.
 
-Existing and newly announced producers share bounded audio/video FIFO queues.
-Starting immediately, each 100 ms dispatch tick inspects at most two items in
-total. Known owned-retired producers are skipped before requesting a consumer;
-already requested slots stay occupied until the server's `ProducerClosed`
-notification frees capacity. Discovery deduplication retains at most 20,000
-identities and fails the run on overflow. This scheduling does not change
-consumer caps, coverage thresholds, keyframe cadence, or session lengths.
+By default, existing and newly announced producers share bounded audio/video
+FIFO queues. Starting immediately, each 100 ms dispatch tick inspects at most
+two items in total. Known owned-retired producers are skipped before requesting
+a consumer; already requested slots stay occupied until the server's
+`ProducerClosed` notification frees capacity. Discovery deduplication retains at
+most 20,000 identities and fails the run on overflow. This scheduling does not
+change consumer caps, coverage thresholds, keyframe cadence, or session lengths.
+
+### Fixed subscription graphs
+
+Add `--subscription-plan ring-v1 --subscription-seed 17` to select the same
+publisher/kind edges across runs, independent of discovery order and server IDs.
+This mode requires an owned loopback server, all clients publishing, no churn,
+at most 100 clients, and caps of at most 16 subscriptions per kind. Targets stay
+within each room and are capped by its available peers.
+
+Planned targets enter the existing paced queues in canonical per-kind order.
+A missing peer is never replaced by another publisher. Keep the seed, room
+assignment, media kinds and caps fixed for comparisons. FIFO remains the default;
+its churn behavior is unchanged.
+The ring balances publisher fan-out and may wait for later arrivals during ramp-up.
+It does not replace discovery-order tests for concentrated load or churn.
 
 ## What constitutes success
 
@@ -94,14 +111,14 @@ separately for audio and video up to the configured caps. Publisher attempts
 must also queue RTP during their own part of the shared measurement window.
 Evidence ends at the planned deadline even if setup or cleanup runs late.
 
-Expectations and the session deadline are fixed before connection setup. Attempt
-eligibility excludes the first three seconds, intersects the shared window, and
-counts complete seconds only. Delayed setup cannot shorten that planned interval
-or turn missing media into a skip. An admitted attempt with no planned eligible
-seconds is a skipped short tail; failed setup still fails. A five-second session
-with slow setup can therefore honestly fail coverage.
+Expectations and the session deadline are fixed before connection setup. In FIFO
+mode, attempt eligibility excludes the first three seconds, intersects the
+shared window, and counts complete seconds only. Delayed setup cannot shorten
+that planned interval or turn missing media into a skip. An admitted attempt
+with no planned eligible seconds is a skipped short tail; failed setup still
+fails. A five-second session with slow setup can therefore honestly fail coverage.
 
-Individual consumer checks remain in place, including streams from churning
+FIFO consumer checks remain in place, including streams from churning
 publishers: after their subscription/publication settling allowance, eligible
 buckets allow no more than two consecutive empty seconds. Owned publisher or
 client departure ends eligibility; unexpected producer closure fails the run.
@@ -114,6 +131,12 @@ later attempt with a nonzero stable receiver expectation. All-churn populations,
 rooms without a stable counterpart, and zero effective consumer caps cannot
 establish measured churn. Earlier successful attempts cannot cover a later
 attempt's missing delivery.
+
+For `ring-v1`, every planned publisher/kind edge must have exactly one consumer
+with packets in every complete second of the shared measurement window. Both
+publisher and consumer lifetimes must cover that entire window. Late setup,
+early closure, missing peers, unknown ownership, duplicate or extra edges fail;
+there is no settling allowance or short-lived skip that can reduce this proof.
 
 Accept a run only when the process exits successfully, `run.completed` and
 `run.passed` are true, and no `load_test_timeout.json` exists. Watchdog expiry
@@ -133,6 +156,10 @@ packet buckets. `load_test_summary.json` aggregates them (`schemaVersion: 2`):
   outcomes, and requested/validated churner counts. It is additive to summary
   schema 2; older artifacts without it or per-attempt coverage are unavailable
   evidence for this guarantee, not successful coverage.
+- Planned runs add summary `subscriptionPlan` with the version, seed, SHA-256
+  graph identity and ordered per-client targets. Per-attempt
+  `coverage.plannedSubscriptions` records those targets, realized
+  publisher/producer/consumer mappings, and the exact-graph pass result.
 - `sendMediaReady` / `receiveMediaReady`: peer `Connected` timing for each attempt.
 - `signalingLatencies.operations`: P50/P95/P99 from merged exact millisecond
   histograms, not averages of client percentiles.
