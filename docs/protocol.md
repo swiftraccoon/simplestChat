@@ -62,8 +62,20 @@ loopback origins. Origin-less native clients are handled separately. See
 
 Authentication comes from the handshake, not from participant IDs in messages.
 The server also enforces JWT expiry and account revocation on open sockets.
-Refreshing an HTTP session updates the browser's token for its **next** handshake;
-it does not reauthenticate the existing WebSocket.
+After an HTTP refresh, the browser sends `renewAuthentication` with a `requestId`
+and the new `token` on its existing authenticated socket. `authenticationRenewed`
+returns that request ID and `expiresAt` in Unix seconds; a rejected renewal returns
+`authenticationRenewalFailed` with only the request ID. These connection-owned
+replies are separate from room request/error correlation. Never log renewal frames.
+
+Renewal validates the same account and credential version without changing room
+membership, media, roles or reconnect credentials. It cannot upgrade a guest,
+change identity, shorten the accepted lifetime or revive an expired connection.
+The server bounds validation to two seconds and the old expiry, and permits three
+renewal attempts per minute per socket under the shared authentication budget.
+The browser retains the newest token for future handshakes; rejected or unconfirmed
+renewal falls back to ordinary bounded reconnection after at most five seconds.
+Logout and identity changes still leave and replace the socket.
 
 The server limits inbound frames/messages to 64 KiB and closes connections after
 five minutes without an inbound frame. For quiet, currently bound room or lobby
@@ -87,6 +99,7 @@ reconnect grace. It runs before any disconnect-time database credential check.
 | Operation | Correlation and browser deadline |
 | --- | --- |
 | Generic `SignalingClient.request` | First pending request matching the response `type`; 5 seconds by default |
+| Authentication renewal | Dedicated `requestId`; 5 seconds, one in flight per socket |
 | Room join | Next `roomJoined`, `lobbyWaiting`, `roomPasswordRequired` or `error`; 10 seconds |
 | Social action | Generated `requestId` plus matching `action`; 10 seconds, at most 32 pending |
 | Chat send | `clientMessageId` reconciles the optimistic entry with an acknowledgement; 12 seconds before marking delivery unconfirmed |

@@ -4,6 +4,7 @@
 // --- Client → Server ---
 
 export type ClientMessage =
+  | { type: 'renewAuthentication'; requestId: string; token: string }
   | { type: 'joinRoom'; roomId: string; participantName: string; password?: string }
   | { type: 'leaveRoom' }
   | { type: 'getRouterRtpCapabilities' }
@@ -60,6 +61,8 @@ export type ClientMessage =
 // --- Server → Client ---
 
 export type ServerMessage =
+  | { type: 'authenticationRenewed'; requestId: string; expiresAt: number }
+  | { type: 'authenticationRenewalFailed'; requestId: string }
   | {
       type: 'roomJoined';
       participantId: string;

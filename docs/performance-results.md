@@ -1,5 +1,23 @@
 # Performance results
 
+## Signed-in chat continuity — 2026-09-15
+
+The original build disconnected both users at 15 minutes despite successful
+token refreshes. Both sessions required a full room rejoin, and one of 286 send
+attempts was not acknowledged.
+
+With same-socket authentication renewal, the **20-minute run passed all 366
+messages**. Both users refreshed and renewed their existing sockets before the
+original expiry. There were zero socket closures, room rejoins, rejected resumes
+or input-disabled intervals. Drafts and rosters stayed intact, the retained
+300-message history matched exactly, and cleanup returned all membership counts
+to zero with clean browser/server/database shutdown.
+
+Both runs used the same harness and Chromium version, two fresh accounts, and
+desktop/375px viewports on an owned local server. This covers one foreground
+refresh cycle, not suspended tabs, physical mobile browsers or live media.
+See [the session soak](testing.md#authenticated-chat-continuity) to repeat it.
+
 ## Concentrated publisher load — 2026-09-14
 
 Two `hotspot-v1` repeats passed all **200 client attempts and 1,600 subscriptions**,

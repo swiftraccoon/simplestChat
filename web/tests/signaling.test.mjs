@@ -50,7 +50,7 @@ function fakeTimers() {
   };
 }
 
-async function connectedClient(t, random = 0.5) {
+async function connectedClient(t, random = 0.5, token) {
   class FakeWebSocket {
     static OPEN = 1;
     static CONNECTING = 0;
@@ -100,12 +100,182 @@ async function connectedClient(t, random = 0.5) {
     },
   });
   const client = new SignalingClient('ws://localhost/ws');
-  client.connect();
+  client.connect(token);
   const socket = FakeWebSocket.instances.at(-1);
   socket.open();
   t.after(() => client.disconnect());
   return { client, socket, timers, FakeWebSocket, errors };
 }
+
+test('refresh renews the same authenticated socket without disturbing room requests', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5, 'initial');
+  const statuses = [],
+    messages = [];
+  client.setOnStatusChange((value) => statuses.push(value));
+  client.setOnMessage((value) => messages.push(value));
+  const pending = client.request({ type: 'createSendTransport' }, 'transportCreated');
+  client.setToken('refreshed');
+  const renewal = socket.sent.at(-1);
+  assert.equal(renewal.type, 'renewAuthentication');
+  assert.equal(renewal.token, 'refreshed');
+  socket.receive({ type: 'authenticationRenewed', requestId: 'unrelated', expiresAt: 1800000000 });
+  assert.equal(timers.pendingCount, 2);
+  socket.receive({
+    type: 'authenticationRenewed',
+    requestId: renewal.requestId,
+    expiresAt: 1800000000,
+  });
+  assert.equal(timers.pendingCount, 1);
+  socket.receive(transportReply('unchanged'));
+  assert.equal((await pending).transportId, 'unchanged');
+  client.setToken('refreshed');
+  assert.equal(socket.sent.length, 2, 'adopted token is not redundantly renewed');
+  assert.equal(FakeWebSocket.instances.length, 1);
+  assert.deepEqual(statuses, []);
+  assert.deepEqual(messages, []);
+});
+
+test('ordinary request errors cannot reject a correlated authentication renewal', async (t) => {
+  const { client, socket, timers } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('refreshed');
+  const renewal = socket.sent.at(-1);
+  const rejected = assert.rejects(
+    client.request({ type: 'createSendTransport' }, 'transportCreated'),
+    /Room operation failed/,
+  );
+  socket.receive({ type: 'error', message: 'Room operation failed' });
+  await rejected;
+  assert.equal(timers.pendingCount, 1);
+  socket.receive({
+    type: 'authenticationRenewed',
+    requestId: renewal.requestId,
+    expiresAt: 1800000000,
+  });
+  assert.equal(timers.pendingCount, 0);
+  assert.equal(client.connected, true);
+});
+
+test('refresh during a pending handshake renews on open and disconnected refresh uses the newest handshake', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5, 'initial');
+  socket.close();
+  client.setToken('second');
+  timers.tick(1500);
+  const replacement = FakeWebSocket.instances.at(-1);
+  assert.deepEqual(replacement.protocols, ['simplestchat', 'auth.second']);
+  client.setToken('third');
+  assert.equal(replacement.sent.length, 0);
+  replacement.open();
+  assert.equal(replacement.sent[0].type, 'renewAuthentication');
+  assert.equal(replacement.sent[0].token, 'third');
+  replacement.receive({
+    type: 'authenticationRenewed',
+    requestId: replacement.sent[0].requestId,
+    expiresAt: 1800000000,
+  });
+  assert.equal(timers.pendingCount, 0);
+});
+
+test('a renewal send failure during open cannot announce a usable replacement socket', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5, 'initial');
+  const statuses = [],
+    reconnects = [];
+  client.setOnStatusChange((status) => statuses.push(status));
+  client.setOnReconnected(() => reconnects.push('connected'));
+  socket.close();
+  timers.tick(1500);
+  const replacement = FakeWebSocket.instances.at(-1);
+  client.setToken('refreshed');
+  replacement.send = () => {
+    throw new Error('fixture send failure');
+  };
+  replacement.open();
+  assert.equal(client.connected, false);
+  assert.equal(statuses.at(-1), 'disconnected');
+  assert.deepEqual(reconnects, []);
+  assert.deepEqual(timers.delays, [120000, 1500]);
+});
+
+test('overlapping refreshes serialize and stale acknowledgements cannot overwrite the latest token', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('second');
+  client.setToken('third');
+  assert.equal(socket.sent.length, 1);
+  const first = socket.sent[0];
+  socket.receive({
+    type: 'authenticationRenewed',
+    requestId: first.requestId,
+    expiresAt: 1800000000,
+  });
+  const second = socket.sent[1];
+  assert.equal(second.token, 'third');
+  socket.receive({ type: 'authenticationRenewalFailed', requestId: first.requestId });
+  assert.equal(client.connected, true);
+  socket.receive({
+    type: 'authenticationRenewed',
+    requestId: second.requestId,
+    expiresAt: 1800000001,
+  });
+  assert.equal(timers.pendingCount, 0);
+  socket.close();
+  timers.tick(1500);
+  assert.deepEqual(FakeWebSocket.instances.at(-1).protocols, ['simplestchat', 'auth.third']);
+});
+
+for (const failure of ['timeout', 'rejected', 'send']) {
+  test(`renewal ${failure} enters bounded recovery without logging credentials`, async (t) => {
+    const { client, socket, timers, FakeWebSocket, errors } = await connectedClient(
+      t,
+      0.5,
+      'initial',
+    );
+    if (failure === 'send')
+      socket.send = () => {
+        throw new Error('secret-token');
+      };
+    client.setToken('secret-token');
+    if (failure === 'timeout') timers.tick(5000);
+    if (failure === 'rejected')
+      socket.receive({ type: 'authenticationRenewalFailed', requestId: socket.sent[0].requestId });
+    assert.equal(client.connected, false);
+    assert.deepEqual(timers.delays, [120000, 1500]);
+    assert.equal(JSON.stringify(errors).includes('secret-token'), false);
+    timers.tick(1500);
+    const replacement = FakeWebSocket.instances.at(-1);
+    assert.deepEqual(replacement.protocols, ['simplestchat', 'auth.secret-token']);
+    replacement.open();
+    assert.equal(replacement.sent.length, 0, 'new handshake already uses the refreshed credential');
+    assert.equal(timers.pendingCount, 0);
+  });
+}
+
+test('logout and replacement sockets retire renewal timers and late results', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('refreshed');
+  const requestId = socket.sent[0].requestId;
+  client.disconnect();
+  assert.equal(timers.pendingCount, 0);
+  client.connect('other-account');
+  const replacement = FakeWebSocket.instances.at(-1);
+  replacement.open();
+  socket.receive({ type: 'authenticationRenewed', requestId, expiresAt: 1800000000 });
+  timers.tick(6000);
+  assert.equal(client.connected, true);
+  assert.deepEqual(replacement.protocols, ['simplestchat', 'auth.other-account']);
+  assert.equal(replacement.sent.length, 0);
+});
+
+test('clearing the token retires renewal and a guest socket is never upgraded in place', async (t) => {
+  const { client, socket, timers } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('refreshed');
+  const requestId = socket.sent[0].requestId;
+  client.setToken(undefined);
+  socket.receive({ type: 'authenticationRenewed', requestId, expiresAt: 1800000000 });
+  assert.equal(timers.pendingCount, 0);
+  client.disconnect();
+  const guest = await connectedClient(t);
+  guest.client.setToken('authenticated');
+  assert.equal(guest.socket.sent.length, 0);
+});
 
 test('malformed replies neither resolve pending requests nor reach application handlers', async (t) => {
   const { client, socket, timers, errors } = await connectedClient(t);

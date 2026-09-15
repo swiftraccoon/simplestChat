@@ -4,6 +4,7 @@ import { decodeServerMessage } from './protocol-validation';
 export type MessageHandler = (msg: ServerMessage) => void;
 
 const RECONNECT_DEADLINE_MS = 120_000;
+const AUTHENTICATION_RENEWAL_TIMEOUT_MS = 5000;
 
 export class SignalingClient {
   private ws: WebSocket | null = null;
@@ -22,6 +23,13 @@ export class SignalingClient {
   private onReconnected: (() => void) | null = null;
   private wasConnected = false;
   private currentToken: string | undefined;
+  private socketToken: string | undefined;
+  private renewalSequence = 0;
+  private renewal: {
+    requestId: string;
+    token: string;
+    timer: ReturnType<typeof setTimeout>;
+  } | null = null;
 
   // Pending request/response tracking
   private pendingResolvers: Array<{
@@ -91,6 +99,8 @@ export class SignalingClient {
       ? ['simplestchat', `auth.${this.currentToken}`]
       : ['simplestchat'];
     const socket = new WebSocket(this.url, protocols);
+    this.clearRenewal();
+    this.socketToken = this.currentToken;
     this.ws = socket;
 
     socket.onopen = () => {
@@ -100,6 +110,9 @@ export class SignalingClient {
       this.wasConnected = true;
       this.reconnectAttempt = 0;
       if (!this.restarting) this.clearReconnectDeadline();
+      // A refresh can finish while the old handshake is still CONNECTING.
+      this.renewAuthentication();
+      if (this.ws !== socket || socket.readyState !== WebSocket.OPEN) return;
       this.onStatusChange?.('connected');
       if (wasReconnect) {
         this.onReconnected?.();
@@ -121,6 +134,20 @@ export class SignalingClient {
       }
 
       try {
+        // Renewal has its own correlation and never consumes an unrelated room
+        // request's generic error or forwards credentials into room handlers.
+        if (msg.type === 'authenticationRenewed' || msg.type === 'authenticationRenewalFailed') {
+          if (this.renewal?.requestId !== msg.requestId) return;
+          const token = this.renewal.token;
+          this.clearRenewal();
+          if (msg.type === 'authenticationRenewalFailed') {
+            this.failRenewal(socket);
+          } else {
+            this.socketToken = token;
+            this.renewAuthentication();
+          }
+          return;
+        }
         if (msg.type === 'serverRestarting') {
           this.restarting = true;
           this.startReconnectDeadline();
@@ -148,7 +175,9 @@ export class SignalingClient {
       // Authentication can replace a socket before its queued close arrives.
       // Only the current connection owns status, requests, and reconnect timers.
       if (this.ws !== socket) return;
+      this.clearRenewal();
       this.ws = null;
+      this.socketToken = undefined;
       console.log('[ws] disconnected');
       this.onStatusChange?.('disconnected');
       this.rejectAllPending('WebSocket closed');
@@ -170,6 +199,8 @@ export class SignalingClient {
     this.wasConnected = false;
     this.reconnectAttempt = 0;
     this.currentToken = undefined;
+    this.socketToken = undefined;
+    this.clearRenewal();
     this.restarting = false;
     this.recoveryFailed = false;
     this.clearReconnectDeadline();
@@ -229,9 +260,53 @@ export class SignalingClient {
     return this.recoveryFailed;
   }
 
-  /** Update JWT token for next connection/reconnection */
+  /** Renew an authenticated socket in place; disconnected refresh updates its next handshake. */
   setToken(token: string | undefined): void {
     this.currentToken = token;
+    if (!token) this.clearRenewal();
+    else this.renewAuthentication();
+  }
+
+  private renewAuthentication(): void {
+    const socket = this.ws;
+    const token = this.currentToken;
+    if (
+      !socket ||
+      socket.readyState !== WebSocket.OPEN ||
+      !this.socketToken ||
+      !token ||
+      token === this.socketToken ||
+      this.renewal
+    )
+      return;
+    const requestId = `auth-${++this.renewalSequence}`;
+    const timer = setTimeout(() => {
+      if (this.ws !== socket || this.renewal?.requestId !== requestId) return;
+      this.clearRenewal();
+      this.failRenewal(socket);
+    }, AUTHENTICATION_RENEWAL_TIMEOUT_MS);
+    this.renewal = { requestId, token, timer };
+    try {
+      socket.send(
+        JSON.stringify({ type: 'renewAuthentication', requestId, token } satisfies ClientMessage),
+      );
+    } catch {
+      this.clearRenewal();
+      this.failRenewal(socket);
+    }
+  }
+
+  private clearRenewal(): void {
+    if (this.renewal) clearTimeout(this.renewal.timer);
+    this.renewal = null;
+  }
+
+  private failRenewal(socket: WebSocket): void {
+    if (this.ws !== socket) return;
+    // A bounded failed renewal falls back to the existing recovery path using
+    // the latest token. Do not log the token, frame, or server response.
+    console.error('[ws] authentication renewal failed; reconnecting');
+    socket.close();
   }
 
   private scheduleReconnect(): void {
@@ -265,6 +340,8 @@ export class SignalingClient {
       this.reconnectTimer = null;
       const socket = this.ws;
       this.ws = null;
+      this.socketToken = undefined;
+      this.clearRenewal();
       socket?.close();
       this.rejectAllPending('Reconnection timed out');
       this.onStatusChange?.('disconnected');

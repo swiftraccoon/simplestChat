@@ -165,8 +165,8 @@ function updateAuthUI(): void {
 auth.setOnChange((loggedIn, tokenRefresh) => {
   updateAuthUI();
   if (loggedIn && tokenRefresh) {
-    // Keep the current room session alive; the server will close the old
-    // socket at JWT expiry and automatic reconnect will use this new token.
+    // Renew the existing socket as well as the next handshake, preserving room
+    // membership and media across the original token's expiry.
     signaling.setToken(auth.jwt ?? undefined);
     return;
   }

@@ -6,6 +6,23 @@ use crate::turn::IceServer;
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// A signaling bearer is serialized only for transport, never for diagnostics.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AuthenticationToken(String);
+
+impl AuthenticationToken {
+    pub(super) fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for AuthenticationToken {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("AuthenticationToken([REDACTED])")
+    }
+}
+
 // Missing fields use the serde default (None); an explicit null must instead
 // survive as Some(None) so nullable settings can be cleared.
 fn deserialize_nullable_patch<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -20,6 +37,12 @@ where
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ClientMessage {
+    /// Renew this authenticated socket without replacing its room membership.
+    #[serde(rename_all = "camelCase")]
+    RenewAuthentication {
+        request_id: String,
+        token: AuthenticationToken,
+    },
     /// Join a room
     #[serde(rename_all = "camelCase")]
     JoinRoom {
@@ -259,6 +282,12 @@ pub enum ServerMessage {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         room_settings: Option<serde_json::Value>,
     },
+    /// The existing socket accepted a same-identity credential renewal.
+    #[serde(rename_all = "camelCase")]
+    AuthenticationRenewed { request_id: String, expires_at: u64 },
+    /// A renewal did not replace or extend the existing socket credential.
+    #[serde(rename_all = "camelCase")]
+    AuthenticationRenewalFailed { request_id: String },
     /// Error response
     Error { message: String },
     /// The client should prompt for a password and retry this room join.
@@ -523,6 +552,33 @@ pub struct ProducerMetadata {
 mod tests {
     use super::{ClientMessage, ServerMessage};
     use serde_json::{Value, json};
+
+    #[test]
+    fn authentication_renewal_is_correlated_and_debug_redacts_the_bearer() {
+        let wire = json!({
+            "type": "renewAuthentication", "requestId": "renewal-1", "token": "fixture-bearer"
+        });
+        let message: ClientMessage = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&message).unwrap(), wire);
+        let diagnostic = format!("{message:?}");
+        assert!(diagnostic.contains("[REDACTED]"));
+        assert!(!diagnostic.contains("fixture-bearer"));
+        assert_eq!(
+            serde_json::to_value(ServerMessage::AuthenticationRenewed {
+                request_id: "renewal-1".into(),
+                expires_at: 1234,
+            })
+            .unwrap(),
+            json!({"type":"authenticationRenewed", "requestId":"renewal-1", "expiresAt":1234}),
+        );
+        assert_eq!(
+            serde_json::to_value(ServerMessage::AuthenticationRenewalFailed {
+                request_id: "renewal-1".into(),
+            })
+            .unwrap(),
+            json!({"type":"authenticationRenewalFailed", "requestId":"renewal-1"}),
+        );
+    }
 
     #[test]
     fn temporary_restart_and_permanent_room_closure_have_distinct_wire_events() {

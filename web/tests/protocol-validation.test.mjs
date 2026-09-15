@@ -148,6 +148,8 @@ const socialData = {
   resolveRoomReport: { reportId: 'report', status: 'resolved' },
 };
 const fixtures = [
+  { type: 'authenticationRenewed', requestId: 'renewal-1', expiresAt: 1800000000 },
+  { type: 'authenticationRenewalFailed', requestId: 'renewal-1' },
   {
     type: 'roomJoined',
     participantId: 'self',

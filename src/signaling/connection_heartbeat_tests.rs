@@ -1,5 +1,6 @@
 //! Real loopback WebSockets exercise the production connection handler with a
-//! short private timing policy; no browser, database, or public service is used.
+//! short private timing policy; no browser or public service is used. The one
+//! ignored authentication fixture requires the existing disposable test database.
 
 use super::*;
 use axum::{Router, extract::ws::WebSocketUpgrade, routing::get};
@@ -33,6 +34,14 @@ impl Fixture {
     }
 
     async fn with_claims(claims: Option<Claims>) -> Self {
+        Self::with_authentication(claims, None, None).await
+    }
+
+    async fn with_authentication(
+        claims: Option<Claims>,
+        pool: Option<sqlx::PgPool>,
+        renewal_authenticator: Option<RenewalAuthenticator>,
+    ) -> Self {
         let metrics = ServerMetrics::new();
         let manager = Arc::new(RoomManager::new_for_connection_tests(metrics.clone()).await);
         let grace = GracePeriodMap::new();
@@ -48,6 +57,8 @@ impl Fixture {
                 let revocations = revocations.clone();
                 move |upgrade: WebSocketUpgrade| {
                     let claims = claims.clone();
+                    let pool = pool.clone();
+                    let renewal_authenticator = renewal_authenticator.clone();
                     let manager = manager.clone();
                     let metrics = metrics.clone();
                     let grace = grace.clone();
@@ -65,8 +76,9 @@ impl Fixture {
                                 permits.acquire_owned().await.unwrap(),
                                 claims,
                                 None,
-                                None,
+                                pool,
                                 revocations,
+                                renewal_authenticator,
                                 ConnectionTiming {
                                     idle_timeout: TEST_IDLE,
                                     heartbeat_interval: Duration::from_millis(75),
@@ -123,6 +135,34 @@ impl Fixture {
                 }
             }
             anyhow::bail!("connection closed before join")
+        })
+        .await?
+    }
+
+    async fn request(
+        &mut self,
+        message: serde_json::Value,
+        response_type: &str,
+    ) -> anyhow::Result<serde_json::Value> {
+        self.peer
+            .send(PeerMessage::Text(message.to_string().into()))
+            .await?;
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while let Some(message) = self.peer.next().await {
+                if let PeerMessage::Text(text) = message? {
+                    let value: serde_json::Value = serde_json::from_str(&text)?;
+                    if value["type"] == response_type {
+                        return Ok(value);
+                    }
+                    anyhow::ensure!(
+                        value["type"] != "error"
+                            && value["type"] != "socialError"
+                            && value["type"] != "authenticationRenewalFailed",
+                        "fixture request rejected",
+                    );
+                }
+            }
+            anyhow::bail!("connection closed before fixture response")
         })
         .await?
     }
@@ -435,4 +475,160 @@ async fn expired_or_unverifiable_account_cannot_receive_heartbeats() {
             "credential checks precede heartbeat work"
         );
     }
+}
+
+#[tokio::test]
+async fn renewal_transport_loss_and_drain_do_not_invalidate_credentials() {
+    let fixture = Fixture::new().await;
+    let secret = "interrupted-renewal-fixture-secret-at-least-32-bytes";
+    let token =
+        crate::auth::jwt::create_token(&Uuid::new_v4().to_string(), "Renewal fixture", secret)
+            .unwrap();
+    let claims = crate::auth::jwt::validate_token(&token, secret).unwrap();
+    let token = serde_json::from_value(serde_json::json!(token)).unwrap();
+    let authenticator = RenewalAuthenticator::new(secret.into(), Arc::new(Semaphore::new(1)));
+    let (_notices, mut revocations) = broadcast::channel(4);
+    let (closed_sender, closed_receiver) = mpsc::channel(1);
+    drop(closed_receiver);
+    let drain = fixture.manager.drain_signal();
+    let lost_transport = renew_authentication(
+        &authenticator,
+        &claims,
+        &token,
+        None,
+        &mut revocations,
+        &drain,
+        &closed_sender,
+    )
+    .await;
+    let (live_sender, _live_receiver) = mpsc::channel(1);
+    drain.begin_draining();
+    let draining = renew_authentication(
+        &authenticator,
+        &claims,
+        &token,
+        None,
+        &mut revocations,
+        &drain,
+        &live_sender,
+    )
+    .await;
+    fixture.finish().await;
+    assert!(matches!(lost_transport, RenewalOutcome::Interrupted));
+    assert!(matches!(draining, RenewalOutcome::Interrupted));
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+async fn authenticated_renewal_keeps_socket_and_membership_across_original_expiry() {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+        .await
+        .unwrap();
+    let email = format!("renewal-{}@example.test", Uuid::new_v4());
+    let account_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO users (email, display_name, password_hash) VALUES ($1, 'Renewal fixture', 'unused-fixture-hash') RETURNING id",
+    ).bind(email).fetch_one(&pool).await.unwrap();
+    let secret = "same-socket-renewal-fixture-secret-at-least-32-bytes";
+    let mut original = crate::auth::jwt::validate_token(
+        &crate::auth::jwt::create_token(&account_id.to_string(), "Renewal fixture", secret)
+            .unwrap(),
+        secret,
+    )
+    .unwrap();
+    // Only this private handler fixture uses a short original credential. The
+    // renewal passes the production JWT verifier and database account check.
+    original.exp = unix_seconds() as usize + 6;
+    let original_expiry = original.exp as u64;
+    let mut fixture = Fixture::with_authentication(
+        Some(original),
+        Some(pool.clone()),
+        Some(RenewalAuthenticator::new(
+            secret.into(),
+            Arc::new(Semaphore::new(1)),
+        )),
+    )
+    .await;
+    let observed =
+        async {
+            let joined = fixture.join().await?;
+            anyhow::ensure!(joined["type"] == "roomJoined", "fixture was not admitted");
+            let participant_id = account_id.to_string();
+            let room = fixture.manager.room_for_connection_tests("heartbeat-test");
+            let before = room.read().await.participants[&participant_id].clone();
+            let token = crate::auth::jwt::create_token(&participant_id, "Renewal fixture", secret)
+                .map_err(|_| anyhow::anyhow!("fixture token could not be issued"))?;
+            let renewed = fixture.request(serde_json::json!({
+            "type": "renewAuthentication", "requestId": "renewal-fixture-1", "token": token,
+        }), "authenticationRenewed").await?;
+            anyhow::ensure!(
+                renewed["requestId"] == "renewal-fixture-1",
+                "correlation changed"
+            );
+            anyhow::ensure!(
+                renewed["expiresAt"]
+                    .as_u64()
+                    .is_some_and(|exp| exp > original_expiry),
+                "expiry did not advance"
+            );
+            fixture
+                .observe_alive(Duration::from_secs(
+                    original_expiry.saturating_sub(unix_seconds()) + 1,
+                ))
+                .await?;
+            let after = room.read().await.participants[&participant_id].clone();
+            anyhow::ensure!(
+                before.media_session_id == after.media_session_id,
+                "membership was replaced"
+            );
+            anyhow::ensure!(
+                before.sender.same_channel(&after.sender),
+                "socket ownership changed"
+            );
+            anyhow::ensure!(
+                before.role == after.role && after.authenticated,
+                "membership identity changed"
+            );
+            anyhow::ensure!(
+                fixture.grace.inner.read().unwrap().is_empty(),
+                "renewal entered reconnect grace"
+            );
+            let snapshot = fixture
+                .request(
+                    serde_json::json!({
+                        "type": "getRoomSnapshot", "requestId": "after-original-expiry",
+                    }),
+                    "socialResponse",
+                )
+                .await?;
+            anyhow::ensure!(
+                snapshot["requestId"] == "after-original-expiry",
+                "post-expiry signaling failed"
+            );
+            anyhow::ensure!(
+                snapshot["action"] == "getRoomSnapshot",
+                "snapshot action changed"
+            );
+            anyhow::ensure!(
+                fixture
+                    .metrics
+                    .render_prometheus(0, 0, 0)
+                    .contains("simplestchat_connections_active 1\n"),
+                "connection was replaced"
+            );
+            Ok::<(), anyhow::Error>(())
+        }
+        .await;
+    fixture.finish().await;
+    sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(account_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+    assert!(
+        observed.is_ok(),
+        "same-socket renewal must preserve live membership: {observed:?}"
+    );
 }

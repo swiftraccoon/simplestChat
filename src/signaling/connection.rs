@@ -20,6 +20,11 @@ use tokio::sync::{Notify, OwnedSemaphorePermit};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
+#[path = "connection_authentication.rs"]
+mod authentication;
+pub use authentication::RenewalAuthenticator;
+use authentication::{RenewalBudget, RenewalOutcome, renew_authentication, unix_seconds};
+
 /// Bounded channel capacity per client.
 /// At 100 msg/s rate limit, 64 slots = 640ms of burst buffer.
 /// Messages queued beyond this are stale — drop them early.
@@ -548,6 +553,7 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         ClientMessage::JoinRoom { .. } => OperationKind::JoinRoom,
         ClientMessage::LeaveRoom => OperationKind::LeaveRoom,
         ClientMessage::Reconnect { .. } => OperationKind::Reconnect,
+        ClientMessage::RenewAuthentication { .. } => OperationKind::RoomAction,
         ClientMessage::GetRouterRtpCapabilities => OperationKind::RouterCapabilities,
         ClientMessage::CreateSendTransport => OperationKind::CreateSendTransport,
         ClientMessage::CreateRecvTransport => OperationKind::CreateRecvTransport,
@@ -630,6 +636,7 @@ pub async fn handle_connection(
     client_ip: Option<std::net::IpAddr>,
     db_pool: Option<sqlx::PgPool>,
     auth_revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
+    renewal_authenticator: Option<RenewalAuthenticator>,
 ) {
     handle_connection_with_timing(
         socket,
@@ -642,6 +649,7 @@ pub async fn handle_connection(
         client_ip,
         db_pool,
         auth_revocations,
+        renewal_authenticator,
         ConnectionTiming::default(),
     )
     .await;
@@ -658,10 +666,11 @@ async fn handle_connection_with_timing(
     grace_periods: GracePeriodMap,
     metrics: ServerMetrics,
     _permit: OwnedSemaphorePermit,
-    authenticated_user: Option<Claims>,
+    mut authenticated_user: Option<Claims>,
     client_ip: Option<std::net::IpAddr>,
     db_pool: Option<sqlx::PgPool>,
     mut auth_revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
+    renewal_authenticator: Option<RenewalAuthenticator>,
     timing: ConnectionTiming,
 ) {
     // Use authenticated user ID if available, otherwise generate anonymous UUID
@@ -672,7 +681,7 @@ async fn handle_connection_with_timing(
 
     let is_authenticated = authenticated_user.is_some();
     let authenticated_display_name = authenticated_user.as_ref().map(|c| c.name.clone());
-    let auth_exp = authenticated_user.as_ref().map(|claims| claims.exp as u64);
+    let mut auth_exp = authenticated_user.as_ref().map(|claims| claims.exp as u64);
 
     let diagnostic_connection_id = metrics.diagnostics().connection_id();
     info!(
@@ -798,14 +807,13 @@ async fn handle_connection_with_timing(
     let mut last_frame_received = Instant::now();
     let mut next_heartbeat = Instant::now() + timing.heartbeat_interval;
     let mut peer_close_received = false;
+    let mut renewal_budget = RenewalBudget::new();
 
     loop {
         // The JWT is a connection credential, not only a handshake credential.
         // Cap every receive wait by its absolute expiry so active traffic cannot
         // keep an authenticated socket alive indefinitely.
-        let now_unix = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(u64::MAX, |duration| duration.as_secs());
+        let now_unix = unix_seconds();
         if auth_exp.is_some_and(|exp| exp <= now_unix) {
             info!(participant_id, "JWT expired; closing WebSocket");
             credentials_invalidated = true;
@@ -975,6 +983,61 @@ async fn handle_connection_with_timing(
 
                 match serde_json::from_str::<ClientMessage>(&text) {
                     Ok(client_msg) => {
+                        // Renewal belongs to this socket, not to a room or media
+                        // session. Its dedicated response cannot consume a pending
+                        // room operation's generic error response in the browser.
+                        if let ClientMessage::RenewAuthentication { request_id, token } =
+                            &client_msg
+                        {
+                            if !crate::room::social::valid_correlation_id(request_id) {
+                                break;
+                            }
+                            let outcome = if renewal_budget.allow(Instant::now()) {
+                                match (renewal_authenticator.as_ref(), authenticated_user.as_ref())
+                                {
+                                    (Some(authenticator), Some(current)) => {
+                                        renew_authentication(
+                                            authenticator,
+                                            current,
+                                            token,
+                                            db_pool.as_ref(),
+                                            &mut auth_revocations,
+                                            &drain,
+                                            &tx,
+                                        )
+                                        .await
+                                    }
+                                    _ => RenewalOutcome::Rejected,
+                                }
+                            } else {
+                                RenewalOutcome::Rejected
+                            };
+                            let response = match outcome {
+                                RenewalOutcome::Renewed(claims) => {
+                                    let expires_at = claims.exp as u64;
+                                    auth_exp = Some(expires_at);
+                                    authenticated_user = Some(claims);
+                                    ServerMessage::AuthenticationRenewed {
+                                        request_id: request_id.clone(),
+                                        expires_at,
+                                    }
+                                }
+                                RenewalOutcome::Rejected => {
+                                    ServerMessage::AuthenticationRenewalFailed {
+                                        request_id: request_id.clone(),
+                                    }
+                                }
+                                RenewalOutcome::Close => {
+                                    credentials_invalidated = true;
+                                    break;
+                                }
+                                RenewalOutcome::Interrupted => break,
+                            };
+                            if send_json(&metrics, &tx, &response).is_err() {
+                                break;
+                            }
+                            continue;
+                        }
                         let now = Instant::now();
                         let media_limit_exceeded =
                             media_rate_state.limit_exceeded(&client_msg, now);
@@ -2220,7 +2283,7 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::Reconnect { .. } => {
+        ClientMessage::Reconnect { .. } | ClientMessage::RenewAuthentication { .. } => {
             // Handled in the main message loop before dispatching here
             // This branch should never be reached
         }

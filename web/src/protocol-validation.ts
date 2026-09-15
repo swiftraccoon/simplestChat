@@ -331,6 +331,11 @@ const socialAction = choice(
 
 // Adding a ServerMessage variant fails typechecking until its decoder exists.
 const messages = {
+  authenticationRenewed: message('authenticationRenewed', {
+    requestId: text,
+    expiresAt: integer(),
+  }),
+  authenticationRenewalFailed: message('authenticationRenewalFailed', { requestId: text }),
   roomJoined: message('roomJoined', {
     participantId: text,
     participants: list(participant),

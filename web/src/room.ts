@@ -889,6 +889,10 @@ export class RoomClient {
   private handleMessage(msg: ServerMessage): void {
     if (!this.roomId) return;
     switch (msg.type) {
+      // Connection-owned replies are consumed by SignalingClient, never room state.
+      case 'authenticationRenewed':
+      case 'authenticationRenewalFailed':
+        break;
       case 'serverRestarting': {
         // Only established membership has recovery intent. A first join that
         // has not completed remains a bounded join attempt, not an automatic
