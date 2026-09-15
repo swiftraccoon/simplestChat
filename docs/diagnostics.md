@@ -239,6 +239,10 @@ lowering today's 100,000 bps minimum changes active congestion-control behavior.
 The message's source is the pinned
 [constraint clamp](../vendor/mediasoup-sys-0.17.0/deps/libwebrtc/libwebrtc/modules/congestion_controller/goog_cc/goog_cc_network_control.cc).
 
+A zero-minimum experiment eliminated the observed clamp logs but showed lower
+received throughput and higher CPU at 100 clients. The default remains unchanged;
+see the [load-test findings](performance-results.md#transport-cleanup-experiment--2026-09-14).
+
 ## Compare explicit leave with disconnect
 
 Use the local runner in full diagnostic mode, keeping the server binary and

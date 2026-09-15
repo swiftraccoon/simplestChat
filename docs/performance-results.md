@@ -1,5 +1,63 @@
 # Performance results
 
+## Departure fan-out — 2026-09-14
+
+The accepted change skips departure notifications to already-closed signaling
+queues without altering bitrate limits, reconnect grace, or accounting for full
+queues and close races. A separate 100-client run passed all 100 attempts and
+800 subscriptions, with packets received by every consumer in all 120 measured
+seconds. It recorded **zero rejected departure sends**, zero remaining rooms,
+participants and connections, and clean process exits.
+
+Throughput was 69,200.29 packets/s; server CPU was 64.84% of one core and sampled
+peak RSS 567.55 MiB. Native bitrate-clamping errors remain: this run logged 893
+during teardown. The frozen server was `34e7c2b84c2d3c69`, with unchanged generator
+`b40d5a6cb8cff135` and the [same workload](#100-client-media-reliability--2026-09-14).
+
+The unchanged server ran second in this order-reversed check and failed four
+ICE/DTLS readiness waits and four client-coverage checks. Its process exited
+cleanly, but the workload failed and has no post-grace cleanup-zero receipt.
+This establishes that the intermittent setup failure also occurs without the
+new changes; it does not identify its
+cause. The pair is **not a valid performance comparison**, and the passing
+departure run is not a production-capacity claim.
+
+## Transport cleanup experiment — 2026-09-14
+
+**The zero-minimum-bitrate candidate was not accepted.** The existing 100 kbps
+minimum remains unchanged. The absence of observed bitrate-clamp logs did not
+justify the received-throughput and CPU results below.
+
+A contemporaneous pair used the same host and
+[100-client workload](#100-client-media-reliability--2026-09-14), unchanged generator,
+and frozen servers: baseline `e868474041a3a00f`, experimental `b0cf331193863411`.
+No other owned builds or workloads overlapped these measurements.
+
+| Measurement | Baseline | Experimental |
+| --- | ---: | ---: |
+| Received packets/second | 69,200.21 | 54,892.86 |
+| Server CPU, percent of one core | 66.31% | 86.93% |
+| Native bitrate-clamping errors during teardown | 892 | 0 |
+| Closed-queue departure attempts during cleanup | 1,200 | 0 |
+
+Both runs passed all 800 consumer-continuity checks and exited cleanly with zero
+remaining rooms, participants and connections. However, received throughput was
+**20.7% lower** and server CPU **31.1% higher** in the experiment, despite nearly
+identical queued packet totals. In these runs, every consumer received packets
+in each measured second; this does not establish complete packet delivery.
+Queued counts are not confirmed wire output, so the difference is not a measured
+network-loss rate.
+
+Earlier candidate runs remain part of the evidence: one passed continuity with a
+2.34% received-packet deficit against this workload's nominal fan-out budget;
+another failed three ICE/DTLS readiness waits and four client-coverage
+checks. That failed run has no post-grace cleanup-zero receipt.
+
+This ordered pair supports withholding the policy change, not attributing the
+cause conclusively. The realized publisher/subscriber graph also varied between
+runs. Next checks need reproducible subscription selection and separate bounded
+transport/packet-path diagnostics; buffer or timeout changes are not yet justified.
+
 ## 100-client media reliability — 2026-09-14
 
 The original build passed all 800 media-subscription checks but recorded three
@@ -27,9 +85,9 @@ Both servers/generators exited zero, with zero remaining rooms, participants and
 connections. **Teardown is not error-free:** the runs logged 751 / 939 native
 [bitrate-clamping errors](diagnostics.md#native-bitrate-clamping-messages), all
 28–30 seconds after workload completion, and each recorded 1,200 closed-queue
-attempts during departure fan-out to disconnected grace sessions. These remain
-core-server follow-up work; general worker logs are not included in the signaling
-error counter.
+attempts during departure fan-out to disconnected grace sessions. Follow-up
+experiments are recorded above; general worker logs are not included in the
+signaling error counter.
 
 Server `e868474041a3a00f` and unchanged generator `b40d5a6cb8cff135` were frozen
 for both repeats. No builds or other owned workloads overlapped. These are
