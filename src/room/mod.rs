@@ -9,6 +9,8 @@ pub mod settings;
 pub mod social;
 
 #[cfg(test)]
+mod departure_broadcast_tests;
+#[cfg(test)]
 mod settings_patch_tests;
 
 use crate::diagnostics::{Stage, measure, measure_result};
@@ -358,6 +360,34 @@ fn try_send_essential(
     result
 }
 
+/// Departure notifications are best-effort roster updates, not direct replies.
+/// Keep their payload lazy so an entirely disconnected cohort needs no message
+/// allocation. Selected recipients still use normal enqueue failure accounting.
+fn broadcast_departure<'a>(
+    metrics: &ServerMetrics,
+    senders: impl Iterator<Item = &'a mpsc::Sender<Arc<String>>>,
+    payload: impl FnOnce() -> serde_json::Result<String>,
+) {
+    // Grace memberships can outlive their signaling receiver. A closed channel
+    // cannot reopen; a reconnect replaces the sender under the same room lock.
+    // Check lazily before constructing the shared payload or cloning it for a
+    // recipient. A later close race still reaches try_send_essential below.
+    let mut senders = senders.filter(|sender| !sender.is_closed()).peekable();
+    if senders.peek().is_none() {
+        return;
+    }
+    let json = match payload() {
+        Ok(json) => Arc::new(json),
+        Err(error) => {
+            warn!("Failed to serialize participant departure: {}", error);
+            return;
+        }
+    };
+    for sender in senders {
+        let _ = try_send_essential(metrics, sender, json.clone());
+    }
+}
+
 /// Room state
 pub struct Room {
     /// Shared process counters; runtime rooms must not keep isolated counters.
@@ -693,6 +723,23 @@ impl Room {
         for participant in self.participants.values() {
             self.try_send_broadcast(&participant.sender, json.clone(), message);
         }
+    }
+
+    /// The caller has already removed the departed membership under this room's
+    /// write lock. Retained grace memberships stay authoritative until their own
+    /// removal/rebind; a future reconnect obtains the current roster snapshot.
+    fn broadcast_participant_left(&self, participant_id: &str) {
+        broadcast_departure(
+            &self.metrics,
+            self.participants
+                .values()
+                .map(|participant| &participant.sender),
+            || {
+                serde_json::to_string(&ServerMessage::ParticipantLeft {
+                    participant_id: participant_id.to_string(),
+                })
+            },
+        );
     }
 
     fn try_send_broadcast(
@@ -2315,9 +2362,7 @@ impl RoomManager {
                 active_obs = room.active_speaker_observer.clone();
                 audio_obs = room.audio_level_observer.clone();
 
-                room.broadcast_all(&ServerMessage::ParticipantLeft {
-                    participant_id: participant_id.to_string(),
-                });
+                room.broadcast_participant_left(participant_id);
 
                 room_empty = room.participants.is_empty() && room.lobby.is_empty();
             }
@@ -3936,9 +3981,7 @@ impl RoomManager {
             }
 
             // Broadcast leave to remaining participants
-            room.broadcast_all(&ServerMessage::ParticipantLeft {
-                participant_id: target_participant_id.to_string(),
-            });
+            room.broadcast_participant_left(target_participant_id);
             target_media_session_id
         };
 
@@ -4087,9 +4130,7 @@ impl RoomManager {
                 }
                 target_sessions.push((affected_participant_id.clone(), target.media_session_id));
 
-                room.broadcast_all(&ServerMessage::ParticipantLeft {
-                    participant_id: affected_participant_id.clone(),
-                });
+                room.broadcast_participant_left(affected_participant_id);
             }
             for affected_participant_id in target_lobby_ids {
                 if let Some(entry) = room.lobby.remove(&affected_participant_id)
