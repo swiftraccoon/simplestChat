@@ -1081,6 +1081,16 @@ impl WebRtcSession {
         Ok(serde_json::json!({"transports": transports}))
     }
 
+    /// A send-readiness failure must not lose its evidence because an unrelated
+    /// receive peer is incomplete. Preserve the normal stats/SDP allowlists.
+    pub async fn send_diagnostic_snapshot(&self) -> Result<serde_json::Value> {
+        let transport = self
+            .send_transport
+            .as_ref()
+            .context("Send transport missing")?;
+        Ok(serde_json::json!({"transports": [transport.diagnostic_snapshot().await?]}))
+    }
+
     /// A stall capture inspects only the receive peer, using the same bounded
     /// stats/SDP allowlists as pre-close diagnostics. This does not query the SFU.
     pub async fn receive_diagnostic_snapshot(&self) -> Result<serde_json::Value> {
@@ -2154,6 +2164,71 @@ mod migration_tests {
         })
         .await
         .expect("sender setup and cleanup must finish");
+    }
+
+    #[tokio::test]
+    async fn send_failure_snapshot_is_independent_of_absent_or_incomplete_receive_peer() {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            let (ice, dtls) = parameters();
+            let metrics = Arc::new(super::super::metrics::MetricsCollector::new(
+                "send-snapshot-test".into(),
+            ));
+            let mut session = WebRtcSession::new("send-snapshot-test".into(), metrics);
+            session
+                .create_send_transport(
+                    "send-snapshot-transport".into(),
+                    ice.clone(),
+                    vec![candidate("127.0.0.1")],
+                    dtls.clone(),
+                )
+                .await
+                .unwrap();
+            let absent_receive = session.send_diagnostic_snapshot().await.unwrap();
+            assert_eq!(absent_receive["transports"].as_array().unwrap().len(), 1);
+            assert_eq!(absent_receive["transports"][0]["direction"], "send");
+
+            // Deliberately leave the unrelated receive peer before its remote
+            // answer. Normal all-peer diagnostics must still reject this state.
+            let (receive, _) = WebRtcTransport::new(
+                "send-snapshot-test".into(),
+                "incomplete-receive-transport".into(),
+                ice,
+                vec![candidate("127.0.0.1")],
+                dtls,
+                false,
+                None,
+            )
+            .await
+            .unwrap();
+            session.recv_transport = Some(receive);
+            assert!(
+                session
+                    .diagnostic_snapshot()
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Diagnostic remote SDP missing")
+            );
+            let snapshot = session.send_diagnostic_snapshot().await.unwrap();
+            assert_eq!(snapshot["transports"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                snapshot["transports"][0]["transportId"],
+                "send-snapshot-transport"
+            );
+            assert_eq!(snapshot["transports"][0]["direction"], "send");
+            assert!(
+                snapshot["transports"][0]["stats"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|stat| stat["type"] == "transport")
+            );
+            assert!(!snapshot.to_string().contains("testufrag"));
+            assert!(!snapshot.to_string().contains("test-password"));
+            session.close().await.unwrap();
+        })
+        .await
+        .expect("send-only snapshot fixture and cleanup must finish");
     }
 
     #[tokio::test]

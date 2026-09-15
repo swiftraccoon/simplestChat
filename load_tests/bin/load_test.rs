@@ -1648,7 +1648,7 @@ async fn run_client_inner(
             &metrics,
             attempt,
             async { webrtc_session.lock().await.wait_send_connected().await },
-            async { webrtc_session.lock().await.diagnostic_snapshot().await },
+            async { webrtc_session.lock().await.send_diagnostic_snapshot().await },
             SEND_READINESS_SNAPSHOT_LIMIT,
         )
         .await?;
@@ -4200,6 +4200,27 @@ mod native_connect_order_tests {
                         .dtls_state,
                     DtlsState::Connecting
                 );
+                if is_send {
+                    let snapshot = tokio::time::timeout(Duration::from_secs(2), async {
+                        session.lock().await.send_diagnostic_snapshot().await
+                    })
+                    .await??;
+                    let transports = snapshot["transports"]
+                        .as_array()
+                        .context("Missing send snapshot")?;
+                    assert_eq!(transports.len(), 1);
+                    assert_eq!(transports[0]["direction"], "send");
+                    assert!(
+                        transports[0]["stats"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .any(
+                                |stat| stat["type"] == "transport" && stat["dtlsState"].is_string()
+                            )
+                    );
+                    assert_eq!(native.dtls_state(), DtlsState::Connecting);
+                }
             }
             if invalid_first {
                 assert!(
