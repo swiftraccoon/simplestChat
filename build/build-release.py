@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Build one production-only Linux release locally, without a registry push.
+"""Build or export one production-only Linux release, without a registry push.
 
 Requires an already configured local Docker/Buildx installation. The checked-in
 Dockerfile remains authoritative for native provenance and dependency checks.
 The output is a fresh, private evidence directory; failures are retained and
 never retried automatically. No running application container is changed.
+An explicit --image-id exports that exact local image without building or pulling;
+the caller is responsible for testing that immutable image before publication.
 """
 
 import argparse
@@ -204,7 +206,7 @@ def benchmark_guard(state=BENCHMARK_STATE, release=Path('/srv/simplestchat-publi
             lock.close()
 
 
-def docker_preflight(runner, root):
+def docker_preflight(runner, root, *, require_builder=True):
     env = dict(os.environ)
     endpoint = env.get("DOCKER_HOST") if not env.get("DOCKER_CONTEXT") else None
     if not endpoint:
@@ -228,10 +230,51 @@ def docker_preflight(runner, root):
         _, running = runner.run(docker + ["ps", "--quiet", "--filter", f"label={label}"], cwd=root, env=env)
         if running:
             raise BuildError("Public chat or a private benchmark is running on this Docker endpoint")
-    _, builder = runner.run(docker + ["buildx", "inspect", "default"], cwd=root, env=env)
-    if re.findall(r"^Driver:\s+(\S+)\s*$", builder, re.MULTILINE) != ["docker"]:
-        raise BuildError("The default Buildx builder must use the inspected local Docker driver")
+    if require_builder:
+        _, builder = runner.run(docker + ["buildx", "inspect", "default"], cwd=root, env=env)
+        if re.findall(r"^Driver:\s+(\S+)\s*$", builder, re.MULTILINE) != ["docker"]:
+            raise BuildError("The default Buildx builder must use the inspected local Docker driver")
     return docker, env
+
+
+def select_existing_image(runner, docker, env, root, image_id, revision, tag):
+    """Bind the release tag to an explicitly selected, matching immutable image.
+
+    No image is built, pulled or run. Existing release tags may be reused only
+    when they already identify the selected image, never silently replaced.
+    """
+    _, encoded = runner.run(docker + ["image", "inspect", "--format",
+        '{"id":{{json .Id}},"os":{{json .Os}},"architecture":{{json .Architecture}},'
+        '"user":{{json .Config.User}},"labels":{{json .Config.Labels}},'
+        '"rootfs":{{json .RootFS}},"cmd":{{json .Config.Cmd}},'
+        '"entrypoint":{{json (index .Config "Entrypoint")}}', image_id], cwd=root, env=env)
+    value = json.loads(encoded)
+    if not isinstance(value, dict) or value.get("id") != image_id \
+            or value.get("os") != "linux" or value.get("architecture") != "amd64" \
+            or value.get("user") != "10001:10001" or value.get("cmd") != ["/app/simplestChat"] \
+            or value.get("entrypoint") not in (None, []) \
+            or not isinstance(value.get("labels"), dict) \
+            or value["labels"].get("org.opencontainers.image.revision") != revision:
+        raise BuildError("Selected image must match this clean revision and the production runtime identity")
+    rootfs = value.get("rootfs")
+    layers = rootfs.get("Layers") if isinstance(rootfs, dict) and rootfs.get("Type") == "layers" else None
+    if not isinstance(layers, list) or not 0 < len(layers) <= 1000 \
+            or any(not isinstance(layer, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", layer) for layer in layers):
+        raise BuildError("Selected image must expose bounded canonical filesystem layer identities")
+    _, existing = runner.run(docker + ["image", "ls", "--quiet", "--no-trunc", "--filter", f"reference={tag}"],
+                             cwd=root, env=env)
+    if existing and existing != image_id:
+        raise BuildError("The release tag already selects a different image; retained images are not overwritten")
+    if not existing:
+        runner.run(docker + ["image", "tag", image_id, tag], cwd=root, env=env)
+    verify_selected_image(runner, docker, env, root, tag, image_id)
+    return layers
+
+
+def verify_selected_image(runner, docker, env, root, tag, image_id):
+    _, selected = runner.run(docker + ["image", "inspect", "--format", "{{.Id}}", tag], cwd=root, env=env)
+    if selected != image_id:
+        raise BuildError("Release image selection changed during export")
 
 
 def unpack_source(archive, destination):
@@ -272,9 +315,11 @@ def migration_checksums(context):
     return migrations
 
 
-def build_release(output_value, timeout, *, root=ROOT, runner=None):
+def build_release(output_value, timeout, *, root=ROOT, runner=None, image_id=None):
     if type(timeout) is not int or not 60 <= timeout <= 7200:
         raise BuildError("Build timeout must be between 60 and 7200 seconds")
+    if image_id is not None and (not isinstance(image_id, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", image_id)):
+        raise BuildError("Export requires an exact sha256 image ID, never a mutable tag")
     runner = runner or Runner()
     output = validate_output(output_value, root, runner)
     revision = clean_revision(runner, root)
@@ -285,7 +330,7 @@ def build_release(output_value, timeout, *, root=ROOT, runner=None):
     error_text = None
     try:
         with benchmark_guard(), tempfile.TemporaryDirectory(prefix="simplestchat-release.") as temporary:
-            docker, env = docker_preflight(runner, root)
+            docker, env = docker_preflight(runner, root, require_builder=image_id is None)
             temporary = Path(temporary)
             source_archive = temporary / "source.tar"
             runner.run(["git", "archive", "--format=tar", f"--output={source_archive}", revision], cwd=root, capture=False)
@@ -298,17 +343,23 @@ def build_release(output_value, timeout, *, root=ROOT, runner=None):
             write_json(output / "source.json", {"revision": revision, "inputsSha256": inputs})
             tag = f"simplestchat-release/production:{revision}"
             deadline = time.monotonic() + timeout
-            runner.run(docker + [
-                "buildx", "build", "--builder", "default", "--platform", "linux/amd64",
-                "--pull", "--progress", "plain", "--target", "production", "--provenance=false", "--sbom=false",
-                "--label", f"org.opencontainers.image.revision={revision}", "--tag", tag,
-                "--load", str(context),
-            ], cwd=context, env=env, timeout=timeout, capture=False)
+            selected_layers = None
+            if image_id is None:
+                runner.run(docker + [
+                    "buildx", "build", "--builder", "default", "--platform", "linux/amd64",
+                    "--pull", "--progress", "plain", "--target", "production", "--provenance=false", "--sbom=false",
+                    "--label", f"org.opencontainers.image.revision={revision}", "--tag", tag,
+                    "--load", str(context),
+                ], cwd=context, env=env, timeout=timeout, capture=False)
+            else:
+                selected_layers = select_existing_image(runner, docker, env, root, image_id, revision, tag)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise BuildError("Build/export deadline expired before image export")
             runner.run(docker + ["image", "save", "--platform", "linux/amd64", "--output", str(output / "image.tar"), tag],
                        cwd=root, env=env, timeout=min(remaining, 300), capture=False)
+            if image_id is not None:
+                verify_selected_image(runner, docker, env, root, tag, image_id)
             if clean_revision(runner, root) != revision:
                 raise BuildError("Checkout revision changed during release build")
             archive = output / "image.tar"
@@ -319,17 +370,28 @@ def build_release(output_value, timeout, *, root=ROOT, runner=None):
             }
             candidate = output / "release.candidate.json"
             write_json(candidate, manifest)
-            ARTIFACT.verify_archive(archive, ARTIFACT.validate_manifest(candidate))
+            configuration = ARTIFACT.verify_archive(archive, ARTIFACT.validate_manifest(candidate))
+            if image_id is not None:
+                # Diff IDs are portable even when local image IDs differ across
+                # Docker image stores. Bind exported filesystem metadata to the
+                # selected image, in addition to validating its runtime identity.
+                rootfs = configuration.get("rootfs")
+                if not isinstance(rootfs, dict) or rootfs.get("type") != "layers" \
+                        or rootfs.get("diff_ids") != selected_layers:
+                    raise BuildError("Exported filesystem layers differ from the selected immutable image")
             os.link(candidate, output / "release.json")
             passed = True
     except BaseException as error:
         error_text = str(error) or type(error).__name__
         raise
     finally:
-        write_json(output / "outcome.json", {
+        outcome = {
             "schemaVersion": 1, "revision": revision, "startedAt": started, "finishedAt": timestamp(),
             "passed": passed, "error": error_text,
-        })
+        }
+        if image_id is not None:
+            outcome["exportedImageId"] = image_id
+        write_json(output / "outcome.json", outcome)
         print(f"Release evidence: {output} (passed={str(passed).lower()})", flush=True)
     return output
 
@@ -348,6 +410,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, action=Once, help="Fresh directory with an existing parent; use an ignored results/ child or a path outside the checkout")
     parser.add_argument("--timeout-seconds", type=int, default=3600, action=Once, help="Build/export deadline, 60–7200 seconds (default: 3600)")
+    parser.add_argument("--image-id", action=Once, help="Export this exact existing sha256 image ID without building or pulling")
     args = parser.parse_args()
     os.umask(0o077)
 
@@ -356,7 +419,7 @@ def main():
 
     signal.signal(signal.SIGTERM, interrupted)
     try:
-        build_release(args.output, args.timeout_seconds)
+        build_release(args.output, args.timeout_seconds, image_id=args.image_id)
     except (BuildError, ARTIFACT.ArtifactError, OSError, ValueError, KeyboardInterrupt) as error:
         print(f"Release build failed: {error}", file=sys.stderr)
         return 1

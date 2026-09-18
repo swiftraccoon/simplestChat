@@ -110,11 +110,22 @@ def verified_envelope(args):
             and association.get('head_sha') == args.revision
             and positive(association.get('repository_id')) and positive(association.get('head_repository_id'))
             and association.get('repository_id') == association.get('head_repository_id'), 'artifact_run_mismatch')
-    for run_id, name, path, event in (
-        (association['id'], 'Build production release artifact', '.github/workflows/release-artifact.yml', 'workflow_dispatch'),
-        (args.ci_run, 'CI', '.github/workflows/ci.yml', 'push'),
-    ):
-        run = api(f'repos/{args.repository}/actions/runs/{run_id}')
+    build_run = api(f'repos/{args.repository}/actions/runs/{association["id"]}')
+    require(isinstance(build_run, dict), 'workflow_identity_or_success_mismatch')
+    from_ci = build_run.get('path') == '.github/workflows/ci.yml'
+    if from_ci:
+        # A normal CI artifact is acceptable only from the exact successful
+        # trusted push run supplied as the CI gate, never a PR or a second run.
+        require(association['id'] == args.ci_run and build_run.get('head_branch') == 'main',
+                'artifact_ci_run_mismatch')
+        expected_build = ('CI', '.github/workflows/ci.yml', 'push')
+        runs = [(association['id'], build_run, *expected_build)]
+    else:
+        expected_build = ('Build production release artifact', '.github/workflows/release-artifact.yml', 'workflow_dispatch')
+        ci_run = api(f'repos/{args.repository}/actions/runs/{args.ci_run}')
+        runs = [(association['id'], build_run, *expected_build),
+                (args.ci_run, ci_run, 'CI', '.github/workflows/ci.yml', 'push')]
+    for run_id, run, name, path, event in runs:
         require(isinstance(run, dict) and type(run.get('id')) is int and run['id'] == run_id
                 and run.get('name') == name and run.get('path') == path and run.get('event') == event
                 and run.get('head_sha') == args.revision and run.get('status') == 'completed'

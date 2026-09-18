@@ -206,6 +206,13 @@ image, using the real release helper and public deployment templates. It checks
 a successful replacement, failed candidate startup and rollback while requiring
 PostgreSQL and Caddy to stay running.
 
+Push CI retains that same immutable production image for deployment. Offline
+operations tests cover export without rebuilding, commit/run/artifact identity,
+bounded CI waiting, single-host selection and stopping after a failed deployment
+or public smoke. Deploying a retained image does not rerun the full suite; it
+checks artifact integrity, runtime compatibility and readiness, then runs the
+bounded public chat smoke. See the [release workflow](../ops/ansible/RELEASES.md).
+
 Run it only as root on a fresh, disposable Linux/amd64 host with a local Docker
 Engine (API 1.48+), Compose, OpenSSL, curl, `nsenter`, `update-ca-certificates`, and the
 [controller Python environment](../ops/ansible/README.md):

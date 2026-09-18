@@ -20,8 +20,16 @@ SPEC = importlib.util.spec_from_file_location("build_release", ROOT / "build/bui
 BUILD = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BUILD)
 ARTIFACT = BUILD.ARTIFACT
+RECEIVER_SPEC = importlib.util.spec_from_file_location(
+    "release_build_receiver_tests", ROOT / "ops/ansible/files/fetch-release.py",
+)
+RECEIVER = importlib.util.module_from_spec(RECEIVER_SPEC)
+with patch.dict(sys.modules, {"release_artifact": ARTIFACT}):
+    RECEIVER_SPEC.loader.exec_module(RECEIVER)
 REVISION = "a" * 40
 TAG = f"simplestchat-release/production:{REVISION}"
+IMAGE_ID = "sha256:" + "b" * 64
+LAYER_ID = "sha256:" + "d" * 64
 
 
 def add_file(archive, name, data, mode=0o644):
@@ -31,9 +39,10 @@ def add_file(archive, name, data, mode=0o644):
     archive.addfile(member, io.BytesIO(data))
 
 
-def image_archive(path, *, revision=REVISION, tags=None, user="10001:10001", architecture="amd64", extra=None, modern=False, index_change=None, image_count=1):
+def image_archive(path, *, revision=REVISION, tags=None, user="10001:10001", architecture="amd64", extra=None,
+                  modern=False, index_change=None, image_count=1, diff_ids=None):
     config = {
-        "architecture": architecture, "os": "linux", "config": {
+        "architecture": architecture, "os": "linux", "rootfs": {"type": "layers", "diff_ids": diff_ids or [LAYER_ID]}, "config": {
             "User": user, "Cmd": ["/app/simplestChat"], "Entrypoint": None,
             "Labels": {"org.opencontainers.image.revision": revision},
         },
@@ -80,7 +89,8 @@ def release_manifest(archive):
 
 class FakeRunner:
     def __init__(self, *, dirty=False, ignored=True, fail=None, running="", builder="docker", final_revision=REVISION,
-                 save_help="Options:\n      --platform string   Export a specific platform\n", server_api="1.48"):
+                 save_help="Options:\n      --platform string   Export a specific platform\n", server_api="1.48",
+                 image=None, existing_tag="", selected_images=None):
         self.output = None
         self.calls = []
         self.dirty = dirty
@@ -93,6 +103,13 @@ class FakeRunner:
         self.final_revision = final_revision
         self.revision_reads = 0
         self.context = None
+        self.image = image if image is not None else {
+            "id": IMAGE_ID, "os": "linux", "architecture": "amd64", "user": "10001:10001",
+            "labels": {"org.opencontainers.image.revision": REVISION},
+            "cmd": ["/app/simplestChat"], "entrypoint": None, "rootfs": {"Type": "layers", "Layers": [LAYER_ID]},
+        }
+        self.existing_tag = existing_tag
+        self.selected_images = iter(selected_images or [IMAGE_ID, IMAGE_ID])
 
     def run(self, argv, **kwargs):
         self.calls.append((argv, kwargs))
@@ -133,6 +150,18 @@ class FakeRunner:
             return 0, self.running
         if command[:2] == ["buildx", "inspect"]:
             return 0, f"Name: default\nDriver: {self.builder}\nNodes:\n"
+        if command[:2] == ["image", "inspect"]:
+            if self.fail == "inspect":
+                raise BUILD.BuildError("fixture selected image unavailable")
+            if command[3] == "{{.Id}}":
+                return 0, next(self.selected_images)
+            assert command[-1] == IMAGE_ID
+            return 0, json.dumps(self.image)
+        if command[:2] == ["image", "ls"]:
+            return 0, self.existing_tag
+        if command[:2] == ["image", "tag"]:
+            assert command == ["image", "tag", IMAGE_ID, TAG]
+            return 0, ""
         if command[:2] == ["buildx", "build"]:
             self.context = Path(command[-1])
             assert self.context.parent.stat().st_mode & 0o777 == 0o700
@@ -145,7 +174,8 @@ class FakeRunner:
         if command[:2] == ["image", "save"]:
             if self.fail != "export":
                 output = Path(command[command.index("--output") + 1])
-                image_archive(output)
+                image_archive(output, revision="c" * 40 if self.fail == "archive-revision" else REVISION,
+                              diff_ids=["sha256:" + "e" * 64] if self.fail == "archive-layers" else None)
             return 0, ""
         raise AssertionError(f"Unexpected Docker command: {argv}")
 
@@ -191,6 +221,133 @@ class ReleaseBuildTests(unittest.TestCase):
             self.build(runner)
         self.assertFalse(self.output.exists())
         self.assertTrue(all(argv[0] == "git" for argv, _ in runner.calls))
+
+    def test_export_only_reuses_the_exact_image_and_keeps_the_existing_artifact_contract(self):
+        runner = FakeRunner(builder="unrelated-remote-builder")
+        BUILD.build_release(self.output, 120, root=self.root, runner=runner, image_id=IMAGE_ID)
+        manifest = ARTIFACT.validate_manifest(self.output / "release.json")
+        ARTIFACT.verify_archive(self.output / "image.tar", manifest)
+        source = json.loads((self.output / "source.json").read_text())
+        self.assertEqual(set(source), {"revision", "inputsSha256"})
+        self.assertEqual(source["revision"], REVISION)
+        self.assertEqual(set(source["inputsSha256"]), {
+            "Dockerfile", ".dockerignore", "Cargo.lock", "web/package-lock.json", "build/pip-constraints.txt",
+        })
+        outcome = json.loads((self.output / "outcome.json").read_text())
+        self.assertTrue(outcome["passed"])
+        self.assertEqual(outcome["exportedImageId"], IMAGE_ID)
+        commands = [argv[3:] for argv, _ in runner.calls if argv[:2] == ["docker", "--host"]]
+        self.assertIn(["image", "tag", IMAGE_ID, TAG], commands)
+        inspect = next(command for command in commands if command[:2] == ["image", "inspect"])
+        self.assertEqual(inspect[-1], IMAGE_ID)
+        save = next(command for command in commands if command[:2] == ["image", "save"] and "--output" in command)
+        self.assertEqual(save[-1], TAG)
+        self.assertEqual(sum(command == ["image", "inspect", "--format", "{{.Id}}", TAG] for command in commands), 2)
+        for command in commands:
+            self.assertTrue({"build", "buildx", "pull", "run", "push", "stop", "restart", "prune"}.isdisjoint(command))
+
+    def test_generated_build_and_export_evidence_pass_the_real_github_receiver_contract(self):
+        for label, image_id in (("build", None), ("export", IMAGE_ID)):
+            with self.subTest(mode=label):
+                output = self.root / f"receiver-contract-{label}"
+                BUILD.build_release(output, 120, root=self.root, runner=FakeRunner(), image_id=image_id)
+                manifest = RECEIVER.validate_build_evidence(output, {"revision": REVISION})
+                self.assertEqual(manifest, ARTIFACT.validate_manifest(output / "release.json"))
+                source_path = output / "source.json"
+                source = json.loads(source_path.read_text())
+                self.assertEqual(set(source), {"revision", "inputsSha256"})
+                # Reproduce the producer/consumer mismatch: source.json is a
+                # closed schema; extra image evidence belongs in outcome.json.
+                source["exportedImageId"] = IMAGE_ID
+                source_path.write_text(json.dumps(source))
+                with self.assertRaisesRegex(RECEIVER.FetchError, "source_evidence_rejected"):
+                    RECEIVER.validate_build_evidence(output, {"revision": REVISION})
+
+    def test_export_requires_an_immutable_id_before_any_side_effect(self):
+        for image_id in ("simplestchat-ci:production", "sha256:" + "b" * 63, "sha256:" + "B" * 64, "", True, 123):
+            with self.subTest(image_id=image_id):
+                runner = FakeRunner()
+                with self.assertRaisesRegex(BUILD.BuildError, "exact sha256"):
+                    BUILD.build_release(self.output, 120, root=self.root, runner=runner, image_id=image_id)
+                self.assertEqual(runner.calls, [])
+                self.assertFalse(self.output.exists())
+
+    def test_export_rejects_wrong_image_identity_before_tagging_or_saving(self):
+        for index, mutation in enumerate((
+            {"id": "sha256:" + "c" * 64}, {"os": "windows"}, {"architecture": "arm64"}, {"user": "root"},
+            {"labels": None}, {"labels": {}}, {"labels": {"org.opencontainers.image.revision": "c" * 40}},
+            {"cmd": ["/app/load_test"]}, {"entrypoint": ["/bin/sh"]},
+        )):
+            with self.subTest(mutation=mutation):
+                self.output = self.root / f"image-identity-{index}"
+                runner = FakeRunner()
+                runner.image.update(mutation)
+                with self.assertRaisesRegex(BUILD.BuildError, "production runtime identity"):
+                    BUILD.build_release(self.output, 120, root=self.root, runner=runner, image_id=IMAGE_ID)
+                self.assertFalse(any("tag" in argv or "--output" in argv or "build" in argv for argv, _ in runner.calls))
+                self.assertFalse((self.output / "release.json").exists())
+                self.assertFalse(json.loads((self.output / "outcome.json").read_text())["passed"])
+
+    def test_export_failure_never_falls_back_to_building(self):
+        for failure in ("inspect", "export", "archive-revision", "archive-layers"):
+            with self.subTest(failure=failure):
+                self.output = self.root / f"export-failure-{failure}"
+                runner = FakeRunner(fail=failure)
+                with self.assertRaises((BUILD.BuildError, ARTIFACT.ArtifactError, OSError)):
+                    BUILD.build_release(self.output, 120, root=self.root, runner=runner, image_id=IMAGE_ID)
+                self.assertFalse(any("build" in argv or "pull" in argv for argv, _ in runner.calls))
+                self.assertFalse((self.output / "release.json").exists())
+                self.assertFalse(json.loads((self.output / "outcome.json").read_text())["passed"])
+
+    def test_export_binds_archive_layers_to_selected_image_and_requires_bounded_layer_metadata(self):
+        runner = FakeRunner(fail="archive-layers")
+        with self.assertRaisesRegex(BUILD.BuildError, "filesystem layers differ"):
+            BUILD.build_release(self.output, 120, root=self.root, runner=runner, image_id=IMAGE_ID)
+        self.assertFalse((self.output / "release.json").exists())
+        for index, rootfs in enumerate((None, {}, {"Type": "layers", "Layers": []},
+                                        {"Type": "other", "Layers": [LAYER_ID]},
+                                        {"Type": "layers", "Layers": ["sha256:wrong"]},
+                                        {"Type": "layers", "Layers": [LAYER_ID] * 1001})):
+            with self.subTest(rootfs_index=index):
+                self.output = self.root / f"invalid-layer-metadata-{index}"
+                runner = FakeRunner()
+                runner.image["rootfs"] = rootfs
+                with self.assertRaisesRegex(BUILD.BuildError, "filesystem layer identities"):
+                    BUILD.build_release(self.output, 120, root=self.root, runner=runner, image_id=IMAGE_ID)
+                self.assertFalse(any("tag" in argv or "--output" in argv for argv, _ in runner.calls))
+
+    def test_export_refuses_different_retained_tag_without_overwriting_it(self):
+        runner = FakeRunner(existing_tag="sha256:" + "c" * 64)
+        with self.assertRaisesRegex(BUILD.BuildError, "different image"):
+            BUILD.build_release(self.output, 120, root=self.root, runner=runner, image_id=IMAGE_ID)
+        self.assertFalse(any("tag" in argv or "--output" in argv for argv, _ in runner.calls))
+        self.assertFalse((self.output / "release.json").exists())
+
+    def test_export_reuses_matching_tag_and_refuses_selection_changes(self):
+        runner = FakeRunner(existing_tag=IMAGE_ID)
+        BUILD.build_release(self.output, 120, root=self.root, runner=runner, image_id=IMAGE_ID)
+        self.assertFalse(any("tag" in argv for argv, _ in runner.calls))
+        for index, selected in enumerate((["sha256:" + "c" * 64], [IMAGE_ID, "sha256:" + "c" * 64])):
+            self.output = self.root / f"tag-change-{index}"
+            runner = FakeRunner(selected_images=selected)
+            with self.assertRaisesRegex(BUILD.BuildError, "selection changed"):
+                BUILD.build_release(self.output, 120, root=self.root, runner=runner, image_id=IMAGE_ID)
+            self.assertFalse((self.output / "release.json").exists())
+            self.assertFalse(json.loads((self.output / "outcome.json").read_text())["passed"])
+
+    def test_export_preserves_source_and_active_workload_preflights(self):
+        for label, runner in (("dirty", FakeRunner(dirty=True)), ("active", FakeRunner(running="owned-container")),
+                              ("source-change", FakeRunner(final_revision="c" * 40))):
+            with self.subTest(label=label):
+                self.output = self.root / label
+                with self.assertRaises(BUILD.BuildError):
+                    BUILD.build_release(self.output, 120, root=self.root, runner=runner, image_id=IMAGE_ID)
+                self.assertFalse((self.output / "release.json").exists())
+                self.assertFalse(any("build" in argv for argv, _ in runner.calls))
+                if label == "dirty":
+                    self.assertFalse(self.output.exists())
+                else:
+                    self.assertFalse(json.loads((self.output / "outcome.json").read_text())["passed"])
 
     def test_nonignored_existing_and_unsafe_output_refused_before_docker(self):
         for value in (self.output, self.root, self.root / "bad,name", self.root / "missing/child"):

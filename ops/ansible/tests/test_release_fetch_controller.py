@@ -146,6 +146,47 @@ class ControllerTests(unittest.TestCase):
             with self.assertRaisesRegex(FETCH.FetchError, 'github_response_too_large'):
                 FETCH.gh(['api', 'fixture'])
 
+    def test_successful_main_push_ci_can_supply_its_own_exact_artifact(self):
+        artifact, _, run = api_records()
+        artifact['workflow_run']['id'] = self.args.ci_run
+        run['head_branch'] = 'main'
+        with patch.object(FETCH, 'api', side_effect=[artifact, run]) as api:
+            self.assertEqual(FETCH.verified_envelope(self.args), dict(envelope(), buildRunId=self.args.ci_run))
+        self.assertEqual([call.args[0] for call in api.call_args_list], [
+            'repos/owner/repo/actions/artifacts/123', 'repos/owner/repo/actions/runs/789'])
+
+    def test_ci_artifacts_require_the_same_successful_trusted_push_run(self):
+        artifact, _, run = api_records()
+        artifact['workflow_run']['id'] = self.args.ci_run
+        run['head_branch'] = 'main'
+        changes = [
+            (0, ('workflow_run', 'id'), 456),
+            (0, ('workflow_run', 'head_sha'), 'e' * 40),
+            (0, ('workflow_run', 'head_repository_id'), 99),
+            (0, ('expired',), True),
+            (0, ('name',), 'unrelated-artifact'),
+            (1, ('id',), 456),
+            (1, ('head_branch',), 'feature'),
+            (1, ('name',), 'Untrusted workflow'),
+            (1, ('path',), '.github/workflows/unrelated.yml'),
+            (1, ('event',), 'pull_request'),
+            (1, ('event',), 'workflow_dispatch'),
+            (1, ('head_sha',), 'e' * 40),
+            (1, ('status',), 'in_progress'),
+            (1, ('conclusion',), 'failure'),
+            (1, ('repository', 'full_name'), 'fork/repo'),
+            (1, ('head_repository', 'full_name'), 'fork/repo'),
+        ]
+        for index, path, value in changes:
+            records = deepcopy([artifact, run])
+            target = records[index]
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = value
+            with self.subTest(index=index, path=path, value=value), \
+                 patch.object(FETCH, 'api', side_effect=records + [run]), self.assertRaises(FETCH.FetchError):
+                FETCH.verified_envelope(self.args)
+
     def test_storage_urls_require_one_trusted_https_endpoint_without_credentials_or_fragments(self):
         self.assertEqual(FETCH.storage_url(URL), URL)
         for value in (URL.replace('https:', 'http:'), URL.replace('.net/', '.net.evil.test/'),

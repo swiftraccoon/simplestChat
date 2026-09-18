@@ -12,6 +12,10 @@ starting a public chat service. The application remains packaged by Docker;
 Ansible does not install a second native Rust/Node build on the host.
 The separate [public VPS playbook](../ops/ansible/PUBLIC.md) adds pinned Caddy,
 socket-only PostgreSQL, protected credentials and an initial guest lobby.
+For routine updates to that prepared host, use the
+[single-command release](../ops/ansible/RELEASES.md#routine-update-use-the-image-ci-tested).
+It deploys the exact image retained by successful CI without rebuilding, replacing
+only the application while keeping the database and proxy running.
 
 1. Point your domain at the host and set Caddy's `CADDY_DOMAIN` environment
    variable (or edit its example hostname). Set `ALLOWED_ORIGINS` to the exact

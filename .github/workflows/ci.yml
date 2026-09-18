@@ -388,10 +388,22 @@ jobs:
             validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
       - name: Build production container
+        shell: bash
         run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
           timeout --signal=TERM --kill-after=2m 50m \
-            docker build --pull --target production \
+            docker build --pull --target production --platform linux/amd64 \
+              --provenance=false --sbom=false \
+              --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+              --iidfile "${RUNNER_TEMP}/production.iid" \
               --tag "${PRODUCTION_IMAGE}" .
+          production_id="$(<"${RUNNER_TEMP}/production.iid")"
+          [[ "${production_id}" =~ ^sha256:[a-f0-9]{64}$ ]]
+          # Every following smoke, export and fixture uses this exact image,
+          # not the mutable build tag. The exporter never rebuilds it.
+          printf 'PRODUCTION_IMAGE=%s\n' "${production_id}" >> "${GITHUB_ENV}"
 
       - name: Verify production image contents and user
         shell: bash
@@ -438,6 +450,13 @@ jobs:
           CONTAINER_TEST_ARTIFACTS: ${{ runner.temp }}/container-smoke
         run: build/test-container.sh
 
+      - name: Export the tested immutable production image
+        if: ${{ success() && github.event_name == 'push' }}
+        timeout-minutes: 6
+        run: |
+          python3 build/build-release.py --image-id "${PRODUCTION_IMAGE}" \
+            --timeout-seconds 300 --output "${RUNNER_TEMP}/simplestchat-release"
+
       - name: Install isolated release-container checks
         timeout-minutes: 5
         run: |
@@ -452,6 +471,18 @@ jobs:
           sudo "${RUNNER_TEMP}/release-container-controller/bin/python" -B \
             build/test-release-container.py --disposable-host \
             --image "${PRODUCTION_IMAGE}" --output "${RUNNER_TEMP}/release-container"
+
+      - name: Retain the verified production release
+        # Export precedes the root-owned fixture; publication requires every
+        # deployment check above to pass. Fetching also requires whole-CI success.
+        if: ${{ success() && github.event_name == 'push' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: simplestchat-production-${{ github.sha }}
+          path: ${{ runner.temp }}/simplestchat-release
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
 
       - name: Preserve sanitized release-container report
         if: ${{ !cancelled() }}

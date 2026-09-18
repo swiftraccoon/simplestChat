@@ -12,6 +12,8 @@ COMPOSE_TOOL = "Install checksum-pinned production Compose"
 PREPARE = "Install isolated release-container checks"
 INTEGRATION = "App-only release and rollback on a disposable host"
 RETENTION = "Preserve sanitized release-container report"
+EXPORT = "Export the tested immutable production image"
+RELEASE = "Retain the verified production release"
 RUN_COMMAND = (
     'sudo "${RUNNER_TEMP}/release-container-controller/bin/python" -B \\\n'
     '  build/test-release-container.py --disposable-host \\\n'
@@ -45,7 +47,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
             COMPOSE_TOOL, "Validate Compose rendering",
             "Build production container", "Verify production image contents and user",
             "Production startup, migration and database-backed API smoke",
-            PREPARE, INTEGRATION, RETENTION,
+            EXPORT, PREPARE, INTEGRATION, RELEASE, RETENTION,
         ]
         indexes = [self.steps.index(self.step(name)) for name in expected]
         self.assertEqual(indexes, sorted(indexes))
@@ -54,6 +56,52 @@ class ReleaseContainerCiTests(unittest.TestCase):
         build_steps = [step for step in self.steps
                        if re.search(r"\bdocker\s+(?:build|buildx\s+build)\b", step.get("run", ""))]
         self.assertEqual(build_steps, [self.step("Build production container")])
+
+    def test_one_revision_labeled_immutable_image_feeds_all_smokes_and_export(self):
+        build = self.step("Build production container")
+        self.assertEqual(build["shell"], "bash")
+        command = build["run"]
+        self.assertTrue(command.startswith("set -euo pipefail\n"))
+        self.assertIn('test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"', command)
+        self.assertIn('test -z "$(git status --porcelain=v1 --untracked-files=all)"', command)
+        self.assertIn('--label "org.opencontainers.image.revision=${GITHUB_SHA}"', command)
+        self.assertIn('--iidfile "${RUNNER_TEMP}/production.iid"', command)
+        self.assertIn('production_id="$(<"${RUNNER_TEMP}/production.iid")"', command)
+        self.assertIn('[[ "${production_id}" =~ ^sha256:[a-f0-9]{64}$ ]]', command)
+        self.assertIn('printf \'PRODUCTION_IMAGE=%s\\n\' "${production_id}" >> "${GITHUB_ENV}"', command)
+        self.assertLess(command.index('git status'), command.index('docker build'))
+        self.assertLess(command.index('docker build'), command.index('"${GITHUB_ENV}"'))
+        for step in self.steps[self.steps.index(build) + 1:]:
+            self.assertNotIn("PRODUCTION_IMAGE", step.get("env", {}), "Do not replace the checked immutable ID")
+        verify = self.step("Verify production image contents and user")["run"]
+        self.assertIn('"${PRODUCTION_IMAGE}" -eu -c', verify)
+        smoke = self.step("Production startup, migration and database-backed API smoke")
+        self.assertEqual(smoke["run"], "build/test-container.sh")
+        self.assertIn('${PRODUCTION_IMAGE:-simplestchat-ci:production}', (ROOT / "build/test-container.sh").read_text())
+        self.assertIn('--image "${PRODUCTION_IMAGE}"', self.step(INTEGRATION)["run"])
+
+    def test_push_export_never_rebuilds_and_publication_waits_for_required_checks(self):
+        self.assertEqual(self.workflow["on"]["push"]["branches"], ["main"])
+        export = self.step(EXPORT)
+        self.assertEqual(export["if"], "${{ success() && github.event_name == 'push' }}")
+        self.assertEqual(export["timeout-minutes"], "6")
+        self.assertEqual(export["run"], (
+            'python3 build/build-release.py --image-id "${PRODUCTION_IMAGE}" \\\n'
+            '  --timeout-seconds 300 --output "${RUNNER_TEMP}/simplestchat-release"\n'
+        ))
+        self.assertNotIn("continue-on-error", export)
+        self.assertNotIn("sudo", export["run"], "Export before root fixture state exists; preserve exporter guards")
+        release = self.step(RELEASE)
+        self.assertEqual(release["if"], "${{ success() && github.event_name == 'push' }}")
+        self.assertRegex(release["uses"], r"^actions/upload-artifact@[a-f0-9]{40}$")
+        self.assertEqual(release["with"], {
+            "name": "simplestchat-production-${{ github.sha }}",
+            "path": "${{ runner.temp }}/simplestchat-release",
+            "if-no-files-found": "error", "compression-level": "0", "retention-days": "14",
+        })
+        self.assertLess(self.steps.index(export), self.steps.index(self.step(INTEGRATION)))
+        self.assertLess(self.steps.index(self.step(INTEGRATION)), self.steps.index(release))
+        self.assertNotIn("continue-on-error", release)
 
     def test_compose_is_verified_before_install_and_matches_both_execution_users(self):
         step = self.step(COMPOSE_TOOL)
@@ -116,6 +164,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertEqual({step["with"]["path"] for step in uploads}, {
             "${{ runner.temp }}/container-smoke",
             "${{ runner.temp }}/release-container/report.json",
+            "${{ runner.temp }}/simplestchat-release",
         }, "Do not upload private release fixture directories or broad runner paths")
 
     def test_read_only_permissions_pinned_actions_and_no_remote_deployment(self):

@@ -17,7 +17,49 @@ host and CI. Older versions can omit service `env_file` values from configuratio
 hashes and reject unchanged containers. CI verifies the same version for both
 the runner user and the root-run release helper.
 
-## Build on your Mac or CI
+## Routine update: use the image CI tested
+
+Commit and push to `main`, then run from the clean checkout:
+
+```sh
+python3 build/deploy.py \
+  --inventory ops/ansible/inventory.local.yml \
+  --repository OWNER/REPOSITORY \
+  --origin https://chat.example.com
+```
+
+Use your repository and public origin. The command selects the exact checkout
+revision's push CI run, waits for success, and finds its production artifact.
+Normal CI builds the production image once, tests it by immutable image ID, and
+retains that same image. Deployment does not rebuild it or rerun the test suite.
+The command does not commit, push, dispatch builds, or retry failed operations.
+
+The controller needs Python 3.12+, authenticated GitHub CLI, Ansible, Node 22.12+,
+and trusted SSH access. Select exactly one inventory host; use `--limit` if needed.
+Its `scpub_domain` must match `--origin` so verification targets the deployed site.
+The default CI wait is one hour; `--wait-seconds` changes that bound. Changed
+checkout state, failed CI, expired/missing artifacts, or mismatched helpers stop
+the command before deployment. Older commits without a CI production artifact
+can use the manual build/staging paths below.
+
+Prepared-host checks are enabled by default. After reviewing helper changes,
+`--install-helpers` explicitly installs the current helpers instead of requiring
+an exact existing match. It does not run host provisioning or database migrations.
+
+The existing release playbook transfers and validates the image while chat stays
+online, takes the backup, and replaces only the application. After readiness,
+the command runs the public smoke, which writes one labeled message in `lobby`.
+Private command logs and the selected revision/run/artifact identities are kept
+under `results/deploy.*`; remote deployment evidence remains on the VPS.
+
+Build and CI time are release latency, not service downtime. The interruption is
+limited to application replacement and startup; database and proxy stay running.
+An unsuccessful deployment stops the command. Its existing bounded rollback and
+unfinished-operation checks remain authoritative; inspect evidence before retrying.
+A failed post-deployment smoke does not trigger another restart or rollback; the
+report distinguishes a successful release from failed public verification.
+
+## Manual fallback: build on your Mac or CI
 
 Use Python 3.12+, Git, and a running local Docker Engine with Buildx. Docker API
 1.48+ is required for platform-specific image export. Docker Desktop can build
@@ -25,7 +67,8 @@ Linux/amd64 on Apple Silicon using emulation; a native Linux/amd64 CI runner is
 usually faster. No registry or additional VPS is required.
 
 The manual **Build production release artifact** GitHub Actions workflow runs
-this same builder on Linux. Select the reviewed commit/branch and require the
+this same builder on Linux. It is a fallback, not part of routine deployment;
+it performs a separate build. Select the reviewed commit/branch and require the
 normal CI checks to pass. Download its `simplestchat-production-<commit>` artifact
 or use the direct GitHub transfer below.
 It has no registry credentials, push permission, SSH access, or deployment step.
@@ -78,8 +121,10 @@ token is installed on the VPS.
 Select the exact artifact ID, reviewed 40-character commit, and successful push CI run
 ID for that commit. Review the repository's build and CI workflows before trusting
 their results. The controller verifies the artifact identity and successful build
-and CI runs before requesting a short-lived download URL. To list artifact IDs
-from the selected build run:
+and CI runs before requesting a short-lived download URL. A normal CI artifact
+must belong to that exact successful push CI run; the manual build workflow is
+also supported with a separate successful CI run for the same commit. To list
+artifact IDs from the selected build run:
 
 ```sh
 gh api repos/OWNER/REPOSITORY/actions/runs/BUILD_RUN_ID/artifacts \
