@@ -1,0 +1,42 @@
+[tool.ruff]
+required-version = "==0.16.8"
+target-version = "py312"
+line-length = 100
+# `build/` contains maintained source, not generated packaging output.
+exclude = [
+  ".git", ".venv", "ops/ansible/.venv", "target", "vendor", "reference",
+  "results", "web/node_modules", "web/e2e/node_modules", ".ruff_cache",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D203", # Use D211: no blank line before a class docstring.
+  "D213", # Use D212: docstring summaries start on the first line.
+  "COM812", # Trailing commas are owned by the Ruff formatter.
+  "CPY001", # Project licensing is maintained centrally, not repeated per file.
+  "ISC003", # Explicit concatenation satisfies strict implicit-string-concat typing.
+]
+
+[tool.ruff.lint.per-file-ignores]
+# These are unittest suites, not pytest suites; keep unittest assertions/context managers.
+"ops/ansible/tests/*.py" = ["PT009", "PT027", "INP001"]
+# These directories are deliberately installed/imported as flat standalone modules.
+"build/*.py" = ["INP001"]
+"ops/ansible/files/*.py" = ["INP001"]
+"ops/ansible/callback_plugins/*.py" = ["INP001"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.basedpyright]
+include = ["build", "ops/ansible/files", "ops/ansible/callback_plugins", "ops/ansible/tests", "typings"]
+exclude = ["**/__pycache__", "ops/ansible/.venv", "vendor", "reference", "results", "target"]
+typeCheckingMode = "all"
+pythonVersion = "3.12"
+pythonPlatform = "All"
+stubPath = "typings"
+extraPaths = ["build", "ops/ansible/files", "ops/ansible/callback_plugins", "ops/ansible/tests"]
+# The same helpers are installed as flat standalone modules on the VPS.
+# Their absolute sibling imports are intentional; all type-safety diagnostics stay enabled.
+reportImplicitRelativeImport = false

@@ -13,6 +13,14 @@ Run commands from the repository root.
 - ShellCheck for the helper-script quality gate (`brew install shellcheck` on
   macOS, or your Linux package manager).
 - `jq` for container benchmark validation tests (`brew install jq` on macOS).
+- Python 3.12+ with the pinned checking environment for Python quality gates:
+
+  ```sh
+  python3 -m venv ops/ansible/.venv
+  ops/ansible/.venv/bin/pip install -r build/python-requirements.txt
+  ```
+
+  These controller/checking dependencies are not installed on the chat server.
 
 ## Guest-only local UI
 

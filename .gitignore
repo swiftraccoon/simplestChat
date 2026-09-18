@@ -32,3 +32,8 @@ CLAUDE.md
 CLAUDE.local.md
 /.cargo/
 /.claude/
+
+# Local Python check caches and bytecode; maintained sources remain visible.
+.ruff_cache/
+__pycache__/
+*.pyc

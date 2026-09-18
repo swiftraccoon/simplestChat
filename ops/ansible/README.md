@@ -138,6 +138,8 @@ roll back database changes, or promise reproducibility of an unrecorded host.
 Offline checks require ShellCheck and `jq` in addition to the controller tools:
 
 ```sh
+ops/ansible/.venv/bin/pip install -r build/python-requirements.txt
+build/check-python.sh
 export PATH="$PWD/ops/ansible/.venv/bin:$PATH"
 export ANSIBLE_CONFIG="$PWD/ops/ansible/ansible.cfg"
 ansible-lint --offline --strict ops/ansible
@@ -147,3 +149,8 @@ done
 shellcheck ops/ansible/files/*.sh
 python -m unittest discover -s ops/ansible/tests -v
 ```
+
+The Python source gate includes controller commands, host helpers, callbacks,
+tests and local type stubs. It uses Ruff `ALL` and basedpyright `all`; see
+[the Python test policy](../../docs/testing.md#python-automation) for scope,
+typed input boundaries and the narrowly documented exceptions.

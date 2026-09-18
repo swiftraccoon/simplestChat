@@ -58,8 +58,8 @@ After [build setup](docs/development.md):
 build/check.sh
 ```
 
-This runs source quality gates and web/helper tests. Native Rust, database and
-browser integration tests are documented in [testing](docs/testing.md).
+This runs Rust, web and Python quality gates plus web/helper tests. Native Rust,
+database and browser integration tests are documented in [testing](docs/testing.md).
 
 ## Deploying
 

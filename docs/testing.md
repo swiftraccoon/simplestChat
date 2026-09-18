@@ -11,9 +11,10 @@ cargo test --locked --all-features -- --test-threads=1
 ```
 
 `build/check.sh` shares the CI quality gates: typed web lint, formatting,
-source/helper tests, TypeScript/build, Rust Clippy, and checked documentation.
-Use `--web`, `--rust`, or `--helpers` for a focused group. It requires installed
-development dependencies and never starts application services. Native tests
+source/helper tests, TypeScript/build, Rust Clippy, checked documentation, and
+strict Python lint/format/types. Use `--web`, `--rust`, `--helpers`, or `--python`
+for a focused group. It requires installed development dependencies and never
+starts application services. Native tests
 are deliberately separate from the source-quality gate.
 
 Rust tests include native media checks; database tests are opt-in. Serial
@@ -32,6 +33,42 @@ cancellation. The ignored persistence test uses a row lock in the disposable
 database to check chat/state access during blocked SQL and publication after
 the requesting task is cancelled. It is a concurrency regression test, not a
 database-outage or throughput benchmark.
+
+### Python automation
+
+Use Python 3.12 or newer and the pinned controller/checking environment:
+
+```sh
+python3 -m venv ops/ansible/.venv
+ops/ansible/.venv/bin/pip install -r build/python-requirements.txt
+build/check-python.sh
+PATH="$PWD/ops/ansible/.venv/bin:$PATH" \
+  ops/ansible/.venv/bin/python -m unittest discover -s ops/ansible/tests -v
+```
+
+The source gate runs Ruff's complete stable rule set, its formatter, and
+basedpyright's `all` mode over every maintained Python file and type stub,
+including tests. It rejects a new source directory until explicitly included.
+Third-party `vendor/` sources and ignored private operator scripts are outside
+this policy. ShellCheck, `jq`, and the Ansible dependencies are required for the
+offline tests; the optional Compose renderer needs the Docker CLI, not a daemon.
+
+`pyproject.toml` defines the policy. Mutually exclusive formatting/docstring
+rules and standalone-module/unittest conventions have documented exceptions;
+reviewed subprocess, CLI-output and transaction-complexity exceptions stay next
+to the affected code. `Any`, unknown types, untyped arguments, unchecked casts
+from decoded data, and test-wide typing exemptions are not used to pass the gate.
+JSON boundaries validate decoded values before constructing typed records;
+options and fixture state use dataclasses where appropriate. The narrow Ansible
+stubs in `typings/` describe only the pinned APIs used here and retain `object`
+for values that callers must validate.
+
+CI uses this same gate. Set `PYTHON_CHECK_ENV` to another virtual environment
+directory to select both its pinned tools and its Python import environment.
+The checks do not install packages, contact deployment hosts, or start services.
+Updating a host helper requires `build/deploy.py --install-helpers` once so that
+the complete wrapper/module set is reconciled; subsequent releases retain the
+prepared-helper hash checks and app-only replacement flow.
 
 ### Readiness and shutdown
 

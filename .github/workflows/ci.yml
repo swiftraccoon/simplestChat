@@ -22,12 +22,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3-venv shellcheck jq
           python3 -m venv "${RUNNER_TEMP}/ansible-controller"
-          "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r ops/ansible/requirements.txt
+          "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r build/python-requirements.txt
           echo "${RUNNER_TEMP}/ansible-controller/bin" >> "${GITHUB_PATH}"
       - name: Validate automation without contacting any host
         env:
           ANSIBLE_CONFIG: ${{ github.workspace }}/ops/ansible/ansible.cfg
+          PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
         run: |
+          build/check-python.sh
           ansible-lint --offline --strict ops/ansible
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/site.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/public.yml --syntax-check

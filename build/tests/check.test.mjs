@@ -18,7 +18,7 @@ const env = process.env;
 fs.appendFileSync(env.FIXTURE_LOG, JSON.stringify({
   command, args, cwd: process.cwd(),
   env: Object.fromEntries(['PATH', 'RUSTC', 'RUSTDOC', 'OPENSSL_DIR',
-    'OPENSSL_STATIC', 'PKG_CONFIG_PATH', 'PIP_CONSTRAINT', 'RUSTDOCFLAGS']
+    'OPENSSL_STATIC', 'PKG_CONFIG_PATH', 'PIP_CONSTRAINT', 'RUSTDOCFLAGS', 'PYTHON_CHECK_ENV']
     .map(key => [key, env[key]])),
 }) + '\n');
 let phase;
@@ -48,6 +48,9 @@ if (command === 'npm') {
 } else if (command === 'shellcheck') {
   if (args.length === 0 || args.some(file => !fs.statSync(file).isFile())) process.exit(98);
   phase = 'shellcheck';
+} else if (command === 'python-check') {
+  if (args.length !== 0) process.exit(98);
+  phase = 'python-check';
 } else {
   console.error('Unexpected command: ' + command);
   process.exit(99);
@@ -63,7 +66,7 @@ async function fixture(t, { installedWeb = true, installedOpenSsl = true, omitte
   const toolchainBin = path.join(root, 'pinned toolchain', 'bin');
   const dispatcher = path.join(temporary, 'fake-tool.cjs');
   const log = path.join(temporary, 'commands.jsonl');
-  const helperNames = ['check.sh', 'helper with spaces.sh', 'run-local.sh', 'with-test-server.sh'];
+  const helperNames = ['check-python.sh', 'check.sh', 'helper with spaces.sh', 'run-local.sh', 'with-test-server.sh'];
   await Promise.all([
     mkdir(path.join(root, 'build/tests'), { recursive: true }),
     mkdir(path.join(root, 'load_tests'), { recursive: true }),
@@ -74,8 +77,13 @@ async function fixture(t, { installedWeb = true, installedOpenSsl = true, omitte
     writeFile(log, ''),
   ]);
   await copyFile(checker, path.join(root, 'build/check.sh'));
-  for (const name of helperNames.filter(name => name !== 'check.sh')) {
+  for (const name of helperNames.filter(name => !['check.sh', 'check-python.sh'].includes(name))) {
     await writeFile(path.join(root, 'build', name), '#!/bin/sh\nexit 99 # must never execute\n');
+  }
+  if (omittedTool !== 'python-check') {
+    const pythonChecker = path.join(root, 'build/check-python.sh');
+    await writeFile(pythonChecker, `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(dispatcher)} python-check "$@"\n`);
+    await chmod(pythonChecker, 0o755);
   }
   await Promise.all([
     writeFile(path.join(root, 'rust-toolchain.toml'), `[toolchain]\nchannel = "${channel}"\n`),
@@ -126,10 +134,11 @@ test('quality checker help and invalid arguments execute no tools', async t => {
   for (const argument of ['--help', '-h']) {
     const result = await setup.run([argument]);
     assert.equal(result.status, 0, result.output);
-    assert.match(result.output, /--web.*--rust.*--helpers/);
+    assert.match(result.output, /--web.*--rust.*--python.*--helpers/);
+    assert.match(result.output, /all four groups/);
     assert.deepEqual(result.events, []);
   }
-  for (const args of [['--unknown'], ['web'], ['--web', '--rust'], ['--help', 'extra']]) {
+  for (const args of [['--unknown'], ['web'], ['--web', '--rust'], ['--python', '--helpers'], ['--help', 'extra']]) {
     const result = await setup.run(args);
     assert.equal(result.status, 2, result.output);
     assert.match(result.output, /Usage:/);
@@ -209,13 +218,38 @@ test('helper checks syntax-check every shell file individually before running on
   assert.ok(result.events.every(event => ['sh', 'bash', 'shellcheck', 'node'].includes(event.command) && event.cwd === setup.root));
 });
 
-test('default quality check runs web, Rust and helper groups in order', async t => {
+test('Python group invokes only the shared gate and preserves the selected controller environment', async t => {
+  const setup = await fixture(t, { installedWeb: false, installedOpenSsl: false });
+  const environment = path.join(setup.root, 'controller environment');
+  const result = await setup.run(['--python'], { PYTHON_CHECK_ENV: environment });
+  assert.equal(result.status, 0, result.output);
+  assert.deepEqual(result.events.map(event => [event.command, ...event.args]), [['python-check']]);
+  assert.equal(result.events[0].cwd, setup.root);
+  assert.equal(result.events[0].env.PYTHON_CHECK_ENV, environment);
+});
+
+test('Python group preserves a failed shared gate status without invoking other groups', async t => {
+  const setup = await fixture(t, { installedWeb: false, installedOpenSsl: false });
+  const result = await setup.run(['--python'], { FIXTURE_FAIL: 'python-check', FIXTURE_FAILURE_CODE: '43' });
+  assert.equal(result.status, 43, result.output);
+  assert.deepEqual(result.events.map(event => event.command), ['python-check']);
+});
+
+test('Python group fails if its shared gate is missing without installing or falling back', async t => {
+  const setup = await fixture(t, { omittedTool: 'python-check' });
+  const result = await setup.run(['--python']);
+  assert.notEqual(result.status, 0, result.output);
+  assert.match(result.output, /check-python\.sh: ((?:command )?not found|No such file)/);
+  assert.deepEqual(result.events, []);
+});
+
+test('default quality check runs web, Rust, Python and helper groups in order', async t => {
   const setup = await fixture(t);
   const result = await setup.run();
   assert.equal(result.status, 0, result.output);
   assert.deepEqual(result.events.map(event => event.command), [
     'npm', 'npm', 'npm', 'npm', 'rustup', 'rustup', 'rustup', 'rustup', 'rustup',
-    'sh', 'sh', ...setup.helperNames.map(() => 'bash'), 'shellcheck', 'node',
+    'python-check', 'sh', 'sh', ...setup.helperNames.map(() => 'bash'), 'shellcheck', 'node',
   ]);
 });
 
@@ -254,6 +288,7 @@ for (const [phase, lastCommand] of [
   ['npm-lint', 'npm'], ['npm-format:check', 'npm'], ['npm-test', 'npm'], ['npm-build', 'npm'],
   ['rustup-which-rustc', 'rustup'], ['rustup-which-rustdoc', 'rustup'],
   ['cargo-fmt', 'rustup'], ['cargo-clippy', 'rustup'], ['cargo-doc', 'rustup'],
+  ['python-check', 'python-check'],
   ['sh:build/run-local.sh', 'sh'], ['bash:build/helper with spaces.sh', 'bash'], ['shellcheck', 'shellcheck'], ['helper-tests', 'node'],
 ]) {
   test(`default quality check stops immediately and preserves ${phase} failure status`, async t => {
@@ -264,7 +299,8 @@ for (const [phase, lastCommand] of [
     const event = result.events.at(-1);
     const actualPhase = event.command === 'npm' ? `npm-${event.args[2] === 'run' ? event.args[3] : event.args[2]}`
       : event.command === 'rustup' ? event.args[0] === 'which' ? `rustup-which-${event.args[3]}` : `cargo-${event.args[3]}`
-      : event.command === 'node' ? 'helper-tests' : event.command === 'shellcheck' ? 'shellcheck' : `${event.command}:${event.args[1]}`;
+      : event.command === 'node' ? 'helper-tests' : event.command === 'shellcheck' ? 'shellcheck'
+      : event.command === 'python-check' ? 'python-check' : `${event.command}:${event.args[1]}`;
     assert.equal(actualPhase, phase, 'no command may run after the injected failure');
   });
 }

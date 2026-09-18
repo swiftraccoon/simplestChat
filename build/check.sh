@@ -3,10 +3,11 @@
 set -eu
 
 usage() {
-    echo 'Usage: build/check.sh [--web | --rust | --helpers]'
-    echo 'Default: run all three groups. Requires the development prerequisites.'
+    echo 'Usage: build/check.sh [--web | --rust | --python | --helpers]'
+    echo 'Default: run all four groups. Requires the development prerequisites.'
     echo 'Web: typed lint, formatting, unit tests, type checking and production build.'
     echo 'Rust: formatting, all-target/all-feature Clippy, and checked documentation.'
+    echo 'Python: pinned Ruff lint/format and strict basedpyright over maintained sources and stubs.'
     echo 'Helpers: shell syntax and helper/benchmark regression tests.'
     echo 'Database, native Rust tests and browser integration remain separate; see docs/testing.md.'
 }
@@ -17,6 +18,7 @@ case "${1:-}" in
     '') ;;
     --web) check_group=web ;;
     --rust) check_group=rust ;;
+    --python) check_group=python ;;
     --helpers) check_group=helpers ;;
     --help|-h) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
@@ -63,6 +65,10 @@ if [ "$check_group" = all ] || [ "$check_group" = rust ]; then
     RUSTDOCFLAGS="${RUSTDOCFLAGS:-} -D warnings"
     export RUSTDOCFLAGS
     rustup run "$toolchain" cargo doc --locked --all-features --no-deps --document-private-items
+fi
+
+if [ "$check_group" = all ] || [ "$check_group" = python ]; then
+    build/check-python.sh
 fi
 
 if [ "$check_group" = all ] || [ "$check_group" = helpers ]; then

@@ -1,0 +1,5 @@
+# Shared controller/test environment; no additional dependency is installed on the VPS.
+-r ../ops/ansible/requirements.txt
+ruff==0.16.8
+basedpyright==1.40.1
+types-PyYAML==6.0.12.20260906
