@@ -62,6 +62,20 @@ loopback origins. Origin-less native clients are handled separately. See
 
 Authentication comes from the handshake, not from participant IDs in messages.
 The server also enforces JWT expiry and account revocation on open sockets.
+
+The browser schedules HTTP token refresh after 12 minutes. Network failures or
+HTTP 5xx responses retain the current session for up to three refresh requests
+within 15 seconds of starting scheduled refresh, capped by the accepted token's
+expiry. Retries wait three seconds plus up to 249 ms of jitter; waiting for the
+same-origin refresh lock also consumes the deadline. Definitive rejection or a
+malformed successful response clears the session. The existing replay-confirmation
+delay for an exact `401` with `Invalid token` remains, and its request counts toward
+the same limit. A lost response can still lead to replay rejection; retries do not
+guarantee recovery of a rotated cookie. Initial session restoration does not gain
+this transient-failure allowance.
+New authentication actions retire pending refresh work but do not replenish the
+old session's budget; budget expiry also retires a still-pending login or logout.
+
 After an HTTP refresh, the browser sends `renewAuthentication` with a `requestId`
 and the new `token` on its existing authenticated socket. `authenticationRenewed`
 returns that request ID and `expiresAt` in Unix seconds; a rejected renewal returns

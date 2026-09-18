@@ -22,9 +22,10 @@ the web build runs TypeScript checking and produces the production UI.
 
 Credential-continuity tests use bounded validation futures to distinguish
 database unavailability from revocation and exercise expiry, drain, notification
-loss and grace-registration races. Browser unit tests cover same-socket renewal
-retries and their deadlines. These do not constitute a database-outage load test;
-the ignored database-backed renewal test exercises successful real validation.
+loss and grace-registration races. Browser unit tests cover scheduled HTTP refresh
+and same-socket renewal retries, deadlines and retirement by newer authentication
+actions. These do not constitute a database-outage load test; the ignored
+database-backed renewal test exercises successful real validation.
 
 ### Readiness and shutdown
 

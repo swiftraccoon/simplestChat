@@ -4,6 +4,8 @@ import { loadTypeScript } from './source-loader.mjs';
 
 const REFRESH_MS = 12 * 60 * 1000;
 const REPLAY_MS = 2250;
+const RETRY_MS = 3000;
+const RETRY_WINDOW_MS = 15000;
 const superseded = /Authentication request superseded/;
 
 function deferred() {
@@ -20,9 +22,10 @@ async function flush() {
   for (let i = 0; i < 20; i += 1) await Promise.resolve();
 }
 
-function session(name) {
+function session(name, expiresAt = 900) {
+  const payload = Buffer.from(JSON.stringify({ sub: name, exp: expiresAt })).toString('base64url');
   return {
-    token: `jwt-${name}`,
+    token: `fixture.${payload}.${name}`,
     user: { id: name, email: `${name}@example.test`, display_name: name },
   };
 }
@@ -82,13 +85,14 @@ function passkeyOptions(kind) {
   };
 }
 
-async function fixture(t, { locks } = {}) {
+async function fixture(t, { locks, random = 0 } = {}) {
   const requests = [];
   const queued = [];
   const timers = new Map();
   const changes = [];
   let nextTimer = 0;
   let now = 0;
+  let wallNow = 0;
   const { AuthManager } = await loadTypeScript('src/auth.ts', {
     globals: {
       fetch: (url, options) => {
@@ -99,12 +103,14 @@ async function fixture(t, { locks } = {}) {
       navigator: locks ? { locks } : {},
       Date: class extends Date {
         static now() {
-          return now;
+          return wallNow;
         }
       },
+      performance: { now: () => now },
+      Math: Object.assign(Object.create(Math), { random: () => random }),
       setTimeout: (callback, milliseconds) => {
         const id = nextTimer++;
-        timers.set(id, { callback, milliseconds });
+        timers.set(id, { callback, milliseconds, deadline: now + milliseconds });
         return id;
       },
       clearTimeout: (id) => timers.delete(id),
@@ -125,17 +131,25 @@ async function fixture(t, { locks } = {}) {
     changes,
     elapse: (milliseconds) => {
       now += milliseconds;
+      wallNow += milliseconds;
     },
+    moveWallClock: (milliseconds) => {
+      wallNow += milliseconds;
+    },
+    session: (name, lifetimeSeconds = 900) =>
+      session(name, Math.floor(wallNow / 1000) + lifetimeSeconds),
     enqueue: (value) => queued.push(value),
-    async login(name = 'initial') {
-      queued.push(response(session(name)));
+    async login(name = 'initial', lifetimeSeconds = 900) {
+      queued.push(response(session(name, Math.floor(wallNow / 1000) + lifetimeSeconds)));
       await auth.login(`${name}@example.test`, 'password');
     },
     async fire(milliseconds) {
       const timer = [...timers.entries()].find(([, value]) => value.milliseconds === milliseconds);
       assert.ok(timer, `Missing ${milliseconds}ms timer`);
       timers.delete(timer[0]);
-      now += milliseconds;
+      const elapsed = Math.max(0, timer[1].deadline - now);
+      now += elapsed;
+      wallNow += elapsed;
       timer[1].callback();
       await flush();
     },
@@ -149,16 +163,21 @@ test('login validates identity and refreshes with the existing token-refresh not
   assert.deepEqual(f.changes, [[true, false]]);
   f.enqueue(response(session('rotated')));
   await f.fire(REFRESH_MS);
-  assert.equal(f.auth.jwt, 'jwt-rotated');
+  assert.equal(f.auth.jwt, session('rotated').token);
   assert.deepEqual(f.changes, [
     [true, false],
     [true, true],
   ]);
   assert.equal(f.timers.size, 1);
-  assert.deepEqual(f.requests[1], {
-    url: '/api/auth/refresh',
-    options: { method: 'POST', credentials: 'include' },
-  });
+  const { signal, ...options } = f.requests[1].options;
+  assert.ok(signal instanceof AbortSignal);
+  assert.deepEqual(
+    { url: f.requests[1].url, options },
+    {
+      url: '/api/auth/refresh',
+      options: { method: 'POST', credentials: 'include' },
+    },
+  );
 });
 
 for (const action of ['login', 'register', 'restore']) {
@@ -356,13 +375,333 @@ test('other refresh failures do not replay and clear only the current session', 
   assert.equal(f.timers.size, 0);
 });
 
+for (const failure of [500, 502, 503, 504, 'network']) {
+  test(`scheduled refresh preserves identity through ${failure} and retries in place`, async (t) => {
+    const f = await fixture(t);
+    await f.login();
+    const accepted = f.auth.jwt;
+    const gate = deferred();
+    f.enqueue(gate.promise);
+    await f.fire(REFRESH_MS);
+    if (failure === 'network') gate.reject(new TypeError('Failed to fetch'));
+    else gate.resolve(response({ error: 'temporarily unavailable' }, failure));
+    await flush();
+    assert.equal(f.auth.jwt, accepted);
+    assert.deepEqual(f.changes, [[true, false]]);
+    assert.equal(f.requests.length, 2);
+    assert.deepEqual(
+      [...f.timers.values()].map((timer) => timer.milliseconds).sort((a, b) => a - b),
+      [RETRY_MS, RETRY_WINDOW_MS],
+    );
+
+    const refreshed = f.session('refreshed');
+    f.enqueue(response(refreshed));
+    await f.fire(RETRY_MS);
+    assert.equal(f.auth.jwt, refreshed.token);
+    assert.deepEqual(f.changes, [
+      [true, false],
+      [true, true],
+    ]);
+    assert.equal(f.requests.length, 3);
+    assert.equal(f.timers.size, 1);
+  });
+}
+
+test('scheduled refresh jitter is bounded and never retries immediately', async (t) => {
+  const f = await fixture(t, { random: 0.999 });
+  await f.login();
+  f.enqueue(response(null, 503));
+  await f.fire(REFRESH_MS);
+  assert.ok([...f.timers.values()].some((timer) => timer.milliseconds === RETRY_MS + 249));
+  assert.equal(f.requests.length, 2);
+});
+
+test('scheduled refresh stops after three actual requests', async (t) => {
+  const f = await fixture(t);
+  await f.login();
+  for (const delay of [REFRESH_MS, RETRY_MS, RETRY_MS]) {
+    f.enqueue(response(null, 503));
+    await f.fire(delay);
+  }
+  assert.equal(f.requests.filter((request) => request.url === '/api/auth/refresh').length, 3);
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.deepEqual(f.changes, [
+    [true, false],
+    [false, false],
+  ]);
+  assert.equal(f.timers.size, 0);
+});
+
+for (const boundary of ['response', 'body']) {
+  test(`scheduled refresh rejects a successful ${boundary} at the exact retention deadline`, async (t) => {
+    const f = await fixture(t);
+    await f.login();
+    const gate = deferred();
+    f.enqueue(boundary === 'body' ? { ...response(null), json: () => gate.promise } : gate.promise);
+    await f.fire(REFRESH_MS);
+    f.elapse(RETRY_WINDOW_MS);
+    gate.resolve(boundary === 'body' ? f.session('late') : response(f.session('late')));
+    await flush();
+    assert.equal(f.auth.isLoggedIn, false);
+    assert.deepEqual(f.changes, [
+      [true, false],
+      [false, false],
+    ]);
+    assert.equal(f.timers.size, 0);
+    assert.equal(f.requests[1].options.signal.aborted, true);
+  });
+}
+
+test('scheduled refresh watchdog aborts a request that never settles', async (t) => {
+  const f = await fixture(t);
+  await f.login();
+  f.enqueue(new Promise(() => {}));
+  await f.fire(REFRESH_MS);
+  await f.fire(RETRY_WINDOW_MS);
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.equal(f.requests[1].options.signal.aborted, true);
+  assert.equal(f.timers.size, 0);
+});
+
+test('accepted JWT expiry caps retention despite a backwards wall clock', async (t) => {
+  const f = await fixture(t);
+  await f.login('initial', (REFRESH_MS + 2000) / 1000);
+  f.enqueue(response(null, 503));
+  await f.fire(REFRESH_MS);
+  f.moveWallClock(-60_000);
+  await f.fire(2000);
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.equal(f.requests.length, 2);
+  assert.equal(f.timers.size, 0);
+});
+
+test('wall-clock retention deadline covers a suspended monotonic clock', async (t) => {
+  const f = await fixture(t);
+  await f.login();
+  f.enqueue(response(null, 503));
+  await f.fire(REFRESH_MS);
+  f.moveWallClock(RETRY_WINDOW_MS);
+  await f.fire(RETRY_MS);
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.equal(f.requests.length, 2, 'no retry after the fixed wall deadline');
+  assert.equal(f.timers.size, 0);
+});
+
+test('accepted JWT wall-clock expiry also fences a pending successful refresh', async (t) => {
+  const f = await fixture(t);
+  await f.login('initial', (REFRESH_MS + 2000) / 1000);
+  const gate = deferred();
+  f.enqueue(gate.promise);
+  await f.fire(REFRESH_MS);
+  f.moveWallClock(2000);
+  gate.resolve(response(f.session('late')));
+  await flush();
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.equal(f.timers.size, 0);
+});
+
+test('unknown accepted-token expiry does not gain transient retry allowance', async (t) => {
+  const f = await fixture(t);
+  f.enqueue(response({ ...session('opaque'), token: 'opaque-fixture-token' }));
+  await f.auth.login('opaque@example.test', 'password');
+  f.enqueue(response(null, 503));
+  await f.fire(REFRESH_MS);
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.equal(f.requests.length, 2);
+  assert.equal(f.timers.size, 0);
+});
+
+test('failed interactive logout preserves the original retry budget and cooldown', async (t) => {
+  const f = await fixture(t);
+  await f.login();
+  f.enqueue(response(null, 503));
+  await f.fire(REFRESH_MS);
+  const expiryTimer = [...f.timers.values()].find(
+    (timer) => timer.milliseconds === RETRY_WINDOW_MS,
+  );
+  f.elapse(1000);
+  f.enqueue(response(null, 500));
+  await assert.rejects(f.auth.logout(), /could not revoke/);
+  assert.ok([...f.timers.values()].includes(expiryTimer), 'the original watchdog remains armed');
+  assert.equal(f.requests[1].options.signal.aborted, true);
+  for (const delay of [RETRY_MS - 1000, RETRY_MS]) {
+    f.enqueue(response(null, 503));
+    await f.fire(delay);
+  }
+  assert.equal(f.requests.filter((request) => request.url === '/api/auth/refresh').length, 3);
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.equal(f.timers.size, 0);
+});
+
+test('retention expiry during an interactive login cannot resurrect the old session', async (t) => {
+  const f = await fixture(t);
+  await f.login();
+  f.enqueue(response(null, 503));
+  await f.fire(REFRESH_MS);
+  const gate = deferred();
+  f.enqueue(gate.promise);
+  const login = assert.rejects(f.auth.login('new@example.test', 'password'), superseded);
+  await f.fire(RETRY_WINDOW_MS);
+  gate.resolve(response(f.session('late')));
+  await login;
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.deepEqual(f.changes, [
+    [true, false],
+    [false, false],
+  ]);
+  assert.equal(f.timers.size, 0);
+});
+
+test('a replaced session is immune to retired retry and expiry callbacks', async (t) => {
+  const f = await fixture(t);
+  await f.login();
+  f.enqueue(response(null, 503));
+  await f.fire(REFRESH_MS);
+  const retired = [...f.timers.values()].map((timer) => timer.callback);
+  await f.login('new');
+  for (const callback of retired) callback();
+  await flush();
+  assert.equal(f.auth.userId, 'new');
+  assert.equal(f.requests.length, 3);
+  assert.deepEqual(f.changes, [
+    [true, false],
+    [true, false],
+  ]);
+  assert.equal(f.timers.size, 1);
+});
+
+for (const status of [401, 403, 429]) {
+  test(`scheduled refresh ${status} remains terminal without a transient retry`, async (t) => {
+    const f = await fixture(t);
+    await f.login();
+    f.enqueue(response({ error: 'Access denied' }, status));
+    await f.fire(REFRESH_MS);
+    assert.equal(f.auth.isLoggedIn, false);
+    assert.equal(f.requests.length, 2);
+    assert.equal(f.timers.size, 0);
+  });
+}
+
+test('scheduled refresh counts exact-401 replay confirmation within its three-request cap', async (t) => {
+  const f = await fixture(t);
+  await f.login();
+  f.enqueue(response({ error: 'Invalid token' }, 401));
+  await f.fire(REFRESH_MS);
+  f.enqueue(response(null, 503));
+  await f.fire(REPLAY_MS);
+  f.enqueue(response(null, 503));
+  await f.fire(RETRY_MS);
+  assert.equal(f.requests.filter((request) => request.url === '/api/auth/refresh').length, 3);
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.equal(f.timers.size, 0);
+});
+
+test('scheduled refresh still accepts the exact-401 replay-confirmation successor', async (t) => {
+  const f = await fixture(t);
+  await f.login();
+  f.enqueue(response({ error: 'Invalid token' }, 401));
+  await f.fire(REFRESH_MS);
+  f.enqueue(response(f.session('successor')));
+  await f.fire(REPLAY_MS);
+  assert.equal(f.auth.userId, 'successor');
+  assert.deepEqual(f.changes, [
+    [true, false],
+    [true, true],
+  ]);
+  assert.equal(f.timers.size, 1);
+});
+
+for (const boundary of ['response', 'body']) {
+  test(`expired refresh ${boundary} cannot start a new exact-401 replay delay`, async (t) => {
+    const f = await fixture(t);
+    await f.login();
+    const gate = deferred();
+    f.enqueue(
+      boundary === 'body'
+        ? { ...response(null, 401), clone: () => ({ json: () => gate.promise }) }
+        : gate.promise,
+    );
+    await f.fire(REFRESH_MS);
+    f.moveWallClock(RETRY_WINDOW_MS);
+    gate.resolve(
+      boundary === 'body' ? { error: 'Invalid token' } : response({ error: 'Invalid token' }, 401),
+    );
+    await flush();
+    assert.equal(f.auth.isLoggedIn, false);
+    assert.equal(f.requests.length, 2, 'the first refresh is the only refresh request');
+    assert.equal(f.timers.size, 0, 'no replay delay is installed after the wall deadline');
+  });
+}
+
+for (const malformed of [{ token: 'incomplete' }, null]) {
+  test(`scheduled refresh malformed successful body ${JSON.stringify(malformed)} is terminal`, async (t) => {
+    const f = await fixture(t);
+    await f.login();
+    f.enqueue(response(malformed));
+    await f.fire(REFRESH_MS);
+    assert.equal(f.auth.isLoggedIn, false);
+    assert.equal(f.requests.length, 2);
+    assert.equal(f.timers.size, 0);
+  });
+}
+
+test('initial restore does not gain scheduled-refresh retry behavior', async (t) => {
+  const f = await fixture(t);
+  f.enqueue(response(null, 503));
+  assert.equal(await f.auth.tryRestore(), false);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.timers.size, 0);
+  assert.deepEqual(f.changes, []);
+});
+
+test('scheduled refresh owns one abortable Web Lock wait and never fetches after expiry', async (t) => {
+  let lockRequests = 0;
+  let waitingSignal;
+  let release;
+  const f = await fixture(t, {
+    locks: {
+      request: (name, options, request) => {
+        assert.equal(name, 'simplestchat-refresh-v1');
+        assert.ok(options.signal instanceof AbortSignal);
+        lockRequests += 1;
+        waitingSignal = options.signal;
+        return new Promise((resolve, reject) => {
+          const abort = () => reject(new Error('Lock request aborted'));
+          options.signal.addEventListener('abort', abort, { once: true });
+          release = async () => {
+            options.signal.removeEventListener('abort', abort);
+            try {
+              resolve(await request());
+            } catch (error) {
+              reject(error);
+            }
+          };
+        });
+      },
+    },
+  });
+  await f.login();
+  await f.fire(REFRESH_MS);
+  assert.equal(lockRequests, 1);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.timers.size, 1);
+  await f.fire(RETRY_WINDOW_MS);
+  assert.equal(waitingSignal.aborted, true);
+  await release();
+  await flush();
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.equal(lockRequests, 1);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.timers.size, 0);
+});
+
 test('malformed authentication JSON never partially replaces a session', async (t) => {
   const f = await fixture(t);
   await f.login();
   f.enqueue(response({ token: 'new', user: { id: 'new' } }));
   await assert.rejects(f.auth.login('new@example.test', 'password'), /incomplete/);
   assert.equal(f.auth.userId, 'initial');
-  assert.equal(f.auth.jwt, 'jwt-initial');
+  assert.equal(f.auth.jwt, session('initial').token);
   assert.equal(f.timers.size, 1);
   f.enqueue(response({ error: { unexpected: true } }, 401));
   await assert.rejects(f.auth.login('new@example.test', 'password'), /^Error: Login failed$/);
