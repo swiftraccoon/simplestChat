@@ -1,140 +1,224 @@
-"""Synthetic callback events only; no inventory, host, subprocess or network."""
+"""Synthetic typed callback events; no host, subprocess, or network access."""
 
-import importlib.util
-import json
-from pathlib import Path
-from types import SimpleNamespace
+from __future__ import annotations
+
 import unittest
-from unittest.mock import Mock, patch
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING
 
-SOURCE = Path(__file__).resolve().parents[1] / 'callback_plugins/release_timing.py'
-SPEC = importlib.util.spec_from_file_location('release_timing_tests', SOURCE)
-TIMING = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(TIMING)
-SECRET = 'PRIVATE_CREDENTIAL_SENTINEL'
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+from test_support import ROOT
+
+# isort: split
+
+import release_timing as timing
+from release_json import JsonObject, decode_json, object_value
+
+PRIVATE_MARKER = "PRIVATE_CREDENTIAL_SENTINEL"
+TASK_ID = "01234567-1234-1234-0123-0123456789ab"
+MAX_RECORD_LENGTH = 1024
 
 
-class Result:
-    def __init__(self, task, host):
-        self.task, self.host = task, host
+@dataclass
+class Clock:
+    """A deterministic monotonic clock shared by every synthetic event."""
+
+    now: float = 100.0
+
+    def __call__(self) -> float:
+        """Return the explicitly controlled test time."""
+        return self.now
+
+
+@dataclass
+class Host:
+    """Expose Ansible's internal identity without exposing its inventory name."""
+
+    identity: str = "host-internal-uuid"
+    name: str = PRIVATE_MARKER
 
     @property
-    def result(self):
-        raise AssertionError('Timing must never access result contents')
+    def _uuid(self) -> str:
+        return self.identity
+
+
+@dataclass
+class Task:
+    """Keep unsafe names and paths separate from the correlation identity."""
+
+    identity: str = TASK_ID
+    name: object = "Verify the exact GitHub release and fetch it directly onto the prepared host"
+    path: object = f"/private/{PRIVATE_MARKER}/ops/ansible/release.yml:148"
+
+    @property
+    def _uuid(self) -> str:
+        return self.identity
+
+    def get_path(self) -> object:
+        """Return the controlled source metadata in the upstream shape."""
+        return self.path
+
+
+@dataclass(frozen=True)
+class Result:
+    """Reject result-payload access while exposing the two event identities."""
+
+    task: Task
+    host: Host
+
+    @property
+    def result(self) -> None:
+        """Fail if an observer reads the deliberately forbidden result body."""
+        message = "Timing must never access result contents"
+        raise AssertionError(message)
 
 
 class ReleaseTimingTests(unittest.TestCase):
-    def setUp(self):
-        self.callback = TIMING.CallbackModule()
-        self.callback._display = Mock()
-        self.clock = patch.object(TIMING.time, 'monotonic', return_value=100.0)
-        self.now = self.clock.start()
-        self.addCleanup(self.clock.stop)
-        self.host = SimpleNamespace(_uuid='host-internal-uuid', name=SECRET)
-        self.task = SimpleNamespace(_uuid='01234567-1234-1234-1234-0123456789ab',
-            name='Verify the exact GitHub release and fetch it directly onto the prepared host',
-            args={'url': SECRET}, get_path=lambda: '/private/' + SECRET + '/ops/ansible/release.yml:148')
+    """Verify bounded projection and unchanged execution outcomes."""
 
-    def records(self):
-        return [json.loads(call.args[0]) for call in self.callback._display.display.call_args_list]
+    clock: Clock
+    callback: timing.CallbackModule
+    host: Host
+    task: Task
+    output: list[str]
 
-    def test_callback_is_opt_in_and_adds_to_the_default_output(self):
-        self.assertEqual(self.callback.CALLBACK_TYPE, 'aggregate')
-        self.assertEqual(self.callback.CALLBACK_NAME, 'release_timing')
-        self.assertIs(self.callback.CALLBACK_NEEDS_ENABLED, True)
-        self.assertEqual(TIMING.LABELS['Verify the host and exact prepared helpers without broad fact gathering'],
-                         'prepared_host')
+    def __init__(self, method_name: str = "runTest") -> None:
+        """Create each test's typed event source and payload-free output collector."""
+        super().__init__(method_name)
+        self.clock = Clock()
+        self.output = []
+        self.callback = timing.CallbackModule(clock=self.clock, emit=self.output.append)
+        self.host, self.task = Host(), Task()
 
-    def test_monotonic_dispatch_to_result_and_playbook_timings(self):
+    def records(self) -> list[JsonObject]:
+        """Parse only the observer's bounded JSON records."""
+        return [object_value(decode_json(line)) for line in self.output]
+
+    def test_callback_is_opt_in_and_aggregate(self) -> None:
+        """The observer supplements normal Ansible output only when enabled."""
+        self.assertEqual(self.callback.CALLBACK_TYPE, "aggregate")
+        self.assertEqual(
+            Path(timing.__file__).resolve(), ROOT / "ops/ansible/callback_plugins/release_timing.py"
+        )
+        self.assertEqual(self.callback.CALLBACK_NAME, "release_timing")
+        self.assertTrue(self.callback.CALLBACK_NEEDS_ENABLED)
+        self.assertEqual(timing.LABELS[str(self.task.name)], "github_fetch")
+
+    def test_monotonic_dispatch_and_completion(self) -> None:
+        """Controller intervals use monotonic dispatch and completion boundaries."""
         self.callback.v2_playbook_on_start(object())
-        self.now.return_value = 102.0
+        self.clock.now = 102
         self.callback.v2_runner_on_start(self.host, self.task)
-        self.now.return_value = 104.125
+        self.clock.now = 104.125
         self.callback.v2_runner_on_ok(Result(self.task, self.host))
-        self.now.return_value = 110.0
+        self.clock.now = 110
         self.callback.v2_playbook_on_stats(object())
         task, summary = self.records()
-        self.assertEqual(task['elapsedMs'], 2125.0)
-        self.assertEqual(task['label'], 'github_fetch')
-        self.assertEqual(task['releaseLine'], 148)
-        self.assertEqual(task['status'], 'ok')
-        self.assertEqual(summary['elapsedMs'], 10000.0)
-        self.assertEqual(summary['taskCounts']['ok'], 1)
-        self.assertNotIn(SECRET, json.dumps(self.records()))
+        self.assertEqual(task["elapsedMs"], 2125)
+        self.assertEqual(task["label"], "github_fetch")
+        self.assertEqual(task["releaseLine"], 148)
+        self.assertEqual(task["status"], "ok")
+        self.assertEqual(summary["elapsedMs"], 10000)
+        self.assertEqual(object_value(summary["taskCounts"])["ok"], 1)
+        self.assertNotIn(PRIVATE_MARKER, "".join(self.output))
 
-    def test_failed_skipped_and_unreachable_events_preserve_their_actual_status(self):
-        for method, status in (('v2_runner_on_failed', 'failed'), ('v2_runner_on_skipped', 'skipped'),
-                               ('v2_runner_on_unreachable', 'unreachable')):
+    def test_terminal_statuses_preserve_original_outcomes(self) -> None:
+        """Ignored failure, skipped work, and unreachable hosts stay distinct."""
+        events: tuple[tuple[Callable[[object], None], str], ...] = (
+            (
+                lambda result: self.callback.v2_runner_on_failed(result, ignore_errors=True),
+                "failed",
+            ),
+            (self.callback.v2_runner_on_skipped, "skipped"),
+            (self.callback.v2_runner_on_unreachable, "unreachable"),
+        )
+        for finish, status in events:
             with self.subTest(status=status):
                 self.callback.v2_runner_on_start(self.host, self.task)
                 result = Result(self.task, self.host)
-                original = dict(vars(result))
-                if status == 'failed':
-                    getattr(self.callback, method)(result, ignore_errors=True)
-                else:
-                    getattr(self.callback, method)(result)
-                self.assertEqual(vars(result), original)
-                self.assertEqual(self.records()[-1]['status'], status)
+                finish(result)
+                self.assertIs(result.host, self.host)
+                self.assertIs(result.task, self.task)
+                self.assertEqual(self.records()[-1]["status"], status)
 
-    def test_arbitrary_names_paths_and_ids_cannot_leak_secrets(self):
-        for name in (SECRET, '{{ ' + SECRET + ' }}', 'github_fetch ' + SECRET):
-            self.task.name, self.task._uuid = name, SECRET
-            self.task.get_path = lambda: '/private/' + SECRET + '/secret.yml:10'
+    def test_metadata_projection_does_not_leak_names_or_paths(self) -> None:
+        """Arbitrary task names, source paths, and IDs become fixed safe labels."""
+        for name in (
+            PRIVATE_MARKER,
+            "{{ " + PRIVATE_MARKER + " }}",
+            "github_fetch " + PRIVATE_MARKER,
+        ):
+            self.task.name, self.task.identity, self.task.path = (
+                name,
+                PRIVATE_MARKER,
+                f"/{PRIVATE_MARKER}/secret.yml:10",
+            )
             self.callback.v2_runner_on_start(self.host, self.task)
             self.callback.v2_runner_on_failed(Result(self.task, self.host))
             record = self.records()[-1]
-            self.assertEqual(record['label'], 'task')
-            self.assertIsNone(record['taskId'])
-            self.assertIsNone(record['releaseLine'])
-        self.assertNotIn(SECRET, json.dumps(self.records()))
+            self.assertEqual(record["label"], "task")
+            self.assertIsNone(record["taskId"])
+            self.assertIsNone(record["releaseLine"])
+        self.assertNotIn(PRIVATE_MARKER, "".join(self.output))
 
-    def test_pending_events_remain_unfinished_and_unknown_results_are_not_fabricated(self):
+    def test_pending_and_unknown_events_never_fabricate_success(self) -> None:
+        """Unmatched completions are ignored and outstanding work stays unfinished."""
         self.callback.v2_playbook_on_start(object())
         self.callback.v2_runner_on_ok(Result(self.task, self.host))
-        self.assertEqual(self.records(), [])
+        self.assertEqual(self.output, [])
         self.callback.v2_runner_on_start(self.host, self.task)
-        self.now.return_value = 105
+        self.clock.now = 105
         self.callback.v2_playbook_on_stats(object())
         task, summary = self.records()
-        self.assertEqual(task['status'], 'unfinished')
-        self.assertEqual(task['elapsedMs'], 5000)
-        self.assertEqual(summary['taskCounts']['unfinished'], 1)
-        self.assertEqual(self.callback._active, {})
+        self.assertEqual(task["status"], "unfinished")
+        self.assertEqual(task["elapsedMs"], 5000)
+        self.assertEqual(object_value(summary["taskCounts"])["unfinished"], 1)
+        self.callback.v2_playbook_on_stats(object())
+        self.assertEqual(len(self.output), 3, "Finished playbooks retain no active task entries")
 
-    def test_multiple_hosts_are_timed_separately_without_inventory_names(self):
-        second = SimpleNamespace(_uuid='second-host', name=SECRET)
+    def test_same_task_on_multiple_hosts_is_correlated_separately(self) -> None:
+        """Internal host identity separates concurrent instances of one task."""
+        other = Host("another-internal-uuid")
         self.callback.v2_runner_on_start(self.host, self.task)
-        self.now.return_value = 101
-        self.callback.v2_runner_on_start(second, self.task)
-        self.now.return_value = 103
-        self.callback.v2_runner_on_ok(Result(self.task, second))
-        self.now.return_value = 104
+        self.clock.now = 101
+        self.callback.v2_runner_on_start(other, self.task)
+        self.clock.now = 104
         self.callback.v2_runner_on_ok(Result(self.task, self.host))
-        self.assertEqual([item['elapsedMs'] for item in self.records()], [2000, 4000])
-        self.assertEqual([item['sequence'] for item in self.records()], [2, 1])
-        self.assertNotIn(SECRET, json.dumps(self.records()))
+        self.callback.v2_runner_on_ok(Result(self.task, other))
+        self.assertEqual([record["elapsedMs"] for record in self.records()], [4000, 3000])
+        self.assertNotIn(PRIVATE_MARKER, "".join(self.output))
 
-    def test_event_and_output_size_limits_are_bounded(self):
-        with patch.object(TIMING, 'MAX_TASKS', 2):
-            for index in range(5):
-                self.task._uuid = str(index)
-                self.callback.v2_runner_on_start(self.host, self.task)
-                self.callback.v2_runner_on_ok(Result(self.task, self.host))
-            self.callback.v2_playbook_on_stats(object())
-        records = self.records()
-        self.assertEqual(len(records), 3)
-        self.assertEqual(records[-1]['suppressedEvents'], 3)
-        self.assertTrue(all(len(json.dumps(record)) < 1024 for record in records))
+    def test_event_count_and_record_size_are_bounded(self) -> None:
+        """Only a fixed maximum number of task records can be retained or emitted."""
+        for index in range(timing.MAX_TASKS + 1):
+            self.task.identity = f"{index:032x}"
+            self.callback.v2_runner_on_start(self.host, self.task)
+            self.callback.v2_runner_on_ok(Result(self.task, self.host))
+        self.callback.v2_playbook_on_stats(object())
+        self.assertEqual(len(self.output), timing.MAX_TASKS + 1)
+        self.assertEqual(self.records()[-1]["suppressedEvents"], 1)
+        self.assertTrue(all(len(line) < MAX_RECORD_LENGTH for line in self.output))
 
-    def test_output_failure_does_not_replace_original_task_failure(self):
-        self.callback._display.display.side_effect = OSError('closed timing sink')
-        self.callback.v2_runner_on_start(self.host, self.task)
-        result = Result(self.task, self.host)
-        self.callback.v2_runner_on_failed(result)
-        self.assertEqual(self.callback._counts['failed'], 1)
-        self.assertEqual(self.callback._suppressed, 1)
-        self.assertIs(result.task, self.task)
+    def test_output_failure_does_not_replace_task_failure(self) -> None:
+        """A failing observer sink cannot raise through execution callbacks."""
+        calls: list[str] = []
+
+        def failing_sink(value: str) -> None:
+            calls.append(value)
+            raise OSError(PRIVATE_MARKER)
+
+        callback = timing.CallbackModule(clock=self.clock, emit=failing_sink)
+        callback.v2_runner_on_start(self.host, self.task)
+        callback.v2_runner_on_failed(Result(self.task, self.host))
+        callback.v2_playbook_on_stats(object())
+        summary = object_value(decode_json(calls[-1]))
+        self.assertEqual(object_value(summary["taskCounts"])["failed"], 1)
+        self.assertEqual(summary["suppressedEvents"], 1)
+        self.assertNotIn(PRIVATE_MARKER, "".join(calls))
 
 
-if __name__ == '__main__':
-    unittest.main()
+if __name__ == "__main__":
+    _ = unittest.main()

@@ -102,10 +102,14 @@
           - >-
             {{ (({
               'release-public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release-public.py', rstrip=false) | hash('sha256'),
+              'release_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_public.py', rstrip=false) | hash('sha256'),
               'release_artifact.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_artifact.py', rstrip=false) | hash('sha256'),
-              'reboot-public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/reboot-public.py', rstrip=false) | hash('sha256')
+              'release_json.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_json.py', rstrip=false) | hash('sha256'),
+              'reboot-public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/reboot-public.py', rstrip=false) | hash('sha256'),
+              'reboot_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/reboot_public.py', rstrip=false) | hash('sha256')
             } | combine(({
-              'fetch-release.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/fetch-release.py', rstrip=false) | hash('sha256')
+              'fetch-release.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/fetch-release.py', rstrip=false) | hash('sha256'),
+              'release_fetch_receiver.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_fetch_receiver.py', rstrip=false) | hash('sha256')
             }) if scpub_release_artifact_id is defined else {}))
             if scpub_release_prepared | default(false) | bool else {}) | to_json }}
       vars:
@@ -138,16 +142,17 @@
         owner: root
         group: root
         mode: '0644'
-      loop: [release-public.py, release_artifact.py, reboot-public.py]
+      loop: [release-public.py, release_public.py, release_artifact.py, release_json.py, reboot-public.py, reboot_public.py]
       when: not (scpub_release_prepared | default(false) | bool)
 
     - name: Install the bounded GitHub artifact receiver
       ansible.builtin.copy:
-        src: fetch-release.py
-        dest: /usr/local/libexec/simplestchat-public/fetch-release.py
+        src: "{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
         owner: root
         group: root
         mode: '0644'
+      loop: [fetch-release.py, release_fetch_receiver.py]
       when:
         - scpub_release_artifact_id is defined
         - not (scpub_release_prepared | default(false) | bool)

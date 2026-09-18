@@ -1,0 +1,3 @@
+# Reviewed subset of ansible-core 2.21.4 plugin initialization.
+
+def init_plugin_loader(prefix_collections_path: list[str] | None = None) -> None: ...

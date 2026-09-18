@@ -229,6 +229,15 @@
         - {source: deploy-public.sh, destination: /usr/local/bin/simplestchat-public-deploy}
         - {source: seed-public-room.py, destination: /usr/local/libexec/simplestchat-bench/seed-public-room.py}
 
+    - name: Install the seed command implementation and typed JSON boundary
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-bench/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: [seed_public_room.py, release_json.py]
+
     - name: Validate Compose privately without printing resolved secrets
       ansible.builtin.command:
         argv: [/usr/local/bin/simplestchat-public, config, --quiet]
@@ -250,7 +259,7 @@
         owner: root
         group: root
         mode: '0644'
-      loop: [release-public.py, release_artifact.py, reboot-public.py]
+      loop: [release-public.py, release_public.py, release_artifact.py, release_json.py, reboot-public.py, reboot_public.py]
 
     - name: Create private prebuilt release storage
       ansible.builtin.file:

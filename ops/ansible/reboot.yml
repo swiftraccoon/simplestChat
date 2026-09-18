@@ -48,7 +48,7 @@
         owner: root
         group: root
         mode: '0644'
-      loop: [reboot-public.py, release-public.py, release_artifact.py]
+      loop: [reboot-public.py, reboot_public.py, release-public.py, release_public.py, release_artifact.py, release_json.py]
 
     - name: Prepare, reboot once and recover the same public containers
       when: not ansible_check_mode
