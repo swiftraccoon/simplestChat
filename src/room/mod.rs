@@ -3,11 +3,14 @@
 // Room module - Room state management and participant tracking
 pub mod api;
 pub mod community;
+mod control;
 pub mod moderation;
 pub mod roles;
 pub mod settings;
 pub mod social;
 
+#[cfg(test)]
+mod control_tests;
 #[cfg(test)]
 mod departure_broadcast_tests;
 #[cfg(test)]
@@ -166,8 +169,9 @@ struct RateWindow {
     attempts: u32,
 }
 
+#[derive(Clone)]
 struct SharedRateLimiter<K> {
-    entries: StdMutex<HashMap<K, RateWindow>>,
+    entries: Arc<StdMutex<HashMap<K, RateWindow>>>,
     max_attempts: u32,
 }
 
@@ -177,7 +181,7 @@ where
 {
     fn new(max_attempts: u32) -> Self {
         Self {
-            entries: StdMutex::new(HashMap::new()),
+            entries: Arc::new(StdMutex::new(HashMap::new())),
             max_attempts,
         }
     }
@@ -390,6 +394,9 @@ fn broadcast_departure<'a>(
 
 /// Room state
 pub struct Room {
+    /// Serializes policy and membership commits independently of chat/media
+    /// state access. Always acquire this before the main room write lock.
+    control: Arc<tokio::sync::Mutex<()>>,
     /// Shared process counters; runtime rooms must not keep isolated counters.
     metrics: ServerMetrics,
     pub(crate) social: social::RoomSocial,
@@ -477,6 +484,7 @@ impl Room {
     ) -> Self {
         Self {
             metrics: ServerMetrics::new(),
+            control: Arc::new(tokio::sync::Mutex::new(())),
             id,
             router_id,
             social: social::RoomSocial::default(),
@@ -520,6 +528,7 @@ impl Room {
     ) -> Self {
         Self {
             metrics,
+            control: Arc::new(tokio::sync::Mutex::new(())),
             id,
             router_id,
             social: social::RoomSocial::default(),
@@ -970,8 +979,15 @@ fn record_banned_cohort(
 ///
 /// Uses per-room locking: the outer HashMap is protected by a std::sync::RwLock
 /// (held only for brief lookups/inserts, never across await points), while each
-/// room is protected by its own tokio::sync::RwLock (held across async operations
-/// but only blocking participants in that specific room).
+/// room has a short-lived state lock and a separate control-operation gate.
+/// Persistence retains control without retaining the state lock, keeping chat
+/// and routine media operations available. Clones share all limits and state.
+///
+/// Persistent control mutations own their work after admission: abandoning the
+/// caller's future does not imply rollback or prevent committed state from being
+/// published. A confirmed rejection leaves existing policy unchanged; uncertain
+/// writes quarantine the exact runtime room until restart reloads durable state.
+#[derive(Clone)]
 pub struct RoomManager {
     rooms: Arc<StdRwLock<HashMap<String, Arc<TokioRwLock<Room>>>>>,
     media_server: Arc<MediaServer>,
@@ -1071,6 +1087,7 @@ impl FailedJoinCleanup {
         // itself bounded, and abandoning this reservation would permanently
         // consume runtime room/router capacity.
         let creation_guard = self.room_creation_lock.lock().await;
+        let control_guard = control::lock_room(&room_lock).await;
         let mut room = room_lock.write().await;
         let should_remove = release_join_reservation(&mut room)
             && self
@@ -1106,6 +1123,7 @@ impl FailedJoinCleanup {
             None
         };
         drop(room);
+        drop(control_guard);
         drop(creation_guard);
 
         if let Some(deletion_token) = eviction_token {
@@ -1347,6 +1365,21 @@ impl RoomManager {
             let creation_guard = tokio::time::timeout(ROOM_DELETE_TIMEOUT, creation_lock.lock())
                 .await
                 .map_err(|_| room_delete_timeout("waiting for room creation"))?;
+            let runtime_room = rooms
+                .read()
+                .unwrap_or_else(|error| error.into_inner())
+                .get(&room_id)
+                .cloned();
+            // Control precedes the deletion reservation: an earlier writer may
+            // quarantine this incarnation while we wait for its SQL to finish.
+            let control_guard = match runtime_room.as_ref() {
+                Some(room) => Some(
+                    tokio::time::timeout(ROOM_DELETE_TIMEOUT, control::lock_room(room))
+                        .await
+                        .map_err(|_| room_delete_timeout("waiting for room control"))?,
+                ),
+                None => None,
+            };
             let deletion_token = uuid::Uuid::new_v4();
             {
                 let mut deleting = deleting_rooms
@@ -1358,11 +1391,6 @@ impl RoomManager {
                 deleting.insert(room_id.clone(), deletion_token);
             }
 
-            let runtime_room = rooms
-                .read()
-                .unwrap_or_else(|error| error.into_inner())
-                .get(&room_id)
-                .cloned();
             if let Some(runtime_room) = runtime_room.as_ref() {
                 let mut room = match tokio::time::timeout(ROOM_DELETE_TIMEOUT, runtime_room.write())
                     .await
@@ -1393,12 +1421,7 @@ impl RoomManager {
                 Ok(Ok(result)) => result.rows_affected() == 1,
                 Ok(Err(error)) => {
                     drop(creation_guard);
-                    if matches!(
-                        &error,
-                        sqlx::Error::Database(_)
-                            | sqlx::Error::PoolTimedOut
-                            | sqlx::Error::PoolClosed
-                    ) {
+                    if !control::persistence_is_indeterminate(&error) {
                         // PostgreSQL rejected the statement (or no connection
                         // was acquired), so no commit is possible.
                         restore_failed_deletion(
@@ -1488,6 +1511,7 @@ impl RoomManager {
                     rooms.remove(&room_id);
                 }
             }
+            drop(control_guard);
 
             let participant_cleanup = participant_sessions.into_iter().map(
                 |(participant_id, media_session_id)| {
@@ -1942,6 +1966,7 @@ impl RoomManager {
             persisted,
             policy_revision,
         ) = {
+            let _control = control::lock_room(&room_lock).await;
             let room = measure(Stage::RoomLockWait, room_lock.read()).await;
             let lobby = room.settings.as_ref().is_some_and(|s| s.lobby_enabled);
             let invite_only = room.settings.as_ref().is_some_and(|s| s.invite_only);
@@ -2070,6 +2095,9 @@ impl RoomManager {
         // but never a leave/kick followed by a new join with the same ID.
         let media_session_id = uuid::Uuid::new_v4();
 
+        // Policy writers retain control across SQL, but not the state lock.
+        // A join must not publish inside that database/runtime gap.
+        let _control = control::lock_room(&room_lock).await;
         // Now acquire write lock for mutation
         let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         // Only post-lock validation/commit/fan-out work belongs to this stage;
@@ -2312,6 +2340,7 @@ impl RoomManager {
 
         // Lock only this room
         {
+            let _control = control::lock_room(&room_lock).await;
             let mut room = room_lock.write().await;
 
             if let Some(expected_sender) = expected_sender {
@@ -2415,6 +2444,7 @@ impl RoomManager {
                         return Ok(removed_any);
                     }
                 };
+            let control_guard = control::lock_room(&room_lock).await;
             let mut room = match tokio::time::timeout(ROOM_DELETE_TIMEOUT, room_lock.write()).await
             {
                 Ok(room) => room,
@@ -2461,6 +2491,7 @@ impl RoomManager {
                 None
             };
             drop(room);
+            drop(control_guard);
             drop(creation_guard);
             if let Some(deletion_token) = eviction_token {
                 let router_teardown_succeeded = match tokio::time::timeout(
@@ -3260,6 +3291,7 @@ impl RoomManager {
         new_sender: mpsc::Sender<Arc<String>>,
     ) -> Result<bool> {
         let room_lock = self.get_room(room_id)?;
+        let _control = control::lock_room(&room_lock).await;
         let mut room = room_lock.write().await;
         let _admission = self.drain.admit()?;
         room.ensure_live()?;
@@ -3326,8 +3358,9 @@ impl RoomManager {
 
     /// Update room settings at runtime (Admin+ only).
     ///
-    /// Applies partial updates to the in-memory RoomSettings, broadcasts the change
-    /// to all participants, and optionally persists to DB.
+    /// Persists a partial update for database-backed rooms before publishing the
+    /// settings, revoking disallowed producers, and broadcasting the change.
+    /// Admitted work survives cancellation of the requesting connection.
     #[expect(
         clippy::too_many_arguments,
         reason = "authorized mutation keeps each nullable wire patch field explicit"
@@ -3352,8 +3385,62 @@ impl RoomManager {
         secret: Option<bool>,
         password: Option<Option<String>>,
     ) -> Result<()> {
-        // Authorize before doing expensive password work. Permissions are
-        // checked again at commit time to handle concurrent role changes.
+        let admin_id = admin_id.to_string();
+        let expected_sender = expected_sender.clone();
+        self.run_room_control(room_id, move |manager, room_id, control| async move {
+            manager
+                .update_room_settings_controlled(
+                    &room_id,
+                    &admin_id,
+                    &expected_sender,
+                    moderated,
+                    lobby_enabled,
+                    guests_allowed,
+                    guests_can_broadcast,
+                    max_broadcasters,
+                    max_participants,
+                    allow_screen_sharing,
+                    allow_chat,
+                    allow_video,
+                    require_registration,
+                    invite_only,
+                    push_to_talk,
+                    secret,
+                    password,
+                    control,
+                )
+                .await
+        })
+        .await
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "owned policy mutation retains each nullable patch field and its control guard"
+    )]
+    async fn update_room_settings_controlled(
+        &self,
+        room_id: &str,
+        admin_id: &str,
+        expected_sender: &mpsc::Sender<Arc<String>>,
+        moderated: Option<bool>,
+        lobby_enabled: Option<bool>,
+        guests_allowed: Option<bool>,
+        guests_can_broadcast: Option<bool>,
+        max_broadcasters: Option<Option<i32>>,
+        max_participants: Option<Option<i32>>,
+        allow_screen_sharing: Option<bool>,
+        allow_chat: Option<bool>,
+        allow_video: Option<bool>,
+        require_registration: Option<bool>,
+        invite_only: Option<bool>,
+        push_to_talk: Option<bool>,
+        secret: Option<bool>,
+        password: Option<Option<String>>,
+        control: tokio::sync::OwnedMutexGuard<()>,
+    ) -> Result<()> {
+        // Authorize before expensive password work. Control retains this
+        // membership/permission order while brief state locks allow chat/media.
         let room_lock = self.get_room(room_id)?;
         {
             let room = room_lock.read().await;
@@ -3469,28 +3556,34 @@ impl RoomManager {
 
         // For DB-backed rooms persistence is the commit point. Do not advertise
         // or enforce a setting that failed to persist.
-        if room.persisted {
+        let persisted = room.persisted;
+        drop(room);
+        if persisted {
             let pool = self
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Room settings are temporarily unavailable"))?;
-            settings::update_room_settings(
-                pool,
+            self.persist_room(
                 room_id,
-                moderated,
-                lobby_enabled,
-                guests_allowed,
-                guests_can_broadcast,
-                max_broadcasters,
-                max_participants,
-                allow_screen_sharing,
-                allow_chat,
-                allow_video,
-                require_registration,
-                invite_only,
-                push_to_talk,
-                secret,
-                password_hash.clone(),
+                &room_lock,
+                settings::update_room_settings(
+                    pool,
+                    room_id,
+                    moderated,
+                    lobby_enabled,
+                    guests_allowed,
+                    guests_can_broadcast,
+                    max_broadcasters,
+                    max_participants,
+                    allow_screen_sharing,
+                    allow_chat,
+                    allow_video,
+                    require_registration,
+                    invite_only,
+                    push_to_talk,
+                    secret,
+                    password_hash.clone(),
+                ),
             )
             .await
             .map_err(|error| {
@@ -3499,6 +3592,8 @@ impl RoomManager {
             })?;
         }
 
+        let mut room = room_lock.write().await;
+        room.ensure_live()?;
         if let Some(hash) = password_hash {
             room.password_hash = hash;
         }
@@ -3515,6 +3610,7 @@ impl RoomManager {
             settings: settings_value,
         });
         drop(room);
+        drop(control);
 
         self.close_revoked_producers(room_id, revoked, active_observer, audio_observer)
             .await;
@@ -3531,6 +3627,24 @@ impl RoomManager {
         admin_id: &str,
         expected_sender: &mpsc::Sender<Arc<String>>,
         topic: String,
+    ) -> Result<()> {
+        let admin_id = admin_id.to_string();
+        let expected_sender = expected_sender.clone();
+        self.run_room_control(room_id, move |manager, room_id, control| async move {
+            manager
+                .set_topic_controlled(&room_id, &admin_id, &expected_sender, topic, control)
+                .await
+        })
+        .await
+    }
+
+    async fn set_topic_controlled(
+        &self,
+        room_id: &str,
+        admin_id: &str,
+        expected_sender: &mpsc::Sender<Arc<String>>,
+        topic: String,
+        control: tokio::sync::OwnedMutexGuard<()>,
     ) -> Result<()> {
         if topic.len() > 512 || topic.chars().any(char::is_control) {
             anyhow::bail!("Room topic must be at most 512 characters without control characters");
@@ -3554,25 +3668,33 @@ impl RoomManager {
             anyhow::bail!("Room administration changes are rate limited");
         }
 
-        if room.persisted {
+        let persisted = room.persisted;
+        drop(room);
+        if persisted {
             let pool = self
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Room topic is temporarily unavailable"))?;
-            let result = sqlx::query("UPDATE rooms SET topic = $1 WHERE id = $2")
-                .bind(&topic)
-                .bind(room_id)
-                .execute(pool)
-                .await
-                .map_err(|error| {
-                    warn!(room_id, %error, "Failed to persist room topic");
-                    anyhow::anyhow!("Room topic could not be saved")
-                })?;
-            if result.rows_affected() != 1 {
-                anyhow::bail!("Room topic could not be saved");
-            }
+            self.persist_room(room_id, &room_lock, async {
+                let result = sqlx::query("UPDATE rooms SET topic = $1 WHERE id = $2")
+                    .bind(&topic)
+                    .bind(room_id)
+                    .execute(pool)
+                    .await?;
+                if result.rows_affected() != 1 {
+                    return Err(sqlx::Error::RowNotFound);
+                }
+                Ok(())
+            })
+            .await
+            .map_err(|error| {
+                warn!(room_id, %error, "Failed to persist room topic");
+                anyhow::anyhow!("Room topic could not be saved")
+            })?;
         }
 
+        let mut room = room_lock.write().await;
+        room.ensure_live()?;
         room.settings
             .get_or_insert_with(|| Self::default_room_settings(room_id))
             .topic = Some(topic.clone());
@@ -3580,6 +3702,8 @@ impl RoomManager {
             topic: topic.clone(),
             changed_by: admin_id.to_string(),
         });
+        drop(room);
+        drop(control);
         info!("Topic set for room {} by {}", room_id, admin_id);
         Ok(())
     }
@@ -3599,6 +3723,42 @@ impl RoomManager {
         kind: moderation::PunitiveKind,
         enabled: bool,
         reason: Option<&str>,
+    ) -> Result<bool> {
+        let moderator_id = moderator_id.to_string();
+        let expected_sender = expected_sender.clone();
+        let target_participant_id = target_participant_id.to_string();
+        let reason = reason.map(String::from);
+        self.run_room_control(room_id, move |manager, room_id, control| async move {
+            manager
+                .update_punitive_state_controlled(
+                    &room_id,
+                    &moderator_id,
+                    &expected_sender,
+                    &target_participant_id,
+                    kind,
+                    enabled,
+                    reason.as_deref(),
+                    control,
+                )
+                .await
+        })
+        .await
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "owned moderation keeps authorized identities, sanction fields and control guard explicit"
+    )]
+    async fn update_punitive_state_controlled(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        expected_sender: &mpsc::Sender<Arc<String>>,
+        target_participant_id: &str,
+        kind: moderation::PunitiveKind,
+        enabled: bool,
+        reason: Option<&str>,
+        control: tokio::sync::OwnedMutexGuard<()>,
     ) -> Result<bool> {
         if reason.is_some_and(|value| value.len() > 256 || value.chars().any(char::is_control)) {
             anyhow::bail!(
@@ -3641,7 +3801,9 @@ impl RoomManager {
             anyhow::bail!("Room administration changes are rate limited");
         }
 
-        if room.persisted {
+        let persisted = room.persisted;
+        drop(room);
+        if persisted {
             let pool = self
                 .db_pool
                 .as_ref()
@@ -3662,15 +3824,19 @@ impl RoomManager {
             if target_user.is_none() && target_ip.is_none() {
                 anyhow::bail!("The target cannot be identified for a durable sanction");
             }
-            moderation::set_punitive_state(
-                pool,
+            self.persist_room(
                 room_id,
-                target_user,
-                target_ip,
-                kind,
-                enabled,
-                reason,
-                applied_by,
+                &room_lock,
+                moderation::set_punitive_state(
+                    pool,
+                    room_id,
+                    target_user,
+                    target_ip,
+                    kind,
+                    enabled,
+                    reason,
+                    applied_by,
+                ),
             )
             .await
             .map_err(|error| {
@@ -3679,6 +3845,8 @@ impl RoomManager {
             })?;
         }
 
+        let mut room = room_lock.write().await;
+        room.ensure_live()?;
         apply_punitive_to_cohort(
             &mut room,
             &target_participant_ids,
@@ -3722,6 +3890,7 @@ impl RoomManager {
         let audio_observer = room.audio_level_observer.clone();
         drop(room);
 
+        drop(control);
         self.close_revoked_producers(room_id, revoked, active_observer, audio_observer)
             .await;
         Ok(true)
@@ -3738,6 +3907,7 @@ impl RoomManager {
         // Collect producer IDs to close (under room lock)
         let (producers_to_close, target_media_session_id): (Vec<String>, uuid::Uuid) = {
             let room_lock = self.get_room(room_id)?;
+            let _control = control::lock_room(&room_lock).await;
             let mut room = room_lock.write().await;
 
             let moderator = Self::participant_for_sender(&room, moderator_id, expected_sender)?;
@@ -3950,6 +4120,7 @@ impl RoomManager {
         // Check permissions and remove under room lock
         let target_media_session_id = {
             let room_lock = self.get_room(room_id)?;
+            let _control = control::lock_room(&room_lock).await;
             let mut room = room_lock.write().await;
 
             let moderator = Self::participant_for_sender(&room, moderator_id, expected_sender)?;
@@ -4017,6 +4188,40 @@ impl RoomManager {
         reason: Option<&str>,
         duration: Option<u64>,
     ) -> Result<()> {
+        let moderator_id = moderator_id.to_string();
+        let expected_sender = expected_sender.clone();
+        let target_participant_id = target_participant_id.to_string();
+        let reason = reason.map(String::from);
+        self.run_room_control(room_id, move |manager, room_id, control| async move {
+            manager
+                .ban_participant_controlled(
+                    &room_id,
+                    &moderator_id,
+                    &expected_sender,
+                    &target_participant_id,
+                    reason.as_deref(),
+                    duration,
+                    control,
+                )
+                .await
+        })
+        .await
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "owned ban retains the authorized actor, target, duration and control guard"
+    )]
+    async fn ban_participant_controlled(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        expected_sender: &mpsc::Sender<Arc<String>>,
+        target_participant_id: &str,
+        reason: Option<&str>,
+        duration: Option<u64>,
+        control: tokio::sync::OwnedMutexGuard<()>,
+    ) -> Result<()> {
         const MAX_BAN_DURATION_SECS: u64 = 10 * 365 * 24 * 60 * 60;
         if duration.is_some_and(|seconds| seconds == 0 || seconds > MAX_BAN_DURATION_SECS) {
             anyhow::bail!("Ban duration must be between 1 second and 10 years");
@@ -4028,7 +4233,7 @@ impl RoomManager {
             std::time::Instant::now().checked_add(std::time::Duration::from_secs(seconds))
         });
 
-        // Check permissions, add to ban list, and remove — all under one write lock.
+        // The control guard pins authority and membership across unlocked SQL.
         // An unauthenticated target with an IP represents the entire live guest
         // cohort on that IP, matching the durable/in-memory ban key.
         let target_sessions = {
@@ -4056,7 +4261,9 @@ impl RoomManager {
 
             // Persist first so a successful response never represents only a
             // transient ban that disappears when the runtime room is removed.
-            if room.persisted {
+            let persisted = room.persisted;
+            drop(room);
+            if persisted {
                 let pool = self
                     .db_pool
                     .as_ref()
@@ -4074,14 +4281,18 @@ impl RoomManager {
                 let expires_at = duration.and_then(|seconds| {
                     chrono::Utc::now().checked_add_signed(chrono::Duration::seconds(seconds as i64))
                 });
-                moderation::persist_ban(
-                    pool,
+                self.persist_room(
                     room_id,
-                    target_user,
-                    target_ip,
-                    reason,
-                    expires_at,
-                    applied_by,
+                    &room_lock,
+                    moderation::persist_ban(
+                        pool,
+                        room_id,
+                        target_user,
+                        target_ip,
+                        reason,
+                        expires_at,
+                        applied_by,
+                    ),
                 )
                 .await
                 .map_err(|error| {
@@ -4090,6 +4301,8 @@ impl RoomManager {
                 })?;
             }
 
+            let mut room = room_lock.write().await;
+            room.ensure_live()?;
             // Add to ban list — prevents rejoining
             let banned_ids: Vec<String> = target_participant_ids
                 .iter()
@@ -4124,7 +4337,7 @@ impl RoomManager {
                 let target = room
                     .participants
                     .remove(affected_participant_id)
-                    .expect("moderation cohort was resolved under the same room lock");
+                    .expect("moderation cohort is stable under the room control guard");
                 for producer_id in target.producers.keys() {
                     room.producer_to_participant.remove(producer_id);
                 }
@@ -4145,6 +4358,7 @@ impl RoomManager {
             }
             target_sessions
         };
+        drop(control);
 
         // Clean up media outside lock
         for (affected_participant_id, media_session_id) in target_sessions {
@@ -4177,6 +4391,31 @@ impl RoomManager {
         moderator_id: &str,
         expected_sender: &mpsc::Sender<Arc<String>>,
         target_participant_id: &str,
+    ) -> Result<()> {
+        let moderator_id = moderator_id.to_string();
+        let expected_sender = expected_sender.clone();
+        let target_participant_id = target_participant_id.to_string();
+        self.run_room_control(room_id, move |manager, room_id, control| async move {
+            manager
+                .unban_participant_controlled(
+                    &room_id,
+                    &moderator_id,
+                    &expected_sender,
+                    &target_participant_id,
+                    control,
+                )
+                .await
+        })
+        .await
+    }
+
+    async fn unban_participant_controlled(
+        &self,
+        room_id: &str,
+        moderator_id: &str,
+        expected_sender: &mpsc::Sender<Arc<String>>,
+        target_participant_id: &str,
+        control: tokio::sync::OwnedMutexGuard<()>,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
@@ -4212,15 +4451,21 @@ impl RoomManager {
 
         // Also clear any persisted user ban (target id == user uuid for
         // registered users; guests have no stable identity to unban). Keep the
-        // room generation locked through this write so deletion/recreation
-        // cannot redirect a delayed unban into a replacement room.
+        // control guard through this write so deletion/recreation cannot
+        // redirect a delayed unban into a replacement room. Readers remain free.
+        drop(room);
         let mut persisted_removed = false;
         if let Some(uid) = persisted_target {
             let pool = self
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Ban service is temporarily unavailable"))?;
-            persisted_removed = moderation::remove_user_ban(pool, room_id, uid)
+            persisted_removed = self
+                .persist_room(
+                    room_id,
+                    &room_lock,
+                    moderation::remove_user_ban(pool, room_id, uid),
+                )
                 .await
                 .map_err(|error| {
                     warn!(room_id, %error, "Failed to remove persisted ban");
@@ -4228,6 +4473,8 @@ impl RoomManager {
                 })?;
         }
 
+        let mut room = room_lock.write().await;
+        room.ensure_live()?;
         let in_memory = room
             .banned_participants
             .remove(target_participant_id)
@@ -4237,6 +4484,8 @@ impl RoomManager {
             anyhow::bail!("Participant is not banned");
         }
         room.social.forget_user_ban(target_participant_id);
+        drop(room);
+        drop(control);
 
         info!(
             "unban: {} unbanned {} from room {}",
@@ -4253,6 +4502,33 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<Arc<String>>,
         target_participant_id: &str,
         new_role: roles::Role,
+    ) -> Result<()> {
+        let setter_id = setter_id.to_string();
+        let expected_sender = expected_sender.clone();
+        let target_participant_id = target_participant_id.to_string();
+        self.run_room_control(room_id, move |manager, room_id, control| async move {
+            manager
+                .set_participant_role_controlled(
+                    &room_id,
+                    &setter_id,
+                    &expected_sender,
+                    &target_participant_id,
+                    new_role,
+                    control,
+                )
+                .await
+        })
+        .await
+    }
+
+    async fn set_participant_role_controlled(
+        &self,
+        room_id: &str,
+        setter_id: &str,
+        expected_sender: &mpsc::Sender<Arc<String>>,
+        target_participant_id: &str,
+        new_role: roles::Role,
+        control: tokio::sync::OwnedMutexGuard<()>,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
@@ -4280,7 +4556,9 @@ impl RoomManager {
             anyhow::bail!("Room administration changes are rate limited");
         }
 
-        if room.persisted {
+        let persisted = room.persisted;
+        drop(room);
+        if persisted {
             if !setter_authenticated || !target_authenticated {
                 anyhow::bail!("Persistent roles require registered participants");
             }
@@ -4294,15 +4572,24 @@ impl RoomManager {
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Role service is temporarily unavailable"))?;
-            roles::set_role(pool, room_id, &target_user, new_role, &granted_by)
-                .await
-                .map_err(|error| {
-                    warn!(room_id, %error, "Failed to persist participant role");
-                    anyhow::anyhow!("Role could not be saved")
-                })?;
+            self.persist_room(
+                room_id,
+                &room_lock,
+                roles::set_role(pool, room_id, &target_user, new_role, &granted_by),
+            )
+            .await
+            .map_err(|error| {
+                warn!(room_id, %error, "Failed to persist participant role");
+                anyhow::anyhow!("Role could not be saved")
+            })?;
         }
 
-        let target = room.participants.get_mut(target_participant_id).unwrap();
+        let mut room = room_lock.write().await;
+        room.ensure_live()?;
+        let target = room
+            .participants
+            .get_mut(target_participant_id)
+            .expect("role target is stable under the room control guard");
         target.role = new_role;
         room.policy_revision = room.policy_revision.wrapping_add(1);
         let revoked = Self::revoke_unauthorized_producers(
@@ -4319,6 +4606,7 @@ impl RoomManager {
             granted_by: setter_name,
         });
         drop(room);
+        drop(control);
 
         self.close_revoked_producers(room_id, revoked, active_observer, audio_observer)
             .await;
@@ -4378,6 +4666,7 @@ impl RoomManager {
         target_id: &str,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
+        let _control = control::lock_room(&room_lock).await;
         let mut room = room_lock.write().await;
         let admission = self.drain.admit()?;
 
@@ -4527,6 +4816,7 @@ impl RoomManager {
         reason: Option<String>,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
+        let _control = control::lock_room(&room_lock).await;
         let mut room = room_lock.write().await;
 
         // Verify moderator exists and has permission
@@ -5042,6 +5332,7 @@ impl RoomManager {
                 .for_each_concurrent(16, |(room_id, room_lock)| {
                     let remaining = &remaining;
                     async move {
+                        let _control = control::lock_room(&room_lock).await;
                         let mut room = room_lock.write().await;
                         let participants = room.participants.len();
                         let lobby = room.lobby.len();

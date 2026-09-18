@@ -27,6 +27,12 @@ and same-socket renewal retries, deadlines and retirement by newer authenticatio
 actions. These do not constitute a database-outage load test; the ignored
 database-backed renewal test exercises successful real validation.
 
+Room-control tests cover write ordering, sender/permission changes and caller
+cancellation. The ignored persistence test uses a row lock in the disposable
+database to check chat/state access during blocked SQL and publication after
+the requesting task is cancelled. It is a concurrency regression test, not a
+database-outage or throughput benchmark.
+
 ### Readiness and shutdown
 
 After building the server, run the same process-lifecycle smoke used by CI:

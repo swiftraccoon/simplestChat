@@ -64,10 +64,9 @@ fn require_verified_remote_database(options: &PgConnectOptions) -> anyhow::Resul
 }
 
 fn with_runtime_timeouts(options: PgConnectOptions) -> PgConnectOptions {
-    // Several room mutations deliberately retain a per-room lock until the
-    // durable write succeeds. Bound server and lock waits so a stalled
-    // database cannot freeze a room indefinitely. Production migrations use
-    // the separate `sqlx migrate run` path documented in README.
+    // Bound every pool user's server-side waits. Room writes additionally bound
+    // the whole persistence phase while retaining their control gate, not their
+    // chat/media state lock. Production migrations use a separate connection.
     options.options([
         ("statement_timeout", "10s"),
         ("lock_timeout", "5s"),

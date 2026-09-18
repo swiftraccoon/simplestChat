@@ -1172,13 +1172,62 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<Arc<String>>,
         command: &ClientMessage,
     ) -> Result<()> {
+        let (request_id, _) = command
+            .social_request()
+            .ok_or_else(|| rejected("Unknown request"))?;
+        if !valid_correlation_id(request_id) {
+            return Err(rejected("Invalid request ID"));
+        }
+        if matches!(
+            command,
+            ClientMessage::SetChatPreferences { .. }
+                | ClientMessage::ChangeNickname { .. }
+                | ClientMessage::GetRoomSnapshot { .. }
+        ) {
+            return self
+                .handle_social_request_inner(
+                    room_id,
+                    participant_id,
+                    expected_sender,
+                    command,
+                    None,
+                )
+                .await;
+        }
+
+        let participant_id = participant_id.to_owned();
+        let sender = expected_sender.clone();
+        let command = command.clone();
+        self.run_room_control(room_id, move |manager, room_id, control| async move {
+            manager
+                .handle_social_request_inner(
+                    &room_id,
+                    &participant_id,
+                    &sender,
+                    &command,
+                    Some(control),
+                )
+                .await
+        })
+        .await
+    }
+
+    async fn handle_social_request_inner(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+        expected_sender: &mpsc::Sender<Arc<String>>,
+        command: &ClientMessage,
+        control: Option<tokio::sync::OwnedMutexGuard<()>>,
+    ) -> Result<()> {
         let (request_id, action) = command
             .social_request()
             .ok_or_else(|| rejected("Unknown request"))?;
         if !valid_correlation_id(request_id) {
             return Err(rejected("Invalid request ID"));
         }
-        // Existing live role mutation handles producer revocation and all existing policies.
+        // Control admission keeps the online/offline decision stable. Reuse the
+        // already-controlled role path rather than trying to acquire this gate again.
         if let ClientMessage::SetMemberRole {
             target_user_id,
             role,
@@ -1192,12 +1241,13 @@ impl RoomManager {
             let online = room.participants.contains_key(target_user_id);
             drop(room);
             if online {
-                self.set_participant_role(
+                self.set_participant_role_controlled(
                     room_id,
                     participant_id,
                     expected_sender,
                     target_user_id,
                     new_role,
+                    control.ok_or_else(|| rejected("Room control is unavailable"))?,
                 )
                 .await?;
                 return send(
@@ -1324,9 +1374,15 @@ impl RoomManager {
                         .db_pool
                         .as_ref()
                         .ok_or_else(|| rejected("Ban service unavailable"))?;
-                    let rows: Vec<BanRow> = sqlx::query_as(
-                        "SELECT s.id,u.display_name,s.user_id IS NOT NULL,s.reason,s.expires_at FROM room_states s LEFT JOIN users u ON u.id=s.user_id WHERE s.room_id=$1 AND s.state='banned' AND (s.expires_at IS NULL OR s.expires_at>now()) ORDER BY s.created_at DESC,s.id LIMIT 101 OFFSET $2")
-                        .bind(room_id).bind(offset as i64).fetch_all(pool).await?;
+                    drop(room);
+                    let rows: Vec<BanRow> = tokio::time::timeout(
+                        control::PERSISTENCE_TIMEOUT,
+                        sqlx::query_as(
+                            "SELECT s.id,u.display_name,s.user_id IS NOT NULL,s.reason,s.expires_at FROM room_states s LEFT JOIN users u ON u.id=s.user_id WHERE s.room_id=$1 AND s.state='banned' AND (s.expires_at IS NULL OR s.expires_at>now()) ORDER BY s.created_at DESC,s.id LIMIT 101 OFFSET $2")
+                            .bind(room_id).bind(offset as i64).fetch_all(pool),
+                    ).await.map_err(|_| rejected("Ban service timed out"))??;
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
                     rows.into_iter()
                         .map(|(id, name, authenticated, reason, expiry)| BanEntry {
                             ban_id: id.to_string(),
@@ -1357,8 +1413,17 @@ impl RoomManager {
                         .db_pool
                         .as_ref()
                         .ok_or_else(|| rejected("Ban service unavailable"))?;
-                    let row:Option<(Option<Uuid>,Option<String>)>=sqlx::query_as("DELETE FROM room_states WHERE room_id=$1 AND id=$2 AND state='banned' RETURNING user_id,host(ip_address)")
-                        .bind(room_id).bind(id).fetch_optional(pool).await?;
+                    drop(room);
+                    let row: Option<(Option<Uuid>, Option<String>)> = self
+                        .persist_room(
+                            room_id,
+                            &room_lock,
+                            sqlx::query_as("DELETE FROM room_states WHERE room_id=$1 AND id=$2 AND state='banned' RETURNING user_id,host(ip_address)")
+                                .bind(room_id).bind(id).fetch_optional(pool),
+                        )
+                        .await?;
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
                     let (uid, ip) = row.ok_or_else(|| rejected("Ban not found"))?;
                     (
                         uid.map(|u| u.to_string()),
@@ -1416,8 +1481,14 @@ impl RoomManager {
                         .db_pool
                         .as_ref()
                         .ok_or_else(|| rejected("Member service unavailable"))?;
-                    let rows:Vec<(Uuid,String,i16)>=sqlx::query_as("WITH roster AS (SELECT owner_id AS user_id,5::smallint AS role FROM rooms WHERE id=$1 UNION ALL SELECT rr.user_id,(rr.role+1)::smallint FROM room_roles rr JOIN rooms r ON r.id=rr.room_id WHERE rr.room_id=$1 AND rr.user_id<>r.owner_id) SELECT u.id,u.display_name,roster.role FROM roster JOIN users u ON u.id=roster.user_id ORDER BY u.display_name,u.id LIMIT 101 OFFSET $2")
-                        .bind(room_id).bind(offset as i64).fetch_all(pool).await?;
+                    drop(room);
+                    let rows: Vec<(Uuid, String, i16)> = tokio::time::timeout(
+                        control::PERSISTENCE_TIMEOUT,
+                        sqlx::query_as("WITH roster AS (SELECT owner_id AS user_id,5::smallint AS role FROM rooms WHERE id=$1 UNION ALL SELECT rr.user_id,(rr.role+1)::smallint FROM room_roles rr JOIN rooms r ON r.id=rr.room_id WHERE rr.room_id=$1 AND rr.user_id<>r.owner_id) SELECT u.id,u.display_name,roster.role FROM roster JOIN users u ON u.id=roster.user_id ORDER BY u.display_name,u.id LIMIT 101 OFFSET $2")
+                            .bind(room_id).bind(offset as i64).fetch_all(pool),
+                    ).await.map_err(|_| rejected("Member service timed out"))??;
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
                     rows.into_iter()
                         .map(|(id, name, role)| {
                             let id = id.to_string();
@@ -1484,16 +1555,27 @@ impl RoomManager {
                     .db_pool
                     .as_ref()
                     .ok_or_else(|| rejected("Member service unavailable"))?;
+                drop(room);
                 // Absent targets must already belong to this room's roster; no account enumeration.
-                let current:Option<i16>=sqlx::query_scalar("SELECT CASE WHEN $2=owner_id THEN 5 ELSE (SELECT role+1 FROM room_roles WHERE room_id=$1 AND user_id=$2) END::smallint FROM rooms WHERE id=$1 AND ($2=owner_id OR EXISTS(SELECT 1 FROM room_roles WHERE room_id=$1 AND user_id=$2))")
-                    .bind(room_id).bind(target).fetch_optional(pool).await?;
+                let current: Option<i16> = tokio::time::timeout(
+                    control::PERSISTENCE_TIMEOUT,
+                    sqlx::query_scalar("SELECT CASE WHEN $2=owner_id THEN 5 ELSE (SELECT role+1 FROM room_roles WHERE room_id=$1 AND user_id=$2) END::smallint FROM rooms WHERE id=$1 AND ($2=owner_id OR EXISTS(SELECT 1 FROM room_roles WHERE room_id=$1 AND user_id=$2))")
+                        .bind(room_id).bind(target).fetch_optional(pool),
+                ).await.map_err(|_| rejected("Member service timed out"))??;
                 let current = current
                     .and_then(|r| roles::Role::from_u8(r as u8))
                     .ok_or_else(|| rejected("Room member not found"))?;
                 if !actor_role.can_set_role(current, new_role) {
                     return Err(rejected("Insufficient role permissions"));
                 }
-                roles::set_role(pool, room_id, &target, new_role, &setter).await?;
+                self.persist_room(
+                    room_id,
+                    &room_lock,
+                    roles::set_role(pool, room_id, &target, new_role, &setter),
+                )
+                .await?;
+                room = room_lock.write().await;
+                room.ensure_live()?;
                 room.policy_revision = room.policy_revision.wrapping_add(1);
                 json!({"updated":true})
             }
@@ -1523,8 +1605,9 @@ impl RoomManager {
                 {
                     return Err(rejected("Please wait before submitting another report"));
                 }
+                let report_id = Uuid::new_v4();
                 let report = ReportEntry {
-                    report_id: Uuid::new_v4().to_string(),
+                    report_id: report_id.to_string(),
                     reporter_id: participant_id.to_string(),
                     reporter_name: actor_name,
                     target_participant_id: target_participant_id.clone(),
@@ -1539,27 +1622,37 @@ impl RoomManager {
                         .db_pool
                         .as_ref()
                         .ok_or_else(|| rejected("Report service unavailable"))?;
-                    let mut transaction = pool.begin().await?;
-                    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,71339))")
-                        .bind(room_id)
-                        .execute(&mut *transaction)
-                        .await?;
-                    let count: i64 =
-                        sqlx::query_scalar("SELECT COUNT(*) FROM room_reports WHERE room_id=$1")
+                    drop(room);
+                    let inserted = self.persist_room(room_id, &room_lock, async {
+                        let mut transaction = pool.begin().await?;
+                        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,71339))")
                             .bind(room_id)
-                            .fetch_one(&mut *transaction)
+                            .execute(&mut *transaction)
                             .await?;
-                    if count >= MAX_REPORTS as i64 {
-                        let removed=sqlx::query("DELETE FROM room_reports WHERE id IN (SELECT id FROM room_reports WHERE room_id=$1 AND status<>'open' ORDER BY created_at,id LIMIT 1)").bind(room_id).execute(&mut *transaction).await?.rows_affected();
-                        if removed == 0 {
-                            return Err(rejected(
-                                "Room report capacity reached; contact a moderator",
-                            ));
+                        let count: i64 =
+                            sqlx::query_scalar("SELECT COUNT(*) FROM room_reports WHERE room_id=$1")
+                                .bind(room_id)
+                                .fetch_one(&mut *transaction)
+                                .await?;
+                        if count >= MAX_REPORTS as i64 {
+                            let removed=sqlx::query("DELETE FROM room_reports WHERE id IN (SELECT id FROM room_reports WHERE room_id=$1 AND status<>'open' ORDER BY created_at,id LIMIT 1)").bind(room_id).execute(&mut *transaction).await?.rows_affected();
+                            if removed == 0 {
+                                return Ok(false);
+                            }
                         }
+                        sqlx::query("INSERT INTO room_reports(id,room_id,reporter_id,reporter_name,target_participant_id,target_name,reason) VALUES($1,$2,$3,$4,$5,$6,$7)")
+                            .bind(report_id).bind(room_id).bind(participant_id).bind(&report.reporter_name).bind(target_participant_id).bind(&report.target_name).bind(reason).execute(&mut *transaction).await?;
+                        transaction.commit().await?;
+                        Ok(true)
+                    })
+                    .await?;
+                    if !inserted {
+                        return Err(rejected(
+                            "Room report capacity reached; contact a moderator",
+                        ));
                     }
-                    sqlx::query("INSERT INTO room_reports(id,room_id,reporter_id,reporter_name,target_participant_id,target_name,reason) VALUES($1,$2,$3,$4,$5,$6,$7)")
-                        .bind(report.report_id.parse::<Uuid>()?).bind(room_id).bind(participant_id).bind(&report.reporter_name).bind(target_participant_id).bind(&report.target_name).bind(reason).execute(&mut *transaction).await?;
-                    transaction.commit().await?;
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
                 } else {
                     if room.social.reports.len() >= MAX_REPORTS {
                         if let Some(index) =
@@ -1590,8 +1683,14 @@ impl RoomManager {
                         .db_pool
                         .as_ref()
                         .ok_or_else(|| rejected("Report service unavailable"))?;
-                    let rows: Vec<ReportRow> = sqlx::query_as("SELECT id,reporter_id,reporter_name,target_participant_id,target_name,reason,status,created_at,resolved_at FROM room_reports WHERE room_id=$1 ORDER BY created_at DESC,id LIMIT 101 OFFSET $2")
-                        .bind(room_id).bind(offset as i64).fetch_all(pool).await?;
+                    drop(room);
+                    let rows: Vec<ReportRow> = tokio::time::timeout(
+                        control::PERSISTENCE_TIMEOUT,
+                        sqlx::query_as("SELECT id,reporter_id,reporter_name,target_participant_id,target_name,reason,status,created_at,resolved_at FROM room_reports WHERE room_id=$1 ORDER BY created_at DESC,id LIMIT 101 OFFSET $2")
+                            .bind(room_id).bind(offset as i64).fetch_all(pool),
+                    ).await.map_err(|_| rejected("Report service timed out"))??;
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
                     rows.into_iter()
                         .map(
                             |(id, rid, rname, tid, tname, reason, status, created, resolved)| {
@@ -1636,8 +1735,18 @@ impl RoomManager {
                         .db_pool
                         .as_ref()
                         .ok_or_else(|| rejected("Report service unavailable"))?;
-                    let affected=sqlx::query("UPDATE room_reports SET status=$3,resolved_at=now(),resolved_by=$4 WHERE room_id=$1 AND id=$2 AND status='open'")
-                        .bind(room_id).bind(id).bind(status).bind(participant_id).execute(pool).await?.rows_affected();
+                    drop(room);
+                    let affected = self
+                        .persist_room(
+                            room_id,
+                            &room_lock,
+                            sqlx::query("UPDATE room_reports SET status=$3,resolved_at=now(),resolved_by=$4 WHERE room_id=$1 AND id=$2 AND status='open'")
+                                .bind(room_id).bind(id).bind(status).bind(participant_id).execute(pool),
+                        )
+                        .await?
+                        .rows_affected();
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
                     if affected == 0 {
                         return Err(rejected("Open report not found"));
                     }
@@ -1655,6 +1764,8 @@ impl RoomManager {
             }
             _ => return Err(rejected("Unknown request")),
         };
+        drop(room);
+        drop(control);
         send(
             &self.metrics,
             expected_sender,

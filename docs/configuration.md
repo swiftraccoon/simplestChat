@@ -84,6 +84,29 @@ without accepting a new token; see [authentication continuity](protocol.md#conne
 Database failure still makes `/ready` unavailable. This policy does not make
 database-backed account or room operations available during an outage.
 
+## Room persistence
+
+Room settings, moderation, reports and identity writes release the chat/media
+state lock during SQL. A separate per-room control gate preserves permissions,
+membership and write order. Chat and routine media control remain available
+under the current policy while a write is pending; joins, leaves, reconnect
+rebinding and other control operations wait. Persisted writes are published to
+runtime state only after database success.
+
+Control admission waits at most five seconds; identity edits separately allow
+five seconds for creation admission. The complete write phase has a 15-second
+deadline, including pool acquisition and transaction commit. Caller cancellation
+after admission does not cancel mandatory runtime publication. These are phase
+limits, not an end-to-end request deadline: authorization reads, state publication
+and native media cleanup are separate.
+
+A confirmed rejected write leaves the existing policy unchanged. A timeout,
+uncertain commit result, or missing backing row makes that room unavailable:
+memberships close, media cleanup is attempted with bounded waits, and the room ID
+stays reserved until restart reloads durable state. The database row is not deleted
+or automatically retried. Inspect the room-persistence and cleanup logs before
+restarting; incomplete media cleanup is explicitly reported.
+
 ## Shutdown
 
 `SIGTERM` and Ctrl-C start a one-way drain. Readiness becomes unavailable,

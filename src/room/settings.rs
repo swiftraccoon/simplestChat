@@ -376,9 +376,9 @@ pub fn apply_settings_update(
 /// `NULL`, and `Some(Some(value))` replaces it. Pass a prepared password **hash**,
 /// never plaintext. If every parameter is omitted, no query is executed.
 ///
-/// This helper does not authorize, validate limits, update live room state or
-/// check the number of affected rows. In particular, a missing room is not a
-/// distinct error here. The owning room operation must serialize persistence
+/// A nonempty update must affect exactly one row; otherwise this returns
+/// `sqlx::Error::RowNotFound`. This helper does not authorize, validate limits or
+/// update live room state. The owning room operation must serialize persistence
 /// with the appropriate runtime generation and enforce those preconditions.
 ///
 /// # Errors

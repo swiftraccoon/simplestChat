@@ -27,6 +27,7 @@ HTTP / WebSocket
 | Password/passkey auth and JWT validation | `auth/routes.rs`, `auth/password.rs`, `auth/webauthn.rs`, `auth/jwt.rs` |
 | Profiles, recovery and refresh sessions | `auth/account.rs`, `auth/session.rs` |
 | Membership, lobby, chat and reconnect state | `room/mod.rs`, `room/social.rs` |
+| Ordered persistence and uncertain-write handling | `room/control.rs` |
 | Persistent room/community API | `room/api.rs`, `room/community.rs`, `room/settings.rs` |
 | Roles and moderation state | `room/roles.rs`, `room/moderation.rs` |
 | Native worker/router/transport lifecycle | `media/worker_manager.rs`, `router_manager.rs`, `transport_manager.rs` |
@@ -47,6 +48,11 @@ Authorization is server-side. Roles, bans, password access, lobby state and
 media/chat permissions cannot rely on what the UI allows. Persistent mutations
 must remain consistent with in-memory state; failed or stale async work must not
 apply to a replacement room or membership.
+Room control operations serialize policy writes and membership changes separately
+from chat/media state. The lock order is creation (when needed), control, then
+the short-lived room state lock. Never wait for SQL or acquire control while
+holding room state. An admitted persistent mutation owns its task through runtime
+publication, even if its caller disconnects. See [failure behavior](../docs/configuration.md#room-persistence).
 The [protocol guide](../docs/protocol.md) documents the browser/server contract,
 including request correlation, replay limits and schema changes.
 HTTP profiles and directory entries serialize snake_case fields, while room

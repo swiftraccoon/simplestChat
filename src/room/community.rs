@@ -1,10 +1,11 @@
 #![forbid(unsafe_code)]
 
-use super::{RoomManager, settings};
+use super::{RoomManager, control, settings};
 use crate::auth::account::{validate_image_data_url, validate_text};
 use crate::auth::types::AuthError;
 use crate::signaling::protocol::ServerMessage;
 use serde::Deserialize;
+use std::time::Duration;
 use uuid::Uuid;
 
 #[derive(Clone, Deserialize)]
@@ -69,55 +70,146 @@ impl RoomManager {
             .clone()
             .ok_or_else(|| sqlx::Error::InvalidArgument("Database not configured".into()))?;
         let room_id = room_id.to_owned();
-        let rooms = self.rooms.clone();
-        let creation_lock = self.room_creation_lock.clone();
-        // Complete database/runtime synchronization even if the HTTP caller
-        // disconnects. Use the existing creation -> runtime -> database order,
-        // preventing a concurrent join/delete from installing stale identity.
-        let update = async move {
-            let _creation_guard = creation_lock.lock().await;
-            let runtime = rooms
+        let manager = self.clone();
+        let creation_guard = tokio::time::timeout(
+            Duration::from_secs(5),
+            manager.room_creation_lock.clone().lock_owned(),
+        )
+        .await
+        .map_err(|_| sqlx::Error::Protocol("Room creation is busy; try again".into()))?;
+        if manager.drain.is_draining()
+            || manager
+                .deleting_rooms
                 .read()
                 .unwrap_or_else(|error| error.into_inner())
-                .get(&room_id)
-                .cloned();
-            let mut runtime = match runtime.as_ref() {
-                Some(room) => Some(room.write().await),
-                None => None,
+                .contains_key(&room_id)
+        {
+            return Ok(false);
+        }
+        let runtime = manager
+            .rooms
+            .read()
+            .unwrap_or_else(|error| error.into_inner())
+            .get(&room_id)
+            .cloned();
+        let control_guard = match runtime.as_ref() {
+            Some(room) => Some(
+                tokio::time::timeout(Duration::from_secs(5), control::lock_room(room))
+                    .await
+                    .map_err(|_| sqlx::Error::Protocol("Room control is busy; try again".into()))?,
+            ),
+            None => None,
+        };
+        // Complete database/runtime synchronization even if the HTTP caller
+        // disconnects after admission. Queued admission remains cancellable.
+        // Creation -> control prevents stale runtime installation, without
+        // retaining the room state lock while waiting for PostgreSQL.
+        let update = async move {
+            let _creation_guard = creation_guard;
+            let _control = control_guard;
+            if manager.drain.is_draining() {
+                return Ok(false);
+            }
+            let publication = if let Some(room_lock) = runtime.as_ref() {
+                let room = room_lock.read().await;
+                if room.deleting || !room.persisted {
+                    return Ok(false);
+                }
+                let Some(settings) = room.settings.as_ref() else {
+                    return Ok(false);
+                };
+                if settings.owner_id != owner_id {
+                    return Ok(false);
+                }
+                let mut settings = settings.clone();
+                settings.display_name = identity.display_name.trim().to_owned();
+                settings.topic = identity.topic.clone();
+                let mut value = serde_json::to_value(&settings)
+                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+                value["description"] = serde_json::json!(identity.description);
+                value["imageUrl"] = serde_json::json!(identity.image_url);
+                Some((settings, value))
+            } else {
+                // Authorize before any uncertain write can reserve this ID.
+                // Read failure has no durable side effects to quarantine.
+                let saved_owner: Option<Uuid> = tokio::time::timeout(
+                    Duration::from_secs(5),
+                    sqlx::query_scalar("SELECT owner_id FROM rooms WHERE id=$1")
+                        .bind(&room_id)
+                        .fetch_optional(&pool),
+                )
+                .await
+                .map_err(|_| sqlx::Error::Protocol("Room owner lookup timed out".into()))??;
+                if saved_owner != Some(owner_id) {
+                    return Ok(false);
+                }
+                None
             };
-            if runtime
-                .as_ref()
-                .is_some_and(|room| room.deleting || !room.persisted)
+            let persistence = async {
+                let mut transaction = pool.begin().await?;
+                sqlx::query("SET LOCAL statement_timeout = '5s'")
+                    .execute(&mut *transaction)
+                    .await?;
+                sqlx::query("SET LOCAL lock_timeout = '5s'")
+                    .execute(&mut *transaction)
+                    .await?;
+                let updated = sqlx::query("UPDATE rooms SET display_name = $3, topic = $4, description = $5, image_url = $6 WHERE id = $1 AND owner_id = $2")
+                    .bind(&room_id).bind(owner_id).bind(identity.display_name.trim()).bind(&identity.topic)
+                    .bind(&identity.description).bind(&identity.image_url).execute(&mut *transaction).await?;
+                if updated.rows_affected() == 0 {
+                    // A live room already verified this owner under control.
+                    // Its missing durable row cannot leave cached policy live.
+                    return if runtime.is_some() {
+                        Err(sqlx::Error::RowNotFound)
+                    } else {
+                        Ok(false)
+                    };
+                }
+                transaction.commit().await?;
+                Ok(true)
+            };
+            let updated = if let Some(room_lock) = runtime.as_ref() {
+                manager
+                    .persist_room(&room_id, room_lock, persistence)
+                    .await?
+            } else {
+                let result = tokio::time::timeout(control::PERSISTENCE_TIMEOUT, persistence)
+                    .await
+                    .unwrap_or_else(|_| {
+                        Err(sqlx::Error::Protocol(
+                            "Room identity persistence deadline exceeded; commit status is unknown"
+                                .into(),
+                        ))
+                    });
+                if let Err(error) = &result
+                    && control::persistence_is_indeterminate(error)
+                {
+                    // Keep creation excluded until this reservation is visible.
+                    // No runtime may load policy from an uncertain commit.
+                    manager
+                        .deleting_rooms
+                        .write()
+                        .unwrap_or_else(|error| error.into_inner())
+                        .entry(room_id.clone())
+                        .or_insert_with(Uuid::new_v4);
+                    tracing::warn!(
+                        room_id,
+                        "Room identity persistence outcome uncertain; retaining room-ID reservation until restart"
+                    );
+                }
+                result?
+            };
+            if !updated {
+                return Ok(false);
+            }
+            if let Some(room_lock) = runtime.as_ref()
+                && let Some((settings, value)) = publication
             {
-                return Ok(false);
-            }
-            let mut transaction = pool.begin().await?;
-            sqlx::query("SET LOCAL statement_timeout = '5s'")
-                .execute(&mut *transaction)
-                .await?;
-            sqlx::query("SET LOCAL lock_timeout = '5s'")
-                .execute(&mut *transaction)
-                .await?;
-            let updated = sqlx::query("UPDATE rooms SET display_name = $3, topic = $4, description = $5, image_url = $6 WHERE id = $1 AND owner_id = $2")
-                .bind(&room_id).bind(owner_id).bind(identity.display_name.trim()).bind(&identity.topic)
-                .bind(&identity.description).bind(&identity.image_url).execute(&mut *transaction).await?;
-            if updated.rows_affected() == 0 {
-                return Ok(false);
-            }
-            transaction.commit().await?;
-            if let Some(room) = runtime.as_mut() {
-                if let Some(settings) = room.settings.as_mut() {
-                    settings.display_name = identity.display_name.trim().to_owned();
-                    settings.topic = identity.topic.clone();
-                }
+                // Publication is mandatory after COMMIT, not part of its timeout.
+                let mut room = room_lock.write().await;
+                room.settings = Some(settings);
                 room.policy_revision = room.policy_revision.wrapping_add(1);
-                if let Some(settings) = room.settings.as_ref() {
-                    let mut value = serde_json::to_value(settings)
-                        .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
-                    value["description"] = serde_json::json!(identity.description);
-                    value["imageUrl"] = serde_json::json!(identity.image_url);
-                    room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings: value });
-                }
+                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings: value });
             }
             Ok(true)
         };
