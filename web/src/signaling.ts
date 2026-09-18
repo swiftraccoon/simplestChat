@@ -5,6 +5,9 @@ export type MessageHandler = (msg: ServerMessage) => void;
 
 const RECONNECT_DEADLINE_MS = 120_000;
 const AUTHENTICATION_RENEWAL_TIMEOUT_MS = 5000;
+const AUTHENTICATION_RENEWAL_DEADLINE_MS = 15_000;
+const AUTHENTICATION_RENEWAL_MAX_ATTEMPTS = 3;
+const AUTHENTICATION_RENEWAL_JITTER_MS = 250;
 
 export class SignalingClient {
   private ws: WebSocket | null = null;
@@ -28,7 +31,14 @@ export class SignalingClient {
   private renewal: {
     requestId: string;
     token: string;
+    deadline: number;
     timer: ReturnType<typeof setTimeout>;
+  } | null = null;
+  private renewalBudget: {
+    socket: WebSocket;
+    deadline: number;
+    attempts: number;
+    retryTimer: ReturnType<typeof setTimeout> | null;
   } | null = null;
 
   // Pending request/response tracking
@@ -136,8 +146,20 @@ export class SignalingClient {
       try {
         // Renewal has its own correlation and never consumes an unrelated room
         // request's generic error or forwards credentials into room handlers.
-        if (msg.type === 'authenticationRenewed' || msg.type === 'authenticationRenewalFailed') {
+        if (
+          msg.type === 'authenticationRenewed' ||
+          msg.type === 'authenticationRenewalFailed' ||
+          msg.type === 'authenticationRenewalDeferred'
+        ) {
           if (this.renewal?.requestId !== msg.requestId) return;
+          if (performance.now() >= this.renewal.deadline) {
+            this.failRenewal(socket);
+            return;
+          }
+          if (msg.type === 'authenticationRenewalDeferred') {
+            this.deferRenewal(socket, msg.retryAfterMs, msg.expiresAt);
+            return;
+          }
           const token = this.renewal.token;
           this.clearRenewal();
           if (msg.type === 'authenticationRenewalFailed') {
@@ -275,34 +297,87 @@ export class SignalingClient {
       socket.readyState !== WebSocket.OPEN ||
       !this.socketToken ||
       !token ||
-      token === this.socketToken ||
-      this.renewal
+      this.renewal ||
+      (this.renewalBudget !== null && this.renewalBudget.retryTimer !== null)
     )
       return;
+    if (token === this.socketToken) {
+      this.clearRenewal();
+      return;
+    }
+    const now = performance.now();
+    let budget = this.renewalBudget;
+    if (!budget || budget.socket !== socket) {
+      this.clearRenewal();
+      budget = {
+        socket,
+        deadline: now + AUTHENTICATION_RENEWAL_DEADLINE_MS,
+        attempts: 0,
+        retryTimer: null,
+      };
+      this.renewalBudget = budget;
+    }
+    if (budget.attempts >= AUTHENTICATION_RENEWAL_MAX_ATTEMPTS || now >= budget.deadline) {
+      this.failRenewal(socket);
+      return;
+    }
+    budget.attempts++;
     const requestId = `auth-${++this.renewalSequence}`;
+    const deadline = Math.min(now + AUTHENTICATION_RENEWAL_TIMEOUT_MS, budget.deadline);
     const timer = setTimeout(() => {
       if (this.ws !== socket || this.renewal?.requestId !== requestId) return;
-      this.clearRenewal();
       this.failRenewal(socket);
-    }, AUTHENTICATION_RENEWAL_TIMEOUT_MS);
-    this.renewal = { requestId, token, timer };
+    }, deadline - now);
+    this.renewal = { requestId, token, deadline, timer };
     try {
       socket.send(
         JSON.stringify({ type: 'renewAuthentication', requestId, token } satisfies ClientMessage),
       );
     } catch {
-      this.clearRenewal();
       this.failRenewal(socket);
     }
   }
 
-  private clearRenewal(): void {
+  /** Retry temporary server contention without replacing the authenticated connection. */
+  private deferRenewal(socket: WebSocket, retryAfterMs: number, expiresAt: number): void {
+    const budget = this.renewalBudget;
+    if (this.ws !== socket || !this.socketToken || budget?.socket !== socket) return;
+    this.clearRenewalRequest();
+    const now = performance.now();
+    // Convert the accepted credential's wall-clock expiry once per response;
+    // later deferrals may shorten this monotonic deadline, never extend it.
+    budget.deadline = Math.min(budget.deadline, now + Math.max(0, expiresAt * 1000 - Date.now()));
+    if (budget.attempts >= AUTHENTICATION_RENEWAL_MAX_ATTEMPTS || now >= budget.deadline) {
+      this.failRenewal(socket);
+      return;
+    }
+    const delay = retryAfterMs + Math.floor(Math.random() * AUTHENTICATION_RENEWAL_JITTER_MS);
+    budget.retryTimer = setTimeout(
+      () => {
+        if (this.ws !== socket || this.renewalBudget !== budget) return;
+        budget.retryTimer = null;
+        if (performance.now() >= budget.deadline) this.failRenewal(socket);
+        else this.renewAuthentication();
+      },
+      Math.min(delay, budget.deadline - now),
+    );
+  }
+
+  private clearRenewalRequest(): void {
     if (this.renewal) clearTimeout(this.renewal.timer);
     this.renewal = null;
   }
 
+  private clearRenewal(): void {
+    this.clearRenewalRequest();
+    if (this.renewalBudget !== null && this.renewalBudget.retryTimer !== null)
+      clearTimeout(this.renewalBudget.retryTimer);
+    this.renewalBudget = null;
+  }
+
   private failRenewal(socket: WebSocket): void {
     if (this.ws !== socket) return;
+    this.clearRenewal();
     // A bounded failed renewal falls back to the existing recovery path using
     // the latest token. Do not log the token, frame, or server response.
     console.error('[ws] authentication renewal failed; reconnecting');

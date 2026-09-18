@@ -288,6 +288,13 @@ pub enum ServerMessage {
     /// A renewal did not replace or extend the existing socket credential.
     #[serde(rename_all = "camelCase")]
     AuthenticationRenewalFailed { request_id: String },
+    /// Temporary validation failure; the existing credential remains unchanged.
+    #[serde(rename_all = "camelCase")]
+    AuthenticationRenewalDeferred {
+        request_id: String,
+        retry_after_ms: u32,
+        expires_at: u64,
+    },
     /// Error response
     Error { message: String },
     /// The client should prompt for a password and retry this room join.
@@ -577,6 +584,15 @@ mod tests {
             })
             .unwrap(),
             json!({"type":"authenticationRenewalFailed", "requestId":"renewal-1"}),
+        );
+        assert_eq!(
+            serde_json::to_value(ServerMessage::AuthenticationRenewalDeferred {
+                request_id: "renewal-1".into(),
+                retry_after_ms: 3000,
+                expires_at: 1234,
+            })
+            .unwrap(),
+            json!({"type":"authenticationRenewalDeferred", "requestId":"renewal-1", "retryAfterMs":3000, "expiresAt":1234}),
         );
     }
 

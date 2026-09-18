@@ -64,6 +64,12 @@ export type ServerMessage =
   | { type: 'authenticationRenewed'; requestId: string; expiresAt: number }
   | { type: 'authenticationRenewalFailed'; requestId: string }
   | {
+      type: 'authenticationRenewalDeferred';
+      requestId: string;
+      retryAfterMs: number;
+      expiresAt: number;
+    }
+  | {
       type: 'roomJoined';
       participantId: string;
       participants: ParticipantInfo[];

@@ -20,6 +20,12 @@ Rust tests include native media checks; database tests are opt-in. Serial
 execution reduces UDP port-allocation races. Web tests use mocked browser APIs;
 the web build runs TypeScript checking and produces the production UI.
 
+Credential-continuity tests use bounded validation futures to distinguish
+database unavailability from revocation and exercise expiry, drain, notification
+loss and grace-registration races. Browser unit tests cover same-socket renewal
+retries and their deadlines. These do not constitute a database-outage load test;
+the ignored database-backed renewal test exercises successful real validation.
+
 ### Readiness and shutdown
 
 After building the server, run the same process-lifecycle smoke used by CI:

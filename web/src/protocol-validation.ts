@@ -336,6 +336,11 @@ const messages = {
     expiresAt: integer(),
   }),
   authenticationRenewalFailed: message('authenticationRenewalFailed', { requestId: text }),
+  authenticationRenewalDeferred: message('authenticationRenewalDeferred', {
+    requestId: text,
+    retryAfterMs: integer(5000, 1),
+    expiresAt: integer(),
+  }),
   roomJoined: message('roomJoined', {
     participantId: text,
     participants: list(participant),

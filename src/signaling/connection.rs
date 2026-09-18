@@ -24,6 +24,9 @@ use uuid::Uuid;
 mod authentication;
 pub use authentication::RenewalAuthenticator;
 use authentication::{RenewalBudget, RenewalOutcome, renew_authentication, unix_seconds};
+#[path = "connection_credentials.rs"]
+mod credentials;
+use credentials::{CredentialContinuity, CredentialStatus, account_credentials_current};
 
 /// Bounded channel capacity per client.
 /// At 100 msg/s rate limit, 64 slots = 640ms of burst buffer.
@@ -466,6 +469,21 @@ impl GracePeriodMap {
         true
     }
 
+    /// A retained timer may start only after its matching map entry exists.
+    fn insert_activated(
+        &self,
+        room_id: String,
+        participant_id: String,
+        entry: GraceEntry,
+        activation: tokio::sync::oneshot::Sender<()>,
+    ) -> bool {
+        let retained = self.insert(room_id, participant_id, entry);
+        if retained {
+            let _ = activation.send(());
+        }
+        retained
+    }
+
     fn remove_if_token_matches(
         &self,
         room_id: &str,
@@ -606,18 +624,121 @@ fn reconnect_attempt_allowed(current_room_id: Option<&str>, in_lobby: bool) -> b
     current_room_id.is_none() && !in_lobby
 }
 
-async fn account_credentials_current(pool: Option<&sqlx::PgPool>, claims: &Claims) -> bool {
-    let Some(pool) = pool else {
-        return false;
-    };
-    matches!(
-        tokio::time::timeout(
-            AUTH_REVALIDATE_INTERVAL,
-            crate::auth::jwt::validate_current_claims(pool, claims)
-        )
-        .await,
-        Ok(Ok(()))
+/// Convert accepted wall-clock expiry once, retaining fractional-second precision.
+fn credential_expiry_deadline(exp: u64) -> Instant {
+    let now = Instant::now();
+    let remaining = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(Duration::ZERO, |elapsed| {
+            Duration::from_secs(exp).saturating_sub(elapsed)
+        });
+    now.checked_add(remaining).unwrap_or(now)
+}
+
+/// Revalidation waits are bounded independently of PostgreSQL's statement limit.
+/// Revocation notices and drain remain observable while the query is pending.
+/// `None` means drain, not invalid credentials. The caller supplies its original
+/// accepted expiry (and, for a retained session, its original grace deadline).
+async fn revalidate_account(
+    pool: Option<&sqlx::PgPool>,
+    claims: &Claims,
+    continuity: &mut CredentialContinuity,
+    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
+    drain: &crate::shutdown::DrainSignal,
+    hard_deadline: Instant,
+) -> Option<bool> {
+    let now = Instant::now();
+    if continuity.expired(now) || now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
+        return Some(false);
+    }
+    let deadline = continuity
+        .deadline()
+        .map_or(hard_deadline, |limit| limit.min(hard_deadline))
+        .min(now + AUTH_REVALIDATE_INTERVAL);
+    let validation = account_credentials_current(pool, claims, deadline);
+    observe_account_validation(
+        validation,
+        claims,
+        continuity,
+        revocations,
+        drain,
+        hard_deadline,
     )
+    .await
+}
+
+/// Keep control-plane races testable without modifying a database or accepting
+/// injected validators at the public connection boundary.
+async fn observe_account_validation(
+    validation: impl std::future::Future<Output = CredentialStatus>,
+    claims: &Claims,
+    continuity: &mut CredentialContinuity,
+    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
+    drain: &crate::shutdown::DrainSignal,
+    hard_deadline: Instant,
+) -> Option<bool> {
+    let now = Instant::now();
+    if continuity.expired(now) || now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
+        return Some(false);
+    }
+    let deadline = continuity
+        .deadline()
+        .map_or(hard_deadline, |limit| limit.min(hard_deadline))
+        .min(now + AUTH_REVALIDATE_INTERVAL);
+    tokio::pin!(validation);
+    let result = loop {
+        tokio::select! {
+            biased;
+            _ = drain.wait() => return None,
+            _ = tokio::time::sleep_until(deadline.into()) => break CredentialStatus::Unavailable,
+            notice = revocations.recv() => match notice {
+                Ok((subject, version)) if subject == claims.sub && claims.auth_version < version => break CredentialStatus::Revoked,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break CredentialStatus::Revoked,
+                // The in-flight query may predate a lost revocation. It cannot
+                // satisfy a fresh-validation requirement after notification loss.
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => break CredentialStatus::Revoked,
+                _ => {},
+            },
+            result = &mut validation => break result,
+        }
+    };
+    let now = Instant::now();
+    if drain.is_draining() {
+        return None;
+    }
+    if now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
+        return Some(false);
+    }
+    let result = if !authentication::revocations_current(revocations, claims) {
+        CredentialStatus::Revoked
+    } else if result == CredentialStatus::Current && now >= deadline {
+        CredentialStatus::Unavailable
+    } else {
+        result
+    };
+    Some(retain_credentials(continuity, result, now))
+}
+
+/// Log only state transitions, never per-check credentials or database errors.
+fn retain_credentials(
+    continuity: &mut CredentialContinuity,
+    result: CredentialStatus,
+    now: Instant,
+) -> bool {
+    let was_unavailable = continuity.unavailable();
+    let accepted = continuity.observe(result, now);
+    if !was_unavailable && continuity.unavailable() && accepted {
+        warn!(
+            event = "authentication_validation_unavailable",
+            "Retaining established credentials within the bounded uncertainty allowance"
+        );
+    } else if was_unavailable && result == CredentialStatus::Current && accepted {
+        info!(
+            event = "authentication_validation_restored",
+            "Account validation recovered before its deadline"
+        );
+    }
+    accepted
 }
 
 /// Handles a single WebSocket connection
@@ -682,6 +803,7 @@ async fn handle_connection_with_timing(
     let is_authenticated = authenticated_user.is_some();
     let authenticated_display_name = authenticated_user.as_ref().map(|c| c.name.clone());
     let mut auth_exp = authenticated_user.as_ref().map(|claims| claims.exp as u64);
+    let mut auth_deadline = auth_exp.map(credential_expiry_deadline);
 
     let diagnostic_connection_id = metrics.diagnostics().connection_id();
     info!(
@@ -803,6 +925,7 @@ async fn handle_connection_with_timing(
     let mut join_attempts = JoinAttemptState::default();
     let mut last_voice_request: Option<Instant> = None;
     let mut credentials_invalidated = false;
+    let mut credential_continuity = CredentialContinuity::default();
     let mut next_auth_check = Instant::now();
     let mut last_frame_received = Instant::now();
     let mut next_heartbeat = Instant::now() + timing.heartbeat_interval;
@@ -814,8 +937,14 @@ async fn handle_connection_with_timing(
         // Cap every receive wait by its absolute expiry so active traffic cannot
         // keep an authenticated socket alive indefinitely.
         let now_unix = unix_seconds();
-        if auth_exp.is_some_and(|exp| exp <= now_unix) {
-            info!(participant_id, "JWT expired; closing WebSocket");
+        if auth_exp.is_some_and(|exp| exp <= now_unix)
+            || auth_deadline.is_some_and(|deadline| Instant::now() >= deadline)
+            || credential_continuity.expired(Instant::now())
+        {
+            info!(
+                participant_id,
+                "Accepted authentication lifetime or validation allowance expired; closing WebSocket"
+            );
             credentials_invalidated = true;
             break;
         }
@@ -829,7 +958,13 @@ async fn handle_connection_with_timing(
         let receive_timeout = auth_exp
             .map(|exp| Duration::from_secs(exp.saturating_sub(now_unix)))
             .map_or(idle_remaining, |remaining| remaining.min(idle_remaining));
-        let receive_deadline = tokio::time::Instant::now() + receive_timeout;
+        let receive_deadline = Instant::now() + receive_timeout;
+        let receive_deadline =
+            auth_deadline.map_or(receive_deadline, |deadline| deadline.min(receive_deadline));
+        let receive_deadline = credential_continuity
+            .deadline()
+            .map_or(receive_deadline, |deadline| deadline.min(receive_deadline));
+        let receive_deadline = tokio::time::Instant::from_std(receive_deadline);
 
         let receive_result = tokio::select! {
             biased;
@@ -841,18 +976,23 @@ async fn handle_connection_with_timing(
                         credentials_invalidated = true;
                         break;
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => next_auth_check = Instant::now(),
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                        credential_continuity.require_revalidation();
+                        next_auth_check = Instant::now();
+                    },
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => { credentials_invalidated = true; break; }
                     _ => {}
                 }
                 continue;
             }
             _ = tokio::time::sleep_until(next_auth_check.into()), if is_authenticated => {
-                if let Some(claims) = authenticated_user.as_ref()
-                    && !account_credentials_current(db_pool.as_ref(), claims).await
-                {
-                    credentials_invalidated = true;
-                    break;
+                if let Some(claims) = authenticated_user.as_ref() {
+                    match revalidate_account(db_pool.as_ref(), claims, &mut credential_continuity,
+                        &mut auth_revocations, &drain, auth_deadline.unwrap_or_else(Instant::now)).await {
+                        Some(true) => {},
+                        Some(false) => { credentials_invalidated = true; break; },
+                        None => break,
+                    }
                 }
                 next_auth_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
                 continue;
@@ -884,7 +1024,10 @@ async fn handle_connection_with_timing(
                                     credentials_invalidated = true;
                                     break;
                                 }
-                                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => next_auth_check = Instant::now(),
+                                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                                    credential_continuity.require_revalidation();
+                                    next_auth_check = Instant::now();
+                                },
                                 Err(tokio::sync::broadcast::error::RecvError::Closed) => { credentials_invalidated = true; break; }
                                 _ => {}
                             }
@@ -909,10 +1052,14 @@ async fn handle_connection_with_timing(
             Ok(Some(Ok(message))) => message,
             Ok(Some(Err(_))) | Ok(None) => break, // Stream error or closed
             Err(_) => {
-                if auth_exp
-                    .is_some_and(|exp| exp <= now_unix.saturating_add(receive_timeout.as_secs()))
+                if auth_exp.is_some_and(|exp| exp <= unix_seconds())
+                    || auth_deadline.is_some_and(|deadline| Instant::now() >= deadline)
+                    || credential_continuity.expired(Instant::now())
                 {
-                    info!(participant_id, "JWT expired; closing WebSocket");
+                    info!(
+                        participant_id,
+                        "Accepted authentication lifetime or validation allowance expired; closing WebSocket"
+                    );
                     credentials_invalidated = true;
                 } else {
                     warn!("Idle timeout for participant {}", participant_id);
@@ -920,6 +1067,15 @@ async fn handle_connection_with_timing(
                 break;
             }
         };
+        // A ready frame can win against timeout_at at the exact deadline.
+        // Never dispatch it using an expired accepted credential or allowance.
+        if auth_exp.is_some_and(|exp| exp <= unix_seconds())
+            || auth_deadline.is_some_and(|deadline| Instant::now() >= deadline)
+            || credential_continuity.expired(Instant::now())
+        {
+            credentials_invalidated = true;
+            break;
+        }
         last_frame_received = Instant::now();
         // Record this before the rate gate, whose Close shortcut also exits.
         if matches!(&msg, Message::Close(_)) {
@@ -996,7 +1152,7 @@ async fn handle_connection_with_timing(
                                 match (renewal_authenticator.as_ref(), authenticated_user.as_ref())
                                 {
                                     (Some(authenticator), Some(current)) => {
-                                        renew_authentication(
+                                        let renewal = renew_authentication(
                                             authenticator,
                                             current,
                                             token,
@@ -1004,8 +1160,20 @@ async fn handle_connection_with_timing(
                                             &mut auth_revocations,
                                             &drain,
                                             &tx,
-                                        )
-                                        .await
+                                        );
+                                        let deadline = auth_deadline.unwrap_or_else(Instant::now);
+                                        let deadline = credential_continuity
+                                            .deadline()
+                                            .map_or(deadline, |limit| limit.min(deadline));
+                                        let outcome =
+                                            tokio::time::timeout_at(deadline.into(), renewal)
+                                                .await
+                                                .unwrap_or(RenewalOutcome::Close);
+                                        if Instant::now() >= deadline {
+                                            RenewalOutcome::Close
+                                        } else {
+                                            outcome
+                                        }
                                     }
                                     _ => RenewalOutcome::Rejected,
                                 }
@@ -1014,9 +1182,19 @@ async fn handle_connection_with_timing(
                             };
                             let response = match outcome {
                                 RenewalOutcome::Renewed(claims) => {
+                                    if !retain_credentials(
+                                        &mut credential_continuity,
+                                        CredentialStatus::Current,
+                                        Instant::now(),
+                                    ) {
+                                        credentials_invalidated = true;
+                                        break;
+                                    }
                                     let expires_at = claims.exp as u64;
                                     auth_exp = Some(expires_at);
+                                    auth_deadline = Some(credential_expiry_deadline(expires_at));
                                     authenticated_user = Some(claims);
+                                    next_auth_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
                                     ServerMessage::AuthenticationRenewed {
                                         request_id: request_id.clone(),
                                         expires_at,
@@ -1025,6 +1203,23 @@ async fn handle_connection_with_timing(
                                 RenewalOutcome::Rejected => {
                                     ServerMessage::AuthenticationRenewalFailed {
                                         request_id: request_id.clone(),
+                                    }
+                                }
+                                RenewalOutcome::Unavailable | RenewalOutcome::Busy => {
+                                    if matches!(outcome, RenewalOutcome::Unavailable)
+                                        && !retain_credentials(
+                                            &mut credential_continuity,
+                                            CredentialStatus::Unavailable,
+                                            Instant::now(),
+                                        )
+                                    {
+                                        credentials_invalidated = true;
+                                        break;
+                                    }
+                                    ServerMessage::AuthenticationRenewalDeferred {
+                                        request_id: request_id.clone(),
+                                        retry_after_ms: 3000,
+                                        expires_at: auth_exp.unwrap_or_default(),
                                     }
                                 }
                                 RenewalOutcome::Close => {
@@ -1446,6 +1641,7 @@ async fn handle_connection_with_timing(
         }
     }
 
+    let disconnected_at = Instant::now();
     // Stop stats task
     if let Some(task) = stats_task.take() {
         task.abort();
@@ -1466,7 +1662,16 @@ async fn handle_connection_with_timing(
         && !credentials_invalidated
         && let Some(claims) = authenticated_user.as_ref()
     {
-        credentials_invalidated = !account_credentials_current(db_pool.as_ref(), claims).await;
+        credentials_invalidated = revalidate_account(
+            db_pool.as_ref(),
+            claims,
+            &mut credential_continuity,
+            &mut auth_revocations,
+            &drain,
+            auth_deadline.unwrap_or_else(Instant::now),
+        )
+        .await
+            == Some(false);
     }
 
     // On disconnect: lobby participants clean up immediately, room participants get grace period
@@ -1476,9 +1681,9 @@ async fn handle_connection_with_timing(
             // not start a new grace timer or race its authoritative cleanup.
             debug!(room_id, participant_id, "Membership handed to server drain");
         } else if in_lobby.load(Ordering::Acquire) || credentials_invalidated {
-            // Lobby participants have no transports/media — clean up immediately
+            // Lobby and invalidated memberships do not receive reconnect grace.
             info!(
-                "Lobby participant {} disconnected from room {}, cleaning up immediately",
+                "Participant {} disconnected from room {}; lobby or expired/invalid credentials require immediate cleanup",
                 participant_id, room_id
             );
             if let Err(e) = room_manager
@@ -1504,20 +1709,51 @@ async fn handle_connection_with_timing(
             let timer_sender = tx.clone();
             let timer_claims = authenticated_user.clone();
             let timer_pool = db_pool.clone();
+            let mut timer_continuity = credential_continuity;
+            let timer_drain = drain.clone();
+            let grace_deadline = disconnected_at + Duration::from_secs(30);
+            let grace_deadline =
+                auth_deadline.map_or(grace_deadline, |expiry| expiry.min(grace_deadline));
+            let (activate_timer, activation) = tokio::sync::oneshot::channel::<()>();
 
             let timer = tokio::spawn(async move {
-                let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+                // Registration must precede even an already-expired timer's
+                // cleanup. Failed insertion drops activation and aborts the task.
+                if activation.await.is_err() {
+                    return;
+                }
+                let mut next_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
                 loop {
-                    let next =
-                        (tokio::time::Instant::now() + AUTH_REVALIDATE_INTERVAL).min(deadline);
-                    tokio::time::sleep_until(next).await;
-                    if tokio::time::Instant::now() >= deadline {
-                        break;
-                    }
-                    if let Some(claims) = timer_claims.as_ref()
-                        && !account_credentials_current(timer_pool.as_ref(), claims).await
-                    {
-                        break;
+                    let deadline = timer_continuity
+                        .deadline()
+                        .map_or(grace_deadline, |limit| limit.min(grace_deadline));
+                    tokio::select! {
+                        biased;
+                        _ = timer_drain.wait() => return,
+                        _ = tokio::time::sleep_until(deadline.into()) => break,
+                        _ = tokio::time::sleep_until(next_check.into()), if timer_claims.is_some() => {
+                            if let Some(claims) = timer_claims.as_ref() {
+                                match revalidate_account(timer_pool.as_ref(), claims, &mut timer_continuity,
+                                    &mut auth_revocations, &timer_drain, grace_deadline).await {
+                                    Some(true) => {},
+                                    Some(false) => break,
+                                    None => return,
+                                }
+                            }
+                            next_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
+                        },
+                        notice = auth_revocations.recv(), if timer_claims.is_some() => {
+                            match notice {
+                                Ok((subject, version)) if timer_claims.as_ref().is_some_and(|claims|
+                                    claims.sub == subject && claims.auth_version < version) => break,
+                                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                                    timer_continuity.require_revalidation();
+                                    next_check = Instant::now();
+                                },
+                                _ => {},
+                            }
+                        }
                     }
                 }
                 // Only the timer that still owns this exact grace entry may
@@ -1551,7 +1787,7 @@ async fn handle_connection_with_timing(
                 }
             });
 
-            let retained_for_reconnect = grace_periods.insert(
+            let retained_for_reconnect = grace_periods.insert_activated(
                 room_id.clone(),
                 participant_id.clone(),
                 GraceEntry {
@@ -1564,6 +1800,7 @@ async fn handle_connection_with_timing(
                     sender: tx.clone(),
                     timer,
                 },
+                activate_timer,
             );
             if retained_for_reconnect
                 && tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
@@ -1637,6 +1874,10 @@ mod close_tests;
 #[cfg(test)]
 #[path = "connection_heartbeat_tests.rs"]
 mod heartbeat_tests;
+
+#[cfg(test)]
+#[path = "connection_credential_tests.rs"]
+mod credential_tests;
 
 /// Attempt to reconnect a participant to their existing session
 async fn handle_reconnect(

@@ -60,6 +60,30 @@ It does not test external ICE reachability, TURN, or existing room health, and
 does not automatically replace failed workers. Restart the server to restore
 lost worker capacity.
 
+## Authentication and database availability
+
+The application pool has 20 connections and a three-second acquisition timeout.
+Runtime PostgreSQL statement, lock and idle-transaction limits are 10, 5 and 15
+seconds respectively; they are not an end-to-end request deadline.
+
+Each active authenticated socket checks its account credential version every
+five seconds after the previous check completes. Checks are not shared between
+sockets for the same account. With fast queries, 10,000 active authenticated
+sockets would therefore approach 2,000 periodic queries per second, before
+handshakes, renewals, disconnect/grace checks and other application SQL. The
+connection limit includes guests and grace sessions; it is not a database capacity
+guarantee. Periodic checks use the pool but not the handshake/renewal semaphore.
+
+An established session tolerates unavailable validation for one 15-second window
+from the first observed failure, never beyond its accepted token expiry. The
+deadline follows it into disconnect grace and repeated failures cannot extend it.
+Authoritative revocation remains immediate; lost revocation notifications cannot
+be excused by the allowance. Missing database configuration and initial
+authentication still fail closed. Renewals can request bounded same-socket retries
+without accepting a new token; see [authentication continuity](protocol.md#connection-and-authentication).
+Database failure still makes `/ready` unavailable. This policy does not make
+database-backed account or room operations available during an outage.
+
 ## Shutdown
 
 `SIGTERM` and Ctrl-C start a one-way drain. Readiness becomes unavailable,

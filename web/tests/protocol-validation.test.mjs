@@ -151,6 +151,12 @@ const fixtures = [
   { type: 'authenticationRenewed', requestId: 'renewal-1', expiresAt: 1800000000 },
   { type: 'authenticationRenewalFailed', requestId: 'renewal-1' },
   {
+    type: 'authenticationRenewalDeferred',
+    requestId: 'renewal-1',
+    retryAfterMs: 3000,
+    expiresAt: 1800000000,
+  },
+  {
     type: 'roomJoined',
     participantId: 'self',
     participants: [participant],
@@ -280,6 +286,27 @@ for (const fixture of fixtures) {
     assert.deepEqual(decode(result), result, 'normalization is idempotent');
   });
 }
+
+test('deferred authentication renewal requires bounded integer timing fields', () => {
+  const deferred = fixtures.find((fixture) => fixture.type === 'authenticationRenewalDeferred');
+  for (const retryAfterMs of [0, -1, 5001, 1.5, NaN, Infinity, '3000', null]) {
+    assert.throws(() => decode({ ...deferred, retryAfterMs }), invalid);
+  }
+  for (const expiresAt of [
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+    NaN,
+    Infinity,
+    '1800000000',
+    null,
+  ]) {
+    assert.throws(() => decode({ ...deferred, expiresAt }), invalid);
+  }
+  for (const retryAfterMs of [1, 3000, 5000]) {
+    assert.equal(decode({ ...deferred, retryAfterMs }).retryAfterMs, retryAfterMs);
+  }
+});
 
 test('social actions validate their own result contract, including report lifecycle status', () => {
   const response = (action, data) => ({

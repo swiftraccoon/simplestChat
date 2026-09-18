@@ -892,6 +892,7 @@ export class RoomClient {
       // Connection-owned replies are consumed by SignalingClient, never room state.
       case 'authenticationRenewed':
       case 'authenticationRenewalFailed':
+      case 'authenticationRenewalDeferred':
         break;
       case 'serverRestarting': {
         // Only established membership has recovery intent. A first join that

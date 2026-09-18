@@ -68,14 +68,37 @@ returns that request ID and `expiresAt` in Unix seconds; a rejected renewal retu
 `authenticationRenewalFailed` with only the request ID. These connection-owned
 replies are separate from room request/error correlation. Never log renewal frames.
 
+Temporary database or authentication-capacity failures instead return
+`authenticationRenewalDeferred`, containing the request ID, `retryAfterMs` and
+the **unchanged accepted** `expiresAt`. This is not acceptance of the new token.
+The browser keeps the socket and retries the latest pending token after the
+requested delay plus up to 249 ms of jitter. It allows at most three total
+attempts within one 15-second budget, shortened by the accepted expiry; repeated
+deferrals and newer pending tokens cannot extend that budget.
+
 Renewal validates the same account and credential version without changing room
 membership, media, roles or reconnect credentials. It cannot upgrade a guest,
 change identity, shorten the accepted lifetime or revive an expired connection.
 The server bounds validation to two seconds and the old expiry, and permits three
 renewal attempts per minute per socket under the shared authentication budget.
-The browser retains the newest token for future handshakes; rejected or unconfirmed
-renewal falls back to ordinary bounded reconnection after at most five seconds.
+The browser retains the newest token for future handshakes. Terminal rejection,
+a missing response after five seconds, or exhaustion of the deferred-retry budget
+falls back to ordinary bounded reconnection.
 Logout and identity changes still leave and replace the socket.
+
+Open authenticated sockets revalidate account state every five seconds after the
+previous check completes. A database error or validation timeout permits retaining
+previously accepted credentials for at most 15 seconds from the first observed
+failure, capped by the accepted JWT expiry. Only successful revalidation before
+that deadline clears the allowance. Disconnecting carries the same deadline into
+reconnect grace; it does not start a fresh allowance or extend the normal 30-second
+grace period. Initial authenticated handshakes still require a successful database
+check, so reconnect admission remains unavailable while the database is down.
+Known revocation, missing authentication configuration and expired credentials
+remain terminal. Lost revocation notifications require a fresh successful check;
+uncertainty cannot substitute for that check.
+Validation and receive waits are deadline-bounded; expiry does not roll back
+already-dispatched database or media operations.
 
 The server limits inbound frames/messages to 64 KiB and closes connections after
 five minutes without an inbound frame. For quiet, currently bound room or lobby

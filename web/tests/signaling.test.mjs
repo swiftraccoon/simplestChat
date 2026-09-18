@@ -3,6 +3,7 @@ import test from 'node:test';
 import { loadContractModules, loadTypeScript } from './source-loader.mjs';
 
 const validation = (await loadContractModules())['./protocol-validation'];
+const CLOCK_EPOCH_MS = 1_800_000_000_000;
 
 function transportReply(transportId) {
   return {
@@ -27,6 +28,15 @@ function fakeTimers() {
     clearTimeout(id) {
       timers.delete(id);
     },
+    get now() {
+      return now;
+    },
+    get callbacks() {
+      return [...timers.values()].map((timer) => timer.callback);
+    },
+    advanceWithoutTimers(milliseconds) {
+      now += milliseconds;
+    },
     tick(milliseconds) {
       const end = now + milliseconds;
       while (true) {
@@ -35,7 +45,7 @@ function fakeTimers() {
           .sort((left, right) => left[1].at - right[1].at)[0];
         if (!next) break;
         const [id, timer] = next;
-        now = timer.at;
+        now = Math.max(now, timer.at);
         timers.delete(id);
         timer.callback();
       }
@@ -91,6 +101,8 @@ async function connectedClient(t, random = 0.5, token) {
       setTimeout: timers.setTimeout,
       clearTimeout: timers.clearTimeout,
       Math: Object.assign(Object.create(Math), { random: () => random }),
+      Date: { now: () => CLOCK_EPOCH_MS + timers.now },
+      performance: { now: () => timers.now },
       console: {
         log() {},
         error(...args) {
@@ -105,6 +117,15 @@ async function connectedClient(t, random = 0.5, token) {
   socket.open();
   t.after(() => client.disconnect());
   return { client, socket, timers, FakeWebSocket, errors };
+}
+
+function deferRenewal(socket, expiresAt = CLOCK_EPOCH_MS / 1000 + 60, retryAfterMs = 3000) {
+  socket.receive({
+    type: 'authenticationRenewalDeferred',
+    requestId: socket.sent.at(-1).requestId,
+    retryAfterMs,
+    expiresAt,
+  });
 }
 
 test('refresh renews the same authenticated socket without disturbing room requests', async (t) => {
@@ -154,6 +175,324 @@ test('ordinary request errors cannot reject a correlated authentication renewal'
   assert.equal(timers.pendingCount, 0);
   assert.equal(client.connected, true);
 });
+
+test('deferred renewal retries on the same socket without disturbing membership or room requests', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5, 'initial');
+  const events = [];
+  client.setOnMessage((message) => events.push(message));
+  client.setOnStatusChange((status) => events.push(status));
+  client.setOnConnectionLost(() => events.push('lost'));
+  const pending = client.request({ type: 'createSendTransport' }, 'transportCreated', 20000);
+  client.setToken('refreshed');
+  const original = socket.sent.at(-1);
+  const staleTimeout = timers.callbacks.at(-1);
+  socket.receive({
+    type: 'authenticationRenewalDeferred',
+    requestId: 'unrelated',
+    retryAfterMs: 3000,
+    expiresAt: CLOCK_EPOCH_MS / 1000 + 60,
+  });
+  assert.deepEqual(timers.delays, [20000, 5000]);
+  deferRenewal(socket);
+  assert.deepEqual(timers.delays, [20000, 3125]);
+  timers.tick(1000);
+  deferRenewal(socket);
+  assert.deepEqual(timers.delays, [19000, 2125], 'duplicate response cannot postpone the retry');
+  staleTimeout();
+  timers.tick(2124);
+  assert.equal(socket.sent.length, 2);
+  timers.tick(1);
+  const retry = socket.sent.at(-1);
+  assert.equal(retry.token, 'refreshed');
+  assert.notEqual(retry.requestId, original.requestId);
+  staleTimeout();
+  socket.receive({ type: 'authenticationRenewalFailed', requestId: original.requestId });
+  assert.equal(client.connected, true);
+  socket.receive({
+    type: 'authenticationRenewed',
+    requestId: retry.requestId,
+    expiresAt: CLOCK_EPOCH_MS / 1000 + 120,
+  });
+  socket.receive(transportReply('same-membership'));
+  assert.equal((await pending).transportId, 'same-membership');
+  assert.equal(timers.pendingCount, 0);
+  assert.equal(FakeWebSocket.instances.length, 1);
+  assert.deepEqual(events, []);
+});
+
+test('token updates retain the delay and use only the latest pending credential on each retry', async (t) => {
+  const { client, socket, timers } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('second');
+  deferRenewal(socket);
+  timers.tick(1000);
+  client.setToken('third');
+  client.setToken('fourth');
+  assert.equal(socket.sent.length, 1);
+  assert.deepEqual(timers.delays, [2125]);
+  timers.tick(2125);
+  assert.equal(socket.sent[1].token, 'fourth');
+  client.setToken('fifth');
+  deferRenewal(socket);
+  client.setToken('latest');
+  assert.equal(socket.sent.length, 2);
+  assert.deepEqual(timers.delays, [3125]);
+  timers.tick(3125);
+  assert.deepEqual(
+    socket.sent.map((message) => message.token),
+    ['second', 'fourth', 'latest'],
+  );
+  socket.receive({
+    type: 'authenticationRenewed',
+    requestId: socket.sent[2].requestId,
+    expiresAt: CLOCK_EPOCH_MS / 1000 + 120,
+  });
+  assert.equal(timers.pendingCount, 0);
+  assert.equal(client.connected, true);
+});
+
+for (const [random, delay] of [
+  [0, 3000],
+  [0.999, 3249],
+]) {
+  test(`renewal retry jitter respects the server delay with random=${random}`, async (t) => {
+    const { client, socket, timers } = await connectedClient(t, random, 'initial');
+    client.setToken('refreshed');
+    deferRenewal(socket);
+    assert.deepEqual(timers.delays, [delay]);
+    timers.tick(delay - 1);
+    assert.equal(socket.sent.length, 1);
+    timers.tick(1);
+    assert.equal(socket.sent.length, 2);
+    assert.deepEqual(timers.delays, [5000]);
+  });
+}
+
+test('the third deferral exhausts the attempt limit and reconnects using the latest token', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('refreshed');
+  for (let attempt = 0; attempt < 2; attempt++) {
+    deferRenewal(socket);
+    timers.tick(3125);
+  }
+  assert.equal(socket.sent.length, 3);
+  client.setToken('latest');
+  deferRenewal(socket);
+  assert.equal(client.connected, false);
+  assert.equal(socket.sent.length, 3);
+  assert.deepEqual(timers.delays, [120000, 1500]);
+  timers.tick(1500);
+  const replacement = FakeWebSocket.instances.at(-1);
+  assert.deepEqual(replacement.protocols, ['simplestchat', 'auth.latest']);
+  replacement.open();
+  assert.equal(timers.pendingCount, 0);
+});
+
+test('late deferrals and token updates cannot extend the original fifteen-second budget', async (t) => {
+  const { client, socket, timers } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('second');
+  timers.tick(4900);
+  deferRenewal(socket, CLOCK_EPOCH_MS / 1000 + 60, 5000);
+  timers.tick(5125);
+  assert.equal(socket.sent.length, 2);
+  timers.tick(4900);
+  deferRenewal(socket, CLOCK_EPOCH_MS / 1000 + 120, 5000);
+  client.setToken('latest');
+  assert.deepEqual(timers.delays, [75]);
+  timers.tick(74);
+  assert.equal(client.connected, true);
+  timers.tick(1);
+  assert.equal(timers.now, 15000);
+  assert.equal(client.connected, false);
+  assert.equal(socket.sent.length, 2, 'deadline cannot start another request');
+});
+
+test('a retry request timeout is shortened to the remaining overall budget', async (t) => {
+  const { client, socket, timers } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('refreshed');
+  deferRenewal(socket);
+  timers.tick(3125);
+  timers.tick(4000);
+  deferRenewal(socket);
+  timers.tick(3125);
+  assert.equal(socket.sent.length, 3);
+  assert.deepEqual(timers.delays, [4750]);
+  timers.tick(4749);
+  assert.equal(client.connected, true);
+  timers.tick(1);
+  assert.equal(timers.now, 15000);
+  assert.equal(client.connected, false);
+});
+
+for (const expirySeconds of [0, 2, 5]) {
+  test(`accepted-token expiry bounds a deferred renewal with ${expirySeconds}s remaining`, async (t) => {
+    const { client, socket, timers } = await connectedClient(t, 0.5, 'initial');
+    client.setToken('refreshed');
+    deferRenewal(socket, CLOCK_EPOCH_MS / 1000 + expirySeconds);
+    if (expirySeconds > 0) {
+      timers.tick(expirySeconds * 1000 - 1);
+      assert.equal(client.connected, true);
+      timers.tick(1);
+    }
+    assert.equal(client.connected, false);
+    assert.equal(socket.sent.length, expirySeconds > 3 ? 2 : 1);
+    assert.deepEqual(timers.delays, [120000, 1500]);
+  });
+}
+
+test('later deferrals cannot extend the previously accepted expiry cap', async (t) => {
+  const { client, socket, timers } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('refreshed');
+  deferRenewal(socket, CLOCK_EPOCH_MS / 1000 + 10);
+  timers.tick(3125);
+  deferRenewal(socket, CLOCK_EPOCH_MS / 1000 + 60);
+  timers.tick(3125);
+  assert.deepEqual(timers.delays, [3750]);
+  timers.tick(3749);
+  assert.equal(client.connected, true);
+  timers.tick(1);
+  assert.equal(timers.now, 10000);
+  assert.equal(client.connected, false);
+});
+
+test('successful renewal retires its deadline and starts a fresh budget for the next refresh', async (t) => {
+  const { client, socket, timers } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('second');
+  deferRenewal(socket);
+  timers.tick(3125);
+  socket.receive({
+    type: 'authenticationRenewed',
+    requestId: socket.sent.at(-1).requestId,
+    expiresAt: CLOCK_EPOCH_MS / 1000 + 60,
+  });
+  assert.equal(timers.pendingCount, 0);
+  timers.tick(13000);
+  client.setToken('third');
+  assert.deepEqual(timers.delays, [5000]);
+  timers.tick(4000);
+  socket.receive({
+    type: 'authenticationRenewed',
+    requestId: socket.sent.at(-1).requestId,
+    expiresAt: CLOCK_EPOCH_MS / 1000 + 120,
+  });
+  assert.equal(client.connected, true);
+  assert.equal(timers.pendingCount, 0);
+});
+
+test('disconnect and replacement retire deferred callbacks and stale replies', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('old-refresh');
+  const original = socket.sent[0];
+  deferRenewal(socket);
+  const staleRetry = timers.callbacks[0];
+  client.disconnect();
+  assert.equal(timers.pendingCount, 0);
+  client.connect('other-account');
+  const replacement = FakeWebSocket.instances.at(-1);
+  replacement.open();
+  client.setToken('other-refresh');
+  staleRetry();
+  for (const type of [
+    'authenticationRenewalDeferred',
+    'authenticationRenewed',
+    'authenticationRenewalFailed',
+  ]) {
+    socket.receive({
+      type,
+      requestId: original.requestId,
+      retryAfterMs: 3000,
+      expiresAt: CLOCK_EPOCH_MS / 1000 + 60,
+    });
+  }
+  assert.equal(client.connected, true);
+  assert.equal(replacement.sent.length, 1);
+  assert.equal(replacement.sent[0].token, 'other-refresh');
+  assert.deepEqual(timers.delays, [5000]);
+});
+
+test('a network close during deferred renewal cancels its retry before ordinary reconnect', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('refreshed');
+  deferRenewal(socket);
+  const staleRetry = timers.callbacks[0];
+  socket.close();
+  assert.deepEqual(timers.delays, [120000, 1500]);
+  timers.tick(1500);
+  const replacement = FakeWebSocket.instances.at(-1);
+  replacement.open();
+  staleRetry();
+  timers.tick(16000);
+  assert.equal(client.connected, true);
+  assert.equal(socket.sent.length, 1);
+  assert.equal(replacement.sent.length, 0);
+  assert.deepEqual(replacement.protocols, ['simplestchat', 'auth.refreshed']);
+  assert.equal(timers.pendingCount, 0);
+});
+
+test('clearing credentials cancels deferred retries and guest deferrals are ignored', async (t) => {
+  const { client, socket, timers } = await connectedClient(t, 0.5, 'initial');
+  client.setToken('refreshed');
+  deferRenewal(socket);
+  const staleRetry = timers.callbacks[0];
+  client.setToken(undefined);
+  staleRetry();
+  timers.tick(16000);
+  assert.equal(socket.sent.length, 1);
+  assert.equal(timers.pendingCount, 0);
+  assert.equal(client.connected, true);
+  client.disconnect();
+  const guest = await connectedClient(t);
+  guest.client.setToken('authenticated');
+  guest.socket.receive({
+    type: 'authenticationRenewalDeferred',
+    requestId: 'auth-1',
+    retryAfterMs: 3000,
+    expiresAt: CLOCK_EPOCH_MS / 1000 + 60,
+  });
+  assert.equal(guest.socket.sent.length, 0);
+  assert.equal(guest.timers.pendingCount, 0);
+});
+
+test('delayed event delivery cannot accept an expired request or retry past the cycle deadline', async (t) => {
+  const fixture = await connectedClient(t, 0.5, 'initial');
+  fixture.client.setToken('refreshed');
+  fixture.timers.advanceWithoutTimers(5000);
+  fixture.socket.receive({
+    type: 'authenticationRenewed',
+    requestId: fixture.socket.sent[0].requestId,
+    expiresAt: CLOCK_EPOCH_MS / 1000 + 60,
+  });
+  assert.equal(fixture.client.connected, false);
+  fixture.client.disconnect();
+  const delayed = await connectedClient(t, 0.5, 'initial');
+  delayed.client.setToken('refreshed');
+  deferRenewal(delayed.socket);
+  delayed.timers.advanceWithoutTimers(15000);
+  delayed.timers.tick(0);
+  assert.equal(delayed.client.connected, false);
+  assert.equal(delayed.socket.sent.length, 1);
+});
+
+for (const failure of ['timeout', 'rejected', 'send']) {
+  test(`retry ${failure} retains the existing hard-failure recovery path`, async (t) => {
+    const { client, socket, timers, errors } = await connectedClient(t, 0.5, 'initial');
+    client.setToken('secret-token');
+    deferRenewal(socket);
+    if (failure === 'send')
+      socket.send = () => {
+        throw new Error('secret-token');
+      };
+    timers.tick(3125);
+    if (failure === 'timeout') timers.tick(5000);
+    if (failure === 'rejected')
+      socket.receive({
+        type: 'authenticationRenewalFailed',
+        requestId: socket.sent.at(-1).requestId,
+      });
+    assert.equal(client.connected, false);
+    assert.deepEqual(timers.delays, [120000, 1500]);
+    assert.equal(JSON.stringify(errors).includes('secret-token'), false);
+  });
+}
 
 test('refresh during a pending handshake renews on open and disconnected refresh uses the newest handshake', async (t) => {
   const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5, 'initial');
