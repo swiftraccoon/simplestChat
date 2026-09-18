@@ -4,12 +4,12 @@
 
 use crate::media::config::RouterConfig;
 use crate::media::types::{MediaError, MediaResult};
-use crate::media::worker_manager::WorkerManager;
+use crate::media::worker_manager::{RouterLoadReservation, WorkerManager};
 use anyhow::Result;
 use mediasoup::prelude::*;
 use mediasoup::router::RouterDump;
 use mediasoup::worker::WorkerId;
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
@@ -17,10 +17,11 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 /// Information about a router and its associated worker
-#[derive(Clone)]
 struct RouterInfo {
     router: Router,
     worker_id: WorkerId,
+    /// Releases allocation load when this entry is removed or creation is cancelled.
+    _load_reservation: RouterLoadReservation,
 }
 
 /// Manages routers for different rooms
@@ -38,7 +39,17 @@ impl RouterManager {
         }
     }
 
-    /// Creates a new router for a room
+    /// Creates and registers one router for a room without holding the room map
+    /// lock across native creation. Concurrent creation for the same room can
+    /// register only one winner; a losing call cannot replace its router.
+    ///
+    /// Pending allocation load is refunded if this future fails or is dropped.
+    /// After registration, the entry owns the reservation until removal or drain.
+    /// This accounting guarantee does not make native IPC cancellation atomic.
+    ///
+    /// # Errors
+    /// Returns an error if the room already has a router, no worker with an open
+    /// listener is available, or native router creation fails.
     pub async fn create_router(
         &self,
         room_id: String,
@@ -54,8 +65,10 @@ impl RouterManager {
             }
         }
 
-        // Get the least loaded worker
-        let (worker, worker_id) = self.worker_manager.get_least_loaded_worker().await?;
+        // Keep the reservation alive through native creation and map insertion.
+        // Every error or cancellation path releases it synchronously.
+        let (worker, load_reservation) = self.worker_manager.reserve_worker().await?;
+        let worker_id = worker.id();
 
         // Create the router
         let router_options = config.to_router_options();
@@ -65,21 +78,33 @@ impl RouterManager {
             .map_err(|e| MediaError::RouterError(format!("Failed to create router: {e}")))?;
 
         let router_id = router.id().to_string();
-        info!(
-            "Created router {} for room {} on worker {}",
-            router_id, room_id, worker_id
-        );
-
         // Set up router event handlers
         self.setup_router_handlers(&router, &room_id);
 
         // Store router info
-        let router_info = RouterInfo { router, worker_id };
+        let router_info = RouterInfo {
+            router,
+            worker_id,
+            _load_reservation: load_reservation,
+        };
+        let mut routers = self.routers.write().await;
+        // Another caller may have registered this room while native creation
+        // was pending. Never replace its router or retain the losing load slot.
+        match routers.entry(room_id.clone()) {
+            Entry::Occupied(_) => {
+                return Err(MediaError::RouterError(format!(
+                    "Router already exists for room: {room_id}"
+                )));
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(router_info);
+            }
+        }
 
-        self.routers
-            .write()
-            .await
-            .insert(room_id.clone(), router_info);
+        info!(
+            "Created router {} for room {} on worker {}",
+            router_id, room_id, worker_id
+        );
 
         Ok(router_id)
     }
@@ -117,17 +142,14 @@ impl RouterManager {
         }
     }
 
-    /// Removes a router for a room
+    /// Removes a room's router entry and immediately releases its allocation load.
+    /// Other callers may still hold native router handles; the count tracks
+    /// registered and pending rooms, not the lifetime of every cloned handle.
     pub async fn remove_router(&self, room_id: &str) -> MediaResult<()> {
         let mut routers = self.routers.write().await;
 
         if let Some(router_info) = routers.remove(room_id) {
-            // Decrement worker load
-            self.worker_manager
-                .decrement_worker_load(router_info.worker_id)
-                .await?;
-
-            // Router is automatically closed when dropped
+            // The router handle and its load reservation are released together.
 
             info!(
                 "Removed router for room {} from worker {}",
@@ -257,7 +279,9 @@ impl RouterManager {
         self.routers.read().await.keys().cloned().collect()
     }
 
-    /// Closes all routers
+    /// Drops every registered router entry and releases its allocation load.
+    /// Callers must quiesce room creation first: draining the map does not fence
+    /// creation calls that are still awaiting native work or map insertion.
     pub async fn close_all(&self) -> Result<()> {
         info!("Closing all routers");
 
@@ -271,6 +295,10 @@ impl RouterManager {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "allocation_tests.rs"]
+mod allocation_tests;
 
 #[cfg(test)]
 mod tests {

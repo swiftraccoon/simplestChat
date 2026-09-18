@@ -36,8 +36,12 @@ HTTP / WebSocket
 
 Worker count is configurable (detected CPUs capped at 64 by default), not fixed
 at 16. Each worker has a dedicated WebRtcServer UDP port; each room has one
-router. Consumers are created paused and resume after the browser creates its
-consumer. See [configuration](../docs/configuration.md) for allocation limits.
+router. New routers select an open worker with an open listener, preferring fewer
+consumers and then fewer pending or registered routers. Selection reserves the
+router count atomically; cancellation, failed creation, and room removal release
+it synchronously. This spreads rooms even before their users start media.
+Consumers are created paused and resume after the browser creates its consumer.
+See [configuration](../docs/configuration.md) for allocation limits.
 
 Authorization is server-side. Roles, bans, password access, lobby state and
 media/chat permissions cannot rely on what the UI allows. Persistent mutations

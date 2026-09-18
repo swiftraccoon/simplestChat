@@ -9,16 +9,24 @@ use mediasoup::prelude::*;
 use mediasoup::worker::{WorkerDump, WorkerId};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
-use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
+/// Consumers remain the primary cost signal; reserved and registered routers
+/// break ties so rooms created before media starts spread across the pool.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct WorkerLoad {
+    consumers: usize,
+    routers: usize,
+}
+
 /// Unavailable workers have no load entry and must not win against live ones.
 fn select_worker_by_load(
-    loads: impl IntoIterator<Item = Option<usize>>,
-) -> MediaResult<(usize, usize)> {
+    loads: impl IntoIterator<Item = Option<WorkerLoad>>,
+) -> MediaResult<(usize, WorkerLoad)> {
     loads
         .into_iter()
         .enumerate()
@@ -31,10 +39,35 @@ fn worker_has_capacity(worker_closed: bool, server_closed: Option<bool>) -> bool
     !worker_closed && server_closed == Some(false)
 }
 
+/// Owns one pending or registered router's contribution to allocation load.
+///
+/// Move this into the room's router entry after creation. Dropping it refunds
+/// the reservation synchronously, including on errors, future cancellation,
+/// room removal, and manager shutdown. It must not be cloned or released by a
+/// spawned task: subsequent allocations must observe cleanup immediately.
+#[must_use = "dropping the reservation releases the worker's router load"]
+pub(crate) struct RouterLoadReservation {
+    worker_id: WorkerId,
+    worker_load: Arc<Mutex<HashMap<WorkerId, usize>>>,
+}
+
+impl Drop for RouterLoadReservation {
+    fn drop(&mut self) {
+        let mut load = self.worker_load.lock().unwrap_or_else(|e| e.into_inner());
+        // A retired worker's entry may already have been removed. Its ID is
+        // never reused, so this cannot decrement a replacement worker's load.
+        if let Some(count) = load.get_mut(&self.worker_id) {
+            *count = count.saturating_sub(1);
+        }
+    }
+}
+
 /// Manages a pool of mediasoup Workers
 pub struct WorkerManager {
     workers: Arc<RwLock<Vec<Worker>>>,
-    worker_load: Arc<RwLock<HashMap<WorkerId, usize>>>,
+    // Selection and reservation share this short synchronous critical section.
+    // No native IPC or await is allowed while it is held.
+    worker_load: Arc<Mutex<HashMap<WorkerId, usize>>>,
     webrtc_servers: Arc<RwLock<HashMap<WorkerId, WebRtcServer>>>,
     worker_consumer_counts: Arc<StdRwLock<HashMap<WorkerId, Arc<AtomicUsize>>>>,
     config: Arc<MediaConfig>,
@@ -112,7 +145,7 @@ impl WorkerManager {
 
         Ok(Self {
             workers: Arc::new(RwLock::new(workers)),
-            worker_load: Arc::new(RwLock::new(worker_load)),
+            worker_load: Arc::new(Mutex::new(worker_load)),
             webrtc_servers: Arc::new(RwLock::new(webrtc_servers)),
             worker_consumer_counts: Arc::new(StdRwLock::new(worker_consumer_counts)),
             config,
@@ -171,59 +204,73 @@ impl WorkerManager {
             .detach();
     }
 
-    /// Gets the least loaded worker based on real-time consumer counts.
-    /// Returns both the Worker and its WorkerId (needed to look up the WebRtcServer).
-    /// Selection reserves one router-load slot before returning. The caller
-    /// must decrement that slot if router creation fails, or on router removal;
-    /// this is separate from the consumer counters used to choose a worker.
+    /// Reserves a router slot on an open worker with an open shared listener.
+    ///
+    /// Consumer count is the primary score; pending and registered router
+    /// counts break ties. Selection and increment are serialized so concurrent
+    /// empty-room creation does not repeatedly choose the same worker.
+    /// The returned reservation must live with the registered router entry.
     ///
     /// # Errors
-    /// Returns `MediaError::WorkerError` if no live workers are available
-    pub async fn get_least_loaded_worker(&self) -> MediaResult<(Worker, WorkerId)> {
+    /// Returns `MediaError::WorkerError` if no eligible worker is available or
+    /// its router reservation count cannot be incremented.
+    pub(crate) async fn reserve_worker(&self) -> MediaResult<(Worker, RouterLoadReservation)> {
         let workers = self.workers.read().await;
+        let servers = self.webrtc_servers.read().await;
 
-        // A dead worker's consumers close and its count falls to zero, so
-        // exclude closed workers before comparing live-worker load.
-        let (best_idx, best_count) = {
-            let consumer_counts = self
-                .worker_consumer_counts
-                .read()
-                .unwrap_or_else(|e| e.into_inner());
-            select_worker_by_load(workers.iter().map(|worker| {
-                (!worker.closed()).then(|| {
-                    consumer_counts
-                        .get(&worker.id())
-                        .map(|count| count.load(Ordering::Relaxed))
-                        .unwrap_or(0)
-                })
-            }))?
-        }; // consumer_counts guard dropped here
+        let mut load = self.worker_load.lock().unwrap_or_else(|e| e.into_inner());
+        let consumer_counts = self
+            .worker_consumer_counts
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        let (best_idx, best_load) = select_worker_by_load(workers.iter().map(|worker| {
+            let worker_id = worker.id();
+            if !worker_has_capacity(
+                worker.closed(),
+                servers.get(&worker_id).map(WebRtcServer::closed),
+            ) {
+                return None;
+            }
+            Some(WorkerLoad {
+                consumers: consumer_counts.get(&worker_id)?.load(Ordering::Relaxed),
+                routers: *load.get(&worker_id)?,
+            })
+        }))?;
 
         let worker = workers[best_idx].clone();
         let worker_id = worker.id();
 
-        // Increment router load counter for this worker
-        let mut load = self.worker_load.write().await;
-        if let Some(count) = load.get_mut(&worker_id) {
-            *count += 1;
-        }
+        let reserved_load = best_load.routers.checked_add(1).ok_or_else(|| {
+            MediaError::WorkerError("Worker router reservation count exhausted".to_string())
+        })?;
+        load.insert(worker_id, reserved_load);
+        drop(load);
+        drop(consumer_counts);
+        let reservation = RouterLoadReservation {
+            worker_id,
+            worker_load: Arc::clone(&self.worker_load),
+        };
 
         debug!(
-            "Selected worker {} (index {}, {} consumers)",
-            worker_id, best_idx, best_count
+            "Selected worker {} (index {}, {} consumers, {} router reservations)",
+            worker_id, best_idx, best_load.consumers, reserved_load
         );
-        Ok((worker, worker_id))
+        Ok((worker, reservation))
     }
 
     /// Gets the WebRtcServer associated with a worker.
     ///
     /// # Errors
-    /// Returns `MediaError::WorkerError` if no WebRtcServer exists for the given worker_id
+    /// Returns `MediaError::WorkerError` if no open WebRtcServer exists for the given worker_id
     pub async fn get_webrtc_server(&self, worker_id: WorkerId) -> MediaResult<WebRtcServer> {
         let servers = self.webrtc_servers.read().await;
-        servers.get(&worker_id).cloned().ok_or_else(|| {
-            MediaError::WorkerError(format!("No WebRtcServer found for worker: {worker_id}"))
-        })
+        servers
+            .get(&worker_id)
+            .filter(|server| !server.closed())
+            .cloned()
+            .ok_or_else(|| {
+                MediaError::WorkerError(format!("No open WebRtcServer for worker: {worker_id}"))
+            })
     }
 
     /// Gets the consumer counter for a specific worker (for real-time tracking)
@@ -233,19 +280,6 @@ impl WorkerManager {
             .read()
             .unwrap_or_else(|e| e.into_inner());
         counts.get(&worker_id).cloned()
-    }
-
-    /// Decrements the load counter for a worker (called when a router is closed)
-    ///
-    /// # Errors
-    /// This function currently never returns an error but returns `Result` for API consistency
-    pub async fn decrement_worker_load(&self, worker_id: WorkerId) -> MediaResult<()> {
-        let mut load = self.worker_load.write().await;
-        if let Some(count) = load.get_mut(&worker_id) {
-            *count = count.saturating_sub(1);
-            debug!("Decremented load for worker {} to {}", worker_id, *count);
-        }
-        Ok(())
     }
 
     /// Counts workers with an open shared WebRTC listener without making IPC requests.
@@ -277,9 +311,12 @@ impl WorkerManager {
         stats
     }
 
-    /// Gets the current load distribution across workers
+    /// Gets pending plus registered router counts for allocation tie-breaking.
     pub async fn get_load_distribution(&self) -> HashMap<WorkerId, usize> {
-        self.worker_load.read().await.clone()
+        self.worker_load
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Checks if a worker is still alive
@@ -355,7 +392,7 @@ impl WorkerManager {
             servers.insert(new_worker_id, webrtc_server);
 
             // Update load tracking
-            let mut load = self.worker_load.write().await;
+            let mut load = self.worker_load.lock().unwrap_or_else(|e| e.into_inner());
             load.remove(&dead_worker_id);
             load.insert(new_worker_id, 0);
 
@@ -471,7 +508,7 @@ impl WorkerManager {
         self.webrtc_servers.write().await.clear();
 
         *workers = new_workers;
-        *self.worker_load.write().await = new_load;
+        *self.worker_load.lock().unwrap_or_else(|e| e.into_inner()) = new_load;
         *self.webrtc_servers.write().await = new_servers;
         {
             let mut counts = self
@@ -497,7 +534,10 @@ impl WorkerManager {
         // Workers are automatically closed when dropped
         workers.clear();
 
-        self.worker_load.write().await.clear();
+        self.worker_load
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
         self.worker_consumer_counts
             .write()
             .unwrap_or_else(|e| e.into_inner())
@@ -520,6 +560,10 @@ impl Drop for WorkerManager {
 mod tests {
     use super::*;
 
+    fn load(consumers: usize, routers: usize) -> WorkerLoad {
+        WorkerLoad { consumers, routers }
+    }
+
     #[test]
     fn closed_workers_or_listeners_have_no_ready_capacity() {
         assert!(worker_has_capacity(false, Some(false)));
@@ -535,15 +579,76 @@ mod tests {
     #[test]
     fn worker_selection_skips_unavailable_workers() {
         assert_eq!(
-            select_worker_by_load([None, Some(8), Some(3), None]).unwrap(),
-            (2, 3),
+            select_worker_by_load([None, Some(load(8, 1)), Some(load(3, 2)), None]).unwrap(),
+            (2, load(3, 2)),
             "dead workers must not outrank live workers carrying calls"
         );
         assert_eq!(
-            select_worker_by_load([None, Some(usize::MAX)]).unwrap(),
-            (1, usize::MAX),
+            select_worker_by_load([None, Some(load(usize::MAX, usize::MAX))]).unwrap(),
+            (1, load(usize::MAX, usize::MAX)),
             "a live worker remains selectable at any load"
         );
+    }
+
+    #[test]
+    fn worker_selection_prioritizes_consumers_and_breaks_ties_by_router_load() {
+        assert_eq!(
+            select_worker_by_load([Some(load(1, 0)), Some(load(0, usize::MAX))]).unwrap(),
+            (1, load(0, usize::MAX)),
+            "router counts must not override the primary consumer score or overflow a sum"
+        );
+        assert_eq!(
+            select_worker_by_load([Some(load(0, 3)), Some(load(0, 1)), Some(load(0, 2))]).unwrap(),
+            (1, load(0, 1)),
+            "rooms without consumers must spread by pending and registered router counts"
+        );
+        assert_eq!(
+            select_worker_by_load([Some(load(7, 3)), Some(load(7, 1))]).unwrap(),
+            (1, load(7, 1)),
+            "router counts also break ties between workers already carrying media"
+        );
+        assert_eq!(
+            select_worker_by_load([Some(load(0, 0)), Some(load(0, 0))]).unwrap(),
+            (0, load(0, 0)),
+            "equal scores keep a deterministic worker order"
+        );
+    }
+
+    #[test]
+    fn cancelling_a_reservation_refunds_load_without_a_runtime() {
+        let worker_id = "00000000-0000-4000-8000-000000000001".parse().unwrap();
+        let worker_load = Arc::new(Mutex::new(HashMap::from([(worker_id, 1)])));
+        let reservation = RouterLoadReservation {
+            worker_id,
+            worker_load: Arc::clone(&worker_load),
+        };
+        let mut future = Box::pin(async move {
+            std::future::pending::<()>().await;
+            drop(reservation);
+        });
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        assert!(std::future::Future::poll(future.as_mut(), &mut context).is_pending());
+        assert_eq!(worker_load.lock().unwrap()[&worker_id], 1);
+        drop(future);
+        assert_eq!(worker_load.lock().unwrap()[&worker_id], 0);
+    }
+
+    #[test]
+    fn retired_worker_reservations_do_not_change_replacement_load() {
+        let old_id = "00000000-0000-4000-8000-000000000001".parse().unwrap();
+        let new_id = "00000000-0000-4000-8000-000000000002".parse().unwrap();
+        let worker_load = Arc::new(Mutex::new(HashMap::from([(old_id, 1)])));
+        let reservation = RouterLoadReservation {
+            worker_id: old_id,
+            worker_load: Arc::clone(&worker_load),
+        };
+        {
+            let mut load = worker_load.lock().unwrap();
+            load.remove(&old_id);
+            load.insert(new_id, 4);
+        }
+        drop(reservation);
+        assert_eq!(*worker_load.lock().unwrap(), HashMap::from([(new_id, 4)]));
     }
 
     #[test]
@@ -572,9 +677,45 @@ mod tests {
 
         if let Ok(manager) = manager {
             assert_eq!(manager.live_worker_count().await, 1);
-            let worker = manager.get_least_loaded_worker().await;
+            let worker = manager.reserve_worker().await;
             assert!(worker.is_ok());
+            assert_eq!(
+                manager
+                    .get_load_distribution()
+                    .await
+                    .values()
+                    .sum::<usize>(),
+                1
+            );
             drop(worker);
+            assert_eq!(
+                manager
+                    .get_load_distribution()
+                    .await
+                    .values()
+                    .sum::<usize>(),
+                0
+            );
+
+            // Keep the listener alive but remove it from the registry. This
+            // exercises missing-listener exclusion without killing a worker.
+            let (worker_id, listener) = {
+                let mut servers = manager.webrtc_servers.write().await;
+                let worker_id = *servers.keys().next().unwrap();
+                (worker_id, servers.remove(&worker_id).unwrap())
+            };
+            assert!(!listener.closed());
+            assert_eq!(manager.live_worker_count().await, 0);
+            assert!(manager.reserve_worker().await.is_err());
+            assert!(manager.get_webrtc_server(worker_id).await.is_err());
+            assert_eq!(manager.get_load_distribution().await[&worker_id], 0);
+            manager
+                .webrtc_servers
+                .write()
+                .await
+                .insert(worker_id, listener);
+            assert!(manager.get_webrtc_server(worker_id).await.is_ok());
+            assert_eq!(manager.live_worker_count().await, 1);
             manager.shutdown().await.unwrap();
             assert_eq!(manager.live_worker_count().await, 0);
         }
