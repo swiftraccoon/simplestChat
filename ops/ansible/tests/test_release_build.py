@@ -156,7 +156,18 @@ class FakeRunner:
             if command[3] == "{{.Id}}":
                 return 0, next(self.selected_images)
             assert command[-1] == IMAGE_ID
-            return 0, json.dumps(self.image)
+            # Exercise the requested Go template instead of returning unrelated
+            # valid JSON; missing JSON delimiters must fail the export tests.
+            rendered = command[3]
+            for expression, key in {
+                '.Id': 'id', '.Os': 'os', '.Architecture': 'architecture',
+                '.Config.User': 'user', '.Config.Labels': 'labels',
+                '.RootFS': 'rootfs', '.Config.Cmd': 'cmd',
+                '(index .Config "Entrypoint")': 'entrypoint',
+            }.items():
+                rendered = rendered.replace('{{json ' + expression + '}}', json.dumps(self.image.get(key)))
+            assert '{{' not in rendered, 'Unexpected image-inspection template expression'
+            return 0, rendered
         if command[:2] == ["image", "ls"]:
             return 0, self.existing_tag
         if command[:2] == ["image", "tag"]:

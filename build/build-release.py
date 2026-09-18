@@ -247,7 +247,7 @@ def select_existing_image(runner, docker, env, root, image_id, revision, tag):
         '{"id":{{json .Id}},"os":{{json .Os}},"architecture":{{json .Architecture}},'
         '"user":{{json .Config.User}},"labels":{{json .Config.Labels}},'
         '"rootfs":{{json .RootFS}},"cmd":{{json .Config.Cmd}},'
-        '"entrypoint":{{json (index .Config "Entrypoint")}}', image_id], cwd=root, env=env)
+        '"entrypoint":{{json (index .Config "Entrypoint")}}}', image_id], cwd=root, env=env)
     value = json.loads(encoded)
     if not isinstance(value, dict) or value.get("id") != image_id \
             or value.get("os") != "linux" or value.get("architecture") != "amd64" \
