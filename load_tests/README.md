@@ -13,7 +13,12 @@ rate is a fixed timer that never adapts to an estimate, and it offers a single
 encoding with no `goog-remb`, `abs-send-time`, simulcast (`rid`) or SVC layers,
 so bitrate adaptation and preferred-layer selection remain unexercised. Results
 cannot support or reject a layer-selection change; browsers negotiate those
-paths and the browser suites measure them.
+paths and the browser suites measure them. Under packet loss the client's own
+ICE and DTLS establishment is fragile (with five percent loss in both
+directions on a Linux loopback, several of thirty clients time out or never
+receive media while browsers join in about two seconds), so loss runs
+describe the generator as much as the server and are kept as evidence, never
+as a delivery verdict.
 
 ## Build and run
 

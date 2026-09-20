@@ -34,8 +34,26 @@ the cores are Apple silicon in a VM, which are faster than the VPS's cores by
 a factor this measurement cannot determine. Read the figures as headroom
 ratios: at the configured `MAX_CONNECTIONS=200` the server used under half of
 its CPU budget and under a fifth of its memory limit on these cores, and the
-cost curve is sublinear. A calibration of the same 100-client two-worker
-workload on a hosted EPYC runner is recorded below when available. Loopback
+cost curve is sublinear. **Calibration:** the same 100-client, two-worker
+workload on a hosted GitHub runner (AMD EPYC 7763, 4 vCPUs, no quota; run
+35541253903, three same-source pairs) used a median 120.4 % of one vCPU
+(117.7–121.6) with the same 207 MiB peak RSS and 424 ms receive-ready P99, so
+one of these Apple-silicon VM cores did the work of 1.92 EPYC vCPUs. Scaling
+the ladder by that factor puts the production quota on EPYC-class cores at
+about 60 % for 100 clients, 86 % for 200 and 101 % for 300:
+
+| Clients | Share of the 2-CPU quota, measured (Apple silicon VM) | Projected on EPYC 7763 vCPUs |
+| ---: | ---: | ---: |
+| 100 | 31.7% | 61% |
+| 200 | 45.1% | 87% |
+| 300 | 52.8% | 101% |
+
+**The configured `MAX_CONNECTIONS=200` therefore sits near the CPU ceiling
+of the production shape on EPYC-class cores for this synthetic workload, and
+300 would saturate it.** Browser traffic with simulcast, congestion feedback
+and TURN costs more per client than this generator, and the VPS's own core
+speed is unmeasured, so 200 is a ceiling to keep, not headroom to spend;
+lowering it is the safe direction until the VPS is measured. Loopback
 carries no real network cost (no TURN, no packet loss, no NAT keepalives), the
 generator's fixed-rate synthetic RTP is lighter than browser traffic with
 congestion feedback and simulcast, and nothing here measures browser quality.
