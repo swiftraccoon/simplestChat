@@ -313,6 +313,32 @@ impl MediaGenerator {
         }
     }
 
+    /// Packets per second this configuration offers with periodic keyframes
+    /// only. Requested keyframes add packets, so this is the minimum offered
+    /// rate a healthy generator produces.
+    pub fn nominal_packets_per_second(&self) -> f64 {
+        let audio = if self.config.audio_enabled {
+            1000.0 / 20.0
+        } else {
+            0.0
+        };
+        let video = if self.config.video_enabled {
+            let interval = self.config.video_fps as usize * 5;
+            let key = self
+                .compute_frame_size(true)
+                .div_ceil(FRAME_DATA_PER_PACKET)
+                .max(1);
+            let inter = self
+                .compute_frame_size(false)
+                .div_ceil(FRAME_DATA_PER_PACKET)
+                .max(1);
+            (key + inter * (interval - 1)) as f64 / 5.0
+        } else {
+            0.0
+        };
+        audio + video
+    }
+
     /// Get the interval between audio packets (20ms for Opus)
     pub fn audio_packet_interval(&self) -> Duration {
         Duration::from_millis(20)
@@ -347,6 +373,22 @@ mod keyframe_tests {
         if frame.is_keyframe {
             assert_eq!(&frame.packets[0][26..29], &[0x9d, 0x01, 0x2a]);
         }
+    }
+
+    /// Every historical "received packets/second" figure is this arithmetic
+    /// times the subscription count; a change here silently moves the baseline.
+    #[test]
+    fn default_preset_offers_615_video_packets_per_five_seconds_and_50_audio_per_second() {
+        let requests = KeyframeRequests::default();
+        let mut generator = MediaGenerator::new(MediaConfig::default());
+        let packets: usize = (0..150)
+            .map(|_| generator.generate_video_frame(&requests).packets.len())
+            .sum();
+        assert_eq!(packets, 615, "19 keyframe packets plus 149 inter frames of 4");
+        assert_eq!(generator.nominal_packets_per_second(), 173.0);
+        assert_eq!(generator.audio_packet_interval(), Duration::from_millis(20));
+        assert_eq!(generator.video_packet_interval(), Duration::from_secs_f64(1.0 / 30.0));
+        assert_eq!(generator.generate_audio_packet().len(), generator.generate_audio_packet().len());
     }
 
     #[test]

@@ -243,6 +243,45 @@ impl TestConfig {
     }
 }
 
+/// Stable publishers a client can be expected to validate. Churners occupy
+/// the trailing client indices, and the success contract scopes delivery
+/// proof to stable peers, so a churner never raises another client's floor.
+fn expected_stable_consumers(
+    client: usize,
+    publishers: usize,
+    churner_start: usize,
+    rooms: usize,
+    audio_cap: Option<usize>,
+    video_cap: Option<usize>,
+) -> usize {
+    let rooms = rooms.max(1);
+    let other_publishers = (0..publishers.min(churner_start))
+        .filter(|publisher| *publisher != client && publisher % rooms == client % rooms)
+        .count();
+    audio_cap.map_or(0, |cap| other_publishers.min(cap))
+        + video_cap.map_or(0, |cap| other_publishers.min(cap))
+}
+
+/// The generator's offered load is deterministic, so a publisher attempt that
+/// queued materially fewer packets than its eligible seconds imply was
+/// throttled by the generator itself (skipped send ticks), not by the
+/// server. Without this floor a stalled generator reads as lower server
+/// throughput. Requested keyframes only add packets, so this is a minimum.
+const OFFERED_LOAD_TOLERANCE: f64 = 0.9;
+
+fn offered_load_deficit(queued: u64, eligible_seconds: usize, nominal_rate: f64) -> Option<String> {
+    if eligible_seconds == 0 {
+        return None;
+    }
+    let expected = nominal_rate * eligible_seconds as f64 * OFFERED_LOAD_TOLERANCE;
+    ((queued as f64) < expected).then(|| {
+        format!(
+            "offered load deficit: queued {queued} packets, expected at least {} over {eligible_seconds} eligible seconds",
+            expected.ceil() as u64
+        )
+    })
+}
+
 fn stable_publishers_by_room(
     publishers: usize,
     churner_start: usize,
@@ -412,16 +451,26 @@ impl RunWatchdog {
     /// normal completion must not turn the process exit back into success.
     fn finish(&self) -> bool {
         use std::sync::atomic::Ordering;
-        if Instant::now() >= self.deadline
-            || self
-                .state
-                .compare_exchange(
-                    WATCHDOG_RUNNING,
-                    WATCHDOG_FINISHED,
-                    Ordering::SeqCst,
-                    Ordering::SeqCst,
-                )
-                .is_err()
+        if Instant::now() >= self.deadline {
+            // A late completion stays expired even if the watchdog thread has
+            // not yet observed the deadline itself.
+            let _ = self.state.compare_exchange(
+                WATCHDOG_RUNNING,
+                WATCHDOG_EXPIRED,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            );
+            return false;
+        }
+        if self
+            .state
+            .compare_exchange(
+                WATCHDOG_RUNNING,
+                WATCHDOG_FINISHED,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .is_err()
         {
             return false;
         }
@@ -1013,15 +1062,24 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
 
     // If we get here, the runtime isn't stuck — generate results normally
     println!("All clients completed.");
+    // A run whose deadline has already passed must not describe itself as
+    // complete in its own artifact, whatever the watchdog thread has done.
+    let late = Instant::now() >= watchdog.deadline;
+    if late {
+        failures.push("Hard deadline expired before results were written".into());
+    }
     let passed = write_results_sync(
         &metrics_collectors,
         &config,
         &started_at,
         &provenance,
-        true,
+        !late,
         failures,
     )?;
     if !watchdog.finish() {
+        // Write the immutable marker here as well: exiting must not race the
+        // watchdog thread's own best-effort write.
+        let _ = write_timeout_results(&config, &started_at, &provenance);
         std::process::exit(124);
     }
     anyhow::ensure!(
@@ -1091,21 +1149,41 @@ fn write_results_sync(
     let publishers = ((config.num_clients as f64 * config.publish_ratio).ceil() as usize)
         .max(1)
         .min(config.num_clients);
+    let churner_start = config.num_clients.saturating_sub(config.churner_count()?);
+    let nominal_rate =
+        MediaGenerator::new(config.media_config.clone()).nominal_packets_per_second();
     for (i, metrics) in all_metrics.iter().enumerate() {
-        let other_publishers = (0..publishers)
-            .filter(|publisher| {
-                *publisher != i && publisher % config.num_rooms == i % config.num_rooms
-            })
-            .count();
-        let expected = if config.media_config.audio_enabled {
-            other_publishers.min(config.max_audio_consumers)
-        } else {
-            0
-        } + if config.media_config.video_enabled {
-            other_publishers.min(config.max_video_consumers)
-        } else {
-            0
-        };
+        let expected = expected_stable_consumers(
+            i,
+            publishers,
+            churner_start,
+            config.num_rooms,
+            config
+                .media_config
+                .audio_enabled
+                .then_some(config.max_audio_consumers),
+            config
+                .media_config
+                .video_enabled
+                .then_some(config.max_video_consumers),
+        );
+        if i < publishers {
+            for (index, attempt) in metrics.connection_attempts.iter().enumerate() {
+                if let Some(coverage) = &attempt.coverage
+                    && let Some(reason) = offered_load_deficit(
+                        coverage.packets_queued,
+                        coverage.planned_eligible_seconds,
+                        nominal_rate,
+                    )
+                {
+                    failures.push(format!(
+                        "{} attempt {}: {reason}",
+                        metrics.client_id,
+                        index + 1
+                    ));
+                }
+            }
+        }
         if metrics.consumers_created < expected as u32 {
             failures.push(format!(
                 "{}: expected at least {expected} consumers, created {}",
@@ -1296,10 +1374,14 @@ async fn run_client_inner(
     });
 
     // Connect to WebSocket signaling server
-    let (ws_stream, _) = connect_async(&config.server_url).await.map_err(|e| {
-        tracing::error!("{}: Failed to connect: {}", client_id, e);
-        e
-    })?;
+    let (ws_stream, _) =
+        tokio::time::timeout_at(config.deadline.into(), connect_async(&config.server_url))
+            .await
+            .map_err(|_| anyhow::anyhow!("No WebSocket connection before the session deadline"))?
+            .map_err(|e| {
+                tracing::error!("{}: Failed to connect: {}", client_id, e);
+                e
+            })?;
 
     tracing::info!("{}: WebSocket connected", client_id);
 
@@ -1320,7 +1402,9 @@ async fn run_client_inner(
     send_message(&mut write, join_msg).await?;
 
     // Wait for room joined response
-    let _participant_id = match receive_response(&mut read, &mut buffered_events).await? {
+    let _participant_id = match receive_response(&mut read, &mut buffered_events, config.deadline)
+        .await?
+    {
         ServerMessage::RoomJoined {
             participant_id,
             participants,
@@ -1392,20 +1476,21 @@ async fn run_client_inner(
     // Get router RTP capabilities (timed)
     let t = Instant::now();
     send_message(&mut write, ClientMessage::GetRouterRtpCapabilities).await?;
-    let router_caps = match receive_response(&mut read, &mut buffered_events).await? {
-        ServerMessage::RouterRtpCapabilities { rtp_capabilities } => {
-            metrics.record_signaling_latency("get_router_caps", t.elapsed().as_millis() as u64);
-            tracing::debug!("{}: Got router RTP capabilities", client_id);
-            rtp_capabilities
-        }
-        ServerMessage::Error { message } => {
-            metrics.record_error(format!("Failed to get router caps: {}", message));
-            return Err(anyhow::anyhow!("Failed to get router caps: {}", message));
-        }
-        msg => {
-            return Err(anyhow::anyhow!("Unexpected message: {:?}", msg));
-        }
-    };
+    let router_caps =
+        match receive_response(&mut read, &mut buffered_events, config.deadline).await? {
+            ServerMessage::RouterRtpCapabilities { rtp_capabilities } => {
+                metrics.record_signaling_latency("get_router_caps", t.elapsed().as_millis() as u64);
+                tracing::debug!("{}: Got router RTP capabilities", client_id);
+                rtp_capabilities
+            }
+            ServerMessage::Error { message } => {
+                metrics.record_error(format!("Failed to get router caps: {}", message));
+                return Err(anyhow::anyhow!("Failed to get router caps: {}", message));
+            }
+            msg => {
+                return Err(anyhow::anyhow!("Unexpected message: {:?}", msg));
+            }
+        };
 
     // Pre-compute RtpCapabilities from RtpCapabilitiesFinalized once (avoids serde round-trip per consumer)
     let rtp_capabilities: RtpCapabilities = serde_json::from_value(
@@ -1424,7 +1509,7 @@ async fn run_client_inner(
         let t = Instant::now();
         send_message(&mut write, ClientMessage::CreateSendTransport).await?;
         let (st_id, send_ice_params, send_ice_cands, send_dtls_params) =
-            match receive_response(&mut read, &mut buffered_events).await? {
+            match receive_response(&mut read, &mut buffered_events, config.deadline).await? {
                 ServerMessage::TransportCreated {
                     transport_id,
                     ice_parameters,
@@ -1475,7 +1560,7 @@ async fn run_client_inner(
             dtls_parameters: local_send_dtls,
         };
         send_message(&mut write, connect_send_msg).await?;
-        match receive_response(&mut read, &mut buffered_events).await? {
+        match receive_response(&mut read, &mut buffered_events, config.deadline).await? {
             ServerMessage::TransportConnected { .. } => {
                 metrics.record_signaling_latency(
                     "connect_send_transport",
@@ -1500,7 +1585,7 @@ async fn run_client_inner(
     let t = Instant::now();
     send_message(&mut write, ClientMessage::CreateRecvTransport).await?;
     let (recv_transport_id, recv_ice_params, recv_ice_cands, recv_dtls_params) =
-        match receive_response(&mut read, &mut buffered_events).await? {
+        match receive_response(&mut read, &mut buffered_events, config.deadline).await? {
             ServerMessage::TransportCreated {
                 transport_id,
                 ice_parameters,
@@ -1551,7 +1636,7 @@ async fn run_client_inner(
         dtls_parameters: local_recv_dtls,
     };
     send_message(&mut write, connect_recv_msg).await?;
-    match receive_response(&mut read, &mut buffered_events).await? {
+    match receive_response(&mut read, &mut buffered_events, config.deadline).await? {
         ServerMessage::TransportConnected { .. } => {
             metrics
                 .record_signaling_latency("connect_recv_transport", t.elapsed().as_millis() as u64);
@@ -1598,7 +1683,7 @@ async fn run_client_inner(
                 source: Some("microphone".to_string()),
             };
             send_message(&mut write, produce_msg).await?;
-            match receive_response(&mut read, &mut buffered_events).await? {
+            match receive_response(&mut read, &mut buffered_events, config.deadline).await? {
                 ServerMessage::ProducerCreated { producer_id } => {
                     metrics
                         .record_signaling_latency("produce_audio", t.elapsed().as_millis() as u64);
@@ -1628,7 +1713,7 @@ async fn run_client_inner(
                 source: Some("camera".to_string()),
             };
             send_message(&mut write, produce_msg).await?;
-            match receive_response(&mut read, &mut buffered_events).await? {
+            match receive_response(&mut read, &mut buffered_events, config.deadline).await? {
                 ServerMessage::ProducerCreated { producer_id } => {
                     metrics
                         .record_signaling_latency("produce_video", t.elapsed().as_millis() as u64);
@@ -2116,6 +2201,9 @@ async fn send_real_media_loop(
             _ = video_interval.tick(), if config.video_enabled => {
                 if let Some(track) = &video_track {
                     let frame = media_gen.generate_video_frame(&keyframe_requests);
+                    if frame.is_keyframe {
+                        metrics.record_keyframe(frame.requested);
+                    }
                     let mut send_error = false;
                     for packet_bytes in frame.packets {
                         let packet = negotiated_rtp_packet(&packet_bytes, video_ssrc);
@@ -2537,6 +2625,57 @@ mod watchdog_tests {
         worker.join().unwrap();
     }
 
+    #[tokio::test]
+    async fn setup_replies_are_bounded_by_the_session_deadline() {
+        use futures_util::StreamExt as _;
+        let (client, _server) = tokio::io::duplex(1024);
+        let stream = tokio_tungstenite::WebSocketStream::from_raw_socket(
+            client,
+            tokio_tungstenite::tungstenite::protocol::Role::Client,
+            None,
+        )
+        .await;
+        let (_write, mut read) = stream.split();
+        let mut buffered = Vec::new();
+        let started = Instant::now();
+        let error = receive_response(
+            &mut read,
+            &mut buffered,
+            Instant::now() + Duration::from_millis(50),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("deadline"), "{error}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn validated_consumer_floor_excludes_churning_publishers() {
+        assert_eq!(expected_stable_consumers(0, 3, 2, 1, Some(4), Some(4)), 2);
+        assert_eq!(
+            expected_stable_consumers(0, 100, 70, 4, Some(4), Some(4)),
+            8
+        );
+        assert_eq!(expected_stable_consumers(2, 3, 2, 1, Some(4), None), 2);
+        assert_eq!(expected_stable_consumers(0, 3, 3, 1, Some(1), Some(4)), 3);
+    }
+
+    #[test]
+    fn offered_load_floor_flags_a_throttled_generator_only() {
+        assert_eq!(offered_load_deficit(1730, 10, 173.0), None);
+        assert_eq!(
+            offered_load_deficit(1560, 10, 173.0),
+            None,
+            "within tolerance"
+        );
+        assert!(offered_load_deficit(1500, 10, 173.0).is_some());
+        assert_eq!(
+            offered_load_deficit(0, 0, 173.0),
+            None,
+            "no eligible seconds, no floor"
+        );
+    }
+
     #[test]
     fn expired_deadline_cannot_be_completed_successfully() {
         let (stop, _receiver) = mpsc::channel();
@@ -2553,6 +2692,11 @@ mod watchdog_tests {
             stop,
         };
         assert!(!already_expired.finish());
+        assert_eq!(
+            expired.state.load(std::sync::atomic::Ordering::SeqCst),
+            WATCHDOG_EXPIRED,
+            "a late completion must leave the run marked expired"
+        );
     }
 
     #[test]
@@ -3075,14 +3219,19 @@ async fn send_message(
     Ok(())
 }
 
-async fn receive_message(
-    read: &mut futures_util::stream::SplitStream<
-        tokio_tungstenite::WebSocketStream<
-            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-        >,
-    >,
-) -> Result<ServerMessage> {
-    match read.next().await {
+async fn receive_message<S>(
+    read: &mut futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<S>>,
+    deadline: Instant,
+) -> Result<ServerMessage>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    // One unanswered request must fail this attempt, not wedge the whole run
+    // until the watchdog discards every other client's evidence.
+    let next = tokio::time::timeout_at(deadline.into(), read.next())
+        .await
+        .map_err(|_| anyhow::anyhow!("No signaling reply before the session deadline"))?;
+    match next {
         Some(Ok(Message::Text(text))) => {
             let msg = serde_json::from_str(&text)?;
             Ok(msg)
@@ -3094,16 +3243,16 @@ async fn receive_message(
 }
 
 /// Receive next response message, buffering async event notifications.
-async fn receive_response(
-    read: &mut futures_util::stream::SplitStream<
-        tokio_tungstenite::WebSocketStream<
-            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-        >,
-    >,
+async fn receive_response<S>(
+    read: &mut futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<S>>,
     buffered_events: &mut Vec<ServerMessage>,
-) -> Result<ServerMessage> {
+    deadline: Instant,
+) -> Result<ServerMessage>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
     loop {
-        match receive_message(read).await? {
+        match receive_message(read, deadline).await? {
             msg @ ServerMessage::ParticipantJoined { .. } => {
                 tracing::debug!("Setup: buffering ParticipantJoined event");
                 buffered_events.push(msg);

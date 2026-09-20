@@ -19,6 +19,12 @@ pub struct ClientMetrics {
     pub total_packets_received: u64,
     pub total_bytes_sent: u64,
     pub total_bytes_received: u64,
+    /// Lifetime keyframes generated; a requested one is 19 packets in place
+    /// of 4, so the offered packet rate depends on server feedback.
+    #[serde(default)]
+    pub keyframes_generated: u64,
+    #[serde(default)]
+    pub keyframes_requested: u64,
     pub errors: Vec<String>,
     pub session_duration_ms: u64,
     pub producers_created: u32,
@@ -93,6 +99,8 @@ pub struct MetricsCollector {
     first_media_sent: AtomicU64,     // 0 = not set
     first_media_received: AtomicU64, // 0 = not set
     packets_sent: AtomicU64,
+    keyframes_generated: AtomicU64,
+    keyframes_requested: AtomicU64,
     packets_received: AtomicU64,
     bytes_sent: AtomicU64,
     bytes_received: AtomicU64,
@@ -130,6 +138,8 @@ impl MetricsCollector {
             first_media_sent: AtomicU64::new(0),
             first_media_received: AtomicU64::new(0),
             packets_sent: AtomicU64::new(0),
+            keyframes_generated: AtomicU64::new(0),
+            keyframes_requested: AtomicU64::new(0),
             packets_received: AtomicU64::new(0),
             bytes_sent: AtomicU64::new(0),
             bytes_received: AtomicU64::new(0),
@@ -324,6 +334,15 @@ impl MetricsCollector {
         }
     }
 
+    /// Keyframes change the offered packet rate, so comparisons need to see
+    /// how many were generated and how many the SFU asked for.
+    pub fn record_keyframe(&self, requested: bool) {
+        self.keyframes_generated.fetch_add(1, Ordering::Relaxed);
+        if requested {
+            self.keyframes_requested.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
     pub fn record_packet_sent_for_attempt(&self, attempt: usize, size: usize) {
         self.packets_sent.fetch_add(1, Ordering::Relaxed);
         self.bytes_sent.fetch_add(size as u64, Ordering::Relaxed);
@@ -428,6 +447,8 @@ impl MetricsCollector {
             total_packets_received: self.packets_received.load(Ordering::Relaxed),
             total_bytes_sent: self.bytes_sent.load(Ordering::Relaxed),
             total_bytes_received: self.bytes_received.load(Ordering::Relaxed),
+            keyframes_generated: self.keyframes_generated.load(Ordering::Relaxed),
+            keyframes_requested: self.keyframes_requested.load(Ordering::Relaxed),
             errors,
             session_duration_ms: session_duration,
             producers_created: self.producers_created.load(Ordering::Relaxed) as u32,
@@ -503,6 +524,11 @@ pub struct TestSummary {
     pub total_packets_received: u64,
     pub total_bytes_sent: u64,
     pub total_bytes_received: u64,
+    /// Lifetime keyframe counts across clients; see `ClientMetrics`.
+    #[serde(default)]
+    pub keyframes_generated: u64,
+    #[serde(default)]
+    pub keyframes_requested: u64,
     pub average_session_duration_ms: u64,
     pub total_errors: usize,
     pub total_producers_created: u32,
@@ -556,6 +582,8 @@ impl TestSummary {
         let total_packets_received: u64 = metrics.iter().map(|m| m.total_packets_received).sum();
         let total_bytes_sent: u64 = metrics.iter().map(|m| m.total_bytes_sent).sum();
         let total_bytes_received: u64 = metrics.iter().map(|m| m.total_bytes_received).sum();
+        let keyframes_generated: u64 = metrics.iter().map(|m| m.keyframes_generated).sum();
+        let keyframes_requested: u64 = metrics.iter().map(|m| m.keyframes_requested).sum();
         let avg_session_duration: u64 =
             metrics.iter().map(|m| m.session_duration_ms).sum::<u64>() / total_clients as u64;
         let total_errors: usize = metrics.iter().map(|m| m.errors.len()).sum();
@@ -583,6 +611,8 @@ impl TestSummary {
             total_packets_received,
             total_bytes_sent,
             total_bytes_received,
+            keyframes_generated,
+            keyframes_requested,
             average_session_duration_ms: avg_session_duration,
             total_errors,
             total_producers_created: total_producers,
@@ -854,6 +884,15 @@ fn histogram_stats(histogram_ms: std::collections::BTreeMap<u64, u64>) -> Latenc
 mod measurement_tests {
     use super::*;
     use std::{sync::Arc, time::Duration};
+
+    #[test]
+    fn keyframe_counts_reach_the_client_report() {
+        let metrics = MetricsCollector::new("keyframes".into());
+        metrics.record_keyframe(false);
+        metrics.record_keyframe(true);
+        let report = metrics.generate_report();
+        assert_eq!((report.keyframes_generated, report.keyframes_requested), (2, 1));
+    }
 
     #[test]
     fn stall_snapshots_have_independent_capacity_and_legacy_compatibility() {

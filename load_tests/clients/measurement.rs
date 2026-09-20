@@ -594,7 +594,10 @@ impl Measurements {
                     {
                         evaluation.failure_reasons.push("Planned subscription counts disagree with attempt expectations".into());
                     }
-                    evaluation.report.passed = evaluation.failure_reasons.is_empty();
+                    // The exact-graph verdict is scoped to the attempt: an
+                    // attempt that failed cannot carry a passing graph.
+                    evaluation.report.passed =
+                        failure_reasons.is_empty() && evaluation.failure_reasons.is_empty();
                     failure_reasons.extend(evaluation.failure_reasons);
                     evaluation.report
                 });
@@ -1011,6 +1014,15 @@ mod planned_subscription_tests {
         let extra = assert_failed(&observations);
         assert_eq!((extra.validated_audio, extra.validated_video), (1, 1));
         assert_eq!(extra.planned_subscriptions.unwrap().realized.len(), 3);
+    }
+
+    #[test]
+    fn a_failed_attempt_never_reports_a_passing_planned_graph() {
+        let (observations, _) = fixture();
+        complete_graph(&observations);
+        observations.attempts.lock().unwrap()[0].report.room_join_ms = None;
+        let failed = assert_failed(&observations);
+        assert!(!failed.planned_subscriptions.unwrap().passed);
     }
 
     #[test]

@@ -29,13 +29,28 @@ export function cpuSeconds(value) {
   return Number(days) * 86400 + parts.reverse().reduce((sum, part, i) => sum + part * 60 ** i, 0);
 }
 
+// Samples arrive every ~500 ms, so a fully sampled window is covered to within
+// about a second; a larger gap or a run of failed `ps` calls would otherwise
+// turn into a CPU figure computed over a fraction of the window.
+const RESOURCE_COVERAGE_SLACK_SECONDS = 1.5;
+const RESOURCE_FAILED_SAMPLE_FRACTION = 0.1;
+
 export function resourceSummary(samples, role, start, end) {
-  const window = samples.filter(s => s.elapsedMs >= start && s.elapsedMs <= end && s[role]);
+  const inWindow = samples.filter(s => s.elapsedMs >= start && s.elapsedMs <= end);
+  const window = inWindow.filter(s => s[role]);
+  const failedSamples = inWindow.length - window.length;
   if (window.length < 2) throw new Error(`Insufficient ${role} resource samples in measurement window`);
   const first = window[0], last = window.at(-1);
   const cpu = last[role].cpuSeconds - first[role].cpuSeconds;
   const seconds = (last.elapsedMs - first.elapsedMs) / 1000;
-  return { samples: window.length, sampledDurationSeconds: seconds, cpuSeconds: cpu,
+  const requestedSeconds = (end - start) / 1000;
+  if (requestedSeconds - seconds > RESOURCE_COVERAGE_SLACK_SECONDS) {
+    throw new Error(`${role} resource samples cover ${seconds.toFixed(2)} s of the ${requestedSeconds} s measurement window`);
+  }
+  if (failedSamples > RESOURCE_FAILED_SAMPLE_FRACTION * inWindow.length) {
+    throw new Error(`${failedSamples} of ${inWindow.length} ${role} resource samples failed`);
+  }
+  return { samples: window.length, failedSamples, sampledDurationSeconds: seconds, requestedDurationSeconds: requestedSeconds, cpuSeconds: cpu,
     cpuPercentOfOneCore: cpu / seconds * 100,
     peakRssMiB: Math.max(...window.map(s => s[role].rssKiB)) / 1024,
     medianRssMiB: median(window.map(s => s[role].rssKiB)) / 1024 };
@@ -269,8 +284,31 @@ async function metrics(url, token) {
   return { raw, values };
 }
 
+/** Parse `/proc/<pid>/stat`: utime and stime in clock ticks, rss in pages. */
+export function linuxProcessSample(stat, clockTicks, pageSize) {
+  const close = stat.lastIndexOf(')');
+  if (close < 0) throw new Error('Invalid /proc stat');
+  const fields = stat.slice(close + 2).trim().split(/\s+/);
+  const utime = Number(fields[11]), stime = Number(fields[12]), rssPages = Number(fields[21]);
+  if (![utime, stime, rssPages].every(Number.isFinite) || !(clockTicks > 0) || !(pageSize > 0)) throw new Error('Invalid /proc stat');
+  return { rssKiB: rssPages * pageSize / 1024, cpuSeconds: (utime + stime) / clockTicks };
+}
+
+let linuxUnits;
+async function linuxSample(pid) {
+  linuxUnits ??= Promise.all([exec('getconf', ['CLK_TCK']), exec('getconf', ['PAGESIZE'])])
+    .then(([ticks, page]) => [Number(ticks.stdout.trim()), Number(page.stdout.trim())]);
+  const [clockTicks, pageSize] = await linuxUnits;
+  return linuxProcessSample(await readFile(`/proc/${pid}/stat`, 'utf8'), clockTicks, pageSize);
+}
+
 async function sample(child) {
   if (!child || child.result) return null;
+  // Linux `ps -o time=` is whole seconds, which is ±1 CPU-second of error on
+  // a 60 s window; /proc carries clock-tick resolution.
+  if (process.platform === 'linux') {
+    try { return await linuxSample(child.pid); } catch { return null; }
+  }
   try {
     const { stdout } = await exec('ps', ['-p', String(child.pid), '-o', 'rss=,time='], { timeout: 2000, env: { ...cleanEnv(), LC_ALL: 'C' } });
     const [rss, cpu] = stdout.trim().split(/\s+/);
@@ -774,7 +812,7 @@ async function main() {
     mediaDiagnosticReporterSha256: hash(await readFile(new URL('./media-diagnostic-report.mjs', import.meta.url))),
     receiverStallReporterSha256: hash(await readFile(new URL('./receiver-stall-report.mjs', import.meta.url))),
     lifecycleDiagnosticReporterSha256: hash(await readFile(new URL('./lifecycle-diagnostic-report.mjs', import.meta.url))),
-    limitations: ['Co-located server/generator: not production capacity.', 'Source-tree hashes cover the listed versioned and nonignored untracked inputs, not ignored/ancestor Cargo configuration, environment flags, toolchains or external native libraries; record those build inputs separately.', 'Symlinks are identified by their link target, not external target contents. Source snapshots and independently frozen binary hashes do not attest that a binary was built from that snapshot.', 'Diagnostic runs skip resource sampling and never produce performance comparisons; full diagnostics change logging, while capture-only retains error-only logs.', 'ps sampled every~500ms in performance mode; RSS is sampled peak and CPU is total user+system for each process, including in-process media workers.', 'CPU window excludes first/last partial sampling intervals. Process launch/hash overhead causes a small offset from the generator clock; no child-process resource attribution.', 'Synthetic queued RTP is not confirmed egress; receive counts do not measure loss without expected fan-out.', 'Latency/CPU differences are descriptive, not an established regression budget.'] };
+    limitations: ['Co-located server/generator: not production capacity.', 'Resource summaries require samples covering the measurement window to within 1.5 s with at most 10% failed samples; a run failing that gate has no comparison row.', 'Source-tree hashes cover the listed versioned and nonignored untracked inputs, not ignored/ancestor Cargo configuration, environment flags, toolchains or external native libraries; record those build inputs separately.', 'Symlinks are identified by their link target, not external target contents. Source snapshots and independently frozen binary hashes do not attest that a binary was built from that snapshot.', 'Diagnostic runs skip resource sampling and never produce performance comparisons; full diagnostics change logging, while capture-only retains error-only logs.', 'ps sampled every~500ms in performance mode; RSS is sampled peak and CPU is total user+system for each process, including in-process media workers.', 'CPU window excludes first/last partial sampling intervals. Process launch/hash overhead causes a small offset from the generator clock; no child-process resource attribution.', 'Synthetic queued RTP is not confirmed egress; receive counts do not measure loss without expected fan-out.', 'Latency/CPU differences are descriptive, not an established regression budget.'] };
   await json(join(options.output, 'manifest.json'), manifest);
   const rows = [];
   try {

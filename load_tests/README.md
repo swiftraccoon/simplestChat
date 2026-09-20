@@ -4,6 +4,14 @@ The optional Rust generator tests SFU forwarding over real ICE/DTLS/SRTP
 connections using synthetic Opus/VP8-shaped RTP. It measures signaling and media
 delivery, not browser encoding, rendering, or visual quality.
 
+The client negotiates only `nack`, `nack pli` and `ccm fir` with a single
+`sdes:mid` header extension: no `transport-cc`, `goog-remb`, `abs-send-time`,
+simulcast (`rid`) or SVC layers, and its send rate is a fixed timer. The server's
+bandwidth estimation, bitrate adaptation and preferred-layer selection are
+therefore never exercised by any run of this generator, and its results cannot
+support or reject a congestion-control or layer-selection change. Browsers do
+negotiate those paths; measure them with the browser suites.
+
 ## Build and run
 
 Install the pinned Rust/native dependencies from the
@@ -144,9 +152,24 @@ publisher and consumer lifetimes must cover that entire window. Late setup,
 early closure, missing peers, unknown ownership, duplicate or extra edges fail;
 there is no settling allowance or short-lived skip that can reduce this proof.
 
+Each publisher attempt must also queue at least 90 percent of the generator's
+nominal packet rate (audio 50/s plus the preset's video rate, 123/s at 480p30)
+multiplied by its eligible seconds. The offered load is deterministic, so a
+deficit means the generator skipped send ticks, and the run fails rather than
+reporting the shortfall as lower server throughput. Requested keyframes only add
+packets; the per-client `keyframesGenerated` and `keyframesRequested` counts show
+how much.
+
+Every setup request (join, capabilities, transports, produce) is bounded by the
+attempt's session deadline. One unanswered reply fails that attempt and the run
+still writes a complete report; it no longer wedges every other client until the
+watchdog discards their evidence.
+
 Accept a run only when the process exits successfully, `run.completed` and
 `run.passed` are true, and no `load_test_timeout.json` exists. Watchdog expiry
-exits 124; incomplete reports and output errors are failures.
+exits 124; a run whose deadline passed before its results were written records
+`run.completed: false` with the reason, and the marker is written from the main
+thread as well. Incomplete reports and output errors are failures.
 
 ## Reports and metric definitions
 
@@ -176,6 +199,12 @@ packet buckets. `load_test_summary.json` aggregates them (`schemaVersion: 2`):
   coverage; inspect per-consumer `packetsBySecond` for stalls.
 - Per-client `consumerDelivery[].attempt` is the immutable one-based connection
   attempt; `isAudio` identifies its media kind. Older artifacts may omit both.
+- `keyframesGenerated` / `keyframesRequested`: lifetime counts per client and in
+  the summary. A requested keyframe is 19 packets in place of 4, so a build
+  that requests more repair raises the offered packet rate; compare these
+  alongside `measurement.packetsReceived`.
+- The per-client validated-consumer floor counts stable (non-churning)
+  publishers in the client's room only, matching the coverage contract above.
 - `run`: completion, failures, timestamps, workload configuration, revision
   labels, and generator binary hash.
 

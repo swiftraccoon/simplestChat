@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cpuSeconds, resourceSummary, comparison, parseOptions, command, captureArguments, finishCapture, diagnosticPolicy, createLifecycleTimeline, lifecycleWorkload, serverDiagnosticEnvironment, diagnosticRunStatus, performanceRunStatus, runFinalizers, collectServerDiagnostics, verifyExecutable, generatorSourceIdentity, sourceTreeIdentity, identity, serverRevisionLabel, stop, SERVER_SHUTDOWN_GRACE_MS, subscriptionArguments, expectedSubscriptionPlan, verifySubscriptionReport, admitsDiagnosticEvidence, collectReceiverStallDiagnostics } from './benchmark-local.mjs';
+import { cpuSeconds, linuxProcessSample, resourceSummary, comparison, parseOptions, command, captureArguments, finishCapture, diagnosticPolicy, createLifecycleTimeline, lifecycleWorkload, serverDiagnosticEnvironment, diagnosticRunStatus, performanceRunStatus, runFinalizers, collectServerDiagnostics, verifyExecutable, generatorSourceIdentity, sourceTreeIdentity, identity, serverRevisionLabel, stop, SERVER_SHUTDOWN_GRACE_MS, subscriptionArguments, expectedSubscriptionPlan, verifySubscriptionReport, admitsDiagnosticEvidence, collectReceiverStallDiagnostics } from './benchmark-local.mjs';
 import { DIAGNOSTIC_LIMITS, readDiagnosticReport } from './diagnostic-report.mjs';
 import { MEDIA_BODY_LIMIT, MEDIA_SAMPLE_LATENESS_MS, validateMediaSnapshot, mediaReference, fetchMediaSnapshot,
   mediaSampleSchedule, createMediaSampler, readGeneratorResults, correlateMediaDiagnostics } from './media-diagnostic-report.mjs';
@@ -388,8 +388,22 @@ test('parses Linux and macOS process CPU time', () => {
 
 test('CPU uses measured process deltas within the shared window', () => {
   const samples = [0, 1000, 2000, 3000].map(elapsedMs => ({ elapsedMs, server: { cpuSeconds: elapsedMs / 2000, rssKiB: 2048 } }));
-  assert.deepEqual(resourceSummary(samples, 'server', 1000, 2000), { samples: 2, sampledDurationSeconds: 1, cpuSeconds: 0.5, cpuPercentOfOneCore: 50, peakRssMiB: 2, medianRssMiB: 2 });
+  assert.deepEqual(resourceSummary(samples, 'server', 1000, 2000), { samples: 2, failedSamples: 0, sampledDurationSeconds: 1, requestedDurationSeconds: 1, cpuSeconds: 0.5, cpuPercentOfOneCore: 50, peakRssMiB: 2, medianRssMiB: 2 });
   assert.throws(() => resourceSummary(samples, 'server', 1500, 1700));
+});
+
+test('resource summaries refuse windows their samples do not cover', () => {
+  const sparse = [0, 900].map(elapsedMs => ({ elapsedMs, server: { cpuSeconds: elapsedMs / 1000, rssKiB: 1024 } }));
+  assert.throws(() => resourceSummary(sparse, 'server', 0, 60000), /cover/);
+  const gaps = [0, 500, 1000, 1500, 2000].map(elapsedMs => ({ elapsedMs,
+    server: elapsedMs === 0 || elapsedMs === 2000 ? { cpuSeconds: elapsedMs / 1000, rssKiB: 1024 } : null }));
+  assert.throws(() => resourceSummary(gaps, 'server', 0, 2000), /failed/);
+});
+
+test('Linux process samples come from /proc at clock-tick resolution', () => {
+  const stat = '1234 (web browser) S 1 1234 1234 0 -1 4194560 100 0 0 0 250 50 0 0 20 0 5 0 100 123456789 3000 18446744073709551615 1 1 0 0 0 0 0 0 0 0 0 0 17 3 0 0 0 0 0';
+  assert.deepEqual(linuxProcessSample(stat, 100, 4096), { rssKiB: 12000, cpuSeconds: 3 });
+  assert.throws(() => linuxProcessSample('garbage', 100, 4096));
 });
 
 test('comparison refuses unmatched runs rather than reporting false success', () => {
