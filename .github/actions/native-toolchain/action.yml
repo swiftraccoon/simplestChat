@@ -39,9 +39,6 @@ runs:
       shell: bash
       run: find vendor -exec touch -h -t 200001010000 {} +
 
-    # By default the cache keeps registry crates only and prunes everything
-    # built from a path, which includes the vendored mediasoup crates and the
-    # compiled worker they carry. Keep all crates so those survive.
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
         # Bump the prefix whenever the retention policy changes: an existing
@@ -49,7 +46,21 @@ runs:
         prefix-key: v1-rust
         shared-key: ${{ inputs.cache-key }}
         key: vendor-${{ hashFiles('vendor/**') }}
-        cache-all-crates: "true"
+
+    # rust-cache saves registry crates and, optionally, workspace members. The
+    # vendored crates are neither (their manifests sit under the repository
+    # root without being members), so it prunes their artifacts on every save,
+    # including the compiled worker under mediasoup-sys's OUT_DIR, and every
+    # job rebuilt it. Cache those artifacts separately: this step runs after
+    # rust-cache, so it restores after it and saves before it cleans.
+    - name: Restore vendored native artifacts
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          target/debug/build/mediasoup-*
+          target/debug/deps/*mediasoup*
+          target/debug/.fingerprint/mediasoup-*
+        key: vendored-${{ runner.os }}-${{ inputs.cache-key }}-${{ hashFiles('vendor/**', 'Cargo.lock', 'rust-toolchain.toml', 'build/pip-constraints.txt', 'build/install-openssl.sh') }}
 
     - name: Configure native dependency paths
       shell: bash
