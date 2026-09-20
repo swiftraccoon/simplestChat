@@ -1,5 +1,43 @@
 # Performance results
 
+## Two media workers at 100 clients — 2026-09-20
+
+Production runs `MEDIA_WORKERS=2`, but every earlier comparison used one worker.
+Four runs of the same build (`f36ff07`, source tree `5367b7ded9f1d05d`, the
+deployed review-fix server plus CI-only commits; generator built from the same
+tree) repeated the four-room, 100-client `ring-v1` seed 17 workload with two
+workers, as a same-build pair so the spread is the measurement noise. All
+**4 runs passed** on the same delivery criteria as the review-fix comparison
+(800 validated consumers per run, none failed or skipped, clean shutdown, no
+failed resource samples); both workers were live and both carried rooms (each
+logged its own consumer teardown), though the exact split is not recorded at
+the default log level. Keyframe counts (4,981–4,983 generated, 289–291 requested) match
+the one-worker runs, so the offered load did not change.
+
+| Measurement | Two workers, median (range of 4) | One worker, review-fix candidate (3) |
+| --- | ---: | ---: |
+| Received packets/second | 69,200.2 (69,199.8–69,200.7) | 69,199.88 (69,199.18–69,200.22) |
+| Receive-ready P99 | 411 ms (410–412) | 416 ms (415–418) |
+| Server CPU, percent of one core | 100.23% (99.40–106.63) | 70.33% (64.48–71.37) |
+| Server sampled peak RSS | 595.45 MiB (595.22–595.72) | 594.27 MiB (594.05–595.20) |
+
+**Two workers forward the same traffic with about 30 percentage points more
+total process CPU** (whole process, both worker threads and the Rust runtime
+together; the sampler has no per-thread attribution) and no change in memory,
+delivery or readiness. The ranges do not overlap. Each worker therefore ran
+near half a core instead of one worker near 0.7 of a core, which is the
+configuration's purpose: per-worker headroom before a single event loop
+saturates, at the price of total efficiency. The mechanism is not isolated
+here; less per-wakeup batching in two lighter loops is consistent with the
+numbers but unmeasured. Capacity planning for the production shape should use
+the two-worker figures, and a two-worker build comparison needs its own pair.
+
+Inputs: the same host and tooling as the review-fix comparison below, two
+media workers, a 205-second ramp, ten-second warmup and 120-second
+measurements, `results/bench-100-multiroom-ring-2workers.20260920T043842Z`.
+Co-located synthetic RTP without congestion-control feedback; not production
+capacity or browser quality.
+
 ## Review-fix comparison at 10, 30 and 100 clients — 2026-09-20
 
 Three alternating baseline/candidate pairs per workload compared the last
