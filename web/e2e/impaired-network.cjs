@@ -39,6 +39,18 @@ const PROFILES = {
   constrained: { env: { IMPAIR_RATE_KBIT: '400', IMPAIR_DELAY_MS: '30' }, seconds: 45 },
   severe: { env: { IMPAIR_RATE_KBIT: '150', IMPAIR_DELAY_MS: '30' }, seconds: 45 },
   recovery: { env: null, seconds: 45 },
+  // A third client joins while both directions are lossy: connection
+  // establishment (ICE, DTLS, first keyframe) under loss, not just steady state.
+  lossyJoin: {
+    env: {
+      IMPAIR_LOSS: '5',
+      IMPAIR_DELAY_MS: '50',
+      IMPAIR_JITTER_MS: '10',
+      IMPAIR_DIRECTION: 'both',
+    },
+    seconds: 20,
+    join: true,
+  },
 };
 const profiles = (process.env.IMPAIRED_PROFILES || Object.keys(PROFILES).join(','))
   .split(',')
@@ -323,6 +335,24 @@ async function main() {
       };
       if (name === 'recovery' || !profile.env) impair('clear');
       else impair('apply', profile.env);
+      let latecomer = null;
+      if (profile.join) {
+        const joinStarted = performance.now();
+        try {
+          latecomer = await client('latecomer');
+          await latecomer.waitForFunction(
+            () =>
+              [...document.querySelectorAll('.video-tile:not(.local) video')].some(
+                (element) => !element.paused && element.videoWidth > 0,
+              ),
+            null,
+            { timeout: 30000 },
+          );
+          phase.secondsToFirstFrame = (performance.now() - joinStarted) / 1000;
+        } catch (error) {
+          phase.joinFailure = error.message.split('\n')[0];
+        }
+      }
       const before = await sample(viewer);
       const publisherBefore = await samplePublisher(publisher);
       const series = [];
@@ -421,6 +451,22 @@ async function main() {
             event.spatial !== null && event.spatial !== undefined && event.spatial <= expected,
         );
         phase.secondsToDowngrade = first ? first.atSeconds - phase.startedAtSeconds : null;
+      }
+      if (profile.join) {
+        ok =
+          check(
+            'a new viewer joins and receives video under bidirectional loss',
+            phase.secondsToFirstFrame !== undefined && phase.secondsToFirstFrame <= 30,
+            {
+              secondsToFirstFrame: phase.secondsToFirstFrame ?? null,
+              failure: phase.joinFailure ?? null,
+            },
+          ) && ok;
+        if (latecomer)
+          await latecomer
+            .context()
+            .close()
+            .catch(() => {});
       }
       if (name === 'recovery') {
         ok =

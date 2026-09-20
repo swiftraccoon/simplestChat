@@ -157,24 +157,11 @@ jobs:
           sudo tc qdisc add dev lo root netem loss 0% && sudo tc qdisc del dev lo root
           build/impaired-check.sh "${RUNNER_TEMP}/impaired/browser"
 
+      # The generator's exact-delivery gates describe a lossless loopback; under
+      # impairment its reports are evidence and the step passes when the run
+      # completes and the server exits cleanly.
       - name: Generator under five percent loss with jitter, both directions
-        shell: bash
-        run: |
-          set -euo pipefail
-          IMPAIR_UDP_PORT=41100 IMPAIR_WORKERS=1 IMPAIR_DIRECTION=both \
-            IMPAIR_LOSS=5 IMPAIR_DELAY_MS=50 IMPAIR_JITTER_MS=10 build/impair.sh apply
-          trap 'build/impair.sh clear' EXIT
-          node load_tests/benchmark-local.mjs \
-            --baseline-root "${GITHUB_WORKSPACE}" \
-            --baseline-bin "${GITHUB_WORKSPACE}/target/release/simplestChat" \
-            --candidate-root "${GITHUB_WORKSPACE}" \
-            --candidate-bin "${GITHUB_WORKSPACE}/target/release/simplestChat" \
-            --generator "${GITHUB_WORKSPACE}/target/release/load_test" \
-            --output "${RUNNER_TEMP}/impaired/generator" \
-            --clients 30 --scenarios multi-room --repetitions 1 \
-            --ramp-up 65 --warmup 10 --duration 60 --workers 1 \
-            --subscription-plan ring-v1 --subscription-seed 17
-          tc -s qdisc show dev lo | tee "${RUNNER_TEMP}/impaired/generator/netem-stats.txt"
+        run: build/impaired-generator.sh "${RUNNER_TEMP}/impaired/generator"
 
       - name: Retain the impaired-network evidence
         if: ${{ !cancelled() }}

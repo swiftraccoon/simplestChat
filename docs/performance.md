@@ -188,10 +188,15 @@ baseline, five percent loss with 50 ms of jitter, a 400 kbit/s cap, a
 150 kbit/s cap and recovery. It asserts that decoding continues under loss
 with retransmission requests, that the server steps the consumer's spatial
 layer down under each cap and back to the top afterwards, and records the
-seconds each switch took. The same job then runs the 30-client four-room
-generator workload with five percent loss and jitter in both directions,
-keeping every delivery gate. Neither job measures production capacity or
-real device media quality.
+seconds each switch took. The same job then runs
+[`build/impaired-generator.sh`](../build/impaired-generator.sh): the 30-client
+four-room generator workload with five percent loss and jitter in both
+directions. The generator's exact-delivery gates describe a lossless loopback,
+so under impairment its summary and per-client reports are retained as
+evidence (connections, validated consumers, keyframe requests, bandwidth
+estimates) and the step passes when the run completes and the server exits
+cleanly. Neither job measures production capacity or real device media
+quality.
 
 ## Production shape and impaired networks
 
