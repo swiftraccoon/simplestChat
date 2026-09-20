@@ -13,10 +13,15 @@ on:
         default: HEAD~1
         type: string
       clients:
-        description: Clients per workload
+        description: Clients per workload (30 and 100 use the four-room ring graph)
         default: '10'
         type: choice
-        options: ['10', '30']
+        options: ['10', '30', '100']
+      workers:
+        description: Media workers for both servers
+        default: '1'
+        type: choice
+        options: ['1', '2']
 
 permissions:
   contents: read
@@ -73,8 +78,12 @@ jobs:
         run: |
           set -euo pipefail
           clients='${{ inputs.clients || '10' }}'
+          workers='${{ inputs.workers || '1' }}'
           if [[ "${clients}" = "30" ]]; then
             scenario=multi-room; ramp=65
+            extra=(--subscription-plan ring-v1 --subscription-seed 17)
+          elif [[ "${clients}" = "100" ]]; then
+            scenario=multi-room; ramp=202
             extra=(--subscription-plan ring-v1 --subscription-seed 17)
           else
             scenario=conference; ramp=5
@@ -88,7 +97,7 @@ jobs:
             --generator "${GITHUB_WORKSPACE}/target/release/load_test" \
             --output "${RUNNER_TEMP}/comparison" \
             --clients "${clients}" --scenarios "${scenario}" --repetitions 3 \
-            --ramp-up "${ramp}" --warmup 10 --duration 60 --workers 1 "${extra[@]}"
+            --ramp-up "${ramp}" --warmup 10 --duration 60 --workers "${workers}" "${extra[@]}"
 
       - name: Evaluate the regression budget
         if: ${{ !cancelled() }}
