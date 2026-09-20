@@ -33,6 +33,27 @@ pub struct IceServer {
     pub credential: Option<String>,
 }
 
+/// Default and maximum `TURN_TTL`. Relay allocations are refreshed with the
+/// credential they were created with, and coturn rejects an expired one, so
+/// the lifetime bounds how long a relayed call can continue. ICE restarts mint
+/// fresh credentials, but an undisturbed call never restarts ICE.
+pub const DEFAULT_TURN_TTL_SECS: u64 = 86_400;
+pub const MAX_TURN_TTL_SECS: u64 = 86_400;
+
+pub(crate) fn parse_turn_ttl(value: Option<&str>) -> anyhow::Result<u64> {
+    let ttl_secs = match value {
+        None => DEFAULT_TURN_TTL_SECS,
+        Some(value) => value
+            .trim()
+            .parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("TURN_TTL must be an integer number of seconds"))?,
+    };
+    if !(60..=MAX_TURN_TTL_SECS).contains(&ttl_secs) {
+        anyhow::bail!("TURN_TTL must be between 60 and {MAX_TURN_TTL_SECS} seconds");
+    }
+    Ok(ttl_secs)
+}
+
 impl TurnConfig {
     /// Load from environment variables. Returns None if TURN_URLS is not set.
     pub fn from_env() -> anyhow::Result<Option<Self>> {
@@ -44,13 +65,7 @@ impl TurnConfig {
         if secret.len() < 32 {
             anyhow::bail!("TURN_SECRET must contain at least 32 bytes");
         }
-        let ttl_secs = std::env::var("TURN_TTL")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(600);
-        if !(60..=3600).contains(&ttl_secs) {
-            anyhow::bail!("TURN_TTL must be between 60 and 3600 seconds");
-        }
+        let ttl_secs = parse_turn_ttl(std::env::var("TURN_TTL").ok().as_deref())?;
 
         let urls: Vec<String> = urls_str
             .split(',')
@@ -106,6 +121,15 @@ impl TurnConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn turn_ttl_defaults_to_a_day_and_rejects_values_outside_its_bounds() {
+        assert_eq!(parse_turn_ttl(None).unwrap(), 86_400);
+        assert_eq!(parse_turn_ttl(Some(" 3600 ")).unwrap(), 3600);
+        assert!(parse_turn_ttl(Some("59")).is_err());
+        assert!(parse_turn_ttl(Some("86401")).is_err());
+        assert!(parse_turn_ttl(Some("soon")).is_err());
+    }
 
     #[test]
     fn turn_hmac_sha1_and_padded_base64_match_known_vector() {

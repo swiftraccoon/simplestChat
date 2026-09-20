@@ -172,8 +172,11 @@ completion guarantee. See [shutdown behavior](configuration.md#shutdown).
 
 ## TURN relay controls
 
-Joined clients receive TURN credentials reusable until expiry. Keep `TURN_TTL`
-low and configure coturn per-user/total allocation and bandwidth quotas.
+Joined clients receive TURN credentials reusable until expiry. The lifetime is
+also the longest a relayed call can last, because coturn refuses allocation
+refreshes with an expired credential and an undisturbed call never restarts
+ICE; the default is one day. Bound abuse with coturn's per-user/total
+allocation and bandwidth quotas rather than with a short lifetime.
 Restrict relay destinations, especially loopback, private, link-local and
 cloud-metadata networks unless explicitly required. Monitor allocations and
 egress: the application issues credentials but cannot enforce coturn's relay

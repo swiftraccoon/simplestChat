@@ -37,7 +37,7 @@
 | `MEDIA_DIAGNOSTICS_ENABLED` | `false` | Enable authenticated, on-demand native media snapshots; requires `METRICS_TOKEN`. See [collection bounds and interpretation](diagnostics.md#server-forwarding-snapshots) |
 | `TURN_URLS` | (none) | Comma-separated TURN server URLs |
 | `TURN_SECRET` | (none) | TURN shared secret of at least 32 bytes; required when `TURN_URLS` is set |
-| `TURN_TTL` | `600` | TURN credential TTL in seconds; constrained to 60–3600 |
+| `TURN_TTL` | `86400` | TURN credential lifetime in seconds (60–86400). Relay allocations are refreshed with the credential they were created with and coturn rejects an expired one, so this bounds how long a relayed call can last; ICE restarts mint fresh credentials |
 
 Media allocation in `src/media/config.rs`:
 
