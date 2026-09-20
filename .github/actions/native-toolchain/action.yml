@@ -33,11 +33,12 @@ runs:
     # Cargo fingerprints path dependencies by source mtime, and checkout gives
     # every file a fresh mtime, so restored artifacts for the vendored
     # mediasoup crates were rebuilt on every run: about three minutes of C++
-    # per compile step. Pin the vendored tree to one fixed mtime; the cache
-    # key below carries its content hash, so a changed patch still rebuilds.
+    # per compile step. The worker's build script also watches the pinned pip
+    # constraints file. Pin those inputs to one fixed mtime; the cache keys
+    # below carry their content hashes, so a real change still rebuilds.
     - name: Give vendored sources a stable mtime
       shell: bash
-      run: find vendor -exec touch -h -t 200001010000 {} +
+      run: find vendor build/pip-constraints.txt -exec touch -h -t 200001010000 {} +
 
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
