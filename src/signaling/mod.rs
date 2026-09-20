@@ -97,6 +97,7 @@ struct AuthGuard {
     concurrency: Arc<Semaphore>,
     trusted_proxy_secret: Arc<Option<String>>,
     allowed_origins: Arc<Vec<String>>,
+    metrics: ServerMetrics,
 }
 
 impl AuthGuard {
@@ -105,6 +106,7 @@ impl AuthGuard {
         max_concurrency: usize,
         trusted_proxy_secret: Arc<Option<String>>,
         allowed_origins: Arc<Vec<String>>,
+        metrics: ServerMetrics,
     ) -> Self {
         Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
@@ -112,6 +114,7 @@ impl AuthGuard {
             concurrency: Arc::new(Semaphore::new(max_concurrency)),
             trusted_proxy_secret,
             allowed_origins,
+            metrics,
         }
     }
 
@@ -281,6 +284,7 @@ pub struct SignalingServer {
     auth_guard: AuthGuard,
     password_work: Arc<Semaphore>,
     max_password_work: usize,
+    session_cleanup: crate::auth::session::SessionCleanup,
     principal_auth_limiter: PrincipalRateLimiter,
     room_creation_limiter: PrincipalRateLimiter,
     room_api_guard: AuthGuard,
@@ -357,6 +361,17 @@ impl SignalingServer {
             DEFAULT_AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE,
         );
         let auth_concurrency = env_usize("AUTH_MAX_CONCURRENCY", DEFAULT_AUTH_CONCURRENCY);
+        let password_workers = password_lane_capacity(
+            std::env::var("MAX_PASSWORD_WORKERS")
+                .ok()
+                .and_then(|value| value.trim().parse().ok()),
+            auth_concurrency,
+            std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get),
+        );
+        info!(
+            password_workers,
+            auth_concurrency, "Account password verification lane sized"
+        );
         let room_api_requests_per_minute = env_u32(
             "ROOM_API_REQUESTS_PER_MINUTE",
             DEFAULT_ROOM_API_REQUESTS_PER_MINUTE,
@@ -399,7 +414,7 @@ impl SignalingServer {
             // separately at the same configured process limit so disconnect
             // churn cannot grow retained room/media sessions without limit.
             grace_periods: GracePeriodMap::with_capacity(max_connections),
-            metrics,
+            metrics: metrics.clone(),
             readiness,
             connection_semaphore: Arc::new(Semaphore::new(max_connections)),
             max_connections,
@@ -409,18 +424,21 @@ impl SignalingServer {
                 1,
                 trusted_proxy_secret.clone(),
                 allowed_origins.clone(),
+                metrics.clone(),
             ),
             auth_guard: AuthGuard::new(
                 auth_requests_per_minute,
                 auth_concurrency,
                 trusted_proxy_secret.clone(),
                 allowed_origins.clone(),
+                metrics.clone(),
             ),
             // Keep the permit alive inside each spawn_blocking Argon2 job. The
             // outer HTTP timeout may cancel a handler, but it must not release
             // capacity while that CPU-heavy job is still running.
-            password_work: Arc::new(Semaphore::new(auth_concurrency)),
-            max_password_work: auth_concurrency,
+            password_work: Arc::new(Semaphore::new(password_workers)),
+            max_password_work: password_workers,
+            session_cleanup: crate::auth::session::SessionCleanup::default(),
             principal_auth_limiter: PrincipalRateLimiter::new(auth_requests_per_account_per_minute),
             room_creation_limiter: PrincipalRateLimiter::new(room_creations_per_account),
             room_api_guard: AuthGuard::new(
@@ -428,6 +446,7 @@ impl SignalingServer {
                 room_api_concurrency,
                 trusted_proxy_secret.clone(),
                 allowed_origins.clone(),
+                metrics.clone(),
             ),
             db_pool,
             jwt_secret,
@@ -462,9 +481,17 @@ impl SignalingServer {
     /// Upgraded WebSockets and blocking password jobs can outlive their HTTP
     /// callers. Wait for their owned permits too; the coordinator bounds this.
     pub async fn wait_for_connections(&self) {
-        while self.connection_count() > 0 || self.pending_password_work() > 0 {
+        while self.connection_count() > 0
+            || self.pending_password_work() > 0
+            || self.session_cleanup.pending() > 0
+        {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
+    }
+
+    /// The single-flight gate for the opportunistic expired-session sweep.
+    pub(crate) fn session_cleanup(&self) -> &crate::auth::session::SessionCleanup {
+        &self.session_cleanup
     }
 
     /// Includes accepted upgrades and any authentication work holding a permit.
@@ -643,7 +670,7 @@ impl SignalingServer {
         let addr = format!("{bind_addr}:{port}");
         info!("Starting signaling server on {}", addr);
 
-        let listener = tokio::net::TcpListener::bind(&addr).await?;
+        let listener = tuned_listener(tokio::net::TcpListener::bind(&addr).await?);
         let drain = self.room_manager.drain_signal();
         let app = self.router();
 
@@ -745,9 +772,15 @@ async fn metrics_handler(State(server): State<SignalingServer>, headers: HeaderM
     let live_workers = tokio::time::timeout(readiness::PROBE_TIMEOUT, workers.live_worker_count())
         .await
         .ok();
-    let body = server
+    let mut body = server
         .metrics
         .render_prometheus_snapshot(rooms, participants, live_workers);
+    crate::metrics::append_gauge(
+        &mut body,
+        "simplestchat_connection_permits_in_use",
+        "Connection permits held by accepted sockets and by handshake authentication work; MAX_CONNECTIONS is enforced against this, not against connections_active",
+        server.connection_count() as u64,
+    );
     (
         StatusCode::OK,
         [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
@@ -795,6 +828,7 @@ async fn ws_handler(
     }
     if !server.ws_handshake_guard.allow(client_ip) {
         warn!(%client_ip, "WebSocket handshake rate limit reached");
+        server.metrics.inc_upgrade_rejected();
         return (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, "60")],
@@ -806,6 +840,7 @@ async fn ws_handler(
     let permit = match server.connection_semaphore.clone().try_acquire_owned() {
         Ok(permit) => permit,
         Err(_) => {
+            server.metrics.inc_upgrade_rejected();
             warn!("Connection limit reached, rejecting WebSocket upgrade");
             return (StatusCode::SERVICE_UNAVAILABLE, "Too many connections").into_response();
         }
@@ -814,6 +849,7 @@ async fn ws_handler(
     let ip_permit = match server.ip_connection_limiter.try_acquire(client_ip) {
         Some(permit) => permit,
         None => {
+            server.metrics.inc_upgrade_rejected();
             warn!(%client_ip, "Per-IP connection limit reached");
             return (StatusCode::TOO_MANY_REQUESTS, "Too many connections").into_response();
         }
@@ -863,8 +899,12 @@ async fn ws_handler(
         return (StatusCode::SERVICE_UNAVAILABLE, "Server shutting down").into_response();
     };
     ws = ws.protocols(["simplestchat"]);
+    // tungstenite reserves the read buffer eagerly per socket; signaling
+    // messages are a few hundred bytes and are capped at 64 KiB, so the 128 KiB
+    // default only inflates per-connection memory.
     ws.max_message_size(65_536)
         .max_frame_size(65_536)
+        .read_buffer_size(16 * 1024)
         .on_failed_upgrade(|error| {
             warn!("WebSocket upgrade failed: {}", error);
         })
@@ -993,6 +1033,7 @@ async fn guarded_api_request(
     }
     let client_ip = request_client_ip(&request, guard.trusted_proxy_secret.as_deref());
     if !guard.allow(client_ip) {
+        guard.metrics.inc_api_request_rejected();
         return (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, "60")],
@@ -1006,7 +1047,14 @@ async fn guarded_api_request(
     // Axum's JSON extractor reads the request body, so a trickled body could
     // otherwise occupy the entire auth/room pool without reaching a handler.
     // Handlers acquire the matching permit after bounded extraction completes.
-    next.run(request).await
+    let response = next.run(request).await;
+    if matches!(
+        response.status(),
+        StatusCode::TOO_MANY_REQUESTS | StatusCode::SERVICE_UNAVAILABLE
+    ) {
+        guard.metrics.inc_api_request_rejected();
+    }
+    response
 }
 
 fn request_client_ip(request: &Request<Body>, trusted_proxy_secret: Option<&str>) -> IpAddr {
@@ -1175,9 +1223,69 @@ async fn security_headers(request: Request<Body>, next: Next) -> Response {
     response
 }
 
+/// Sizes the account Argon2 lane.
+///
+/// Each verification is a 19 MiB, multi-pass argon2id job that runs on the
+/// blocking pool and is reachable without an account (unknown emails verify
+/// a dummy hash). The lane shares its CPU quota with the in-process media
+/// workers, so its default follows available parallelism rather than the HTTP
+/// concurrency cap; `MAX_PASSWORD_WORKERS` (1–32) overrides it.
+fn password_lane_capacity(
+    override_value: Option<usize>,
+    auth_concurrency: usize,
+    available_parallelism: usize,
+) -> usize {
+    match override_value {
+        Some(value) if (1..=32).contains(&value) => value,
+        _ => auth_concurrency.min(available_parallelism / 2).max(1),
+    }
+}
+
+/// Applies per-socket options to every accepted signaling connection.
+///
+/// Signaling frames are small and often sent back to back (a join reply
+/// followed by producer announcements), so Nagle's algorithm would hold each
+/// one until the previous segment is acknowledged. A failed option set is
+/// logged and the connection proceeds with kernel defaults.
+fn tuned_listener(
+    listener: tokio::net::TcpListener,
+) -> axum::serve::TapIo<
+    tokio::net::TcpListener,
+    impl FnMut(&mut tokio::net::TcpStream) + Send + 'static,
+> {
+    use axum::serve::ListenerExt;
+    listener.tap_io(|stream| {
+        if let Err(error) = stream.set_nodelay(true) {
+            tracing::debug!(%error, "TCP_NODELAY was not applied to a signaling socket");
+        }
+    })
+}
+
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    #[test]
+    fn password_lane_is_sized_from_cpu_quota_not_http_concurrency() {
+        assert_eq!(password_lane_capacity(None, 16, 2), 1);
+        assert_eq!(password_lane_capacity(None, 16, 18), 9);
+        assert_eq!(password_lane_capacity(None, 4, 18), 4);
+        assert_eq!(password_lane_capacity(Some(6), 16, 2), 6);
+        assert_eq!(password_lane_capacity(Some(0), 16, 2), 1);
+        assert_eq!(password_lane_capacity(Some(64), 16, 2), 1);
+    }
+
+    #[tokio::test]
+    async fn accepted_signaling_sockets_disable_nagle() {
+        use axum::serve::Listener;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let mut listener = tuned_listener(listener);
+        let client = tokio::net::TcpStream::connect(address).await.unwrap();
+        let (accepted, _) = Listener::accept(&mut listener).await;
+        assert!(accepted.nodelay().unwrap());
+        drop(client);
+    }
 
     #[tokio::test]
     async fn shutdown_rejects_new_room_and_socket_requests_but_keeps_liveness() {
@@ -1270,7 +1378,13 @@ mod security_tests {
             next.run(request).await
         }
 
-        let guard = AuthGuard::new(10, 1, Arc::new(None), Arc::new(Vec::new()));
+        let guard = AuthGuard::new(
+            10,
+            1,
+            Arc::new(None),
+            Arc::new(Vec::new()),
+            ServerMetrics::new(),
+        );
         let (entered_tx, mut entered_rx) = tokio::sync::mpsc::channel(1);
         let app = Router::new()
             .route("/json", post(json_handler))
@@ -1353,7 +1467,13 @@ mod security_tests {
 
     #[test]
     fn auth_rate_guard_enforces_limit_and_recovers_next_window() {
-        let guard = AuthGuard::new(2, 1, Arc::new(None), Arc::new(Vec::new()));
+        let guard = AuthGuard::new(
+            2,
+            1,
+            Arc::new(None),
+            Arc::new(Vec::new()),
+            ServerMetrics::new(),
+        );
         let ip = IpAddr::from([192, 0, 2, 1]);
         assert!(guard.allow(ip));
         assert!(guard.allow(ip));

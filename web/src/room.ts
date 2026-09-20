@@ -47,6 +47,14 @@ export type RoomEventHandler = {
     kind: 'audio' | 'video',
     source?: string,
   ) => void;
+  /** The server or media stack refused a subscription; the tile would otherwise stay blank silently. */
+  onRemoteMediaUnavailable?: (
+    participantId: string,
+    participantName: string,
+    kind: 'audio' | 'video',
+    source: string | undefined,
+    reason: string,
+  ) => void;
   onParticipantLeft: (participantId: string) => void;
   onParticipantJoined: (participantId: string, participantName: string) => void;
   onChatMessage: (participantId: string, participantName: string, content: string) => void;
@@ -870,7 +878,15 @@ export class RoomClient {
           );
         }
       } catch (error) {
-        if (current()) console.warn('[room] remote media unavailable:', producerId, error);
+        if (!current()) return;
+        console.warn('[room] remote media unavailable:', producerId, error);
+        this.events.onRemoteMediaUnavailable?.(
+          participantId,
+          this.participants.get(participantId)?.name ?? participantId.slice(0, 8),
+          kind,
+          source,
+          error instanceof Error ? error.message : String(error),
+        );
       }
     });
     this.consumeQueue = task.catch(() => {});
@@ -1024,7 +1040,7 @@ export class RoomClient {
       }
       case 'iceRestarted': {
         this.observeTask(
-          this.media?.handleIceRestarted(msg.transportId, msg.iceParameters),
+          this.media?.handleIceRestarted(msg.transportId, msg.iceParameters, msg.iceServers),
           'Media reconnection',
         );
         break;

@@ -35,10 +35,12 @@ pub struct RoomListItem {
     pub id: String,
     pub display_name: String,
     pub topic: Option<String>,
-    pub participant_count: usize,
+    /// `null` when the room's state lock was busy at listing time.
+    pub participant_count: Option<usize>,
     pub password_protected: bool,
     pub moderated: bool,
-    pub broadcaster_count: usize,
+    /// `null` when the room's state lock was busy at listing time.
+    pub broadcaster_count: Option<usize>,
     pub description: String,
     pub image_url: Option<String>,
     pub secret: bool,

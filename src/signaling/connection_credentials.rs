@@ -109,6 +109,16 @@ pub(super) async fn account_credentials_current(
     classify_validation(validate_current_claims(pool, claims), deadline).await
 }
 
+/// Owned form for a check that lives across loop iterations as its own
+/// `select!` arm, so a slow database never blocks that socket's frame dispatch.
+pub(super) async fn account_credentials_current_owned(
+    pool: Option<sqlx::PgPool>,
+    claims: Claims,
+    deadline: Instant,
+) -> CredentialStatus {
+    account_credentials_current(pool.as_ref(), &claims, deadline).await
+}
+
 /// Keep result classification independent of PostgreSQL for deterministic
 /// policy tests. No database error text or credentials leave this boundary.
 async fn classify_validation(

@@ -399,7 +399,7 @@ export class CommunityUI {
           el('h3', room.display_name),
           el(
             'p',
-            `${room.id} · ${room.secret ? 'Unlisted' : 'Public'} · ${room.participant_count} online`,
+            `${room.id} · ${room.secret ? 'Unlisted' : 'Public'} · ${room.participant_count ?? '?'} online`,
           ),
         );
         row.append(

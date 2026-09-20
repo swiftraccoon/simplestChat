@@ -20,3 +20,8 @@ pub mod room;
 pub mod shutdown;
 pub mod signaling;
 pub mod turn;
+
+/// Serialized outbound signaling payload. A broadcast serializes once and
+/// every recipient's writer sends the same buffer; cloning is a refcount
+/// bump and the WebSocket frame is built without copying the text again.
+pub type OutboundJson = axum::extract::ws::Utf8Bytes;

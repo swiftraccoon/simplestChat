@@ -116,7 +116,7 @@ pub(super) async fn renew_authentication(
     pool: Option<&sqlx::PgPool>,
     revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
     drain: &crate::shutdown::DrainSignal,
-    sender: &mpsc::Sender<Arc<String>>,
+    sender: &mpsc::Sender<crate::OutboundJson>,
 ) -> RenewalOutcome {
     if current.exp as u64 <= unix_seconds() || !revocations_current(revocations, current) {
         return RenewalOutcome::Close;
@@ -168,7 +168,7 @@ async fn validate_renewal(
     validation: impl std::future::Future<Output = CredentialStatus>,
     revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
     drain: &crate::shutdown::DrainSignal,
-    sender: &mpsc::Sender<Arc<String>>,
+    sender: &mpsc::Sender<crate::OutboundJson>,
     deadline: tokio::time::Instant,
 ) -> RenewalOutcome {
     if !renewal_matches(current, candidate, unix_seconds())
@@ -232,8 +232,8 @@ mod tests {
         notice_sender: tokio::sync::broadcast::Sender<(String, i64)>,
         revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
         drain: crate::shutdown::DrainSignal,
-        sender: mpsc::Sender<Arc<String>>,
-        receiver: mpsc::Receiver<Arc<String>>,
+        sender: mpsc::Sender<crate::OutboundJson>,
+        receiver: mpsc::Receiver<crate::OutboundJson>,
     }
 
     impl ValidationFixture {

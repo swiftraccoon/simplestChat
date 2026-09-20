@@ -202,10 +202,14 @@ async fn enforce_user_capacity(
         .execute(&mut **transaction)
         .await
         .map_err(database_error)?;
-    let user_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
-        .fetch_one(&mut **transaction)
-        .await
-        .map_err(database_error)?;
+    // The lock is transaction-scoped, so the probe it protects must stay
+    // cheap: count at most `max_users` rows rather than the whole table.
+    let user_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM (SELECT 1 FROM users LIMIT $1) AS capacity")
+            .bind(max_users)
+            .fetch_one(&mut **transaction)
+            .await
+            .map_err(database_error)?;
     if user_count >= max_users {
         return Err(AuthError::RegistrationDisabled);
     }
@@ -443,7 +447,7 @@ pub async fn refresh(
     let user_id_string = user_id.to_string();
     let token = jwt::create_token_with_version(&user_id_string, &row.1, secret, row.2)?;
     transaction.commit().await.map_err(database_error)?;
-    session::spawn_expired_cleanup(pool);
+    session::spawn_expired_cleanup(pool, server.session_cleanup());
 
     Ok((
         refresh_cookie_headers(&refresh_token.raw),

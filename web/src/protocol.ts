@@ -120,7 +120,12 @@ export type ServerMessage =
   | { type: 'consumerResumed'; consumerId: string }
   | { type: 'consumerPaused'; consumerId: string }
   | { type: 'reconnectResult'; success: boolean; participantId: string; reconnectToken?: string }
-  | { type: 'iceRestarted'; transportId: string; iceParameters: IceParameters }
+  | {
+      type: 'iceRestarted';
+      transportId: string;
+      iceParameters: IceParameters;
+      iceServers: IceServerEntry[];
+    }
   | { type: 'connectionStats'; availableBitrate: number | null; rtt: number | null }
   | {
       type: 'consumerLayersChanged';
@@ -384,10 +389,12 @@ export interface RoomListItem {
   id: string;
   display_name: string;
   topic: string | null;
-  participant_count: number;
+  /** `null` when the room's state was busy at listing time; never render as zero. */
+  participant_count: number | null;
   password_protected: boolean;
   moderated: boolean;
-  broadcaster_count: number;
+  /** `null` when the room's state was busy at listing time; never render as zero. */
+  broadcaster_count: number | null;
   description: string;
   image_url: string | null;
   secret: boolean;

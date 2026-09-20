@@ -178,6 +178,30 @@ for (const direction of ['sendTransport', 'recvTransport']) {
   });
 }
 
+test('ICE restart installs fresh TURN credentials before regathering', async (t) => {
+  const { state, media } = await fixture(t);
+  const calls = [];
+  const iceServers = [{ urls: ['turn:relay.example:3478'], username: '1:u', credential: 'c' }];
+  const parameters = { usernameFragment: 'local-test', password: 'local-test' };
+  media.sendTransport = {
+    id: 'current',
+    closed: false,
+    close() {},
+    async updateIceServers(options) {
+      calls.push(['updateIceServers', options]);
+    },
+    async restartIce(options) {
+      calls.push(['restartIce', options]);
+    },
+  };
+  await media.handleIceRestarted('current', parameters, iceServers);
+  assert.deepEqual(calls, [
+    ['updateIceServers', { iceServers }],
+    ['restartIce', { iceParameters: parameters }],
+  ]);
+  assert.deepEqual(state.warnings, []);
+});
+
 for (const failure of ['throw', 'reject']) {
   test(`ICE restart handles a current transport ${failure} without exposing native error details`, async (t) => {
     const { state, media } = await fixture(t);

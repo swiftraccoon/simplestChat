@@ -89,6 +89,62 @@ test('producer closure updates local controls and still removes remote media', a
   assert.equal(localProducers.size, 0);
 });
 
+test('a rejected remote subscription is reported instead of silently leaving a blank tile', async () => {
+  const reported = [];
+  class FakeMediaManager {
+    async setup() {}
+    async consume() {
+      throw new Error('Consumer limit reached (64)');
+    }
+    closeConsumerByProducer() {}
+  }
+  const { RoomClient } = await loadTypeScript('src/room.ts', {
+    modules: { './media': { MediaManager: FakeMediaManager } },
+  });
+  const signaling = {
+    setOnMessage(handler) {
+      this.onMessage = handler;
+    },
+    setOnReconnected() {},
+    setOnReconnectFailed() {},
+    setOnConnectionLost() {},
+    completeRestartRecovery() {},
+    send() {
+      queueMicrotask(() =>
+        this.onMessage({
+          type: 'roomJoined',
+          participantId: 'local',
+          reconnectToken: 'token',
+          yourRole: 'user',
+          participants: [
+            {
+              id: 'remote',
+              name: 'Remote participant',
+              role: 'user',
+              producers: [{ id: 'remote-camera', kind: 'video', source: 'camera' }],
+            },
+          ],
+        }),
+      );
+    },
+  };
+  const room = new RoomClient(signaling, {
+    onParticipantsChanged() {},
+    onRemoteTrack() {
+      assert.fail('no track can be delivered for a rejected subscription');
+    },
+    onRemoteTrackRemoved() {},
+    onLocalMediaChanged() {},
+    onRemoteMediaUnavailable(...args) {
+      reported.push(args);
+    },
+  });
+  await room.join('room', 'Local participant');
+  assert.deepEqual(reported, [
+    ['remote', 'Remote participant', 'video', 'camera', 'Consumer limit reached (64)'],
+  ]);
+});
+
 async function captureStoppedFixture(events = {}) {
   const managers = [];
   class FakeMediaManager {

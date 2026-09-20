@@ -350,10 +350,50 @@ pub async fn delete_session_by_token(pool: &PgPool, raw_token: &str) -> Result<b
     Ok(result.rows_affected() > 0)
 }
 
-pub fn spawn_expired_cleanup(pool: &PgPool) {
-    let pool_clone = pool.clone();
+/// Serializes the opportunistic expired-session sweep. A refresh burst must
+/// not pile up concurrent table-wide DELETEs, and shutdown must be able to
+/// wait for the one in flight before closing the pool.
+#[derive(Clone)]
+pub struct SessionCleanup {
+    gate: std::sync::Arc<tokio::sync::Semaphore>,
+}
+
+impl Default for SessionCleanup {
+    fn default() -> Self {
+        Self {
+            gate: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
+        }
+    }
+}
+
+impl SessionCleanup {
+    /// Claims the single sweep slot, or `None` while a sweep is running.
+    pub fn begin(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
+        self.gate.clone().try_acquire_owned().ok()
+    }
+
+    /// Sweeps in flight (zero or one), for drain accounting.
+    pub fn pending(&self) -> usize {
+        1_usize.saturating_sub(self.gate.available_permits())
+    }
+}
+
+const EXPIRED_CLEANUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Runs at most one bounded sweep at a time; a refresh that finds a sweep in
+/// flight simply skips its turn.
+pub fn spawn_expired_cleanup(pool: &PgPool, cleanup: &SessionCleanup) {
+    let Some(permit) = cleanup.begin() else {
+        return;
+    };
+    let pool = pool.clone();
     tokio::spawn(async move {
-        let _ = cleanup_expired(&pool_clone).await;
+        let _permit = permit;
+        match tokio::time::timeout(EXPIRED_CLEANUP_TIMEOUT, cleanup_expired(&pool)).await {
+            Ok(Ok(_)) => {}
+            Ok(Err(_)) => tracing::debug!("Expired session sweep failed; the next refresh retries"),
+            Err(_) => tracing::warn!("Expired session sweep exceeded its time budget"),
+        }
     });
 }
 
@@ -376,6 +416,20 @@ pub async fn cleanup_expired(pool: &PgPool) -> Result<u64, AuthError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn expired_session_sweeps_run_one_at_a_time_and_are_visible_to_drain() {
+        let cleanup = super::SessionCleanup::default();
+        assert_eq!(cleanup.pending(), 0);
+        let first = cleanup.begin().expect("first sweep starts");
+        assert!(
+            cleanup.begin().is_none(),
+            "a concurrent refresh must not start a second table-wide DELETE"
+        );
+        assert_eq!(cleanup.pending(), 1);
+        drop(first);
+        assert_eq!(cleanup.pending(), 0);
+    }
+
     use super::*;
 
     #[test]

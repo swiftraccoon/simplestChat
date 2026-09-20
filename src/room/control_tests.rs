@@ -33,7 +33,7 @@ fn runtime_room(id: &str) -> Arc<TokioRwLock<Room>> {
     )))
 }
 
-fn participant(role: roles::Role) -> (Participant, mpsc::Receiver<Arc<String>>) {
+fn participant(role: roles::Role) -> (Participant, mpsc::Receiver<crate::OutboundJson>) {
     let (sender, receiver) = mpsc::channel(32);
     (
         Participant {
@@ -57,7 +57,7 @@ struct Fixture {
     room_id: String,
     room: Arc<TokioRwLock<Room>>,
     owner: Participant,
-    owner_messages: mpsc::Receiver<Arc<String>>,
+    owner_messages: mpsc::Receiver<crate::OutboundJson>,
 }
 
 /// Native construction is necessary only for tests of RoomManager's actual

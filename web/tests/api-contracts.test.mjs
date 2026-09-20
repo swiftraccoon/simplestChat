@@ -148,6 +148,18 @@ for (const [name, request, path, method, valid] of endpoints) {
   });
 }
 
+test('directory counts are nullable when a room was busy at listing time', async () => {
+  const { ui, state } = await uiFixture();
+  state.response = {
+    ok: true,
+    status: 200,
+    json: async () => [{ ...room, participant_count: null, broadcaster_count: null }],
+  };
+  const [listed] = await ui.api.ownRooms(null);
+  assert.equal(listed.participant_count, null);
+  assert.equal(listed.broadcaster_count, null);
+});
+
 test('all serialized profile and directory fields remain required, including nullable values', async () => {
   const { ui, state } = await uiFixture();
   for (const [request, valid] of [

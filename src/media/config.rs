@@ -208,7 +208,7 @@ impl RouterConfig {
                     ("minptime", 10_u32.into()),
                     ("useinbandfec", 1_u32.into()),
                 ]),
-                rtcp_feedback: vec![RtcpFeedback::TransportCc],
+                rtcp_feedback: vec![RtcpFeedback::Nack, RtcpFeedback::TransportCc],
             },
             // Video codecs - VP8
             RtpCodecCapability::Video {
@@ -353,6 +353,24 @@ mod tests {
         assert_eq!(config.initial_available_outgoing_bitrate, 600_000);
         assert_eq!(config.max_outgoing_bitrate, 3_000_000);
         assert_eq!(config.max_incoming_bitrate, Some(1_500_000));
+    }
+
+    #[test]
+    fn opus_negotiates_nack_alongside_transport_cc() {
+        let codecs = RouterConfig::default_codecs();
+        let opus_feedback = codecs
+            .iter()
+            .find_map(|codec| match codec {
+                RtpCodecCapability::Audio {
+                    mime_type: MimeTypeAudio::Opus,
+                    rtcp_feedback,
+                    ..
+                } => Some(rtcp_feedback),
+                _ => None,
+            })
+            .expect("Opus is advertised");
+        assert!(opus_feedback.contains(&RtcpFeedback::Nack));
+        assert!(opus_feedback.contains(&RtcpFeedback::TransportCc));
     }
 
     #[test]

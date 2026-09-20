@@ -11,7 +11,7 @@ fn metric(metrics: &ServerMetrics, name: &str) -> u64 {
         .unwrap()
 }
 
-fn participant(id: &str, sender: mpsc::Sender<Arc<String>>) -> Participant {
+fn participant(id: &str, sender: mpsc::Sender<crate::OutboundJson>) -> Participant {
     Participant {
         id: id.into(),
         name: id.into(),
@@ -51,7 +51,7 @@ fn departure_payload_is_not_constructed_without_recipients() {
 fn departure_skips_known_closed_channels_before_constructing_payload_or_enqueuing() {
     let metrics = ServerMetrics::new();
     let (sender, mut receiver) = mpsc::channel(1);
-    let queued = Arc::new(String::from("already queued"));
+    let queued = crate::OutboundJson::from("already queued");
     sender.try_send(queued.clone()).unwrap();
     receiver.close();
     let constructed = Cell::new(0);
@@ -62,7 +62,8 @@ fn departure_skips_known_closed_channels_before_constructing_payload_or_enqueuin
     });
     assert_eq!(constructed.get(), 0);
     assert_eq!(metrics.render_prometheus(0, 0, 0), before);
-    assert!(Arc::ptr_eq(&receiver.try_recv().unwrap(), &queued));
+    let received = receiver.try_recv().unwrap();
+    assert_eq!(received.as_bytes().as_ptr(), queued.as_bytes().as_ptr());
     assert!(matches!(
         receiver.try_recv(),
         Err(mpsc::error::TryRecvError::Disconnected)
@@ -89,8 +90,11 @@ fn departure_serializes_once_and_shares_only_with_live_recipients() {
     assert_eq!(constructed.get(), 1);
     let first_message = first_receiver.try_recv().unwrap();
     let second_message = second_receiver.try_recv().unwrap();
-    assert!(Arc::ptr_eq(&first_message, &second_message));
-    assert_eq!(Arc::strong_count(&first_message), 2);
+    // One serialization, shared by both recipients: the buffers alias.
+    assert_eq!(
+        first_message.as_bytes().as_ptr(),
+        second_message.as_bytes().as_ptr()
+    );
     assert_eq!(first_message.as_str(), departure().unwrap());
     assert!(first_receiver.try_recv().is_err());
     assert!(second_receiver.try_recv().is_err());
@@ -104,7 +108,8 @@ fn departure_preserves_full_queue_accounting_and_other_live_delivery() {
     let (full, mut full_receiver) = mpsc::channel(1);
     let (closed, mut closed_receiver) = mpsc::channel(1);
     let (live, mut live_receiver) = mpsc::channel(1);
-    full.try_send(Arc::new("existing".into())).unwrap();
+    full.try_send(crate::OutboundJson::from("existing"))
+        .unwrap();
     closed_receiver.close();
     broadcast_departure(&metrics, [&full, &closed, &live].into_iter(), departure);
     assert_eq!(
@@ -182,7 +187,11 @@ fn departure_fanout_does_not_remove_grace_memberships_or_replace_authoritative_s
         1
     );
     assert!(matches!(
-        try_send_essential(&room.metrics, &closed, Arc::new("direct reply".into())),
+        try_send_essential(
+            &room.metrics,
+            &closed,
+            crate::OutboundJson::from("direct reply")
+        ),
         Err(mpsc::error::TrySendError::Closed(_))
     ));
     assert_eq!(

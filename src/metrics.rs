@@ -110,6 +110,9 @@ struct Inner {
     producers_created_total: AtomicU64,
     consumers_created_total: AtomicU64,
 
+    api_requests_rejected_total: AtomicU64,
+    upgrades_rejected_total: AtomicU64,
+
     // Gauge
     connections_active: AtomicU64,
 
@@ -145,6 +148,8 @@ impl ServerMetrics {
                 leaves_total: AtomicU64::new(0),
                 producers_created_total: AtomicU64::new(0),
                 consumers_created_total: AtomicU64::new(0),
+                api_requests_rejected_total: AtomicU64::new(0),
+                upgrades_rejected_total: AtomicU64::new(0),
                 connections_active: AtomicU64::new(0),
                 message_handling: Histogram::new(),
             }),
@@ -190,6 +195,19 @@ impl ServerMetrics {
     /// Essential-message enqueue attempt rejected by a closed recipient queue.
     pub fn inc_outbound_queue_closed(&self) {
         self.inner.outbound_queue_closed_total.fetch_add(1, Relaxed);
+    }
+
+    /// An HTTP API request answered 429 or 503: rate limits, concurrency
+    /// caps, the password lane, or a busy service. Without this series a
+    /// login flood looks healthy on `/metrics`.
+    pub fn inc_api_request_rejected(&self) {
+        self.inner.api_requests_rejected_total.fetch_add(1, Relaxed);
+    }
+
+    /// A WebSocket upgrade refused by the handshake, connection, or per-IP
+    /// limits before `connections_active` could observe it.
+    pub fn inc_upgrade_rejected(&self) {
+        self.inner.upgrades_rejected_total.fetch_add(1, Relaxed);
     }
 
     pub fn inc_errors(&self) {
@@ -305,6 +323,18 @@ impl ServerMetrics {
         );
         render_counter(
             &mut out,
+            "simplestchat_api_requests_rejected_total",
+            "HTTP API requests answered 429 or 503 by rate limits, concurrency caps, the password lane or a busy service",
+            i.api_requests_rejected_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
+            "simplestchat_upgrades_rejected_total",
+            "WebSocket upgrades refused by handshake, connection or per-IP limits",
+            i.upgrades_rejected_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
             "simplestchat_rooms_created_total",
             "Runtime room media setups completed, including setups later rolled back",
             i.rooms_created_total.load(Relaxed),
@@ -401,6 +431,11 @@ fn render_counter(out: &mut String, name: &str, help: &str, value: u64) {
     let _ = writeln!(out, "{name} {value}");
 }
 
+/// Append a gauge computed by the caller at scrape time.
+pub fn append_gauge(out: &mut String, name: &str, help: &str, value: u64) {
+    render_gauge(out, name, help, value);
+}
+
 fn render_gauge(out: &mut String, name: &str, help: &str, value: u64) {
     let _ = writeln!(out, "# HELP {name} {help}");
     let _ = writeln!(out, "# TYPE {name} gauge");
@@ -423,6 +458,23 @@ mod tests {
                 .and_then(|suffix| suffix.strip_prefix(' '))
                 .map(|value| value.parse().unwrap())
         })
+    }
+
+    #[test]
+    fn rejections_are_exported_as_counters() {
+        let metrics = ServerMetrics::new();
+        metrics.inc_api_request_rejected();
+        metrics.inc_upgrade_rejected();
+        metrics.inc_upgrade_rejected();
+        let body = metrics.render_prometheus(0, 0, 1);
+        assert_eq!(
+            value(&body, "simplestchat_api_requests_rejected_total"),
+            Some(1)
+        );
+        assert_eq!(
+            value(&body, "simplestchat_upgrades_rejected_total"),
+            Some(2)
+        );
     }
 
     #[test]

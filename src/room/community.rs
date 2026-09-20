@@ -45,18 +45,13 @@ impl RoomIdentityUpdate {
 }
 
 impl RoomManager {
-    pub fn broadcaster_count_for_room(&self, room_id: &str) -> usize {
+    /// Broadcaster count for a room, or `None` when it is not live or its
+    /// state lock is busy; see `participant_count_for_room`.
+    pub fn broadcaster_count_for_room(&self, room_id: &str) -> Option<usize> {
         let rooms = self.rooms.read().unwrap_or_else(|error| error.into_inner());
         rooms
             .get(room_id)
-            .and_then(|room| room.try_read().ok())
-            .map(|room| {
-                room.participants
-                    .values()
-                    .filter(|participant| !participant.producers.is_empty())
-                    .count()
-            })
-            .unwrap_or(0)
+            .and_then(Self::readable_broadcaster_count)
     }
 
     pub async fn update_room_identity(
@@ -86,6 +81,11 @@ impl RoomManager {
         {
             return Ok(false);
         }
+        // Exclude creation of this one room for the update's duration. The
+        // process-wide creation lock is released before any SQL so a database
+        // stall here cannot block every other room's first join.
+        let identity_guard = manager.begin_identity_update(&room_id);
+        drop(creation_guard);
         let runtime = manager
             .rooms
             .read()
@@ -105,7 +105,7 @@ impl RoomManager {
         // Creation -> control prevents stale runtime installation, without
         // retaining the room state lock while waiting for PostgreSQL.
         let update = async move {
-            let _creation_guard = creation_guard;
+            let _identity_guard = identity_guard;
             let _control = control_guard;
             if manager.drain.is_draining() {
                 return Ok(false);

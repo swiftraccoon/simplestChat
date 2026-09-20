@@ -376,11 +376,13 @@ pub enum ServerMessage {
         #[serde(skip_serializing_if = "Option::is_none")]
         reconnect_token: Option<String>,
     },
-    /// ICE restarted — new ICE parameters
+    /// ICE restarted — new ICE parameters plus fresh TURN credentials, since
+    /// the ones minted at transport creation expire after `TURN_TTL`.
     #[serde(rename_all = "camelCase")]
     IceRestarted {
         transport_id: String,
         ice_parameters: IceParameters,
+        ice_servers: Vec<IceServer>,
     },
     /// Connection quality stats
     #[serde(rename_all = "camelCase")]
@@ -594,6 +596,28 @@ mod tests {
             .unwrap(),
             json!({"type":"authenticationRenewalDeferred", "requestId":"renewal-1", "retryAfterMs":3000, "expiresAt":1234}),
         );
+    }
+
+    #[test]
+    fn ice_restart_carries_fresh_turn_credentials() {
+        let message = ServerMessage::IceRestarted {
+            transport_id: "transport-1".into(),
+            ice_parameters: serde_json::from_value(
+                json!({"usernameFragment":"u","password":"p","iceLite":true}),
+            )
+            .unwrap(),
+            ice_servers: vec![crate::turn::IceServer {
+                urls: vec!["turn:relay.example:3478".into()],
+                username: Some("1700000000:credential".into()),
+                credential: Some("mac".into()),
+            }],
+        };
+        let wire = serde_json::to_value(&message).unwrap();
+        assert_eq!(wire["type"], "iceRestarted");
+        assert_eq!(wire["transportId"], "transport-1");
+        assert_eq!(wire["iceParameters"]["usernameFragment"], "u");
+        assert_eq!(wire["iceServers"][0]["urls"][0], "turn:relay.example:3478");
+        assert_eq!(wire["iceServers"][0]["username"], "1700000000:credential");
     }
 
     #[test]

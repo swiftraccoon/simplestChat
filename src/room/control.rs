@@ -12,7 +12,7 @@ use std::time::Duration;
 use tokio::sync::OwnedMutexGuard;
 use tracing::{Instrument, warn};
 
-const ADMISSION_TIMEOUT: Duration = Duration::from_secs(5);
+pub(super) const ADMISSION_TIMEOUT: Duration = Duration::from_secs(5);
 pub(super) const PERSISTENCE_TIMEOUT: Duration = Duration::from_secs(15);
 const QUARANTINE_CLEANUP_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -160,7 +160,7 @@ impl RoomManager {
             };
             room.broadcast_all(&notice);
             if let Ok(notice) = serde_json::to_string(&notice) {
-                let notice = Arc::new(notice);
+                let notice = crate::OutboundJson::from(notice);
                 for entry in room.lobby.values() {
                     let _ = try_send_essential(&room.metrics, &entry.sender, notice.clone());
                 }

@@ -26,7 +26,10 @@ pub use authentication::RenewalAuthenticator;
 use authentication::{RenewalBudget, RenewalOutcome, renew_authentication, unix_seconds};
 #[path = "connection_credentials.rs"]
 mod credentials;
-use credentials::{CredentialContinuity, CredentialStatus, account_credentials_current};
+use credentials::{
+    CredentialContinuity, CredentialStatus, account_credentials_current,
+    account_credentials_current_owned,
+};
 
 /// Bounded channel capacity per client.
 /// At 100 msg/s rate limit, 64 slots = 640ms of burst buffer.
@@ -369,7 +372,7 @@ struct GraceEntry {
     media_rate_state: MediaSessionRateState,
     /// Sender channel that owned the participant session when it disconnected.
     /// `same_channel` is the immutable connection-incarnation check.
-    sender: mpsc::Sender<Arc<String>>,
+    sender: mpsc::Sender<crate::OutboundJson>,
     timer: tokio::task::JoinHandle<()>,
 }
 
@@ -421,7 +424,7 @@ impl GracePeriodMap {
         &self,
         user_id: &str,
         minimum_version: i64,
-    ) -> Vec<(String, String, mpsc::Sender<Arc<String>>)> {
+    ) -> Vec<(String, String, mpsc::Sender<crate::OutboundJson>)> {
         let mut map = self
             .inner
             .write()
@@ -511,10 +514,10 @@ impl GracePeriodMap {
 /// Serialize a ServerMessage and send it through the channel as pre-serialized JSON.
 fn send_json(
     metrics: &ServerMetrics,
-    sender: &mpsc::Sender<Arc<String>>,
+    sender: &mpsc::Sender<crate::OutboundJson>,
     msg: &ServerMessage,
 ) -> anyhow::Result<()> {
-    let json = Arc::new(serde_json::to_string(msg)?);
+    let json = crate::OutboundJson::from(serde_json::to_string(msg)?);
     if let Err(error) = sender.try_send(json) {
         match error {
             mpsc::error::TrySendError::Full(_) => metrics.inc_outbound_queue_full(),
@@ -667,6 +670,54 @@ async fn revalidate_account(
     .await
 }
 
+/// Query budget for one validation attempt, or `None` when the accepted
+/// credentials are already invalid before any query is issued.
+fn validation_deadline(
+    claims: &Claims,
+    continuity: &CredentialContinuity,
+    hard_deadline: Instant,
+) -> Option<Instant> {
+    let now = Instant::now();
+    if continuity.expired(now) || now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
+        return None;
+    }
+    Some(
+        continuity
+            .deadline()
+            .map_or(hard_deadline, |limit| limit.min(hard_deadline))
+            .min(now + AUTH_REVALIDATE_INTERVAL),
+    )
+}
+
+/// Applies one completed validation. `None` means drain, not invalid
+/// credentials. Shared by the awaited form below and the connection loop's
+/// pending-validation arm so both apply identical policy.
+fn settle_account_validation(
+    result: CredentialStatus,
+    claims: &Claims,
+    continuity: &mut CredentialContinuity,
+    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
+    drain: &crate::shutdown::DrainSignal,
+    hard_deadline: Instant,
+    deadline: Instant,
+) -> Option<bool> {
+    let now = Instant::now();
+    if drain.is_draining() {
+        return None;
+    }
+    if now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
+        return Some(false);
+    }
+    let result = if !authentication::revocations_current(revocations, claims) {
+        CredentialStatus::Revoked
+    } else if result == CredentialStatus::Current && now >= deadline {
+        CredentialStatus::Unavailable
+    } else {
+        result
+    };
+    Some(retain_credentials(continuity, result, now))
+}
+
 /// Keep control-plane races testable without modifying a database or accepting
 /// injected validators at the public connection boundary.
 async fn observe_account_validation(
@@ -677,14 +728,9 @@ async fn observe_account_validation(
     drain: &crate::shutdown::DrainSignal,
     hard_deadline: Instant,
 ) -> Option<bool> {
-    let now = Instant::now();
-    if continuity.expired(now) || now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
+    let Some(deadline) = validation_deadline(claims, continuity, hard_deadline) else {
         return Some(false);
-    }
-    let deadline = continuity
-        .deadline()
-        .map_or(hard_deadline, |limit| limit.min(hard_deadline))
-        .min(now + AUTH_REVALIDATE_INTERVAL);
+    };
     tokio::pin!(validation);
     let result = loop {
         tokio::select! {
@@ -702,21 +748,15 @@ async fn observe_account_validation(
             result = &mut validation => break result,
         }
     };
-    let now = Instant::now();
-    if drain.is_draining() {
-        return None;
-    }
-    if now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
-        return Some(false);
-    }
-    let result = if !authentication::revocations_current(revocations, claims) {
-        CredentialStatus::Revoked
-    } else if result == CredentialStatus::Current && now >= deadline {
-        CredentialStatus::Unavailable
-    } else {
-        result
-    };
-    Some(retain_credentials(continuity, result, now))
+    settle_account_validation(
+        result,
+        claims,
+        continuity,
+        revocations,
+        drain,
+        hard_deadline,
+        deadline,
+    )
 }
 
 /// Log only state transitions, never per-check credentials or database errors.
@@ -821,7 +861,7 @@ async fn handle_connection_with_timing(
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
     // Bounded channel for sending messages to this client
-    let (tx, mut rx) = mpsc::channel::<Arc<String>>(CHANNEL_CAPACITY);
+    let (tx, mut rx) = mpsc::channel::<crate::OutboundJson>(CHANNEL_CAPACITY);
 
     // Clone for the send task
     let send_metrics = metrics.clone();
@@ -846,7 +886,7 @@ async fn handle_connection_with_timing(
                         biased;
                         _ = writer_heartbeat.notified() => Message::Ping(bytes::Bytes::new()),
                         json = rx.recv() => match json {
-                            Some(json) => Message::Text((*json).clone().into()),
+                            Some(json) => Message::Text(json),
                             None => break,
                         },
                     };
@@ -927,6 +967,12 @@ async fn handle_connection_with_timing(
     let mut credentials_invalidated = false;
     let mut credential_continuity = CredentialContinuity::default();
     let mut next_auth_check = Instant::now();
+    // The periodic account check is polled as its own arm below, so a slow
+    // database delays only the verdict, never this socket's frame dispatch.
+    let mut pending_validation: Option<
+        std::pin::Pin<Box<dyn std::future::Future<Output = CredentialStatus> + Send>>,
+    > = None;
+    let mut pending_validation_deadline = Instant::now();
     let mut last_frame_received = Instant::now();
     let mut next_heartbeat = Instant::now() + timing.heartbeat_interval;
     let mut peer_close_received = false;
@@ -977,6 +1023,9 @@ async fn handle_connection_with_timing(
                         break;
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                        // An in-flight query predates the lost notices and
+                        // cannot satisfy the fresh-validation requirement.
+                        pending_validation = None;
                         credential_continuity.require_revalidation();
                         next_auth_check = Instant::now();
                     },
@@ -985,10 +1034,29 @@ async fn handle_connection_with_timing(
                 }
                 continue;
             }
-            _ = tokio::time::sleep_until(next_auth_check.into()), if is_authenticated => {
+            _ = tokio::time::sleep_until(next_auth_check.into()), if is_authenticated && pending_validation.is_none() => {
                 if let Some(claims) = authenticated_user.as_ref() {
-                    match revalidate_account(db_pool.as_ref(), claims, &mut credential_continuity,
-                        &mut auth_revocations, &drain, auth_deadline.unwrap_or_else(Instant::now)).await {
+                    let hard_deadline = auth_deadline.unwrap_or_else(Instant::now);
+                    match validation_deadline(claims, &credential_continuity, hard_deadline) {
+                        Some(deadline) => {
+                            pending_validation_deadline = deadline;
+                            pending_validation = Some(Box::pin(account_credentials_current_owned(
+                                db_pool.clone(),
+                                claims.clone(),
+                                deadline,
+                            )));
+                        }
+                        None => { credentials_invalidated = true; break; }
+                    }
+                }
+                continue;
+            }
+            result = async { pending_validation.as_mut().expect("guarded by is_some").await }, if pending_validation.is_some() => {
+                pending_validation = None;
+                if let Some(claims) = authenticated_user.as_ref() {
+                    match settle_account_validation(result, claims, &mut credential_continuity,
+                        &mut auth_revocations, &drain, auth_deadline.unwrap_or_else(Instant::now),
+                        pending_validation_deadline) {
                         Some(true) => {},
                         Some(false) => { credentials_invalidated = true; break; },
                         None => break,
@@ -1887,7 +1955,7 @@ async fn handle_reconnect(
     authenticated_subject: Option<&str>,
     grace_periods: &GracePeriodMap,
     room_manager: &Arc<RoomManager>,
-    new_sender: &mpsc::Sender<Arc<String>>,
+    new_sender: &mpsc::Sender<crate::OutboundJson>,
 ) -> Option<MediaSessionRateState> {
     if !settings::valid_room_id(room_id)
         || participant_id.parse::<Uuid>().is_err()
@@ -1957,7 +2025,7 @@ fn spawn_stats_task(
     room_manager: Arc<RoomManager>,
     room_id: String,
     participant_id: String,
-    sender: mpsc::Sender<Arc<String>>,
+    sender: mpsc::Sender<crate::OutboundJson>,
     mut bwe_rx: mpsc::Receiver<u32>,
 ) -> OwnedTask {
     OwnedTask(tokio::spawn(async move {
@@ -2045,7 +2113,7 @@ fn spawn_stats_task(
                             available_bitrate: Some(last_bitrate),
                             rtt: None,
                         }) {
-                            let _ = sender.try_send(Arc::new(json));
+                            let _ = sender.try_send(crate::OutboundJson::from(json));
                         }
                     }
                 }
@@ -2096,7 +2164,7 @@ async fn handle_client_message(
     participant_id: &str,
     current_room_id: &mut Option<String>,
     in_lobby: &Arc<AtomicBool>,
-    sender: &mpsc::Sender<Arc<String>>,
+    sender: &mpsc::Sender<crate::OutboundJson>,
     room_manager: &Arc<RoomManager>,
     turn_config: &Option<Arc<TurnConfig>>,
     metrics: &ServerMetrics,
@@ -2541,6 +2609,9 @@ async fn handle_client_message(
                     &ServerMessage::IceRestarted {
                         transport_id: transport_id.clone(),
                         ice_parameters,
+                        // Relay credentials minted at transport creation may
+                        // have expired; candidate gathering needs fresh ones.
+                        ice_servers: make_ice_servers(turn_config),
                     },
                 )?;
             } else {

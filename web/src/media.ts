@@ -382,6 +382,7 @@ export class MediaManager {
   async handleIceRestarted(
     transportId: string,
     iceParameters: mediasoupClient.types.IceParameters,
+    iceServers?: RTCIceServer[],
   ): Promise<void> {
     const transport =
       this.sendTransport?.id === transportId
@@ -398,6 +399,10 @@ export class MediaManager {
       (transport === this.sendTransport || transport === this.recvTransport);
     if (!transport || !isCurrent()) return;
     try {
+      // TURN credentials expire after the server's TURN_TTL; the ones minted at
+      // transport creation cannot gather relay candidates on a long call.
+      if (iceServers) await transport.updateIceServers({ iceServers });
+      if (!isCurrent()) return;
       await transport.restartIce({ iceParameters });
       if (isCurrent())
         console.log(`[media] ICE restart credentials applied for transport ${transportId}`);

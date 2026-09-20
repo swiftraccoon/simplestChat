@@ -29,11 +29,23 @@ fn max_producers_per_participant() -> usize {
 }
 
 fn max_consumers_per_participant() -> usize {
-    std::env::var("MAX_CONSUMERS_PER_PARTICIPANT")
-        .ok()
-        .and_then(|value| value.parse().ok())
+    consumer_cap_from(
+        std::env::var("MAX_CONSUMERS_PER_PARTICIPANT")
+            .ok()
+            .as_deref(),
+    )
+}
+
+/// Per-participant consumer cap. Browsers consume every remote producer, so
+/// a participant needs `2 * (N - 1)` consumers in an N-person room with
+/// camera and microphone (three per peer with screen sharing). The default
+/// covers 32 such publishers; the previous value of 16 silently blanked the
+/// tenth participant's tiles.
+fn consumer_cap_from(configured: Option<&str>) -> usize {
+    configured
+        .and_then(|value| value.trim().parse().ok())
         .filter(|value| *value > 0)
-        .unwrap_or(16)
+        .unwrap_or(64)
 }
 
 fn producer_pause_transition_needed(currently_paused: bool, requested_paused: bool) -> bool {
@@ -423,9 +435,27 @@ impl TransportManager {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let mut participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
 
-        participant
-            .producers
-            .retain(|_, producer| !producer.closed());
+        // A producer the worker closed (transport failure, native teardown)
+        // never reaches close_producer, so its paused-index entry must leave
+        // with it here rather than persisting for the process lifetime.
+        let mut pruned = Vec::new();
+        participant.producers.retain(|id, producer| {
+            if producer.closed() {
+                pruned.push(id.clone());
+                false
+            } else {
+                true
+            }
+        });
+        if !pruned.is_empty() {
+            let mut index = self
+                .paused_producers
+                .write()
+                .unwrap_or_else(|e| e.into_inner());
+            for id in &pruned {
+                index.remove(id);
+            }
+        }
         let producer_cap = max_producers_per_participant();
         if participant.producers.len() >= producer_cap {
             return Err(MediaError::ProducerError(format!(
@@ -475,7 +505,7 @@ impl TransportManager {
         producer_id: ProducerId,
         rtp_capabilities: RtpCapabilities,
         app_data: AppData,
-        sender: Option<mpsc::Sender<Arc<String>>>,
+        sender: Option<mpsc::Sender<crate::OutboundJson>>,
         consumer_counter: Option<Arc<AtomicUsize>>,
     ) -> MediaResult<Consumer> {
         let participant_lock = self.get_participant_lock(participant_id)?;
@@ -1093,7 +1123,7 @@ impl TransportManager {
         &self,
         consumer: &Consumer,
         participant_id: &str,
-        sender: Option<mpsc::Sender<Arc<String>>>,
+        sender: Option<mpsc::Sender<crate::OutboundJson>>,
         consumer_counter: Option<Arc<AtomicUsize>>,
     ) {
         let participant_id = participant_id.to_string();
@@ -1180,7 +1210,7 @@ impl TransportManager {
                             temporal_layer: layers.as_ref().and_then(|l| l.temporal_layer),
                         };
                         if let Ok(json) = serde_json::to_string(&msg) {
-                            let _ = sender.try_send(Arc::new(json));
+                            let _ = sender.try_send(crate::OutboundJson::from(json));
                         }
                     }
                 })
@@ -1229,6 +1259,15 @@ mod tests {
         fn drop(&mut self) {
             self.0.fetch_add(1, Ordering::Relaxed);
         }
+    }
+
+    #[test]
+    fn default_consumer_cap_covers_a_32_person_camera_and_microphone_room() {
+        // Every participant consumes audio and video from each peer, so a room
+        // of N publishers needs 2 * (N - 1) consumers per participant.
+        assert!(consumer_cap_from(None) >= 2 * 31);
+        assert_eq!(consumer_cap_from(Some(" 8 ")), 8);
+        assert_eq!(consumer_cap_from(Some("0")), consumer_cap_from(None));
     }
 
     #[test]

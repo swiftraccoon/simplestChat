@@ -980,7 +980,7 @@ async function loadRoomBrowser(append = false): Promise<void> {
       const meta = document.createElement('div');
       meta.className = 'room-card-meta';
       const count = document.createElement('span');
-      count.textContent = `${r.participant_count} online · ${r.broadcaster_count ?? 0} broadcasting`;
+      count.textContent = `${r.participant_count ?? '?'} online · ${r.broadcaster_count ?? '?'} broadcasting`;
       meta.appendChild(count);
       if (r.moderated) {
         const badge = document.createElement('span');
@@ -1300,6 +1300,9 @@ joinBtn.addEventListener(
         onLocalCaptureStopped: handleLocalCaptureStopped,
         onRemoteTrack: renderRemoteTrack,
         onRemoteTrackRemoved: removeRemoteTrack,
+        onRemoteMediaUnavailable: (_participantId, participantName, kind, _source, reason) => {
+          showToast(`Cannot receive ${participantName}'s ${kind}: ${reason}`, 6000);
+        },
         onParticipantLeft: handleParticipantLeft,
         onChatMessage: () => {}, // Typed entries and delivery state handled by session inbox.
         onSocialEvent: (message) => {

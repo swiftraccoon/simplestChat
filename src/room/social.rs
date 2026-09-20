@@ -37,14 +37,99 @@ pub(crate) struct ParticipantSocial {
     joined_sequence: u64,
     allow_private_messages: bool,
     ignored: HashSet<String>,
-    last_report: Option<std::time::Instant>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn participant(name: &str) -> (Participant, mpsc::Receiver<Arc<String>>) {
+    fn message(json: &str) -> ClientMessage {
+        serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn read_only_social_requests_reserve_no_room_budget() {
+        for json in [
+            r#"{"type":"getRoomSnapshot","requestId":"r"}"#,
+            r#"{"type":"listRoomBans","requestId":"r"}"#,
+            r#"{"type":"listRoomMembers","requestId":"r"}"#,
+            r#"{"type":"listRoomReports","requestId":"r"}"#,
+            r#"{"type":"setChatPreferences","requestId":"r","allowPrivateMessages":true,"ignoredParticipantIds":[]}"#,
+        ] {
+            assert_eq!(message(json).social_budget(), SocialBudget::None, "{json}");
+        }
+    }
+
+    #[test]
+    fn room_wide_social_mutations_reserve_the_matching_budget() {
+        assert_eq!(
+            message(r#"{"type":"changeNickname","requestId":"r","nickname":"n"}"#).social_budget(),
+            SocialBudget::ChatBroadcast
+        );
+        assert_eq!(
+            message(r#"{"type":"setMemberRole","requestId":"r","targetUserId":"u","role":1}"#)
+                .social_budget(),
+            SocialBudget::AdminMutation
+        );
+    }
+
+    #[test]
+    fn report_cooldown_follows_identity_across_sessions() {
+        let mut social = RoomSocial::default();
+        let t0 = std::time::Instant::now();
+        let later = |secs: u64| t0 + std::time::Duration::from_secs(secs);
+        assert!(!social.report_cooldown_active("user:a", t0));
+        social.note_report("user:a".into(), t0);
+        assert!(social.report_cooldown_active("user:a", later(29)));
+        assert!(!social.report_cooldown_active("user:b", later(29)));
+        assert!(!social.report_cooldown_active("user:a", later(30)));
+
+        let (base, _rx) = participant("guest");
+        let guest = Participant {
+            authenticated: false,
+            ip: Some("203.0.113.9".parse().unwrap()),
+            ..base
+        };
+        assert_eq!(reporter_key(&guest), "ip:203.0.113.9");
+        let (member, _rx) = participant("member");
+        assert_eq!(reporter_key(&member), format!("user:{}", member.id));
+    }
+
+    #[test]
+    fn private_messages_do_not_consume_the_public_chat_window() {
+        let mut room = Room::new("room".to_string(), "router".to_string(), None, false, None);
+        let (alice, _alice_rx) = participant("alice");
+        let (bob, _bob_rx) = participant("bob");
+        let (alice_id, alice_sender) = (alice.id.clone(), alice.sender.clone());
+        let bob_id = bob.id.clone();
+        room.participants.insert(alice_id.clone(), alice);
+        room.participants.insert(bob_id.clone(), bob);
+
+        for index in 0..MAX_ROOM_CHAT_MESSAGES_PER_WINDOW {
+            RoomManager::process_social_chat(
+                &mut room,
+                &alice_id,
+                &alice_sender,
+                format!("private {index}"),
+                None,
+                Some(&bob_id),
+            )
+            .unwrap();
+        }
+        assert!(room.recent_chat_broadcasts.is_empty());
+        RoomManager::process_social_chat(
+            &mut room,
+            &alice_id,
+            &alice_sender,
+            "public".to_string(),
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(room.recent_chat_broadcasts.len(), 1);
+    }
+
+    fn participant(name: &str) -> (Participant, mpsc::Receiver<crate::OutboundJson>) {
         let (sender, receiver) = mpsc::channel(16);
         (
             Participant {
@@ -68,7 +153,7 @@ mod tests {
         Participant,
         Participant,
         Participant,
-        Vec<mpsc::Receiver<Arc<String>>>,
+        Vec<mpsc::Receiver<crate::OutboundJson>>,
     ) {
         let (alice, arx) = participant("Alice");
         let (bob, brx) = participant("Bob");
@@ -286,7 +371,9 @@ mod tests {
     fn full_private_recipient_queue_does_not_claim_delivery() {
         let (mut room, alice, bob, _, mut receivers) = fixture();
         for _ in 0..16 {
-            bob.sender.try_send(Arc::new("queued".into())).unwrap();
+            bob.sender
+                .try_send(crate::OutboundJson::from("queued"))
+                .unwrap();
         }
         assert!(chat(&mut room, &alice, "busy", Some(&bob.id)).is_err());
         assert!(room.social.history.is_empty());
@@ -323,7 +410,9 @@ mod tests {
     fn public_queue_rejections_count_only_eligible_recipients() {
         let (mut room, alice, bob, _, mut receivers) = fixture();
         for _ in 0..16 {
-            bob.sender.try_send(Arc::new("queued".into())).unwrap();
+            bob.sender
+                .try_send(crate::OutboundJson::from("queued"))
+                .unwrap();
         }
         drop(receivers.pop());
         chat(&mut room, &alice, "first", None).unwrap();
@@ -352,7 +441,10 @@ mod tests {
     fn failed_ack_retries_are_counted_without_rebroadcasting_chat() {
         let (mut room, alice, _, _, mut receivers) = fixture();
         for _ in 0..16 {
-            alice.sender.try_send(Arc::new("queued".into())).unwrap();
+            alice
+                .sender
+                .try_send(crate::OutboundJson::from("queued"))
+                .unwrap();
         }
         assert!(chat(&mut room, &alice, "same-id", None).is_err());
         assert!(chat(&mut room, &alice, "same-id", None).is_err());
@@ -710,11 +802,9 @@ mod tests {
             .unwrap()
             .write()
             .await
-            .participants
-            .get_mut(&bob.id)
-            .unwrap()
             .social
-            .last_report = None;
+            .report_cooldowns
+            .clear();
         assert!(
             manager
                 .handle_social_request(
@@ -787,7 +877,6 @@ impl ParticipantSocial {
             joined_sequence,
             allow_private_messages: true,
             ignored: HashSet::new(),
-            last_report: None,
         }
     }
 }
@@ -799,9 +888,25 @@ struct HistoryEntry {
     message: ChatEntry,
 }
 
+const REPORT_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Cooldown identity for abuse reports: the account for signed-in members,
+/// the canonical guest address otherwise. A session-scoped cooldown reset on
+/// every rejoin and let one identity fill the room's report capacity.
+pub(crate) fn reporter_key(participant: &Participant) -> String {
+    if participant.authenticated {
+        format!("user:{}", participant.id)
+    } else if let Some(ip) = participant.ip {
+        format!("ip:{ip}")
+    } else {
+        format!("session:{}", participant.id)
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct RoomSocial {
     pub(crate) next_sequence: u64,
+    report_cooldowns: HashMap<String, std::time::Instant>,
     history: VecDeque<HistoryEntry>,
     history_bytes: usize,
     bans: HashMap<String, RuntimeBan>,
@@ -871,7 +976,31 @@ pub(crate) fn valid_correlation_id(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
 }
 
+/// Which room-wide budget a social request must reserve before it runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SocialBudget {
+    None,
+    ChatBroadcast,
+    AdminMutation,
+}
+
 impl ClientMessage {
+    /// Read-only queries and self-scoped preferences never draw on a room-wide
+    /// window, so ordinary members cannot starve moderation or public chat.
+    /// A nickname change fans out like a chat message; durable moderation
+    /// writes share the administration window with kick, ban and settings.
+    pub(crate) fn social_budget(&self) -> SocialBudget {
+        match self {
+            Self::GetRoomSnapshot { .. }
+            | Self::ListRoomBans { .. }
+            | Self::ListRoomMembers { .. }
+            | Self::ListRoomReports { .. }
+            | Self::SetChatPreferences { .. } => SocialBudget::None,
+            Self::ChangeNickname { .. } => SocialBudget::ChatBroadcast,
+            _ => SocialBudget::AdminMutation,
+        }
+    }
+
     pub(crate) fn social_request(&self) -> Option<(&str, &'static str)> {
         match self {
             Self::SetChatPreferences { request_id, .. } => Some((request_id, "setChatPreferences")),
@@ -911,11 +1040,15 @@ impl ClientMessage {
 
 fn send(
     metrics: &ServerMetrics,
-    sender: &mpsc::Sender<Arc<String>>,
+    sender: &mpsc::Sender<crate::OutboundJson>,
     message: &ServerMessage,
 ) -> Result<()> {
-    try_send_essential(metrics, sender, Arc::new(serde_json::to_string(message)?))
-        .map_err(|_| rejected("Connection is busy; please retry"))
+    try_send_essential(
+        metrics,
+        sender,
+        crate::OutboundJson::from(serde_json::to_string(message)?),
+    )
+    .map_err(|_| rejected("Connection is busy; please retry"))
 }
 fn page_offset(offset: Option<u32>) -> Result<usize> {
     let offset = offset.unwrap_or(0) as usize;
@@ -951,6 +1084,20 @@ fn can_private_message(sender: &Participant, recipient: &Participant) -> bool {
         && !sender.social.ignored.contains(&recipient.id)
 }
 impl RoomSocial {
+    /// Whether this identity reported within the cooldown. Expired entries
+    /// are dropped here, so the map never outgrows one cooldown of reporters.
+    pub(crate) fn report_cooldown_active(&mut self, key: &str, now: std::time::Instant) -> bool {
+        self.report_cooldowns
+            .retain(|_, at| now.duration_since(*at) < REPORT_COOLDOWN);
+        self.report_cooldowns
+            .get(key)
+            .is_some_and(|at| now.duration_since(*at) < REPORT_COOLDOWN)
+    }
+
+    pub(crate) fn note_report(&mut self, key: String, now: std::time::Instant) {
+        self.report_cooldowns.insert(key, now);
+    }
+
     pub(crate) fn forget_user_ban(&mut self, participant_id: &str) {
         self.bans.retain(|_, ban| {
             !ban.entry.authenticated || !ban.participant_ids.iter().any(|id| id == participant_id)
@@ -1031,7 +1178,7 @@ impl RoomManager {
         &self,
         room_id: &str,
         sender_id: &str,
-        expected_sender: &mpsc::Sender<Arc<String>>,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
         content: String,
         client_message_id: Option<String>,
         recipient_id: Option<&str>,
@@ -1051,7 +1198,7 @@ impl RoomManager {
     fn process_social_chat(
         room: &mut Room,
         sender_id: &str,
-        expected_sender: &mpsc::Sender<Arc<String>>,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
         content: String,
         client_message_id: Option<String>,
         recipient_id: Option<&str>,
@@ -1112,7 +1259,9 @@ impl RoomManager {
         } else {
             None
         };
-        if !room.reserve_chat_broadcast(std::time::Instant::now()) {
+        // A private message reaches one bounded queue; only public fan-out
+        // draws on the room-wide window.
+        if recipient.is_none() && !room.reserve_chat_broadcast(std::time::Instant::now()) {
             return Err(rejected("Room chat rate limit exceeded"));
         }
         let message = ChatEntry {
@@ -1143,7 +1292,7 @@ impl RoomManager {
                 client_message_id: message.client_message_id.clone(),
                 sent_at: message.sent_at.clone(),
             };
-            let json = Arc::new(serde_json::to_string(&event)?);
+            let json = crate::OutboundJson::from(serde_json::to_string(&event)?);
             for participant in room.participants.values() {
                 if participant.id != sender_id && !participant.social.ignored.contains(sender_id) {
                     let _ = try_send_essential(&room.metrics, &participant.sender, json.clone());
@@ -1169,7 +1318,7 @@ impl RoomManager {
         &self,
         room_id: &str,
         participant_id: &str,
-        expected_sender: &mpsc::Sender<Arc<String>>,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
         command: &ClientMessage,
     ) -> Result<()> {
         let (request_id, _) = command
@@ -1216,7 +1365,7 @@ impl RoomManager {
         &self,
         room_id: &str,
         participant_id: &str,
-        expected_sender: &mpsc::Sender<Arc<String>>,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
         command: &ClientMessage,
         control: Option<tokio::sync::OwnedMutexGuard<()>>,
     ) -> Result<()> {
@@ -1268,8 +1417,18 @@ impl RoomManager {
         let actor_role = actor.role;
         let actor_name = actor.name.clone();
         let actor_authenticated = actor.authenticated;
-        if !room.reserve_admin_mutation(std::time::Instant::now()) {
-            return Err(rejected("Room requests are rate limited"));
+        match command.social_budget() {
+            SocialBudget::None => {}
+            SocialBudget::ChatBroadcast => {
+                if !room.reserve_chat_broadcast(std::time::Instant::now()) {
+                    return Err(rejected("Room chat rate limit exceeded"));
+                }
+            }
+            SocialBudget::AdminMutation => {
+                if !room.reserve_admin_mutation(std::time::Instant::now()) {
+                    return Err(rejected("Room requests are rate limited"));
+                }
+            }
         }
         let data = match command {
             ClientMessage::SetChatPreferences {
@@ -1597,11 +1756,10 @@ impl RoomManager {
                     .get(target_participant_id)
                     .ok_or_else(|| rejected("Participant is no longer in this room"))?;
                 let target_name = target.name.clone();
-                let actor = room.participants.get(participant_id).unwrap();
-                if actor
+                let reporter = reporter_key(room.participants.get(participant_id).unwrap());
+                if room
                     .social
-                    .last_report
-                    .is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(30))
+                    .report_cooldown_active(&reporter, std::time::Instant::now())
                 {
                     return Err(rejected("Please wait before submitting another report"));
                 }
@@ -1667,11 +1825,7 @@ impl RoomManager {
                     }
                     room.social.reports.push_back(report.clone());
                 }
-                room.participants
-                    .get_mut(participant_id)
-                    .unwrap()
-                    .social
-                    .last_report = Some(std::time::Instant::now());
+                room.social.note_report(reporter, std::time::Instant::now());
                 // Only the submitting participant receives the report ID here.
                 json!({"reportId":report.report_id,"status":"open"})
             }

@@ -22,8 +22,16 @@ pub async fn connect() -> anyhow::Result<Option<PgPool>> {
     require_verified_remote_database(&options)?;
     let run_migrations = run_migrations()?;
 
+    // A small warm floor keeps the first request after an idle period from
+    // paying a full connect (TLS on remote hosts) inside the acquire budget.
+    // The default pre-acquire ping is retained deliberately: one extra
+    // round trip is cheaper than a user-facing failure on a stale connection
+    // after a database restart.
     let pool = PgPoolOptions::new()
         .max_connections(20)
+        .min_connections(2)
+        .idle_timeout(Duration::from_secs(600))
+        .max_lifetime(Duration::from_secs(1800))
         .acquire_timeout(Duration::from_secs(3))
         .connect_with(options)
         .await?;

@@ -391,7 +391,11 @@ const messages = {
     participantId: text,
     reconnectToken: optional(text),
   }),
-  iceRestarted: message('iceRestarted', { transportId: text, iceParameters: ice }),
+  iceRestarted: message('iceRestarted', {
+    transportId: text,
+    iceParameters: ice,
+    iceServers: list(iceServer),
+  }),
   connectionStats: message('connectionStats', {
     availableBitrate: nullable(uint32),
     rtt: nullable(number),

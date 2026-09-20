@@ -207,7 +207,12 @@ const fixtures = [
   })),
   ...['consumerResumed', 'consumerPaused'].map((type) => ({ type, consumerId: 'consumer' })),
   { type: 'reconnectResult', success: false, participantId: '' },
-  { type: 'iceRestarted', transportId: 'transport', iceParameters: ice },
+  {
+    type: 'iceRestarted',
+    transportId: 'transport',
+    iceParameters: ice,
+    iceServers: [{ urls: ['turn:relay.example:3478'], username: '1:u', credential: 'c' }],
+  },
   { type: 'connectionStats', availableBitrate: null, rtt: null },
   {
     type: 'consumerLayersChanged',
