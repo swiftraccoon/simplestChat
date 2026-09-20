@@ -83,8 +83,6 @@ COPY build/pip-constraints.txt /opt/simplestchat/pip-constraints.txt
 ENV PIP_CONSTRAINT=/opt/simplestchat/pip-constraints.txt
 COPY Cargo.toml Cargo.lock ./
 COPY vendor ./vendor
-COPY src ./src
-COPY migrations/*.sql ./migrations/
 RUN grep -Fq 'source_filename = abseil-cpp-20240722.2.tar.gz' \
         vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp.wrap \
     && grep -Fq 'source_hash = ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8' \
@@ -94,8 +92,23 @@ RUN grep -Fq 'source_filename = abseil-cpp-20240722.2.tar.gz' \
     && echo '454b10520ba4ba4a9995612ba2d9e6490b5477bb5093eff54af4c84917f71f19  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/abseil-cpp/meson.build' \
         | sha256sum --check --strict \
     && echo '7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/abseil-cpp/LICENSE.build' \
-        | sha256sum --check --strict \
+        | sha256sum --check --strict
+
+# Warm every dependency, including the native worker, against stub sources.
+# This layer is reused until the manifest, lockfile or vendored patches change,
+# so a source-only build compiles this crate alone instead of the whole graph.
+RUN mkdir -p src load_tests/bin \
+    && printf 'fn main() {}\n' > src/main.rs \
+    && : > src/lib.rs \
+    && printf 'fn main() {}\n' > load_tests/bin/load_test.rs \
     && cargo build --locked --release --bin simplestChat \
+    && rm -rf src load_tests \
+        target/release/simplestChat \
+        target/release/deps/simplestChat-* target/release/deps/libsimplestChat-* \
+        target/release/.fingerprint/simplestChat-*
+COPY src ./src
+COPY migrations/*.sql ./migrations/
+RUN cargo build --locked --release --bin simplestChat \
     && strings target/release/simplestChat | grep -Fq 'OpenSSL 3.5.8 25 Aug 2026' \
     && ! strings target/release/simplestChat | grep -Fq 'OpenSSL 3.0.8' \
     && ! ldd target/release/simplestChat | grep -Eq 'lib(ssl|crypto)\.so'

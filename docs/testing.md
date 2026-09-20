@@ -270,6 +270,12 @@ host is destroyed. CI uploads only sanitized `report.json`,
 never private logs, credentials or database dumps. This does not reboot a host,
 exercise real users/media or establish production outage duration.
 
+Rust linting, native/PostgreSQL tests and the browser suites run as parallel
+CI jobs. The build jobs share one dependency cache keyed by the vendored
+sources, whose files are given a fixed mtime so cached native-worker artifacts
+stay valid across checkouts, and every Rust target is built with the same
+feature set so the worker compiles once. The production image reuses cached
+layers up to a warmed dependency build.
 [CI](../.github/workflows/ci.yml) also runs formatting, locked Rust builds/tests,
 web tests/build, readiness/shutdown and pinned Chromium integration tests, dependency audits, native
 dependency guards and production-image non-root/loader checks.
