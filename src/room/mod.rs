@@ -37,7 +37,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock, Weak};
 use tokio::sync::RwLock as TokioRwLock;
 use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Events sent from observer callbacks (sync Fn) to async broadcast task
 enum ObserverEvent {
@@ -1700,6 +1700,137 @@ impl RoomManager {
             updates: self.identity_updates.clone(),
             room_id: room_id.to_owned(),
         }
+    }
+
+    /// Starts the task that turns media worker deaths into recovery: the
+    /// worker is recreated so capacity returns, and every room whose router
+    /// lived on it is closed with a temporary restart notice so its members
+    /// rejoin onto live capacity. The task holds only a weak handle and ends
+    /// with the manager.
+    pub fn spawn_worker_recovery(self: &Arc<Self>) {
+        let Some(mut deaths) = self.media_server.worker_manager().take_death_events() else {
+            return;
+        };
+        let manager = Arc::downgrade(self);
+        tokio::spawn(async move {
+            while let Some(worker_id) = deaths.recv().await {
+                let Some(manager) = manager.upgrade() else {
+                    break;
+                };
+                manager.recover_from_worker_death(worker_id).await;
+            }
+        });
+    }
+
+    /// Recovery for one dead worker; see [`Self::spawn_worker_recovery`].
+    pub async fn recover_from_worker_death(&self, dead_worker: mediasoup::worker::WorkerId) {
+        self.metrics.inc_media_worker_death();
+        let rooms = self
+            .media_server
+            .router_manager()
+            .rooms_on_worker(dead_worker)
+            .await;
+        warn!(
+            %dead_worker,
+            affected_rooms = rooms.len(),
+            "Media worker died; recreating it and asking its rooms to rejoin"
+        );
+        // Capacity first: when this was the only worker, rejoins need it back.
+        if let Err(error) = self
+            .media_server
+            .worker_manager()
+            .recreate_worker(dead_worker)
+            .await
+        {
+            error!(
+                %dead_worker,
+                %error,
+                "Failed to recreate a dead media worker; capacity stays reduced until restart"
+            );
+        }
+        for room_id in rooms {
+            if let Err(error) = self
+                .close_room_for_rejoin(&room_id, "Media worker restarted; rejoining")
+                .await
+            {
+                warn!(room_id, %error, "Failed to close a room whose media worker died");
+            }
+        }
+    }
+
+    /// Removes a live room's runtime and tells its members to rejoin. Unlike
+    /// deletion this keeps any persisted row and reserves nothing, so the next
+    /// join recreates the room on a live worker.
+    async fn close_room_for_rejoin(&self, room_id: &str, reason: &str) -> Result<()> {
+        let Ok(room_lock) = self.get_room(room_id) else {
+            return Ok(());
+        };
+        let creation_guard =
+            tokio::time::timeout(ROOM_CREATION_TIMEOUT, self.room_creation_lock.lock())
+                .await
+                .map_err(|_| anyhow::anyhow!("Room creation is busy"))?;
+        let control_guard =
+            tokio::time::timeout(control::ADMISSION_TIMEOUT, control::lock_room(&room_lock))
+                .await
+                .map_err(|_| anyhow::anyhow!("Room control is busy"))?;
+        let participant_sessions = {
+            let mut room = tokio::time::timeout(ROOM_DELETE_TIMEOUT, room_lock.write())
+                .await
+                .map_err(|_| anyhow::anyhow!("Room state is busy"))?;
+            let notice = ServerMessage::ServerRestarting {
+                reason: reason.to_string(),
+            };
+            room.broadcast_all(&notice);
+            if let Ok(message) = serde_json::to_string(&notice) {
+                let message = crate::OutboundJson::from(message);
+                for entry in room.lobby.values() {
+                    let _ = try_send_essential(&room.metrics, &entry.sender, message.clone());
+                }
+            }
+            let sessions: Vec<(String, uuid::Uuid)> = room
+                .participants
+                .values()
+                .map(|participant| (participant.id.clone(), participant.media_session_id))
+                .collect();
+            room.participants.clear();
+            room.lobby.clear();
+            room.producer_to_participant.clear();
+            room.active_speaker_observer = None;
+            room.audio_level_observer = None;
+            room.deleting = true;
+            room.policy_revision = room.policy_revision.wrapping_add(1);
+            sessions
+        };
+        {
+            let mut rooms = self
+                .rooms
+                .write()
+                .unwrap_or_else(|error| error.into_inner());
+            if rooms
+                .get(room_id)
+                .is_some_and(|candidate| Arc::ptr_eq(candidate, &room_lock))
+            {
+                rooms.remove(room_id);
+            }
+        }
+        drop(control_guard);
+        drop(creation_guard);
+        for (participant_id, media_session_id) in participant_sessions {
+            let media_participant_id =
+                Self::media_participant_id(room_id, &participant_id, media_session_id);
+            if let Err(error) = self
+                .media_server
+                .transport_manager()
+                .remove_participant(&media_participant_id)
+                .await
+            {
+                debug!(room_id, %participant_id, %error, "Media for a rejoining participant was already gone");
+            }
+        }
+        if let Err(error) = self.media_server.remove_router(room_id).await {
+            debug!(room_id, %error, "Router for a closed room was already gone");
+        }
+        Ok(())
     }
 
     /// Gets a room lock by ID (brief outer read lock, no await)
@@ -5642,6 +5773,125 @@ mod security_tests {
             .unwrap();
         manager.allow_ad_hoc_rooms = true;
         manager
+    }
+
+    async fn two_worker_test_manager() -> Arc<RoomManager> {
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 2;
+        config.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(2);
+        let mut manager = RoomManager::new(config, ServerMetrics::new(), None)
+            .await
+            .unwrap();
+        manager.allow_ad_hoc_rooms = true;
+        Arc::new(manager)
+    }
+
+    async fn join_guest(
+        manager: &RoomManager,
+        room: &str,
+        name: &str,
+    ) -> (
+        mpsc::Sender<crate::OutboundJson>,
+        mpsc::Receiver<crate::OutboundJson>,
+    ) {
+        let (tx, rx) = mpsc::channel(32);
+        let joined = manager
+            .add_participant(
+                room,
+                name.into(),
+                name.into(),
+                tx.clone(),
+                false,
+                Arc::new(AtomicBool::new(false)),
+                None,
+                &format!("{name}-token"),
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(matches!(joined, JoinResult::Joined { .. }));
+        (tx, rx)
+    }
+
+    fn drain_messages(rx: &mut mpsc::Receiver<crate::OutboundJson>) -> Vec<String> {
+        let mut messages = Vec::new();
+        while let Ok(message) = rx.try_recv() {
+            messages.push(message.to_string());
+        }
+        messages
+    }
+
+    /// A worker thread cannot be killed through the API. Releasing its
+    /// listener leaves what a dead worker leaves behind: a free port the
+    /// replacement must bind, and rooms whose media is gone.
+    #[tokio::test]
+    async fn worker_death_recreates_capacity_and_asks_only_its_rooms_to_rejoin() {
+        let manager = two_worker_test_manager().await;
+        let (_alpha_tx, mut alpha_rx) = join_guest(&manager, "alpha", "alice").await;
+        let (_beta_tx, mut beta_rx) = join_guest(&manager, "beta", "bob").await;
+        let routers = manager.media_server().router_manager();
+        let workers = manager.media_server().worker_manager();
+        let alpha_worker = routers.get_worker_id("alpha").await.unwrap();
+        let beta_worker = routers.get_worker_id("beta").await.unwrap();
+        assert_ne!(
+            alpha_worker, beta_worker,
+            "empty rooms spread across workers"
+        );
+        drain_messages(&mut alpha_rx);
+        drain_messages(&mut beta_rx);
+        assert!(workers.release_worker_listener(alpha_worker).await);
+
+        manager.recover_from_worker_death(alpha_worker).await;
+
+        let alpha_messages = drain_messages(&mut alpha_rx);
+        assert!(
+            alpha_messages
+                .iter()
+                .any(|m| m.contains("\"serverRestarting\"")),
+            "{alpha_messages:?}"
+        );
+        assert!(
+            drain_messages(&mut beta_rx).is_empty(),
+            "the other worker's room is untouched"
+        );
+        assert!(manager.get_room("alpha").is_err());
+        assert!(manager.get_room("beta").is_ok());
+        assert_eq!(
+            workers.live_worker_count().await,
+            2,
+            "the dead worker is replaced"
+        );
+        assert!(!workers.is_worker_alive(alpha_worker).await);
+        assert!(workers.is_worker_alive(beta_worker).await);
+        assert!(!routers.has_router("alpha").await);
+
+        // The rejoin lands on live capacity with a fresh router.
+        let (_again_tx, _again_rx) = join_guest(&manager, "alpha", "alice").await;
+        assert!(routers.has_router("alpha").await);
+        assert_ne!(routers.get_worker_id("alpha").await.unwrap(), alpha_worker);
+    }
+
+    #[tokio::test]
+    async fn queued_worker_deaths_reach_the_recovery_task() {
+        let manager = two_worker_test_manager().await;
+        manager.spawn_worker_recovery();
+        let (_tx, _rx) = join_guest(&manager, "gamma", "carol").await;
+        let workers = manager.media_server().worker_manager();
+        let worker = manager
+            .media_server()
+            .router_manager()
+            .get_worker_id("gamma")
+            .await
+            .unwrap();
+        assert!(workers.release_worker_listener(worker).await);
+        assert!(workers.simulate_death(worker));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while manager.get_room("gamma").is_ok() {
+            assert!(std::time::Instant::now() < deadline, "recovery did not run");
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        assert_eq!(workers.live_worker_count().await, 2);
+        assert!(!workers.is_worker_alive(worker).await);
     }
 
     #[tokio::test]

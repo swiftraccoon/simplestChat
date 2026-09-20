@@ -86,6 +86,7 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
 
     let room_manager =
         Arc::new(RoomManager::new(media_config, metrics.clone(), db_pool.clone()).await?);
+    room_manager.spawn_worker_recovery();
 
     info!("Room manager and media server initialized");
 

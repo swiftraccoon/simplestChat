@@ -147,10 +147,11 @@ connections, rooms, participants, errors and message latency. The
 `simplestchat_media_workers_live` gauge counts open workers with open WebRTC
 listeners. A timed-out snapshot omits that gauge and reports
 `simplestchat_media_workers_snapshot_complete 0`; it is unknown capacity, not
-zero live workers. Failed workers are not replaced
-automatically: restart the server to restore capacity.
+zero live workers. A worker that dies is recreated and its rooms are told to
+rejoin; `simplestchat_media_worker_deaths_total` counts those interruptions.
+If recreation fails the gauge stays low until the server is restarted.
 
-Alert on the rejection counters as well: `simplestchat_api_requests_rejected_total` (HTTP 429/503 from rate limits, concurrency caps, the password lane or a busy service) and `simplestchat_upgrades_rejected_total` (WebSocket upgrades refused by handshake, connection or per-IP limits). `simplestchat_connection_permits_in_use` is the quantity `MAX_CONNECTIONS` is enforced against, including handshake authentication work, and can exceed `simplestchat_connections_active`.
+Alert on the rejection counters as well: `simplestchat_api_requests_rejected_total` (HTTP 429/503 from rate limits, concurrency caps, the password lane or a busy service) and `simplestchat_upgrades_rejected_total` (WebSocket upgrades refused by handshake, connection or per-IP limits), and on `simplestchat_media_worker_deaths_total`, because each death interrupts that worker's calls even though the worker is recreated. `simplestchat_connection_permits_in_use` is the quantity `MAX_CONNECTIONS` is enforced against, including handshake authentication work, and can exceed `simplestchat_connections_active`.
 
 Use `GET /health` for process liveness and `GET /ready` for load-balancer
 readiness. `/ready` returns 503 when no media capacity remains, a configured

@@ -112,6 +112,7 @@ struct Inner {
 
     api_requests_rejected_total: AtomicU64,
     upgrades_rejected_total: AtomicU64,
+    media_worker_deaths_total: AtomicU64,
 
     // Gauge
     connections_active: AtomicU64,
@@ -150,6 +151,7 @@ impl ServerMetrics {
                 consumers_created_total: AtomicU64::new(0),
                 api_requests_rejected_total: AtomicU64::new(0),
                 upgrades_rejected_total: AtomicU64::new(0),
+                media_worker_deaths_total: AtomicU64::new(0),
                 connections_active: AtomicU64::new(0),
                 message_handling: Histogram::new(),
             }),
@@ -208,6 +210,12 @@ impl ServerMetrics {
     /// limits before `connections_active` could observe it.
     pub fn inc_upgrade_rejected(&self) {
         self.inner.upgrades_rejected_total.fetch_add(1, Relaxed);
+    }
+
+    /// A media worker died. Each death recreates the worker and closes its
+    /// rooms with a rejoin notice; a rising counter still means lost calls.
+    pub fn inc_media_worker_death(&self) {
+        self.inner.media_worker_deaths_total.fetch_add(1, Relaxed);
     }
 
     pub fn inc_errors(&self) {
@@ -332,6 +340,12 @@ impl ServerMetrics {
             "simplestchat_upgrades_rejected_total",
             "WebSocket upgrades refused by handshake, connection or per-IP limits",
             i.upgrades_rejected_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
+            "simplestchat_media_worker_deaths_total",
+            "Media workers that died; each was recreated and its rooms told to rejoin, but their calls were interrupted",
+            i.media_worker_deaths_total.load(Relaxed),
         );
         render_counter(
             &mut out,
@@ -466,7 +480,12 @@ mod tests {
         metrics.inc_api_request_rejected();
         metrics.inc_upgrade_rejected();
         metrics.inc_upgrade_rejected();
+        metrics.inc_media_worker_death();
         let body = metrics.render_prometheus(0, 0, 1);
+        assert_eq!(
+            value(&body, "simplestchat_media_worker_deaths_total"),
+            Some(1)
+        );
         assert_eq!(
             value(&body, "simplestchat_api_requests_rejected_total"),
             Some(1)

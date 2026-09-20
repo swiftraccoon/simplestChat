@@ -163,6 +163,17 @@ impl RouterManager {
         }
     }
 
+    /// Rooms whose router lives on this worker; their media went with it.
+    pub async fn rooms_on_worker(&self, worker_id: WorkerId) -> Vec<String> {
+        self.routers
+            .read()
+            .await
+            .iter()
+            .filter(|(_, info)| info.worker_id == worker_id)
+            .map(|(room_id, _)| room_id.clone())
+            .collect()
+    }
+
     /// Checks if a router exists for a room
     pub async fn has_router(&self, room_id: &str) -> bool {
         self.routers.read().await.contains_key(room_id)

@@ -72,6 +72,9 @@ pub struct WorkerManager {
     worker_consumer_counts: Arc<StdRwLock<HashMap<WorkerId, Arc<AtomicUsize>>>>,
     config: Arc<MediaConfig>,
     mediasoup_worker_manager: Arc<mediasoup::worker_manager::WorkerManager>,
+    /// Worker deaths are queued here for the room manager's recovery task.
+    deaths: tokio::sync::mpsc::Sender<WorkerId>,
+    death_events: Mutex<Option<tokio::sync::mpsc::Receiver<WorkerId>>>,
 }
 
 impl WorkerManager {
@@ -85,6 +88,7 @@ impl WorkerManager {
         info!("Creating WorkerManager with {} workers", num_workers);
 
         let mediasoup_worker_manager = Arc::new(mediasoup::worker_manager::WorkerManager::new());
+        let (deaths, death_events) = tokio::sync::mpsc::channel(64);
         let mut workers = Vec::with_capacity(num_workers);
         let mut worker_load = HashMap::new();
         let mut webrtc_servers = HashMap::new();
@@ -107,7 +111,7 @@ impl WorkerManager {
             info!("Created worker {} with id: {}", i, worker_id);
 
             // Set up worker event handlers
-            Self::setup_worker_handlers(&worker, i);
+            Self::setup_worker_handlers(&worker, i, deaths.clone());
 
             // Create a WebRtcServer for this worker on a dedicated port
             let port = config.worker_port(i)?;
@@ -150,7 +154,53 @@ impl WorkerManager {
             worker_consumer_counts: Arc::new(StdRwLock::new(worker_consumer_counts)),
             config,
             mediasoup_worker_manager,
+            deaths,
+            death_events: Mutex::new(Some(death_events)),
         })
+    }
+
+    /// The death queue, handed once to the recovery task that owns it.
+    pub fn take_death_events(&self) -> Option<tokio::sync::mpsc::Receiver<WorkerId>> {
+        self.death_events
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+    }
+
+    /// Queues a death exactly as the native callback does, for recovery tests.
+    #[cfg(test)]
+    pub(crate) fn simulate_death(&self, worker_id: WorkerId) -> bool {
+        self.deaths.try_send(worker_id).is_ok()
+    }
+
+    /// Drops a live worker's listener and waits until its port can be bound
+    /// again. A worker thread cannot be killed through the API, and this is
+    /// the state a dead worker leaves behind for recreation.
+    #[cfg(test)]
+    pub(crate) async fn release_worker_listener(&self, worker_id: WorkerId) -> bool {
+        let position = self
+            .workers
+            .read()
+            .await
+            .iter()
+            .position(|worker| worker.id() == worker_id);
+        let Some(port) = position.and_then(|pos| self.config.worker_port(pos).ok()) else {
+            return false;
+        };
+        let Some(listener) = self.webrtc_servers.write().await.remove(&worker_id) else {
+            return false;
+        };
+        drop(listener);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            if std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port)).is_ok() {
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
     }
 
     /// Creates a single worker with the given configuration
@@ -169,19 +219,30 @@ impl WorkerManager {
     }
 
     /// Sets up event handlers for a worker
-    fn setup_worker_handlers(worker: &Worker, worker_index: usize) {
+    fn setup_worker_handlers(
+        worker: &Worker,
+        worker_index: usize,
+        deaths: tokio::sync::mpsc::Sender<WorkerId>,
+    ) {
         let worker_id = worker.id();
 
-        // Handle worker death
+        // Handle worker death: allocation already excludes a closed worker; the
+        // recovery task recreates it and closes its rooms with a rejoin notice.
         // .detach() — dropping the HandlerId would unregister the callback immediately
         worker
             .on_dead({
                 move |reason| {
                     error!(
                         ?reason,
-                        "Worker {} (index {}) died; excluded from new room allocation. Restart the server to restore worker capacity",
+                        "Worker {} (index {}) died; queuing recreation and room recovery",
                         worker_id, worker_index
                     );
+                    if deaths.try_send(worker_id).is_err() {
+                        error!(
+                            "Worker death queue is unavailable; worker {} will not be recreated until restart",
+                            worker_id
+                        );
+                    }
                 }
             })
             .detach();
@@ -325,96 +386,94 @@ impl WorkerManager {
         workers.iter().any(|w| w.id() == worker_id && !w.closed())
     }
 
-    /// Recreates a dead worker (for fault tolerance)
+    /// Replaces a dead worker with a new one on the same listener port.
+    ///
+    /// The replacement is fully built before the registries change, so a
+    /// failure leaves the dead entry in place (already excluded from
+    /// allocation) for a later attempt instead of silently shrinking the pool.
     ///
     /// # Errors
-    /// Returns an error if the worker cannot be recreated
+    /// Returns an error if the worker or its listener cannot be created; the
+    /// pool is unchanged in that case.
     pub async fn recreate_worker(&self, dead_worker_id: WorkerId) -> MediaResult<()> {
         warn!("Recreating dead worker: {}", dead_worker_id);
 
         let mut workers = self.workers.write().await;
+        let Some(pos) = workers.iter().position(|w| w.id() == dead_worker_id) else {
+            warn!(
+                "Worker {} is not in the pool; nothing to recreate",
+                dead_worker_id
+            );
+            return Ok(());
+        };
 
-        // Find and remove the dead worker
-        if let Some(pos) = workers.iter().position(|w| w.id() == dead_worker_id) {
-            drop(workers.remove(pos));
+        let new_worker = Self::create_worker_with_manager(
+            &self.config.worker_config,
+            &self.mediasoup_worker_manager,
+        )
+        .await
+        .map_err(|e| MediaError::WorkerError(format!("Failed to recreate worker: {e}")))?;
+        let new_worker_id = new_worker.id();
+        info!("Created replacement worker with id: {}", new_worker_id);
+        Self::setup_worker_handlers(&new_worker, pos, self.deaths.clone());
 
-            // Create a new worker
-            let new_worker = Self::create_worker_with_manager(
-                &self.config.worker_config,
-                &self.mediasoup_worker_manager,
-            )
+        // The listener reuses the dead worker's port so announced addresses stay stable.
+        let announced_address = self
+            .config
+            .webrtc_transport_config
+            .listen_ips
+            .first()
+            .and_then(|li| li.announced_address.clone());
+        let port = self.config.worker_port(pos).map_err(|error| {
+            MediaError::ConfigurationError(format!("Invalid worker port configuration: {error}"))
+        })?;
+        let listen_info = ListenInfo {
+            protocol: Protocol::Udp,
+            ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            announced_address,
+            port: Some(port),
+            port_range: None,
+            flags: None,
+            send_buffer_size: None,
+            recv_buffer_size: None,
+            expose_internal_ip: false,
+        };
+        let server_options = WebRtcServerOptions::new(WebRtcServerListenInfos::new(listen_info));
+        let webrtc_server = new_worker
+            .create_webrtc_server(server_options)
             .await
-            .map_err(|e| MediaError::WorkerError(format!("Failed to recreate worker: {e}")))?;
-
-            let new_worker_id = new_worker.id();
-            info!("Created replacement worker with id: {}", new_worker_id);
-
-            // Set up handlers
-            Self::setup_worker_handlers(&new_worker, pos);
-
-            // Create WebRtcServer for replacement worker (reuse same port)
-            let announced_address = self
-                .config
-                .webrtc_transport_config
-                .listen_ips
-                .first()
-                .and_then(|li| li.announced_address.clone());
-            let port = self.config.worker_port(pos).map_err(|error| {
-                MediaError::ConfigurationError(format!(
-                    "Invalid worker port configuration: {error}"
+            .map_err(|e| {
+                MediaError::WorkerError(format!(
+                    "Failed to create WebRtcServer for replacement worker {new_worker_id}: {e}"
                 ))
             })?;
-            let listen_info = ListenInfo {
-                protocol: Protocol::Udp,
-                ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                announced_address,
-                port: Some(port),
-                port_range: None,
-                flags: None,
-                send_buffer_size: None,
-                recv_buffer_size: None,
-                expose_internal_ip: false,
-            };
-            let server_options =
-                WebRtcServerOptions::new(WebRtcServerListenInfos::new(listen_info));
-            let webrtc_server = new_worker
-                .create_webrtc_server(server_options)
-                .await
-                .map_err(|e| {
-                    MediaError::WorkerError(format!(
-                        "Failed to create WebRtcServer for replacement worker {new_worker_id}: {e}"
-                    ))
-                })?;
 
-            // Update WebRtcServer map
+        // Swap the registries only now that the replacement is ready.
+        let old_worker = std::mem::replace(&mut workers[pos], new_worker);
+        {
             let mut servers = self.webrtc_servers.write().await;
             servers.remove(&dead_worker_id);
             servers.insert(new_worker_id, webrtc_server);
-
-            // Update load tracking
+        }
+        {
             let mut load = self.worker_load.lock().unwrap_or_else(|e| e.into_inner());
             load.remove(&dead_worker_id);
             load.insert(new_worker_id, 0);
-
-            // Update consumer counter
-            {
-                let mut counts = self
-                    .worker_consumer_counts
-                    .write()
-                    .unwrap_or_else(|e| e.into_inner());
-                counts.remove(&dead_worker_id);
-                counts.insert(new_worker_id, Arc::new(AtomicUsize::new(0)));
-            }
-
-            // Add the new worker
-            workers.insert(pos, new_worker);
-
-            info!(
-                "Replacement worker {} fully initialized with WebRtcServer on port {}",
-                new_worker_id, port
-            );
         }
+        {
+            let mut counts = self
+                .worker_consumer_counts
+                .write()
+                .unwrap_or_else(|e| e.into_inner());
+            counts.remove(&dead_worker_id);
+            counts.insert(new_worker_id, Arc::new(AtomicUsize::new(0)));
+        }
+        drop(old_worker);
 
+        info!(
+            "Replacement worker {} fully initialized with WebRtcServer on port {}",
+            new_worker_id, port
+        );
         Ok(())
     }
 
@@ -463,7 +522,7 @@ impl WorkerManager {
                     })?;
 
             let worker_id = worker.id();
-            Self::setup_worker_handlers(&worker, i);
+            Self::setup_worker_handlers(&worker, i, self.deaths.clone());
 
             // Create WebRtcServer for each new worker
             let port = checked_worker_port(
@@ -556,9 +615,85 @@ impl Drop for WorkerManager {
     }
 }
 
+/// Reserves `count` contiguous UDP ports for a test pool. The sockets are
+/// released on return, just before the native listeners bind the ports.
+#[cfg(test)]
+pub(crate) fn reserve_worker_ports(count: u16) -> u16 {
+    for _ in 0..64 {
+        let first = std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).unwrap();
+        let base = first.local_addr().unwrap().port();
+        let rest: Option<Vec<std::net::UdpSocket>> = (1..count)
+            .map(|offset| {
+                base.checked_add(offset)
+                    .and_then(|port| std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port)).ok())
+            })
+            .collect();
+        if rest.is_some() {
+            return base;
+        }
+    }
+    panic!("could not reserve {count} contiguous local UDP ports");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn two_worker_manager() -> WorkerManager {
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 2;
+        config.webrtc_server_port_base = reserve_worker_ports(2);
+        WorkerManager::new(Arc::new(config)).await.unwrap()
+    }
+
+    async fn worker_ids(manager: &WorkerManager) -> Vec<WorkerId> {
+        manager
+            .workers
+            .read()
+            .await
+            .iter()
+            .map(Worker::id)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn recreate_worker_replaces_a_worker_whose_listener_is_gone() {
+        let manager = two_worker_manager().await;
+        let ids = worker_ids(&manager).await;
+        assert!(manager.release_worker_listener(ids[0]).await);
+        assert_eq!(manager.live_worker_count().await, 1);
+
+        manager.recreate_worker(ids[0]).await.unwrap();
+
+        assert_eq!(manager.live_worker_count().await, 2);
+        let replaced = worker_ids(&manager).await;
+        assert_ne!(replaced[0], ids[0], "the dead worker is replaced in place");
+        assert_eq!(replaced[1], ids[1], "the live worker is untouched");
+        assert!(manager.get_webrtc_server(replaced[0]).await.is_ok());
+        assert!(manager.get_webrtc_server(ids[0]).await.is_err());
+        let load = manager.get_load_distribution().await;
+        assert_eq!(load.get(&replaced[0]), Some(&0));
+        assert!(!load.contains_key(&ids[0]));
+        assert!(manager.get_consumer_counter(replaced[0]).is_some());
+        assert!(manager.get_consumer_counter(ids[0]).is_none());
+        manager.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn recreate_worker_keeps_the_pool_when_the_replacement_cannot_bind() {
+        let manager = two_worker_manager().await;
+        let ids = worker_ids(&manager).await;
+
+        // The worker is alive and still holds its port, so the replacement
+        // cannot bind it; the pool must not lose the slot.
+        let error = manager.recreate_worker(ids[0]).await.unwrap_err();
+        assert!(matches!(error, MediaError::WorkerError(_)), "{error}");
+
+        assert_eq!(manager.live_worker_count().await, 2);
+        assert_eq!(worker_ids(&manager).await, ids);
+        assert!(manager.get_webrtc_server(ids[0]).await.is_ok());
+        manager.shutdown().await.unwrap();
+    }
 
     fn load(consumers: usize, routers: usize) -> WorkerLoad {
         WorkerLoad { consumers, routers }

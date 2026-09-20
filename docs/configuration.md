@@ -56,9 +56,13 @@ probe saturation, or explicit drain state return `503 {"status":"not_ready"}`.
 Responses are uncached and contain no backend errors.
 
 Each readiness probe has a one-second total deadline; at most four run at once.
-It does not test external ICE reachability, TURN, or existing room health, and
-does not automatically replace failed workers. Restart the server to restore
-lost worker capacity.
+It does not test external ICE reachability, TURN, or existing room health.
+A media worker that dies is recreated automatically, and every room whose
+router lived on it is closed with the temporary `serverRestarting` notice so
+its members rejoin onto live capacity; their calls are interrupted, not
+retained. `simplestchat_media_worker_deaths_total` counts these events. If
+recreation itself fails, capacity stays reduced until restart and the
+`simplestchat_media_workers_live` gauge shows it.
 
 ## Authentication and database availability
 
