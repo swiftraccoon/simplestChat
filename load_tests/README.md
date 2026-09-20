@@ -37,7 +37,9 @@ Use an owned test server and a fresh output directory for each run. The generato
 joins rooms and sends media; it does not manage the server. Server join limits
 still apply: 10 attempts per room/IP and 30 per IP in 60 seconds. For larger runs
 and repeated baseline/candidate comparisons, use the
-[local benchmark workflow](../docs/performance.md).
+[local benchmark workflow](../docs/performance.md); for the production CPU quota,
+cgroup throttling, per-thread attribution and netem impairment inside a Linux
+VM, use [`benchmark-podman.mjs`](../docs/performance.md#production-shape-and-impaired-networks).
 
 ### Linux container
 
@@ -100,7 +102,7 @@ change consumer caps, coverage thresholds, keyframe cadence, or session lengths.
 Add `--subscription-plan ring-v1 --subscription-seed 17` to select the same
 publisher/kind edges across runs, independent of discovery order and server IDs.
 Fixed graphs require an owned loopback server, all clients publishing, no churn,
-at most 100 clients, and caps of at most 16 subscriptions per kind. Targets stay
+at most 400 clients, and caps of at most 16 subscriptions per kind. Targets stay
 within each room and are capped by its available peers.
 
 Planned targets enter the existing paced queues in canonical per-kind order.

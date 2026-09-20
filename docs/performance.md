@@ -179,7 +179,60 @@ against the CI database and stops PostgreSQL for eight seconds at the midpoint
 (revalidation runs every five seconds and a connection tolerates fifteen
 seconds of validator unavailability), so the bounded credential-uncertainty
 allowance is exercised by a real outage rather than a mocked validator.
-Neither job measures production capacity or browser media quality.
+The workflow's impaired job degrades the viewer's downlink with netem on the
+runner's loopback (UDP leaving the server's media port only) and runs
+[`web/e2e/impaired-network.cjs`](../web/e2e/impaired-network.cjs): a
+publisher sends simulcast from a fake camera while a viewer's native inbound
+statistics and the client's layer-change log are sampled through a clean
+baseline, five percent loss with 50 ms of jitter, a 400 kbit/s cap, a
+150 kbit/s cap and recovery. It asserts that decoding continues under loss
+with retransmission requests, that the server steps the consumer's spatial
+layer down under each cap and back to the top afterwards, and records the
+seconds each switch took. The same job then runs the 30-client four-room
+generator workload with five percent loss and jitter in both directions,
+keeping every delivery gate. Neither job measures production capacity or
+real device media quality.
+
+## Production shape and impaired networks
+
+Production runs two media workers under a 2-CPU, 2 GiB container. The Mac
+runner above has neither the quota nor Linux, so
+[`load_tests/benchmark-podman.mjs`](../load_tests/benchmark-podman.mjs) runs
+the same workloads inside the Podman Linux VM: the production image gets
+`--cpus` and `--memory`, the load-test image shares its network namespace over
+loopback, and one streaming sampler per container reads the process, the
+cgroup's `cpu.stat` (usage and throttled periods) and every thread's CPU. The
+row therefore carries `serverCpuPercentOfQuota`, `serverThrottledPeriodFraction`
+and `serverThreadCpuSeconds` split between mediasoup workers, tokio workers and
+everything else, next to the usual delivery and readiness figures. Build both
+images from the checkout, then for example:
+
+```sh
+podman build --target production -t localhost/simplestchat-production:dev .
+podman build --target loadtest -t localhost/simplestchat-loadtest:dev .
+node load_tests/benchmark-podman.mjs \
+  --server-image localhost/simplestchat-production:dev \
+  --generator-image localhost/simplestchat-loadtest:dev \
+  --output results/capacity-200c.$(date -u +%Y%m%dT%H%M%SZ) \
+  --clients 200 --scenarios multi-room --subscription-plan ring-v1 --subscription-seed 17 \
+  --workers 2 --cpus 2 --memory 2g --ramp-up 405 --warmup 10 --duration 120
+```
+
+The ramp must respect the server's join limits from one address (about two
+seconds per client above 30). The quota is the production shape; the cores are
+Apple silicon, so absolute figures do not transfer to the VPS, while the
+per-client cost, throttling and the worker/runtime split do inform limits.
+`--netem "loss 5% delay 50ms 10ms"` adds a NET_ADMIN sidecar built from
+[`load_tests/netem.Containerfile`](../load_tests/netem.Containerfile) that
+impairs UDP inside the server's namespace, when the VM kernel ships `sch_netem`
+(the pinned Podman 5.5 machine image does not; the CI runner does).
+
+[`build/impair.sh`](../build/impair.sh) applies the same profiles to an owned
+native server on Linux (netem on loopback, sudo), and
+[`build/impaired-check.sh`](../build/impaired-check.sh) starts a guest-only
+server and runs the browser scenario against it. macOS pf dummynet does not act
+on loopback, so on a Mac the scenario only exercises its mechanics
+(`IMPAIR_SCRIPT=none`).
 
 ## Browser and authenticated work
 

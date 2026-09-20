@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
-const MAX_CLIENTS: usize = 100;
+const MAX_CLIENTS: usize = 400;
 const MAX_TARGETS_PER_KIND: usize = 16;
 const VERSION: &str = "ring-v1";
 const PERMUTATION_DOMAIN: &[u8] = b"simplestchat:ring-v1:permutation\0";
@@ -417,6 +417,31 @@ mod tests {
     }
 
     #[test]
+    fn ring_scales_to_the_capacity_ladder_without_leaving_a_room() {
+        let plan = SubscriptionPlan::ring(300, 4, 4, 4, 17).unwrap();
+        assert_eq!(plan, SubscriptionPlan::ring(300, 4, 4, 4, 17).unwrap());
+        assert_eq!(plan.clients.len(), 300);
+        let mut incoming = vec![[0usize; 2]; 300];
+        for (index, client) in plan.clients.iter().enumerate() {
+            assert_eq!(client.room, index % 4);
+            for (kind, targets) in [&client.targets.audio, &client.targets.video]
+                .into_iter()
+                .enumerate()
+            {
+                assert_eq!(targets.len(), 4);
+                for target in targets {
+                    let target_index: usize = target.trim_start_matches("client-").parse().unwrap();
+                    assert_ne!(target_index, index);
+                    assert_eq!(target_index % 4, client.room, "targets stay in the room");
+                    incoming[target_index][kind] += 1;
+                }
+            }
+        }
+        // The ring spreads fan-out: every publisher serves exactly four per kind.
+        assert!(incoming.iter().all(|counts| counts == &[4, 4]));
+    }
+
+    #[test]
     fn ring_is_repeatable_seeded_bounded_and_round_trips() {
         let plan = SubscriptionPlan::ring(100, 4, 4, 4, 17).unwrap();
         assert_eq!(plan, SubscriptionPlan::ring(100, 4, 4, 4, 17).unwrap());
@@ -488,7 +513,7 @@ mod tests {
     fn ring_rejects_unbounded_or_undefined_inputs() {
         for (clients, rooms, audio, video) in [
             (0, 1, 1, 1),
-            (101, 1, 1, 1),
+            (401, 1, 1, 1),
             (2, 0, 1, 1),
             (2, 3, 1, 1),
             (2, 1, 17, 0),
@@ -656,7 +681,7 @@ mod tests {
     fn hotspot_rejects_unbounded_or_undefined_inputs_before_index_arithmetic() {
         for (clients, rooms, audio, video) in [
             (0, 1, 1, 1),
-            (101, 1, 1, 1),
+            (401, 1, 1, 1),
             (usize::MAX, 1, 1, 1),
             (2, 0, 1, 1),
             (2, 3, 1, 1),
@@ -688,7 +713,7 @@ mod tests {
         assert_eq!(registry.lookup_owner("participant-b").unwrap(), "client-1");
         assert!(OwnedParticipants::new(0).register("p", "client-0").is_err());
         assert!(
-            OwnedParticipants::new(101)
+            OwnedParticipants::new(401)
                 .register("p", "client-0")
                 .is_err()
         );
