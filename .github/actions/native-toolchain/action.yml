@@ -44,6 +44,9 @@ runs:
     # compiled worker they carry. Keep all crates so those survive.
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
+        # Bump the prefix whenever the retention policy changes: an existing
+        # key is reused as is and never re-saved.
+        prefix-key: v1-rust
         shared-key: ${{ inputs.cache-key }}
         key: vendor-${{ hashFiles('vendor/**') }}
         cache-all-crates: "true"
