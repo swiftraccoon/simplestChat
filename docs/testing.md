@@ -286,9 +286,12 @@ manual Firefox/Linux and WebKit/macOS runs.
 
 The [Performance workflow](../.github/workflows/performance.yml) (weekly and
 manual) compares a baseline build with the candidate on one hosted runner under
-coarse regression budgets, and runs the session soak with an eight-second
-PostgreSQL outage at its midpoint. See [continuous comparison](performance.md#continuous-comparison)
-for the budgets and their limits.
+coarse regression budgets, runs the session soak with an eight-second
+PostgreSQL outage at its midpoint, and runs the impaired-downlink browser and
+generator checks under netem. See [continuous comparison](performance.md#continuous-comparison)
+for the budgets and their limits, and
+[production shape and impaired networks](performance.md#production-shape-and-impaired-networks)
+for the Podman capacity runs and the local impairment helpers.
 
 ## Media correctness and performance
 

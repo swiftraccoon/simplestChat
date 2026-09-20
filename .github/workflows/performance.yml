@@ -103,6 +103,79 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  impaired:
+    name: Adaptive path under an impaired downlink
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+      OPENSSL_STATIC: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/native-toolchain
+        with:
+          cache-key: rust-release-benchmark
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/e2e/package-lock.json
+
+      - name: Build the server and the generator
+        run: |
+          cargo build --locked --release --bin simplestChat
+          cargo build --locked --release --features load-test --bin load_test
+
+      - name: Build UI and install pinned browser tooling
+        run: |
+          npm --prefix web ci --ignore-scripts
+          npm --prefix web run build
+          npm --prefix web/e2e ci --ignore-scripts
+          npm --prefix web/e2e exec -- playwright install --with-deps chromium
+
+      # netem on loopback, UDP from the server's media port only: the viewer's
+      # downlink degrades while signaling and the publisher's uplink stay clean.
+      - name: Browser viewer under loss, a bandwidth cap and recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo tc qdisc add dev lo root netem loss 0% && sudo tc qdisc del dev lo root
+          build/impaired-check.sh "${RUNNER_TEMP}/impaired/browser"
+
+      - name: Generator under five percent loss with jitter, both directions
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMPAIR_UDP_PORT=41100 IMPAIR_WORKERS=1 IMPAIR_DIRECTION=both \
+            IMPAIR_LOSS=5 IMPAIR_DELAY_MS=50 IMPAIR_JITTER_MS=10 build/impair.sh apply
+          trap 'build/impair.sh clear' EXIT
+          node load_tests/benchmark-local.mjs \
+            --baseline-root "${GITHUB_WORKSPACE}" \
+            --baseline-bin "${GITHUB_WORKSPACE}/target/release/simplestChat" \
+            --candidate-root "${GITHUB_WORKSPACE}" \
+            --candidate-bin "${GITHUB_WORKSPACE}/target/release/simplestChat" \
+            --generator "${GITHUB_WORKSPACE}/target/release/load_test" \
+            --output "${RUNNER_TEMP}/impaired/generator" \
+            --clients 30 --scenarios multi-room --repetitions 1 \
+            --ramp-up 65 --warmup 10 --duration 60 --workers 1 \
+            --subscription-plan ring-v1 --subscription-seed 17
+          tc -s qdisc show dev lo | tee "${RUNNER_TEMP}/impaired/generator/netem-stats.txt"
+
+      - name: Retain the impaired-network evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: impaired-network-${{ github.run_id }}
+          path: ${{ runner.temp }}/impaired
+          if-no-files-found: warn
+          retention-days: 30
+
   soak:
     name: Session soak with a database restart
     runs-on: ubuntu-24.04
