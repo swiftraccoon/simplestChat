@@ -64,8 +64,8 @@ echo "generator exit ${generator_status}; server exit ${status}" | tee "${result
 test -s "${results}/load_test_summary.json" || { echo "Generator produced no summary" >&2; exit 1; }
 test "${status}" -eq 0 || { echo "Server did not exit cleanly" >&2; exit 1; }
 node -e '
-const summary = require(process.argv[1]);
+const summary = require(require("node:path").resolve(process.argv[1]));
 const fields = ["successfulConnections", "failedConnections", "validatedConsumers", "failedConsumers", "keyframesRequested", "bandwidthEstimates", "totalPacketsReceived", "totalErrors"];
 console.log(JSON.stringify(Object.fromEntries(fields.map((key) => [key, summary[key]]))));
-' "$(pwd)/${results}/load_test_summary.json"
+' "${results}/load_test_summary.json"
 echo "Results: ${results}"
