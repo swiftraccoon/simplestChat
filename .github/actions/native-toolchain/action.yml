@@ -1,0 +1,65 @@
+name: Native Rust toolchain
+description: >-
+  Pinned Rust toolchain, restored Cargo cache, cached checksum-pinned static
+  OpenSSL, and stable mtimes for the vendored native crates.
+
+inputs:
+  cache-key:
+    description: >-
+      Name of the artifact set this job produces. Jobs that build the same
+      targets share one cache under this key; jobs that build different
+      targets must use different keys so a save never evicts another job's
+      artifacts.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # mediasoup-sys builds the C++ worker: needs python3 + pip (meson/ninja
+    # are fetched by its build script) and a full C++ toolchain.
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config shellcheck jq
+
+    - name: Install pinned Rust toolchain
+      uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-09)
+      with:
+        toolchain: 1.98.1
+        # mediasoup-sys formats generated bindings during its build script.
+        components: rustfmt, clippy
+
+    # Cargo fingerprints path dependencies by source mtime, and checkout gives
+    # every file a fresh mtime, so restored artifacts for the vendored
+    # mediasoup crates were rebuilt on every run: about three minutes of C++
+    # per compile step. Pin the vendored tree to one fixed mtime; the cache
+    # key below carries its content hash, so a changed patch still rebuilds.
+    - name: Give vendored sources a stable mtime
+      shell: bash
+      run: find vendor -exec touch -h -t 200001010000 {} +
+
+    - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      with:
+        shared-key: ${{ inputs.cache-key }}
+        key: vendor-${{ hashFiles('vendor/**') }}
+
+    - name: Configure native dependency paths
+      shell: bash
+      run: |
+        echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-3.5.8" >> "${GITHUB_ENV}"
+        echo "PKG_CONFIG_PATH=${RUNNER_TEMP}/simplestchat-openssl-3.5.8/lib/pkgconfig" >> "${GITHUB_ENV}"
+
+    # The installer verifies the archive checksum before building; the prefix
+    # is a pure function of the script, so cache it by the script's hash.
+    - name: Restore checksum-pinned OpenSSL
+      id: openssl
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/simplestchat-openssl-3.5.8
+        key: openssl-${{ runner.os }}-${{ hashFiles('build/install-openssl.sh') }}
+
+    - name: Build checksum-pinned OpenSSL
+      if: steps.openssl.outputs.cache-hit != 'true'
+      shell: bash
+      run: build/install-openssl.sh "${OPENSSL_DIR}"

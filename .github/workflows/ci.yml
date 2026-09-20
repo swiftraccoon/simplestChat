@@ -38,10 +38,51 @@ jobs:
           shellcheck ops/ansible/files/*.sh
           python -m unittest discover -s ops/ansible/tests -v
 
-  rust:
-    name: Rust + PostgreSQL + browser integration
+  rust-lint:
+    name: Rust format, lints and documentation
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 30
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+      OPENSSL_STATIC: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/native-toolchain
+        with:
+          cache-key: rust-check
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/e2e/package-lock.json
+
+      - name: Check helper syntax, safety and cleanup
+        run: build/check.sh --helpers
+
+      - name: Check Rust formatting, lints and documentation
+        run: build/check.sh --rust
+
+      - name: Audit Rust dependencies
+        run: |
+          cargo install cargo-audit --locked --version 0.22.2
+          # SQLx 0.9 removes the old optional rsa lockfile entry. Keep its
+          # advisory unsuppressed so a future reintroduction is audited.
+          # The atty and rand advisories occur only in mediasoup-sys build tools.
+          cargo audit --deny unsound \
+            --ignore RUSTSEC-2021-0145 \
+            --ignore RUSTSEC-2026-0097
+
+
+  rust-test:
+    name: Rust build, native and PostgreSQL tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     services:
       postgres:
         # Official image, pinned to the verified PostgreSQL 18.6 manifest.
@@ -69,24 +110,9 @@ jobs:
         with:
           persist-credentials: false
 
-      # mediasoup-sys builds the C++ worker: needs python3 + pip (meson/ninja
-      # are fetched by its build script) and a full C++ toolchain
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config shellcheck jq
-
-      - name: Install pinned Rust toolchain
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-09)
+      - uses: ./.github/actions/native-toolchain
         with:
-          toolchain: 1.98.1
-          # mediasoup-sys formats generated bindings during its build script.
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-
-      - name: Check Rust formatting
-        run: cargo fmt --all -- --check
+          cache-key: rust-build
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -96,23 +122,13 @@ jobs:
             web/package-lock.json
             web/e2e/package-lock.json
 
-      - name: Check helper syntax, safety and cleanup
-        run: build/check.sh --helpers
-
-      - name: Configure native dependency paths
-        run: |
-          echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-3.5.8" >> "${GITHUB_ENV}"
-          echo "PKG_CONFIG_PATH=${RUNNER_TEMP}/simplestchat-openssl-3.5.8/lib/pkgconfig" >> "${GITHUB_ENV}"
-
-      # rust-cache may clean non-Cargo files under target on a fallback hit.
-      - name: Build checksum-pinned OpenSSL
-        run: build/install-openssl.sh "${OPENSSL_DIR}"
-
-      - name: Check Rust lints and documentation
-        run: build/check.sh --rust
-
-      - name: Build production server
-        run: cargo build --locked --bin simplestChat
+      # One feature set for every Rust target in CI. Distinct feature sets
+      # (default for the server, load-test for the generator, all for the
+      # tests) each rebuilt the native worker, three minutes apiece. The
+      # load-test feature only adds the generator's dependencies and binary;
+      # the server code is identical.
+      - name: Build server and load generator
+        run: cargo build --locked --all-features --bins
 
       - name: Verify readiness and graceful shutdown
         run: node build/shutdown-smoke.mjs --binary "$PWD/target/debug/simplestChat"
@@ -171,8 +187,6 @@ jobs:
             exit 1
           fi
 
-      - name: Build load-test client
-        run: cargo build --locked --features load-test --bin load_test
 
       - name: Migrate disposable test database with the real server
         run: build/with-test-server.sh true
@@ -202,6 +216,61 @@ jobs:
           path: ${{ runner.temp }}/media-smoke
           if-no-files-found: ignore
           retention-days: 7
+
+
+  browser:
+    name: Browser integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        # Official image, pinned to the verified PostgreSQL 18.6 manifest.
+        image: docker.io/library/postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_USER: test_owner
+          POSTGRES_PASSWORD: disposable-ci-password
+          POSTGRES_DB: simplestchat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_owner -d simplestchat_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # mediasoup-sys invokes pip from its Cargo build script.
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+      OPENSSL_STATIC: "1"
+      DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
+      DISPOSABLE_TEST_DATABASE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/native-toolchain
+        with:
+          cache-key: rust-build
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/e2e/package-lock.json
+
+      # One feature set for every Rust target in CI. Distinct feature sets
+      # (default for the server, load-test for the generator, all for the
+      # tests) each rebuilt the native worker, three minutes apiece. The
+      # load-test feature only adds the generator's dependencies and binary;
+      # the server code is identical.
+      - name: Build server and load generator
+        run: cargo build --locked --all-features --bins
+
+      - name: Migrate disposable test database with the real server
+        run: build/with-test-server.sh true
 
       - name: Build UI and install pinned browser tooling
         run: |
@@ -291,15 +360,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Audit Rust dependencies
-        run: |
-          cargo install cargo-audit --locked --version 0.22.2
-          # SQLx 0.9 removes the old optional rsa lockfile entry. Keep its
-          # advisory unsuppressed so a future reintroduction is audited.
-          # The atty and rand advisories occur only in mediasoup-sys build tools.
-          cargo audit --deny unsound \
-            --ignore RUSTSEC-2021-0145 \
-            --ignore RUSTSEC-2026-0097
 
   web:
     name: Web lint + format + tests + typecheck + build
@@ -389,19 +449,39 @@ jobs:
             "${CADDY_IMAGE}" \
             validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
+      - name: Require the exact clean checkout
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Layers are cached in the Actions cache: the OpenSSL build, the
+      # toolchain and the warmed dependency layer (including the native
+      # worker) are reused until their inputs change, so a source-only push
+      # compiles only this crate.
       - name: Build production container
+        id: production-image
+        timeout-minutes: 50
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: production
+          platforms: linux/amd64
+          pull: true
+          load: true
+          provenance: false
+          sbom: false
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          tags: ${{ env.PRODUCTION_IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Record the immutable production image
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-          test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          timeout --signal=TERM --kill-after=2m 50m \
-            docker build --pull --target production --platform linux/amd64 \
-              --provenance=false --sbom=false \
-              --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
-              --iidfile "${RUNNER_TEMP}/production.iid" \
-              --tag "${PRODUCTION_IMAGE}" .
-          production_id="$(<"${RUNNER_TEMP}/production.iid")"
+          production_id='${{ steps.production-image.outputs.imageid }}'
           [[ "${production_id}" =~ ^sha256:[a-f0-9]{64}$ ]]
           # Every following smoke, export and fixture uses this exact image,
           # not the mutable build tag. The exporter never rebuilds it.
