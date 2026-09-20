@@ -1,5 +1,62 @@
 # Performance results
 
+## Review-fix comparison at 10, 30 and 100 clients — 2026-09-20
+
+Three alternating baseline/candidate pairs per workload compared the last
+pre-review build `f427e2f` (frozen server `44b57e57142d8712`) with the deployed
+review-fix build `1cf352b` (`8bef4346eb87d0d1`), using one generator
+(`5ff5515a9c316fb9`, built from the candidate) for both. All **18 runs passed**:
+every expected subscription delivered in every measured second (80, 240 and 800
+validated consumers per run, none failed or skipped), every publisher attempt
+met the new offered-load floor, resource sampling covered each window with no
+failed samples, rooms/participants/connections returned to zero, and every
+server exited cleanly.
+
+| Workload | Measurement | Baseline median (range) | Candidate median (range) |
+| --- | --- | ---: | ---: |
+| Conference, 10 clients, FIFO | Received packets/second | 6,920.00 (6,920.00–6,920.00) | 6,920.00 (6,919.95–6,920.02) |
+| | Receive-ready P99 | 412 ms (411–412) | 412 ms (410–412) |
+| | Server CPU, percent of one core | 18.81% (18.16–19.41) | 18.53% (18.47–18.76) |
+| | Server sampled peak RSS | 95.00 MiB (94.80–95.58) | 94.23 MiB (93.53–94.39) |
+| Four rooms, 30 clients, `ring-v1` seed 17 | Received packets/second | 20,760.00 (20,759.83–20,760.00) | 20,760.00 (20,759.82–20,760.18) |
+| | Receive-ready P99 | 416 ms (414–418) | 415 ms (414–415) |
+| | Server CPU, percent of one core | 48.61% (42.21–50.19) | 51.58% (41.66–52.67) |
+| | Server sampled peak RSS | 210.69 MiB (210.56–210.70) | 206.45 MiB (206.44–206.52) |
+| Four rooms, 100 clients, `ring-v1` seed 17 | Received packets/second | 69,200.00 (69,199.82–69,200.22) | 69,199.88 (69,199.18–69,200.22) |
+| | Receive-ready P99 | 416 ms (414–418) | 416 ms (415–418) |
+| | Server CPU, percent of one core | 70.92% (65.95–71.96) | 70.33% (64.48–71.37) |
+| | Server sampled peak RSS | 609.44 MiB (609.39–609.48) | 594.27 MiB (594.05–595.20) |
+
+Admission P99 was 1 ms and send-ready P99 within 408–418 ms in every run.
+The received-packet rates are the generator's nominal rates (see the
+[reproducible baseline](#reproducible-100-client-baseline--2026-09-14)); they
+confirm complete delivery, not capacity. The 100-client graph identity was
+`b916f569a92ea0ab`, the same graph as that baseline; the 30-client graph was
+`08b2ac731656e145`.
+
+**CPU is unchanged within measurement noise** at all three sizes. The 30-client
+medians differ by 6.1 percent, but the ranges overlap almost entirely and the
+unchanged generator's CPU moved by the same amount in the same runs, which
+points at host variance rather than the server. **Peak RSS is lower on the
+candidate** by 4.2 MiB at 30 clients and 15.2 MiB (2.5 percent) at 100 clients,
+with no overlap across the three repeats on either side; this is consistent with
+the smaller per-socket WebSocket read buffer and the shared outbound payload
+buffer, but the pair does not isolate which change contributed how much.
+
+The new keyframe counters were identical for both builds: 4,981–4,982 keyframes
+generated and 289–290 requested per 100-client run (718 and 89 at 30 clients,
+172–175 and 23–26 at 10), so the offered load did not differ between variants.
+
+Inputs: Apple M5 Max, 18 logical CPUs, 128 GiB RAM, Darwin 27.2.0; Rust 1.98.1
+with static OpenSSL 3.5.8; Node 26.8.1; one media worker; synthetic
+480p/30 fps with four audio and four video subscriptions per client; ramps of
+5, 65 and 205 seconds with a ten-second warmup and 60, 60 and 120-second
+measurements; both trees clean at their revisions. No builds or other owned
+workloads ran on the host during measurement. These are co-located,
+single-worker, synthetic-RTP observations without congestion-control feedback;
+they establish delivery and relative resource use for these builds, not
+production capacity, browser quality, or multi-worker behaviour.
+
 ## Signed-in chat continuity — 2026-09-15
 
 The original build disconnected both users at 15 minutes despite successful
