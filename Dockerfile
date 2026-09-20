@@ -98,8 +98,8 @@ RUN grep -Fq 'source_filename = abseil-cpp-20240722.2.tar.gz' \
 # This layer is reused until the manifest, lockfile or vendored patches change,
 # so a source-only build compiles this crate alone instead of the whole graph.
 RUN mkdir -p src load_tests/bin \
-    && printf 'fn main() {}\n' > src/main.rs \
-    && : > src/lib.rs \
+    && printf '#![allow(non_snake_case)]\nfn main() {}\n' > src/main.rs \
+    && printf '#![allow(non_snake_case)]\n' > src/lib.rs \
     && printf 'fn main() {}\n' > load_tests/bin/load_test.rs \
     && cargo build --locked --release --bin simplestChat \
     && rm -rf src load_tests \
