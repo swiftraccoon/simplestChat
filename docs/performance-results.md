@@ -1,5 +1,46 @@
 # Performance results
 
+## Production shape: 2 CPUs, 2 GiB, two workers — 2026-09-20
+
+Production runs the server container with a 2.0-CPU quota, a 2 GiB memory
+limit and two media workers. These runs put the production image (built from
+`1a2f5b5`, server source unchanged since the deployed `ace63ae`) under exactly
+those limits inside the Podman Linux VM on this Mac and drove it with the
+load-test image over loopback in the same network namespace, one run per size
+of the four-room `ring-v1` seed 17 workload with a 120-second measurement
+(`load_tests/benchmark-podman.mjs`, see [performance.md](performance.md#production-shape-and-impaired-networks)).
+All **3 runs passed**: every planned subscription delivered in every measured
+second (800, 1,600 and 2,400 validated consumers, none failed), every client
+received bandwidth estimates, no rejections, errors, worker deaths or full
+outbound queues, and the server exited cleanly.
+
+| Clients | Consumers | Received packets/second | Receive-ready P99 | Server CPU, share of the 2-CPU quota | Throttled periods | Peak RSS | Worker threads' share of server CPU |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 100 | 800 | 69,200 | 424 ms | 31.7% | 0 | 202 MiB | 98.4% |
+| 200 | 1,600 | 138,395 | 427 ms | 45.1% | 0 | 378 MiB | 98.8% |
+| 300 | 2,400 | 207,570 | 420 ms | 52.8% | 0 | 558 MiB | 99.5% |
+
+**The cost is almost entirely inside the mediasoup worker threads**: the tokio
+runtime and everything else used 0.4–0.6 CPU-seconds per 120-second window
+against 75–125 for the workers. **Per-client cost falls as load rises**: 100
+clients cost 0.63 CPU-cores in total, 300 cost 1.05, so each additional 100
+clients cost roughly a third of the first 100, consistent with the workers
+handling more packets per wakeup as their loops fill. No cgroup period was
+throttled at any size, so the quota was never the limiter here, and memory
+grew linearly at about 1.8 MiB per client from a 20 MiB base.
+
+**What this does and does not establish.** The quota is the production shape;
+the cores are Apple silicon in a VM, which are faster than the VPS's cores by
+a factor this measurement cannot determine. Read the figures as headroom
+ratios: at the configured `MAX_CONNECTIONS=200` the server used under half of
+its CPU budget and under a fifth of its memory limit on these cores, and the
+cost curve is sublinear. A calibration of the same 100-client two-worker
+workload on a hosted EPYC runner is recorded below when available. Loopback
+carries no real network cost (no TURN, no packet loss, no NAT keepalives), the
+generator's fixed-rate synthetic RTP is lighter than browser traffic with
+congestion feedback and simulcast, and nothing here measures browser quality.
+Evidence: `results/capacity-{100,200,300}c-2cpu.20260920T2*`.
+
 ## Two media workers at 100 clients — 2026-09-20
 
 Production runs `MEDIA_WORKERS=2`, but every earlier comparison used one worker.
