@@ -39,10 +39,14 @@ runs:
       shell: bash
       run: find vendor -exec touch -h -t 200001010000 {} +
 
+    # By default the cache keeps registry crates only and prunes everything
+    # built from a path, which includes the vendored mediasoup crates and the
+    # compiled worker they carry. Keep all crates so those survive.
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
         shared-key: ${{ inputs.cache-key }}
         key: vendor-${{ hashFiles('vendor/**') }}
+        cache-all-crates: "true"
 
     - name: Configure native dependency paths
       shell: bash

@@ -467,6 +467,7 @@ jobs:
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           # The default driver cannot export a layer cache; a container builder
           # can, and --load hands the finished image to the runner's daemon.
+          docker buildx rm --force simplestchat-ci 2>/dev/null || true
           docker buildx create --name simplestchat-ci --driver docker-container --use
           cache_dir="${RUNNER_TEMP}/buildx-cache"
           cache_from=()
@@ -484,6 +485,9 @@ jobs:
           # Replace rather than append: an appended local cache grows without bound.
           rm -rf "${cache_dir}"
           mv "${cache_dir}-next" "${cache_dir}"
+          # The release fixture requires an empty engine; the builder's
+          # BuildKit container must not outlive the build.
+          docker buildx rm --force simplestchat-ci
           production_id="$(<"${RUNNER_TEMP}/production.iid")"
           [[ "${production_id}" =~ ^sha256:[a-f0-9]{64}$ ]]
           # Every following smoke, export and fixture uses this exact image,
