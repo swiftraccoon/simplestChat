@@ -94,9 +94,10 @@ darwin_clear() {
 
 case "$1" in
   apply)
+    # Replacing a profile mid-run must not fail on the previous qdisc or pipe.
     case "${platform}" in
-      Linux) linux_apply ;;
-      Darwin) darwin_apply ;;
+      Linux) linux_clear; linux_apply ;;
+      Darwin) darwin_clear; darwin_apply ;;
       *) echo "Unsupported platform ${platform}" >&2; exit 2 ;;
     esac
     echo "impairment applied: port ${port}-${last_port} ${direction} loss=${loss}% delay=${delay_ms}ms jitter=${jitter_ms}ms rate=${rate_kbit}kbit"
