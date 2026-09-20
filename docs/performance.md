@@ -150,9 +150,11 @@ the full window. Missing peers cannot be substituted or skipped. See
 for bounds and report fields.
 
 Synthetic RTP exercises forwarding, not browser encoding or visual quality.
-The generator negotiates no congestion-control feedback and no simulcast, so
-these runs never exercise bandwidth estimation, bitrate adaptation or layer
-selection; see [what the generator does not model](../load_tests/README.md).
+The generator negotiates transport-wide congestion control, so the server's
+bandwidth estimators run and the summary counts their reports, but it never
+adapts its fixed send rate and offers no simulcast, so bitrate adaptation and
+layer selection stay unexercised; see
+[what the generator does not model](../load_tests/README.md).
 Receive/send totals are not a packet-loss estimate because streams fan out to
 multiple subscribers. See [report definitions](../load_tests/README.md#reports-and-metric-definitions)
 for counters and delivery checks.

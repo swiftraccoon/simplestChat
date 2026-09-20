@@ -5,6 +5,9 @@ use anyhow::{Context, Result};
 use mediasoup::prelude::*;
 use mediasoup_types::data_structures::{DtlsFingerprint, DtlsRole, IceCandidateType};
 use rtc::interceptor::{Interceptor, Packet, StreamInfo, TaggedPacket, interceptor};
+use rtc::peer_connection::configuration::interceptor_registry::{
+    configure_nack, configure_rtcp_reports, configure_simulcast_extension_headers, configure_twcc,
+};
 use rtc::rtcp::payload_feedbacks::{
     full_intra_request::FullIntraRequest, picture_loss_indication::PictureLossIndication,
 };
@@ -23,9 +26,65 @@ use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
     RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceConnectionState, RTCPeerConnectionState,
     RTCSessionDescription, RTCStatsReportEntry, Registry, StatsSelector,
-    register_default_interceptors,
 };
 use webrtc::rtp_transceiver::{RTCRtpTransceiverDirection, RTCRtpTransceiverInit};
+
+const MID_URI: &str = "urn:ietf:params:rtp-hdrext:sdes:mid";
+const TRANSPORT_CC_URI: &str =
+    "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
+
+/// The interceptor chain every peer runs: NACK, RTCP reports, the simulcast
+/// extensions, and transport-wide congestion control in both directions. The
+/// TWCC sender stamps outgoing packets so the SFU can estimate our uplink; the
+/// TWCC receiver reports what we receive so the SFU's downlink estimator runs.
+/// Nothing adapts the fixed send rate to either estimate.
+fn interceptor_registry(
+    media_engine: &mut MediaEngine,
+) -> Result<Registry<impl Interceptor + use<>>> {
+    let registry = configure_nack(Registry::new(), media_engine);
+    let registry = configure_rtcp_reports(registry);
+    configure_simulcast_extension_headers(media_engine)?;
+    let registry = configure_twcc(registry, media_engine)?;
+    Ok(registry)
+}
+
+/// Header extension ids negotiated for one direction: `mid` and, when the
+/// peer offered it, transport-wide congestion control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HeaderExtensionIds {
+    pub mid: u16,
+    pub transport_cc: Option<u16>,
+}
+
+impl Default for HeaderExtensionIds {
+    fn default() -> Self {
+        Self {
+            mid: 1,
+            transport_cc: None,
+        }
+    }
+}
+
+/// `a=extmap:<id>[/direction] <uri>` lines of a local description.
+fn extract_extension_ids_from_sdp(sdp: &str) -> HeaderExtensionIds {
+    let mut ids = HeaderExtensionIds::default();
+    for line in sdp.lines() {
+        let Some(rest) = line.strip_prefix("a=extmap:") else {
+            continue;
+        };
+        let mut parts = rest.splitn(2, ' ');
+        let id = parts
+            .next()
+            .and_then(|id| id.split('/').next())
+            .and_then(|id| id.parse::<u16>().ok());
+        match (id, parts.next().map(str::trim)) {
+            (Some(id), Some(MID_URI)) => ids.mid = id,
+            (Some(id), Some(TRANSPORT_CC_URI)) => ids.transport_cc = Some(id),
+            _ => {}
+        }
+    }
+    ids
+}
 
 /// Observe requests before the default chain consumes RTCP. The original packet
 /// still reaches every interceptor; this observer neither clones nor queues it.
@@ -300,6 +359,9 @@ pub struct WebRtcTransport {
     send_audio_track: Option<Arc<TrackLocalStaticRTP>>,
     send_video_track: Option<Arc<TrackLocalStaticRTP>>,
     video_keyframe_requests: Arc<super::media_generator::KeyframeRequests>,
+    /// Extension ids from this peer's own offer; the synthesized answer for a
+    /// send transport and the producer parameters sent to the SFU must match.
+    local_extension_ids: HeaderExtensionIds,
 }
 
 impl Drop for WebRtcTransport {
@@ -322,6 +384,7 @@ struct ConsumerInfo {
     kind: MediaKind,
     ssrc: u32,
     mid_ext_id: Option<u16>,
+    twcc_ext_id: Option<u16>,
     mid: usize,
     server_mid: Option<u32>,
 }
@@ -452,7 +515,7 @@ impl WebRtcTransport {
                 None,
             )?;
         }
-        let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
+        let registry = interceptor_registry(&mut media_engine)?;
         let (cancellation, cancellation_rx) = tokio::sync::watch::channel(false);
         let video_ssrc = rand::random::<u32>();
         let video_keyframe_requests = Arc::new(super::media_generator::KeyframeRequests::default());
@@ -565,7 +628,7 @@ impl WebRtcTransport {
                 }
                 (None, None)
             };
-            let transport = Self {
+            let mut transport = Self {
                 peer_connection: peer_connection.clone(),
                 transport_id,
                 client_id,
@@ -580,6 +643,7 @@ impl WebRtcTransport {
                 send_audio_track,
                 send_video_track,
                 video_keyframe_requests,
+                local_extension_ids: HeaderExtensionIds::default(),
             };
             let local_dtls = transport.generate_dtls_parameters().await?;
             Ok::<_, anyhow::Error>((transport, local_dtls))
@@ -591,8 +655,13 @@ impl WebRtcTransport {
         setup
     }
 
+    /// Header extension ids this peer offered, used for producer parameters.
+    pub fn local_extension_ids(&self) -> HeaderExtensionIds {
+        self.local_extension_ids
+    }
+
     /// Generate local DTLS parameters from the peer connection
-    async fn generate_dtls_parameters(&self) -> Result<DtlsParameters> {
+    async fn generate_dtls_parameters(&mut self) -> Result<DtlsParameters> {
         let offer = self
             .peer_connection
             .create_offer(None)
@@ -610,6 +679,7 @@ impl WebRtcTransport {
             .await
             .context("No local description")?;
 
+        self.local_extension_ids = extract_extension_ids_from_sdp(&local_desc.sdp);
         let fingerprint = extract_fingerprint_from_sdp(&local_desc.sdp)?;
 
         // Client always takes DTLS client role (active side).
@@ -632,6 +702,7 @@ impl WebRtcTransport {
             dtls_parameters,
             self.is_send,
             &self.consumers,
+            self.local_extension_ids,
         )?;
 
         let remote_desc = RTCSessionDescription::answer(remote_sdp)?;
@@ -680,6 +751,11 @@ impl WebRtcTransport {
             .iter()
             .find(|ext| ext.uri == RtpHeaderExtensionUri::Mid)
             .map(|ext| ext.id);
+        let twcc_ext_id = consumer_rtp_parameters
+            .header_extensions
+            .iter()
+            .find(|ext| ext.uri == RtpHeaderExtensionUri::TransportWideCcDraft01)
+            .map(|ext| ext.id);
 
         debug!(
             "{}: Recording consumer: kind={:?}, ssrc={}, mid_ext_id={:?}, consumer_mid={:?}",
@@ -711,6 +787,7 @@ impl WebRtcTransport {
             kind,
             ssrc,
             mid_ext_id,
+            twcc_ext_id,
             mid,
             server_mid: consumer_rtp_parameters
                 .mid
@@ -775,6 +852,7 @@ impl WebRtcTransport {
             &self.dtls_parameters,
             self.is_send,
             &self.consumers,
+            self.local_extension_ids,
         )?;
 
         debug!(
@@ -863,6 +941,7 @@ impl WebRtcTransport {
                 "localMid": c.mid,
                 "serverMid": c.server_mid,
                 "midExtensionId": c.mid_ext_id,
+                "transportCcExtensionId": c.twcc_ext_id,
             })).collect::<Vec<_>>(),
         }))
     }
@@ -940,6 +1019,15 @@ impl WebRtcSession {
             video_track: None,
             metrics: Some(metrics),
         }
+    }
+
+    /// Header extension ids negotiated on the send transport.
+    pub fn send_extension_ids(&self) -> Result<HeaderExtensionIds> {
+        Ok(self
+            .send_transport
+            .as_ref()
+            .context("No send transport")?
+            .local_extension_ids())
     }
 
     /// Create send transport (tracks are added before SDP negotiation)
@@ -1300,6 +1388,7 @@ fn generate_remote_sdp(
     dtls_parameters: &DtlsParameters,
     is_send: bool,
     consumers: &[ConsumerInfo],
+    local_extension_ids: HeaderExtensionIds,
 ) -> Result<String> {
     // webrtc-rs only supports SHA-256 fingerprints. mediasoup returns all
     // algorithms (SHA-1, SHA-224, SHA-256, SHA-384, SHA-512) in non-deterministic
@@ -1355,9 +1444,16 @@ fn generate_remote_sdp(
             MediaKind::Video => ("video", 96, "VP8/90000"),
         };
         let direction = if is_send { "recvonly" } else { "sendonly" };
-        let extension = consumer
-            .and_then(|consumer| consumer.mid_ext_id)
-            .unwrap_or(1);
+        // A send transport answers our own offer, so its ids mirror ours; a
+        // receive transport carries the ids the SFU assigned to each consumer.
+        let (extension, transport_cc) = if is_send {
+            (local_extension_ids.mid, local_extension_ids.transport_cc)
+        } else {
+            (
+                consumer.and_then(|consumer| consumer.mid_ext_id).unwrap_or(1),
+                consumer.and_then(|consumer| consumer.twcc_ext_id),
+            )
+        };
         sdp.push_str(&format!(
             "m={media} 9 UDP/TLS/RTP/SAVPF {payload_type}\r\n\
              c=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=rtcp-mux\r\n\
@@ -1365,6 +1461,11 @@ fn generate_remote_sdp(
              a=extmap:{extension} urn:ietf:params:rtp-hdrext:sdes:mid\r\n\
              a=fingerprint:{fp_algorithm} {fp_value}\r\na=setup:{setup}\r\n",
         ));
+        if let Some(id) = transport_cc {
+            sdp.push_str(&format!(
+                "a=extmap:{id} {TRANSPORT_CC_URI}\r\na=rtcp-fb:{payload_type} transport-cc\r\n"
+            ));
+        }
         if kind == MediaKind::Audio {
             sdp.push_str("a=fmtp:111 minptime=10;useinbandfec=1\r\n");
         } else {
@@ -1606,11 +1707,54 @@ mod migration_tests {
     }
 
     #[test]
+    fn local_offer_extension_ids_are_read_and_mirrored_into_the_answer() {
+        let ids = extract_extension_ids_from_sdp(
+            "v=0\r\na=extmap:3 urn:ietf:params:rtp-hdrext:sdes:mid\r\n\
+             a=extmap:5/sendrecv http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\n",
+        );
+        assert_eq!(
+            ids,
+            HeaderExtensionIds {
+                mid: 3,
+                transport_cc: Some(5)
+            }
+        );
+        let ice = IceParameters {
+            username_fragment: "u".into(),
+            password: "p".into(),
+            ice_lite: Some(true),
+        };
+        let dtls = DtlsParameters {
+            role: DtlsRole::Server,
+            fingerprints: vec![DtlsFingerprint::Sha256 { value: [7; 32] }],
+        };
+        let answer = generate_remote_sdp(&ice, &dtls, true, &[], ids).unwrap();
+        assert!(answer.contains("a=extmap:3 urn:ietf:params:rtp-hdrext:sdes:mid\r\n"));
+        assert!(answer.contains(
+            "a=extmap:5 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\na=rtcp-fb:96 transport-cc\r\n"
+        ));
+        assert!(answer.contains("a=rtcp-fb:111 transport-cc\r\n"));
+
+        // A receive transport carries the SFU's consumer ids instead.
+        let consumer = ConsumerInfo {
+            kind: MediaKind::Video,
+            ssrc: 9,
+            mid_ext_id: Some(2),
+            twcc_ext_id: Some(4),
+            mid: 1,
+            server_mid: Some(1),
+        };
+        let receive = generate_remote_sdp(&ice, &dtls, false, &[consumer], ids).unwrap();
+        assert!(receive.contains("a=mid:1\r\na=sendonly\r\na=rtpmap:96 VP8/90000\r\na=extmap:2 urn:ietf:params:rtp-hdrext:sdes:mid\r\n"));
+        assert!(receive.contains("a=extmap:4 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\na=rtcp-fb:96 transport-cc\r\n"));
+    }
+
+    #[test]
     fn video_feedback_observer_precedes_the_complete_default_interceptor_chain() {
         let (cancellation, receiver) = tokio::sync::watch::channel(false);
         let requests = Arc::new(super::super::media_generator::KeyframeRequests::default());
         let mut media_engine = MediaEngine::default();
-        let registry = register_default_interceptors(Registry::new(), &mut media_engine).unwrap();
+        let registry = interceptor_registry(&mut media_engine).unwrap();
         let mut observer = registry
             .with(|next| VideoFeedbackObserver {
                 next,
@@ -1863,11 +2007,19 @@ mod migration_tests {
                     .await
                     .context("receiver local SDP missing")?;
                 let recv_ice = loopback_ice_parameters(&recv_description.sdp, false)?;
+                let peer_ids = extract_extension_ids_from_sdp(
+                    &peer
+                        .local_description()
+                        .await
+                        .context("sender local SDP missing")?
+                        .sdp,
+                );
                 peer.set_remote_description(RTCSessionDescription::answer(generate_remote_sdp(
                     &recv_ice,
                     &recv_dtls,
                     true,
                     &[],
+                    peer_ids,
                 )?)?)
                 .await?;
                 recv.set_remote_description(&source_ice, &source_dtls)
@@ -1938,8 +2090,21 @@ mod migration_tests {
                         // peers' incremental offer/answer updates.
                         peer.set_local_description(peer.create_offer(None).await?)
                             .await?;
+                        let peer_ids = extract_extension_ids_from_sdp(
+                            &peer
+                                .local_description()
+                                .await
+                                .context("sender local SDP missing")?
+                                .sdp,
+                        );
                         peer.set_remote_description(RTCSessionDescription::answer(
-                            generate_remote_sdp(&recv_ice, &recv_dtls, true, &recv.consumers)?,
+                            generate_remote_sdp(
+                                &recv_ice,
+                                &recv_dtls,
+                                true,
+                                &recv.consumers,
+                                peer_ids,
+                            )?,
                         )?)
                         .await?;
                     }
@@ -2156,10 +2321,30 @@ mod migration_tests {
                 .await
                 .unwrap()
                 .sdp;
-            for feedback in ["nack", "nack pli", "ccm fir"] {
+            for feedback in ["nack", "nack pli", "ccm fir", "transport-cc"] {
                 assert!(answer.contains(&format!("a=rtcp-fb:96 {feedback}\r\n")));
             }
-            assert!(!answer.contains("a=rtcp-fb:111"));
+            // Audio negotiates only transport-cc, with the extension id the
+            // offer chose so the peer's stamped packets match the answer.
+            assert_eq!(answer.matches("a=rtcp-fb:111 ").count(), 1);
+            assert!(answer.contains("a=rtcp-fb:111 transport-cc\r\n"));
+            let twcc_id = transport
+                .local_extension_ids()
+                .transport_cc
+                .expect("the offer negotiates transport-cc");
+            assert_eq!(
+                offer
+                    .matches(&format!("a=extmap:{twcc_id} {TRANSPORT_CC_URI}\r\n"))
+                    .count(),
+                2,
+                "one transport-cc extension per offered section"
+            );
+            assert_eq!(
+                answer
+                    .matches(&format!("a=extmap:{twcc_id} {TRANSPORT_CC_URI}\r\n"))
+                    .count(),
+                2
+            );
             transport.close().await.unwrap();
         })
         .await
@@ -2288,7 +2473,14 @@ mod migration_tests {
             );
             assert!(!snapshot.to_string().contains("testufrag"));
             assert!(!snapshot.to_string().contains("test-password"));
-            let answer = generate_remote_sdp(&ice, &dtls, false, &transport.consumers).unwrap();
+            let answer = generate_remote_sdp(
+                &ice,
+                &dtls,
+                false,
+                &transport.consumers,
+                transport.local_extension_ids(),
+            )
+            .unwrap();
             assert_eq!(answer.matches("m=audio ").count(), 2);
             assert_eq!(answer.matches("m=video ").count(), 2);
             assert!(answer.contains("a=group:BUNDLE 0 1 2 3\r\n"));

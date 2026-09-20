@@ -154,10 +154,12 @@ impl Fixture {
 
         let configuration = MediaConfig::video_only();
         let (_, video_ssrc) = self.publisher.lock().await.send_ssrcs().await?;
+        let extension_ids = self.publisher.lock().await.send_extension_ids()?;
         let mut parameters = extract_rtp_parameters(
             MediaKind::Video,
             video_ssrc,
             configuration.video_bitrate_kbps,
+            extension_ids,
         );
         // Only the producer's advertised feedback differs between controls.
         // Both retain the real peer, SFU, generator and five-second cadence.

@@ -57,7 +57,7 @@ use subscription_plan::{OwnedParticipants, PlannedTargets, SubscriptionPlan};
 use subscriptions::Subscriptions;
 use tokio::sync::Mutex;
 use webrtc::media_stream::track_local::TrackLocal;
-use webrtc_client::WebRtcSession;
+use webrtc_client::{HeaderExtensionIds, WebRtcSession};
 
 /// Departure is an experimental workload dimension, never an implicit change
 /// to the default disconnect-and-reconnect-grace performance workload.
@@ -1661,6 +1661,7 @@ async fn run_client_inner(
 
         // Get actual SSRCs from webrtc-rs (tracks were bound during send transport SDP negotiation)
         let (audio_ssrc, video_ssrc) = webrtc_session.lock().await.send_ssrcs().await?;
+        let extension_ids = webrtc_session.lock().await.send_extension_ids()?;
         tracing::info!(
             "{}: Send transport SSRCs - audio: {}, video: {}",
             client_id,
@@ -1675,6 +1676,7 @@ async fn run_client_inner(
                 MediaKind::Audio,
                 audio_ssrc,
                 config.media_config.video_bitrate_kbps,
+                extension_ids,
             );
             let produce_msg = ClientMessage::Produce {
                 transport_id: st_id.clone(),
@@ -1705,6 +1707,7 @@ async fn run_client_inner(
                 MediaKind::Video,
                 video_ssrc,
                 config.media_config.video_bitrate_kbps,
+                extension_ids,
             );
             let produce_msg = ClientMessage::Produce {
                 transport_id: st_id.clone(),
@@ -2502,12 +2505,16 @@ mod packet_migration_tests {
 
     #[test]
     fn producer_video_advertises_supported_feedback_without_changing_audio() {
-        let audio = extract_rtp_parameters(MediaKind::Audio, 12_345, 1000);
-        let video = extract_rtp_parameters(MediaKind::Video, 54_321, 1000);
+        let ids = HeaderExtensionIds {
+            mid: 3,
+            transport_cc: Some(5),
+        };
+        let audio = extract_rtp_parameters(MediaKind::Audio, 12_345, 1000, ids);
+        let video = extract_rtp_parameters(MediaKind::Video, 54_321, 1000, ids);
         let RtpCodecParameters::Audio { rtcp_feedback, .. } = &audio.codecs[0] else {
             panic!("audio codec expected");
         };
-        assert!(rtcp_feedback.is_empty());
+        assert_eq!(rtcp_feedback, &[RtcpFeedback::TransportCc]);
         let RtpCodecParameters::Video { rtcp_feedback, .. } = &video.codecs[0] else {
             panic!("video codec expected");
         };
@@ -2516,7 +2523,19 @@ mod packet_migration_tests {
             &[
                 RtcpFeedback::Nack,
                 RtcpFeedback::NackPli,
-                RtcpFeedback::CcmFir
+                RtcpFeedback::CcmFir,
+                RtcpFeedback::TransportCc,
+            ]
+        );
+        assert_eq!(
+            video
+                .header_extensions
+                .iter()
+                .map(|ext| (ext.uri, ext.id))
+                .collect::<Vec<_>>(),
+            vec![
+                (RtpHeaderExtensionUri::Mid, 3),
+                (RtpHeaderExtensionUri::TransportWideCcDraft01, 5)
             ]
         );
         assert_eq!(video.encodings[0].ssrc, Some(54_321));
@@ -3197,6 +3216,11 @@ async fn handle_server_message(
         ServerMessage::ConsumerPaused { consumer_id } => {
             tracing::debug!("{}: Consumer paused: {}", client_id, consumer_id);
         }
+        ServerMessage::ConnectionStats {
+            available_bitrate, ..
+        } => {
+            metrics.record_bandwidth_estimate(available_bitrate);
+        }
         ServerMessage::Error { message } => {
             tracing::warn!("{}: Server error: {}", client_id, message);
             metrics.record_error(format!("Server error: {}", message));
@@ -3301,7 +3325,27 @@ where
     }
 }
 
-fn extract_rtp_parameters(kind: MediaKind, ssrc: u32, video_bitrate_kbps: u32) -> RtpParameters {
+/// Producer parameters for the SFU. Header extension ids must be the ones our
+/// own offer negotiated, because the peer stamps outgoing packets with them;
+/// transport-cc lets the SFU run its uplink estimator on our stream.
+fn extract_rtp_parameters(
+    kind: MediaKind,
+    ssrc: u32,
+    video_bitrate_kbps: u32,
+    extension_ids: HeaderExtensionIds,
+) -> RtpParameters {
+    let mut header_extensions = vec![RtpHeaderExtensionParameters {
+        uri: RtpHeaderExtensionUri::Mid,
+        id: extension_ids.mid,
+        encrypt: false,
+    }];
+    if let Some(id) = extension_ids.transport_cc {
+        header_extensions.push(RtpHeaderExtensionParameters {
+            uri: RtpHeaderExtensionUri::TransportWideCcDraft01,
+            id,
+            encrypt: false,
+        });
+    }
     // Payload types must match the router's codec config (see config.rs)
     match kind {
         MediaKind::Audio => RtpParameters {
@@ -3313,13 +3357,9 @@ fn extract_rtp_parameters(kind: MediaKind, ssrc: u32, video_bitrate_kbps: u32) -
                 clock_rate: NonZeroU32::new(48000).unwrap(),
                 channels: NonZeroU8::new(2).unwrap(),
                 parameters: RtpCodecParametersParameters::default(),
-                rtcp_feedback: vec![],
+                rtcp_feedback: vec![RtcpFeedback::TransportCc],
             }],
-            header_extensions: vec![RtpHeaderExtensionParameters {
-                uri: RtpHeaderExtensionUri::Mid,
-                id: 1,
-                encrypt: false,
-            }],
+            header_extensions,
             encodings: vec![RtpEncodingParameters {
                 ssrc: Some(ssrc),
                 ..Default::default()
@@ -3338,13 +3378,10 @@ fn extract_rtp_parameters(kind: MediaKind, ssrc: u32, video_bitrate_kbps: u32) -
                     RtcpFeedback::Nack,
                     RtcpFeedback::NackPli,
                     RtcpFeedback::CcmFir,
+                    RtcpFeedback::TransportCc,
                 ],
             }],
-            header_extensions: vec![RtpHeaderExtensionParameters {
-                uri: RtpHeaderExtensionUri::Mid,
-                id: 1,
-                encrypt: false,
-            }],
+            header_extensions,
             encodings: vec![RtpEncodingParameters {
                 ssrc: Some(ssrc),
                 max_bitrate: Some(video_bitrate_kbps * 1000),

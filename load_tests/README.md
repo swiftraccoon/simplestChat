@@ -4,13 +4,16 @@ The optional Rust generator tests SFU forwarding over real ICE/DTLS/SRTP
 connections using synthetic Opus/VP8-shaped RTP. It measures signaling and media
 delivery, not browser encoding, rendering, or visual quality.
 
-The client negotiates only `nack`, `nack pli` and `ccm fir` with a single
-`sdes:mid` header extension: no `transport-cc`, `goog-remb`, `abs-send-time`,
-simulcast (`rid`) or SVC layers, and its send rate is a fixed timer. The server's
-bandwidth estimation, bitrate adaptation and preferred-layer selection are
-therefore never exercised by any run of this generator, and its results cannot
-support or reject a congestion-control or layer-selection change. Browsers do
-negotiate those paths; measure them with the browser suites.
+The client negotiates `nack`, `nack pli`, `ccm fir` and transport-wide
+congestion control (`transport-cc` feedback with its header extension) in both
+directions, so the SFU's uplink and downlink estimators run; the summary's
+`bandwidthEstimates` and `clientsWithBandwidthEstimate` count the downlink
+estimates the server reported. What the client still does not do: its send
+rate is a fixed timer that never adapts to an estimate, and it offers a single
+encoding with no `goog-remb`, `abs-send-time`, simulcast (`rid`) or SVC layers,
+so bitrate adaptation and preferred-layer selection remain unexercised. Results
+cannot support or reject a layer-selection change; browsers negotiate those
+paths and the browser suites measure them.
 
 ## Build and run
 

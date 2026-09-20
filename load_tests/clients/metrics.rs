@@ -25,6 +25,12 @@ pub struct ClientMetrics {
     pub keyframes_generated: u64,
     #[serde(default)]
     pub keyframes_requested: u64,
+    /// Bandwidth estimates the SFU reported for this client's downlink. A
+    /// nonzero count proves the transport-cc feedback loop ran.
+    #[serde(default)]
+    pub bandwidth_estimates: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_available_bitrate: Option<u32>,
     pub errors: Vec<String>,
     pub session_duration_ms: u64,
     pub producers_created: u32,
@@ -101,6 +107,8 @@ pub struct MetricsCollector {
     packets_sent: AtomicU64,
     keyframes_generated: AtomicU64,
     keyframes_requested: AtomicU64,
+    bandwidth_estimates: AtomicU64,
+    last_available_bitrate: AtomicU64,
     packets_received: AtomicU64,
     bytes_sent: AtomicU64,
     bytes_received: AtomicU64,
@@ -140,6 +148,8 @@ impl MetricsCollector {
             packets_sent: AtomicU64::new(0),
             keyframes_generated: AtomicU64::new(0),
             keyframes_requested: AtomicU64::new(0),
+            bandwidth_estimates: AtomicU64::new(0),
+            last_available_bitrate: AtomicU64::new(0),
             packets_received: AtomicU64::new(0),
             bytes_sent: AtomicU64::new(0),
             bytes_received: AtomicU64::new(0),
@@ -343,6 +353,16 @@ impl MetricsCollector {
         }
     }
 
+    /// The SFU pushes its downlink estimate whenever it changes; `None` means
+    /// the estimator has nothing yet and is not counted.
+    pub fn record_bandwidth_estimate(&self, available_bitrate: Option<u32>) {
+        if let Some(bitrate) = available_bitrate {
+            self.bandwidth_estimates.fetch_add(1, Ordering::Relaxed);
+            self.last_available_bitrate
+                .store(u64::from(bitrate) + 1, Ordering::Relaxed);
+        }
+    }
+
     pub fn record_packet_sent_for_attempt(&self, attempt: usize, size: usize) {
         self.packets_sent.fetch_add(1, Ordering::Relaxed);
         self.bytes_sent.fetch_add(size as u64, Ordering::Relaxed);
@@ -449,6 +469,11 @@ impl MetricsCollector {
             total_bytes_received: self.bytes_received.load(Ordering::Relaxed),
             keyframes_generated: self.keyframes_generated.load(Ordering::Relaxed),
             keyframes_requested: self.keyframes_requested.load(Ordering::Relaxed),
+            bandwidth_estimates: self.bandwidth_estimates.load(Ordering::Relaxed),
+            last_available_bitrate: match self.last_available_bitrate.load(Ordering::Relaxed) {
+                0 => None,
+                stored => u32::try_from(stored - 1).ok(),
+            },
             errors,
             session_duration_ms: session_duration,
             producers_created: self.producers_created.load(Ordering::Relaxed) as u32,
@@ -529,6 +554,12 @@ pub struct TestSummary {
     pub keyframes_generated: u64,
     #[serde(default)]
     pub keyframes_requested: u64,
+    /// Downlink bandwidth estimates received across clients, and how many
+    /// clients received at least one; zero means congestion control never ran.
+    #[serde(default)]
+    pub bandwidth_estimates: u64,
+    #[serde(default)]
+    pub clients_with_bandwidth_estimate: usize,
     pub average_session_duration_ms: u64,
     pub total_errors: usize,
     pub total_producers_created: u32,
@@ -584,6 +615,9 @@ impl TestSummary {
         let total_bytes_received: u64 = metrics.iter().map(|m| m.total_bytes_received).sum();
         let keyframes_generated: u64 = metrics.iter().map(|m| m.keyframes_generated).sum();
         let keyframes_requested: u64 = metrics.iter().map(|m| m.keyframes_requested).sum();
+        let bandwidth_estimates: u64 = metrics.iter().map(|m| m.bandwidth_estimates).sum();
+        let clients_with_bandwidth_estimate =
+            metrics.iter().filter(|m| m.bandwidth_estimates > 0).count();
         let avg_session_duration: u64 =
             metrics.iter().map(|m| m.session_duration_ms).sum::<u64>() / total_clients as u64;
         let total_errors: usize = metrics.iter().map(|m| m.errors.len()).sum();
@@ -613,6 +647,8 @@ impl TestSummary {
             total_bytes_received,
             keyframes_generated,
             keyframes_requested,
+            bandwidth_estimates,
+            clients_with_bandwidth_estimate,
             average_session_duration_ms: avg_session_duration,
             total_errors,
             total_producers_created: total_producers,
@@ -884,6 +920,18 @@ fn histogram_stats(histogram_ms: std::collections::BTreeMap<u64, u64>) -> Latenc
 mod measurement_tests {
     use super::*;
     use std::{sync::Arc, time::Duration};
+
+    #[test]
+    fn bandwidth_estimates_are_counted_only_when_the_estimator_reported() {
+        let metrics = MetricsCollector::new("bwe".into());
+        metrics.record_bandwidth_estimate(None);
+        assert_eq!(metrics.generate_report().bandwidth_estimates, 0);
+        metrics.record_bandwidth_estimate(Some(0));
+        metrics.record_bandwidth_estimate(Some(750_000));
+        let report = metrics.generate_report();
+        assert_eq!(report.bandwidth_estimates, 2);
+        assert_eq!(report.last_available_bitrate, Some(750_000));
+    }
 
     #[test]
     fn keyframe_counts_reach_the_client_report() {
