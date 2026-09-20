@@ -158,10 +158,13 @@ jobs:
       - name: Migrate disposable test database with the real server
         run: build/with-test-server.sh true
 
-      # The twenty-minute soak covers a real token refresh and expiry. Restarting
-      # PostgreSQL at the midpoint exercises the bounded credential-uncertainty
-      # allowance: sessions must survive the outage without a rejoin.
-      - name: Soak twenty minutes and restart PostgreSQL at the midpoint
+      # The twenty-minute soak covers a real token refresh and expiry. Stopping
+      # PostgreSQL for eight seconds at the midpoint exercises the bounded
+      # credential-uncertainty allowance (revalidation every 5 s, 15 s of
+      # tolerated unavailability): at least one revalidation must fail and the
+      # sessions must survive it without a rejoin. A plain `docker restart`
+      # completes in under a second and no query falls into that window.
+      - name: Soak twenty minutes and stop PostgreSQL for eight seconds at the midpoint
         timeout-minutes: 40
         shell: bash
         env:
@@ -175,9 +178,11 @@ jobs:
           test -n "${container}"
           (
             sleep 600
-            echo "Restarting PostgreSQL at $(date -u +%FT%TZ)"
-            docker restart "${container}"
-            echo "PostgreSQL back at $(date -u +%FT%TZ)"
+            echo "Stopping PostgreSQL at $(date -u +%FT%TZ)"
+            docker stop "${container}"
+            sleep 8
+            docker start "${container}"
+            echo "PostgreSQL started again at $(date -u +%FT%TZ)"
           ) &
           restarter=$!
           build/with-test-server.sh npm --prefix web/e2e run test:session-soak

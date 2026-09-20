@@ -286,8 +286,8 @@ manual Firefox/Linux and WebKit/macOS runs.
 
 The [Performance workflow](../.github/workflows/performance.yml) (weekly and
 manual) compares a baseline build with the candidate on one hosted runner under
-coarse regression budgets, and runs the session soak with a PostgreSQL restart
-at its midpoint. See [continuous comparison](performance.md#continuous-comparison)
+coarse regression budgets, and runs the session soak with an eight-second
+PostgreSQL outage at its midpoint. See [continuous comparison](performance.md#continuous-comparison)
 for the budgets and their limits.
 
 ## Media correctness and performance

@@ -175,10 +175,11 @@ recorded below, not single-digit drifts. The `comparison.json` and every run's
 evidence are retained as a workflow artifact for 30 days.
 
 The same workflow's soak job runs the 20-minute authenticated session soak
-against the CI database and restarts PostgreSQL at the midpoint, so the bounded
-credential-uncertainty allowance is exercised by a real outage rather than a
-mocked validator. Neither job measures production capacity or browser media
-quality.
+against the CI database and stops PostgreSQL for eight seconds at the midpoint
+(revalidation runs every five seconds and a connection tolerates fifteen
+seconds of validator unavailability), so the bounded credential-uncertainty
+allowance is exercised by a real outage rather than a mocked validator.
+Neither job measures production capacity or browser media quality.
 
 ## Browser and authenticated work
 
