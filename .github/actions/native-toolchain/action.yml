@@ -61,6 +61,9 @@ runs:
           target/debug/build/mediasoup-*
           target/debug/deps/*mediasoup*
           target/debug/.fingerprint/mediasoup-*
+          target/release/build/mediasoup-*
+          target/release/deps/*mediasoup*
+          target/release/.fingerprint/mediasoup-*
         key: vendored-${{ runner.os }}-${{ inputs.cache-key }}-${{ hashFiles('vendor/**', 'Cargo.lock', 'rust-toolchain.toml', 'build/pip-constraints.txt', 'build/install-openssl.sh') }}
 
     - name: Configure native dependency paths

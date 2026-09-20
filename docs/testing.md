@@ -282,6 +282,14 @@ dependency guards and production-image non-root/loader checks.
 The [browser compatibility workflow](../web/e2e/README.md#ci) adds weekly and
 manual Firefox/Linux and WebKit/macOS runs.
 
+### Weekly performance and soak
+
+The [Performance workflow](../.github/workflows/performance.yml) (weekly and
+manual) compares a baseline build with the candidate on one hosted runner under
+coarse regression budgets, and runs the session soak with a PostgreSQL restart
+at its midpoint. See [continuous comparison](performance.md#continuous-comparison)
+for the budgets and their limits.
+
 ## Media correctness and performance
 
 See [performance](performance.md) for the optional RTP generator and comparison

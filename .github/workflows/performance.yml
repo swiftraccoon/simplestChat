@@ -1,0 +1,193 @@
+name: Performance
+
+# Weekly controlled comparison and a session soak with a database restart.
+# Both run on one hosted runner, so the numbers are relative to the baseline
+# measured in the same run and never a capacity claim; see docs/performance.md.
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: Git ref the candidate (this commit) is measured against
+        default: HEAD~1
+        type: string
+      clients:
+        description: Clients per workload
+        default: '10'
+        type: choice
+        options: ['10', '30']
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: Baseline versus candidate on one hosted runner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+      OPENSSL_STATIC: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: ./.github/actions/native-toolchain
+        with:
+          cache-key: rust-release-benchmark
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+
+      # The baseline is a detached worktree sharing this checkout's dependency
+      # artifacts; only its workspace crate and vendored path crates compile.
+      - name: Build the baseline server
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline_ref='${{ inputs.baseline || 'HEAD~1' }}'
+          baseline="$(git rev-parse --verify "${baseline_ref}^{commit}")"
+          echo "baseline commit ${baseline}"
+          git worktree add --detach "${RUNNER_TEMP}/baseline" "${baseline}"
+          find "${RUNNER_TEMP}/baseline/vendor" -exec touch -h -t 200001010000 {} +
+          (
+            cd "${RUNNER_TEMP}/baseline"
+            CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target" \
+              cargo build --locked --release --bin simplestChat
+          )
+          install -D "${GITHUB_WORKSPACE}/target/release/simplestChat" \
+            "${RUNNER_TEMP}/baseline/target/release/simplestChat"
+          rm -f "${GITHUB_WORKSPACE}/target/release/simplestChat"
+
+      - name: Build the candidate server and the generator
+        run: |
+          cargo build --locked --release --bin simplestChat
+          cargo build --locked --release --features load-test --bin load_test
+
+      - name: Run the controlled comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          clients='${{ inputs.clients || '10' }}'
+          if [[ "${clients}" = "30" ]]; then
+            scenario=multi-room; ramp=65
+            extra=(--subscription-plan ring-v1 --subscription-seed 17)
+          else
+            scenario=conference; ramp=5
+            extra=()
+          fi
+          node load_tests/benchmark-local.mjs \
+            --baseline-root "${RUNNER_TEMP}/baseline" \
+            --baseline-bin "${RUNNER_TEMP}/baseline/target/release/simplestChat" \
+            --candidate-root "${GITHUB_WORKSPACE}" \
+            --candidate-bin "${GITHUB_WORKSPACE}/target/release/simplestChat" \
+            --generator "${GITHUB_WORKSPACE}/target/release/load_test" \
+            --output "${RUNNER_TEMP}/comparison" \
+            --clients "${clients}" --scenarios "${scenario}" --repetitions 3 \
+            --ramp-up "${ramp}" --warmup 10 --duration 60 --workers 1 "${extra[@]}"
+
+      - name: Evaluate the regression budget
+        if: ${{ !cancelled() }}
+        run: node build/performance-thresholds.mjs "${RUNNER_TEMP}/comparison/comparison.json"
+
+      - name: Retain the comparison
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: performance-comparison-${{ github.run_id }}
+          path: ${{ runner.temp }}/comparison
+          if-no-files-found: warn
+          retention-days: 30
+
+  soak:
+    name: Session soak with a database restart
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        # Official image, pinned to the verified PostgreSQL 18.6 manifest.
+        image: docker.io/library/postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_USER: test_owner
+          POSTGRES_PASSWORD: disposable-ci-password
+          POSTGRES_DB: simplestchat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_owner -d simplestchat_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+      OPENSSL_STATIC: "1"
+      DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
+      DISPOSABLE_TEST_DATABASE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/native-toolchain
+        with:
+          cache-key: rust-build
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/e2e/package-lock.json
+
+      - name: Build server and load generator
+        run: cargo build --locked --all-features --bins
+
+      - name: Build UI and install pinned browser tooling
+        run: |
+          npm --prefix web ci --ignore-scripts
+          npm --prefix web run build
+          npm --prefix web/e2e ci --ignore-scripts
+          npm --prefix web/e2e exec -- playwright install --with-deps chromium
+
+      - name: Migrate disposable test database with the real server
+        run: build/with-test-server.sh true
+
+      # The twenty-minute soak covers a real token refresh and expiry. Restarting
+      # PostgreSQL at the midpoint exercises the bounded credential-uncertainty
+      # allowance: sessions must survive the outage without a rejoin.
+      - name: Soak twenty minutes and restart PostgreSQL at the midpoint
+        timeout-minutes: 40
+        shell: bash
+        env:
+          SESSION_SOAK_E2E: "1"
+          E2E_ARTIFACTS: ${{ runner.temp }}/session-soak
+          SERVER_REVISION: ${{ github.sha }}
+          FRONTEND_REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          container="$(docker ps -q --filter publish=5432)"
+          test -n "${container}"
+          (
+            sleep 600
+            echo "Restarting PostgreSQL at $(date -u +%FT%TZ)"
+            docker restart "${container}"
+            echo "PostgreSQL back at $(date -u +%FT%TZ)"
+          ) &
+          restarter=$!
+          build/with-test-server.sh npm --prefix web/e2e run test:session-soak
+          wait "${restarter}"
+
+      - name: Preserve soak diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: session-soak-${{ github.run_id }}
+          path: ${{ runner.temp }}/session-soak
+          if-no-files-found: ignore
+          retention-days: 30

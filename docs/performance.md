@@ -159,6 +159,27 @@ Receive/send totals are not a packet-loss estimate because streams fan out to
 multiple subscribers. See [report definitions](../load_tests/README.md#reports-and-metric-definitions)
 for counters and delivery checks.
 
+## Continuous comparison
+
+The [Performance workflow](../.github/workflows/performance.yml) runs weekly and
+on demand. Its comparison job builds a baseline (`HEAD~1` unless a ref is
+given) and the candidate commit on one hosted runner, runs the ten-client
+conference (or the 30-client four-room `ring-v1` graph when selected) three
+alternating pairs deep, and fails when `build/performance-thresholds.mjs` finds
+the candidate's median worse than the baseline's by more than 25 percent for
+receive-ready or send-ready P99 and server CPU, or 15 percent for server peak
+RSS, or when any run fails the runner's own gates. The budgets are wide on
+purpose: hosted runners are noisy and the comparison is relative to the
+baseline measured in the same run, so it catches changes of the size already
+recorded below, not single-digit drifts. The `comparison.json` and every run's
+evidence are retained as a workflow artifact for 30 days.
+
+The same workflow's soak job runs the 20-minute authenticated session soak
+against the CI database and restarts PostgreSQL at the midpoint, so the bounded
+credential-uncertainty allowance is exercised by a real outage rather than a
+mocked validator. Neither job measures production capacity or browser media
+quality.
+
 ## Browser and authenticated work
 
 Set up the [disposable browser test server](../web/e2e/README.md#install-and-run),
