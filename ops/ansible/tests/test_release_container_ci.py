@@ -265,8 +265,11 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertNotIn("environment", self.job)
         for step in self.steps:
             if "uses" in step:
+                # First-party GitHub actions only, pinned by commit: checkout,
+                # the Actions-cache layer store, and artifact retention.
                 self.assertRegex(
-                    string(step, "uses"), r"^actions/(?:checkout|upload-artifact)@[a-f0-9]{40}$"
+                    string(step, "uses"),
+                    r"^actions/(?:checkout|cache|upload-artifact)@[a-f0-9]{40}$",
                 )
             self.assertNotIn("permissions", step)
             self.assertNotIn("environment", step)
