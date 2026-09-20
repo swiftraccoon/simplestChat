@@ -125,6 +125,12 @@ room cleanup passed. Failed runs retain their evidence and original failure.
 | CPU | Percentage of one core; server and generator are reported separately |
 | Peak RSS | Highest sampled resident memory, not total allocations |
 
+CPU and RSS come from process samples every 500 ms (`/proc/<pid>/stat` on Linux
+at clock-tick resolution, `ps` on macOS). A resource summary is refused, and the
+run has no comparison row, unless surviving samples cover the measurement window
+to within 1.5 s and at most 10 percent of samples failed; `serverResources`
+records the sample count, failures and covered span for every valid run.
+
 A passing media run requires expected subscriptions and sustained packet
 delivery. Use only completed, passing runs for timing comparisons; retain failures
 to investigate separately. Keep the default ten-second warmup because synthetic
@@ -144,6 +150,9 @@ the full window. Missing peers cannot be substituted or skipped. See
 for bounds and report fields.
 
 Synthetic RTP exercises forwarding, not browser encoding or visual quality.
+The generator negotiates no congestion-control feedback and no simulcast, so
+these runs never exercise bandwidth estimation, bitrate adaptation or layer
+selection; see [what the generator does not model](../load_tests/README.md).
 Receive/send totals are not a packet-loss estimate because streams fan out to
 multiple subscribers. See [report definitions](../load_tests/README.md#reports-and-metric-definitions)
 for counters and delivery checks.

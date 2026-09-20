@@ -27,6 +27,10 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `updateRoomIdentity` | `PATCH /api/rooms/:id/identity` | `RoomListItem` |
 | `deleteRoom` | `DELETE /api/rooms/:id` | `204`, no body |
 
+`RoomListItem.participant_count` and `broadcaster_count` are `null`, never zero,
+when the room's live state was busy at listing time; the browser renders an
+unknown count rather than an empty room.
+
 Account/profile and directory fields use snake_case. `RoomSettings`, including
 the room-creation result, uses camelCase. Profile `avatar_url`, directory `topic`
 and directory `image_url` are required nullable fields; null is not a missing
@@ -193,7 +197,10 @@ messages while disconnected.
 Producer pause/resume/close events describe shared publishing state. Consumer
 pause/resume and preferred layers affect that receiver's subscription; local
 playback volume is not producer moderation. `restartIce` / `iceRestarted` update
-an existing transport and are distinct from reconnecting signaling.
+an existing transport and are distinct from reconnecting signaling; `iceRestarted`
+carries fresh `iceServers` because the TURN credentials minted at transport
+creation expire after `TURN_TTL`, and the browser installs them before it
+regathers candidates.
 
 `leaveRoom` has no dedicated acknowledgement. The browser immediately retires its
 membership and media, and the server removes the corresponding membership.

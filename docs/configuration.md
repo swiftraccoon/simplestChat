@@ -28,9 +28,9 @@
 | `MAX_ROOMS` | `1000` | Maximum rooms held by one server process |
 | `MAX_PERSISTED_ROOMS` | `10000` | Global database-backed room cap enforced transactionally |
 | `ALLOW_AD_HOC_ROOMS` | `false` | Permit joins to create ephemeral rooms; must be explicitly enabled on every bind address |
-| `MAX_PASSWORD_WORKERS` | `2` | Global concurrent room-password verification cap (valid range 1–32); hashing uses a separate single-worker lane |
+| `MAX_PASSWORD_WORKERS` | see note | Concurrent Argon2 verification cap (valid range 1–32) for both the room-password lane (default `2`) and the account-password lane (default `min(AUTH_MAX_CONCURRENCY, CPUs ÷ 2)`, at least 1, where CPUs honours a container quota); room-password hashing uses a separate single-worker lane |
 | `MAX_PRODUCERS_PER_PARTICIPANT` | `8` | Server-side media producer cap per participant |
-| `MAX_CONSUMERS_PER_PARTICIPANT` | `16` | Server-side consumer cap per participant |
+| `MAX_CONSUMERS_PER_PARTICIPANT` | `64` | Server-side consumer cap per participant. Each peer with camera and microphone costs two consumers (three with a screen share), so the default covers 32 such publishers; a lower value silently limits how many peers a participant can see |
 | `METRICS_TOKEN` | (none) | Bearer token of at least 32 bytes; `/metrics` returns 404 when unset |
 | `RUST_LOG` | `simplestChat=info,mediasoup=warn` | Tracing filter |
 | `DIAGNOSTICS_PATH` | (none) | Opt-in, new absolute path for private local operation records; see [limits and report definitions](diagnostics.md) |

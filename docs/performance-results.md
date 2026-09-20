@@ -41,7 +41,7 @@ with complete server/media/lifecycle diagnostics.
 
 Inputs: seed 17, one worker, a 205-second ramp, ten-second warmup and 120-second
 measurement on the same local Mac. Frozen server `d54792e46079c795`, generator
-`c8606b697acdb1c9`, graph `d5879adc2be169085`; no competing owned workloads or
+`c8606b697acdb1c9`, graph `d5879adc2be16908`; no competing owned workloads or
 builds. These are same-build concentrated-load observations, not a speedup over
 ring or a capacity claim. Earlier intermittent readiness failures did not recur
 and remain unresolved. See [fixed graphs](../load_tests/README.md#fixed-subscription-graphs).
@@ -133,7 +133,9 @@ another failed three ICE/DTLS readiness waits and four client-coverage
 checks. That failed run has no post-grace cleanup-zero receipt.
 
 This ordered pair supports withholding the policy change, not attributing the
-cause conclusively. The realized publisher/subscriber graph also varied between
+cause conclusively. The synthetic client negotiates no congestion-control
+feedback, so neither build's bandwidth estimator ran during these runs; the
+difference lies elsewhere in the forwarding path. The realized publisher/subscriber graph also varied between
 runs. Next checks need reproducible subscription selection and separate bounded
 transport/packet-path diagnostics; buffer or timeout changes are not yet justified.
 
@@ -304,7 +306,7 @@ production capacity, enabled-diagnostics overhead, or the cause of the
 
 Compared `e054e6b` with the quality/settings working tree using frozen release
 servers and web assets. The candidate server SHA-256 begins `08cfc3c0b1255845`;
-its main JavaScript SHA-256 begins `cb5d25e755f952b4b`. These identify the measured
+its main JavaScript SHA-256 begins `cb5d25e755f952b4`. These identify the measured
 builds independently of a later commit. Results do not cover subsequent edits.
 Hardware was an Apple M5 Max with 18 logical CPUs and 128 GiB RAM
 (Darwin 27.0.0). Servers used Rust 1.98.1 and static OpenSSL 3.5.8.

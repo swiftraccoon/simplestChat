@@ -150,6 +150,8 @@ listeners. A timed-out snapshot omits that gauge and reports
 zero live workers. Failed workers are not replaced
 automatically: restart the server to restore capacity.
 
+Alert on the rejection counters as well: `simplestchat_api_requests_rejected_total` (HTTP 429/503 from rate limits, concurrency caps, the password lane or a busy service) and `simplestchat_upgrades_rejected_total` (WebSocket upgrades refused by handshake, connection or per-IP limits). `simplestchat_connection_permits_in_use` is the quantity `MAX_CONNECTIONS` is enforced against, including handshake authentication work, and can exceed `simplestchat_connections_active`.
+
 Use `GET /health` for process liveness and `GET /ready` for load-balancer
 readiness. `/ready` returns 503 when no media capacity remains, a configured
 database fails its one-second probe, or shutdown has begun. Probe concurrency
