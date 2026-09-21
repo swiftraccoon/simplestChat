@@ -113,6 +113,11 @@ struct Inner {
     api_requests_rejected_total: AtomicU64,
     upgrades_rejected_total: AtomicU64,
     media_worker_deaths_total: AtomicU64,
+    joins_refused_saturated_total: AtomicU64,
+    /// Latest CPU saturation reading, published by the monitor task.
+    saturation: std::sync::RwLock<Option<SaturationSnapshot>>,
+    /// Latest media quality sample, published by the sampler task.
+    quality: std::sync::RwLock<Option<crate::media::quality::QualitySample>>,
 
     // Gauge
     connections_active: AtomicU64,
@@ -152,6 +157,9 @@ impl ServerMetrics {
                 api_requests_rejected_total: AtomicU64::new(0),
                 upgrades_rejected_total: AtomicU64::new(0),
                 media_worker_deaths_total: AtomicU64::new(0),
+                joins_refused_saturated_total: AtomicU64::new(0),
+                saturation: std::sync::RwLock::new(None),
+                quality: std::sync::RwLock::new(None),
                 connections_active: AtomicU64::new(0),
                 message_handling: Histogram::new(),
             }),
@@ -220,6 +228,29 @@ impl ServerMetrics {
 
     pub fn inc_errors(&self) {
         self.inner.errors_total.fetch_add(1, Relaxed);
+    }
+
+    /// A fresh join was refused because the process is CPU saturated.
+    pub fn inc_join_refused_saturated(&self) {
+        self.inner
+            .joins_refused_saturated_total
+            .fetch_add(1, Relaxed);
+    }
+
+    pub fn set_saturation(&self, snapshot: SaturationSnapshot) {
+        *self
+            .inner
+            .saturation
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Some(snapshot);
+    }
+
+    pub fn set_quality_sample(&self, sample: crate::media::quality::QualitySample) {
+        *self
+            .inner
+            .quality
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Some(sample);
     }
 
     pub fn inc_rooms_created(&self) {
@@ -423,8 +454,174 @@ impl ServerMetrics {
             &mut out,
         );
 
+        render_counter(
+            &mut out,
+            "simplestchat_joins_refused_saturated_total",
+            "Fresh room joins refused because the process was CPU saturated",
+            i.joins_refused_saturated_total.load(Relaxed),
+        );
+        if let Some(saturation) = i
+            .saturation
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            render_gauge(
+                &mut out,
+                "simplestchat_cpu_saturated",
+                "Whether the process is CPU saturated by cgroup throttling or pressure; readiness fails and fresh joins are refused while set",
+                u64::from(saturation.saturated),
+            );
+            render_gauge(
+                &mut out,
+                "simplestchat_cpu_throttling_available",
+                "Whether cgroup v2 throttling counters were readable for the last sample",
+                u64::from(saturation.throttling_available),
+            );
+            render_gauge_f64(
+                &mut out,
+                "simplestchat_cpu_throttled_fraction",
+                "Share of cgroup enforcement periods throttled over the sampling window",
+                saturation.throttled_fraction,
+            );
+            render_gauge(
+                &mut out,
+                "simplestchat_cpu_pressure_available",
+                "Whether cgroup v2 CPU pressure was readable for the last sample",
+                u64::from(saturation.pressure_available),
+            );
+            render_gauge_f64(
+                &mut out,
+                "simplestchat_cpu_pressure_some_avg10",
+                "cgroup CPU pressure, percent of time some task waited for CPU over ten seconds",
+                saturation.pressure_avg10,
+            );
+        }
+        if let Some(quality) = i.quality.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            render_quality(&mut out, quality);
+        }
+
         out
     }
+}
+
+/// What the CPU saturation monitor last observed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SaturationSnapshot {
+    pub throttling_available: bool,
+    pub pressure_available: bool,
+    pub saturated: bool,
+    pub throttled_fraction: f64,
+    pub pressure_avg10: f64,
+}
+
+/// Media quality as the SFU sees it, from its own RTCP view and send path.
+fn render_quality(out: &mut String, quality: &crate::media::quality::QualitySample) {
+    use crate::media::quality::{BITRATE_BOUNDS, LOSS_BOUNDS};
+    render_gauge(
+        out,
+        "simplestchat_quality_consumers",
+        "Consumers in the last media quality sample",
+        quality.consumers,
+    );
+    render_gauge(
+        out,
+        "simplestchat_quality_consumers_paused",
+        "Sampled consumers paused by the viewer or by the producer",
+        quality.consumers_paused,
+    );
+    let score_labels: Vec<String> = (0..=10).map(|score| score.to_string()).collect();
+    render_cumulative_buckets(
+        out,
+        "simplestchat_quality_consumer_score",
+        "mediasoup consumer transmission score from 0 to 10 across sampled consumers",
+        &score_labels,
+        &quality.consumer_scores,
+        quality.consumer_score_sum as f64,
+    );
+    for (layer, count) in quality.video_consumers_by_spatial.iter().enumerate() {
+        let label = if layer == quality.video_consumers_by_spatial.len() - 1 {
+            "none".to_string()
+        } else {
+            layer.to_string()
+        };
+        let _ = writeln!(
+            out,
+            "simplestchat_quality_video_consumers_by_spatial_layer{{layer=\"{label}\"}} {count}"
+        );
+    }
+    render_gauge(
+        out,
+        "simplestchat_quality_producers",
+        "Producers with a stream score in the last media quality sample",
+        quality.producers,
+    );
+    render_cumulative_buckets(
+        out,
+        "simplestchat_quality_producer_score",
+        "mediasoup producer worst-stream score from 0 to 10 across sampled producers",
+        &score_labels,
+        &quality.producer_scores,
+        quality.producer_score_sum as f64,
+    );
+    render_gauge(
+        out,
+        "simplestchat_quality_transports_sampled",
+        "Receive transports whose statistics were requested in the last sample",
+        quality.transports_sampled,
+    );
+    render_gauge(
+        out,
+        "simplestchat_quality_transport_stats_failed",
+        "Receive transport statistics requests that failed or timed out in the last sample",
+        quality.transport_stats_failed,
+    );
+    let loss_labels: Vec<String> = LOSS_BOUNDS.iter().map(|bound| bound.to_string()).collect();
+    render_cumulative_buckets(
+        out,
+        "simplestchat_quality_downlink_loss",
+        "Fraction of RTP packets the viewer reported lost on sampled receive transports (transport-cc feedback)",
+        &loss_labels,
+        &quality.loss_buckets,
+        quality.loss_sum,
+    );
+    let bitrate_labels: Vec<String> = BITRATE_BOUNDS
+        .iter()
+        .map(|bound| bound.to_string())
+        .collect();
+    render_cumulative_buckets(
+        out,
+        "simplestchat_quality_available_outgoing_bitrate",
+        "Bandwidth estimate in bit/s toward the viewer on sampled receive transports",
+        &bitrate_labels,
+        &quality.bitrate_buckets,
+        quality.bitrate_sum as f64,
+    );
+}
+
+/// Prometheus histogram lines from per-bucket counts; the last count is the
+/// overflow bucket rendered as `+Inf`.
+fn render_cumulative_buckets(
+    out: &mut String,
+    name: &str,
+    help: &str,
+    labels: &[String],
+    counts: &[u64],
+    sum: f64,
+) {
+    let _ = writeln!(out, "# HELP {name} {help}");
+    let _ = writeln!(out, "# TYPE {name} histogram");
+    let mut cumulative = 0u64;
+    for (index, count) in counts.iter().enumerate() {
+        cumulative += count;
+        let label = labels.get(index).map_or("+Inf", String::as_str);
+        let _ = writeln!(out, "{name}_bucket{{le=\"{label}\"}} {cumulative}");
+    }
+    if labels.len() == counts.len() {
+        let _ = writeln!(out, "{name}_bucket{{le=\"+Inf\"}} {cumulative}");
+    }
+    let _ = writeln!(out, "{name}_sum {sum}");
+    let _ = writeln!(out, "{name}_count {cumulative}");
 }
 
 /// RAII guard that decrements `connections_active` on drop.
@@ -450,6 +647,12 @@ pub fn append_gauge(out: &mut String, name: &str, help: &str, value: u64) {
     render_gauge(out, name, help, value);
 }
 
+fn render_gauge_f64(out: &mut String, name: &str, help: &str, value: f64) {
+    let _ = writeln!(out, "# HELP {name} {help}");
+    let _ = writeln!(out, "# TYPE {name} gauge");
+    let _ = writeln!(out, "{name} {value}");
+}
+
 fn render_gauge(out: &mut String, name: &str, help: &str, value: u64) {
     let _ = writeln!(out, "# HELP {name} {help}");
     let _ = writeln!(out, "# TYPE {name} gauge");
@@ -472,6 +675,63 @@ mod tests {
                 .and_then(|suffix| suffix.strip_prefix(' '))
                 .map(|value| value.parse().unwrap())
         })
+    }
+
+    #[test]
+    fn saturation_and_quality_samples_render_as_gauges_and_histograms() {
+        let metrics = ServerMetrics::new();
+        let body = metrics.render_prometheus(0, 0, 1);
+        assert!(
+            !body.contains("simplestchat_cpu_saturated"),
+            "absent until sampled"
+        );
+        assert!(
+            !body.contains("simplestchat_quality_consumers "),
+            "absent until sampled"
+        );
+        metrics.set_saturation(SaturationSnapshot {
+            throttling_available: true,
+            pressure_available: false,
+            saturated: true,
+            throttled_fraction: 0.75,
+            pressure_avg10: 0.0,
+        });
+        let mut sample = crate::media::quality::QualitySample::default();
+        sample.record_consumer(10, Some(2), true, false);
+        sample.record_consumer(6, Some(1), true, false);
+        sample.record_producer([9, 7]);
+        sample.record_transport(Some(0.03), Some(450_000));
+        metrics.set_quality_sample(sample);
+        metrics.inc_join_refused_saturated();
+        let body = metrics.render_prometheus(0, 0, 1);
+        assert_eq!(value(&body, "simplestchat_cpu_saturated"), Some(1));
+        assert_eq!(
+            value(&body, "simplestchat_cpu_throttling_available"),
+            Some(1)
+        );
+        assert_eq!(value(&body, "simplestchat_cpu_pressure_available"), Some(0));
+        assert!(body.contains("simplestchat_cpu_throttled_fraction 0.75\n"));
+        assert_eq!(
+            value(&body, "simplestchat_joins_refused_saturated_total"),
+            Some(1)
+        );
+        assert_eq!(value(&body, "simplestchat_quality_consumers"), Some(2));
+        assert!(body.contains("simplestchat_quality_consumer_score_bucket{le=\"6\"} 1\n"));
+        assert!(body.contains("simplestchat_quality_consumer_score_bucket{le=\"10\"} 2\n"));
+        assert!(body.contains("simplestchat_quality_consumer_score_count 2\n"));
+        assert!(
+            body.contains("simplestchat_quality_video_consumers_by_spatial_layer{layer=\"1\"} 1\n")
+        );
+        assert!(body.contains("simplestchat_quality_producer_score_bucket{le=\"7\"} 1\n"));
+        assert!(body.contains("simplestchat_quality_downlink_loss_bucket{le=\"0.05\"} 1\n"));
+        assert!(body.contains("simplestchat_quality_downlink_loss_bucket{le=\"0.02\"} 0\n"));
+        assert!(body.contains("simplestchat_quality_downlink_loss_bucket{le=\"+Inf\"} 1\n"));
+        assert!(
+            body.contains(
+                "simplestchat_quality_available_outgoing_bitrate_bucket{le=\"600000\"} 1\n"
+            )
+        );
+        assert!(body.contains("simplestchat_quality_available_outgoing_bitrate_sum 450000\n"));
     }
 
     #[test]

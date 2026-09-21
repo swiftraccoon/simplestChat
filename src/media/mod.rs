@@ -5,6 +5,7 @@
 
 pub mod config;
 pub mod diagnostics;
+pub mod quality;
 pub mod router_manager;
 pub mod transport_manager;
 pub mod types;

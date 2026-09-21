@@ -877,14 +877,70 @@ impl TransportManager {
         Ok(())
     }
 
-    /// Gets the consumer IDs for a participant (no IPC — reads in-memory HashMap only)
-    pub async fn get_consumer_ids(&self, participant_id: &str) -> MediaResult<Vec<String>> {
-        let participant_lock = self.get_participant_lock(participant_id)?;
-        let mut participant = participant_lock.lock().await;
-        participant
-            .consumers
-            .retain(|_, consumer| !consumer.closed());
-        Ok(participant.consumers.keys().cloned().collect())
+    /// One media quality sample over every participant. Consumer and producer
+    /// scores and current layers are read from the crate's cached state (no
+    /// IPC); at most `max_transport_stats` receive transports are asked for
+    /// their statistics per call, continuing round-robin from `cursor`, so a
+    /// large room set is covered over several samples without a request burst.
+    pub async fn quality_sample(
+        &self,
+        cursor: &mut usize,
+        max_transport_stats: usize,
+    ) -> crate::media::quality::QualitySample {
+        use crate::media::quality::QualitySample;
+        let participants: Vec<Arc<TokioMutex<ParticipantMedia>>> = {
+            let map = self.participants.read().unwrap_or_else(|e| e.into_inner());
+            let mut ids: Vec<&String> = map.keys().collect();
+            ids.sort();
+            ids.into_iter()
+                .filter_map(|id| map.get(id).cloned())
+                .collect()
+        };
+        let mut sample = QualitySample::default();
+        let mut transports = Vec::new();
+        for participant in &participants {
+            let participant = participant.lock().await;
+            for consumer in participant.consumers.values() {
+                if consumer.closed() {
+                    continue;
+                }
+                sample.record_consumer(
+                    consumer.score().score,
+                    consumer.current_layers().map(|layers| layers.spatial_layer),
+                    consumer.kind() == MediaKind::Video,
+                    consumer.paused() || consumer.producer_paused(),
+                );
+            }
+            for producer in participant.producers.values() {
+                if producer.closed() {
+                    continue;
+                }
+                sample.record_producer(producer.score().iter().map(|score| score.score));
+            }
+            if let Some(transport) = participant.recv_transport.as_ref().filter(|t| !t.closed()) {
+                transports.push(transport.clone());
+            }
+        }
+        let total = transports.len();
+        let take = max_transport_stats.min(total);
+        let start = if total > 0 { *cursor % total } else { 0 };
+        for offset in 0..take {
+            let transport = &transports[(start + offset) % total];
+            match tokio::time::timeout(std::time::Duration::from_secs(2), transport.get_stats())
+                .await
+            {
+                Ok(Ok(stats)) => {
+                    let stat = stats.first();
+                    sample.record_transport(
+                        stat.and_then(|s| s.rtp_packet_loss_sent),
+                        stat.and_then(|s| s.available_outgoing_bitrate),
+                    );
+                }
+                _ => sample.transport_stats_failed += 1,
+            }
+        }
+        *cursor = start + take;
+        sample
     }
 
     /// Closes a producer for a participant

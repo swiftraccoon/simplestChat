@@ -728,6 +728,11 @@ async fn readiness_handler(State(server): State<SignalingServer>) -> Response {
             if workers.live_worker_count().await == 0 {
                 return false;
             }
+            // Saturation is a capacity signal: a balancer should route new
+            // users elsewhere while existing calls continue.
+            if server.room_manager.saturated() {
+                return false;
+            }
             if !readiness::database_ready(server.db_pool.as_ref()).await {
                 return false;
             }

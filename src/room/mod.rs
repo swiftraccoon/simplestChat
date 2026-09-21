@@ -1096,6 +1096,8 @@ pub struct RoomManager {
     max_rooms: usize,
     max_persisted_rooms: i64,
     allow_ad_hoc_rooms: bool,
+    /// CPU saturation monitor; fresh joins are refused while it reports saturation.
+    saturation: std::sync::OnceLock<crate::saturation::SaturationMonitor>,
     /// Verification must remain available even if an administrator repeatedly
     /// requests expensive password hashes.
     password_verify_work: Arc<tokio::sync::Semaphore>,
@@ -1292,6 +1294,7 @@ impl RoomManager {
                 .filter(|value| (1..=1_000_000).contains(value))
                 .unwrap_or(10_000),
             allow_ad_hoc_rooms,
+            saturation: std::sync::OnceLock::new(),
             password_verify_work: Arc::new(tokio::sync::Semaphore::new(password_verify_workers)),
             // One bounded hashing lane prevents room settings from consuming
             // every CPU while the separate verification lane serves joiners.
@@ -1328,6 +1331,49 @@ impl RoomManager {
     /// Shared one-way admission and shutdown notification for this process.
     pub fn drain_signal(&self) -> DrainSignal {
         self.drain.clone()
+    }
+
+    /// Installs the CPU saturation monitor once; later calls are ignored.
+    pub fn attach_saturation(&self, monitor: crate::saturation::SaturationMonitor) -> bool {
+        self.saturation.set(monitor).is_ok()
+    }
+
+    /// Whether fresh joins are currently refused for CPU saturation.
+    pub fn saturated(&self) -> bool {
+        self.saturation
+            .get()
+            .is_some_and(crate::saturation::SaturationMonitor::saturated)
+    }
+
+    /// Starts the periodic server-side media quality sample; the task holds
+    /// only a weak handle and ends with the manager or on drain.
+    pub fn spawn_quality_sampler(
+        self: &Arc<Self>,
+        interval: std::time::Duration,
+        max_transport_stats: usize,
+    ) {
+        let manager = Arc::downgrade(self);
+        let drain = self.drain.clone();
+        tokio::spawn(async move {
+            let mut cursor = 0usize;
+            let mut ticker = tokio::time::interval(interval);
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            ticker.tick().await;
+            loop {
+                tokio::select! {
+                    _ = drain.wait() => break,
+                    _ = ticker.tick() => {
+                        let Some(manager) = manager.upgrade() else { break };
+                        let sample = manager
+                            .media_server
+                            .transport_manager()
+                            .quality_sample(&mut cursor, max_transport_stats)
+                            .await;
+                        manager.metrics.set_quality_sample(sample);
+                    }
+                }
+            }
+        });
     }
 
     /// Jobs retain these permits inside `spawn_blocking`, including after their
@@ -2196,6 +2242,11 @@ impl RoomManager {
             {
                 anyhow::bail!("Room join attempts are rate limited");
             }
+        }
+
+        if self.saturated() {
+            self.metrics.inc_join_refused_saturated();
+            anyhow::bail!("The server is at capacity right now; please try again in a moment");
         }
 
         let mut pending_join = self.get_or_create_room(room_id).await?;
@@ -5850,6 +5901,38 @@ mod security_tests {
         let (_again_tx, _again_rx) = join_guest(&manager, "alpha", "alice").await;
         assert!(routers.has_router("alpha").await);
         assert_ne!(routers.get_worker_id("alpha").await.unwrap(), alpha_worker);
+    }
+
+    #[tokio::test]
+    async fn saturated_server_refuses_fresh_joins_and_counts_them() {
+        let manager = drain_test_manager().await;
+        assert!(manager.attach_saturation(crate::saturation::SaturationMonitor::forced(true)));
+        assert!(!manager.attach_saturation(crate::saturation::SaturationMonitor::forced(false)));
+        let (tx, _rx) = mpsc::channel(8);
+        let error = match manager
+            .add_participant(
+                "busy",
+                "alice".into(),
+                "alice".into(),
+                tx,
+                false,
+                Arc::new(AtomicBool::new(false)),
+                None,
+                "alice-token",
+                None,
+            )
+            .await
+        {
+            Ok(_) => panic!("a saturated server admitted a fresh join"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("at capacity"), "{error}");
+        assert!(
+            manager.get_room("busy").is_err(),
+            "no room is created for a refused join"
+        );
+        let body = manager.metrics.render_prometheus(0, 0, 1);
+        assert!(body.contains("simplestchat_joins_refused_saturated_total 1\n"));
     }
 
     #[tokio::test]

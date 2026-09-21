@@ -2,8 +2,15 @@
 
 use anyhow::Result;
 use simplestChat::{
-    db, diagnostics::Diagnostics, media::MediaConfig, metrics::ServerMetrics, room::RoomManager,
-    shutdown::run_stage, signaling::SignalingServer, turn::TurnConfig,
+    db,
+    diagnostics::Diagnostics,
+    media::MediaConfig,
+    metrics::ServerMetrics,
+    room::RoomManager,
+    saturation::{SaturationConfig, SaturationMonitor},
+    shutdown::run_stage,
+    signaling::SignalingServer,
+    turn::TurnConfig,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -87,6 +94,16 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
     let room_manager =
         Arc::new(RoomManager::new(media_config, metrics.clone(), db_pool.clone()).await?);
     room_manager.spawn_worker_recovery();
+    match SaturationConfig::from_env()? {
+        Some(config) => {
+            room_manager.attach_saturation(SaturationMonitor::spawn(config, metrics.clone()));
+        }
+        None => info!("CPU saturation monitor disabled by configuration"),
+    }
+    room_manager.spawn_quality_sampler(
+        Duration::from_secs(quality_sample_interval_secs()?),
+        quality_sample_max_transport_stats()?,
+    );
 
     info!("Room manager and media server initialized");
 
@@ -163,4 +180,34 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
     );
     info!("Server shutdown complete");
     Ok(())
+}
+
+/// `QUALITY_SAMPLE_INTERVAL_SECS`: seconds between server-side media quality samples (5–300, default 15).
+fn quality_sample_interval_secs() -> Result<u64> {
+    match std::env::var("QUALITY_SAMPLE_INTERVAL_SECS") {
+        Ok(value) => value
+            .trim()
+            .parse::<u64>()
+            .ok()
+            .filter(|v| (5..=300).contains(v))
+            .ok_or_else(|| {
+                anyhow::anyhow!("QUALITY_SAMPLE_INTERVAL_SECS must be between 5 and 300")
+            }),
+        Err(_) => Ok(15),
+    }
+}
+
+/// `QUALITY_SAMPLE_MAX_TRANSPORT_STATS`: receive transports asked for statistics per sample (0–10000, default 100).
+fn quality_sample_max_transport_stats() -> Result<usize> {
+    match std::env::var("QUALITY_SAMPLE_MAX_TRANSPORT_STATS") {
+        Ok(value) => value
+            .trim()
+            .parse::<usize>()
+            .ok()
+            .filter(|v| *v <= 10_000)
+            .ok_or_else(|| {
+                anyhow::anyhow!("QUALITY_SAMPLE_MAX_TRANSPORT_STATS must be between 0 and 10000")
+            }),
+        Err(_) => Ok(100),
+    }
 }
