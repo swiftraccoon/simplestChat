@@ -1,5 +1,34 @@
 # Performance results
 
+## One room on one worker, and the per-worker gauges — 2026-09-21
+
+A mediasoup router lives on one worker thread. Two runs of the same
+single-room workload on the production shape (Podman VM, `--cpus 2
+--memory 2g`, two workers, 100 clients in one room, ring plan `ring-v1` seed
+17, 800 consumers, 605 s ramp, 120 s window) show what that means:
+
+| run | source | worker 0 | worker 1 | mediasoup threads | of quota | recv-ready p99 |
+|---|---|---|---|---|---|---|
+| `results/capacity-100c-1room-2cpu.20260921T050407Z` | 973636d, images from an earlier build | 33.9 % of a core (per-thread `/proc` samples, 112 s) | 0.0 % | 41.5 CPU-s / 119.6 s | 17.7 % | 422 ms |
+| `results/capacity-100c-1room-2cpu.20260921T054621Z` | a06e843 | 0.309 of a core (`simplestchat_media_worker_cpu{worker="0"}`) | 0 | 38.9 CPU-s / 119.6 s | 16.6 % | 418 ms |
+
+The whole room runs on one thread while the other worker idles; the cgroup
+quota shows headroom throughout, so the cgroup monitor could never have
+refused a join for it. The second run is the first with the per-worker
+monitor (`a06e843`): its gauges reproduce the per-thread sampling of the
+first run from inside the server, `simplestchat_media_worker_saturated` stayed
+0 for both workers (0.31 is below the 0.85 threshold), and
+`simplestchat_consumer_layer_requests_total` finished at 0: with the viewer
+ceiling and the bandwidth tier merged server-side, the generator's clients
+(which never send a ceiling and whose estimates stay above the top tier)
+caused no layer requests at all, where the previous code wrote the top layer
+to every consumer on each participant's first bandwidth event (8 per client,
+about 800 per run) and repeated it for audio consumers on every tier change.
+The 4-room ladder run of 2026-09-20 with the same 800 consumers and packet
+rate used 74.5 CPU-s on the worker threads on older images, so the two are
+not a controlled per-consumer comparison; these runs establish placement and
+the new counters only. Synthetic RTP forwarding; no browser decode.
+
 ## Congestion-controller field trials, single runs — 2026-09-21
 
 `LIBWEBRTC_FIELD_TRIALS` now reaches the media workers, and the weekly
