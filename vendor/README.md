@@ -43,12 +43,23 @@ and `put` API surface; this removes RUSTSEC-2026-0253 from the active graph.
 
 `mediasoup-sys-0.17.0` changes only `Cargo.toml`, `Cargo.toml.orig`,
 `build.rs`, `tasks.py`, `meson.build`, `deps/libwebrtc/meson.build`,
+`src/RTC/TransportCongestionControlClient.cpp`,
 `subprojects/abseil-cpp.wrap`, `subprojects/libuv.wrap`,
 `subprojects/unordered-dense.wrap`, `subprojects/catch2.wrap`, the two files under
 `subprojects/packagefiles/abseil-cpp/`, the four files under
 `subprojects/packagefiles/libuv/`, and
 `subprojects/packagefiles/ankerl-unordered-dense/meson.build`, and removes the package-local
-`Cargo.lock` and `subprojects/openssl.wrap`. Cargo ignores a dependency's
+`Cargo.lock` and `subprojects/openssl.wrap`.
+
+The one C++ change, in `TransportCongestionControlClient::SetDesiredBitrate`,
+bounds the congestion controller's start bitrate by the configured minimum
+outgoing bitrate (`std::max(minBitrate, availableBitrate)`) instead of only
+the built-in 30 kbit/s floor. libwebrtc's `GoogCcNetworkController::
+ClampConstraints` already raises a start rate below the minimum, but logs an
+error each time; with the application's 100 kbit/s floor that line repeated
+on every bitrate update of a transport whose estimate had decayed to the
+floor (941 lines in one 100-client run). Behaviour is unchanged apart from the
+log line. Drop the change when upstream bounds the start bitrate itself. Cargo ignores a dependency's
 nested lockfile, so removing that generated package artifact does not change
 workspace resolution. The replacement build:
 

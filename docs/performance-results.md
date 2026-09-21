@@ -25,12 +25,12 @@ are included.
 At the 150 kbit/s cap the floor keeps the lowest layer flowing (frame rate
 and freezes do not overlap between the groups); recovery to the top layer
 looks slower with the floor, but the ranges touch and three runs cannot
-settle it. The floor stays at 100 kbit/s. Its cost remains the worker's
+settle it. The floor stays at 100 kbit/s. Its cost was the worker's
 `ClampConstraints` error line on every bitrate update of a transport whose
-estimate sits at 30 kbit/s (see the review record of 2026-09-21); the clean
-fix is mediasoup's own `startBitrate = max(minBitrate, availableBitrate)` in
-`TransportCongestionControlClient::SetDesiredBitrate`, a vendored patch not
-applied here.
+estimate sat at 30 kbit/s (941 lines in the 100-client single-room run
+above); the vendored worker now bounds its start bitrate by the configured
+floor (`vendor/README.md`), which removes the line without changing
+behaviour.
 
 ## One room on one worker, and the per-worker gauges — 2026-09-21
 

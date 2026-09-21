@@ -344,9 +344,9 @@ pub struct WebRtcTransportConfig {
     pub initial_available_outgoing_bitrate: u32,
     /// Application-imposed outgoing floor in bits per second. Zero leaves the
     /// native congestion controller's minimum (30 kbit/s) unchanged; a
-    /// positive override can exceed its estimate during congestion or network
-    /// unavailability, and the worker logs an error on every bitrate update
-    /// whose estimate sits below it. `WEBRTC_MIN_OUTGOING_BITRATE`.
+    /// positive override keeps sending above a weak link's estimate, which
+    /// measurably keeps the lowest layer flowing at a 150 kbit/s cap.
+    /// `WEBRTC_MIN_OUTGOING_BITRATE`.
     pub min_outgoing_bitrate: u32,
     pub max_outgoing_bitrate: u32,
     /// REMB ceiling sent to each publisher. It must cover the largest

@@ -346,8 +346,13 @@ namespace RTC
 
 		// NOTE: Setting 'startBitrate' to 'availableBitrate' has proven to generate
 		// more stable values.
-		this->bitrates.startBitrate = std::max<uint32_t>(
-		  RTC::TransportCongestionControlMinOutgoingBitrate, this->bitrates.availableBitrate);
+		// simplestChat: bound it by the configured minimum (minBitrate above), not
+		// only by the built-in floor. libwebrtc clamps a start rate below the
+		// minimum anyway, but logs an error each time; with a configured floor
+		// above 30 kbit/s that line repeated on every bitrate update of a transport
+		// whose estimate had decayed to the floor.
+		this->bitrates.startBitrate =
+		  std::max<uint32_t>(this->bitrates.minBitrate, this->bitrates.availableBitrate);
 
 		ApplyBitrateUpdates();
 	}
