@@ -458,6 +458,14 @@ async function main() {
       const layerEvents = report.layerEvents
         .slice(layerEventsBefore)
         .filter((event) => event.client === 'viewer');
+      // The layer in force when the phase began: a phase that starts already
+      // stepped down (the previous impairment left it there) has no new event
+      // to show, so the entering layer counts as well.
+      const enteringSpatial =
+        report.layerEvents
+          .slice(0, layerEventsBefore)
+          .filter((event) => event.client === 'viewer' && event.spatial !== null)
+          .at(-1)?.spatial ?? null;
       const lowestSpatial = layerEvents.reduce(
         (lowest, event) =>
           event.spatial !== null &&
@@ -465,11 +473,12 @@ async function main() {
           (lowest === null || lowest === undefined || event.spatial < lowest)
             ? event.spatial
             : lowest,
-        null,
+        enteringSpatial,
       );
       const lastSpatial = layerEvents.length ? layerEvents.at(-1).spatial : null;
       Object.assign(phase, {
         delta: change,
+        enteringSpatial,
         minFrameWidth: Math.min(...widths),
         maxFrameWidth: Math.max(...widths),
         layerEvents,
@@ -534,7 +543,12 @@ async function main() {
           (event) =>
             event.spatial !== null && event.spatial !== undefined && event.spatial <= expected,
         );
-        phase.secondsToDowngrade = first ? first.atSeconds - phase.startedAtSeconds : null;
+        phase.secondsToDowngrade =
+          enteringSpatial !== null && enteringSpatial <= expected
+            ? 0
+            : first
+              ? first.atSeconds - phase.startedAtSeconds
+              : null;
       }
       if (profile.join) {
         ok =

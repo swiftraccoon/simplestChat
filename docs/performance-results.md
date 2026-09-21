@@ -1,5 +1,37 @@
 # Performance results
 
+## Outgoing bitrate floor: 100 kbit/s against mediasoup's own — 2026-09-21
+
+Three impaired-job runs each at commit `3f43600` on hosted Linux runners, the
+default `WEBRTC_MIN_OUTGOING_BITRATE` (100 000, runs 35566649914,
+35566654915, 35566659954) against `0`, which leaves mediasoup's 30 kbit/s
+floor (runs 35566690792, 35566695380, 35566700001). Medians with ranges of
+the browser scenario's phases; one run in each group failed the
+"constrained" assertion only because the layer was already at 1 when that
+phase began (the scenario now counts the entering layer), so its other phases
+are included.
+
+| phase, measure | floor 100 kbit/s | floor 0 (mediasoup default) |
+|---|---|---|
+| lossy, frames/s | 17.4 [10.2–19.0] | 18.0 [14.4–19.1] |
+| 400 kbit/s, seconds to layer ≤ 1 | 0.7 [0.7–0.7] (n=2) | 0.8 [0.7–0.9] (n=2) |
+| 150 kbit/s, seconds to layer 0 | 2.9 [2.8–4.4] | 4.3 [2.9–4.3] |
+| 150 kbit/s, frames/s | 12.5 [11.3–12.5] | 8.9 [5.8–10.2] |
+| 150 kbit/s, freeze seconds | 0.9 [0.6–1.0] | 2.0 [0.9–2.2] |
+| recovery, seconds to the top layer | 16.6 [9.9–17.2] | 9.8 [3.7–11.9] |
+| recovery, freeze seconds | 2.6 [0.4–2.8] | 0.2 [0.0–4.3] |
+| join under loss, seconds to first frame | 2.2 [2.0–3.4] | 2.0 [2.0–2.2] |
+
+At the 150 kbit/s cap the floor keeps the lowest layer flowing (frame rate
+and freezes do not overlap between the groups); recovery to the top layer
+looks slower with the floor, but the ranges touch and three runs cannot
+settle it. The floor stays at 100 kbit/s. Its cost remains the worker's
+`ClampConstraints` error line on every bitrate update of a transport whose
+estimate sits at 30 kbit/s (see the review record of 2026-09-21); the clean
+fix is mediasoup's own `startBitrate = max(minBitrate, availableBitrate)` in
+`TransportCongestionControlClient::SetDesiredBitrate`, a vendored patch not
+applied here.
+
 ## One room on one worker, and the per-worker gauges — 2026-09-21
 
 A mediasoup router lives on one worker thread. Two runs of the same

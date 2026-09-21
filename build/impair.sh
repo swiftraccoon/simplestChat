@@ -102,7 +102,8 @@ linux_block_udp() {
   linux_unblock_udp
   sudo iptables -I INPUT -i lo -p udp --dport "${port}:${last_port}" -j DROP
   sudo iptables -I INPUT -i lo -p udp --sport "${port}:${last_port}" -j DROP
-  sudo iptables -S INPUT | grep -- "--dport ${port}:${last_port}\|--sport ${port}:${last_port}"
+  # iptables prints a one-port range as a single port, so list rather than match.
+  sudo iptables -S INPUT
 }
 
 linux_unblock_udp() {

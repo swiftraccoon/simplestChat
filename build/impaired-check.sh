@@ -31,6 +31,7 @@ cleanup() {
   kill -TERM "${server}" 2>/dev/null || true
   wait "${server}" 2>/dev/null || true
   IMPAIR_UDP_PORT="${udp_port}" sh build/impair.sh clear >/dev/null 2>&1 || true
+  IMPAIR_UDP_PORT="${udp_port}" sh build/impair.sh unblock-udp >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 for _ in $(seq 1 100); do
