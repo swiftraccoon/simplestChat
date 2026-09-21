@@ -2248,6 +2248,24 @@ impl RoomManager {
             self.metrics.inc_join_refused_saturated();
             anyhow::bail!("The server is at capacity right now; please try again in a moment");
         }
+        // A room's router lives on one worker thread; when that thread is
+        // saturated the quota may still show headroom, so the refusal is per
+        // room. Reconnects and lobby admissions do not pass through here.
+        if let Ok(worker_id) = self
+            .media_server
+            .router_manager()
+            .get_worker_id(room_id)
+            .await
+            && self
+                .media_server
+                .worker_manager()
+                .worker_saturated(worker_id)
+        {
+            self.metrics.inc_join_refused_saturated();
+            anyhow::bail!(
+                "This room's media worker is at capacity right now; please try again in a moment"
+            );
+        }
 
         let mut pending_join = self.get_or_create_room(room_id).await?;
         let room_lock = pending_join.room();
@@ -5974,6 +5992,50 @@ mod security_tests {
             "no room is created for a refused join"
         );
         let body = manager.metrics.render_prometheus(0, 0, 1);
+        assert!(body.contains("simplestchat_joins_refused_saturated_total 1\n"));
+    }
+
+    #[tokio::test]
+    async fn join_to_a_room_on_a_saturated_worker_is_refused_while_other_rooms_continue() {
+        let manager = two_worker_test_manager().await;
+        let (_a, _ra) = join_guest(&manager, "alpha", "alice").await;
+        let (_b, _rb) = join_guest(&manager, "beta", "bob").await;
+        let routers = manager.media_server().router_manager();
+        let alpha = routers.get_worker_id("alpha").await.unwrap();
+        let beta = routers.get_worker_id("beta").await.unwrap();
+        assert_ne!(alpha, beta, "two rooms spread over two workers");
+        manager
+            .media_server()
+            .worker_manager()
+            .set_worker_saturated(alpha, true);
+
+        let (tx, _rx) = mpsc::channel(8);
+        let error = match manager
+            .add_participant(
+                "alpha",
+                "carol".into(),
+                "carol".into(),
+                tx,
+                false,
+                Arc::new(AtomicBool::new(false)),
+                None,
+                "carol-token",
+                None,
+            )
+            .await
+        {
+            Ok(_) => panic!("a room on a saturated worker admitted a fresh join"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("at capacity"), "{error}");
+        let (_d, _rd) = join_guest(&manager, "beta", "dave").await;
+        let (_e, _re) = join_guest(&manager, "gamma", "erin").await;
+        assert_eq!(
+            routers.get_worker_id("gamma").await.unwrap(),
+            beta,
+            "new rooms avoid the saturated worker"
+        );
+        let body = manager.metrics.render_prometheus(0, 0, 2);
         assert!(body.contains("simplestchat_joins_refused_saturated_total 1\n"));
     }
 

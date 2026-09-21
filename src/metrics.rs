@@ -117,6 +117,7 @@ struct Inner {
     consumer_layer_requests_total: AtomicU64,
     /// Latest CPU saturation reading, published by the monitor task.
     saturation: std::sync::RwLock<Option<SaturationSnapshot>>,
+    worker_cpu: std::sync::RwLock<Vec<WorkerCpuSnapshot>>,
     /// Latest media quality sample, published by the sampler task.
     quality: std::sync::RwLock<Option<crate::media::quality::QualitySample>>,
 
@@ -161,6 +162,7 @@ impl ServerMetrics {
                 joins_refused_saturated_total: AtomicU64::new(0),
                 consumer_layer_requests_total: AtomicU64::new(0),
                 saturation: std::sync::RwLock::new(None),
+                worker_cpu: std::sync::RwLock::new(Vec::new()),
                 quality: std::sync::RwLock::new(None),
                 connections_active: AtomicU64::new(0),
                 message_handling: Histogram::new(),
@@ -245,6 +247,15 @@ impl ServerMetrics {
         self.inner
             .joins_refused_saturated_total
             .fetch_add(1, Relaxed);
+    }
+
+    /// Publishes the latest per-worker CPU readings of the saturation monitor.
+    pub fn set_worker_cpu(&self, workers: Vec<WorkerCpuSnapshot>) {
+        *self
+            .inner
+            .worker_cpu
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = workers;
     }
 
     pub fn set_saturation(&self, snapshot: SaturationSnapshot) {
@@ -513,6 +524,10 @@ impl ServerMetrics {
                 saturation.pressure_avg10,
             );
         }
+        render_worker_cpu(
+            &mut out,
+            &i.worker_cpu.read().unwrap_or_else(|e| e.into_inner()),
+        );
         if let Some(quality) = i.quality.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
             render_quality(&mut out, quality);
         }
@@ -529,6 +544,49 @@ pub struct SaturationSnapshot {
     pub saturated: bool,
     pub throttled_fraction: f64,
     pub pressure_avg10: f64,
+}
+
+/// One media worker thread's CPU share over the saturation window, labelled
+/// by its position in the pool.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkerCpuSnapshot {
+    pub index: usize,
+    /// Share of one core; `None` when the thread's time could not be read.
+    pub utilization: Option<f64>,
+    pub saturated: bool,
+}
+
+fn render_worker_cpu(out: &mut String, workers: &[WorkerCpuSnapshot]) {
+    if workers.is_empty() {
+        return;
+    }
+    let _ = writeln!(
+        out,
+        "# HELP simplestchat_media_worker_cpu Share of one core each media worker thread used over the saturation window (Linux, from schedstat)"
+    );
+    let _ = writeln!(out, "# TYPE simplestchat_media_worker_cpu gauge");
+    for worker in workers {
+        if let Some(utilization) = worker.utilization {
+            let _ = writeln!(
+                out,
+                "simplestchat_media_worker_cpu{{worker=\"{}\"}} {utilization}",
+                worker.index
+            );
+        }
+    }
+    let _ = writeln!(
+        out,
+        "# HELP simplestchat_media_worker_saturated Whether the worker is CPU saturated; its rooms refuse fresh joins and new rooms are placed elsewhere"
+    );
+    let _ = writeln!(out, "# TYPE simplestchat_media_worker_saturated gauge");
+    for worker in workers {
+        let _ = writeln!(
+            out,
+            "simplestchat_media_worker_saturated{{worker=\"{}\"}} {}",
+            worker.index,
+            u8::from(worker.saturated)
+        );
+    }
 }
 
 /// Media quality as the SFU sees it, from its own RTCP view and send path.
@@ -878,6 +936,39 @@ mod tests {
             value(&empty, "simplestchat_media_workers_snapshot_complete"),
             Some(1)
         );
+    }
+
+    #[test]
+    fn worker_cpu_gauges_are_labelled_by_worker_index() {
+        let metrics = ServerMetrics::new();
+        assert!(
+            !metrics
+                .render_prometheus(0, 0, 1)
+                .contains("simplestchat_media_worker_cpu")
+        );
+        metrics.set_worker_cpu(vec![
+            WorkerCpuSnapshot {
+                index: 0,
+                utilization: Some(0.339),
+                saturated: false,
+            },
+            WorkerCpuSnapshot {
+                index: 1,
+                utilization: None,
+                saturated: true,
+            },
+        ]);
+        let body = metrics.render_prometheus(0, 0, 2);
+        assert!(
+            body.contains("simplestchat_media_worker_cpu{worker=\"0\"} 0.339\n"),
+            "{body}"
+        );
+        assert!(
+            !body.contains("simplestchat_media_worker_cpu{worker=\"1\"}"),
+            "{body}"
+        );
+        assert!(body.contains("simplestchat_media_worker_saturated{worker=\"0\"} 0\n"));
+        assert!(body.contains("simplestchat_media_worker_saturated{worker=\"1\"} 1\n"));
     }
 
     #[test]

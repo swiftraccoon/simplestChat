@@ -7,7 +7,7 @@ use simplestChat::{
     media::MediaConfig,
     metrics::ServerMetrics,
     room::RoomManager,
-    saturation::{SaturationConfig, SaturationMonitor},
+    saturation::{SaturationConfig, SaturationMonitor, WorkerThreads},
     shutdown::run_stage,
     signaling::SignalingServer,
     turn::TurnConfig,
@@ -96,7 +96,12 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
     room_manager.spawn_worker_recovery();
     match SaturationConfig::from_env()? {
         Some(config) => {
-            room_manager.attach_saturation(SaturationMonitor::spawn(config, metrics.clone()));
+            let workers: Arc<dyn WorkerThreads> = room_manager.media_server().worker_manager();
+            room_manager.attach_saturation(SaturationMonitor::spawn(
+                config,
+                metrics.clone(),
+                Some(workers),
+            ));
         }
         None => info!("CPU saturation monitor disabled by configuration"),
     }

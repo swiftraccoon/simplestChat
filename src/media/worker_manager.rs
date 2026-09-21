@@ -4,10 +4,11 @@
 
 use crate::media::config::{MediaConfig, checked_worker_port};
 use crate::media::types::{MediaError, MediaResult};
+use crate::saturation::{WorkerThreadInfo, WorkerThreads};
 use anyhow::Result;
 use mediasoup::prelude::*;
 use mediasoup::worker::{WorkerDump, WorkerId};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -75,6 +76,30 @@ pub struct WorkerManager {
     /// Worker deaths are queued here for the room manager's recovery task.
     deaths: tokio::sync::mpsc::Sender<WorkerId>,
     death_events: Mutex<Option<tokio::sync::mpsc::Receiver<WorkerId>>>,
+    /// Each worker's position in the pool and native thread, for the
+    /// per-worker CPU monitor.
+    worker_threads: StdRwLock<HashMap<WorkerId, WorkerThreadInfo>>,
+    /// Workers the saturation monitor reports as CPU saturated: placement
+    /// avoids them and rooms on them refuse fresh joins.
+    saturated_workers: StdRwLock<HashSet<WorkerId>>,
+}
+
+/// Linux thread IDs of the mediasoup worker threads in this process. The
+/// kernel truncates the crate's `mediasoup-worker-<id>` thread name to 15
+/// bytes, so a worker's thread is learned by diffing this set around its
+/// creation. Empty where `/proc` is absent.
+pub(crate) fn mediasoup_thread_ids() -> HashSet<u32> {
+    let Ok(entries) = std::fs::read_dir("/proc/self/task") else {
+        return HashSet::new();
+    };
+    entries
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let tid = entry.file_name().to_str()?.parse::<u32>().ok()?;
+            let comm = std::fs::read_to_string(entry.path().join("comm")).ok()?;
+            comm.starts_with("mediasoup-worke").then_some(tid)
+        })
+        .collect()
 }
 
 impl WorkerManager {
@@ -101,14 +126,27 @@ impl WorkerManager {
             .first()
             .and_then(|li| li.announced_address.clone());
 
+        let mut worker_threads = HashMap::new();
+
         // Create all workers
         for i in 0..num_workers {
-            let worker =
+            let (worker, tid) =
                 Self::create_worker_with_manager(&config.worker_config, &mediasoup_worker_manager)
                     .await?;
             let worker_id = worker.id();
+            worker_threads.insert(
+                worker_id,
+                WorkerThreadInfo {
+                    worker_id,
+                    index: i,
+                    tid,
+                },
+            );
 
-            info!("Created worker {} with id: {}", i, worker_id);
+            info!(
+                "Created worker {} with id: {} (thread {:?})",
+                i, worker_id, tid
+            );
 
             // Set up worker event handlers
             Self::setup_worker_handlers(&worker, i, deaths.clone());
@@ -156,7 +194,30 @@ impl WorkerManager {
             mediasoup_worker_manager,
             deaths,
             death_events: Mutex::new(Some(death_events)),
+            worker_threads: StdRwLock::new(worker_threads),
+            saturated_workers: StdRwLock::new(HashSet::new()),
         })
+    }
+
+    /// Marks a worker as CPU saturated or not; the saturation monitor owns the
+    /// decision, placement and admission only read it.
+    pub fn set_worker_saturated(&self, worker_id: WorkerId, saturated: bool) {
+        let mut set = self
+            .saturated_workers
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        if saturated {
+            set.insert(worker_id);
+        } else {
+            set.remove(&worker_id);
+        }
+    }
+
+    pub fn worker_saturated(&self, worker_id: WorkerId) -> bool {
+        self.saturated_workers
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(&worker_id)
     }
 
     /// The death queue, handed once to the recovery task that owns it.
@@ -204,18 +265,28 @@ impl WorkerManager {
     }
 
     /// Creates a single worker with the given configuration
+    /// Creates a single worker with the given configuration, returning the
+    /// Linux thread it runs on when exactly one worker thread appeared.
+    /// Callers create workers one at a time, so the diff is unambiguous.
     async fn create_worker_with_manager(
         config: &crate::media::config::WorkerConfig,
         manager: &mediasoup::worker_manager::WorkerManager,
-    ) -> Result<Worker> {
+    ) -> Result<(Worker, Option<u32>)> {
         let worker_settings = config.to_worker_settings();
 
+        let before = mediasoup_thread_ids();
         let worker = manager
             .create_worker(worker_settings)
             .await
             .map_err(|e| MediaError::WorkerError(format!("Failed to create worker: {e}")))?;
+        let after = mediasoup_thread_ids();
+        let mut fresh = after.difference(&before);
+        let tid = match (fresh.next(), fresh.next()) {
+            (Some(tid), None) => Some(*tid),
+            _ => None,
+        };
 
-        Ok(worker)
+        Ok((worker, tid))
     }
 
     /// Sets up event handlers for a worker
@@ -284,19 +355,35 @@ impl WorkerManager {
             .worker_consumer_counts
             .read()
             .unwrap_or_else(|e| e.into_inner());
-        let (best_idx, best_load) = select_worker_by_load(workers.iter().map(|worker| {
-            let worker_id = worker.id();
-            if !worker_has_capacity(
-                worker.closed(),
-                servers.get(&worker_id).map(WebRtcServer::closed),
-            ) {
-                return None;
-            }
-            Some(WorkerLoad {
-                consumers: consumer_counts.get(&worker_id)?.load(Ordering::Relaxed),
-                routers: *load.get(&worker_id)?,
-            })
-        }))?;
+        let saturated = self
+            .saturated_workers
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let candidates = |skip_saturated: bool| {
+            workers
+                .iter()
+                .map(|worker| {
+                    let worker_id = worker.id();
+                    if !worker_has_capacity(
+                        worker.closed(),
+                        servers.get(&worker_id).map(WebRtcServer::closed),
+                    ) || (skip_saturated && saturated.contains(&worker_id))
+                    {
+                        return None;
+                    }
+                    Some(WorkerLoad {
+                        consumers: consumer_counts.get(&worker_id)?.load(Ordering::Relaxed),
+                        routers: *load.get(&worker_id)?,
+                    })
+                })
+                .collect::<Vec<_>>()
+        };
+        // A saturated worker is skipped while another can host the router;
+        // when every worker is saturated the least loaded one still does, so
+        // reconnects and admitted lobby members keep working.
+        let (best_idx, best_load) = select_worker_by_load(candidates(true))
+            .or_else(|_| select_worker_by_load(candidates(false)))?;
 
         let worker = workers[best_idx].clone();
         let worker_id = worker.id();
@@ -407,14 +494,17 @@ impl WorkerManager {
             return Ok(());
         };
 
-        let new_worker = Self::create_worker_with_manager(
+        let (new_worker, tid) = Self::create_worker_with_manager(
             &self.config.worker_config,
             &self.mediasoup_worker_manager,
         )
         .await
         .map_err(|e| MediaError::WorkerError(format!("Failed to recreate worker: {e}")))?;
         let new_worker_id = new_worker.id();
-        info!("Created replacement worker with id: {}", new_worker_id);
+        info!(
+            "Created replacement worker with id: {} (thread {:?})",
+            new_worker_id, tid
+        );
         Self::setup_worker_handlers(&new_worker, pos, self.deaths.clone());
 
         // The listener reuses the dead worker's port so announced addresses stay stable.
@@ -468,6 +558,25 @@ impl WorkerManager {
             counts.remove(&dead_worker_id);
             counts.insert(new_worker_id, Arc::new(AtomicUsize::new(0)));
         }
+        {
+            let mut threads = self
+                .worker_threads
+                .write()
+                .unwrap_or_else(|e| e.into_inner());
+            threads.remove(&dead_worker_id);
+            threads.insert(
+                new_worker_id,
+                WorkerThreadInfo {
+                    worker_id: new_worker_id,
+                    index: pos,
+                    tid,
+                },
+            );
+        }
+        self.saturated_workers
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&dead_worker_id);
         drop(old_worker);
 
         info!(
@@ -509,12 +618,13 @@ impl WorkerManager {
         let mut new_load = HashMap::new();
         let mut new_servers = HashMap::new();
         let mut new_consumer_counts = HashMap::new();
+        let mut new_threads = HashMap::new();
 
         // Close old workers - they close automatically when dropped
 
         // Create new workers with updated settings
         for i in 0..new_config.num_workers {
-            let worker =
+            let (worker, tid) =
                 Self::create_worker_with_manager(&new_config, &self.mediasoup_worker_manager)
                     .await
                     .map_err(|e| {
@@ -522,6 +632,14 @@ impl WorkerManager {
                     })?;
 
             let worker_id = worker.id();
+            new_threads.insert(
+                worker_id,
+                WorkerThreadInfo {
+                    worker_id,
+                    index: i,
+                    tid,
+                },
+            );
             Self::setup_worker_handlers(&worker, i, self.deaths.clone());
 
             // Create WebRtcServer for each new worker
@@ -576,6 +694,14 @@ impl WorkerManager {
                 .unwrap_or_else(|e| e.into_inner());
             *counts = new_consumer_counts;
         }
+        *self
+            .worker_threads
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = new_threads;
+        self.saturated_workers
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
 
         info!("Worker settings updated successfully");
         Ok(())
@@ -633,6 +759,24 @@ pub(crate) fn reserve_worker_ports(count: u16) -> u16 {
         }
     }
     panic!("could not reserve {count} contiguous local UDP ports");
+}
+
+impl WorkerThreads for WorkerManager {
+    fn worker_threads(&self) -> Vec<WorkerThreadInfo> {
+        let mut threads: Vec<WorkerThreadInfo> = self
+            .worker_threads
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .copied()
+            .collect();
+        threads.sort_by_key(|thread| thread.index);
+        threads
+    }
+
+    fn set_worker_saturated(&self, worker_id: WorkerId, saturated: bool) {
+        WorkerManager::set_worker_saturated(self, worker_id, saturated);
+    }
 }
 
 #[cfg(test)]
@@ -854,5 +998,55 @@ mod tests {
             manager.shutdown().await.unwrap();
             assert_eq!(manager.live_worker_count().await, 0);
         }
+    }
+
+    #[tokio::test]
+    async fn reservation_avoids_saturated_workers_until_none_remain() {
+        let manager = two_worker_manager().await;
+        let ids = worker_ids(&manager).await;
+        let (first, reservation) = manager.reserve_worker().await.unwrap();
+        // The second router normally goes to the other, emptier worker.
+        manager.set_worker_saturated(ids[1], true);
+        assert!(manager.worker_saturated(ids[1]));
+        let (second, second_reservation) = manager.reserve_worker().await.unwrap();
+        assert_eq!(
+            second.id(),
+            first.id(),
+            "a saturated worker is skipped while another can take the router"
+        );
+        manager.set_worker_saturated(ids[0], true);
+        let (third, _third) = manager.reserve_worker().await.unwrap();
+        assert_eq!(
+            third.id(),
+            ids[1],
+            "when every worker is saturated the least loaded one still hosts the room"
+        );
+        manager.set_worker_saturated(ids[1], false);
+        assert!(!manager.worker_saturated(ids[1]));
+        drop((reservation, second_reservation));
+    }
+
+    #[test]
+    fn worker_thread_lookup_survives_a_missing_proc() {
+        // Where /proc is absent the set is empty and the gauge is simply missing.
+        let _ = mediasoup_thread_ids();
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn worker_threads_are_discovered_from_proc() {
+        let manager = two_worker_manager().await;
+        let threads = manager.worker_threads();
+        assert_eq!(threads.len(), 2);
+        for thread in &threads {
+            let tid = thread.tid.expect("worker thread id is known on Linux");
+            let comm = std::fs::read_to_string(format!("/proc/self/task/{tid}/comm")).unwrap();
+            assert!(comm.starts_with("mediasoup-worke"), "{comm}");
+        }
+        assert_ne!(threads[0].tid, threads[1].tid);
+        assert_eq!(
+            threads.iter().map(|t| t.index).collect::<Vec<_>>(),
+            vec![0, 1]
+        );
     }
 }
