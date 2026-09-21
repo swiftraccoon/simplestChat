@@ -634,7 +634,7 @@ def quiet(runner: RunnerProtocol, report: JsonObject, seconds: int) -> None:
         report["roomsActiveAtReplacement"] = None
         return
     curl_config = runner.attempt / "metrics-curl.config"
-    curl_config.write_text(f'header = "Authorization: Bearer {token}"\n')
+    _ = curl_config.write_text(f'header = "Authorization: Bearer {token}"\n')
     curl_config.chmod(0o600)
     started = time.monotonic()
     deadline = started + seconds

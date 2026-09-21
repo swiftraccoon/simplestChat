@@ -590,7 +590,7 @@ class PublicReleaseTests(unittest.TestCase):
         _ = (self.config / "compose.public.yml").write_text(compose)
         _ = (self.config / "app.env").write_text(
             f"SIMPLESTCHAT_IMAGE={OLD_IMAGE}\nRUN_MIGRATIONS=false\n"
-            "METRICS_TOKEN=fixture-metrics-token-with-at-least-32-bytes\n"
+            + "METRICS_TOKEN=fixture-metrics-token-with-at-least-32-bytes\n"
         )
         self.before = {name: (self.config / name).read_bytes() for name in public.SELECTION}
         self.attempt = self.root / "direct-attempt"
@@ -835,8 +835,8 @@ class PublicReleaseTests(unittest.TestCase):
         self.runner.metrics_rooms = [2, 1, 0]
         # The harness clock jumps 100 s per call; polling needs a slow one.
         with (
-            patch.object(public.time, "sleep") as sleep,
-            patch.object(public.time, "monotonic", side_effect=itertools.count(0.0, 0.5)),
+            patch.object(time, "sleep") as sleep,
+            patch.object(time, "monotonic", side_effect=itertools.count(0.0, 0.5)),
         ):
             self.execute_quiet(30)
         report = self.report()
@@ -873,8 +873,8 @@ class PublicReleaseTests(unittest.TestCase):
         self.runner.metrics_rooms = [3]
         clock = iter([0.0, 0.0, 0.0, 1.0, 1.5, 3.0, 3.5, 100.0, 100.0, 100.0, 100.0, 100.0])
         with (
-            patch.object(public.time, "sleep"),
-            patch.object(public.time, "monotonic", side_effect=lambda: next(clock, 200.0)),
+            patch.object(time, "sleep"),
+            patch.object(time, "monotonic", side_effect=lambda: next(clock, 200.0)),
         ):
             self.execute_quiet(2)
         report = self.report()
@@ -886,7 +886,7 @@ class PublicReleaseTests(unittest.TestCase):
         """Missing observability never blocks a release; the report says it could not tell."""
         _ = self.stage()
         self.runner.metrics_rooms = None
-        with patch.object(public.time, "sleep") as sleep:
+        with patch.object(time, "sleep") as sleep:
             self.execute_quiet(30)
         report = self.report()
         self.assertTrue(report["passed"])
@@ -898,7 +898,7 @@ class PublicReleaseTests(unittest.TestCase):
         """An environment without METRICS_TOKEN cannot poll and records that."""
         _ = self.stage()
         environment = (self.config / "app.env").read_text()
-        (self.config / "app.env").write_text(
+        _ = (self.config / "app.env").write_text(
             "\n".join(
                 line for line in environment.splitlines() if not line.startswith("METRICS_TOKEN=")
             )
