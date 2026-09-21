@@ -450,7 +450,14 @@ export class MediaManager {
         existing.resume();
         this.signaling.send({ type: 'resumeProducer', producerId: existing.id });
       } else {
-        const producer = await transport.produce({ track, appData: { source: 'microphone' } });
+        // DTX lets a silent microphone send a few packets a second instead of
+        // fifty; in-band FEC stays on. Both are negotiated in this producer's
+        // SDP by mediasoup-client.
+        const producer = await transport.produce({
+          track,
+          appData: { source: 'microphone' },
+          codecOptions: { opusDtx: true, opusFec: true },
+        });
         if (!isCurrent() || track.readyState === 'ended') {
           producer.close();
           this.signaling.send({ type: 'closeProducer', producerId: producer.id });

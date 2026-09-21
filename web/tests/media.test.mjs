@@ -1180,6 +1180,18 @@ test('hide and restore pause only the selected viewer consumer', async (t) => {
   );
 });
 
+test('the microphone producer negotiates Opus DTX and in-band FEC', async (t) => {
+  const { state, media } = await fixture(t);
+  const options = [];
+  state.beforeProduce = async (produceOptions) => {
+    options.push(produceOptions);
+  };
+  await startLocal(media, 'audio');
+  assert.equal(options.length, 1);
+  assert.deepEqual(options[0].appData, { source: 'microphone' });
+  assert.deepEqual(options[0].codecOptions, { opusDtx: true, opusFec: true });
+});
+
 test('quality preferences respect available simulcast layers and skip single-layer video', async (t) => {
   const { state, media, newTrack } = await fixture(t);
   for (const [id, mode] of [
