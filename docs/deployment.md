@@ -86,6 +86,15 @@ each worker needs one port starting at 40000. Resource limits are not capacity
 guarantees. Compose sets the file-descriptor limit to 65536; configure an
 appropriate limit separately for native deployments.
 
+Media is reachable over UDP only by default, and a deployment without TURN
+turns away every client whose network blocks outbound UDP. To offer ICE-TCP as
+well, publish the same port range over TCP in Compose (a second `ports` entry
+ending in `/tcp`), open it at the provider firewall, and set
+`WEBRTC_SERVER_TCP=true`; the weekly performance workflow proves the TCP path
+with UDP blocked. TURN over TLS (coturn, `TURN_URLS`/`TURN_SECRET`) is still the
+only path through symmetric NAT and the more robust fallback; see the relay
+controls below.
+
 ## Database migrations and TLS
 
 Run migrations from the repository root using a DDL-capable role. Use a separate

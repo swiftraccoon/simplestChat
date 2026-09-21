@@ -17,6 +17,10 @@ pub struct MediaConfig {
     pub webrtc_transport_config: WebRtcTransportConfig,
     /// Base UDP port for WebRtcServer per worker. Worker i listens on base + i.
     pub webrtc_server_port_base: u16,
+    /// Also listen for ICE-TCP on each worker's port. Off by default: the
+    /// deployment must publish the TCP range and open it at the firewall,
+    /// otherwise clients would be offered candidates that cannot connect.
+    pub webrtc_server_tcp: bool,
 }
 
 impl Default for MediaConfig {
@@ -26,6 +30,7 @@ impl Default for MediaConfig {
             router_config: RouterConfig::default(),
             webrtc_transport_config: WebRtcTransportConfig::default(),
             webrtc_server_port_base: DEFAULT_WEBRTC_SERVER_PORT_BASE,
+            webrtc_server_tcp: false,
         }
     }
 }
@@ -59,6 +64,9 @@ impl MediaConfig {
                 anyhow::bail!("WEBRTC_SERVER_PORT_BASE must be valid UTF-8")
             }
         }
+        if let Ok(value) = std::env::var("WEBRTC_SERVER_TCP") {
+            config.set_tcp(parse_switch("WEBRTC_SERVER_TCP", &value)?);
+        }
         if let Ok(value) = std::env::var("WEBRTC_MIN_OUTGOING_BITRATE") {
             config.webrtc_transport_config.min_outgoing_bitrate =
                 parse_bitrate("WEBRTC_MIN_OUTGOING_BITRATE", &value)?;
@@ -70,6 +78,14 @@ impl MediaConfig {
 
         config.validate()?;
         Ok(config)
+    }
+
+    /// Enables or disables ICE-TCP on every worker's port. The transport flag
+    /// follows the listener: mediasoup builds a transport's candidates from
+    /// the server's listeners, so the flag alone never produces one.
+    pub fn set_tcp(&mut self, tcp: bool) {
+        self.webrtc_server_tcp = tcp;
+        self.webrtc_transport_config.enable_tcp = tcp;
     }
 
     /// Validates worker count and the corresponding dedicated UDP port span.
@@ -108,6 +124,14 @@ fn parse_field_trials(value: &str) -> anyhow::Result<String> {
         anyhow::bail!("LIBWEBRTC_FIELD_TRIALS may contain only letters, digits and / - _ : , .");
     }
     Ok(value.to_string())
+}
+
+fn parse_switch(name: &str, value: &str) -> anyhow::Result<bool> {
+    match value.trim() {
+        "true" | "1" => Ok(true),
+        "false" | "0" => Ok(false),
+        other => anyhow::bail!("{name} must be true or false, not {other}"),
+    }
 }
 
 /// A bitrate in bits per second from 0 (mediasoup's own default) to 50 Mbit/s.
@@ -330,6 +354,8 @@ pub struct WebRtcTransportConfig {
     /// the browser starves the top layer. `WEBRTC_MAX_INCOMING_BITRATE`.
     pub max_incoming_bitrate: Option<u32>,
     pub enable_udp: bool,
+    /// Offer ICE-TCP candidates. Set through `MediaConfig::set_tcp` so it
+    /// never claims a listener the WebRtcServer does not have.
     pub enable_tcp: bool,
     pub prefer_udp: bool,
     pub prefer_tcp: bool,
@@ -354,7 +380,7 @@ impl Default for WebRtcTransportConfig {
             max_outgoing_bitrate: 3_000_000,
             max_incoming_bitrate: Some(3_000_000),
             enable_udp: true,
-            enable_tcp: true,
+            enable_tcp: false,
             prefer_udp: true,
             prefer_tcp: false,
         }
@@ -409,6 +435,20 @@ mod tests {
         // the publisher's REMB ceiling or the browser starves the top layer.
         assert_eq!(config.max_incoming_bitrate, Some(3_000_000));
         assert!(config.max_incoming_bitrate.unwrap() >= 100_000 + 300_000 + 2_500_000 + 64_000);
+    }
+
+    #[test]
+    fn tcp_switch_parses_and_moves_both_listener_and_transport_flag() {
+        assert!(parse_switch("WEBRTC_SERVER_TCP", " true ").unwrap());
+        assert!(!parse_switch("WEBRTC_SERVER_TCP", "0").unwrap());
+        assert!(parse_switch("WEBRTC_SERVER_TCP", "maybe").is_err());
+        let mut config = MediaConfig::default();
+        assert!(!config.webrtc_server_tcp);
+        assert!(!config.webrtc_transport_config.enable_tcp);
+        config.set_tcp(true);
+        assert!(config.webrtc_server_tcp && config.webrtc_transport_config.enable_tcp);
+        config.set_tcp(false);
+        assert!(!config.webrtc_server_tcp && !config.webrtc_transport_config.enable_tcp);
     }
 
     #[test]

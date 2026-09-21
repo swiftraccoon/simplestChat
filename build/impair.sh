@@ -1,8 +1,10 @@
 #!/bin/sh
 # Impair the UDP media path of an owned local test server on loopback.
 #
-#   build/impair.sh apply   # from IMPAIR_* environment
+#   build/impair.sh apply        # from IMPAIR_* environment
 #   build/impair.sh clear
+#   build/impair.sh block-udp    # drop every UDP packet to or from the media
+#   build/impair.sh unblock-udp  # port(s), so clients must connect over TCP
 #
 # Environment:
 #   IMPAIR_UDP_PORT   server media port (default 41100); with IMPAIR_WORKERS>1
@@ -30,7 +32,9 @@ rate_kbit="${IMPAIR_RATE_KBIT:-0}"
 direction="${IMPAIR_DIRECTION:-downlink}"
 state_dir="${IMPAIR_STATE_DIR:-${TMPDIR:-/tmp}}"
 token_file="${state_dir}/simplestchat-impair.pf-token"
+block_token_file="${state_dir}/simplestchat-block.pf-token"
 anchor="com.apple/simplestchat-impair"
+block_anchor="com.apple/simplestchat-block"
 pipe=41
 platform="$(uname -s)"
 
@@ -92,6 +96,40 @@ darwin_clear() {
   fi
 }
 
+# The block lives apart from the netem/dummynet state so apply and clear can
+# run for the phases while it stays in force.
+linux_block_udp() {
+  linux_unblock_udp
+  sudo iptables -I INPUT -i lo -p udp --dport "${port}:${last_port}" -j DROP
+  sudo iptables -I INPUT -i lo -p udp --sport "${port}:${last_port}" -j DROP
+  sudo iptables -S INPUT | grep -- "--dport ${port}:${last_port}\|--sport ${port}:${last_port}"
+}
+
+linux_unblock_udp() {
+  sudo iptables -D INPUT -i lo -p udp --dport "${port}:${last_port}" -j DROP 2>/dev/null || true
+  sudo iptables -D INPUT -i lo -p udp --sport "${port}:${last_port}" -j DROP 2>/dev/null || true
+}
+
+darwin_block_udp() {
+  rules="block drop quick on lo0 proto udp from any to any port ${port}:${last_port}
+block drop quick on lo0 proto udp from any port ${port}:${last_port} to any
+"
+  printf '%s' "${rules}" | sudo pfctl -q -a "${block_anchor}" -f -
+  if [ ! -f "${block_token_file}" ]; then
+    sudo pfctl -E 2>&1 | sed -n 's/.*Token : \([0-9][0-9]*\).*/\1/p' > "${block_token_file}"
+    [ -s "${block_token_file}" ] || { rm -f "${block_token_file}"; echo "pfctl -E returned no token" >&2; exit 1; }
+  fi
+  sudo pfctl -q -a "${block_anchor}" -s rules
+}
+
+darwin_unblock_udp() {
+  sudo pfctl -q -a "${block_anchor}" -F all 2>/dev/null || true
+  if [ -f "${block_token_file}" ]; then
+    sudo pfctl -X "$(cat "${block_token_file}")" 2>/dev/null || true
+    rm -f "${block_token_file}"
+  fi
+}
+
 case "$1" in
   apply)
     # Replacing a profile mid-run must not fail on the previous qdisc or pipe.
@@ -110,5 +148,21 @@ case "$1" in
     esac
     echo "impairment cleared"
     ;;
-  *) echo "Usage: build/impair.sh apply|clear" >&2; exit 2 ;;
+  block-udp)
+    case "${platform}" in
+      Linux) linux_block_udp ;;
+      Darwin) darwin_block_udp ;;
+      *) echo "Unsupported platform ${platform}" >&2; exit 2 ;;
+    esac
+    echo "udp blocked: port ${port}-${last_port} both directions"
+    ;;
+  unblock-udp)
+    case "${platform}" in
+      Linux) linux_unblock_udp ;;
+      Darwin) darwin_unblock_udp ;;
+      *) echo "Unsupported platform ${platform}" >&2; exit 2 ;;
+    esac
+    echo "udp unblocked"
+    ;;
+  *) echo "Usage: build/impair.sh apply|clear|block-udp|unblock-udp" >&2; exit 2 ;;
 esac

@@ -184,6 +184,15 @@ jobs:
           IMPAIRED_SILENT_AUDIO: "1"
         run: IMPAIRED_PROFILES=baseline,silentAudio IMPAIR_SCRIPT=none build/impaired-check.sh "${RUNNER_TEMP}/impaired/dtx"
 
+      # UDP to and from the media port is dropped before anyone joins, so the
+      # publisher and the viewer can only connect over the server's ICE-TCP
+      # candidates; both transports must report a TCP pair and video must flow.
+      - name: Clients connect over ICE-TCP when UDP is blocked
+        env:
+          IMPAIRED_BLOCK_UDP: "1"
+          WEBRTC_SERVER_TCP: "true"
+        run: IMPAIRED_PROFILES=baseline build/impaired-check.sh "${RUNNER_TEMP}/impaired/tcp"
+
       - name: Generator under five percent loss with jitter, both directions
         run: build/impaired-generator.sh "${RUNNER_TEMP}/impaired/generator"
 

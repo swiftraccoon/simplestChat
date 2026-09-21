@@ -84,6 +84,34 @@ pub struct WorkerManager {
     saturated_workers: StdRwLock<HashSet<WorkerId>>,
 }
 
+/// The listeners of one worker's WebRtcServer: UDP on its dedicated port and,
+/// when enabled, ICE-TCP on the same port number. mediasoup derives every
+/// transport's ICE candidates from these, filtered by the transport's
+/// `enable_udp`/`enable_tcp`.
+fn webrtc_server_listen_infos(
+    port: u16,
+    announced_address: Option<String>,
+    tcp: bool,
+) -> WebRtcServerListenInfos {
+    let info = |protocol| ListenInfo {
+        protocol,
+        ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        announced_address: announced_address.clone(),
+        port: Some(port),
+        port_range: None,
+        flags: None,
+        send_buffer_size: None,
+        recv_buffer_size: None,
+        expose_internal_ip: false,
+    };
+    let infos = WebRtcServerListenInfos::new(info(Protocol::Udp));
+    if tcp {
+        infos.insert(info(Protocol::Tcp))
+    } else {
+        infos
+    }
+}
+
 /// Linux thread IDs of the mediasoup worker threads in this process. The
 /// kernel truncates the crate's `mediasoup-worker-<id>` thread name to 15
 /// bytes, so a worker's thread is learned by diffing this set around its
@@ -153,19 +181,11 @@ impl WorkerManager {
 
             // Create a WebRtcServer for this worker on a dedicated port
             let port = config.worker_port(i)?;
-            let listen_info = ListenInfo {
-                protocol: Protocol::Udp,
-                ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                announced_address: announced_address.clone(),
-                port: Some(port),
-                port_range: None,
-                flags: None,
-                send_buffer_size: None,
-                recv_buffer_size: None,
-                expose_internal_ip: false,
-            };
-            let server_options =
-                WebRtcServerOptions::new(WebRtcServerListenInfos::new(listen_info));
+            let server_options = WebRtcServerOptions::new(webrtc_server_listen_infos(
+                port,
+                announced_address.clone(),
+                config.webrtc_server_tcp,
+            ));
             let webrtc_server = worker
                 .create_webrtc_server(server_options)
                 .await
@@ -175,8 +195,15 @@ impl WorkerManager {
                     ))
                 })?;
             info!(
-                "Created WebRtcServer on UDP port {} for worker {} (index {})",
-                port, worker_id, i
+                "Created WebRtcServer on port {} ({}) for worker {} (index {})",
+                port,
+                if config.webrtc_server_tcp {
+                    "UDP and TCP"
+                } else {
+                    "UDP"
+                },
+                worker_id,
+                i
             );
             webrtc_servers.insert(worker_id, webrtc_server);
 
@@ -517,18 +544,11 @@ impl WorkerManager {
         let port = self.config.worker_port(pos).map_err(|error| {
             MediaError::ConfigurationError(format!("Invalid worker port configuration: {error}"))
         })?;
-        let listen_info = ListenInfo {
-            protocol: Protocol::Udp,
-            ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        let server_options = WebRtcServerOptions::new(webrtc_server_listen_infos(
+            port,
             announced_address,
-            port: Some(port),
-            port_range: None,
-            flags: None,
-            send_buffer_size: None,
-            recv_buffer_size: None,
-            expose_internal_ip: false,
-        };
-        let server_options = WebRtcServerOptions::new(WebRtcServerListenInfos::new(listen_info));
+            self.config.webrtc_server_tcp,
+        ));
         let webrtc_server = new_worker
             .create_webrtc_server(server_options)
             .await
@@ -653,19 +673,11 @@ impl WorkerManager {
                     "Invalid worker port configuration: {error}"
                 ))
             })?;
-            let listen_info = ListenInfo {
-                protocol: Protocol::Udp,
-                ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                announced_address: announced_address.clone(),
-                port: Some(port),
-                port_range: None,
-                flags: None,
-                send_buffer_size: None,
-                recv_buffer_size: None,
-                expose_internal_ip: false,
-            };
-            let server_options =
-                WebRtcServerOptions::new(WebRtcServerListenInfos::new(listen_info));
+            let server_options = WebRtcServerOptions::new(webrtc_server_listen_infos(
+                port,
+                announced_address.clone(),
+                self.config.webrtc_server_tcp,
+            ));
             let webrtc_server = worker
                 .create_webrtc_server(server_options)
                 .await

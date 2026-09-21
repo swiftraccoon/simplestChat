@@ -13,7 +13,9 @@
  * baseline, lossy, constrained, severe, recovery, lossyJoin; default all),
  * IMPAIRED_ROOM (join this existing room instead of a new one, for canaries),
  * IMPAIRED_SILENT_AUDIO=1 (capture silence instead of the fake tone, for the
- * silentAudio profile).
+ * silentAudio profile), IMPAIRED_BLOCK_UDP=1 (drop UDP to and from the media
+ * port before any client joins, so every client must connect over ICE-TCP;
+ * the server needs WEBRTC_SERVER_TCP=true and only the baseline profile runs).
  */
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
@@ -61,11 +63,15 @@ const PROFILES = {
   silentAudio: { env: null, seconds: 20, silent: true },
 };
 const silentAudio = process.env.IMPAIRED_SILENT_AUDIO === '1';
+const blockUdp = process.env.IMPAIRED_BLOCK_UDP === '1';
+if (blockUdp && !impairmentEnabled)
+  throw new Error('IMPAIRED_BLOCK_UDP needs the impairment script (IMPAIR_SCRIPT is none)');
 // The silent-microphone phase only makes sense with a silent capture, so it
-// joins the default list only when that is configured.
-const defaultProfiles = Object.keys(PROFILES).filter(
-  (name) => silentAudio || name !== 'silentAudio',
-);
+// joins the default list only when that is configured. With UDP blocked the
+// netem profiles have nothing to shape, so only the clean phase runs.
+const defaultProfiles = blockUdp
+  ? ['baseline']
+  : Object.keys(PROFILES).filter((name) => silentAudio || name !== 'silentAudio');
 const profiles = (process.env.IMPAIRED_PROFILES || defaultProfiles.join(','))
   .split(',')
   .map((name) => name.trim())
@@ -78,7 +84,7 @@ const report = {
   startedAt: new Date().toISOString(),
   base,
   impairment: impairmentEnabled
-    ? { script: impairScript }
+    ? { script: impairScript, udpBlocked: blockUdp }
     : { script: null, note: 'mechanics only' },
   browser: null,
   passed: false,
@@ -123,6 +129,7 @@ function impair(action, env) {
 async function sample(page) {
   return page.evaluate(async () => {
     const totals = {
+      transportProtocols: [],
       framesDecoded: 0,
       framesDropped: 0,
       frameWidth: 0,
@@ -181,6 +188,10 @@ async function sample(page) {
         ) {
           totals.roundTripTime = stat.currentRoundTripTime;
         }
+        if (stat.type === 'candidate-pair' && stat.state === 'succeeded' && stat.nominated) {
+          const remote = stats.get(stat.remoteCandidateId);
+          if (remote && remote.protocol) totals.transportProtocols.push(remote.protocol);
+        }
       }
     }
     totals.sampledAtMs = performance.now();
@@ -192,6 +203,7 @@ async function sample(page) {
 async function samplePublisher(page) {
   return page.evaluate(async () => {
     const layers = {};
+    const transportProtocols = [];
     let keyFramesEncoded = 0;
     let pliCount = 0;
     let framesEncoded = 0;
@@ -199,6 +211,10 @@ async function samplePublisher(page) {
       if (peer.connectionState === 'closed') continue;
       const stats = await peer.getStats();
       for (const stat of stats.values()) {
+        if (stat.type === 'candidate-pair' && stat.state === 'succeeded' && stat.nominated) {
+          const remote = stats.get(stat.remoteCandidateId);
+          if (remote && remote.protocol) transportProtocols.push(remote.protocol);
+        }
         if (stat.type !== 'outbound-rtp' || stat.kind !== 'video') continue;
         keyFramesEncoded += stat.keyFramesEncoded || 0;
         pliCount += stat.pliCount || 0;
@@ -216,7 +232,14 @@ async function samplePublisher(page) {
         };
       }
     }
-    return { keyFramesEncoded, pliCount, framesEncoded, layers, sampledAtMs: performance.now() };
+    return {
+      keyFramesEncoded,
+      pliCount,
+      framesEncoded,
+      layers,
+      transportProtocols,
+      sampledAtMs: performance.now(),
+    };
   });
 }
 
@@ -327,6 +350,9 @@ async function main() {
     return page;
   }
   try {
+    // With UDP dropped before anyone joins, ICE can only succeed over the
+    // server's TCP candidates; every client and both directions prove it.
+    if (blockUdp) impair('block-udp');
     const publisher = await client('publisher');
     // The first camera request opens the capture settings dialog; saving it
     // with the fake devices selected starts the camera.
@@ -457,6 +483,18 @@ async function main() {
         change.framesDecoded > 0 && after.videoReports > 0,
         change.framesPerSecond,
       );
+      if (blockUdp) {
+        const viewerProtocols = [...new Set(after.transportProtocols)];
+        const publisherProtocols = [...new Set(publisherAfter.transportProtocols)];
+        ok =
+          check(
+            'every transport runs over ICE-TCP while UDP is blocked',
+            viewerProtocols.length > 0 &&
+              publisherProtocols.length > 0 &&
+              [...viewerProtocols, ...publisherProtocols].every((protocol) => protocol === 'tcp'),
+            { viewerProtocols, publisherProtocols },
+          ) && ok;
+      }
       if (name === 'baseline') {
         baselineWidth = phase.maxFrameWidth;
         baselineFps = change.framesPerSecond;
@@ -555,6 +593,7 @@ async function main() {
   } finally {
     try {
       impair('clear');
+      if (blockUdp) impair('unblock-udp');
     } catch (error) {
       report.failure ??= { message: `impairment clear failed: ${error.message}` };
     }

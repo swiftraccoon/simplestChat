@@ -2000,4 +2000,61 @@ mod tests {
             "a consumer created under a low tier starts capped without an extra request"
         );
     }
+    /// A loopback port free for both UDP and TCP, so a TCP-enabled WebRtcServer
+    /// can bind both in tests.
+    fn reserve_udp_and_tcp_port() -> u16 {
+        for _ in 0..50 {
+            let udp = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+            let port = udp.local_addr().unwrap().port();
+            if std::net::TcpListener::bind(("0.0.0.0", port)).is_ok() {
+                drop(udp);
+                return port;
+            }
+        }
+        panic!("no port free for both UDP and TCP");
+    }
+
+    #[tokio::test]
+    async fn tcp_listener_adds_tcp_ice_candidates_and_is_off_by_default() {
+        for tcp in [false, true] {
+            let mut config = MediaConfig::default();
+            config.worker_config.num_workers = 1;
+            config.webrtc_server_port_base = reserve_udp_and_tcp_port();
+            assert!(!config.webrtc_transport_config.enable_tcp, "TCP is opt-in");
+            config.set_tcp(tcp);
+            assert_eq!(config.webrtc_server_tcp, tcp);
+            assert_eq!(
+                config.webrtc_transport_config.enable_tcp, tcp,
+                "the transport flag must follow the listener, never claim TCP without one"
+            );
+            let config = Arc::new(config);
+            let worker_manager = Arc::new(WorkerManager::new(config.clone()).await.unwrap());
+            let router_manager = RouterManager::new(worker_manager.clone());
+            let transport_manager = TransportManager::new();
+            let room_id = format!("tcp-room-{tcp}");
+            router_manager
+                .create_router(room_id.clone(), RouterConfig::default())
+                .await
+                .unwrap();
+            let router = router_manager.get_router(&room_id).await.unwrap();
+            let worker_id = router_manager.get_worker_id(&room_id).await.unwrap();
+            let webrtc_server = worker_manager.get_webrtc_server(worker_id).await.unwrap();
+            let info = transport_manager
+                .create_send_transport(
+                    "candidate-check".to_string(),
+                    &router,
+                    webrtc_server,
+                    &config.webrtc_transport_config,
+                )
+                .await
+                .unwrap();
+            let protocols: Vec<Protocol> = info
+                .ice_candidates
+                .iter()
+                .map(|candidate| candidate.protocol)
+                .collect();
+            assert!(protocols.contains(&Protocol::Udp), "{protocols:?}");
+            assert_eq!(protocols.contains(&Protocol::Tcp), tcp, "{protocols:?}");
+        }
+    }
 }

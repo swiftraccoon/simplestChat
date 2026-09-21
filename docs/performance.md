@@ -200,7 +200,13 @@ baseline, five percent loss with 50 ms of jitter, a 400 kbit/s cap, a
 150 kbit/s cap and recovery. It asserts that decoding continues under loss
 with retransmission requests, that the server steps the consumer's spatial
 layer down under each cap and back to the top afterwards, and records the
-seconds each switch took. The same job then runs
+seconds each switch took. Two further browser steps reuse the scenario: with
+`IMPAIRED_SILENT_AUDIO=1` the publisher's microphone is a file of silence and
+the viewer's audio packet rate must show Opus DTX at work, and with
+`IMPAIRED_BLOCK_UDP=1` against a server started with `WEBRTC_SERVER_TCP=true`
+UDP to and from the media port is dropped before anyone joins, so the
+publisher and the viewer must both connect over the server's ICE-TCP
+candidates and still exchange video. The same job then runs
 [`build/impaired-generator.sh`](../build/impaired-generator.sh): the 30-client
 four-room generator workload with five percent loss and jitter in both
 directions. The generator's exact-delivery gates describe a lossless loopback,
