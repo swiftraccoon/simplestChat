@@ -1527,6 +1527,8 @@ async fn handle_connection_with_timing(
 
                                 stats_task = Some(spawn_stats_task(
                                     room_manager.clone(),
+                                    reconnect_room.clone(),
+                                    participant_id.clone(),
                                     tx.clone(),
                                     bwe_rx,
                                 ));
@@ -1647,7 +1649,7 @@ async fn handle_connection_with_timing(
                         // Invariant-based (not join-triggered) so it also covers lobby
                         // admission: admit_from_lobby clears in_lobby, and the admitted
                         // client's first media-setup message lands here.
-                        if current_room_id.is_some()
+                        if let Some(room_id) = current_room_id.as_ref()
                             && !in_lobby.load(Ordering::Acquire)
                             && stats_task.is_none()
                         {
@@ -1655,8 +1657,13 @@ async fn handle_connection_with_timing(
                             let (bwe_tx, bwe_rx) = mpsc::channel::<u32>(32);
                             bwe_sender = Some(bwe_tx);
 
-                            stats_task =
-                                Some(spawn_stats_task(room_manager.clone(), tx.clone(), bwe_rx));
+                            stats_task = Some(spawn_stats_task(
+                                room_manager.clone(),
+                                room_id.clone(),
+                                participant_id.clone(),
+                                tx.clone(),
+                                bwe_rx,
+                            ));
                         }
 
                         // Stop stats task when leaving a room
@@ -2008,24 +2015,29 @@ async fn handle_reconnect(
     }
 }
 
-/// Spawns a background task that relays the downlink bandwidth estimate to
-/// the client as `ConnectionStats` every ~10 s (no IPC, skipped if unchanged).
+/// Spawns a background task that performs bandwidth adaptation and sends connection stats.
 ///
-/// Layer selection is left to mediasoup: its transport distributes the
-/// estimated bitrate across the participant's simulcast consumers layer by
-/// layer on every estimate change, with the client's own preferred layers as
-/// the ceiling. The server-side tiers that used to cap layers here reacted to
-/// the same estimate two seconds later and never chose a higher layer than
-/// mediasoup would, so they only added IPC.
+/// Uses event-driven BWE (bandwidth estimation) events for layer adaptation:
+/// - BWE events arrive via channel when mediasoup detects bandwidth changes
+/// - Layer preferences update immediately on tier change (debounced at 2s)
+/// - ConnectionStats sent to client every ~10s using last-known bitrate (no IPC, skipped if unchanged)
 fn spawn_stats_task(
     room_manager: Arc<RoomManager>,
+    room_id: String,
+    participant_id: String,
     sender: mpsc::Sender<crate::OutboundJson>,
     mut bwe_rx: mpsc::Receiver<u32>,
 ) -> OwnedTask {
     OwnedTask(tokio::spawn(async move {
         let drain = room_manager.drain_signal();
+        let mut current_layers: HashMap<String, u8> = HashMap::new();
         let mut last_bitrate: u32 = 0;
         let mut last_sent_bitrate: u32 = 0;
+        let mut last_tier: Option<u8> = None;
+
+        // Minimum interval between layer updates (debounce rapid BWE fluctuations)
+        let mut last_layer_update = Instant::now();
+        let debounce = Duration::from_secs(2);
 
         // ConnectionStats interval — no IPC call, just uses last-known bitrate
         let mut stats_interval = tokio::time::interval(Duration::from_secs(10));
@@ -2038,7 +2050,57 @@ fn spawn_stats_task(
                 // BWE event: bandwidth estimation changed
                 bwe = bwe_rx.recv() => {
                     match bwe {
-                        Some(bitrate) => last_bitrate = bitrate,
+                        Some(bitrate) => {
+                            last_bitrate = bitrate;
+
+                            let target_layer = if bitrate < 200_000 {
+                                0u8
+                            } else if bitrate < 600_000 {
+                                1u8
+                            } else {
+                                2u8
+                            };
+
+                            // Only update layers on tier change, with debounce
+                            if last_tier != Some(target_layer) && last_layer_update.elapsed() >= debounce {
+                                last_tier = Some(target_layer);
+                                last_layer_update = Instant::now();
+
+                                // Get current consumer IDs (in-memory only — zero IPC)
+                                match room_manager
+                                    .get_consumer_ids(&room_id, &participant_id, &sender)
+                                    .await
+                                {
+                                    Ok(consumer_ids) if !consumer_ids.is_empty() => {
+                                        for consumer_id in &consumer_ids {
+                                            let prev = current_layers.get(consumer_id).copied();
+                                            if prev != Some(target_layer) {
+                                                if let Err(e) = room_manager.set_preferred_layers(
+                                                    &room_id,
+                                                    &participant_id,
+                                                    &sender,
+                                                    consumer_id,
+                                                    target_layer,
+                                                    None,
+                                                ).await {
+                                                    debug!("Failed to set layers for consumer {}: {}", consumer_id, e);
+                                                } else {
+                                                    current_layers.insert(consumer_id.clone(), target_layer);
+                                                }
+                                            }
+                                        }
+                                        current_layers.retain(|id, _| consumer_ids.contains(id));
+                                    }
+                                    Ok(_) => {
+                                        // No consumers — skip layer updates, clear stale state
+                                        current_layers.clear();
+                                    }
+                                    Err(e) => {
+                                        debug!("Failed to get consumer IDs for {}: {}", participant_id, e);
+                                    }
+                                }
+                            }
+                        }
                         None => break, // Channel closed — participant disconnected
                     }
                 }

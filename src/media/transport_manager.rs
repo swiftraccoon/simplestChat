@@ -877,6 +877,16 @@ impl TransportManager {
         Ok(())
     }
 
+    /// Gets the consumer IDs for a participant (no IPC — reads in-memory HashMap only)
+    pub async fn get_consumer_ids(&self, participant_id: &str) -> MediaResult<Vec<String>> {
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let mut participant = participant_lock.lock().await;
+        participant
+            .consumers
+            .retain(|_, consumer| !consumer.closed());
+        Ok(participant.consumers.keys().cloned().collect())
+    }
+
     /// One media quality sample over every participant. Consumer and producer
     /// scores and current layers are read from the crate's cached state (no
     /// IPC); at most `max_transport_stats` receive transports are asked for

@@ -179,14 +179,17 @@ against the CI database and stops PostgreSQL for eight seconds at the midpoint
 (revalidation runs every five seconds and a connection tolerates fifteen
 seconds of validator unavailability), so the bounded credential-uncertainty
 allowance is exercised by a real outage rather than a mocked validator.
-Layer selection is mediasoup's own: its transport distributes the estimated
-downlink bitrate across a viewer's simulcast consumers layer by layer on every
-estimate change. The server no longer caps layers from fixed bitrate tiers
-(they reacted to the same estimate two seconds later and never chose a higher
-layer than mediasoup would). The browser caps each remote camera tile to the
-layer its rendered size can show (`web/src/layer-cap.ts`, with hysteresis),
-so a grid of small tiles no longer asks for 720p per tile and the estimator
-has less to take back under congestion.
+Layer selection is shared: mediasoup's transport distributes the estimated
+downlink bitrate across a viewer's simulcast consumers on every estimate
+change, and the server additionally caps each consumer's preferred layer
+from fixed tiers of the same estimate (below 200 kbit/s layer 0, below
+600 kbit/s layer 1). The tiers looked redundant, but measurement showed
+otherwise: with them removed, the weekly job's downgrade under a 400 kbit/s
+cap took 19 s instead of about one, under 150 kbit/s 31 s instead of three,
+and decode rate under loss halved, so they stay. The browser caps each remote
+camera tile to the layer its rendered size can show (`web/src/layer-cap.ts`,
+with hysteresis), so a grid of small tiles no longer asks for 720p per tile
+and the estimator has less to take back under congestion.
 
 The workflow's impaired job degrades the viewer's downlink with netem on the
 runner's loopback (UDP leaving the server's media port only) and runs
