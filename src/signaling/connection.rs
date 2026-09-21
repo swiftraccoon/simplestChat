@@ -2019,7 +2019,9 @@ async fn handle_reconnect(
 ///
 /// Uses event-driven BWE (bandwidth estimation) events for layer adaptation:
 /// - BWE events arrive via channel when mediasoup detects bandwidth changes
-/// - Layer preferences update immediately on tier change (debounced at 2s)
+/// - A tier change (debounced at 2 s) becomes the participant's bandwidth
+///   ceiling; the room manager merges it with each viewer ceiling and only
+///   asks the worker for consumers whose layers actually change
 /// - ConnectionStats sent to client every ~10s using last-known bitrate (no IPC, skipped if unchanged)
 fn spawn_stats_task(
     room_manager: Arc<RoomManager>,
@@ -2030,7 +2032,6 @@ fn spawn_stats_task(
 ) -> OwnedTask {
     OwnedTask(tokio::spawn(async move {
         let drain = room_manager.drain_signal();
-        let mut current_layers: HashMap<String, u8> = HashMap::new();
         let mut last_bitrate: u32 = 0;
         let mut last_sent_bitrate: u32 = 0;
         let mut last_tier: Option<u8> = None;
@@ -2053,6 +2054,9 @@ fn spawn_stats_task(
                         Some(bitrate) => {
                             last_bitrate = bitrate;
 
+                            // Keep these tiers: mediasoup steps layers down only as the
+                            // estimate falls below each layer's measured bitrate, and
+                            // removing them slowed downgrades from about 1 s to 19–31 s.
                             let target_layer = if bitrate < 200_000 {
                                 0u8
                             } else if bitrate < 600_000 {
@@ -2065,39 +2069,18 @@ fn spawn_stats_task(
                             if last_tier != Some(target_layer) && last_layer_update.elapsed() >= debounce {
                                 last_tier = Some(target_layer);
                                 last_layer_update = Instant::now();
-
-                                // Get current consumer IDs (in-memory only — zero IPC)
                                 match room_manager
-                                    .get_consumer_ids(&room_id, &participant_id, &sender)
+                                    .set_bandwidth_ceiling(&room_id, &participant_id, &sender, target_layer)
                                     .await
                                 {
-                                    Ok(consumer_ids) if !consumer_ids.is_empty() => {
-                                        for consumer_id in &consumer_ids {
-                                            let prev = current_layers.get(consumer_id).copied();
-                                            if prev != Some(target_layer) {
-                                                if let Err(e) = room_manager.set_preferred_layers(
-                                                    &room_id,
-                                                    &participant_id,
-                                                    &sender,
-                                                    consumer_id,
-                                                    target_layer,
-                                                    None,
-                                                ).await {
-                                                    debug!("Failed to set layers for consumer {}: {}", consumer_id, e);
-                                                } else {
-                                                    current_layers.insert(consumer_id.clone(), target_layer);
-                                                }
-                                            }
-                                        }
-                                        current_layers.retain(|id, _| consumer_ids.contains(id));
-                                    }
-                                    Ok(_) => {
-                                        // No consumers — skip layer updates, clear stale state
-                                        current_layers.clear();
-                                    }
-                                    Err(e) => {
-                                        debug!("Failed to get consumer IDs for {}: {}", participant_id, e);
-                                    }
+                                    Ok(written) => debug!(
+                                        "Bandwidth tier {} for {}: {} consumer layer requests",
+                                        target_layer, participant_id, written
+                                    ),
+                                    Err(e) => debug!(
+                                        "Failed to apply bandwidth tier for {}: {}",
+                                        participant_id, e
+                                    ),
                                 }
                             }
                         }

@@ -10,7 +10,6 @@ use mediasoup::prelude::*;
 use mediasoup::router::RouterDump;
 use mediasoup::worker::WorkerId;
 use std::collections::{HashMap, hash_map::Entry};
-use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use tokio::sync::RwLock;
@@ -192,74 +191,6 @@ impl RouterManager {
             .dump()
             .await
             .map_err(|e| MediaError::RouterError(format!("Failed to get router stats: {e}")))
-    }
-
-    /// Creates a pipe transport to connect two routers
-    pub async fn create_pipe_transport(
-        &self,
-        room_id: &str,
-        remote_ip: IpAddr,
-        remote_port: u16,
-    ) -> MediaResult<PipeTransport> {
-        let router = self.get_router(room_id).await?;
-
-        let options = PipeTransportOptions::new(ListenInfo {
-            protocol: Protocol::Udp,
-            ip: IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
-            announced_address: None,
-            port: None,
-            port_range: None,
-            flags: None,
-            send_buffer_size: None,
-            recv_buffer_size: None,
-            expose_internal_ip: false,
-        });
-
-        let transport = router.create_pipe_transport(options).await.map_err(|e| {
-            MediaError::TransportError(format!("Failed to create pipe transport: {e}"))
-        })?;
-
-        // Connect to remote router
-        let remote_parameters = PipeTransportRemoteParameters {
-            ip: remote_ip,
-            port: remote_port,
-            srtp_parameters: None, // No SRTP for internal pipe transports
-        };
-
-        transport.connect(remote_parameters).await.map_err(|e| {
-            MediaError::TransportError(format!("Failed to connect pipe transport: {e}"))
-        })?;
-
-        info!(
-            "Created pipe transport for room {} to {}:{}",
-            room_id, remote_ip, remote_port
-        );
-
-        Ok(transport)
-    }
-
-    /// Pipes a producer to another router (for server-side routing)
-    pub async fn pipe_producer_to_router(
-        &self,
-        from_room_id: &str,
-        to_room_id: &str,
-        producer_id: ProducerId,
-    ) -> MediaResult<Producer> {
-        let from_router = self.get_router(from_room_id).await?;
-        let to_router = self.get_router(to_room_id).await?;
-
-        // Use the built-in pipe_producer_to_router method
-        let pipe_result = from_router
-            .pipe_producer_to_router(producer_id, PipeToRouterOptions::new(to_router))
-            .await
-            .map_err(|e| MediaError::RouterError(format!("Failed to pipe producer: {e}")))?;
-
-        info!(
-            "Piped producer {} from room {} to room {}",
-            producer_id, from_room_id, to_room_id
-        );
-
-        Ok(pipe_result.pipe_producer.into_inner())
     }
 
     /// Sets up event handlers for a router

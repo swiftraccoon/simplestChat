@@ -4,7 +4,8 @@
 #   build/impaired-check.sh [results-dir]
 #
 # Environment: SIMPLESTCHAT_BIN (default target/release/simplestChat),
-# IMPAIRED_PROFILES, IMPAIR_SCRIPT ("none" for mechanics only), E2E_BROWSER.
+# IMPAIRED_PROFILES, IMPAIR_SCRIPT ("none" for mechanics only), E2E_BROWSER,
+# LIBWEBRTC_FIELD_TRIALS and WEBRTC_MIN_OUTGOING_BITRATE (passed to the server).
 # The server is guest-only with ad-hoc rooms on 127.0.0.1:3109 and media port
 # 41100; the scenario applies impairment through build/impair.sh (sudo) and
 # clears it before exit. The UI must be built and web/e2e installed.
@@ -18,6 +19,7 @@ mkdir -p "${results}"
 test -x "${binary}" || { echo "Server binary ${binary} is missing" >&2; exit 2; }
 env -i PATH="${PATH}" HOME="${HOME}" TMPDIR="${TMPDIR:-/tmp}" \
   ${LIBWEBRTC_FIELD_TRIALS:+LIBWEBRTC_FIELD_TRIALS="${LIBWEBRTC_FIELD_TRIALS}"} \
+  ${WEBRTC_MIN_OUTGOING_BITRATE:+WEBRTC_MIN_OUTGOING_BITRATE="${WEBRTC_MIN_OUTGOING_BITRATE}"} \
   BIND_ADDR=127.0.0.1 PORT="${port}" ANNOUNCE_IP=127.0.0.1 MEDIA_WORKERS=1 \
   WEBRTC_SERVER_PORT_BASE="${udp_port}" ALLOW_AD_HOC_ROOMS=true \
   ALLOWED_ORIGINS="http://127.0.0.1:${port}" REGISTRATION_ENABLED=false \

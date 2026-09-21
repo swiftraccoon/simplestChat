@@ -31,6 +31,10 @@ on:
         description: LIBWEBRTC_FIELD_TRIALS for the impaired job's server (empty keeps mediasoup's default)
         default: ''
         type: string
+      min_outgoing_bitrate:
+        description: WEBRTC_MIN_OUTGOING_BITRATE for the impaired job's server in bit/s (empty keeps the application default; 0 keeps mediasoup's floor)
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -131,6 +135,7 @@ jobs:
       PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
       OPENSSL_STATIC: "1"
       LIBWEBRTC_FIELD_TRIALS: ${{ inputs.field_trials }}
+      WEBRTC_MIN_OUTGOING_BITRATE: ${{ inputs.min_outgoing_bitrate }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -59,6 +59,14 @@ impl MediaConfig {
                 anyhow::bail!("WEBRTC_SERVER_PORT_BASE must be valid UTF-8")
             }
         }
+        if let Ok(value) = std::env::var("WEBRTC_MIN_OUTGOING_BITRATE") {
+            config.webrtc_transport_config.min_outgoing_bitrate =
+                parse_bitrate("WEBRTC_MIN_OUTGOING_BITRATE", &value)?;
+        }
+        if let Ok(value) = std::env::var("WEBRTC_MAX_INCOMING_BITRATE") {
+            config.webrtc_transport_config.max_incoming_bitrate =
+                Some(parse_bitrate("WEBRTC_MAX_INCOMING_BITRATE", &value)?).filter(|v| *v > 0);
+        }
 
         config.validate()?;
         Ok(config)
@@ -100,6 +108,16 @@ fn parse_field_trials(value: &str) -> anyhow::Result<String> {
         anyhow::bail!("LIBWEBRTC_FIELD_TRIALS may contain only letters, digits and / - _ : , .");
     }
     Ok(value.to_string())
+}
+
+/// A bitrate in bits per second from 0 (mediasoup's own default) to 50 Mbit/s.
+fn parse_bitrate(name: &str, value: &str) -> anyhow::Result<u32> {
+    value
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .filter(|bitrate| *bitrate <= 50_000_000)
+        .ok_or_else(|| anyhow::anyhow!("{name} must be an integer from 0 through 50000000 bit/s"))
 }
 
 fn parse_webrtc_port_base(value: &str) -> anyhow::Result<u16> {
@@ -301,10 +319,15 @@ pub struct WebRtcTransportConfig {
     pub listen_ips: Vec<ListenInfo>,
     pub initial_available_outgoing_bitrate: u32,
     /// Application-imposed outgoing floor in bits per second. Zero leaves the
-    /// native congestion controller's minimum unchanged; a positive override
-    /// can exceed its estimate during congestion or network unavailability.
+    /// native congestion controller's minimum (30 kbit/s) unchanged; a
+    /// positive override can exceed its estimate during congestion or network
+    /// unavailability, and the worker logs an error on every bitrate update
+    /// whose estimate sits below it. `WEBRTC_MIN_OUTGOING_BITRATE`.
     pub min_outgoing_bitrate: u32,
     pub max_outgoing_bitrate: u32,
+    /// REMB ceiling sent to each publisher. It must cover the largest
+    /// simulcast ladder the client publishes (1080p: about 2.9 Mbit/s), or
+    /// the browser starves the top layer. `WEBRTC_MAX_INCOMING_BITRATE`.
     pub max_incoming_bitrate: Option<u32>,
     pub enable_udp: bool,
     pub enable_tcp: bool,
@@ -329,7 +352,7 @@ impl Default for WebRtcTransportConfig {
             initial_available_outgoing_bitrate: 600_000,
             min_outgoing_bitrate: 100_000,
             max_outgoing_bitrate: 3_000_000,
-            max_incoming_bitrate: Some(1_500_000),
+            max_incoming_bitrate: Some(3_000_000),
             enable_udp: true,
             enable_tcp: true,
             prefer_udp: true,
@@ -382,7 +405,19 @@ mod tests {
         assert_eq!(config.min_outgoing_bitrate, 100_000);
         assert_eq!(config.initial_available_outgoing_bitrate, 600_000);
         assert_eq!(config.max_outgoing_bitrate, 3_000_000);
-        assert_eq!(config.max_incoming_bitrate, Some(1_500_000));
+        // 100k + 300k + 2.5M for the 1080p ladder, plus audio, must fit under
+        // the publisher's REMB ceiling or the browser starves the top layer.
+        assert_eq!(config.max_incoming_bitrate, Some(3_000_000));
+        assert!(config.max_incoming_bitrate.unwrap() >= 100_000 + 300_000 + 2_500_000 + 64_000);
+    }
+
+    #[test]
+    fn bitrate_overrides_are_bounded_and_zero_means_mediasoup_default() {
+        assert_eq!(parse_bitrate("X", " 0 ").unwrap(), 0);
+        assert_eq!(parse_bitrate("X", "30000").unwrap(), 30_000);
+        assert!(parse_bitrate("X", "50000001").is_err());
+        assert!(parse_bitrate("X", "-1").is_err());
+        assert!(parse_bitrate("X", "fast").is_err());
     }
 
     #[test]

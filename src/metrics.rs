@@ -114,6 +114,7 @@ struct Inner {
     upgrades_rejected_total: AtomicU64,
     media_worker_deaths_total: AtomicU64,
     joins_refused_saturated_total: AtomicU64,
+    consumer_layer_requests_total: AtomicU64,
     /// Latest CPU saturation reading, published by the monitor task.
     saturation: std::sync::RwLock<Option<SaturationSnapshot>>,
     /// Latest media quality sample, published by the sampler task.
@@ -158,6 +159,7 @@ impl ServerMetrics {
                 upgrades_rejected_total: AtomicU64::new(0),
                 media_worker_deaths_total: AtomicU64::new(0),
                 joins_refused_saturated_total: AtomicU64::new(0),
+                consumer_layer_requests_total: AtomicU64::new(0),
                 saturation: std::sync::RwLock::new(None),
                 quality: std::sync::RwLock::new(None),
                 connections_active: AtomicU64::new(0),
@@ -228,6 +230,14 @@ impl ServerMetrics {
 
     pub fn inc_errors(&self) {
         self.inner.errors_total.fetch_add(1, Relaxed);
+    }
+
+    /// A worker request changed a consumer's preferred layers, after the
+    /// viewer ceiling and the bandwidth tier were merged server-side.
+    pub fn inc_consumer_layer_request(&self) {
+        self.inner
+            .consumer_layer_requests_total
+            .fetch_add(1, Relaxed);
     }
 
     /// A fresh join was refused because the process is CPU saturated.
@@ -459,6 +469,12 @@ impl ServerMetrics {
             "simplestchat_joins_refused_saturated_total",
             "Fresh room joins refused because the process was CPU saturated",
             i.joins_refused_saturated_total.load(Relaxed),
+        );
+        render_counter(
+            &mut out,
+            "simplestchat_consumer_layer_requests_total",
+            "Worker requests that changed a consumer's preferred layers (viewer ceiling and bandwidth tier merged server-side)",
+            i.consumer_layer_requests_total.load(Relaxed),
         );
         if let Some(saturation) = i
             .saturation

@@ -4,9 +4,12 @@
 
 use crate::diagnostics::{Stage, measure, measure_result};
 use crate::media::config::WebRtcTransportConfig;
-use crate::media::types::{MediaError, MediaResult, ParticipantMedia, TransportInfo};
+use crate::media::types::{
+    ConsumerLayerState, MediaError, MediaResult, ParticipantMedia, TransportInfo,
+};
 use crate::signaling::protocol::ServerMessage;
 use anyhow::Result;
+use mediasoup::consumer::ConsumerType;
 use mediasoup::prelude::*;
 use mediasoup::transport::{TransportTraceEventData, TransportTraceEventType};
 use mediasoup_types::data_structures::DtlsState;
@@ -17,7 +20,7 @@ use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use uuid::Uuid;
 
 fn max_producers_per_participant() -> usize {
@@ -61,6 +64,51 @@ fn consumer_layers_transition_needed(
     requested_layers: ConsumerLayers,
 ) -> bool {
     current_layers != Some(requested_layers)
+}
+
+/// The layers the worker should receive for one consumer: the stream's top
+/// layers bounded by the viewer's ceiling and by the transport's bandwidth
+/// tier. An absent client temporal layer means the top one, so the result is
+/// fully specified and compares exactly with the worker's applied value.
+fn effective_layers(
+    top: ConsumerLayers,
+    client: Option<ConsumerLayers>,
+    bandwidth_spatial: Option<u8>,
+) -> ConsumerLayers {
+    let mut spatial = top.spatial_layer;
+    let mut temporal = top.temporal_layer;
+    if let Some(client) = client {
+        spatial = spatial.min(client.spatial_layer);
+        if let (Some(requested), Some(limit)) = (client.temporal_layer, top.temporal_layer) {
+            temporal = Some(requested.min(limit));
+        }
+    }
+    if let Some(tier) = bandwidth_spatial {
+        spatial = spatial.min(tier);
+    }
+    ConsumerLayers {
+        spatial_layer: spatial,
+        temporal_layer: temporal,
+    }
+}
+
+/// The top spatial and temporal layer of a consumer that has layers, from
+/// the scalability mode mediasoup assigned it; `None` for simple consumers
+/// (audio, single-stream video), which the worker accepts layer requests for
+/// without effect and which must therefore never be sent one.
+fn layered_top(consumer: &Consumer) -> Option<ConsumerLayers> {
+    if consumer.r#type() == ConsumerType::Simple {
+        return None;
+    }
+    let mode = &consumer
+        .rtp_parameters()
+        .encodings
+        .first()?
+        .scalability_mode;
+    Some(ConsumerLayers {
+        spatial_layer: mode.spatial_layers().get() - 1,
+        temporal_layer: Some(mode.temporal_layers().get() - 1),
+    })
 }
 
 /// Extracts only the public UUID from a room-scoped media namespace. The
@@ -510,10 +558,15 @@ impl TransportManager {
     ) -> MediaResult<Consumer> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let mut participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
+        let participant = &mut *participant;
 
         participant
             .consumers
             .retain(|_, consumer| !consumer.closed());
+        let live = &participant.consumers;
+        participant
+            .consumer_layers
+            .retain(|id, _| live.contains_key(id));
         let consumer_cap = max_consumers_per_participant();
         if participant.consumers.len() >= consumer_cap {
             return Err(MediaError::ConsumerError(format!(
@@ -531,6 +584,14 @@ impl TransportManager {
         // RTP must not reach the browser before its SDP is ready, even when
         // the producer is active. Producer pause state is tracked separately.
         consumer_options.paused = true;
+        // A consumer created while the bandwidth tier is low starts under it;
+        // the worker ignores the field for consumers without layers.
+        if let Some(tier) = participant.bandwidth_spatial_ceiling {
+            consumer_options.preferred_layers = Some(ConsumerLayers {
+                spatial_layer: tier,
+                temporal_layer: None,
+            });
+        }
 
         let consumer = measure_result(Stage::MediaConsume, transport.consume(consumer_options))
             .await
@@ -544,6 +605,12 @@ impl TransportManager {
         }
 
         self.setup_consumer_handlers(&consumer, participant_id, sender, consumer_counter);
+        if let Some(top) = layered_top(&consumer) {
+            participant.consumer_layers.insert(
+                consumer_id.clone(),
+                ConsumerLayerState { top, client: None },
+            );
+        }
         participant
             .consumers
             .insert(consumer_id.clone(), consumer.clone());
@@ -708,71 +775,10 @@ impl TransportManager {
         index.get(producer_id).copied()
     }
 
-    /// Pauses all consumers whose producer matches the given producer_id.
-    /// Returns the count of consumers that were actually paused.
-    pub async fn pause_consumers_of_producer(&self, producer_id: &str) -> MediaResult<usize> {
-        let target_id: ProducerId = producer_id.parse().map_err(|_| {
-            MediaError::ProducerError(format!("Invalid producer ID: {producer_id}"))
-        })?;
-
-        let all_locks: Vec<Arc<TokioMutex<ParticipantMedia>>> = {
-            let participants = self.participants.read().unwrap_or_else(|e| e.into_inner());
-            participants.values().cloned().collect()
-        };
-
-        let mut count = 0usize;
-        for lock in all_locks {
-            let participant = lock.lock().await;
-            for (cid, consumer) in &participant.consumers {
-                if !consumer.closed() && consumer.producer_id() == target_id && !consumer.paused() {
-                    if let Err(e) = consumer.pause().await {
-                        warn!(
-                            "Failed to pause consumer {} of producer {}: {}",
-                            cid, producer_id, e
-                        );
-                    } else {
-                        count += 1;
-                    }
-                }
-            }
-        }
-
-        Ok(count)
-    }
-
-    /// Resumes all consumers whose producer matches the given producer_id.
-    /// Returns the count of consumers that were actually resumed.
-    pub async fn resume_consumers_of_producer(&self, producer_id: &str) -> MediaResult<usize> {
-        let target_id: ProducerId = producer_id.parse().map_err(|_| {
-            MediaError::ProducerError(format!("Invalid producer ID: {producer_id}"))
-        })?;
-
-        let all_locks: Vec<Arc<TokioMutex<ParticipantMedia>>> = {
-            let participants = self.participants.read().unwrap_or_else(|e| e.into_inner());
-            participants.values().cloned().collect()
-        };
-
-        let mut count = 0usize;
-        for lock in all_locks {
-            let participant = lock.lock().await;
-            for (cid, consumer) in &participant.consumers {
-                if !consumer.closed() && consumer.producer_id() == target_id && consumer.paused() {
-                    if let Err(e) = consumer.resume().await {
-                        warn!(
-                            "Failed to resume consumer {} of producer {}: {}",
-                            cid, producer_id, e
-                        );
-                    } else {
-                        count += 1;
-                    }
-                }
-            }
-        }
-
-        Ok(count)
-    }
-
-    /// Sets preferred simulcast layers for a consumer, returning whether worker state changed.
+    /// Records the viewer's own layer ceiling for a consumer (tile size or
+    /// manual quality) and writes the merged ceiling, returning whether the
+    /// worker was asked to change. Consumers without layers are left alone
+    /// without a worker request.
     pub async fn set_preferred_layers(
         &self,
         participant_id: &str,
@@ -780,23 +786,100 @@ impl TransportManager {
         layers: ConsumerLayers,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
-        let participant = participant_lock.lock().await;
+        let mut participant = participant_lock.lock().await;
+        let participant = &mut *participant;
 
         let consumer = participant.consumers.get(consumer_id).ok_or_else(|| {
             MediaError::ConsumerError(format!("Consumer not found: {consumer_id}"))
         })?;
+        let Some(state) = participant.consumer_layers.get_mut(consumer_id) else {
+            return Ok(false);
+        };
+        state.client = Some(layers);
+        Self::write_effective_layers(
+            consumer,
+            *state,
+            participant.bandwidth_spatial_ceiling,
+            participant_id,
+        )
+        .await
+    }
 
-        if !consumer_layers_transition_needed(consumer.preferred_layers(), layers) {
+    /// Records the receive transport's bandwidth tier as a spatial ceiling for
+    /// every layered consumer and returns, sorted, the consumers whose applied
+    /// layers now differ; `apply_layer_ceilings` writes each one. Nothing is
+    /// sent to the worker here.
+    pub async fn set_bandwidth_ceiling(
+        &self,
+        participant_id: &str,
+        spatial_layer: u8,
+    ) -> MediaResult<Vec<String>> {
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let mut participant = participant_lock.lock().await;
+        participant.bandwidth_spatial_ceiling = Some(spatial_layer);
+        let mut pending: Vec<String> = participant
+            .consumer_layers
+            .iter()
+            .filter(|(id, state)| {
+                participant
+                    .consumers
+                    .get(*id)
+                    .filter(|consumer| !consumer.closed())
+                    .is_some_and(|consumer| {
+                        consumer_layers_transition_needed(
+                            consumer.preferred_layers(),
+                            effective_layers(state.top, state.client, Some(spatial_layer)),
+                        )
+                    })
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        pending.sort();
+        Ok(pending)
+    }
+
+    /// Writes the merged ceiling of one consumer to the worker if it differs
+    /// from the applied one, returning whether a request was made.
+    pub async fn apply_layer_ceilings(
+        &self,
+        participant_id: &str,
+        consumer_id: &str,
+    ) -> MediaResult<bool> {
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let participant = participant_lock.lock().await;
+        let consumer = participant.consumers.get(consumer_id).ok_or_else(|| {
+            MediaError::ConsumerError(format!("Consumer not found: {consumer_id}"))
+        })?;
+        let Some(state) = participant.consumer_layers.get(consumer_id) else {
+            return Ok(false);
+        };
+        Self::write_effective_layers(
+            consumer,
+            *state,
+            participant.bandwidth_spatial_ceiling,
+            participant_id,
+        )
+        .await
+    }
+
+    async fn write_effective_layers(
+        consumer: &Consumer,
+        state: ConsumerLayerState,
+        bandwidth_spatial: Option<u8>,
+        participant_id: &str,
+    ) -> MediaResult<bool> {
+        let target = effective_layers(state.top, state.client, bandwidth_spatial);
+        if !consumer_layers_transition_needed(consumer.preferred_layers(), target) {
             return Ok(false);
         }
-
-        consumer.set_preferred_layers(layers).await.map_err(|e| {
+        consumer.set_preferred_layers(target).await.map_err(|e| {
             MediaError::ConsumerError(format!("Failed to set preferred layers: {e}"))
         })?;
-
         debug!(
             "Set preferred layers {:?} for consumer {} of participant {}",
-            layers, consumer_id, participant_id
+            target,
+            consumer.id(),
+            participant_id
         );
         Ok(true)
     }
@@ -875,16 +958,6 @@ impl TransportManager {
             participant_id
         );
         Ok(())
-    }
-
-    /// Gets the consumer IDs for a participant (no IPC — reads in-memory HashMap only)
-    pub async fn get_consumer_ids(&self, participant_id: &str) -> MediaResult<Vec<String>> {
-        let participant_lock = self.get_participant_lock(participant_id)?;
-        let mut participant = participant_lock.lock().await;
-        participant
-            .consumers
-            .retain(|_, consumer| !consumer.closed());
-        Ok(participant.consumers.keys().cloned().collect())
     }
 
     /// One media quality sample over every participant. Consumer and producer
@@ -1513,7 +1586,7 @@ mod tests {
                 .unwrap();
             assert_eq!(sent.len(), 1);
             assert_eq!(received.len(), 1);
-            assert_eq!(sent[0].max_incoming_bitrate, Some(1_500_000));
+            assert_eq!(sent[0].max_incoming_bitrate, Some(3_000_000));
             assert_eq!(received[0].max_outgoing_bitrate, Some(3_000_000));
             assert_eq!(received[0].min_outgoing_bitrate, Some(100_000));
         }
@@ -1614,5 +1687,317 @@ mod tests {
                 "repeated acknowledgments remain idempotent"
             );
         }
+    }
+    #[test]
+    fn effective_layers_take_the_stricter_of_client_and_bandwidth_ceilings() {
+        let top = ConsumerLayers {
+            spatial_layer: 2,
+            temporal_layer: Some(2),
+        };
+        assert_eq!(effective_layers(top, None, None), top);
+        assert_eq!(
+            effective_layers(
+                top,
+                Some(ConsumerLayers {
+                    spatial_layer: 0,
+                    temporal_layer: None,
+                }),
+                None
+            ),
+            ConsumerLayers {
+                spatial_layer: 0,
+                temporal_layer: Some(2),
+            },
+            "an absent client temporal layer means the top one"
+        );
+        assert_eq!(
+            effective_layers(top, None, Some(1)),
+            ConsumerLayers {
+                spatial_layer: 1,
+                temporal_layer: Some(2),
+            }
+        );
+        assert_eq!(
+            effective_layers(
+                top,
+                Some(ConsumerLayers {
+                    spatial_layer: 2,
+                    temporal_layer: Some(1),
+                }),
+                Some(0)
+            ),
+            ConsumerLayers {
+                spatial_layer: 0,
+                temporal_layer: Some(1),
+            },
+            "the stricter spatial ceiling wins and the client's temporal choice is kept"
+        );
+        assert_eq!(
+            effective_layers(
+                top,
+                Some(ConsumerLayers {
+                    spatial_layer: 7,
+                    temporal_layer: Some(9),
+                }),
+                Some(5)
+            ),
+            top,
+            "requests above the stream's layers clamp to the top"
+        );
+    }
+
+    fn simulcast_video_parameters() -> RtpParameters {
+        let encoding = |ssrc: u32| RtpEncodingParameters {
+            ssrc: Some(ssrc),
+            scalability_mode: "L1T3".parse().unwrap(),
+            ..RtpEncodingParameters::default()
+        };
+        RtpParameters {
+            mid: Some("video".to_string()),
+            codecs: vec![RtpCodecParameters::Video {
+                mime_type: MimeTypeVideo::Vp8,
+                payload_type: 96,
+                clock_rate: NonZeroU32::new(90_000).unwrap(),
+                parameters: RtpCodecParametersParameters::default(),
+                rtcp_feedback: vec![],
+            }],
+            encodings: vec![encoding(1001), encoding(1002), encoding(1003)],
+            ..RtpParameters::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn bandwidth_ceiling_merges_with_the_client_ceiling_and_skips_audio() {
+        let reservation = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 1;
+        config.webrtc_server_port_base = reservation.local_addr().unwrap().port();
+        drop(reservation);
+        let config = Arc::new(config);
+        let worker_manager = Arc::new(WorkerManager::new(config.clone()).await.unwrap());
+        let router_manager = RouterManager::new(worker_manager.clone());
+        let transport_manager = TransportManager::new();
+        let room_id = "layers-room".to_string();
+        router_manager
+            .create_router(room_id.clone(), RouterConfig::default())
+            .await
+            .unwrap();
+        let router = router_manager.get_router(&room_id).await.unwrap();
+        let worker_id = router_manager.get_worker_id(&room_id).await.unwrap();
+        let webrtc_server = worker_manager.get_webrtc_server(worker_id).await.unwrap();
+        let pid = "viewer".to_string();
+        transport_manager
+            .create_send_transport(
+                pid.clone(),
+                &router,
+                webrtc_server.clone(),
+                &config.webrtc_transport_config,
+            )
+            .await
+            .unwrap();
+        transport_manager
+            .create_recv_transport(
+                pid.clone(),
+                &router,
+                webrtc_server,
+                &config.webrtc_transport_config,
+            )
+            .await
+            .unwrap();
+        let capabilities = RtpCapabilities {
+            codecs: config.router_config.media_codecs.clone(),
+            ..RtpCapabilities::default()
+        };
+        let audio_producer = transport_manager
+            .create_producer(
+                &pid,
+                MediaKind::Audio,
+                RtpParameters {
+                    mid: Some("audio".to_string()),
+                    codecs: vec![RtpCodecParameters::Audio {
+                        mime_type: MimeTypeAudio::Opus,
+                        payload_type: 111,
+                        clock_rate: NonZeroU32::new(48_000).unwrap(),
+                        channels: NonZeroU8::new(2).unwrap(),
+                        parameters: RtpCodecParametersParameters::default(),
+                        rtcp_feedback: vec![],
+                    }],
+                    ..RtpParameters::default()
+                },
+                AppData::default(),
+            )
+            .await
+            .unwrap();
+        let video_producer = transport_manager
+            .create_producer(
+                &pid,
+                MediaKind::Video,
+                simulcast_video_parameters(),
+                AppData::default(),
+            )
+            .await
+            .unwrap();
+        let audio = transport_manager
+            .create_consumer(
+                &pid,
+                audio_producer.id(),
+                capabilities.clone(),
+                AppData::default(),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        let video = transport_manager
+            .create_consumer(
+                &pid,
+                video_producer.id(),
+                capabilities.clone(),
+                AppData::default(),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        let audio_id = audio.id().to_string();
+        let video_id = video.id().to_string();
+        assert_eq!(video.r#type(), ConsumerType::Simulcast);
+        let top = ConsumerLayers {
+            spatial_layer: 2,
+            temporal_layer: Some(2),
+        };
+        assert_eq!(video.preferred_layers(), Some(top));
+
+        // Audio has no layers: neither writer may spend a worker request on it.
+        assert!(
+            !transport_manager
+                .set_preferred_layers(
+                    &pid,
+                    &audio_id,
+                    ConsumerLayers {
+                        spatial_layer: 1,
+                        temporal_layer: None,
+                    },
+                )
+                .await
+                .unwrap()
+        );
+        assert_eq!(audio.preferred_layers(), None);
+        assert_eq!(
+            transport_manager
+                .set_bandwidth_ceiling(&pid, 2)
+                .await
+                .unwrap(),
+            Vec::<String>::new(),
+            "the top tier matches the worker's default ceiling: nothing to write"
+        );
+
+        // The bandwidth tier lowers the video consumer only.
+        assert_eq!(
+            transport_manager
+                .set_bandwidth_ceiling(&pid, 1)
+                .await
+                .unwrap(),
+            vec![video_id.clone()]
+        );
+        assert!(
+            transport_manager
+                .apply_layer_ceilings(&pid, &video_id)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !transport_manager
+                .apply_layer_ceilings(&pid, &video_id)
+                .await
+                .unwrap(),
+            "a second application is a no-op"
+        );
+        assert_eq!(
+            video.preferred_layers(),
+            Some(ConsumerLayers {
+                spatial_layer: 1,
+                temporal_layer: Some(2),
+            })
+        );
+
+        // A stricter client ceiling stays in force when bandwidth recovers.
+        assert!(
+            transport_manager
+                .set_preferred_layers(
+                    &pid,
+                    &video_id,
+                    ConsumerLayers {
+                        spatial_layer: 0,
+                        temporal_layer: Some(1),
+                    },
+                )
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            transport_manager
+                .set_bandwidth_ceiling(&pid, 2)
+                .await
+                .unwrap(),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            video.preferred_layers(),
+            Some(ConsumerLayers {
+                spatial_layer: 0,
+                temporal_layer: Some(1),
+            }),
+            "the bandwidth tier must not push a capped tile back to the top layer"
+        );
+
+        // Lifting the client ceiling restores the bandwidth tier, and a lower
+        // tier applies to consumers created while it is in force.
+        assert!(
+            transport_manager
+                .set_preferred_layers(
+                    &pid,
+                    &video_id,
+                    ConsumerLayers {
+                        spatial_layer: 2,
+                        temporal_layer: None,
+                    },
+                )
+                .await
+                .unwrap()
+        );
+        assert_eq!(video.preferred_layers(), Some(top));
+        assert_eq!(
+            transport_manager
+                .set_bandwidth_ceiling(&pid, 0)
+                .await
+                .unwrap(),
+            vec![video_id.clone()]
+        );
+        assert!(
+            transport_manager
+                .apply_layer_ceilings(&pid, &video_id)
+                .await
+                .unwrap()
+        );
+        let late = transport_manager
+            .create_consumer(
+                &pid,
+                video_producer.id(),
+                capabilities,
+                AppData::default(),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            late.preferred_layers(),
+            Some(ConsumerLayers {
+                spatial_layer: 0,
+                temporal_layer: Some(2),
+            }),
+            "a consumer created under a low tier starts capped without an extra request"
+        );
     }
 }

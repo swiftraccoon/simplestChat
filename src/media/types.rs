@@ -117,6 +117,17 @@ impl ConsumerInfo {
     }
 }
 
+/// Layer ceilings of one consumer that has layers. `top` is what the stream
+/// can deliver; `client` is the viewer's own ceiling (tile size or manual
+/// choice). The bandwidth tier lives on the participant, one per receive
+/// transport. The worker receives the minimum of all three, so neither writer
+/// can undo the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConsumerLayerState {
+    pub top: ConsumerLayers,
+    pub client: Option<ConsumerLayers>,
+}
+
 /// Participant media state
 #[derive(Debug, Clone)]
 pub struct ParticipantMedia {
@@ -133,6 +144,12 @@ pub struct ParticipantMedia {
     pub(super) recv_connect_applied: Option<TransportId>,
     pub producers: HashMap<String, Producer>,
     pub consumers: HashMap<String, Consumer>,
+    /// Spatial layer ceiling from the receive transport's bandwidth estimate;
+    /// applied to every layered consumer, including ones created later.
+    pub bandwidth_spatial_ceiling: Option<u8>,
+    /// Ceilings of the consumers that have layers at all. Audio and
+    /// single-stream consumers have no entry and never receive layer requests.
+    pub consumer_layers: HashMap<String, ConsumerLayerState>,
 }
 
 impl ParticipantMedia {
@@ -146,6 +163,8 @@ impl ParticipantMedia {
             recv_connect_applied: None,
             producers: HashMap::new(),
             consumers: HashMap::new(),
+            bandwidth_spatial_ceiling: None,
+            consumer_layers: HashMap::new(),
         }
     }
 
@@ -160,6 +179,7 @@ impl ParticipantMedia {
             drop(consumer);
             tracing::debug!("Closed consumer {}", id);
         }
+        self.consumer_layers.clear();
         for (id, producer) in self.producers.drain() {
             drop(producer);
             tracing::debug!("Closed producer {}", id);

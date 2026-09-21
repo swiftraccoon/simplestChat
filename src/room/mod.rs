@@ -3548,7 +3548,9 @@ impl RoomManager {
             )
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
-        if !changed {
+        if changed {
+            self.metrics.inc_consumer_layer_request();
+        } else {
             Self::refund_media_control_ipc(ipc_reservation).await;
         }
         Ok(())
@@ -3577,23 +3579,44 @@ impl RoomManager {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
-    /// Gets consumer IDs for a participant (no IPC — in-memory only)
-    pub async fn get_consumer_ids(
+    /// Applies the receive transport's bandwidth tier as a layer ceiling to
+    /// the participant's layered consumers: one media-control request per
+    /// consumer whose applied layers change, none for the rest. Returns the
+    /// number of worker requests made.
+    pub async fn set_bandwidth_ceiling(
         &self,
         room_id: &str,
         participant_id: &str,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<Vec<String>> {
+        spatial_layer: u8,
+    ) -> Result<usize> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
         let media_participant_id =
             Self::media_participant_id(room_id, participant_id, media_session_id);
-        self.media_server
-            .transport_manager()
-            .get_consumer_ids(&media_participant_id)
+        let transports = self.media_server.transport_manager();
+        let pending = transports
+            .set_bandwidth_ceiling(&media_participant_id, spatial_layer)
             .await
-            .map_err(|e| anyhow::anyhow!(e))
+            .map_err(|e| anyhow::anyhow!(e))?;
+        let mut written = 0;
+        for consumer_id in pending {
+            let reservation = self
+                .reserve_media_control_ipc_for_sender(room_id, participant_id, expected_sender)
+                .await?;
+            let changed = transports
+                .apply_layer_ceilings(&media_participant_id, &consumer_id)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
+            if changed {
+                written += 1;
+                self.metrics.inc_consumer_layer_request();
+            } else {
+                Self::refund_media_control_ipc(reservation).await;
+            }
+        }
+        Ok(written)
     }
 
     /// Restarts ICE on a transport, returning new ICE parameters
