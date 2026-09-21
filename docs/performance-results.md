@@ -1,5 +1,34 @@
 # Performance results
 
+## Congestion-controller field trials, single runs — 2026-09-21
+
+`LIBWEBRTC_FIELD_TRIALS` now reaches the media workers, and the weekly
+workflow's impaired job accepts a candidate string, so five variants ran
+once each on hosted Linux runners at commit `e020004` (runs 35557553288,
+35557557261, 35557561516, 35557565768 and 35557569332). Every variant keeps
+mediasoup's default `WebRTC-Bwe-AlrLimitedBackoff/Enabled/`. The rows are
+the browser scenario's phases; the run status was a scenario bug (the new
+silent-microphone phase ran without a silent capture) and does not affect
+these numbers.
+
+| Variant | 5 % loss fps | 400 kbit/s: seconds to layer 1 | 150 kbit/s: seconds to layer 0 / freeze s | Recovery: seconds to top / freeze s |
+| --- | ---: | ---: | ---: | ---: |
+| Control (default) | 15.9 | 11.0 | 3.1 / 0.57 | 11.9 / 3.59 |
+| AdaptiveBweThreshold 0.05,0.005 | 13.6 | 17.9 | 4.1 / 1.46 | 16.7 / 3.79 |
+| BweRapidRecoveryExperiment | 14.7 | 2.8 | 2.9 / 1.50 | 15.1 / 4.84 |
+| BweBackOffFactor 0.92 | 16.0 | 3.1 | 4.9 / 1.01 | 16.8 / 2.00 |
+| All three combined | 14.1 | 1.9 | 4.6 / 0.59 | 7.5 / 6.94 |
+
+**No variant wins on single runs.** The control's own downgrade time ranged
+from 0.8 to 11 s across the day's runs, which is larger than most
+between-variant differences here; the combined variant recovered to the top
+layer fastest (7.5 s) but froze longest doing so (6.9 s), and the adaptive
+threshold made everything slower. Every viewer stayed at layer 1 under
+5 % loss with jitter in every variant, so none of these trials changes the
+half-resolution-under-jitter behaviour. Production keeps mediasoup's default.
+The next step, if this is pursued, is three runs per variant on the same day
+and a decision on which metric matters more, recovery time or freeze time.
+
 ## Adaptive path under an impaired downlink — 2026-09-21
 
 The weekly workflow's impaired job (`web/e2e/impaired-network.cjs` under

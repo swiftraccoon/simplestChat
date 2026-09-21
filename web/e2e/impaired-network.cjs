@@ -61,7 +61,12 @@ const PROFILES = {
   silentAudio: { env: null, seconds: 20, silent: true },
 };
 const silentAudio = process.env.IMPAIRED_SILENT_AUDIO === '1';
-const profiles = (process.env.IMPAIRED_PROFILES || Object.keys(PROFILES).join(','))
+// The silent-microphone phase only makes sense with a silent capture, so it
+// joins the default list only when that is configured.
+const defaultProfiles = Object.keys(PROFILES).filter(
+  (name) => silentAudio || name !== 'silentAudio',
+);
+const profiles = (process.env.IMPAIRED_PROFILES || defaultProfiles.join(','))
   .split(',')
   .map((name) => name.trim())
   .filter(Boolean);
