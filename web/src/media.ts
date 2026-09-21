@@ -124,6 +124,10 @@ export class MediaManager {
   private consumers = new Map<string, mediasoupClient.types.Consumer>();
   // Map producerId → consumerId for cleanup when producer closes
   private producerToConsumer = new Map<string, string>();
+  /** Viewer-chosen quality per consumer; 'auto' leaves only the size cap. */
+  private consumerQualities = new Map<string, RemoteVideoQuality>();
+  /** Highest spatial layer the rendered tile can use, per consumer, or null. */
+  private consumerSizeCaps = new Map<string, number | null>();
   private localStream: MediaStream | null = null;
   // ICE restart timers per transport
   private iceRestartTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -603,10 +607,27 @@ export class MediaManager {
     });
   }
 
-  /** Cap simulcast quality when layers exist. Auto restores the highest available cap. */
+  /** Cap simulcast quality when layers exist. Auto leaves only the tile-size cap. */
   setConsumerQualityByProducer(producerId: string, quality: RemoteVideoQuality): boolean {
     const consumerId = this.producerToConsumer.get(producerId);
-    const consumer = consumerId ? this.consumers.get(consumerId) : undefined;
+    if (!consumerId) return false;
+    this.consumerQualities.set(consumerId, quality);
+    return this.applyConsumerLayerCeiling(consumerId);
+  }
+
+  /**
+   * Cap the spatial layer to what the tile can show (null lifts the cap). The
+   * server still steps below the ceiling when the bandwidth estimate demands.
+   */
+  setConsumerSizeCapByProducer(producerId: string, maxSpatialLayer: number | null): boolean {
+    const consumerId = this.producerToConsumer.get(producerId);
+    if (!consumerId) return false;
+    this.consumerSizeCaps.set(consumerId, maxSpatialLayer);
+    return this.applyConsumerLayerCeiling(consumerId);
+  }
+
+  private applyConsumerLayerCeiling(consumerId: string): boolean {
+    const consumer = this.consumers.get(consumerId);
     if (!consumer || consumer.closed || consumer.kind !== 'video') return false;
     const spatialLayers = Math.max(
       1,
@@ -616,8 +637,14 @@ export class MediaManager {
       }),
     );
     if (spatialLayers <= 1) return false;
-    const requested = quality === 'low' ? 0 : quality === 'medium' ? 1 : spatialLayers - 1;
-    this.setPreferredLayers(consumer.id, Math.min(requested, spatialLayers - 1));
+    // The stricter of the viewer's manual choice and the tile-size cap; the
+    // server still steps below it when the bandwidth estimate demands.
+    const top = spatialLayers - 1;
+    const manual = this.consumerQualities.get(consumerId) ?? 'auto';
+    const chosen = manual === 'low' ? 0 : manual === 'medium' ? 1 : top;
+    const sizeCap = this.consumerSizeCaps.get(consumerId);
+    const cap = sizeCap === null || sizeCap === undefined ? top : Math.max(0, sizeCap);
+    this.setPreferredLayers(consumer.id, Math.min(chosen, cap, top));
     return true;
   }
 

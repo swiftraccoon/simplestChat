@@ -1211,6 +1211,55 @@ test('quality preferences respect available simulcast layers and skip single-lay
   );
 });
 
+test('a tile-size cap bounds the requested layer and the manual choice stays the stricter one', async (t) => {
+  const { state, media, newTrack } = await fixture(t);
+  for (const [id, mode] of [
+    ['camera', 'S3T3'],
+    ['screen', 'L1T1'],
+  ]) {
+    const consumer = new Consumer({
+      id,
+      localId: id,
+      producerId: id,
+      track: newTrack('video'),
+      rtpParameters: { encodings: [{ scalabilityMode: mode }] },
+    });
+    media.consumers.set(id, consumer);
+    media.producerToConsumer.set(id, id);
+  }
+  assert.equal(
+    media.setConsumerSizeCapByProducer('camera', 1),
+    true,
+    'a small tile caps at layer 1',
+  );
+  assert.equal(
+    media.setConsumerQualityByProducer('camera', 'high'),
+    true,
+    'high cannot exceed the cap',
+  );
+  assert.equal(
+    media.setConsumerSizeCapByProducer('camera', null),
+    true,
+    'a large tile lifts the cap',
+  );
+  assert.equal(media.setConsumerQualityByProducer('camera', 'low'), true);
+  assert.equal(
+    media.setConsumerSizeCapByProducer('camera', 2),
+    true,
+    'low stays below a loose cap',
+  );
+  assert.equal(
+    media.setConsumerSizeCapByProducer('screen', 0),
+    false,
+    'single-layer video ignores caps',
+  );
+  assert.equal(media.setConsumerSizeCapByProducer('missing', 0), false);
+  assert.deepEqual(
+    state.sent.map((message) => message.spatialLayer),
+    [1, 1, 2, 0, 0],
+  );
+});
+
 for (const stage of ['capabilities', 'device-load', 'send-transport', 'receive-transport']) {
   test(`closing media during ${stage} setup prevents later transport work`, async (t) => {
     const pending = deferred(),

@@ -54,6 +54,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/room.ts` | Membership, lobby, moderation and room events |
 | `src/media.ts` | Transports, capture, producers and consumers |
 | `src/media-controls.ts` | Private device preview and viewer-local playback controls |
+| `src/layer-cap.ts` | Simulcast layer a remote tile can use at its rendered size, with hysteresis |
 | `src/settings-dialog.ts` | Shared settings tabs and native-dialog dismissal |
 | `src/social-chat.ts`, `chat-store.ts` | Room/PM conversations, composer, bounded replay and preferences |
 | `src/*.css`, `index.html` | Layout, component styles and initial document |

@@ -14,6 +14,7 @@ import { CommunityUI } from './community-ui';
 import { api, ApiError, safeRasterUrl } from './ui';
 import { configureSettingsDialog } from './settings-dialog';
 import { avatarColors } from './avatar-colors';
+import { spatialLayerForRenderedWidth } from './layer-cap';
 import './community.css';
 import type { CreateRoomRequest } from './protocol';
 
@@ -190,6 +191,31 @@ let roomRecovering = false;
 let cameraTogglePending = false;
 let microphoneTogglePending = false;
 const remoteTiles = new Map<string, HTMLDivElement>();
+/** Size observers per camera tile: the layer a tile can show caps what it requests. */
+const tileLayerCaps = new Map<string, { observer: ResizeObserver; layer: number | null }>();
+
+function observeTileSize(tileKey: string, participantId: string, video: HTMLVideoElement): void {
+  if (tileLayerCaps.has(tileKey) || typeof ResizeObserver === 'undefined') return;
+  const state: { observer: ResizeObserver; layer: number | null } = {
+    observer: new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? video.clientWidth;
+      const layer = spatialLayerForRenderedWidth(width, window.devicePixelRatio, state.layer);
+      if (layer === state.layer) return;
+      state.layer = layer;
+      room?.setRemoteVideoSizeCap(participantId, layer);
+    }),
+    layer: null,
+  };
+  state.observer.observe(video);
+  tileLayerCaps.set(tileKey, state);
+}
+
+function stopObservingTileSize(tileKey: string): void {
+  const state = tileLayerCaps.get(tileKey);
+  if (!state) return;
+  state.observer.disconnect();
+  tileLayerCaps.delete(tileKey);
+}
 const lobbyWaiters = new Map<string, string>(); // participantId → displayName
 
 // Active speaker / audio level tracking — avoids querySelectorAll on every event
@@ -2431,6 +2457,7 @@ function renderRemoteTrack(
       tile.insertBefore(video, tile.firstChild);
     }
     video.srcObject = new MediaStream([track]);
+    if (!isScreen) observeTileSize(tileKey, participantId, video);
     const avatar = tile.querySelector('.no-video-avatar') as HTMLElement | null;
     if (avatar) avatar.style.display = 'none';
   } else {
@@ -2457,6 +2484,7 @@ function removeRemoteTrack(
   if (!tile) return;
 
   if (kind === 'video') {
+    stopObservingTileSize(tileKey);
     const video = tile.querySelector('video');
     if (video) {
       video.srcObject = null;
@@ -2474,6 +2502,7 @@ function removeRemoteTrack(
 
   // Remove tile entirely if no active media remains
   if (!tile.querySelector('video') && !tile.querySelector('audio')) {
+    stopObservingTileSize(tileKey);
     tile.remove();
     remoteTiles.delete(tileKey);
     updateVideoGridCount();
@@ -2486,6 +2515,7 @@ function handleParticipantLeft(participantId: string): void {
   const tile = remoteTiles.get(participantId);
   const name = tile?.querySelector('.name-tag')?.textContent;
   if (tile) {
+    stopObservingTileSize(participantId);
     tile.remove();
     remoteTiles.delete(participantId);
   }

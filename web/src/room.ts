@@ -112,6 +112,7 @@ export class RoomClient {
   private cancelJoin: (() => void) | null = null;
   private hiddenParticipants = new Set<string>();
   private videoQualities = new Map<string, RemoteVideoQuality>();
+  private videoSizeCaps = new Map<string, number | null>();
   private socialRequests = new Map<
     string,
     {
@@ -505,6 +506,15 @@ export class RoomClient {
     }
   }
 
+  /** Highest simulcast layer the participant's camera tile can show; null lifts the cap. */
+  setRemoteVideoSizeCap(participantId: string, maxSpatialLayer: number | null): void {
+    this.videoSizeCaps.set(participantId, maxSpatialLayer);
+    for (const [producerId, producer] of this.participants.get(participantId)?.producers ?? []) {
+      if (producer.kind === 'video' && producer.source !== 'screen')
+        this.media?.setConsumerSizeCapByProducer(producerId, maxSpatialLayer);
+    }
+  }
+
   async toggleAudio(): Promise<boolean> {
     return (await this.media?.toggleAudio()) ?? false;
   }
@@ -868,6 +878,9 @@ export class RoomClient {
           media.setConsumerHiddenByProducer(producerId, true);
         const quality = this.videoQualities.get(participantId);
         if (quality && kind === 'video') media.setConsumerQualityByProducer(producerId, quality);
+        const sizeCap = this.videoSizeCaps.get(participantId);
+        if (sizeCap !== undefined && kind === 'video' && source !== 'screen')
+          media.setConsumerSizeCapByProducer(producerId, sizeCap);
         if (!this.pausedProducers.has(producerId)) {
           this.events.onRemoteTrack(
             participantId,
