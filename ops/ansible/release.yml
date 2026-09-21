@@ -261,7 +261,7 @@
           - systemd-run
           - "--unit=simplestchat-release-{{ scpub_release_revision[:12] }}-{{ (scpub_release_preflight.stdout | from_json).runId }}"
           - --property=Type=exec
-          - --property=RuntimeMaxSec=900
+          - --property=RuntimeMaxSec=1800
           - --property=TimeoutStopSec=240
           - --wait
           - /usr/bin/python3
@@ -269,6 +269,8 @@
           - /usr/local/libexec/simplestchat-public/release-public.py
           - deploy
           - "{{ scpub_release_revision }}"
+          - --quiet-seconds
+          - "{{ scpub_release_quiet_seconds | default(600) | int }}"
       changed_when: true
       when:
         - not ansible_check_mode

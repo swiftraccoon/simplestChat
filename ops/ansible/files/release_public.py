@@ -121,11 +121,13 @@ class ReleaseOptions:
 
     action: str
     revision: str
+    quiet_seconds: int = 0
 
 
 class _ArgumentValues(argparse.Namespace):
     action: str = ""
     revision: str = ""
+    quiet_seconds: int = 0
 
 
 class ReleaseError(RuntimeError):
@@ -571,6 +573,79 @@ def ledger(runner: RunnerProtocol, database: str) -> dict[str, str]:
     return result
 
 
+QUIET_POLL_SECONDS = 5.0
+MAX_QUIET_SECONDS = 600
+
+
+def metrics_token() -> str | None:
+    """The app's metrics bearer token from its private environment file, if set."""
+    for line in (CONFIG / "app.env").read_text().splitlines():
+        if line.startswith("METRICS_TOKEN="):
+            token = line.partition("=")[2].strip()
+            return token if token and re.fullmatch(r"[A-Za-z0-9._~-]{32,512}", token) else None
+    return None
+
+
+def active_rooms(runner: RunnerProtocol, curl_config: Path) -> int | None:
+    """`simplestchat_rooms_active` from the local metrics endpoint; None when unavailable."""
+    try:
+        body = runner.run(
+            [
+                "/usr/bin/curl",
+                "--disable",
+                "--noproxy",
+                "*",
+                "--proto",
+                "=http",
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--max-time",
+                "2",
+                "--config",
+                str(curl_config),
+                "http://127.0.0.1:3000/metrics",
+            ],
+            timeout=5,
+        ).decode()
+    except (ReleaseError, UnicodeDecodeError):
+        return None
+    for line in body.splitlines():
+        if line.startswith("simplestchat_rooms_active "):
+            try:
+                return int(line.split()[1])
+            except (IndexError, ValueError):
+                return None
+    return None
+
+
+def quiet(runner: RunnerProtocol, report: JsonObject, seconds: int) -> None:
+    """Wait, bounded, for zero active rooms so the replacement interrupts no call.
+
+    The wait needs the metrics token from app.env; without it, or when the
+    endpoint is unreadable, the release proceeds and records that it could
+    not tell. A deadline reached with rooms still active also proceeds: the
+    operator chose the bound, and the report shows what was interrupted.
+    """
+    report["quietWaitRequestedSeconds"] = seconds
+    token = metrics_token() if seconds > 0 else None
+    if token is None:
+        report["quietWaitSeconds"] = 0
+        report["roomsActiveAtReplacement"] = None
+        return
+    curl_config = runner.attempt / "metrics-curl.config"
+    curl_config.write_text(f'header = "Authorization: Bearer {token}"\n')
+    curl_config.chmod(0o600)
+    started = time.monotonic()
+    deadline = started + seconds
+    rooms = active_rooms(runner, curl_config)
+    while rooms is not None and rooms > 0 and time.monotonic() < deadline:
+        time.sleep(min(QUIET_POLL_SECONDS, max(0.0, deadline - time.monotonic())))
+        rooms = active_rooms(runner, curl_config)
+    report["quietWaitSeconds"] = round(time.monotonic() - started, 3)
+    report["roomsActiveAtReplacement"] = rooms
+
+
 def ready(runner: RunnerProtocol, *, origin: str | None = None, seconds: float = 30) -> None:
     """Require bounded readiness on loopback or trusted public HTTPS."""
     deadline = time.monotonic() + seconds
@@ -666,7 +741,11 @@ def candidate_selection(
 
 
 def deploy(  # noqa: PLR0915 - keep replacement, original-failure propagation, and bounded rollback together.
-    runner: RunnerProtocol, manifest: Manifest, staged: JsonObject, report: JsonObject
+    runner: RunnerProtocol,
+    manifest: Manifest,
+    staged: JsonObject,
+    report: JsonObject,
+    quiet_seconds: int = 0,
 ) -> None:
     """Replace only the app, preserving backup evidence and one bounded rollback."""
     for filename in SELECTION:
@@ -718,6 +797,7 @@ def deploy(  # noqa: PLR0915 - keep replacement, original-failure propagation, a
     origin = string_value(environment["WEBAUTHN_ORIGIN"])
     require(re.fullmatch(r"https://[a-z0-9.-]+", origin), "Unexpected public origin")
     ready(runner, origin=origin, seconds=3)
+    quiet(runner, report, quiet_seconds)
     backup = runner.attempt / "database-before.dump"
     require(shutil.disk_usage(ROOT).free > 1024**3, "Insufficient backup headroom")
     journal(runner, finalized=False, phase="live_backup")
@@ -851,10 +931,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument("action", choices=("stage", "deploy"))
     _ = parser.add_argument("revision")
+    _ = parser.add_argument(
+        "--quiet-seconds",
+        type=int,
+        default=0,
+        help="wait up to this long for zero active rooms before replacing the app",
+    )
     raw = parser.parse_args(namespace=_ArgumentValues())
-    arguments = ReleaseOptions(action=raw.action, revision=raw.revision)
+    arguments = ReleaseOptions(
+        action=raw.action, revision=raw.revision, quiet_seconds=raw.quiet_seconds
+    )
     require(os.geteuid() == 0, "Run as root on the prepared public host")
     require(re.fullmatch(r"[a-f0-9]{40}", arguments.revision), "Use the exact release commit")
+    require(
+        0 <= arguments.quiet_seconds <= MAX_QUIET_SECONDS,
+        f"--quiet-seconds must be between 0 and {MAX_QUIET_SECONDS}",
+    )
     _ = os.umask(0o077)
 
     def interrupted(_signum: int, _frame: FrameType | None) -> NoReturn:
@@ -885,7 +977,7 @@ def main() -> None:
             staged = stage(runner, directory, manifest)
             if arguments.action == "deploy":
                 report["phase"] = "preflight"
-                deploy(runner, manifest, staged, report)
+                deploy(runner, manifest, staged, report, quiet_seconds=arguments.quiet_seconds)
             else:
                 report["phase"] = "complete"
             report["passed"] = True

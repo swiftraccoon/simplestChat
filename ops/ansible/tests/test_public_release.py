@@ -6,6 +6,7 @@ render comparison, journal writes, readiness decisions and rollback are real.
 
 import hashlib
 import io
+import itertools
 import json
 import os
 import re
@@ -117,6 +118,9 @@ class FixtureRunner:
         self.config_hash_mismatch: str | None = None
         self.candidate_wrong_image: bool = False
         self.candidate_unready: bool = False
+        # Rooms reported by successive metrics polls; the last value repeats.
+        # None models an unreadable endpoint.
+        self.metrics_rooms: list[int] | None = [0]
         self.rollback_unready: bool = False
         self.validation_exit: bytes = b"0"
         self.validation_images: dict[str, str] = {}
@@ -166,6 +170,12 @@ class FixtureRunner:
     def run(self, args: Sequence[str], **kwargs: Unpack[public.CommandOptions]) -> bytes:
         """Model only readiness requests and their selected failure conditions."""
         self.calls.append(("run", tuple(args), dict(kwargs)))
+        if args[0] == "/usr/bin/curl" and args[-1].endswith("/metrics"):
+            if self.metrics_rooms is None:
+                message = "fixture metrics unavailable"
+                raise public.ReleaseError(message)
+            rooms = self.metrics_rooms.pop(0) if len(self.metrics_rooms) > 1 else self.metrics_rooms[0]
+            return f"simplestchat_connections_active 3\nsimplestchat_rooms_active {rooms}\n".encode()
         if args[0] != "/usr/bin/curl" or not args[-1].endswith("/ready"):
             message = f"Unexpected external command: {args}"
             raise AssertionError(message)
@@ -576,6 +586,7 @@ class PublicReleaseTests(unittest.TestCase):
         _ = (self.config / "compose.public.yml").write_text(compose)
         _ = (self.config / "app.env").write_text(
             f"SIMPLESTCHAT_IMAGE={OLD_IMAGE}\nRUN_MIGRATIONS=false\n"
+            "METRICS_TOKEN=fixture-metrics-token-with-at-least-32-bytes\n"
         )
         self.before = {name: (self.config / name).read_bytes() for name in public.SELECTION}
         self.attempt = self.root / "direct-attempt"
@@ -813,6 +824,80 @@ class PublicReleaseTests(unittest.TestCase):
                 self.assertRaisesRegex(public.ReleaseError, "readiness deadline exceeded"),
             ):
                 public.ready(self.runner, seconds=0)
+
+    def test_replacement_waits_for_rooms_to_empty_and_reports_it(self) -> None:
+        """With active rooms the app is replaced only after they empty, within the bound."""
+        _ = self.stage()
+        self.runner.metrics_rooms = [2, 1, 0]
+        # The harness clock jumps 100 s per call; polling needs a slow one.
+        with (
+            patch.object(public.time, "sleep") as sleep,
+            patch.object(public.time, "monotonic", side_effect=itertools.count(0.0, 0.5)),
+        ):
+            self.execute_quiet(30)
+        report = self.report()
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["roomsActiveAtReplacement"], 0)
+        self.assertEqual(report["quietWaitRequestedSeconds"], 30)
+        self.assertEqual(sleep.call_count, 2)
+        polls = [call for call in self.runner.calls if call[0] == "run" and call[1][-1].endswith("/metrics")]
+        self.assertEqual(len(polls), 3)
+        stop = next(index for index, call in enumerate(self.runner.calls) if call[0] == "compose" and call[1][0] == "stop")
+        last_poll = max(index for index, call in enumerate(self.runner.calls) if call[0] == "run" and call[1][-1].endswith("/metrics"))
+        self.assertLess(last_poll, stop, "polling finishes before the app is stopped")
+        self.assertEqual(self.runner.app_image, NEW_IMAGE)
+        self.assertTrue(all("Bearer" not in " ".join(call[1]) for call in self.runner.calls), "the token never appears in a command line")
+
+    def test_replacement_proceeds_at_the_quiet_deadline_and_reports_active_rooms(self) -> None:
+        """The bound is the operator's: rooms still active at the deadline are recorded, not a failure."""
+        _ = self.stage()
+        self.runner.metrics_rooms = [3]
+        clock = iter([0.0, 0.0, 0.0, 1.0, 1.5, 3.0, 3.5, 100.0, 100.0, 100.0, 100.0, 100.0])
+        with (
+            patch.object(public.time, "sleep"),
+            patch.object(public.time, "monotonic", side_effect=lambda: next(clock, 200.0)),
+        ):
+            self.execute_quiet(2)
+        report = self.report()
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["roomsActiveAtReplacement"], 3)
+        self.assertEqual(self.runner.app_image, NEW_IMAGE)
+
+    def test_replacement_proceeds_when_metrics_are_unavailable_or_no_token_is_set(self) -> None:
+        """Missing observability never blocks a release; the report says it could not tell."""
+        _ = self.stage()
+        self.runner.metrics_rooms = None
+        with patch.object(public.time, "sleep") as sleep:
+            self.execute_quiet(30)
+        report = self.report()
+        self.assertTrue(report["passed"])
+        self.assertIsNone(report["roomsActiveAtReplacement"])
+        self.assertEqual(sleep.call_count, 0)
+        self.assertEqual(self.runner.app_image, NEW_IMAGE)
+
+    def test_quiet_wait_without_a_metrics_token_is_skipped(self) -> None:
+        """An environment without METRICS_TOKEN cannot poll and records that."""
+        _ = self.stage()
+        environment = (self.config / "app.env").read_text()
+        (self.config / "app.env").write_text(
+            "\n".join(line for line in environment.splitlines() if not line.startswith("METRICS_TOKEN=")) + "\n"
+        )
+        self.runner.metrics_rooms = [5]
+        self.execute_quiet(30)
+        report = self.report()
+        self.assertTrue(report["passed"])
+        self.assertIsNone(report["roomsActiveAtReplacement"])
+        self.assertEqual(report["quietWaitSeconds"], 0)
+        polls = [call for call in self.runner.calls if call[0] == "run" and call[1][-1].endswith("/metrics")]
+        self.assertEqual(polls, [])
+
+    def execute_quiet(self, seconds: int) -> None:
+        """Run a deployment with a bounded wait for empty rooms."""
+        with (
+            patch.object(sys, "argv", ["release-public.py", "deploy", REVISION, "--quiet-seconds", str(seconds)]),
+            redirect_stdout(io.StringIO()),
+        ):
+            public.main()
 
     def assert_failed_rollback(self) -> None:
         """Require successful recovery to retain the original failed release outcome."""

@@ -299,6 +299,7 @@ class DeployTests(unittest.TestCase):
                 "scpub_release_ci_run": 789,
                 "scpub_release_prepared": True,
                 "scpub_release_deploy": True,
+                "scpub_release_quiet_seconds": 600,
             },
         )
         self.assertEqual(configuration["timeout"], 2400)

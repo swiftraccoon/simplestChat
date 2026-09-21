@@ -259,23 +259,25 @@ class ReleasePlaybookTests(unittest.TestCase):
         )
         for action, task, runtime, grace in (
             ("stage", stage, 600, 60),
-            ("deploy", deploy, 900, 240),
+            # The deploy bound covers the quiet wait for empty rooms (at most 600 s)
+            # plus the replacement itself.
+            ("deploy", deploy, 1800, 240),
         ):
             argv = strings(task, "ansible.builtin.command", "argv")
             self.assertEqual(argv[0], "systemd-run")
             self.assertIn("--wait", argv)
             self.assertIn(f"--property=RuntimeMaxSec={runtime}", argv)
             self.assertIn(f"--property=TimeoutStopSec={grace}", argv)
-            self.assertEqual(
-                argv[-5:],
-                [
-                    "/usr/bin/python3",
-                    "-B",
-                    "/usr/local/libexec/simplestchat-public/release-public.py",
-                    action,
-                    "{{ scpub_release_revision }}",
-                ],
-            )
+            tail = [
+                "/usr/bin/python3",
+                "-B",
+                "/usr/local/libexec/simplestchat-public/release-public.py",
+                action,
+                "{{ scpub_release_revision }}",
+            ]
+            if action == "deploy":
+                tail += ["--quiet-seconds", "{{ scpub_release_quiet_seconds | default(600) | int }}"]
+            self.assertEqual(argv[-len(tail) :], tail)
         self.assertEqual(self.play["serial"], 1)
         for task in (stage, deploy):
             self.assertEqual(at(task, "vars", "ansible_python_interpreter"), "/usr/bin/python3")

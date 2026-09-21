@@ -51,6 +51,7 @@ class DeployOptions(argparse.Namespace):
     limit: str | None = None
     room: str = "lobby"
     wait_seconds: int = 3600
+    quiet_seconds: int = 600
     install_helpers: bool = False
     ansible_playbook: str | None = None
 
@@ -71,6 +72,12 @@ def options(argv: list[str] | None = None) -> DeployOptions:
     _ = parser.add_argument("--limit", help="Exact inventory hostname; patterns are not supported")
     _ = parser.add_argument("--room", default="lobby")
     _ = parser.add_argument("--wait-seconds", type=int, default=3600)
+    _ = parser.add_argument(
+        "--quiet-seconds",
+        type=int,
+        default=600,
+        help="wait up to this long for zero active rooms before the app is replaced (0-600)",
+    )
     _ = parser.add_argument(
         "--install-helpers",
         action="store_true",
@@ -95,6 +102,7 @@ def options(argv: list[str] | None = None) -> DeployOptions:
     )
     require(re.fullmatch(r"[A-Za-z0-9_-]{1,128}", args.room), "invalid_room")
     require(0 <= args.wait_seconds <= MAX_CI_WAIT_SECONDS, "invalid_wait_seconds")
+    require(0 <= args.quiet_seconds <= 600, "invalid_quiet_seconds")
     origin = urlsplit(args.origin)
     require(
         origin.scheme == "https"
@@ -353,6 +361,7 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:
             "scpub_release_ci_run": envelope["ciRunId"],
             "scpub_release_prepared": not args.install_helpers,
             "scpub_release_deploy": True,
+            "scpub_release_quiet_seconds": args.quiet_seconds,
         }
         require(checkout_identity(inspector, root, args.repository) == revision, "checkout_changed")
         report.update(phase="deploy", remoteOutcome="inspect_if_interrupted")
