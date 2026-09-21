@@ -30,7 +30,10 @@ settle it. The floor stays at 100 kbit/s. Its cost was the worker's
 estimate sat at 30 kbit/s (941 lines in the 100-client single-room run
 above); the vendored worker now bounds its start bitrate by the configured
 floor (`vendor/README.md`), which removes the line without changing
-behaviour.
+behaviour: the same run with the patched worker
+(`results/capacity-100c-1room-2cpu.20260921T064121Z`) logged 0 lines at
+recv-ready p99 426 ms and worker 0 at 0.354 of a core, against 418–422 ms
+and 0.309–0.339 in the two runs before it.
 
 ## One room on one worker, and the per-worker gauges — 2026-09-21
 
