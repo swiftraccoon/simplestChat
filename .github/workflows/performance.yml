@@ -22,6 +22,15 @@ on:
         default: '1'
         type: choice
         options: ['1', '2']
+      only:
+        description: Run one job instead of all three
+        default: all
+        type: choice
+        options: [all, compare, soak, impaired]
+      field_trials:
+        description: LIBWEBRTC_FIELD_TRIALS for the impaired job's server (empty keeps mediasoup's default)
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -29,6 +38,7 @@ permissions:
 jobs:
   compare:
     name: Baseline versus candidate on one hosted runner
+    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'compare' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
@@ -114,11 +124,13 @@ jobs:
 
   impaired:
     name: Adaptive path under an impaired downlink
+    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'impaired' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
       OPENSSL_STATIC: "1"
+      LIBWEBRTC_FIELD_TRIALS: ${{ inputs.field_trials }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -160,6 +172,13 @@ jobs:
       # The generator's exact-delivery gates describe a lossless loopback; under
       # impairment its reports are evidence and the step passes when the run
       # completes and the server exits cleanly.
+      # A silent microphone with Opus DTX negotiated must send a few packets a
+      # second, not fifty; the viewer's audio packet rate proves it end to end.
+      - name: Silent microphone sends almost nothing with DTX
+        env:
+          IMPAIRED_SILENT_AUDIO: "1"
+        run: IMPAIRED_PROFILES=baseline,silentAudio IMPAIR_SCRIPT=none build/impaired-check.sh "${RUNNER_TEMP}/impaired/dtx"
+
       - name: Generator under five percent loss with jitter, both directions
         run: build/impaired-generator.sh "${RUNNER_TEMP}/impaired/generator"
 
@@ -174,6 +193,7 @@ jobs:
 
   soak:
     name: Session soak with a database restart
+    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'soak' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     services:

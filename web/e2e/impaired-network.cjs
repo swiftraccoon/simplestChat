@@ -11,7 +11,9 @@
  * "none" to exercise the mechanics without impairment), IMPAIR_UDP_PORT and
  * IMPAIR_WORKERS (the server's media ports), IMPAIRED_PROFILES (comma list of
  * baseline, lossy, constrained, severe, recovery, lossyJoin; default all),
- * IMPAIRED_ROOM (join this existing room instead of a new one, for canaries).
+ * IMPAIRED_ROOM (join this existing room instead of a new one, for canaries),
+ * IMPAIRED_SILENT_AUDIO=1 (capture silence instead of the fake tone, for the
+ * silentAudio profile).
  */
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
@@ -54,7 +56,11 @@ const PROFILES = {
     seconds: 20,
     join: true,
   },
+  // With IMPAIRED_SILENT_AUDIO=1 the publisher's microphone is a file of
+  // silence, so Opus DTX must reduce its packet rate to a few per second.
+  silentAudio: { env: null, seconds: 20, silent: true },
 };
+const silentAudio = process.env.IMPAIRED_SILENT_AUDIO === '1';
 const profiles = (process.env.IMPAIRED_PROFILES || Object.keys(PROFILES).join(','))
   .split(',')
   .map((name) => name.trim())
@@ -209,6 +215,27 @@ async function samplePublisher(page) {
   });
 }
 
+/** A mono 16-bit PCM WAV of digital silence, looped by Chromium's fake capture. */
+function silentWav(sampleRate, seconds) {
+  const frames = sampleRate * seconds;
+  const data = Buffer.alloc(frames * 2);
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + data.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(data.length, 40);
+  return Buffer.concat([header, data]);
+}
+
 function delta(before, after) {
   const seconds = (after.sampledAtMs - before.sampledAtMs) / 1000;
   return {
@@ -237,12 +264,23 @@ function delta(before, after) {
         ? null
         : after.totalFreezesDuration - before.totalFreezesDuration,
     audioPacketsLost: after.audioPacketsLost - before.audioPacketsLost,
+    audioPacketsPerSecond: (after.audioPacketsReceived - before.audioPacketsReceived) / seconds,
   };
 }
 
 async function main() {
   const options = browserOptions(process.env.E2E_BROWSER);
   const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+  if (silentAudio) {
+    if (options.name !== 'chromium')
+      throw new Error('IMPAIRED_SILENT_AUDIO needs Chromium fake capture from a file');
+    const wav = path.join(artifacts, 'silence.wav');
+    fs.writeFileSync(wav, silentWav(48000, 5));
+    options.launchOptions.args = [
+      ...(options.launchOptions.args || []),
+      `--use-file-for-fake-audio-capture=${wav}`,
+    ];
+  }
   const browser = await playwright[options.name].launch(options.launchOptions);
   report.browser = { name: options.name, version: browser.version() };
   const started = performance.now();
@@ -471,6 +509,14 @@ async function main() {
             .close()
             .catch(() => {});
       }
+      if (profile.silent) {
+        ok =
+          check(
+            'silent microphone with DTX sends under ten packets a second',
+            silentAudio && change.audioPacketsPerSecond < 10,
+            { silentAudio, audioPacketsPerSecond: change.audioPacketsPerSecond },
+          ) && ok;
+      }
       if (name === 'recovery') {
         ok =
           check(
@@ -493,7 +539,7 @@ async function main() {
       phase.passed = ok;
       save();
       console.log(
-        `${ok ? 'PASS' : 'FAIL'} ${name}: fps=${change.framesPerSecond.toFixed(1)} lost=${change.packetsLost} nack=${change.nackCount} pliSent=${change.pliCount} publisherKeyframes=${phase.publisher.keyFramesEncoded} publisherPli=${phase.publisher.pliReceived} width=${phase.minFrameWidth}-${phase.maxFrameWidth} layers=${layerEvents.map((event) => event.spatial).join(',') || '-'}`,
+        `${ok ? 'PASS' : 'FAIL'} ${name}: fps=${change.framesPerSecond.toFixed(1)} audioPps=${change.audioPacketsPerSecond.toFixed(1)} lost=${change.packetsLost} nack=${change.nackCount} pliSent=${change.pliCount} publisherKeyframes=${phase.publisher.keyFramesEncoded} publisherPli=${phase.publisher.pliReceived} width=${phase.minFrameWidth}-${phase.maxFrameWidth} layers=${layerEvents.map((event) => event.spatial).join(',') || '-'}`,
       );
     }
     report.completed = true;
