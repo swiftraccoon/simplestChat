@@ -10,7 +10,8 @@
  * E2E_ARTIFACTS, E2E_BROWSER (chromium), IMPAIR_SCRIPT (build/impair.sh, or
  * "none" to exercise the mechanics without impairment), IMPAIR_UDP_PORT and
  * IMPAIR_WORKERS (the server's media ports), IMPAIRED_PROFILES (comma list of
- * baseline, lossy, constrained, severe, recovery; default all).
+ * baseline, lossy, constrained, severe, recovery, lossyJoin; default all),
+ * IMPAIRED_ROOM (join this existing room instead of a new one, for canaries).
  */
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
@@ -27,7 +28,9 @@ const impairmentEnabled = impairScript !== 'none';
 const artifacts =
   process.env.E2E_ARTIFACTS || fs.mkdtempSync(path.join(os.tmpdir(), 'simplestchat-impaired.'));
 fs.mkdirSync(artifacts, { recursive: true, mode: 0o700 });
-const runId = `impair-${Date.now().toString(36)}`;
+// A fixed room (IMPAIRED_ROOM) lets the scenario run as a canary against a
+// deployment whose ad-hoc rooms are closed; otherwise each run owns a new room.
+const runId = process.env.IMPAIRED_ROOM || `impair-${Date.now().toString(36)}`;
 
 /** Downlink profiles; assertions name the production change that would break them. */
 const PROFILES = {
