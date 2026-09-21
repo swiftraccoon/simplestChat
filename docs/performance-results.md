@@ -1,5 +1,40 @@
 # Performance results
 
+## Adaptive path under an impaired downlink — 2026-09-21
+
+The weekly workflow's impaired job (`web/e2e/impaired-network.cjs` under
+netem on a hosted Linux runner) is the measurement behind the server's
+layer-selection decision. A publisher sends three simulcast layers from a
+fake 720p camera; the viewer's downlink is degraded phase by phase and its
+native inbound statistics and the client's layer-change log are sampled once
+a second. Three runs bracket one change: the server's fixed bitrate tiers
+that cap each consumer's preferred layer, which looked redundant next to
+mediasoup's own bitrate-driven selection and were removed in `cecc0d8`, then
+restored in `beab4bd` after the measurement below. The client-side tile-size
+cap (`e468c84`) is present in the last two runs.
+
+| Phase | Tiers on, before (35541993704) | Tiers removed (35551539603) | Tiers restored (35552045902) |
+| --- | --- | --- | --- |
+| 5 % loss, 50 ± 10 ms: decoded fps | 18.9 | 9.2 | 16.0 |
+| 400 kbit/s cap: seconds to layer 1 | 0.8 | 19.5 | 4.8 |
+| 150 kbit/s cap: seconds to layer 0 | 3.0 | 30.9 | 2.9 |
+| 150 kbit/s cap: freezes (count / seconds) | 2 / 0.86 | 2 / 4.92 | 2 / 1.06 |
+| Recovery: seconds to the top layer | 15.4 | 16.7 | 17.7 |
+| Join under 5 % bidirectional loss: seconds to video | 2.3 | 2.0 | 2.1 |
+
+**mediasoup alone steps layers down far more slowly than the tiers do**: it
+lowers a consumer's layer only as the estimate falls below each layer's
+measured bitrate, while the tiers cut the ceiling within seconds of the
+estimate dropping under 600 or 200 kbit/s. Decode rate under loss halved
+without them. The tiers therefore stay; the thresholds, not their existence,
+are the tuning surface, and every change must be proved on this job. Recovery
+to the top layer (15–18 s in all three runs, dominated by the congestion
+controller's ramp and a keyframe per step) and the time to first video for a
+joiner under bidirectional loss (2–2.3 s) did not depend on the tiers. Each
+run's `impaired-network-results.json` is retained as that run's
+`impaired-network-<run id>` artifact for 30 days; single runs, so read the
+downgrade times as an order of magnitude, not a tenth of a second.
+
 ## Production shape: 2 CPUs, 2 GiB, two workers — 2026-09-20
 
 Production runs the server container with a 2.0-CPU quota, a 2 GiB memory
