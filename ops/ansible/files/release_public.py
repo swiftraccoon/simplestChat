@@ -578,7 +578,7 @@ MAX_QUIET_SECONDS = 600
 
 
 def metrics_token() -> str | None:
-    """The app's metrics bearer token from its private environment file, if set."""
+    """Return the app's metrics bearer token from its private environment file, if set."""
     for line in (CONFIG / "app.env").read_text().splitlines():
         if line.startswith("METRICS_TOKEN="):
             token = line.partition("=")[2].strip()

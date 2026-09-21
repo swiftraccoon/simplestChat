@@ -276,7 +276,10 @@ class ReleasePlaybookTests(unittest.TestCase):
                 "{{ scpub_release_revision }}",
             ]
             if action == "deploy":
-                tail += ["--quiet-seconds", "{{ scpub_release_quiet_seconds | default(600) | int }}"]
+                tail += [
+                    "--quiet-seconds",
+                    "{{ scpub_release_quiet_seconds | default(600) | int }}",
+                ]
             self.assertEqual(argv[-len(tail) :], tail)
         self.assertEqual(self.play["serial"], 1)
         for task in (stage, deploy):

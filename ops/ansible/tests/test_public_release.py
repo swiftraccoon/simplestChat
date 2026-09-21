@@ -174,8 +174,12 @@ class FixtureRunner:
             if self.metrics_rooms is None:
                 message = "fixture metrics unavailable"
                 raise public.ReleaseError(message)
-            rooms = self.metrics_rooms.pop(0) if len(self.metrics_rooms) > 1 else self.metrics_rooms[0]
-            return f"simplestchat_connections_active 3\nsimplestchat_rooms_active {rooms}\n".encode()
+            rooms = (
+                self.metrics_rooms.pop(0) if len(self.metrics_rooms) > 1 else self.metrics_rooms[0]
+            )
+            return (
+                f"simplestchat_connections_active 3\nsimplestchat_rooms_active {rooms}\n".encode()
+            )
         if args[0] != "/usr/bin/curl" or not args[-1].endswith("/ready"):
             message = f"Unexpected external command: {args}"
             raise AssertionError(message)
@@ -840,16 +844,31 @@ class PublicReleaseTests(unittest.TestCase):
         self.assertEqual(report["roomsActiveAtReplacement"], 0)
         self.assertEqual(report["quietWaitRequestedSeconds"], 30)
         self.assertEqual(sleep.call_count, 2)
-        polls = [call for call in self.runner.calls if call[0] == "run" and call[1][-1].endswith("/metrics")]
+        polls = [
+            call
+            for call in self.runner.calls
+            if call[0] == "run" and call[1][-1].endswith("/metrics")
+        ]
         self.assertEqual(len(polls), 3)
-        stop = next(index for index, call in enumerate(self.runner.calls) if call[0] == "compose" and call[1][0] == "stop")
-        last_poll = max(index for index, call in enumerate(self.runner.calls) if call[0] == "run" and call[1][-1].endswith("/metrics"))
+        stop = next(
+            index
+            for index, call in enumerate(self.runner.calls)
+            if call[0] == "compose" and call[1][0] == "stop"
+        )
+        last_poll = max(
+            index
+            for index, call in enumerate(self.runner.calls)
+            if call[0] == "run" and call[1][-1].endswith("/metrics")
+        )
         self.assertLess(last_poll, stop, "polling finishes before the app is stopped")
         self.assertEqual(self.runner.app_image, NEW_IMAGE)
-        self.assertTrue(all("Bearer" not in " ".join(call[1]) for call in self.runner.calls), "the token never appears in a command line")
+        self.assertTrue(
+            all("Bearer" not in " ".join(call[1]) for call in self.runner.calls),
+            "the token never appears in a command line",
+        )
 
     def test_replacement_proceeds_at_the_quiet_deadline_and_reports_active_rooms(self) -> None:
-        """The bound is the operator's: rooms still active at the deadline are recorded, not a failure."""
+        """Rooms still active at the deadline are recorded, not treated as a failure."""
         _ = self.stage()
         self.runner.metrics_rooms = [3]
         clock = iter([0.0, 0.0, 0.0, 1.0, 1.5, 3.0, 3.5, 100.0, 100.0, 100.0, 100.0, 100.0])
@@ -880,7 +899,10 @@ class PublicReleaseTests(unittest.TestCase):
         _ = self.stage()
         environment = (self.config / "app.env").read_text()
         (self.config / "app.env").write_text(
-            "\n".join(line for line in environment.splitlines() if not line.startswith("METRICS_TOKEN=")) + "\n"
+            "\n".join(
+                line for line in environment.splitlines() if not line.startswith("METRICS_TOKEN=")
+            )
+            + "\n"
         )
         self.runner.metrics_rooms = [5]
         self.execute_quiet(30)
@@ -888,13 +910,21 @@ class PublicReleaseTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertIsNone(report["roomsActiveAtReplacement"])
         self.assertEqual(report["quietWaitSeconds"], 0)
-        polls = [call for call in self.runner.calls if call[0] == "run" and call[1][-1].endswith("/metrics")]
+        polls = [
+            call
+            for call in self.runner.calls
+            if call[0] == "run" and call[1][-1].endswith("/metrics")
+        ]
         self.assertEqual(polls, [])
 
     def execute_quiet(self, seconds: int) -> None:
         """Run a deployment with a bounded wait for empty rooms."""
         with (
-            patch.object(sys, "argv", ["release-public.py", "deploy", REVISION, "--quiet-seconds", str(seconds)]),
+            patch.object(
+                sys,
+                "argv",
+                ["release-public.py", "deploy", REVISION, "--quiet-seconds", str(seconds)],
+            ),
             redirect_stdout(io.StringIO()),
         ):
             public.main()

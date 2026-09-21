@@ -29,6 +29,7 @@ from release_json import JsonObject, JsonValue, array_value, integer_value
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_CI_WAIT_SECONDS = 7200
+MAX_QUIET_SECONDS = 600
 
 
 class DeployError(Exception):
@@ -75,7 +76,7 @@ def options(argv: list[str] | None = None) -> DeployOptions:
     _ = parser.add_argument(
         "--quiet-seconds",
         type=int,
-        default=600,
+        default=MAX_QUIET_SECONDS,
         help="wait up to this long for zero active rooms before the app is replaced (0-600)",
     )
     _ = parser.add_argument(
@@ -102,7 +103,7 @@ def options(argv: list[str] | None = None) -> DeployOptions:
     )
     require(re.fullmatch(r"[A-Za-z0-9_-]{1,128}", args.room), "invalid_room")
     require(0 <= args.wait_seconds <= MAX_CI_WAIT_SECONDS, "invalid_wait_seconds")
-    require(0 <= args.quiet_seconds <= 600, "invalid_quiet_seconds")
+    require(0 <= args.quiet_seconds <= MAX_QUIET_SECONDS, "invalid_quiet_seconds")
     origin = urlsplit(args.origin)
     require(
         origin.scheme == "https"
