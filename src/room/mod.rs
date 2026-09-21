@@ -3526,25 +3526,6 @@ impl RoomManager {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
-    /// Gets consumer IDs for a participant (no IPC — in-memory only)
-    pub async fn get_consumer_ids(
-        &self,
-        room_id: &str,
-        participant_id: &str,
-        expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<Vec<String>> {
-        let media_session_id = self
-            .media_session_for_sender(room_id, participant_id, expected_sender)
-            .await?;
-        let media_participant_id =
-            Self::media_participant_id(room_id, participant_id, media_session_id);
-        self.media_server
-            .transport_manager()
-            .get_consumer_ids(&media_participant_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
-    }
-
     /// Restarts ICE on a transport, returning new ICE parameters
     pub async fn restart_ice(
         &self,
