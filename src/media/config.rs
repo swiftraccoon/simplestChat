@@ -48,6 +48,9 @@ impl MediaConfig {
                 anyhow::bail!("MEDIA_WORKERS must be valid UTF-8");
             }
         }
+        if let Ok(value) = std::env::var("LIBWEBRTC_FIELD_TRIALS") {
+            config.worker_config.libwebrtc_field_trials = Some(parse_field_trials(&value)?);
+        }
 
         match std::env::var("WEBRTC_SERVER_PORT_BASE") {
             Ok(value) => config.webrtc_server_port_base = parse_webrtc_port_base(&value)?,
@@ -77,6 +80,26 @@ impl MediaConfig {
             worker_index,
         )
     }
+}
+
+/// A libwebrtc field-trial string: `Name/Value/` pairs, letters, digits and
+/// a few punctuation characters, so a typo cannot smuggle anything else into
+/// the worker's configuration.
+fn parse_field_trials(value: &str) -> anyhow::Result<String> {
+    let value = value.trim();
+    if value.is_empty() || value.len() > 2048 {
+        anyhow::bail!("LIBWEBRTC_FIELD_TRIALS must be 1-2048 characters");
+    }
+    if !value.ends_with('/') || value.split('/').filter(|part| !part.is_empty()).count() % 2 != 0 {
+        anyhow::bail!("LIBWEBRTC_FIELD_TRIALS must be Name/Value/ pairs ending in a slash");
+    }
+    if !value
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '-' | '_' | ':' | ',' | '.'))
+    {
+        anyhow::bail!("LIBWEBRTC_FIELD_TRIALS may contain only letters, digits and / - _ : , .");
+    }
+    Ok(value.to_string())
 }
 
 fn parse_webrtc_port_base(value: &str) -> anyhow::Result<u16> {
@@ -133,6 +156,9 @@ pub struct WorkerConfig {
     pub num_workers: usize,
     pub log_level: WorkerLogLevel,
     pub log_tags: Vec<WorkerLogTag>,
+    /// libwebrtc field trials for the worker's congestion controller; `None`
+    /// keeps mediasoup's default (`WebRTC-Bwe-AlrLimitedBackoff/Enabled/`).
+    pub libwebrtc_field_trials: Option<String>,
     pub rtc_min_port: u16,
     pub rtc_max_port: u16,
     pub dtls_certificate_file: Option<String>,
@@ -144,6 +170,7 @@ impl Default for WorkerConfig {
         Self {
             num_workers: num_cpus::get().clamp(1, MAX_MEDIA_WORKERS),
             log_level: WorkerLogLevel::Warn,
+            libwebrtc_field_trials: None,
             log_tags: vec![
                 WorkerLogTag::Info,
                 WorkerLogTag::Ice,
@@ -166,6 +193,9 @@ impl WorkerConfig {
 
         settings.log_level = self.log_level;
         settings.log_tags = self.log_tags.clone();
+        if let Some(trials) = &self.libwebrtc_field_trials {
+            settings.libwebrtc_field_trials = Some(trials.clone());
+        }
         settings.rtc_port_range = self.rtc_min_port..=self.rtc_max_port;
 
         if let (Some(cert), Some(key)) = (&self.dtls_certificate_file, &self.dtls_private_key_file)
@@ -385,6 +415,17 @@ mod tests {
 
     #[test]
     fn media_port_base_is_explicit_and_bounded() {
+        assert_eq!(
+            parse_field_trials(
+                " WebRTC-Bwe-AlrLimitedBackoff/Enabled/WebRTC-BweBackOffFactor/Enabled-0.92/ "
+            )
+            .unwrap(),
+            "WebRTC-Bwe-AlrLimitedBackoff/Enabled/WebRTC-BweBackOffFactor/Enabled-0.92/"
+        );
+        assert!(parse_field_trials("WebRTC-Bwe-AlrLimitedBackoff/Enabled").is_err());
+        assert!(parse_field_trials("WebRTC-Bwe-AlrLimitedBackoff/").is_err());
+        assert!(parse_field_trials("WebRTC-X/Enabled; rm -rf/").is_err());
+        assert!(parse_field_trials("").is_err());
         assert_eq!(parse_webrtc_port_base("41000").unwrap(), 41000);
         assert!(parse_webrtc_port_base("0").is_err());
         assert!(parse_webrtc_port_base("65536").is_err());

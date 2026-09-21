@@ -37,6 +37,7 @@
 | `MEDIA_DIAGNOSTICS_ENABLED` | `false` | Enable authenticated, on-demand native media snapshots; requires `METRICS_TOKEN`. See [collection bounds and interpretation](diagnostics.md#server-forwarding-snapshots) |
 | `TURN_URLS` | (none) | Comma-separated TURN server URLs |
 | `TURN_SECRET` | (none) | TURN shared secret of at least 32 bytes; required when `TURN_URLS` is set |
+| `LIBWEBRTC_FIELD_TRIALS` | (mediasoup default) | libwebrtc field trials for the media workers' congestion controller as `Name/Value/` pairs, replacing mediasoup's default `WebRTC-Bwe-AlrLimitedBackoff/Enabled/`; the weekly impaired-network job is the way to evaluate a candidate before setting it |
 | `CPU_SATURATION_DISABLED` | `false` | Disable the CPU saturation monitor. When enabled it reads the process cgroup's `cpu.stat` throttling counters and `cpu.pressure` every 2 s; while saturated, `/ready` returns 503 and fresh room joins are refused with a retry message (existing calls, reconnects and lobby admissions continue) |
 | `CPU_SATURATION_THROTTLED_FRACTION` | `0.5` | Share of cgroup enforcement periods throttled over the last 10 s that counts as saturated (0.05–1); saturation clears once the share falls below half of this |
 | `CPU_SATURATION_PRESSURE_AVG10` | `50` | cgroup CPU pressure `some avg10` percentage that counts as saturated (5–100); clears below half of this |

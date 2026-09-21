@@ -17,6 +17,7 @@ udp_port=41100
 mkdir -p "${results}"
 test -x "${binary}" || { echo "Server binary ${binary} is missing" >&2; exit 2; }
 env -i PATH="${PATH}" HOME="${HOME}" TMPDIR="${TMPDIR:-/tmp}" \
+  ${LIBWEBRTC_FIELD_TRIALS:+LIBWEBRTC_FIELD_TRIALS="${LIBWEBRTC_FIELD_TRIALS}"} \
   BIND_ADDR=127.0.0.1 PORT="${port}" ANNOUNCE_IP=127.0.0.1 MEDIA_WORKERS=1 \
   WEBRTC_SERVER_PORT_BASE="${udp_port}" ALLOW_AD_HOC_ROOMS=true \
   ALLOWED_ORIGINS="http://127.0.0.1:${port}" REGISTRATION_ENABLED=false \
