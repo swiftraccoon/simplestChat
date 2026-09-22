@@ -183,9 +183,7 @@ class FixtureRunner:
         if args[0] != "/usr/bin/curl" or not args[-1].endswith("/ready"):
             message = f"Unexpected external command: {args}"
             raise AssertionError(message)
-        if (self.candidate_unready and self.app_image == NEW_IMAGE) or (
-            self.rollback_unready and self.ups >= 2
-        ):
+        if (self.candidate_unready and self.ups == 1) or (self.rollback_unready and self.ups >= 2):
             message = "fixture readiness unavailable"
             raise public.ReleaseError(message)
         return b'{"status":"ready"}'
@@ -228,6 +226,19 @@ class FixtureRunner:
                     "caddy": {"image": self.proxy["image"]},
                 }
             }
+            selected_environment = self.config / "app.env"
+            candidate_environment = re.search(
+                r'- "([^"]+/candidate.env)"', selected_file.read_text()
+            )
+            if candidate_environment:
+                selected_environment = Path(candidate_environment.group(1))
+            obj(rendered, "services", "simplestchat", "environment").update(
+                dict(
+                    line.split("=", 1)
+                    for line in selected_environment.read_text().splitlines()
+                    if "=" in line
+                )
+            )
             if filename and self.preview_change:
                 obj(rendered, "services", "simplestchat", "environment")["ALLOW_AD_HOC_ROOMS"] = (
                     "true"
@@ -585,6 +596,7 @@ class PublicReleaseTests(unittest.TestCase):
         )
         compose = (
             f'services:\n  simplestchat:\n    image: "{OLD_IMAGE}"\n'
+            "    env_file:\n      - ./app.env\n"
             f'  migrate:\n    image: "{OLD_IMAGE}"\n'
         )
         _ = (self.config / "compose.public.yml").write_text(compose)
@@ -819,6 +831,85 @@ class PublicReleaseTests(unittest.TestCase):
             self.execute()
         self.assert_failed_rollback()
 
+    def test_turn_activation_reuses_the_image_and_changes_only_its_three_settings(self) -> None:
+        """Explicit relay activation keeps the app image, proxy and database identities."""
+        turn = public.TurnConfiguration(domain="fixture.invalid", secret="a" * 64)
+        manifest = deepcopy(self.manifest)
+        manifest["revision"] = OLD_REVISION
+        report: JsonObject = {}
+        public.deploy(self.runner, manifest, {"serverImage": OLD_IMAGE}, report, turn=turn)
+        self.assertEqual(self.runner.app_image, OLD_IMAGE)
+        self.assertEqual(self.runner.ups, 1)
+        self.assertEqual(
+            (self.config / "compose.public.yml").read_bytes(), self.before["compose.public.yml"]
+        )
+        environment = dict(
+            line.split("=", 1) for line in (self.config / "app.env").read_text().splitlines()
+        )
+        for key, value in turn.environment().items():
+            self.assertEqual(environment.pop(key), value)
+        self.assertEqual(
+            environment,
+            dict(line.split("=", 1) for line in self.before["app.env"].decode().splitlines()),
+        )
+        self.assertEqual(report["phase"], "complete")
+        self.assertIn("backupSha256", report)
+        self.assertTrue(all(args[-1] == "simplestchat" for args in self.app_mutations()))
+
+    def test_turn_activation_failure_restores_the_prior_environment_with_the_same_image(
+        self,
+    ) -> None:
+        """Readiness failure removes advertised relay settings and preserves original failure."""
+        self.runner.candidate_unready = True
+        manifest = deepcopy(self.manifest)
+        manifest["revision"] = OLD_REVISION
+        report: JsonObject = {}
+        with self.assertRaisesRegex(public.ReleaseError, "readiness deadline"):
+            public.deploy(
+                self.runner,
+                manifest,
+                {"serverImage": OLD_IMAGE},
+                report,
+                turn=public.TurnConfiguration(domain="fixture.invalid", secret="a" * 64),
+            )
+        self.assertTrue(report["rollbackPassed"])
+        self.assertEqual(self.runner.app_image, OLD_IMAGE)
+        self.assertEqual(self.runner.ups, 2)
+        self.assert_config_unchanged()
+
+    def test_turn_activation_refuses_existing_settings_and_unrelated_preview_changes(self) -> None:
+        """Rotation or hidden runtime changes must never enter the replacement phase."""
+        turn = public.TurnConfiguration(domain="fixture.invalid", secret="a" * 64)
+        old: JsonObject = {"serverImage": OLD_IMAGE}
+        for existing in ("TURN_SECRET=old\n", "TURN_URLS=turn:other.invalid\n", "TURN_TTL=600\n"):
+            with self.subTest(existing=existing):
+                _ = (self.config / "app.env").write_bytes(
+                    self.before["app.env"] + existing.encode()
+                )
+                with self.assertRaisesRegex(public.ReleaseError, "already configured"):
+                    _ = public.candidate_selection(self.runner, OLD_IMAGE, old, turn)
+        _ = (self.config / "app.env").write_bytes(self.before["app.env"])
+        self.runner.preview_change = True
+        with self.assertRaisesRegex(public.ReleaseError, "beyond the reviewed selection"):
+            _ = public.candidate_selection(self.runner, OLD_IMAGE, old, turn)
+        self.assertEqual(self.app_mutations(), [])
+
+    def test_turn_values_cannot_inject_urls_or_environment_and_secret_repr_is_private(self) -> None:
+        """Only the fixed managed URLs and an opaque 256-bit secret can be advertised."""
+        for domain, secret in (
+            ("chat.example/evil", "a" * 64),
+            ("chat.example\nBAD=1", "a" * 64),
+            ("chat.example", "a" * 63 + "\n"),
+        ):
+            with (
+                self.subTest(domain=domain),
+                self.assertRaisesRegex(public.ReleaseError, "Invalid managed"),
+            ):
+                _ = public.TurnConfiguration(domain=domain, secret=secret).environment()
+        self.assertNotIn(
+            "a" * 64, repr(public.TurnConfiguration(domain="chat.example", secret="a" * 64))
+        )
+
     def test_malformed_readiness_shapes_are_retried_only_until_the_deadline(self) -> None:
         """A non-object or ambiguous readiness response cannot pass or escape the deadline."""
         for response in (b"[]", b"null", b'{"status":"ready","status":"ready"}'):
@@ -972,7 +1063,7 @@ class PublicReleaseTests(unittest.TestCase):
         """Rendered nonimage change is rejected before stop or backup."""
         _ = self.stage()
         self.runner.preview_change = True
-        with self.assertRaisesRegex(public.ReleaseError, "beyond image selection"):
+        with self.assertRaisesRegex(public.ReleaseError, "beyond the reviewed selection"):
             self.execute()
         self.assertFalse(self.report()["passed"])
         self.assertEqual(self.app_mutations(), [])

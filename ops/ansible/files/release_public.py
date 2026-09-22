@@ -22,7 +22,7 @@ import uuid
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from types import FrameType
@@ -132,6 +132,31 @@ class _ArgumentValues(argparse.Namespace):
 
 class ReleaseError(RuntimeError):
     """A bounded release operation failed; inspect its private evidence."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TurnConfiguration:
+    """The only supported runtime change: enable the separately verified local relay."""
+
+    domain: str
+    secret: str = field(repr=False)
+
+    def environment(self) -> dict[str, str]:
+        """Return fixed TURN settings after rejecting dotenv or URL injection."""
+        require(
+            re.fullmatch(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", self.domain)
+            and re.fullmatch(r"[a-f0-9]{64}", self.secret),
+            "Invalid managed TURN configuration",
+        )
+        return {
+            "TURN_URLS": (
+                f"turn:{self.domain}:3478?transport=udp,"
+                f"turn:{self.domain}:3478?transport=tcp,"
+                f"turns:{self.domain}:5349?transport=tcp"
+            ),
+            "TURN_SECRET": self.secret,
+            "TURN_TTL": "86400",
+        }
 
 
 def timestamp() -> str:
@@ -684,9 +709,12 @@ def ready(runner: RunnerProtocol, *, origin: str | None = None, seconds: float =
 
 
 def candidate_selection(
-    runner: RunnerProtocol, new_image: str, old: JsonObject
+    runner: RunnerProtocol,
+    new_image: str,
+    old: JsonObject,
+    turn: TurnConfiguration | None = None,
 ) -> tuple[bytes, bytes]:
-    """Require the rendered service config to change only image selection."""
+    """Allow image selection and, explicitly, enabling the managed TURN relay."""
     compose = (CONFIG / "compose.public.yml").read_text()
     needle = f'image: "{old["serverImage"]}"'
     require(
@@ -710,6 +738,22 @@ def candidate_selection(
         )
         + "\n",
     )
+    selected_compose = preview.read_bytes()
+    if turn is not None:
+        values = turn.environment()
+        require(
+            not any(line.partition("=")[0] in values for line in environment.splitlines()),
+            "TURN is already configured; rotation requires separate maintenance",
+        )
+        atomic(
+            preview_env,
+            preview_env.read_bytes()
+            + "".join(f"{key}={value}\n" for key, value in values.items()).encode(),
+        )
+        # Override this service's env_file only for validation; the installed
+        # Compose file continues to reference its ordinary protected app.env.
+        require(compose.count("- ./app.env") == 1, "Unexpected application env_file selection")
+        atomic(preview, selected_compose.replace(b"- ./app.env", f'- "{preview_env}"'.encode()))
     before = object_value(
         decode_json(runner.compose("--profile", "maintenance", "config", "--format", "json"))
     )
@@ -729,23 +773,31 @@ def candidate_selection(
     expected = deepcopy(before)
     for service in ("simplestchat", "migrate"):
         object_value(object_value(expected["services"])[service])["image"] = new_image
+    if turn is not None:
+        expected_environment = object_value(
+            object_value(object_value(expected["services"])["simplestchat"])["environment"]
+        )
+        expected_environment.update(turn.environment())
+        expected_environment["SIMPLESTCHAT_IMAGE"] = new_image
     # app.env is also a service env_file; preview overrides only interpolation,
     # so its image metadata is changed when the real file is installed below.
-    require(after == expected, "Candidate changes configuration beyond image selection")
+    require(after == expected, "Candidate changes configuration beyond the reviewed selection")
     application = object_value(object_value(before["services"])["simplestchat"])
     require(
         object_value(application["environment"])["RUN_MIGRATIONS"] == "false",
         "Runtime migrations must remain disabled",
     )
-    return preview.read_bytes(), preview_env.read_bytes()
+    return selected_compose, preview_env.read_bytes()
 
 
-def deploy(  # noqa: PLR0915 - keep replacement, original-failure propagation, and bounded rollback together.
+def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replacement and bounded rollback together.
     runner: RunnerProtocol,
     manifest: Manifest,
     staged: JsonObject,
     report: JsonObject,
     quiet_seconds: int = 0,
+    *,
+    turn: TurnConfiguration | None = None,
 ) -> None:
     """Replace only the app, preserving backup evidence and one bounded rollback."""
     for filename in SELECTION:
@@ -759,7 +811,7 @@ def deploy(  # noqa: PLR0915 - keep replacement, original-failure propagation, a
     )
     _ = image_identity(runner, old_image, old_revision)
     new_image = image_identity(runner, string_value(staged["serverImage"]), manifest["revision"])
-    require(old["serverImage"] != new_image, "This image is already selected")
+    require(old["serverImage"] != new_image or turn is not None, "This image is already selected")
     app, database, proxy = (
         runner.container(service) for service in ("simplestchat", "postgres", "caddy")
     )
@@ -789,7 +841,7 @@ def deploy(  # noqa: PLR0915 - keep replacement, original-failure propagation, a
         packaged_migrations(runner, new_image) == manifest["migrations"],
         "Candidate migration mismatch",
     )
-    preview, preview_env = candidate_selection(runner, new_image, old)
+    preview, preview_env = candidate_selection(runner, new_image, old, turn)
     config = object_value(decode_json(runner.compose("config", "--format", "json")))
     environment = object_value(
         object_value(object_value(config["services"])["simplestchat"])["environment"]

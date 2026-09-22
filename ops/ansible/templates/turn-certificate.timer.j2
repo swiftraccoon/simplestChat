@@ -1,0 +1,11 @@
+[Unit]
+Description=Check simplestChat TURN certificate renewal hourly
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+RandomizedDelaySec=60
+Unit=simplestchat-turn-certificate.service
+
+[Install]
+WantedBy=timers.target

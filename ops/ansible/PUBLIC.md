@@ -96,9 +96,63 @@ sudo /usr/local/bin/simplestchat-public ps
 sudo /usr/local/bin/simplestchat-public logs --tail 100 simplestchat caddy
 ```
 
-TURN is not configured. Direct UDP media still needs checks from real browsers
-and networks; relay support requires separate setup. The two-worker allocation
-and connection limits are starting settings, not measured capacity guarantees.
+TURN is opt-in; see the managed relay below. Direct and relayed media still need
+checks from real browsers and networks. The two-worker allocation and connection
+limits are starting settings, not measured capacity guarantees.
+
+## Managed TURN on the same VPS
+
+Set `scpub_turn_enabled: true` in the ignored inventory. The host must already
+serve trusted HTTPS and have a staged app-only release matching its running
+image. Allow inbound UDP/TCP 3478 and TCP 5349 at the provider firewall. The relay
+uses this VPS's public IPv4 address and accepts peer destinations only on that
+address. Its UDP allocation ports 49160–49959 communicate with the media server
+on the same host; they do not need public inbound firewall access.
+
+Prepare and start the separate, checksum-pinned coturn 4.18.0 project:
+
+```sh
+ANSIBLE_CONFIG=ops/ansible/ansible.cfg ops/ansible/.venv/bin/ansible-playbook \
+  -i ops/ansible/inventory.local.yml ops/ansible/turn.yml --limit public_vps
+```
+
+Preparation does not change the application's advertised ICE servers. It
+generates a dedicated secret, copies and validates Caddy's hostname certificate,
+starts the unprivileged relay with resource limits, and installs an hourly
+certificate timer. The timer selects a validated certificate/key pair together
+and sends SIGUSR2; active allocations are retained. Configuration preparation
+requires the relay to be stopped, but the application and HTTPS remain running.
+Serialize this operation with releases and other host maintenance.
+
+Verify authenticated allocations externally over UDP, TCP and trusted TLS, then
+enable the relay for clients:
+
+```sh
+ANSIBLE_CONFIG=ops/ansible/ansible.cfg ops/ansible/.venv/bin/ansible-playbook \
+  -i ops/ansible/inventory.local.yml ops/ansible/turn.yml --limit public_vps \
+  -e scpub_turn_activate=true
+```
+
+Activation waits up to ten minutes for active rooms, then backs up the database
+and replaces only the application with the **same image**, adding the three
+reviewed TURN environment values. PostgreSQL and Caddy stay running. It uses the
+release journal, readiness checks and bounded rollback, and retains evidence in
+`/srv/simplestchat-public/results/turn.*`. Inspect its `outcome.json`; starting a
+systemd unit is not proof of success. Repeated activation of the same settings
+does not restart the app. Secret rotation is separate maintenance.
+
+The relay permits four allocations per credential and 400 total, with a
+2,000,000-byte/s per-session limit and 100,000,000-byte/s aggregate capacity
+(each direction). These limits bound relay use; they are not measured capacity.
+Credentials expire after one day. Networks allowing only outbound TCP 443 still
+need a separate relay address on that port: this VPS uses it for HTTPS.
+
+Check certificate renewal with
+`systemctl status simplestchat-turn-certificate.timer` and inspect the matching
+service journal for failures. Keep `scpub_turn_enabled` in inventory so later
+full maintenance preserves the relay settings. Protect `/etc/simplestchat-turn`
+alongside the other private configuration; it contains the shared secret and a
+copy of the TLS private key.
 
 ## Maintenance and data
 

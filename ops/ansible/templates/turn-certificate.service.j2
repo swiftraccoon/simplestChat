@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh simplestChat TURN TLS certificate without restarting calls
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -B /usr/local/libexec/simplestchat-public/turn_public.py refresh-certificate
+UMask=0077
+TimeoutStartSec=60
+NoNewPrivileges=true
+PrivateTmp=true

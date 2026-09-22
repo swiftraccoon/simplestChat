@@ -22,6 +22,7 @@ import socket
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass
@@ -1041,6 +1042,50 @@ class Harness:
                 "stageUninterrupted": True,
                 "commandSeconds": round(time.monotonic() - started, 3),
             }
+        self.exercise_turn_configuration()
+
+    def exercise_turn_configuration(self) -> None:
+        """Verify real Compose env_file preview and same-image replacement, without a relay."""
+        self.report["phase"] = "enable_turn_configuration"
+        before = self.snapshot()
+        selected = object_value(decode_json((CONFIG / "images.json").read_bytes()))
+        revision = string_value(selected["revision"])
+        manifest = validate_manifest(ROOT / "releases" / revision / "release.json")
+        attempt = Path(tempfile.mkdtemp(prefix="turn-config.", dir=ROOT / "results"))
+        outcome: JsonObject = {}
+        turn = release.TurnConfiguration(domain="relay.example.invalid", secret="a" * 64)
+        with release.workload_lock():
+            release.deploy(release.Runner(attempt), manifest, selected, outcome, turn=turn)
+        after = self.continuity(before)
+        self.check_backup(attempt, outcome)
+        self.ready()
+        require(
+            after["simplestchat"][1] == before["simplestchat"][1]
+            and after["simplestchat"][0] != before["simplestchat"][0],
+            "TURN configuration did not replace only the app using the same image",
+        )
+        configured = object_value(
+            object_value(
+                object_value(
+                    decode_json(self.commands.compose("config", "--format", "json").text())
+                )["services"]
+            )["simplestchat"]
+        )
+        require(
+            all(
+                object_value(configured["environment"])[key] == value
+                for key, value in turn.environment().items()
+            ),
+            "TURN values did not reach the rendered application configuration",
+        )
+        object_value(self.report["cases"])["turnConfiguration"] = {
+            "passed": True,
+            "sameImage": True,
+            "dependenciesUnchanged": True,
+            "databaseMarkerPreserved": True,
+            "backupVerified": True,
+            "limitation": "Configuration activation only; no TURN connectivity is tested here.",
+        }
 
     def cleanup(self) -> None:
         """Remove only verified owned fixture resources after command settlement is confirmed."""

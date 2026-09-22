@@ -171,6 +171,37 @@
         - {source: docker-compose.yml, destination: compose.base.yml}
         - {source: Caddyfile, destination: Caddyfile}
 
+    - name: Check for separately managed relay configuration
+      ansible.builtin.stat:
+        path: /etc/simplestchat-turn/secret
+        get_checksum: false
+      register: scpub_existing_turn
+
+    - name: Prevent full maintenance from silently disabling the managed relay
+      ansible.builtin.assert:
+        that:
+          - not scpub_existing_turn.stat.exists or scpub_turn_enabled | bool
+          - not scpub_turn_enabled | bool or scpub_existing_turn.stat.exists
+          - not scpub_existing_turn.stat.exists or scpub_existing_turn.stat.isreg
+          - not scpub_existing_turn.stat.exists or scpub_existing_turn.stat.uid == 0
+          - not scpub_existing_turn.stat.exists or scpub_existing_turn.stat.mode == '0600'
+          - not scpub_existing_turn.stat.exists or scpub_existing_turn.stat.size == 64
+        fail_msg: Keep scpub_turn_enabled in inventory and prepare turn.yml before enabling its app settings.
+
+    - name: Read the managed relay secret for maintenance rendering
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-turn/secret
+      register: scpub_maintenance_turn_secret
+      when: scpub_turn_enabled | bool
+      no_log: true
+
+    - name: Retain the relay secret only in memory
+      ansible.builtin.set_fact:
+        scpub_turn_secret: "{{ scpub_maintenance_turn_secret.content | b64decode }}"
+        cacheable: false
+      when: scpub_turn_enabled | bool
+      no_log: true
+
     - name: Render the private public-service configuration
       ansible.builtin.template:
         src: "public-{{ item.source }}.j2"

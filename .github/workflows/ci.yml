@@ -35,6 +35,7 @@ jobs:
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/public.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/release.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/reboot.yml --syntax-check
+          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/turn.yml --syntax-check
           shellcheck ops/ansible/files/*.sh
           python -m unittest discover -s ops/ansible/tests -v
 

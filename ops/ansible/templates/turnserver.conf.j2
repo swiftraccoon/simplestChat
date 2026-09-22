@@ -1,0 +1,31 @@
+# coturn 4.18.0: TLS 1.2 minimum; DTLS, CLI, RFC5780 and web admin default off.
+listening-ip={{ scpub_announce_ip }}
+relay-ip={{ scpub_announce_ip }}
+listening-port=3478
+tls-listening-port=5349
+min-port=49160
+max-port=49959
+realm={{ scpub_domain }}
+use-auth-secret
+static-auth-secret={{ scpub_turn_secret }}
+cert=/tls/current/certificate.pem
+pkey=/tls/current/key.pem
+userdb=/tmp/turndb
+pidfile=/tmp/turnserver.pid
+no-auth-pings
+no-dynamic-ip-list
+no-dynamic-realms
+no-stun
+no-tcp-relay
+no-multicast-peers
+denied-peer-ip=0.0.0.0-255.255.255.255
+denied-peer-ip=::-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+allowed-peer-ip={{ scpub_announce_ip }}
+user-quota=4
+total-quota=400
+max-bps=2000000
+bps-capacity=100000000
+stale-nonce=600
+relay-threads=1
+log-file=stdout
+log-min-level=warning

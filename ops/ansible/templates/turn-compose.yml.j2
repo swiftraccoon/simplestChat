@@ -1,0 +1,31 @@
+# Managed separately from the app, database and HTTPS proxy.
+name: simplestchat-turn
+services:
+  turn:
+    image: "{{ scpub_turn_image }}"
+    entrypoint: [/usr/bin/turnserver]
+    command: [-c, /etc/coturn/turnserver.conf]
+    user: "10002:10002"
+    network_mode: host
+    volumes:
+      - /etc/simplestchat-turn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - /etc/simplestchat-turn/tls:/tls:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+      - /var/lib/coturn:rw,nosuid,nodev,noexec,size=1m,uid=10002,gid=10002,mode=0700
+    cap_drop: [ALL]
+    # The upstream executable carries this capability; its bounding set must
+    # include it even though this configuration uses only unprivileged ports.
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: "1.0"
+    ulimits:
+      nofile: {soft: 8192, hard: 8192}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
