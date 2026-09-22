@@ -138,10 +138,38 @@ The ICE restart check sends real legacy no-ID restart commands through the owned
 server route, forwarding replies unchanged. Both native peer connections must
 install different remote ICE credentials, keep their identities and tracks,
 and resume decoded audio/video progress. Credentials stay inside the browser
-and are not written to reports. This checks actual restart application with no
-TURN server configured; it does not simulate a UDP failure or test relay access.
-Unit tests exercise the installed Firefox handler's unsupported TURN update and
-the room rebuild that obtains fresh credentials without automatic capture.
+and are not written to reports. The default run uses direct media paths.
+
+To run the same suite through an owned local TURN relay, install coturn **4.18.0**
+(for example, `brew install coturn`) and run:
+
+```sh
+TEST_ANNOUNCE_IP="$(node build/test-media-ip.mjs)" TURN_E2E=1 E2E_BROWSER=chromium \
+  build/with-test-postgres.sh build/with-test-server.sh npm --prefix web/e2e test
+```
+
+Repeat with `E2E_BROWSER=firefox` and, on macOS, `webkit`. The helper generates its
+own shared secret and 60-second credentials, binds the relay's client listener
+only to loopback, and restricts relay peers to the selected local media address.
+`TEST_TURN_PORT` defaults to 34790. Existing deployment TURN configuration is
+ignored. The generated secret file is deleted after owned-process cleanup;
+`turn-shutdown.json` records coturn's exit and whether cleanup needed escalation.
+
+The browser sets native `iceTransportPolicy: 'relay'`; it still uses real server
+credentials, native RTC, and decoded fake-device media. The ICE test publishes
+in both directions, waits for the original TURN credentials to expire in real
+time, and requires selected relay candidates with actual traffic. Chromium and
+WebKit must rotate credentials and select fresh allocations without replacing
+peers or tracks. Firefox must close old transports, rejoin with capture off,
+and publish successfully through the relay after explicit camera/microphone
+activation. WebKit uses a second owned browser process for the other publisher:
+[its capture policy](https://webkit.org/blog/7763/a-closer-look-into-webrtc/)
+silences capture in earlier tabs when another tab acquires the devices, including
+the mock devices. Both browsers are closed during cleanup.
+The test allows ICE nomination to finish before checking new paths;
+applying an SDP alone does not prove that traffic has switched allocations.
+This adds about one minute and does not exercise external NAT, TLS relays, or
+physical network loss. It is an optional local check, not part of default CI.
 
 Capture termination is simulated on owned fake tracks. The check verifies remote
 removal, controls, restart guidance, preservation of the other capture kind and

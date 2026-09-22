@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import dgram from 'node:dgram';
 import { once } from 'node:events';
-import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -192,6 +192,91 @@ test('helper isolates server configuration and preserves command failures while 
   assert.equal(report.statusBeforeCleanup, 23);
   assert.equal(report.waitStatus, 0);
 });
+
+async function turnFixture(t) {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-turn-fixture.'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const turn = path.join(directory, 'turnserver');
+  await writeFile(turn, `#!/usr/bin/env node
+    import assert from 'node:assert/strict';
+    import fs from 'node:fs';
+    import net from 'node:net';
+    import dgram from 'node:dgram';
+    if (process.argv[2] === '--version') { console.log('4.18.0'); process.exit(0); }
+    assert.equal(process.env.TURN_SECRET, undefined);
+    assert.equal(process.env.NODE_OPTIONS, undefined);
+    assert.equal(process.argv[2], '-c');
+    const file = process.argv[3];
+    assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+    const config = Object.fromEntries(fs.readFileSync(file, 'utf8').trim().split('\\n').map(line => {
+      const separator = line.indexOf('=');
+      return separator < 0 ? [line, true] : [line.slice(0, separator), line.slice(separator + 1)];
+    }));
+    assert.equal(config['listening-ip'], '127.0.0.1');
+    assert.equal(config['relay-ip'], '127.0.0.1');
+    assert.equal(config['allowed-peer-ip'], '127.0.0.1');
+    assert.equal(config['denied-peer-ip'], '::-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff');
+    assert.equal(config['use-auth-secret'], true);
+    assert.match(config['static-auth-secret'], /^[a-f0-9]{64}$/);
+    const tcp = net.createServer(socket => socket.end()).listen(Number(config['listening-port']), '127.0.0.1');
+    const udp = dgram.createSocket('udp4').bind(Number(config['listening-port']), '127.0.0.1');
+    console.log('FIXTURE_TURN_PID=' + process.pid);
+    process.on('SIGTERM', () => { tcp.close(); udp.close(); });
+  `);
+  await chmod(turn, 0o755);
+  const server = path.join(directory, 'server.mjs');
+  const port = await unusedPort();
+  await writeFile(server, `#!/usr/bin/env node
+    import assert from 'node:assert/strict';
+    assert.equal(process.env.TURN_URLS, 'turn:127.0.0.1:${port}?transport=udp');
+    assert.equal(process.env.TURN_TTL, '60');
+    assert.match(process.env.TURN_SECRET, /^[a-f0-9]{64}$/);
+    delete process.env.TURN_URLS;
+    await import(${JSON.stringify(pathToFileURL(fixture).href)});
+  `);
+  await chmod(server, 0o755);
+  return { PATH: `${directory}:${process.env.PATH}`, TURN_E2E: '1', TEST_TURN_PORT: String(port), TEST_SERVER_BINARY: server };
+}
+
+for (const status of [0, 23]) {
+  test(`owned relay uses disposable credentials and releases both ports after command status ${status}`, async t => {
+    const environment = await turnFixture(t);
+    const result = await run(t, { ...environment, TURN_URLS: 'turn:production.invalid', TURN_SECRET: 'must-not-inherit' },
+      [process.execPath, '-e', `process.exit(${status})`]);
+    assert.equal(result.status, status, result.output);
+    const log = await readFile(path.join(result.artifacts, 'turn.log'), 'utf8');
+    const pid = Number(log.match(/FIXTURE_TURN_PID=(\d+)/)?.[1]);
+    assert.ok(pid > 0);
+    assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+    assert.doesNotMatch(result.output + log, /must-not-inherit/);
+    assert.equal((await readdir(result.artifacts)).some(name => name.startsWith('turn-config.')), false);
+    const shutdown = JSON.parse(await readFile(path.join(result.artifacts, 'turn-shutdown.json'), 'utf8'));
+    assert.equal(shutdown.pid, pid);
+    assert.equal(shutdown.passed, true);
+    assert.equal(shutdown.forced, false);
+    assert.equal(shutdown.waitStatus, 0);
+    const tcp = net.createServer().listen(Number(environment.TEST_TURN_PORT), '127.0.0.1');
+    await once(tcp, 'listening');
+    await new Promise(resolve => tcp.close(resolve));
+    const udp = dgram.createSocket('udp4').bind(Number(environment.TEST_TURN_PORT), '127.0.0.1');
+    await once(udp, 'listening');
+    await new Promise(resolve => udp.close(resolve));
+  });
+}
+
+for (const protocol of ['tcp', 'udp']) {
+  test(`relay preflight refuses an occupied ${protocol} socket without touching its owner`, async t => {
+    const environment = await turnFixture(t);
+    const listener = protocol === 'tcp' ? net.createServer().listen(0, '127.0.0.1') : dgram.createSocket('udp4').bind(0, '127.0.0.1');
+    await once(listener, 'listening');
+    t.after(() => new Promise(resolve => listener.close(resolve)));
+    const port = listener.address().port;
+    const result = await run(t, { ...environment, TEST_TURN_PORT: String(port) });
+    assert.equal(result.status, 2, result.output);
+    assert.equal(listener.address().port, port);
+    await assert.rejects(readFile(path.join(result.artifacts, 'turn.log')), { code: 'ENOENT' });
+  });
+}
 
 test('helper reports actual graceful exit separately from its requested TERM', async t => {
   const result = await run(t);

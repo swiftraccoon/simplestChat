@@ -25,19 +25,28 @@ test -f "${server_workdir}/Cargo.toml"
 test -d "${server_workdir}/migrations"
 test_port="${TEST_SERVER_PORT:-3119}"
 media_port="${TEST_MEDIA_PORT:-41010}"
+turn_port="${TEST_TURN_PORT:-34790}"
 # An explicitly empty override is invalid, not a request for the default.
 test_announce_ip="${TEST_ANNOUNCE_IP-127.0.0.1}"
-for port in "${test_port}" "${media_port}"; do
+for port in "${test_port}" "${media_port}" "${turn_port}"; do
   if [[ ! "${port}" =~ ^[1-9][0-9]{3,4}$ ]] || ((port > 65535)); then
     echo 'Test ports must be integers from 1000 through 65535.' >&2
     exit 2
   fi
 done
+if [[ "${TURN_E2E:-}" == 1 ]] && ! command -v turnserver >/dev/null; then
+  echo 'TURN_E2E requires coturn (turnserver) on PATH.' >&2
+  exit 2
+fi
+if [[ "${TURN_E2E:-}" == 1 && "$(env -i PATH="${PATH}" turnserver --version)" != 4.18.0 ]]; then
+  echo 'TURN_E2E requires the verified coturn 4.18.0 configuration.' >&2
+  exit 2
+fi
 test -x "${server_binary}"
 export BASE_URL="http://127.0.0.1:${test_port}"
 # Probe both sockets; a non-HTTP listener must not be mistaken for a free port.
 # The server still owns the final bind and must remain alive after readiness.
-node --input-type=module - "${test_port}" "${media_port}" "${test_announce_ip}" <<'JS'
+node --input-type=module - "${test_port}" "${media_port}" "${test_announce_ip}" "${TURN_E2E:-}" "${turn_port}" <<'JS'
 import net from 'node:net';
 import dgram from 'node:dgram';
 import os from 'node:os';
@@ -54,6 +63,8 @@ try {
 }
 const tcp = net.createServer();
 const udp = dgram.createSocket('udp4');
+const turnTcp = net.createServer();
+const turnUdp = dgram.createSocket('udp4');
 try {
   await new Promise((resolve, reject) => {
     tcp.once('error', reject).listen(Number(process.argv[2]), '127.0.0.1', resolve);
@@ -61,12 +72,22 @@ try {
   await new Promise((resolve, reject) => {
     udp.once('error', reject).bind(Number(process.argv[3]), '0.0.0.0', resolve);
   });
+  if (process.argv[5] === '1') {
+    await new Promise((resolve, reject) => {
+      turnTcp.once('error', reject).listen(Number(process.argv[6]), '127.0.0.1', resolve);
+    });
+    await new Promise((resolve, reject) => {
+      turnUdp.once('error', reject).bind(Number(process.argv[6]), '127.0.0.1', resolve);
+    });
+  }
 } catch (error) {
   console.error(`Refusing unavailable test ports: ${error.message}`);
   process.exitCode = 2;
 } finally {
   tcp.close();
   try { udp.close(); } catch {}
+  turnTcp.close();
+  try { turnUdp.close(); } catch {}
 }
 JS
 export TEST_ANNOUNCE_IP="${test_announce_ip}"
@@ -75,6 +96,8 @@ test_artifacts="${E2E_ARTIFACTS:-$(mktemp -d "${TMPDIR:-/tmp}/simplestchat-tests
 mkdir -p "${test_artifacts}"
 export E2E_ARTIFACTS="${test_artifacts}"
 server_pid=''
+turn_pid=''
+turn_config=''
 cleanup() {
   test_status=$?
   trap - EXIT
@@ -140,6 +163,42 @@ JS
     echo 'Owned test server shutdown was unsuccessful or its evidence was unavailable.' >&2
     if ((test_status == 0)); then test_status=1; fi
   fi
+  if [[ -n "${turn_pid}" ]]; then
+    turn_forced=false
+    kill -TERM "${turn_pid}" 2>/dev/null || true
+    for ((attempt = 0; attempt < 50; attempt++)); do
+      kill -0 "${turn_pid}" 2>/dev/null || break
+      sleep 0.1
+    done
+    if kill -0 "${turn_pid}" 2>/dev/null; then
+      kill -KILL "${turn_pid}" 2>/dev/null || true
+      turn_forced=true
+      echo 'Owned TURN relay needed forced shutdown.' >&2
+      if ((test_status == 0)); then test_status=1; fi
+    fi
+    turn_status=0
+    wait "${turn_pid}" 2>/dev/null || turn_status=$?
+    if ((turn_status != 0 && turn_status != 143)); then
+      echo "Owned TURN relay exited unsuccessfully: ${turn_status}" >&2
+      if ((test_status == 0)); then test_status=1; fi
+    fi
+    if ! env -i PATH="${PATH}" node --input-type=module - "${test_artifacts}" "${turn_pid}" "${turn_status}" "${turn_forced}" <<'JS'
+import fs from 'node:fs';
+import path from 'node:path';
+const [artifacts, pid, status, forced] = process.argv.slice(2);
+const waitStatus = Number(status);
+const report = { schemaVersion: 1, version: '4.18.0', pid: Number(pid), waitStatus,
+  forced: forced === 'true', passed: forced === 'false' && [0, 143].includes(waitStatus),
+  finishedAt: new Date().toISOString() };
+fs.writeFileSync(path.join(artifacts, 'turn-shutdown.json'), `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+JS
+    then
+      echo 'Could not retain the owned TURN relay shutdown report.' >&2
+      if ((test_status == 0)); then test_status=1; fi
+    fi
+  fi
+  # The generated shared secret is needed only while the owned relay is alive.
+  if [[ -n "${turn_config}" ]]; then rm -f "${turn_config}"; fi
   echo "Test server log and browser artifacts: ${test_artifacts}"
   if ((test_status != 0)); then
     tail -n 80 "${test_artifacts}/server.log" >&2 || true
@@ -158,6 +217,62 @@ if [[ "${LIFECYCLE_E2E:-}" == 1 || "${UI_STRESS_E2E:-}" == 1 || "${SESSION_SOAK_
   TEST_METRICS_TOKEN="$(env -i PATH="${PATH}" node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
   export TEST_METRICS_TOKEN
   test_metrics_environment+=("METRICS_TOKEN=${TEST_METRICS_TOKEN}")
+fi
+
+if [[ "${TURN_E2E:-}" == 1 ]]; then
+  # This opt-in creates its own relay and credentials. Never accept deployment
+  # TURN settings or listen for clients outside loopback. Relay permissions are
+  # limited to the same interface-owned address as the disposable media server.
+  test_turn_secret="$(env -i PATH="${PATH}" node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+  test_metrics_environment+=("TURN_URLS=turn:127.0.0.1:${turn_port}?transport=udp" "TURN_SECRET=${test_turn_secret}" "TURN_TTL=60")
+  turn_config="$(mktemp "${test_artifacts}/turn-config.XXXXXX")"
+  cat >"${turn_config}" <<EOF
+listening-ip=127.0.0.1
+listening-port=${turn_port}
+relay-ip=${test_announce_ip}
+realm=simplestchat-test.invalid
+use-auth-secret
+static-auth-secret=${test_turn_secret}
+userdb=${test_artifacts}/turn.sqlite
+pidfile=${test_artifacts}/turn.pid
+no-tls
+no-tcp-relay
+no-multicast-peers
+no-rfc5780
+denied-peer-ip=0.0.0.0-255.255.255.255
+denied-peer-ip=::-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+allowed-peer-ip=${test_announce_ip}
+relay-threads=1
+user-quota=8
+total-quota=64
+log-file=stdout
+log-min-level=warning
+EOF
+  if [[ "${test_announce_ip}" == 127.0.0.1 ]]; then
+    printf 'allow-loopback-peers\n' >>"${turn_config}"
+  fi
+  env -i PATH="${PATH}" turnserver -c "${turn_config}" >"${test_artifacts}/turn.log" 2>&1 &
+  turn_pid=$!
+  unset test_turn_secret
+  # Readiness uses the local TCP listener; the browser must additionally prove
+  # authenticated relay allocation and selected relay candidates over UDP.
+  env -i PATH="${PATH}" node --input-type=module - "${turn_port}" "${turn_pid}" <<'JS'
+import net from 'node:net';
+import { setTimeout } from 'node:timers/promises';
+for (let attempt = 0; ; attempt++) {
+  process.kill(Number(process.argv[3]), 0);
+  const ready = await new Promise(resolve => {
+    const socket = net.connect(Number(process.argv[2]), '127.0.0.1');
+    const finish = value => { socket.destroy(); resolve(value); };
+    socket.once('connect', () => finish(true));
+    socket.once('error', () => finish(false));
+    socket.setTimeout(500, () => finish(false));
+  });
+  if (ready) break;
+  if (attempt === 39) throw new Error('Owned TURN relay did not become ready');
+  await setTimeout(100);
+}
+JS
 fi
 
 # A clean server environment also prevents inherited rate limits, TURN, passkey,
@@ -197,6 +312,10 @@ export TEST_DATABASE_URL="${DATABASE_URL}"
 # Reports identify the actual selected binary/assets even when defaults were used.
 export TEST_SERVER_BINARY="${server_binary}" TEST_SERVER_WORKDIR="${server_workdir}"
 "$@"
+if [[ -n "${turn_pid}" ]] && ! kill -0 "${turn_pid}" 2>/dev/null; then
+  echo 'Owned TURN relay exited while the test command was running.' >&2
+  exit 1
+fi
 if ! kill -0 "${server_pid}" 2>/dev/null; then
   echo 'Test server exited while the test command was running.' >&2
   exit 1

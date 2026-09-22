@@ -18,6 +18,8 @@ const { browserOptions } = require('./browser-options.cjs');
 const { collectPeerDiagnostics } = require('./peer-diagnostics.cjs');
 const { installPeerEventTracing } = require('./peer-events.cjs');
 const { installSignalingReconnectObservation } = require('./signaling-reconnect.cjs');
+const { installRelayPolicy, waitForRelayPaths } = require('./turn-relay.cjs');
+const turnRelay = process.env.TURN_E2E === '1';
 const options = browserOptions(process.env.E2E_BROWSER);
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const artifacts =
@@ -27,6 +29,7 @@ fs.mkdirSync(artifacts, { recursive: true, mode: 0o700 });
 const runId = `e2e-${Date.now().toString(36)}`;
 const password = 'Disposable-browser-password-2026!';
 const clients = [];
+const additionalBrowsers = [];
 let browser;
 let activeStep = 'launch';
 const report = {
@@ -45,6 +48,7 @@ const report = {
   launchOptions: options.launchOptions,
   contextOptions: options.contextOptions,
   announcedIp: process.env.TEST_ANNOUNCE_IP || null,
+  turnRelay,
   startedAt: new Date().toISOString(),
   complete: false,
   passed: false,
@@ -57,7 +61,9 @@ const report = {
     'Mobile checks resize a desktop viewport; they do not run a mobile browser.',
     'Signaling recovery closes an owned WebSocket only; it is not a UDP outage or reconnect-grace-expiry test.',
     'Interrupted setup closes a separate routed signaling connection after real transport creation; protocol replies and native RTC are not synthesized.',
-    'ICE restarts use real legacy commands and native credential changes; no UDP failure or TURN relay is exercised.',
+    turnRelay
+      ? 'TURN uses an owned local coturn relay and native relay-only ICE; no external NAT, TLS relay, or physical network outage is exercised.'
+      : 'ICE restarts use real legacy commands and native credential changes; no UDP failure or TURN relay is exercised.',
   ],
 };
 function saveReport() {
@@ -100,8 +106,15 @@ async function step(name, work) {
   saveReport();
   console.log(`PASS ${name}`);
 }
-async function client(label, mobile = false, configureContext) {
-  const context = await browser.newContext({
+async function client(label, mobile = false, configureContext, independentCapture = false) {
+  let clientBrowser = browser;
+  if (independentCapture) {
+    // WebKit silences existing capture when another tab starts using devices.
+    // An independent browser represents a second caller without that conflict.
+    clientBrowser = await playwright[options.name].launch(options.launchOptions);
+    additionalBrowsers.push(clientBrowser);
+  }
+  const context = await clientBrowser.newContext({
     ...options.contextOptions,
     viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
   });
@@ -110,6 +123,7 @@ async function client(label, mobile = false, configureContext) {
   page.setDefaultTimeout(10000);
   const entry = { label, context, page, errors: [], frames: [], warnings: [] };
   clients.push(entry);
+  if (turnRelay) await page.addInitScript(installRelayPolicy);
   // Observe native peer connections for failure diagnostics; no SDP/media mocking.
   await page.addInitScript(installPeerEventTracing, {
     announcedIp: process.env.TEST_ANNOUNCE_IP || null,
@@ -1416,62 +1430,67 @@ async function setRole(owner, name, role) {
         let acknowledgedPauses = 0;
         const transportIds = [];
         let restartCurrentTransports;
-        const probe = await client('interrupted-setup', false, async (context) => {
-          await context.routeWebSocket(`${base.replace(/^http/, 'ws')}/ws`, (route) => {
-            const server = route.connectToServer();
-            let retired = false;
-            restartCurrentTransports = () => {
-              assert.equal(retired, false, 'ICE restart must use the current signaling route');
-              assert.equal(transportIds.length, 2);
-              // Exercise real server restarts through the supported legacy
-              // no-ID command path. Forward the resulting replies unchanged.
-              for (const transportId of transportIds)
-                server.send(JSON.stringify({ type: 'restartIce', transportId }));
-            };
-            const interrupt = (delayMs = 0) => {
-              retired = true;
-              closing = (async () => {
-                if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
-                await Promise.all([server.close(), route.close()]);
-              })();
-              closing.catch(() => {
-                closeFailed = true;
-              });
-            };
-            route.onMessage((message) => {
-              if (retired) return;
-              const parsed = JSON.parse(String(message));
-              if (dropPause && !droppedPause && parsed.type === 'pauseProducer') {
-                droppedPause = true;
-                // Keep the socket apparently open beyond the client's request
-                // deadline, as can happen before network failure is detected.
-                interrupt(5500);
-                return;
-              }
-              server.send(message);
-            });
-            server.onMessage((message) => {
-              if (retired) return;
-              const parsed = JSON.parse(String(message));
-              if (parsed.type === 'transportCreated') {
-                transportReplies++;
-                transportIds.push(parsed.transportId);
-                if (transportIds.length > 2) transportIds.shift();
-                if (!interrupted && transportReplies === 2) {
-                  // The real server created both transports. Lose its receive
-                  // reply by closing both owned signaling ends, without forging
-                  // any protocol response or changing native RTC behavior.
-                  interrupted = true;
-                  interrupt();
+        const probe = await client(
+          'interrupted-setup',
+          false,
+          async (context) => {
+            await context.routeWebSocket(`${base.replace(/^http/, 'ws')}/ws`, (route) => {
+              const server = route.connectToServer();
+              let retired = false;
+              restartCurrentTransports = () => {
+                assert.equal(retired, false, 'ICE restart must use the current signaling route');
+                assert.equal(transportIds.length, 2);
+                // Exercise real server restarts through the supported legacy
+                // no-ID command path. Forward the resulting replies unchanged.
+                for (const transportId of transportIds)
+                  server.send(JSON.stringify({ type: 'restartIce', transportId }));
+              };
+              const interrupt = (delayMs = 0) => {
+                retired = true;
+                closing = (async () => {
+                  if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+                  await Promise.all([server.close(), route.close()]);
+                })();
+                closing.catch(() => {
+                  closeFailed = true;
+                });
+              };
+              route.onMessage((message) => {
+                if (retired) return;
+                const parsed = JSON.parse(String(message));
+                if (dropPause && !droppedPause && parsed.type === 'pauseProducer') {
+                  droppedPause = true;
+                  // Keep the socket apparently open beyond the client's request
+                  // deadline, as can happen before network failure is detected.
+                  interrupt(5500);
                   return;
                 }
-              }
-              if (parsed.type === 'producerPaused' && typeof parsed.requestId === 'string')
-                acknowledgedPauses++;
-              route.send(message);
+                server.send(message);
+              });
+              server.onMessage((message) => {
+                if (retired) return;
+                const parsed = JSON.parse(String(message));
+                if (parsed.type === 'transportCreated') {
+                  transportReplies++;
+                  transportIds.push(parsed.transportId);
+                  if (transportIds.length > 2) transportIds.shift();
+                  if (!interrupted && transportReplies === 2) {
+                    // The real server created both transports. Lose its receive
+                    // reply by closing both owned signaling ends, without forging
+                    // any protocol response or changing native RTC behavior.
+                    interrupted = true;
+                    interrupt();
+                    return;
+                  }
+                }
+                if (parsed.type === 'producerPaused' && typeof parsed.requestId === 'string')
+                  acknowledgedPauses++;
+                route.send(message);
+              });
             });
-          });
-        });
+          },
+          turnRelay && options.name === 'webkit',
+        );
         await join(probe, 'Setup recovery');
         await probe.waitForFunction(() => {
           const counts = window.__communitySignalingReconnect.snapshot().counters;
@@ -1571,6 +1590,109 @@ async function setRole(owner, name, role) {
           }
         };
         checkIceRestart = async () => {
+          if (turnRelay) {
+            // Give the probe a live return stream too. A paused receive
+            // transport can legitimately have zero RTP bytes after restarting.
+            await owner.locator('#cam-btn').click();
+            const settings = owner.getByRole('dialog', { name: 'Your settings', exact: true });
+            if (await settings.isVisible()) {
+              await settings.getByRole('button', { name: 'Save settings', exact: true }).click();
+              await settings.waitFor({ state: 'hidden' });
+            }
+            await owner.locator('#mic-btn').click();
+            await remotePlayback(probe, 'video');
+            await remotePlayback(probe, 'audio');
+            const returning = await reconnectMediaIdentity(probe);
+            try {
+              await waitForMediaStart(probe, returning);
+              await advancingReconnectMedia(probe, returning, 3000);
+            } finally {
+              await returning.dispose();
+            }
+            // The owned server issues 60-second credentials. Wait on real wall
+            // time so the restart must obtain fresh credentials after expiry.
+            await probe.waitForFunction(
+              () => {
+                const peers = window.__communityPeers.filter(
+                  (peer) => peer.connectionState === 'connected' && peer.remoteDescription,
+                );
+                return (
+                  peers.length === 2 &&
+                  peers.every((peer) => {
+                    const username = peer.getConfiguration().iceServers?.[0]?.username;
+                    const expiry = Number(username?.split(':')[0]);
+                    return expiry > 0 && expiry * 1000 + 1000 < Date.now();
+                  })
+                );
+              },
+              null,
+              { timeout: 70000 },
+            );
+            report.relayBeforeRestart = await waitForRelayPaths(probe);
+            assert.equal(report.relayBeforeRestart.length, 2);
+          }
+          if (turnRelay && options.name === 'firefox') {
+            const before = await probe.evaluateHandle(() => ({
+              peers: window.__communityPeers.filter((peer) => peer.connectionState !== 'closed'),
+              tracks: document.querySelector('#local-tile video').srcObject.getTracks(),
+              captures: window.__communityCaptureRequests,
+              counts: window.__communitySignalingReconnect.snapshot().counters,
+            }));
+            try {
+              restartCurrentTransports();
+              await probe.waitForFunction(({ peers, counts }) => {
+                const current = window.__communitySignalingReconnect.snapshot().counters;
+                return (
+                  peers.every((peer) => peer.connectionState === 'closed') &&
+                  current.sentJoinRoom === counts.sentJoinRoom + 1 &&
+                  current.sentCreateSendTransport === counts.sentCreateSendTransport + 1 &&
+                  current.sentCreateRecvTransport === counts.sentCreateRecvTransport + 1
+                );
+              }, before);
+              await connected(probe);
+              await probe.locator('#mic-btn.muted').waitFor({ state: 'visible' });
+              await probe.locator('#cam-btn.muted').waitFor({ state: 'visible' });
+              assert.equal(
+                await before.evaluate(
+                  ({ captures, tracks }) =>
+                    window.__communityCaptureRequests === captures &&
+                    tracks.length > 0 &&
+                    tracks.every((track) => track.readyState === 'ended'),
+                ),
+                true,
+                'TURN rebuild must stop old capture and never recapture automatically',
+              );
+              await owner.locator('.video-tile:not(.local) audio').waitFor({ state: 'detached' });
+              await owner.locator('.video-tile:not(.local) video').waitFor({ state: 'detached' });
+              await probe.locator('#cam-btn').click();
+              await probe.locator('#mic-btn').click();
+              await remotePlayback(owner, 'video');
+              await remotePlayback(owner, 'audio');
+              const receiver = await reconnectMediaIdentity(owner);
+              const returning = await reconnectMediaIdentity(probe);
+              try {
+                await waitForMediaStart(owner, receiver);
+                await waitForMediaStart(probe, returning);
+                report.iceRestart = {
+                  passed: true,
+                  rebuilt: true,
+                  media: await advancingReconnectMedia(owner, receiver, 3000),
+                  relay: await waitForRelayPaths(probe),
+                  returnMedia: await advancingReconnectMedia(probe, returning, 3000),
+                };
+              } finally {
+                await receiver.dispose();
+                await returning.dispose();
+              }
+            } finally {
+              await before.dispose();
+            }
+            await leave(probe);
+            await probe.context().close();
+            await owner.locator('#cam-btn').click();
+            await owner.locator('#mic-btn').click();
+            return;
+          }
           const identity = await reconnectMediaIdentity(probe);
           const receiver = await reconnectMediaIdentity(owner);
           const credentials = await probe.evaluateHandle(() =>
@@ -1579,6 +1701,7 @@ async function setRole(owner, name, role) {
               .map((peer) => ({
                 peer,
                 ufrag: peer.remoteDescription.sdp.match(/^a=ice-ufrag:(.+)$/m)?.[1],
+                turnUsername: peer.getConfiguration().iceServers?.[0]?.username,
               })),
           );
           try {
@@ -1592,12 +1715,14 @@ async function setRole(owner, name, role) {
             restartCurrentTransports();
             await probe.waitForFunction(
               (entries) =>
-                entries.every(({ peer, ufrag }) => {
+                entries.every(({ peer, ufrag, turnUsername }) => {
                   const current = peer.remoteDescription?.sdp.match(/^a=ice-ufrag:(.+)$/m)?.[1];
                   return (
                     peer.connectionState === 'connected' &&
                     typeof current === 'string' &&
-                    current !== ufrag
+                    current !== ufrag &&
+                    (turnUsername === undefined ||
+                      peer.getConfiguration().iceServers?.[0]?.username !== turnUsername)
                   );
                 }),
               credentials,
@@ -1607,6 +1732,10 @@ async function setRole(owner, name, role) {
               passed: true,
               identity: await identity.evaluate((state) => state.verify()),
               media: await advancingReconnectMedia(owner, receiver, 3000),
+              ...(turnRelay && {
+                relay: await waitForRelayPaths(probe, report.relayBeforeRestart),
+                returnMedia: await advancingReconnectMedia(probe, identity, 3000),
+              }),
             };
           } finally {
             await credentials.dispose();
@@ -1615,6 +1744,10 @@ async function setRole(owner, name, role) {
           }
           await leave(probe);
           await probe.context().close();
+          if (turnRelay) {
+            await owner.locator('#cam-btn').click();
+            await owner.locator('#mic-btn').click();
+          }
         };
       },
     );
@@ -1623,7 +1756,7 @@ async function setRole(owner, name, role) {
       checkUnacknowledgedControl,
     );
     await step(
-      'real ICE restarts update both native transports and retain working media',
+      'real ICE restarts recover both native transports with working media',
       checkIceRestart,
     );
     await step(
@@ -1909,17 +2042,24 @@ async function setRole(owner, name, role) {
           .click()
           .catch(() => {});
     }
-    try {
-      await browser?.close();
-    } catch (error) {
+    const closures = await Promise.allSettled(
+      [...(browser ? [browser] : []), ...additionalBrowsers].map(async (owned) => {
+        await owned.close();
+      }),
+    );
+    const failedClose = closures.find((result) => result.status === 'rejected');
+    if (failedClose) {
+      const error =
+        failedClose.reason instanceof Error
+          ? failedClose.reason
+          : new Error('An owned browser could not be closed');
       report.complete = false;
       report.passed = false;
       report.cleanupError = error.message;
       cleanupFailure = error;
-    } finally {
-      report.finishedAt = new Date().toISOString();
-      saveReport();
     }
+    report.finishedAt = new Date().toISOString();
+    saveReport();
   }
   if (cleanupFailure) throw cleanupFailure;
 })().catch((error) => {
