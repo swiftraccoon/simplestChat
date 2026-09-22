@@ -139,34 +139,47 @@ test('community runner preserves the original failure when collecting peer diagn
 });
 
 for (const failedBeforeCleanup of [false, true]) {
-  test(`community cleanup failure ${failedBeforeCleanup ? 'preserves the original failure' : 'fails an otherwise successful run'}`, async () => {
-    const source = await readFile(runner, 'utf8');
-    const failureStart = source.indexOf('report.failedStep = activeStep;');
-    const cleanupStart = source.indexOf('\n  } finally {', failureStart);
-    const cleanupEnd = source.indexOf('\n})().catch', cleanupStart);
-    assert.ok(cleanupStart > failureStart && cleanupEnd > cleanupStart);
-    const tail = source.slice(cleanupStart + '\n  }'.length, cleanupEnd);
-    const report = { complete: true, passed: true };
-    const originalFailure = new Error('owned original failure');
-    const cleanupFailure = new Error('owned close failure');
-    const saved = [];
-    const run = runInNewContext(`(async () => {
-      let cleanupFailure;
-      try { if (failedBeforeCleanup) throw originalFailure; }
-      ${tail}
-    })`, {
-      report, clients: [], failedBeforeCleanup, originalFailure,
-      browser: { async close() { throw cleanupFailure; } },
-      saveReport() { saved.push({ ...report }); },
+  for (const failingBrowser of [0, 1]) {
+    test(`community browser ${failingBrowser} cleanup failure ${failedBeforeCleanup ? 'preserves the original failure' : 'fails an otherwise successful run'}`, async () => {
+      const source = await readFile(runner, 'utf8');
+      const failureStart = source.indexOf('report.failedStep = activeStep;');
+      const cleanupStart = source.indexOf('\n  } finally {', failureStart);
+      const cleanupEnd = source.indexOf('\n})().catch', cleanupStart);
+      assert.ok(cleanupStart > failureStart && cleanupEnd > cleanupStart);
+      const tail = source.slice(cleanupStart + '\n  }'.length, cleanupEnd);
+      const report = { complete: true, passed: true };
+      const originalFailure = new Error('owned original failure');
+      const cleanupFailure = new Error('owned close failure');
+      const saved = [];
+      const closed = [];
+      const owned = [0, 1, 2].map(index => ({
+        async close() {
+          // A later close must finish before returning even when an earlier one
+          // rejects. These represent independently owned WebKit capture clients.
+          await new Promise(resolve => setTimeout(resolve, index * 5));
+          closed.push(index);
+          if (index === failingBrowser) throw cleanupFailure;
+        },
+      }));
+      const run = runInNewContext(`(async () => {
+        let cleanupFailure;
+        try { if (failedBeforeCleanup) throw originalFailure; }
+        ${tail}
+      })`, {
+        Error, report, clients: [], failedBeforeCleanup, originalFailure,
+        browser: owned[0], additionalBrowsers: owned.slice(1),
+        saveReport() { saved.push({ ...report }); },
+      });
+      await assert.rejects(run(), error => error === (failedBeforeCleanup ? originalFailure : cleanupFailure));
+      assert.deepEqual(closed.sort(), [0, 1, 2]);
+      assert.equal(report.complete, false);
+      assert.equal(report.passed, false);
+      assert.equal(report.cleanupError, cleanupFailure.message);
+      assert.ok(Date.parse(report.finishedAt));
+      assert.equal(saved.length, 1);
+      assert.deepEqual(saved[0], report);
     });
-    await assert.rejects(run(), error => error === (failedBeforeCleanup ? originalFailure : cleanupFailure));
-    assert.equal(report.complete, false);
-    assert.equal(report.passed, false);
-    assert.equal(report.cleanupError, cleanupFailure.message);
-    assert.ok(Date.parse(report.finishedAt));
-    assert.equal(saved.length, 1);
-    assert.deepEqual(saved[0], report);
-  });
+  }
 }
 
 test('community peer snapshots remain failure-only', async () => {
