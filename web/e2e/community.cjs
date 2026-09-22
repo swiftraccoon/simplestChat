@@ -328,7 +328,9 @@ async function reconnectMediaIdentity(page) {
           }
         }
         if (!videoReports || audioReports !== 1)
-          throw new Error('Expected decoded-video counters and one matching native audio report');
+          throw new Error(
+            `Expected decoded-video counters and one matching native audio report; received ${videoReports} video and ${audioReports} audio reports`,
+          );
         const audioCounters = [
           audioStats.packetsReceived,
           audioStats.totalSamplesDuration,
@@ -371,6 +373,23 @@ function mediaProgressDelta(before, after) {
         : after.audioPlayoutTime - before.audioPlayoutTime,
     elapsedMs: after.sampledAtMs - before.sampledAtMs,
   };
+}
+async function waitForMediaStart(page, identity) {
+  const until = performance.now() + 10000;
+  let lastError;
+  do {
+    try {
+      const sample = await identity.evaluate((state) => state.sample());
+      if (sample.audioPackets > 0 && sample.audioSamplesTime > 0.5 && sample.audioEnergy > 0)
+        return;
+    } catch (error) {
+      lastError = error;
+    }
+    await page.waitForTimeout(200);
+  } while (performance.now() < until);
+  throw new Error('New remote media did not expose decoded audio statistics', {
+    cause: lastError,
+  });
 }
 async function advancingReconnectMedia(page, identity, milliseconds, ensureGap) {
   if (ensureGap) await ensureGap();
@@ -1379,6 +1398,7 @@ async function setRole(owner, name, role) {
       await guest.locator('#cam-btn').click();
       await guest.locator('#mic-btn').click();
     });
+    let checkUnacknowledgedControl;
     await step(
       'interrupted transport setup rejoins with working media and no automatic capture',
       async () => {
@@ -1386,10 +1406,35 @@ async function setRole(owner, name, role) {
         let interrupted = false;
         let closing = Promise.resolve();
         let closeFailed = false;
+        let dropPause = false;
+        let droppedPause = false;
+        let acknowledgedPauses = 0;
         const probe = await client('interrupted-setup', false, async (context) => {
           await context.routeWebSocket(`${base.replace(/^http/, 'ws')}/ws`, (route) => {
             const server = route.connectToServer();
             let retired = false;
+            const interrupt = (delayMs = 0) => {
+              retired = true;
+              closing = (async () => {
+                if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+                await Promise.all([server.close(), route.close()]);
+              })();
+              closing.catch(() => {
+                closeFailed = true;
+              });
+            };
+            route.onMessage((message) => {
+              if (retired) return;
+              const parsed = JSON.parse(String(message));
+              if (dropPause && !droppedPause && parsed.type === 'pauseProducer') {
+                droppedPause = true;
+                // Keep the socket apparently open beyond the client's request
+                // deadline, as can happen before network failure is detected.
+                interrupt(5500);
+                return;
+              }
+              server.send(message);
+            });
             server.onMessage((message) => {
               if (retired) return;
               const parsed = JSON.parse(String(message));
@@ -1399,14 +1444,13 @@ async function setRole(owner, name, role) {
                   // The real server created both transports. Lose its receive
                   // reply by closing both owned signaling ends, without forging
                   // any protocol response or changing native RTC behavior.
-                  interrupted = retired = true;
-                  closing = Promise.all([server.close(), route.close()]);
-                  closing.catch(() => {
-                    closeFailed = true;
-                  });
+                  interrupted = true;
+                  interrupt();
                   return;
                 }
               }
+              if (parsed.type === 'producerPaused' && typeof parsed.requestId === 'string')
+                acknowledgedPauses++;
               route.send(message);
             });
           });
@@ -1440,13 +1484,7 @@ async function setRole(owner, name, role) {
           // This is a new receiver, so wait for its first native RTP report
           // before measuring progress. The retained-reconnect checks already
           // have live counters and deliberately do not need this startup wait.
-          await owner.waitForFunction(async (state) => {
-            try {
-              return (await state.sample()).audioPackets > 0;
-            } catch {
-              return false;
-            }
-          }, identity);
+          await waitForMediaStart(owner, identity);
           report.interruptedSetup = {
             passed: true,
             transportReplies,
@@ -1455,9 +1493,72 @@ async function setRole(owner, name, role) {
         } finally {
           await identity.dispose();
         }
-        await leave(probe);
-        await probe.context().close();
+        checkUnacknowledgedControl = async () => {
+          const peers = await probe.evaluateHandle(() => window.__communityPeers.slice());
+          const before = await probe.evaluate(
+            () => window.__communitySignalingReconnect.snapshot().counters,
+          );
+          const previousAcks = acknowledgedPauses;
+          try {
+            dropPause = true;
+            await probe.locator('#mic-btn').click();
+            await probe.waitForFunction(
+              (previous) =>
+                window.__communitySignalingReconnect.snapshot().counters.reconnectSuccess ===
+                previous + 1,
+              before.reconnectSuccess,
+            );
+            await connected(probe);
+            await owner.waitForFunction(
+              () => document.querySelectorAll('.video-tile:not(.local) audio').length === 0,
+            );
+            await closing;
+            assert.equal(closeFailed, false);
+            assert.equal(droppedPause, true);
+            assert.equal(acknowledgedPauses, previousAcks + 1);
+            assert.equal(
+              await peers.evaluate((before) => {
+                const after = window.__communityPeers;
+                return (
+                  before.length === after.length &&
+                  before.every((peer, index) => peer === after[index])
+                );
+              }),
+              true,
+              'control recovery must preserve native peer connections',
+            );
+            const after = await probe.evaluate(
+              () => window.__communitySignalingReconnect.snapshot().counters,
+            );
+            for (const key of [
+              'sentJoinRoom',
+              'sentCreateSendTransport',
+              'sentCreateRecvTransport',
+              'sentProduce',
+            ])
+              assert.equal(after[key], before[key]);
+            await probe.locator('#mic-btn').click();
+            await remotePlayback(owner, 'audio');
+            const resumed = await reconnectMediaIdentity(owner);
+            try {
+              report.unacknowledgedControl = {
+                passed: true,
+                media: await advancingReconnectMedia(owner, resumed, 3000),
+              };
+            } finally {
+              await resumed.dispose();
+            }
+          } finally {
+            await peers.dispose();
+          }
+          await leave(probe);
+          await probe.context().close();
+        };
       },
+    );
+    await step(
+      'a media control lost before server receipt is replayed after reconnect',
+      checkUnacknowledgedControl,
     );
     await step(
       'simulated capture termination updates both clients and permits explicit restart',

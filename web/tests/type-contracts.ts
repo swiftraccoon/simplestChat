@@ -120,4 +120,10 @@ export async function checkMediaContracts(signaling: SignalingClient): Promise<v
     { type: 'consume', producerId: 'producer', rtpCapabilities: {} },
     'consumerCreated',
   );
+  const control = await signaling.request(
+    { type: 'closeConsumer', consumerId: 'consumer' },
+    'mediaControlApplied',
+  );
+  const controlId: string = control.requestId;
+  void controlId;
 }

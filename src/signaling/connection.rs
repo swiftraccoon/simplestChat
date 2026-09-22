@@ -560,6 +560,15 @@ struct ReplySender<'a> {
 }
 
 impl ReplySender<'_> {
+    /// Legacy closure/layer commands have no reply. Modern clients explicitly
+    /// request acknowledgement so a lost socket cannot hide an unapplied control.
+    fn acknowledge_control(&self) -> anyhow::Result<()> {
+        if self.request_id.is_some() {
+            self.send(&ServerMessage::MediaControlApplied)?;
+        }
+        Ok(())
+    }
+
     fn send(&self, message: &ServerMessage) -> anyhow::Result<()> {
         // These protocols already serialize their own IDs. Do not emit a
         // duplicate JSON key or replace their independent correlation state.
@@ -2556,6 +2565,7 @@ async fn handle_client_message(
                 room_manager
                     .close_consumer(room_id, participant_id, sender, consumer_id)
                     .await?;
+                reply.acknowledge_control()?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2566,6 +2576,7 @@ async fn handle_client_message(
                 room_manager
                     .close_producer(room_id, participant_id, sender, producer_id)
                     .await?;
+                reply.acknowledge_control()?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2636,6 +2647,7 @@ async fn handle_client_message(
                         *temporal_layer,
                     )
                     .await?;
+                reply.acknowledge_control()?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2977,6 +2989,34 @@ mod security_tests {
         .await
         .unwrap();
         assert!(map.inner.read().unwrap().is_empty());
+    }
+
+    #[test]
+    fn control_acknowledgement_preserves_legacy_silence_and_echoes_modern_ids() {
+        let metrics = ServerMetrics::new();
+        let (sender, mut receiver) = mpsc::channel(2);
+        for request_id in [None, Some("control-1")] {
+            ReplySender {
+                metrics: &metrics,
+                sender: &sender,
+                request_id,
+            }
+            .acknowledge_control()
+            .unwrap();
+            if let Some(request_id) = request_id {
+                let reply: serde_json::Value =
+                    serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
+                assert_eq!(
+                    reply,
+                    serde_json::json!({ "type": "mediaControlApplied", "requestId": request_id })
+                );
+            } else {
+                assert!(matches!(
+                    receiver.try_recv(),
+                    Err(mpsc::error::TryRecvError::Empty)
+                ));
+            }
+        }
     }
 
     #[test]

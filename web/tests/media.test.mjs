@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import ts from '@typescript/typescript6';
-import { evaluateTypeScript, loadTypeScript } from './source-loader.mjs';
+import { evaluateTypeScript, loadContractModules, loadTypeScript } from './source-loader.mjs';
+
+const signalingModule = await loadTypeScript('src/signaling.ts', {
+  modules: await loadContractModules(),
+});
 
 const { Producer } = await import(
   new URL('./Producer.js', import.meta.resolve('mediasoup-client'))
@@ -75,7 +79,7 @@ async function fixture(t) {
     return track;
   };
   const { MediaManager } = await loadTypeScript('src/media.ts', {
-    modules: { 'mediasoup-client': {} },
+    modules: { 'mediasoup-client': {}, './signaling': signalingModule },
     globals: {
       localStorage: {
         getItem() {
@@ -109,6 +113,11 @@ async function fixture(t) {
     connected: true,
     send(message) {
       if (this.connected) state.sent.push(message);
+    },
+    async request(message, responseType) {
+      if (!this.connected) throw new Error('WebSocket closed');
+      state.sent.push(message);
+      return (await state.controlReply?.(message)) ?? { type: responseType };
     },
   };
   const media = new MediaManager(signaling);
@@ -156,6 +165,205 @@ const closeMessages = (state, producer) =>
     (message) => message.type === 'closeProducer' && message.producerId === producer.id,
   );
 
+async function settleControls() {
+  for (let index = 0; index < 12; index++) await Promise.resolve();
+}
+
+for (const outcome of ['resolve', 'reject']) {
+  test(`an old control ${outcome} cannot retire a replacement request after socket loss`, async (t) => {
+    const { media, signaling, state } = await fixture(t);
+    await media.unmuteAudio();
+    const oldReply = deferred();
+    const currentReply = deferred();
+    const replies = [oldReply, currentReply];
+    state.controlReply = () => replies.shift().promise;
+    media.muteAudio();
+    assert.equal(state.sent.length, 1);
+    assert.equal(media.pendingControls.size, 1, 'a native send is not acknowledgement');
+    signaling.connected = false;
+    media.suspendSignaling();
+    signaling.connected = true;
+    media.resumeSignaling();
+    assert.equal(state.sent.length, 2);
+    oldReply[outcome](new Error('Old socket closed'));
+    await settleControls();
+    assert.equal(media.pendingControls.size, 1, 'an old completion cannot erase the replay');
+    currentReply.resolve();
+    await settleControls();
+    assert.equal(media.pendingControls.size, 0);
+    media.resumeSignaling();
+    assert.equal(state.sent.length, 2, 'acknowledged controls must not replay again');
+  });
+}
+
+test('rapid controls coalesce while acknowledgement is pending and eventually apply the last state', async (t) => {
+  const { media, state } = await fixture(t);
+  await media.unmuteAudio();
+  const reply = deferred();
+  state.controlReply = () => reply.promise;
+  media.muteAudio();
+  await media.unmuteAudio();
+  media.muteAudio();
+  await media.unmuteAudio();
+  assert.equal(state.sent.length, 1, 'only one producer control may be in flight');
+  reply.resolve();
+  await settleControls();
+  assert.deepEqual(
+    state.sent.map(({ type }) => type),
+    ['pauseProducer', 'resumeProducer'],
+  );
+  assert.equal(media.pendingControls.size, 0);
+});
+
+test('a live control rejection reports failure once and permits the next user action', async (t) => {
+  const { media, state } = await fixture(t);
+  await media.unmuteAudio();
+  let errors = 0;
+  media.onControlError = () => {
+    errors++;
+  };
+  state.controlReply = () => Promise.reject(new Error('Private native error details'));
+  media.muteAudio();
+  await settleControls();
+  assert.equal(errors, 1);
+  assert.equal(media.pendingControls.size, 0);
+  assert.equal(state.sent.length, 1, 'a failed control must not spin on retries');
+  assert.deepEqual(state.warnings, [['[media] pauseProducer could not be confirmed']]);
+  state.controlReply = undefined;
+  await media.unmuteAudio();
+  await settleControls();
+  assert.equal(state.sent.at(-1).type, 'resumeProducer');
+  assert.equal(errors, 1);
+});
+
+test('a failed superseded control still delivers the newest desired state', async (t) => {
+  const { media, state } = await fixture(t);
+  await media.unmuteAudio();
+  const reply = deferred();
+  state.controlReply = () => reply.promise;
+  media.muteAudio();
+  await media.unmuteAudio();
+  state.controlReply = undefined;
+  reply.reject(new Error('Old pause rejected'));
+  await settleControls();
+  assert.deepEqual(
+    state.sent.map(({ type }) => type),
+    ['pauseProducer', 'resumeProducer'],
+  );
+  assert.equal(media.pendingControls.size, 0);
+  assert.deepEqual(state.warnings, []);
+});
+
+test('a timeout before socket closure retains the desired control without retrying on unrelated acknowledgements', async (t) => {
+  const { media, state, signaling } = await fixture(t);
+  await media.unmuteAudio();
+  await media.unmuteVideo();
+  const audioId = media.audioProducer.id;
+  state.controlReply = (message) => {
+    if (message.producerId === audioId)
+      return Promise.reject(new signalingModule.SignalingRequestTimeoutError('producerPaused'));
+  };
+  media.muteAudio();
+  await settleControls();
+  assert.equal(media.pendingControls.size, 1);
+  media.pauseVideo();
+  await settleControls();
+  assert.equal(state.sent.filter((message) => message.producerId === audioId).length, 1);
+  assert.equal(state.warnings.length, 1);
+  signaling.connected = false;
+  media.suspendSignaling();
+  state.controlReply = undefined;
+  signaling.connected = true;
+  media.resumeSignaling();
+  await settleControls();
+  assert.deepEqual(state.sent.at(-1), { type: 'pauseProducer', producerId: audioId });
+  assert.equal(media.pendingControls.size, 0);
+  assert.equal(media.inFlightControls.size, 0);
+});
+
+test('a new user choice proceeds after a timeout without waiting for socket recovery', async (t) => {
+  const { media, state } = await fixture(t);
+  await media.unmuteAudio();
+  state.controlReply = () =>
+    Promise.reject(new signalingModule.SignalingRequestTimeoutError('producerPaused'));
+  media.muteAudio();
+  await settleControls();
+  state.controlReply = undefined;
+  await media.unmuteAudio();
+  await settleControls();
+  assert.deepEqual(
+    state.sent.map(({ type }) => type),
+    ['pauseProducer', 'resumeProducer'],
+  );
+  assert.equal(media.pendingControls.size, 0);
+  assert.equal(media.inFlightControls.size, 0);
+});
+
+for (const retirement of ['session', 'revoked-producer']) {
+  test(`late control failures after ${retirement} retirement cannot warn or replay`, async (t) => {
+    const { media, state } = await fixture(t);
+    await media.unmuteAudio();
+    const reply = deferred();
+    state.controlReply = () => reply.promise;
+    media.muteAudio();
+    if (retirement === 'session') media.close();
+    else media.reconcileLocalProducers([]);
+    reply.reject(new Error('Retired operation failed'));
+    await settleControls();
+    media.resumeSignaling();
+    assert.equal(state.sent.length, 1);
+    assert.equal(media.pendingControls.size, 0);
+    assert.equal(media.inFlightControls.size, 0);
+    assert.deepEqual(state.warnings, []);
+  });
+}
+
+test('a snapshot confirms an unacknowledged producer closure without repeating it', async (t) => {
+  const { media, state, signaling } = await fixture(t);
+  await media.startScreenShare();
+  const reply = deferred();
+  state.controlReply = () => reply.promise;
+  media.stopScreenShare();
+  assert.equal(media.pendingControls.size, 2);
+  signaling.connected = false;
+  media.suspendSignaling();
+  media.reconcileLocalProducers([]);
+  signaling.connected = true;
+  media.resumeSignaling();
+  reply.resolve();
+  await settleControls();
+  assert.equal(state.sent.length, 2);
+  assert.equal(media.pendingControls.size, 0);
+});
+
+test('correlated ICE acknowledgement applies the returned credentials to its native transport', async (t) => {
+  const { media, state } = await fixture(t);
+  const parameters = { usernameFragment: 'fresh', password: 'fresh-password', iceLite: true };
+  const applied = [];
+  const transport = {
+    id: 'transport',
+    closed: false,
+    close() {},
+    on(_event, changed) {
+      this.changed = changed;
+    },
+    async restartIce(value) {
+      applied.push(value);
+    },
+  };
+  media.recvTransport = transport;
+  media.setupIceRecovery(transport);
+  state.controlReply = async () => ({
+    type: 'iceRestarted',
+    transportId: transport.id,
+    iceParameters: parameters,
+  });
+  transport.changed('failed');
+  await settleControls();
+  assert.deepEqual(applied, [{ iceParameters: parameters }]);
+  assert.equal(media.pendingControls.size, 0);
+});
+
 test('offline microphone changes coalesce until the room resumes on its new socket', async (t) => {
   const { media, signaling, state } = await fixture(t);
   await media.unmuteAudio();
@@ -176,6 +384,7 @@ test('offline microphone changes coalesce until the room resumes on its new sock
   assert.deepEqual(state.sent, [], 'socket open alone does not restore room ownership');
   media.resumeSignaling();
   assert.deepEqual(state.sent, [{ type: 'pauseProducer', producerId: producer.id }]);
+  await settleControls();
   assert.equal(media.pendingControls.size, 0);
   media.resumeSignaling();
   assert.equal(state.sent.length, 1, 'a flushed state must not be replayed twice');
@@ -239,6 +448,7 @@ for (const closure of ['local', 'server', 'session']) {
       state.sent,
       closure === 'local' ? [{ type: 'closeConsumer', consumerId: consumer.id }] : [],
     );
+    await settleControls();
     assert.equal(media.pendingControls.size, 0);
   });
 }
@@ -1251,7 +1461,9 @@ for (const stage of ['receiver', 'resume']) {
     const consumers = [];
     const capabilities = { codecs: [] };
     media.device = { recvRtpCapabilities: capabilities };
-    media.signaling.request = async (message) => {
+    const controlRequest = media.signaling.request.bind(media.signaling);
+    media.signaling.request = async (message, responseType) => {
+      if (message.type === 'closeConsumer') return controlRequest(message, responseType);
       if (message.type === 'consume') {
         assert.equal(message.rtpCapabilities, capabilities);
         return {
@@ -1429,6 +1641,7 @@ test('hide and restore pause only the selected viewer consumer', async (t) => {
   media.setConsumerHiddenByProducer('remote', false);
   assert.equal(consumer.paused, false);
   assert.equal(track.enabled, true);
+  await settleControls();
   assert.deepEqual(
     state.sent.map((message) => message.type),
     ['pauseConsumer', 'resumeConsumer'],
@@ -1466,8 +1679,10 @@ test('quality preferences respect available simulcast layers and skip single-lay
     media.consumers.set(id, consumer);
     media.producerToConsumer.set(id, id);
   }
-  for (const quality of ['low', 'medium', 'high', 'auto'])
+  for (const quality of ['low', 'medium', 'high', 'auto']) {
     assert.equal(media.setConsumerQualityByProducer('camera', quality), true);
+    await settleControls();
+  }
   assert.equal(media.setConsumerQualityByProducer('screen', 'high'), false);
   assert.equal(media.setConsumerQualityByProducer('missing', 'high'), false);
   assert.deepEqual(
@@ -1502,22 +1717,27 @@ test('a tile-size cap bounds the requested layer and the manual choice stays the
     true,
     'a small tile caps at layer 1',
   );
+  await settleControls();
   assert.equal(
     media.setConsumerQualityByProducer('camera', 'high'),
     true,
     'high cannot exceed the cap',
   );
+  await settleControls();
   assert.equal(
     media.setConsumerSizeCapByProducer('camera', null),
     true,
     'a large tile lifts the cap',
   );
+  await settleControls();
   assert.equal(media.setConsumerQualityByProducer('camera', 'low'), true);
+  await settleControls();
   assert.equal(
     media.setConsumerSizeCapByProducer('camera', 2),
     true,
     'low stays below a loose cap',
   );
+  await settleControls();
   assert.equal(
     media.setConsumerSizeCapByProducer('screen', 0),
     false,
@@ -1586,7 +1806,7 @@ for (const stage of [
       }
     }
     const { MediaManager } = await loadTypeScript('src/media.ts', {
-      modules: { 'mediasoup-client': { Device } },
+      modules: { 'mediasoup-client': { Device }, './signaling': signalingModule },
       globals: {
         localStorage: {
           getItem() {

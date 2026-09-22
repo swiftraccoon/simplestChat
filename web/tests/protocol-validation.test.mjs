@@ -206,6 +206,7 @@ const fixtures = [
     producerId: 'producer',
   })),
   ...['consumerResumed', 'consumerPaused'].map((type) => ({ type, consumerId: 'consumer' })),
+  { type: 'mediaControlApplied', requestId: 'control-1' },
   { type: 'reconnectResult', success: false, participantId: '' },
   {
     type: 'iceRestarted',
@@ -318,6 +319,16 @@ test('request and error IDs survive decoding and reject malformed correlation to
     }
     assert.equal(Object.hasOwn(decode(fixture), 'requestId'), false);
   }
+});
+
+test('media control acknowledgements require a bounded correlation ID', () => {
+  for (const requestId of [undefined, null, '', 'x'.repeat(65), 1, 'unsafe\n']) {
+    assert.throws(() => decode({ type: 'mediaControlApplied', requestId }), invalid);
+  }
+  assert.deepEqual(decode({ type: 'mediaControlApplied', requestId: 'control-1' }), {
+    type: 'mediaControlApplied',
+    requestId: 'control-1',
+  });
 });
 
 test('deferred authentication renewal requires bounded integer timing fields', () => {

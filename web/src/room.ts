@@ -401,6 +401,12 @@ export class RoomClient {
     const media = new MediaManager(this.signaling);
     this.media = media;
     this.mediaReady = false;
+    media.onControlError = () => {
+      if (generation !== this.generation || this.media !== media) return;
+      this.events.onBackgroundError?.(
+        'A media change could not be confirmed. Try the control again.',
+      );
+    };
     media.onLocalCaptureStopped = (kind) => {
       if (generation !== this.generation || this.media !== media) return;
       this.events.onLocalMediaChanged();
@@ -1292,6 +1298,7 @@ export class RoomClient {
       case 'consumerCreated':
       case 'consumerPaused':
       case 'consumerResumed':
+      case 'mediaControlApplied':
       case 'error':
       case 'producerCreated':
       case 'reconnectResult':

@@ -1,6 +1,6 @@
 import * as mediasoupClient from 'mediasoup-client';
-import type { ClientMessage } from './protocol';
-import type { SignalingClient } from './signaling';
+import type { ClientMessage, RequestResponses } from './protocol';
+import { SignalingRequestTimeoutError, type SignalingClient } from './signaling';
 
 type MediaControl = Extract<
   ClientMessage,
@@ -15,7 +15,18 @@ type MediaControl = Extract<
       | 'setConsumerPreferredLayers'
       | 'restartIce';
   }
->;
+> & { requestId?: never };
+
+const CONTROL_RESPONSES: { [K in MediaControl['type']]: RequestResponses[K] } = {
+  pauseProducer: 'producerPaused',
+  resumeProducer: 'producerResumed',
+  closeProducer: 'mediaControlApplied',
+  pauseConsumer: 'consumerPaused',
+  resumeConsumer: 'consumerResumed',
+  closeConsumer: 'mediaControlApplied',
+  setConsumerPreferredLayers: 'mediaControlApplied',
+  restartIce: 'iceRestarted',
+};
 
 export interface CapturePreferences {
   cameraDeviceId: string;
@@ -122,6 +133,7 @@ export class MediaManager {
   // Only controls for existing native resources are retained, never creation or
   // capture requests. Coalesce each resource's state while its socket recovers.
   private pendingControls = new Map<string, MediaControl>();
+  private inFlightControls = new Map<string, { timedOut: boolean }>();
   private device: mediasoupClient.Device | null = null;
   private sendTransport: mediasoupClient.types.Transport | null = null;
   private recvTransport: mediasoupClient.types.Transport | null = null;
@@ -153,6 +165,7 @@ export class MediaManager {
   // Callback when screen share stops (browser "Stop sharing" or explicit stop)
   private onScreenShareStoppedCb: (() => void) | null = null;
   private onLocalCaptureStoppedCb: ((kind: 'audio' | 'video') => void) | null = null;
+  private onControlErrorCb: (() => void) | null = null;
 
   constructor(signaling: SignalingClient) {
     this.signaling = signaling;
@@ -161,13 +174,16 @@ export class MediaManager {
   /** Keep media running, but wait for room ownership on the replacement socket. */
   suspendSignaling(): void {
     this.signalingSuspended = true;
+    // Every unacknowledged command remains pending. Old promise completions
+    // must not erase the replacement socket's attempt for the same resource.
+    this.inFlightControls.clear();
   }
 
   /** Called only after the same room session resumes and reconciles its snapshot. */
   resumeSignaling(): void {
     if (this.closed || !this.signaling.connected) return;
     this.signalingSuspended = false;
-    this.flushControls();
+    for (const key of this.pendingControls.keys()) this.flushControl(key);
   }
 
   private sendControl(message: MediaControl): void {
@@ -185,16 +201,64 @@ export class MediaManager {
       if (message.type === 'closeConsumer')
         this.pendingControls.delete(`layers:${message.consumerId}`);
     } else key = `ice:${message.transportId}`;
+    if (this.inFlightControls.get(key)?.timedOut) this.inFlightControls.delete(key);
     this.pendingControls.set(key, message);
-    this.flushControls();
+    this.flushControl(key);
   }
 
-  private flushControls(): void {
-    if (this.signalingSuspended || !this.signaling.connected) return;
-    for (const [key, message] of this.pendingControls) {
-      this.signaling.send(message);
-      this.pendingControls.delete(key);
-    }
+  private flushControl(key: string): void {
+    if (this.signalingSuspended || !this.signaling.connected || this.inFlightControls.has(key))
+      return;
+    const message = this.pendingControls.get(key);
+    if (!message) return;
+    const attempt = { timedOut: false };
+    this.inFlightControls.set(key, attempt);
+    const isCurrent = () => !this.closed && this.inFlightControls.get(key) === attempt;
+    this.requestControl(message, isCurrent)
+      .then(() => {
+        if (!isCurrent()) return;
+        this.inFlightControls.delete(key);
+        if (this.pendingControls.get(key) === message) this.pendingControls.delete(key);
+        this.flushControl(key);
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent()) return;
+        if (this.signalingSuspended || !this.signaling.connected) {
+          this.inFlightControls.delete(key);
+          return;
+        }
+        if (this.pendingControls.get(key) === message) {
+          if (error instanceof SignalingRequestTimeoutError) {
+            // An apparently open socket may already be unable to deliver.
+            // Retain the desired state, but wait for recovery or another user
+            // action instead of retrying every time an unrelated ACK arrives.
+            attempt.timedOut = true;
+          } else {
+            this.inFlightControls.delete(key);
+            this.pendingControls.delete(key);
+          }
+          console.warn(`[media] ${message.type} could not be confirmed`);
+          this.onControlErrorCb?.();
+        } else {
+          this.inFlightControls.delete(key);
+        }
+        this.flushControl(key);
+      });
+  }
+
+  private async requestControl(message: MediaControl, isCurrent: () => boolean): Promise<void> {
+    const response = await this.signaling.request(message, CONTROL_RESPONSES[message.type]);
+    if (isCurrent() && response.type === 'iceRestarted')
+      await this.handleIceRestarted(
+        response.transportId,
+        response.iceParameters,
+        response.iceServers,
+      );
+  }
+
+  /** Report rejected or timed-out controls without exposing server/native error details. */
+  set onControlError(callback: (() => void) | null) {
+    this.onControlErrorCb = callback;
   }
 
   /** Register callback for when screen share stops */
@@ -736,6 +800,8 @@ export class MediaManager {
     if (!consumerId) return;
     this.pendingControls.delete(`consumer:${consumerId}`);
     this.pendingControls.delete(`layers:${consumerId}`);
+    this.inFlightControls.delete(`layers:${consumerId}`);
+    if (!notifyServer) this.inFlightControls.delete(`consumer:${consumerId}`);
     const consumer = this.consumers.get(consumerId);
     if (consumer) {
       consumer.close();
@@ -750,6 +816,7 @@ export class MediaManager {
   /** Release a producer revoked by the server so it can be created again later. */
   closeLocalProducer(producerId: string): boolean {
     this.pendingControls.delete(`producer:${producerId}`);
+    this.inFlightControls.delete(`producer:${producerId}`);
     if (this.audioProducer?.id === producerId) {
       this.cancelAudioActivation();
       const producer = this.audioProducer;
@@ -781,6 +848,12 @@ export class MediaManager {
   /** Release local capture for server-side closures missed during a disconnected interval. */
   reconcileLocalProducers(producerIds: readonly string[]): boolean {
     const active = new Set(producerIds);
+    for (const [key, message] of this.pendingControls) {
+      if (message.type === 'closeProducer' && !active.has(message.producerId)) {
+        this.pendingControls.delete(key);
+        this.inFlightControls.delete(key);
+      }
+    }
     const localIds = [
       this.audioProducer?.id,
       this.videoProducer?.id,
@@ -1057,6 +1130,7 @@ export class MediaManager {
   close(): void {
     this.closed = true;
     this.pendingControls.clear();
+    this.inFlightControls.clear();
     this.lifecycle++;
     this.cancelAudioActivation();
     this.videoVersion++;

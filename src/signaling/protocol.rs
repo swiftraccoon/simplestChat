@@ -411,6 +411,9 @@ pub enum ServerMessage {
     /// Consumer paused
     #[serde(rename_all = "camelCase")]
     ConsumerPaused { consumer_id: String },
+    /// A correlated closure or preferred-layer command completed successfully.
+    /// Sent only inside a reply envelope with the caller's request ID.
+    MediaControlApplied,
     /// Result of reconnection attempt
     #[serde(rename_all = "camelCase")]
     ReconnectResult {

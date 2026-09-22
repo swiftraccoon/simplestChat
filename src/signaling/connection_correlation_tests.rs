@@ -91,6 +91,43 @@ async fn correlated_media_replies_keep_notifications_outside_the_request_envelop
         .unwrap();
     assert_eq!(ice["requestId"], "ice");
     assert_eq!(ice["transportId"], transports[1]);
+    let layers = fixture
+        .request(
+            json!({
+                "type": "setConsumerPreferredLayers", "requestId": "layers",
+                "consumerId": consumed["consumerId"], "spatialLayer": 0,
+            }),
+            "mediaControlApplied",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        layers,
+        json!({"type": "mediaControlApplied", "requestId": "layers"})
+    );
+    for request_id in ["close-consumer", "close-consumer-again"] {
+        let closed = fixture
+            .request(
+                json!({
+                    "type": "closeConsumer", "requestId": request_id,
+                    "consumerId": consumed["consumerId"],
+                }),
+                "mediaControlApplied",
+            )
+            .await
+            .unwrap();
+        assert_eq!(closed["requestId"], request_id);
+    }
+    let closed = fixture
+        .request(
+            json!({
+                "type": "closeProducer", "requestId": "close-producer", "producerId": producer_id,
+            }),
+            "mediaControlApplied",
+        )
+        .await
+        .unwrap();
+    assert_eq!(closed["requestId"], "close-producer");
     // Existing native/load clients omit the optional envelope and still work.
     let legacy = fixture
         .request(
@@ -119,6 +156,8 @@ async fn correlated_dispatch_and_decode_errors_echo_only_valid_request_ids() {
         json!({"type": "consume", "requestId": "missing-fields"}),
         json!({"type": "unknownCommand", "requestId": "unknown-command"}),
         json!({"type": "resumeConsumer", "requestId": "missing-consumer", "consumerId": Uuid::new_v4().to_string()}),
+        json!({"type": "setConsumerPreferredLayers", "requestId": "missing-layers-consumer", "consumerId": Uuid::new_v4().to_string(), "spatialLayer": 0}),
+        json!({"type": "closeProducer", "requestId": "missing-producer", "producerId": Uuid::new_v4().to_string()}),
     ] {
         let rejected = fixture.request(command.clone(), "error").await.unwrap();
         assert_eq!(rejected["requestId"], command["requestId"]);

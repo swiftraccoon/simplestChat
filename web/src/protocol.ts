@@ -27,8 +27,8 @@ export type ClientMessage =
   | { type: 'consume'; requestId?: string; producerId: string; rtpCapabilities: RtpCapabilities }
   | { type: 'resumeConsumer'; requestId?: string; consumerId: string }
   | { type: 'pauseConsumer'; requestId?: string; consumerId: string }
-  | { type: 'closeConsumer'; consumerId: string }
-  | { type: 'closeProducer'; producerId: string }
+  | { type: 'closeConsumer'; requestId?: string; consumerId: string }
+  | { type: 'closeProducer'; requestId?: string; producerId: string }
   | { type: 'pauseProducer'; requestId?: string; producerId: string }
   | { type: 'resumeProducer'; requestId?: string; producerId: string }
   | {
@@ -41,6 +41,7 @@ export type ClientMessage =
   | { type: 'restartIce'; requestId?: string; transportId: string }
   | {
       type: 'setConsumerPreferredLayers';
+      requestId?: string;
       consumerId: string;
       spatialLayer: number;
       temporalLayer?: number;
@@ -134,6 +135,7 @@ export type ServerMessage =
   | { type: 'producerResumed'; requestId?: string; producerId: string }
   | { type: 'consumerResumed'; requestId?: string; consumerId: string }
   | { type: 'consumerPaused'; requestId?: string; consumerId: string }
+  | { type: 'mediaControlApplied'; requestId: string }
   | {
       type: 'reconnectResult';
       requestId?: string;
@@ -192,6 +194,9 @@ export interface RequestResponses {
   consume: 'consumerCreated';
   resumeConsumer: 'consumerResumed';
   pauseConsumer: 'consumerPaused';
+  closeConsumer: 'mediaControlApplied';
+  closeProducer: 'mediaControlApplied';
+  setConsumerPreferredLayers: 'mediaControlApplied';
   pauseProducer: 'producerPaused';
   resumeProducer: 'producerResumed';
   reconnect: 'reconnectResult';

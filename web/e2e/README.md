@@ -127,6 +127,12 @@ socket ends before delivering the receive-transport reply. Recovery must reclaim
 and rejoin the room, create fresh transports without capture, and deliver decoded
 audio/video after the user explicitly enables the camera and microphone. No
 protocol success, native peer connection or RTP statistics are synthesized.
+The same recovered client then loses a microphone pause command before it reaches
+the server; socket closure is delayed beyond the acknowledgement timeout to
+exercise delayed failure detection. After signaling recovery, the test requires a
+correlated server acknowledgement, removal of the remote audio element, unchanged native peers and
+no replacement transports or producers. Explicit unmute must restore decoded
+audio/video progress.
 
 Capture termination is simulated on owned fake tracks. The check verifies remote
 removal, controls, restart guidance, preservation of the other capture kind and

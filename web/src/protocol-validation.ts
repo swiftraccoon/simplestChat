@@ -405,6 +405,7 @@ const messages = {
   producerResumed: message('producerResumed', { requestId: optionalRequestId, producerId: text }),
   consumerResumed: message('consumerResumed', { requestId: optionalRequestId, consumerId: text }),
   consumerPaused: message('consumerPaused', { requestId: optionalRequestId, consumerId: text }),
+  mediaControlApplied: message('mediaControlApplied', { requestId }),
   reconnectResult: message('reconnectResult', {
     requestId: optionalRequestId,
     success: boolean,

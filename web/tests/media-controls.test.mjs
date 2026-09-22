@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadContractModules, loadTypeScript } from './source-loader.mjs';
+
+const signalingModule = await loadTypeScript('src/signaling.ts', {
+  modules: await loadContractModules(),
+});
 
 function deferred() {
   let resolve, reject;
@@ -42,7 +46,7 @@ async function fixture(t) {
     setItem: (key, value) => stored.set(key, value),
   };
   const media = await loadTypeScript('src/media.ts', {
-    modules: { 'mediasoup-client': {} },
+    modules: { 'mediasoup-client': {}, './signaling': signalingModule },
     globals: { localStorage: storage },
   });
   const state = {

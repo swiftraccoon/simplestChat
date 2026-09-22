@@ -647,7 +647,7 @@ test('late success and error replies cannot settle a retry or become application
   client.setOnMessage((message) => events.push(message));
   const expired = assert.rejects(
     client.request({ type: 'createSendTransport' }, 'transportCreated', 10),
-    /Timeout waiting for transportCreated/,
+    { name: 'SignalingRequestTimeoutError', message: 'Timeout waiting for transportCreated' },
   );
   const originalId = socket.sent[0].requestId;
   const originalTimeout = timers.callbacks[0];
@@ -761,7 +761,7 @@ test('a reply at the deadline rejects even when browser timeout callbacks have b
     const { client, socket, timers } = await connectedClient(t);
     const expired = assert.rejects(
       client.request({ type: 'createRecvTransport' }, 'transportCreated', 10),
-      /Timeout waiting for transportCreated/,
+      { name: 'SignalingRequestTimeoutError', message: 'Timeout waiting for transportCreated' },
     );
     const requestId = socket.sent[0].requestId;
     timers.advanceWithoutTimers(10);

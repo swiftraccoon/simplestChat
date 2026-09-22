@@ -9,11 +9,54 @@ const source = await readFile(new URL('../../web/e2e/community.cjs', import.meta
 const start = source.indexOf('async function reconnectMediaIdentity(');
 const end = source.indexOf('\nasync function signalingReconnect(', start);
 assert.ok(start >= 0 && end > start, 'reconnect identity helper must remain available');
-const { reconnectMediaIdentity, mediaProgressDelta, advancingReconnectMedia } = runInNewContext(
-  `${source.slice(start, end)}; ({ reconnectMediaIdentity, mediaProgressDelta, advancingReconnectMedia })`,
-  { performance },
-  { timeout: 1000 },
-);
+function helpers(clock = performance) {
+  return runInNewContext(
+    `${source.slice(start, end)}; ({ reconnectMediaIdentity, mediaProgressDelta, waitForMediaStart, advancingReconnectMedia })`,
+    { performance: clock },
+    { timeout: 1000 },
+  );
+}
+const { reconnectMediaIdentity, mediaProgressDelta, advancingReconnectMedia } = helpers();
+
+test('initial media statistics wait awaits asynchronous samples and retries missing or unready counters', async () => {
+  let elapsed = 0;
+  let calls = 0;
+  const { waitForMediaStart } = helpers({ now: () => elapsed });
+  const state = {
+    async sample() {
+      await Promise.resolve();
+      calls++;
+      if (calls === 1) throw new Error('Fresh receiver has no statistics yet');
+      return { audioPackets: calls > 2 ? 10 : 0, audioSamplesTime: 0.6, audioEnergy: 0.2 };
+    },
+  };
+  await waitForMediaStart(
+    { async waitForTimeout(milliseconds) { elapsed += milliseconds; } },
+    { async evaluate(callback) { return callback(state); } },
+  );
+  assert.equal(calls, 3);
+  assert.equal(elapsed, 400);
+});
+
+for (const missing of [false, true]) {
+  test(`initial media statistics wait fails within its deadline when counters are ${missing ? 'missing' : 'unready'}`, async () => {
+    let elapsed = 0;
+    const { waitForMediaStart } = helpers({ now: () => elapsed });
+    const failure = new Error('Statistics unavailable');
+    await assert.rejects(waitForMediaStart(
+      { async waitForTimeout(milliseconds) { elapsed += milliseconds; } },
+      { async evaluate() {
+        if (missing) throw failure;
+        return { audioPackets: 10, audioSamplesTime: 0, audioEnergy: 0 };
+      } },
+    ), error => {
+      assert.match(error.message, /did not expose decoded audio statistics/);
+      assert.equal(error.cause, missing ? failure : undefined);
+      return true;
+    });
+    assert.equal(elapsed, 10000);
+  });
+}
 
 function peer(connectionState, senders = [], receivers = []) {
   return {

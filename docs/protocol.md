@@ -179,14 +179,29 @@ requests and clears their timers; callbacks from a replaced socket are ignored.
 with the browser: the new browser never matches requests to ID-less replies
 from older servers.
 
-The media manager separately retains the latest unsent controls for its existing
-resources during signaling loss: producer/consumer pause or resume, closure,
-layer selection and ICE restart. It applies these after the same room session
+The media manager retains each control until its correlated acknowledgement:
+producer/consumer pause or resume, closure, layer selection and ICE restart.
+Only one command per resource/state category is in flight; newer choices coalesce
+behind it. A socket loss leaves unacknowledged controls pending, including commands
+whose native WebSocket send succeeded before the server received them. It applies
+the latest pending state after the same room session
 resumes and its snapshot is reconciled (or snapshot retrieval fails). Superseded
-controls and resources revoked by the snapshot are discarded; leaving or doing
+controls and resources revoked by the snapshot are discarded, and a snapshot can
+confirm that a locally closed producer is already absent. Leaving or doing
 a fresh join discards the old manager's pending controls. Creation and capture
 requests are never queued for replay. A second disconnect retires the previous
 recovery attempt without letting it close or resume the new socket's media.
+An explicit rejection reports the failed change and discards that command.
+A timeout reports the unconfirmed change and keeps it for the next recovery:
+the socket can still appear open after delivery has stopped. Neither failure
+retries in a loop, and a newer user choice can proceed immediately.
+Late results from a retired socket or resource cannot acknowledge a newer attempt.
+
+`closeConsumer`, `closeProducer` and `setConsumerPreferredLayers` reply with
+`mediaControlApplied` and the request ID after successful processing. This reply
+is emitted only for commands carrying an ID; legacy no-ID commands remain silent.
+Layer acknowledgement means the server accepted the preference, not that the
+selected layer has become available or been decoded.
 
 If signaling is lost during initial transport setup, the browser closes its
 partial local media manager. Recovery first reclaims the admitted session, then
@@ -225,8 +240,9 @@ cannot report a closed or replaced socket as connected.
    video, audible sound or permission to autoplay.
    If receiver creation or resumption fails, send `closeConsumer` with its
    `consumerId` to release the server subscription before retrying. This also
-   releases a receiver that is no longer needed. It has no acknowledgement and
-   repeated closure is harmless; only the current session's consumer is affected.
+   releases a receiver that is no longer needed. Correlated closure receives
+   `mediaControlApplied`; repeated closure is harmless and only the current
+   session's consumer is affected.
 
 Producer pause/resume/close events describe shared publishing state. Consumer
 pause/resume and preferred layers affect that receiver's subscription; local

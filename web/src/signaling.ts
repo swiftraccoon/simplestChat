@@ -3,6 +3,14 @@ import { decodeServerMessage } from './protocol-validation';
 
 export type MessageHandler = (msg: ServerMessage) => void;
 
+/** Missing acknowledgement does not prove that a command was rejected. */
+export class SignalingRequestTimeoutError extends Error {
+  constructor(responseType: RequestResponses[keyof RequestResponses]) {
+    super(`Timeout waiting for ${responseType}`);
+    this.name = 'SignalingRequestTimeoutError';
+  }
+}
+
 const RECONNECT_DEADLINE_MS = 120_000;
 const AUTHENTICATION_RENEWAL_TIMEOUT_MS = 5000;
 const AUTHENTICATION_RENEWAL_DEADLINE_MS = 15_000;
@@ -192,7 +200,7 @@ export class SignalingClient {
           if (!pending || (msg.type !== pending.responseType && msg.type !== 'error')) return;
           this.pendingRequests.delete(msg.requestId);
           if (performance.now() >= pending.deadline) {
-            pending.reject(new Error(`Timeout waiting for ${pending.responseType}`));
+            pending.reject(new SignalingRequestTimeoutError(pending.responseType));
           } else if (msg.type === 'error') {
             pending.reject(new Error(msg.message));
           } else {
@@ -298,7 +306,7 @@ export class SignalingClient {
       };
       const timer = setTimeout(() => {
         if (!this.pendingRequests.delete(requestId)) return;
-        pending.reject(new Error(`Timeout waiting for ${responseType}`));
+        pending.reject(new SignalingRequestTimeoutError(responseType));
       }, timeoutMs);
       this.pendingRequests.set(requestId, pending);
 

@@ -3329,8 +3329,8 @@ impl RoomManager {
         Ok(())
     }
 
-    /// Releases only the current sender's consumer. No acknowledgement is needed;
-    /// teardown may race producer closure or repeat after a lost connection.
+    /// Releases only the current sender's consumer, idempotently within its
+    /// session. Teardown may race producer closure or repeat after a lost reply.
     pub async fn close_consumer(
         &self,
         room_id: &str,
