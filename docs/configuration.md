@@ -25,7 +25,7 @@
 | `TRUSTED_PROXY_SECRET` | (none) | Shared proxy-authentication secret of at least 32 bytes; required for accurate client IPs through a container bridge |
 | `MEDIA_WORKERS` | detected CPUs, capped at 64 | Worker count from 1 through 64; invalid or non-UTF-8 values fail startup |
 | `WEBRTC_SERVER_PORT_BASE` | `40000` | First dedicated WebRTC UDP port; worker N uses base+N. Range must fit within 1–65535; use a separate base for isolated local instances |
-| `WEBRTC_SERVER_TCP` | `false` | Also listen for ICE-TCP on each worker's port and offer TCP candidates (UDP stays preferred). Clients on networks that block UDP can then still connect; the deployment must publish the same port range over TCP and open it at the firewall first, or clients are offered candidates that cannot connect. TURN over TLS remains the only path through symmetric NAT |
+| `WEBRTC_SERVER_TCP` | `false` | Also listen for ICE-TCP on each worker's port and offer TCP candidates (UDP stays preferred). Clients on networks that block UDP can then still connect; the deployment must publish the same port range over TCP and open it at the firewall first, or clients are offered candidates that cannot connect. TURN over TCP/TLS offers another fallback when clients cannot reach these media ports; a symmetric NAT alone does not require a relay to a reachable public ICE-Lite server |
 | `MAX_ROOMS` | `1000` | Maximum rooms held by one server process |
 | `MAX_PERSISTED_ROOMS` | `10000` | Global database-backed room cap enforced transactionally |
 | `ALLOW_AD_HOC_ROOMS` | `false` | Permit joins to create ephemeral rooms; must be explicitly enabled on every bind address |
