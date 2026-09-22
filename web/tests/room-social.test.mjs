@@ -359,6 +359,43 @@ test('a temporary restart rejoins a lobby without claiming admission or restarti
   ]);
 });
 
+test('rejoin notifies conversations while room intent is retained, then reclaims admitted sessions on further loss', async () => {
+  const notifications = [];
+  const setupStates = [];
+  const h = await harness({
+    joinReply: () => ({
+      type: 'roomJoined',
+      participantId: `membership-${notifications.length}`,
+      participants: [],
+      reconnectToken: 'reconnect-token',
+    }),
+    events: {
+      onParticipantsChanged() {
+        notifications.push(h.room.rejoiningAfterRestart);
+      },
+    },
+    setup() {
+      setupStates.push(h.room.restarting);
+    },
+  });
+  await h.room.join('retained-room', 'Local');
+  h.reply({ type: 'serverRestarting', reason: 'Server shutting down' });
+  h.signaling.onReconnected();
+  await h.room.recoveryPromise;
+  assert.deepEqual(
+    notifications,
+    [false, true],
+    'conversation activation must preserve the public draft',
+  );
+  assert.deepEqual(
+    setupStates,
+    [false, false],
+    'media setup must already use the admitted reconnect token',
+  );
+  assert.equal(h.room.rejoiningAfterRestart, false);
+  await h.room.leave();
+});
+
 for (const finish of ['leave', 'roomClosed', 'new-room']) {
   test(`${finish} cancels temporary restart intent and late failure callbacks`, async () => {
     const h = await harness();

@@ -360,9 +360,6 @@ export class RoomClient {
 
     this.localId = response.participantId;
     this.reconnectToken = response.reconnectToken;
-    // Once admitted, another disconnect must reclaim this session before
-    // replacing partially created transports, even during a fresh rejoin.
-    this.restarting = false;
     this.localRole = response.yourRole ?? 'user';
     this._roomSettings = response.roomSettings ?? null;
     this.recovering = false;
@@ -383,6 +380,12 @@ export class RoomClient {
       });
     }
     this.events.onParticipantsChanged(this.participants);
+    if (generation !== this.generation) throw new Error('Room join cancelled');
+    // Conversations must observe the retained room intent when a rejoin gives
+    // guests new participant IDs, so they can preserve the public draft. Once
+    // notified, another disconnect must reclaim this admitted session before
+    // replacing partially created transports, even during a fresh rejoin.
+    this.restarting = false;
 
     // Set up media transports only — no capture, no producers.
     // Camera/mic are captured lazily when user explicitly enables them.
