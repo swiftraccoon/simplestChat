@@ -298,30 +298,53 @@ async function reconnectMediaIdentity(page) {
             element.srcObject?.getAudioTracks().some((track) => track.readyState === 'live'),
         );
         if (audio.length !== 1) throw new Error('Expected one audible owned remote audio element');
+        const tracks = audio[0].srcObject.getAudioTracks();
+        if (tracks.length !== 1) throw new Error('Expected one owned remote audio track');
         let videoReports = 0;
         let audioReports = 0;
         let framesDecoded = 0;
-        let audioPackets = 0;
+        let audioStats;
+        let audioPlayout = null;
         for (const { peer, closed } of peers) {
           if (closed) continue;
-          for (const stat of (await peer.getStats()).values()) {
+          const stats = await peer.getStats();
+          for (const stat of stats.values()) {
             if (stat.type !== 'inbound-rtp') continue;
             if (stat.kind === 'video' && Number.isFinite(stat.framesDecoded)) {
               videoReports++;
               framesDecoded += stat.framesDecoded;
             }
-            if (stat.kind === 'audio' && Number.isFinite(stat.packetsReceived)) {
+            if (stat.kind === 'audio' && stat.trackIdentifier === tracks[0].id) {
               audioReports++;
-              audioPackets += stat.packetsReceived;
+              audioStats = stat;
+              if (stat.playoutId !== undefined) {
+                audioPlayout = stats.get(stat.playoutId);
+                if (audioPlayout?.type !== 'media-playout' || audioPlayout.kind !== 'audio')
+                  throw new Error('Linked native audio playout statistics unavailable');
+              }
             }
           }
         }
-        if (!videoReports || !audioReports)
-          throw new Error('Native decoded-video/audio-packet counters unavailable');
+        if (!videoReports || audioReports !== 1)
+          throw new Error('Expected decoded-video counters and one matching native audio report');
+        const audioCounters = [
+          audioStats.packetsReceived,
+          audioStats.totalSamplesDuration,
+          audioStats.totalAudioEnergy,
+          audio[0].currentTime,
+        ];
+        if (audioPlayout) audioCounters.push(audioPlayout.totalSamplesDuration);
+        if (audioCounters.some((value) => !Number.isFinite(value) || value < 0))
+          throw new Error('Native audio progress counters unavailable or invalid');
         return {
           framesDecoded,
-          audioPackets,
+          audioReportId: audioStats.id,
+          audioPackets: audioStats.packetsReceived,
+          audioSamplesTime: audioStats.totalSamplesDuration,
+          audioEnergy: audioStats.totalAudioEnergy,
           audioTime: audio[0].currentTime,
+          audioPlayoutId: audioPlayout?.id ?? null,
+          audioPlayoutTime: audioPlayout?.totalSamplesDuration ?? null,
           sampledAtMs: performance.now(),
         };
       },
@@ -329,31 +352,57 @@ async function reconnectMediaIdentity(page) {
   });
 }
 function mediaProgressDelta(before, after) {
+  if (
+    before.audioReportId !== after.audioReportId ||
+    before.audioPlayoutId !== after.audioPlayoutId
+  )
+    throw new Error('Native audio statistics changed identity during media observation');
   return {
     framesDecoded: after.framesDecoded - before.framesDecoded,
     audioPackets: after.audioPackets - before.audioPackets,
+    audioSamplesSeconds: after.audioSamplesTime - before.audioSamplesTime,
+    audioEnergy: after.audioEnergy - before.audioEnergy,
     audioSeconds: after.audioTime - before.audioTime,
+    audioPlayoutSeconds:
+      before.audioPlayoutTime === null || after.audioPlayoutTime === null
+        ? null
+        : after.audioPlayoutTime - before.audioPlayoutTime,
     elapsedMs: after.sampledAtMs - before.sampledAtMs,
   };
 }
 async function advancingReconnectMedia(page, identity, milliseconds, ensureGap) {
   if (ensureGap) await ensureGap();
   const before = await identity.evaluate((state) => state.sample());
+  const samples = [before];
   if (ensureGap) await ensureGap();
   const until = performance.now() + milliseconds;
   do {
     await page.waitForTimeout(200);
     if (ensureGap) await ensureGap();
     const after = await identity.evaluate((state) => state.sample());
+    // Retain a bounded timeline on failure; one final stats snapshot cannot
+    // distinguish a stalled stream from a reset counter or playback timeline.
+    if (samples.length < 32) samples.push(after);
     if (ensureGap) await ensureGap();
     const delta = mediaProgressDelta(before, after);
-    if (delta.framesDecoded > 0 && delta.audioPackets > 0 && delta.audioSeconds > 0.05)
+    // Chromium's HTML clock can freeze after capture replacement while decoded
+    // audio and device playout continue. Prefer linked native playout counters;
+    // retain the HTML clock for engines without them. The owned fake microphone
+    // emits a signal, so received packets or synthetic silence alone cannot pass.
+    if (
+      delta.framesDecoded > 0 &&
+      delta.audioPackets > 0 &&
+      delta.audioSamplesSeconds > 0.05 &&
+      delta.audioEnergy > 0 &&
+      (delta.audioPlayoutSeconds ?? delta.audioSeconds) > 0.05
+    )
       return delta;
   } while (performance.now() < until);
   throw new Error(
     ensureGap
       ? 'No measured video/audio progress inside the observed signaling outage'
       : 'No measured decoded video and audible audio progress',
+    { cause: { mediaProgress: samples } },
   );
 }
 async function signalingReconnect(interrupted, publisher, receiver, direction) {
@@ -1494,6 +1543,7 @@ async function setRole(owner, name, role) {
   } catch (error) {
     report.failedStep = activeStep;
     report.error = error.message;
+    if (error.cause?.mediaProgress) report.mediaProgressFailure = error.cause.mediaProgress;
     saveReport();
     report.diagnostics = [];
     for (const item of clients) {

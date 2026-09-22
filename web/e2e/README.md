@@ -112,6 +112,10 @@ Signaling recovery closes only the owned browser WebSocket while fake audio/vide
 is active, separately for publisher and receiver. The check requires successful
 session recovery without a fresh join, new media peers or recapture, plus decoded
 video and audible audio progress during the interruption and after recovery.
+Audio evidence includes decoded sample duration and energy from the playing track,
+plus its linked native playout duration when supported. Other engines must advance
+the element's playback clock. Chromium can freeze that clock after capture
+replacement while native audio continues; packet arrival alone cannot pass.
 This does not simulate UDP failure, a network outage or expired reconnect grace.
 
 Capture termination is simulated on owned fake tracks. The check verifies remote
