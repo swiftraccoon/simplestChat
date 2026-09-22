@@ -24,6 +24,8 @@ function installSignalingReconnectObservation() {
     reconnectSuccess: 0,
     reconnectFailure: 0,
     receivedRoomSnapshot: 0,
+    receivedConsumerPaused: 0,
+    receivedConsumerResumed: 0,
   };
   const sentKinds = {
     reconnect: 'sentReconnect',
@@ -112,6 +114,9 @@ function installSignalingReconnectObservation() {
           } else if (message?.type === 'socialResponse' && message.action === 'getRoomSnapshot') {
             increment('receivedRoomSnapshot');
             record('room-snapshot', ordinal);
+          } else if (typeof message?.consumerId === 'string') {
+            if (message.type === 'consumerPaused') increment('receivedConsumerPaused');
+            else if (message.type === 'consumerResumed') increment('receivedConsumerResumed');
           }
         });
       } catch {

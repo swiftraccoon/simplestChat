@@ -105,7 +105,13 @@ async function fixture(t) {
       },
     },
   });
-  const media = new MediaManager({ send: (message) => state.sent.push(message) });
+  const signaling = {
+    connected: true,
+    send(message) {
+      if (this.connected) state.sent.push(message);
+    },
+  };
+  const media = new MediaManager(signaling);
   media.sendTransport = {
     async produce(options) {
       await state.beforeProduce?.(options);
@@ -133,7 +139,7 @@ async function fixture(t) {
     close() {},
   };
   t.after(() => media.close());
-  return { ...state, state, media, newTrack };
+  return { ...state, state, media, signaling, newTrack };
 }
 
 const startLocal = (media, kind) => (kind === 'audio' ? media.unmuteAudio() : media.unmuteVideo());
@@ -149,6 +155,156 @@ const closeMessages = (state, producer) =>
   state.sent.filter(
     (message) => message.type === 'closeProducer' && message.producerId === producer.id,
   );
+
+test('offline microphone changes coalesce until the room resumes on its new socket', async (t) => {
+  const { media, signaling, state } = await fixture(t);
+  await media.unmuteAudio();
+  const producer = state.producers[0];
+  signaling.connected = false;
+  media.suspendSignaling();
+  media.muteAudio();
+  await media.unmuteAudio();
+  media.muteAudio();
+  assert.equal(media.audioEnabled, false);
+  assert.ok(state.tracks.every((track) => track.readyState === 'ended'));
+  assert.equal(media.pendingControls.size, 1);
+  assert.deepEqual(state.sent, []);
+  media.resumeSignaling();
+  assert.deepEqual(state.sent, [], 'a disconnected resume must not discard pending controls');
+  signaling.connected = true;
+  media.muteAudio();
+  assert.deepEqual(state.sent, [], 'socket open alone does not restore room ownership');
+  media.resumeSignaling();
+  assert.deepEqual(state.sent, [{ type: 'pauseProducer', producerId: producer.id }]);
+  assert.equal(media.pendingControls.size, 0);
+  media.resumeSignaling();
+  assert.equal(state.sent.length, 1, 'a flushed state must not be replayed twice');
+});
+
+test('offline viewer changes retain only the final pause and quality state', async (t) => {
+  const { media, signaling, state, newTrack } = await fixture(t);
+  const consumer = new Consumer({
+    id: 'consumer',
+    localId: '0',
+    producerId: 'remote',
+    track: newTrack('video'),
+    rtpParameters: { encodings: [{ scalabilityMode: 'L3T3' }] },
+  });
+  media.consumers.set(consumer.id, consumer);
+  media.producerToConsumer.set('remote', consumer.id);
+  media.setConsumerHiddenByProducer('remote', true);
+  state.sent.length = 0;
+  signaling.connected = false;
+  media.suspendSignaling();
+  for (let index = 0; index < 100; index++) {
+    media.setConsumerHiddenByProducer('remote', false);
+    media.setConsumerQualityByProducer('remote', 'high');
+    media.setConsumerHiddenByProducer('remote', true);
+    media.setConsumerQualityByProducer('remote', 'low');
+  }
+  media.setConsumerHiddenByProducer('remote', false);
+  assert.equal(consumer.paused, false);
+  assert.equal(media.pendingControls.size, 2);
+  assert.deepEqual(state.sent, []);
+  signaling.connected = true;
+  media.resumeSignaling();
+  assert.deepEqual(state.sent, [
+    { type: 'resumeConsumer', consumerId: consumer.id },
+    { type: 'setConsumerPreferredLayers', consumerId: consumer.id, spatialLayer: 0 },
+  ]);
+});
+
+for (const closure of ['local', 'server', 'session']) {
+  test(`deferred consumer controls respect ${closure} teardown`, async (t) => {
+    const { media, signaling, state, newTrack } = await fixture(t);
+    const consumer = new Consumer({
+      id: 'consumer',
+      localId: '0',
+      producerId: 'remote',
+      track: newTrack('video'),
+      rtpParameters: { encodings: [{ scalabilityMode: 'L3T3' }] },
+    });
+    media.consumers.set(consumer.id, consumer);
+    media.producerToConsumer.set('remote', consumer.id);
+    signaling.connected = false;
+    media.suspendSignaling();
+    media.setConsumerHiddenByProducer('remote', true);
+    media.setConsumerQualityByProducer('remote', 'low');
+    if (closure === 'session') media.close();
+    else media.closeConsumerByProducer('remote', closure === 'local');
+    media.setPreferredLayers(consumer.id, 2);
+    signaling.connected = true;
+    media.resumeSignaling();
+    assert.deepEqual(
+      state.sent,
+      closure === 'local' ? [{ type: 'closeConsumer', consumerId: consumer.id }] : [],
+    );
+    assert.equal(media.pendingControls.size, 0);
+  });
+}
+
+test('server producer revocation retires pending resume without restarting capture', async (t) => {
+  const { media, signaling, state } = await fixture(t);
+  await media.unmuteAudio();
+  const producer = state.producers[0];
+  media.muteAudio();
+  state.sent.length = 0;
+  signaling.connected = false;
+  media.suspendSignaling();
+  await media.unmuteAudio();
+  assert.equal(media.pendingControls.size, 1);
+  assert.equal(media.reconcileLocalProducers([]), true);
+  assert.equal(producer.closed, true);
+  const captures = state.captureCalls.length;
+  signaling.connected = true;
+  media.resumeSignaling();
+  assert.deepEqual(state.sent, []);
+  assert.equal(media.audioEnabled, false);
+  assert.equal(state.captureCalls.length, captures);
+});
+
+test('offline screen closure is delivered once for each retired producer', async (t) => {
+  const { media, signaling, state } = await fixture(t);
+  await media.startScreenShare();
+  signaling.connected = false;
+  media.suspendSignaling();
+  media.stopScreenShare();
+  media.stopScreenShare();
+  assert.ok(state.tracks.every((track) => track.readyState === 'ended'));
+  signaling.connected = true;
+  media.resumeSignaling();
+  assert.deepEqual(
+    state.sent,
+    state.producers.map((producer) => ({ type: 'closeProducer', producerId: producer.id })),
+  );
+});
+
+for (const recovered of [false, true]) {
+  test(`offline ICE restart ${recovered ? 'is cancelled after native recovery' : 'waits for signaling recovery'}`, async (t) => {
+    const { media, signaling, state } = await fixture(t);
+    let changed;
+    const transport = {
+      id: 'transport',
+      on(_event, callback) {
+        changed = callback;
+      },
+      close() {},
+    };
+    media.recvTransport = transport;
+    media.setupIceRecovery(transport);
+    signaling.connected = false;
+    media.suspendSignaling();
+    changed('failed');
+    changed('failed');
+    if (recovered) changed('connected');
+    signaling.connected = true;
+    media.resumeSignaling();
+    assert.deepEqual(
+      state.sent,
+      recovered ? [] : [{ type: 'restartIce', transportId: transport.id }],
+    );
+  });
+}
 
 for (const direction of ['sendTransport', 'recvTransport']) {
   test(`ICE restart on ${direction} reports applied credentials only after completion`, async (t) => {

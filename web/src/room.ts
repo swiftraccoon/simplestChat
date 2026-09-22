@@ -109,6 +109,7 @@ export class RoomClient {
   private awaitingPostAdmission = false;
   private joinPassword: string | undefined;
   private generation = 0;
+  private connectionGeneration = 0;
   private cancelJoin: (() => void) | null = null;
   private hiddenParticipants = new Set<string>();
   private videoQualities = new Map<string, RemoteVideoQuality>();
@@ -131,6 +132,10 @@ export class RoomClient {
       this.observeTask(this.attemptReconnect(), 'Room reconnection');
     });
     this.signaling.setOnConnectionLost(() => {
+      this.connectionGeneration++;
+      this.recoveryPromise = null;
+      this.rejectSocialRequests('Connection changed; please retry');
+      this.media?.suspendSignaling();
       // Retire a join waiter before the replacement socket can produce an
       // unrelated admission; the next open then owns one fresh rejoin attempt.
       if (this.restarting) this.cancelJoin?.();
@@ -684,10 +689,13 @@ export class RoomClient {
     }
     if (!this.localId) return;
     const generation = this.generation;
+    const connectionGeneration = this.connectionGeneration;
+    const isCurrent = () =>
+      generation === this.generation && connectionGeneration === this.connectionGeneration;
     this.recovering = true;
     this.rejectSocialRequests('Connection changed; please retry');
     this.events.onRecoveryState?.('reconnecting');
-    if (generation !== this.generation) return;
+    if (!isCurrent()) return;
 
     console.log('[room] attempting session reconnect...');
     try {
@@ -702,7 +710,7 @@ export class RoomClient {
         10000,
       );
 
-      if (generation !== this.generation) return;
+      if (!isCurrent()) return;
 
       if (result.success) {
         if (!result.reconnectToken) {
@@ -711,25 +719,25 @@ export class RoomClient {
         this.reconnectToken = result.reconnectToken;
         this.recovering = false;
         console.log('[room] session reconnected successfully');
+        let snapshotError: string | undefined;
         try {
           await this.requestSocial('getRoomSnapshot');
-          if (generation === this.generation) this.events.onRecoveryState?.('connected');
         } catch (error) {
           // A successfully resumed room remains usable even if its snapshot was
           // rate-limited. Do not destroy live transports or require another join.
-          if (generation === this.generation)
-            this.events.onRecoveryState?.(
-              'connected',
-              error instanceof Error ? error.message : 'Room state could not be refreshed',
-            );
+          snapshotError =
+            error instanceof Error ? error.message : 'Room state could not be refreshed';
         }
+        if (!isCurrent()) return;
+        this.media?.resumeSignaling();
+        this.events.onRecoveryState?.('connected', snapshotError);
         // Media transports survive independently — only signaling needed reconnection
       } else {
         console.log('[room] session expired, performing full rejoin');
         await this.fullRejoin();
       }
     } catch (e) {
-      if (generation !== this.generation) return;
+      if (!isCurrent()) return;
       console.error('[room] reconnect failed, performing full rejoin:', e);
       await this.fullRejoin();
     }

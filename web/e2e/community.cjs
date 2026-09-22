@@ -523,6 +523,73 @@ async function signalingReconnect(interrupted, publisher, receiver, direction) {
     ).catch(() => {});
   }
 }
+async function offlineViewerControls(publisher, receiver) {
+  const identities = [];
+  try {
+    identities.push(await reconnectMediaIdentity(publisher));
+    identities.push(await reconnectMediaIdentity(receiver));
+    const before = await advancingReconnectMedia(receiver, identities[1], 3000);
+    const controls = receiver.locator('.personal-media-controls').first();
+    if (!(await controls.evaluate((element) => element.open)))
+      await controls.locator('summary').click();
+    const baseline = await receiver.evaluate(() => window.__communitySignalingReconnect.snapshot());
+    await receiver.getByRole('button', { name: 'Hide for me', exact: true }).first().click();
+    // Both server consumers must be paused before the socket closes; local
+    // playback alone cannot prove that the subsequent resume reached the server.
+    await receiver.waitForFunction(
+      (previous) =>
+        window.__communitySignalingReconnect.snapshot().counters.receivedConsumerPaused >=
+        previous + 2,
+      baseline.counters.receivedConsumerPaused,
+    );
+    const hidden = await receiver.evaluate(() => window.__communitySignalingReconnect.snapshot());
+    const requested = await receiver.evaluate(() =>
+      window.__communitySignalingReconnect.closeCurrent(),
+    );
+    await receiver.waitForFunction(
+      (ordinal) => {
+        const state = window.__communitySignalingReconnect.snapshot();
+        return (
+          state.openSocketOrdinals.length === 0 &&
+          state.events.some((event) => event.event === 'close' && event.socketOrdinal === ordinal)
+        );
+      },
+      requested.socketOrdinal,
+      { timeout: 1500 },
+    );
+    await receiver.getByRole('button', { name: 'Restore broadcast', exact: true }).first().click();
+    const changedOffline = await receiver.evaluate(() =>
+      window.__communitySignalingReconnect.snapshot(),
+    );
+    assert.equal(
+      changedOffline.openSocketOrdinals.length,
+      0,
+      'Restore must occur while signaling is offline',
+    );
+    assert.equal(
+      changedOffline.counters.receivedConsumerResumed,
+      hidden.counters.receivedConsumerResumed,
+    );
+    await receiver.waitForFunction(
+      (previous) => {
+        const state = window.__communitySignalingReconnect.snapshot();
+        return (
+          state.counters.reconnectSuccess > previous.reconnectSuccess &&
+          state.counters.receivedRoomSnapshot > previous.receivedRoomSnapshot &&
+          state.counters.receivedConsumerResumed >= previous.receivedConsumerResumed + 2
+        );
+      },
+      hidden.counters,
+      { timeout: 10000 },
+    );
+    await connected(receiver);
+    const after = await advancingReconnectMedia(receiver, identities[1], 3000);
+    for (const identity of identities) await identity.evaluate((state) => state.verify());
+    report.offlineViewerControls = { passed: true, before, after };
+  } finally {
+    for (const identity of identities) await identity.dispose();
+  }
+}
 async function register(page, email, name) {
   await page.locator('#sign-in-btn').click();
   await page.locator('#login-to-register').click();
@@ -1304,6 +1371,9 @@ async function setRole(owner, name, role) {
       await remotePlayback(owner, 'audio');
       await signalingReconnect(guest, guest, owner, 'publisher');
       await signalingReconnect(owner, guest, owner, 'receiver');
+    });
+    await step('viewer controls changed offline apply after signaling recovery', async () => {
+      await offlineViewerControls(guest, owner);
       await guest.locator('#cam-btn').click();
       await guest.locator('#mic-btn').click();
     });

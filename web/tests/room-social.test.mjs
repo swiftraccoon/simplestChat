@@ -33,11 +33,19 @@ async function harness(options = {}) {
     videoEnabled = false;
     isScreenSharing = false;
     reconciled = [];
+    suspensions = 0;
+    resumptions = 0;
     constructor() {
       instances.push(this);
     }
     async setup() {
       await options.setup?.(this);
+    }
+    suspendSignaling() {
+      this.suspensions++;
+    }
+    resumeSignaling() {
+      this.resumptions++;
     }
     async consume(id) {
       const track = await (options.consume?.(id, this) ?? { id });
@@ -717,10 +725,63 @@ test('snapshot errors do not force a successfully resumed room to rejoin', async
   await reconnect;
   assert.equal(h.sent.filter((message) => message.type === 'joinRoom').length, 1);
   assert.equal(h.instances[0].closes, 0);
+  assert.equal(h.instances[0].resumptions, 1);
   assert.equal(h.room.connected, true);
   assert.equal(h.room.reconnectToken, 'rotated-token');
   assert.equal(h.recovery.at(-1)[0], 'connected');
 });
+
+test('media controls resume only after the retained session snapshot is reconciled', async () => {
+  const h = await harness();
+  await h.room.join('room', 'Local');
+  const media = h.instances[0];
+  h.signaling.connected = false;
+  h.signaling.onConnectionLost();
+  assert.equal(media.suspensions, 1);
+  h.signaling.connected = true;
+  const reconnect = h.room.attemptReconnect();
+  await flush();
+  assert.equal(media.resumptions, 0);
+  const request = h.sent.at(-1);
+  assert.equal(request.type, 'getRoomSnapshot');
+  h.respond(request, snapshot());
+  await reconnect;
+  assert.equal(media.resumptions, 1);
+  assert.deepEqual(media.reconciled, [[]]);
+  assert.equal(media.closes, 0);
+  await h.room.leave();
+});
+
+for (const stage of ['reconnect', 'snapshot']) {
+  test(`a second disconnect during ${stage} retires the old recovery without destroying live media`, async () => {
+    const pending = deferred();
+    let calls = 0;
+    const h = await harness({
+      reconnect: () => (stage === 'reconnect' && calls++ === 0 ? pending.promise : undefined),
+    });
+    await h.room.join('room', 'Local');
+    const media = h.instances[0];
+    h.signaling.onConnectionLost();
+    const oldRecovery = h.room.attemptReconnect();
+    await flush();
+    h.signaling.connected = false;
+    h.signaling.onConnectionLost();
+    h.signaling.connected = true;
+    const currentRecovery = h.room.attemptReconnect();
+    await flush();
+    if (stage === 'reconnect') pending.reject(new Error('Old socket closed'));
+    await oldRecovery;
+    assert.equal(media.closes, 0);
+    assert.equal(media.resumptions, 0);
+    assert.equal(h.sent.filter((message) => message.type === 'reconnect').length, 2);
+    assert.equal(h.sent.filter((message) => message.type === 'joinRoom').length, 1);
+    h.respond(h.sent.at(-1), snapshot());
+    await currentRecovery;
+    assert.equal(media.resumptions, 1);
+    assert.equal(h.room.connected, true);
+    await h.room.leave();
+  });
+}
 
 test('malformed snapshot rejects its request without partially replacing room state', async () => {
   const h = await harness();

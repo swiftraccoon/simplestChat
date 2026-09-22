@@ -116,6 +116,9 @@ Audio evidence includes decoded sample duration and energy from the playing trac
 plus its linked native playout duration when supported. Other engines must advance
 the element's playback clock. Chromium can freeze that clock after capture
 replacement while native audio continues; packet arrival alone cannot pass.
+A separate check pauses both server consumers, restores the broadcast through
+the UI while signaling is offline, then requires server resume acknowledgements
+and decoded audio/video progress after recovery with the original peers/tracks.
 This does not simulate UDP failure, a network outage or expired reconnect grace.
 
 Capture termination is simulated on owned fake tracks. The check verifies remote

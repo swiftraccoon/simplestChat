@@ -1,5 +1,21 @@
 import * as mediasoupClient from 'mediasoup-client';
+import type { ClientMessage } from './protocol';
 import type { SignalingClient } from './signaling';
+
+type MediaControl = Extract<
+  ClientMessage,
+  {
+    type:
+      | 'pauseProducer'
+      | 'resumeProducer'
+      | 'closeProducer'
+      | 'pauseConsumer'
+      | 'resumeConsumer'
+      | 'closeConsumer'
+      | 'setConsumerPreferredLayers'
+      | 'restartIce';
+  }
+>;
 
 export interface CapturePreferences {
   cameraDeviceId: string;
@@ -102,6 +118,10 @@ export class MediaManager {
   private signaling: SignalingClient;
   private lifecycle = 0;
   private closed = false;
+  private signalingSuspended = false;
+  // Only controls for existing native resources are retained, never creation or
+  // capture requests. Coalesce each resource's state while its socket recovers.
+  private pendingControls = new Map<string, MediaControl>();
   private device: mediasoupClient.Device | null = null;
   private sendTransport: mediasoupClient.types.Transport | null = null;
   private recvTransport: mediasoupClient.types.Transport | null = null;
@@ -138,6 +158,45 @@ export class MediaManager {
     this.signaling = signaling;
   }
 
+  /** Keep media running, but wait for room ownership on the replacement socket. */
+  suspendSignaling(): void {
+    this.signalingSuspended = true;
+  }
+
+  /** Called only after the same room session resumes and reconciles its snapshot. */
+  resumeSignaling(): void {
+    if (this.closed || !this.signaling.connected) return;
+    this.signalingSuspended = false;
+    this.flushControls();
+  }
+
+  private sendControl(message: MediaControl): void {
+    if (this.closed) {
+      // A native publication can finish after local teardown. Retire its late
+      // server resource without retaining work for a future room session.
+      if (message.type === 'closeProducer' || message.type === 'closeConsumer')
+        this.signaling.send(message);
+      return;
+    }
+    let key: string;
+    if ('producerId' in message) key = `producer:${message.producerId}`;
+    else if ('consumerId' in message) {
+      key = `${message.type === 'setConsumerPreferredLayers' ? 'layers' : 'consumer'}:${message.consumerId}`;
+      if (message.type === 'closeConsumer')
+        this.pendingControls.delete(`layers:${message.consumerId}`);
+    } else key = `ice:${message.transportId}`;
+    this.pendingControls.set(key, message);
+    this.flushControls();
+  }
+
+  private flushControls(): void {
+    if (this.signalingSuspended || !this.signaling.connected) return;
+    for (const [key, message] of this.pendingControls) {
+      this.signaling.send(message);
+      this.pendingControls.delete(key);
+    }
+  }
+
   /** Register callback for when screen share stops */
   set onScreenShareStopped(cb: (() => void) | null) {
     this.onScreenShareStoppedCb = cb;
@@ -169,7 +228,7 @@ export class MediaManager {
     const producer = kind === 'audio' ? this.audioProducer : this.videoProducer;
     if (producer) {
       this.closeLocalProducer(producer.id);
-      this.signaling.send({ type: 'closeProducer', producerId: producer.id });
+      this.sendControl({ type: 'closeProducer', producerId: producer.id });
     } else if (kind === 'audio') {
       this.cancelAudioActivation();
       this.stopLocalAudioTrack();
@@ -355,7 +414,7 @@ export class MediaManager {
             )
               return;
             console.log(`[media] requesting ICE restart for transport ${transport.id}`);
-            this.signaling.send({ type: 'restartIce', transportId: transport.id });
+            this.sendControl({ type: 'restartIce', transportId: transport.id });
           }, 3000);
           this.iceRestartTimers.set(transport.id, timer);
         }
@@ -367,8 +426,9 @@ export class MediaManager {
           this.iceRestartTimers.delete(transport.id);
         }
         console.log(`[media] requesting immediate ICE restart for transport ${transport.id}`);
-        this.signaling.send({ type: 'restartIce', transportId: transport.id });
+        this.sendControl({ type: 'restartIce', transportId: transport.id });
       } else if (state === 'connected') {
+        this.pendingControls.delete(`ice:${transport.id}`);
         // Clear pending restart timer if connection recovered on its own
         const timer = this.iceRestartTimers.get(transport.id);
         if (timer) {
@@ -449,7 +509,7 @@ export class MediaManager {
           return;
         }
         existing.resume();
-        this.signaling.send({ type: 'resumeProducer', producerId: existing.id });
+        this.sendControl({ type: 'resumeProducer', producerId: existing.id });
       } else {
         // DTX lets a silent microphone send a few packets a second instead of
         // fifty; in-band FEC stays on. Both are negotiated in this producer's
@@ -461,7 +521,7 @@ export class MediaManager {
         });
         if (!isCurrent() || track.readyState === 'ended') {
           producer.close();
-          this.signaling.send({ type: 'closeProducer', producerId: producer.id });
+          this.sendControl({ type: 'closeProducer', producerId: producer.id });
           if (isCurrent()) this.localCaptureStopped('audio');
           return;
         }
@@ -519,7 +579,7 @@ export class MediaManager {
       });
       if (!isCurrent() || videoTrack.readyState === 'ended') {
         producer.close();
-        this.signaling.send({ type: 'closeProducer', producerId: producer.id });
+        this.sendControl({ type: 'closeProducer', producerId: producer.id });
         if (isCurrent()) this.localCaptureStopped('video');
         return false;
       }
@@ -591,15 +651,16 @@ export class MediaManager {
       this.consumerSizeCaps.delete(response.consumerId);
       if (this.producerToConsumer.get(producerId) === response.consumerId)
         this.producerToConsumer.delete(producerId);
-      if (isCurrent())
-        this.signaling.send({ type: 'closeConsumer', consumerId: response.consumerId });
+      if (isCurrent()) this.sendControl({ type: 'closeConsumer', consumerId: response.consumerId });
       throw error;
     }
   }
 
   /** Set preferred simulcast layers for a consumer */
   setPreferredLayers(consumerId: string, spatialLayer: number, temporalLayer?: number): void {
-    this.signaling.send({
+    const consumer = this.consumers.get(consumerId);
+    if (!consumer || consumer.closed) return;
+    this.sendControl({
       type: 'setConsumerPreferredLayers',
       consumerId,
       spatialLayer,
@@ -614,7 +675,7 @@ export class MediaManager {
     if (!consumer || consumer.closed || consumer.paused === hidden) return;
     if (hidden) consumer.pause();
     else consumer.resume();
-    this.signaling.send({
+    this.sendControl({
       type: hidden ? 'pauseConsumer' : 'resumeConsumer',
       consumerId: consumer.id,
     });
@@ -673,6 +734,8 @@ export class MediaManager {
   closeConsumerByProducer(producerId: string, notifyServer = true): void {
     const consumerId = this.producerToConsumer.get(producerId);
     if (!consumerId) return;
+    this.pendingControls.delete(`consumer:${consumerId}`);
+    this.pendingControls.delete(`layers:${consumerId}`);
     const consumer = this.consumers.get(consumerId);
     if (consumer) {
       consumer.close();
@@ -681,11 +744,12 @@ export class MediaManager {
     this.consumerQualities.delete(consumerId);
     this.consumerSizeCaps.delete(consumerId);
     this.producerToConsumer.delete(producerId);
-    if (notifyServer) this.signaling.send({ type: 'closeConsumer', consumerId });
+    if (notifyServer) this.sendControl({ type: 'closeConsumer', consumerId });
   }
 
   /** Release a producer revoked by the server so it can be created again later. */
   closeLocalProducer(producerId: string): boolean {
+    this.pendingControls.delete(`producer:${producerId}`);
     if (this.audioProducer?.id === producerId) {
       this.cancelAudioActivation();
       const producer = this.audioProducer;
@@ -805,7 +869,7 @@ export class MediaManager {
     this.cancelAudioActivation();
     if (this.audioProducer && !this.audioProducer.paused) {
       this.audioProducer.pause();
-      this.signaling.send({ type: 'pauseProducer', producerId: this.audioProducer.id });
+      this.sendControl({ type: 'pauseProducer', producerId: this.audioProducer.id });
     }
     this.stopLocalAudioTrack();
   }
@@ -832,7 +896,7 @@ export class MediaManager {
     this.pendingVideoTrack?.stop();
     if (this.videoProducer && !this.videoProducer.paused) {
       this.videoProducer.pause();
-      this.signaling.send({ type: 'pauseProducer', producerId: this.videoProducer.id });
+      this.sendControl({ type: 'pauseProducer', producerId: this.videoProducer.id });
       this.stopLocalVideoTrack();
     }
   }
@@ -847,7 +911,7 @@ export class MediaManager {
     if (producer.paused) {
       if (!(await this.recaptureVideo()) || this.videoProducer !== producer) return;
       producer.resume();
-      this.signaling.send({ type: 'resumeProducer', producerId: producer.id });
+      this.sendControl({ type: 'resumeProducer', producerId: producer.id });
     }
   }
 
@@ -914,7 +978,7 @@ export class MediaManager {
       });
       if (!isCurrent()) {
         videoProducer.close();
-        this.signaling.send({ type: 'closeProducer', producerId: videoProducer.id });
+        this.sendControl({ type: 'closeProducer', producerId: videoProducer.id });
         return null;
       }
       this.screenProducer = videoProducer;
@@ -927,7 +991,7 @@ export class MediaManager {
         });
         if (!isCurrent()) {
           audioProducer.close();
-          this.signaling.send({ type: 'closeProducer', producerId: audioProducer.id });
+          this.sendControl({ type: 'closeProducer', producerId: audioProducer.id });
           return null;
         }
         this.screenAudioProducer = audioProducer;
@@ -965,7 +1029,7 @@ export class MediaManager {
       if (track) track.stop();
       sp.close();
       if (sp.id !== revokedProducerId) {
-        this.signaling.send({ type: 'closeProducer', producerId: sp.id });
+        this.sendControl({ type: 'closeProducer', producerId: sp.id });
       }
     }
     if (sap) {
@@ -973,7 +1037,7 @@ export class MediaManager {
       if (track) track.stop();
       sap.close();
       if (sap.id !== revokedProducerId) {
-        this.signaling.send({ type: 'closeProducer', producerId: sap.id });
+        this.sendControl({ type: 'closeProducer', producerId: sap.id });
       }
     }
     this.onScreenShareStoppedCb?.();
@@ -992,6 +1056,7 @@ export class MediaManager {
 
   close(): void {
     this.closed = true;
+    this.pendingControls.clear();
     this.lifecycle++;
     this.cancelAudioActivation();
     this.videoVersion++;

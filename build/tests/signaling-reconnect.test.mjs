@@ -82,7 +82,8 @@ function assertPrivate(snapshot) {
     'openSocketOrdinals', 'counters', 'events', 'droppedEvents', 'droppedSockets'].sort());
   assert.deepEqual(Object.keys(snapshot.counters).sort(), ['sentReconnect', 'sentJoinRoom', 'sentCreateSendTransport',
     'sentCreateRecvTransport', 'sentProduce', 'sentGetRoomSnapshot', 'receivedReconnectResult',
-    'reconnectSuccess', 'reconnectFailure', 'receivedRoomSnapshot'].sort());
+    'reconnectSuccess', 'reconnectFailure', 'receivedRoomSnapshot',
+    'receivedConsumerPaused', 'receivedConsumerResumed'].sort());
   assert.equal(snapshot.schemaVersion, 1);
   assert.ok(snapshot.socketsRetained <= 16);
   assert.ok(snapshot.events.length <= 64);
@@ -316,6 +317,18 @@ test('snapshot results cannot mutate retained counters or event history', t => {
   assert.equal(after.counters.sentReconnect, 1);
   assert.ok(after.events.length > 0);
   assert.deepEqual(after.openSocketOrdinals, [1]);
+});
+
+test('consumer pause and resume acknowledgements retain counts without resource identifiers', t => {
+  const f = fixture(t), socket = f.create('/ws');
+  socket.emit('open');
+  received(socket, 'consumerPaused', { consumerId: secret });
+  received(socket, 'consumerResumed', { consumerId: secret });
+  received(socket, 'consumerPaused', {});
+  received(socket, 'consumerResumed', { consumerId: 1 });
+  assert.equal(f.snapshot().counters.receivedConsumerPaused, 1);
+  assert.equal(f.snapshot().counters.receivedConsumerResumed, 1);
+  assertPrivate(f.snapshot());
 });
 
 test('missing native instrumentation fails loudly instead of looking like a successful empty capture', t => {

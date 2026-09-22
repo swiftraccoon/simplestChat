@@ -179,6 +179,15 @@ requests and clears their timers; callbacks from a replaced socket are ignored.
 with the browser: the new browser never matches requests to ID-less replies
 from older servers.
 
+The media manager separately retains the latest unsent controls for its existing
+resources during signaling loss: producer/consumer pause or resume, closure,
+layer selection and ICE restart. It applies these after the same room session
+resumes and its snapshot is reconciled (or snapshot retrieval fails). Superseded
+controls and resources revoked by the snapshot are discarded; leaving or doing
+a fresh join discards the old manager's pending controls. Creation and capture
+requests are never queued for replay. A second disconnect retires the previous
+recovery attempt without letting it close or resume the new socket's media.
+
 ## Join, lobby and media
 
 1. Send `joinRoom` with `roomId`, `participantName` and an optional password.
