@@ -262,7 +262,7 @@ export class MediaManager {
     this.onControlErrorCb = callback;
   }
 
-  /** A browser without ICE-server updates needs new transports for fresh TURN credentials. */
+  /** Failed native recovery needs fresh transports; the room owns rebuilding and capture consent. */
   set onTransportRebuildRequired(callback: (() => void) | null) {
     this.onTransportRebuildRequiredCb = callback;
   }
@@ -538,27 +538,23 @@ export class MediaManager {
       // transport creation cannot gather relay candidates on a long call.
       // The server emits an empty list when TURN is disabled. Firefox rejects
       // even that no-op update, despite supporting ICE restart itself.
-      if (iceServers?.length) {
-        try {
-          await transport.updateIceServers({ iceServers });
-        } catch (error) {
-          if (!isCurrent()) return;
-          if (error instanceof Error && error.name === 'UnsupportedError') {
-            this.onTransportRebuildRequiredCb?.();
-            return;
-          }
-          throw error;
-        }
-      }
+      if (iceServers?.length) await transport.updateIceServers({ iceServers });
       if (!isCurrent()) return;
       await transport.restartIce({ iceParameters });
-      if (isCurrent())
-        console.log(`[media] ICE restart credentials applied for transport ${transportId}`);
-    } catch {
+    } catch (error) {
       // Avoid logging credentials or browser-native error details. Retired
       // operations have no effect on the replacement room's diagnostics.
-      if (isCurrent()) console.warn(`[media] ICE restart failed for transport ${transportId}`);
+      if (!isCurrent()) return;
+      if (!(error instanceof Error && error.name === 'UnsupportedError'))
+        console.warn(`[media] ICE restart failed for transport ${transportId}`);
+      // A rejected restart may leave native ICE permanently failed, with no
+      // further state event to retry. The same safe rebuild used by Firefox's
+      // unsupported TURN updates retires those transports and stops capture.
+      this.onTransportRebuildRequiredCb?.();
+      return;
     }
+    if (isCurrent())
+      console.log(`[media] ICE restart credentials applied for transport ${transportId}`);
   }
 
   /** Serialize capture and discard results after mute, leave, or producer revocation. */

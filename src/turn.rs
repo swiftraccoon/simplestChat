@@ -18,7 +18,7 @@ pub struct TurnConfig {
     pub urls: Vec<String>,
     /// Shared secret for generating time-limited credentials
     pub secret: String,
-    /// Credential TTL in seconds (default: 10 minutes)
+    /// Credential TTL in seconds (default: one day)
     pub ttl_secs: u64,
 }
 

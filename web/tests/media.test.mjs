@@ -607,10 +607,10 @@ for (const relayConfigured of [false, true]) {
   });
 }
 
-test('an unexpected TURN update failure stays a sanitized failure instead of rebuilding the room', async (t) => {
+test('a rejected TURN update requests fresh transports without exposing credentials', async (t) => {
   const { state, media } = await fixture(t);
-  media.onTransportRebuildRequired = () =>
-    assert.fail('Only unsupported updates require rebuilding');
+  let rebuilds = 0;
+  media.onTransportRebuildRequired = () => rebuilds++;
   media.sendTransport = {
     id: 'current',
     closed: false,
@@ -627,6 +627,7 @@ test('an unexpected TURN update failure stays a sanitized failure instead of reb
   ]);
   assert.deepEqual(state.warnings, [['[media] ICE restart failed for transport current']]);
   assert.deepEqual(state.logs, []);
+  assert.equal(rebuilds, 1, 'failed native recovery must not strand the current transport');
 });
 
 for (const retirement of ['close', 'replace']) {
@@ -662,6 +663,8 @@ for (const failure of ['throw', 'reject']) {
   test(`ICE restart handles a current transport ${failure} without exposing native error details`, async (t) => {
     const { state, media } = await fixture(t);
     const error = new Error('native-detail-must-not-be-logged');
+    let rebuilds = 0;
+    media.onTransportRebuildRequired = () => rebuilds++;
     media.sendTransport = {
       id: 'current',
       closed: false,
@@ -677,7 +680,8 @@ for (const failure of ['throw', 'reject']) {
     });
     assert.deepEqual(state.logs, []);
     assert.deepEqual(state.warnings, [['[media] ICE restart failed for transport current']]);
-    assert.deepEqual(state.sent, [], 'failure does not silently retry or recreate a transport');
+    assert.equal(rebuilds, 1, 'the room must be able to replace failed native transports');
+    assert.deepEqual(state.sent, [], 'the room owns admission and transport replacement');
     assert.deepEqual(state.captureCalls, []);
   });
 }
@@ -687,6 +691,8 @@ for (const retirement of ['close', 'replace', 'transport-close']) {
     test(`ICE restart ignores a late ${result} after ${retirement}`, async (t) => {
       const { state, media } = await fixture(t);
       const restart = deferred();
+      media.onTransportRebuildRequired = () =>
+        assert.fail('Retired operations cannot rebuild the current session');
       const transport = {
         id: 'current',
         closed: false,

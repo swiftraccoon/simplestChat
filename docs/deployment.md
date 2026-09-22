@@ -91,9 +91,13 @@ turns away every client whose network blocks outbound UDP. To offer ICE-TCP as
 well, publish the same port range over TCP in Compose (a second `ports` entry
 ending in `/tcp`), open it at the provider firewall, and set
 `WEBRTC_SERVER_TCP=true`; the weekly performance workflow proves the TCP path
-with UDP blocked. TURN over TLS (coturn, `TURN_URLS`/`TURN_SECRET`) is still the
-only path through symmetric NAT and the more robust fallback; see the relay
-controls below.
+with UDP blocked. TURN over TCP or TLS (coturn, `TURN_URLS`/`TURN_SECRET`) provides
+another path when clients cannot reach the media ports. A symmetric NAT alone
+does not require TURN when the browser can reach this public ICE-Lite server;
+the browser initiates the connection, as described in the
+[mediasoup deployment guidance](https://mediasoup.org/faq/#running-mediasoup-in-hosts-with-private-ip-aws-google-cloud-azure).
+Networks allowing only outbound TCP 443 need a relay listening on that port on
+a separate address from the HTTPS proxy. See the relay controls below.
 
 ## Database migrations and TLS
 
