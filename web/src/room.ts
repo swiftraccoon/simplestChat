@@ -410,6 +410,7 @@ export class RoomClient {
     this.joinPassword = undefined;
     this.hiddenParticipants.clear();
     this.videoQualities.clear();
+    this.videoSizeCaps.clear();
     this.rejectSocialRequests('Room left');
     this.closeMedia();
     this.participants.clear();
@@ -508,8 +509,10 @@ export class RoomClient {
 
   /** Highest simulcast layer the participant's camera tile can show; null lifts the cap. */
   setRemoteVideoSizeCap(participantId: string, maxSpatialLayer: number | null): void {
+    const participant = this.participants.get(participantId);
+    if (!participant) return;
     this.videoSizeCaps.set(participantId, maxSpatialLayer);
-    for (const [producerId, producer] of this.participants.get(participantId)?.producers ?? []) {
+    for (const [producerId, producer] of participant.producers) {
       if (producer.kind === 'video' && producer.source !== 'screen')
         this.media?.setConsumerSizeCapByProducer(producerId, maxSpatialLayer);
     }
@@ -1001,6 +1004,7 @@ export class RoomClient {
       case 'participantLeft': {
         this.hiddenParticipants.delete(msg.participantId);
         this.videoQualities.delete(msg.participantId);
+        this.videoSizeCaps.delete(msg.participantId);
         // Clean up paused state for this participant's producers
         const leaving = this.participants.get(msg.participantId);
         if (leaving) {
@@ -1287,6 +1291,7 @@ export class RoomClient {
         this.participants.delete(id);
         this.hiddenParticipants.delete(id);
         this.videoQualities.delete(id);
+        this.videoSizeCaps.delete(id);
         this.events.onParticipantLeft(id);
       }
     }

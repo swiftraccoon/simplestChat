@@ -66,6 +66,9 @@ async function harness(options = {}) {
     setConsumerQualityByProducer() {
       return true;
     }
+    setConsumerSizeCapByProducer() {
+      return true;
+    }
     setCapturePreferences() {}
   }
   const signaling = {
@@ -205,6 +208,40 @@ function snapshot(overrides = {}) {
     localProducerIds: [],
     ...overrides,
   };
+}
+
+for (const departure of ['event', 'snapshot', 'leave']) {
+  test(`tile-size limits are bounded by current participants after ${departure}`, async () => {
+    const h = await harness();
+    await h.room.join('room', 'Local');
+    for (let index = 0; index < 20; index++) {
+      const participantId = `remote-${index}`;
+      h.reply({
+        type: 'participantJoined',
+        participantId,
+        participantName: 'Remote',
+        role: 'user',
+        authenticated: false,
+      });
+      h.room.setRemoteVideoSizeCap(participantId, 0);
+    }
+    assert.equal(h.room.videoSizeCaps.size, 20);
+    if (departure === 'event') {
+      for (let index = 0; index < 20; index++)
+        h.reply({ type: 'participantLeft', participantId: `remote-${index}` });
+    } else if (departure === 'snapshot') {
+      const refresh = h.room.requestSocial('getRoomSnapshot');
+      h.respond(h.sent.at(-1), snapshot());
+      await refresh;
+    } else {
+      await h.room.leave();
+    }
+    assert.equal(h.room.videoSizeCaps.size, 0, 'departed participants must release size limits');
+    // ResizeObserver callbacks may already be queued when a tile is detached.
+    h.room.setRemoteVideoSizeCap('remote-0', 1);
+    assert.equal(h.room.videoSizeCaps.size, 0, 'a late resize must not restore retired state');
+    await h.room.leave();
+  });
 }
 
 test('room closure releases media and pending actions and cannot reconnect', async () => {
