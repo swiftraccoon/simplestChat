@@ -31,7 +31,7 @@ fn max_producers_per_participant() -> usize {
         .unwrap_or(8)
 }
 
-fn max_consumers_per_participant() -> usize {
+pub(crate) fn max_consumers_per_participant() -> usize {
     consumer_cap_from(
         std::env::var("MAX_CONSUMERS_PER_PARTICIPANT")
             .ok()
@@ -41,7 +41,7 @@ fn max_consumers_per_participant() -> usize {
 
 /// Per-participant consumer cap. Browsers consume every remote producer, so
 /// a participant needs `2 * (N - 1)` consumers in an N-person room with
-/// camera and microphone (three per peer with screen sharing). The default
+/// camera and microphone (four per peer with screen video and audio). The default
 /// covers 32 such publishers; the previous value of 16 silently blanked the
 /// tenth participant's tiles.
 fn consumer_cap_from(configured: Option<&str>) -> usize {
@@ -240,6 +240,9 @@ impl TransportManager {
         webrtc_server: WebRtcServer,
         config: &WebRtcTransportConfig,
     ) -> MediaResult<TransportInfo> {
+        config
+            .validate()
+            .map_err(|error| MediaError::ConfigurationError(error.to_string()))?;
         debug!(
             "Creating send transport for participant: {}",
             participant_id
@@ -321,6 +324,9 @@ impl TransportManager {
         webrtc_server: WebRtcServer,
         config: &WebRtcTransportConfig,
     ) -> MediaResult<TransportInfo> {
+        config
+            .validate()
+            .map_err(|error| MediaError::ConfigurationError(error.to_string()))?;
         debug!(
             "Creating receive transport for participant: {}",
             participant_id
@@ -1026,6 +1032,19 @@ impl TransportManager {
         sample
     }
 
+    /// Releases a consumer and its layer state within this participant's session.
+    /// Unknown IDs are harmless no-ops, including after the producer closed it.
+    pub async fn close_consumer(
+        &self,
+        participant_id: &str,
+        consumer_id: &str,
+    ) -> MediaResult<bool> {
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let mut participant = participant_lock.lock().await;
+        participant.consumer_layers.remove(consumer_id);
+        Ok(participant.consumers.remove(consumer_id).is_some())
+    }
+
     /// Closes a producer for a participant
     pub async fn close_producer(&self, participant_id: &str, producer_id: &str) -> MediaResult<()> {
         let participant_lock = self.get_participant_lock(participant_id)?;
@@ -1538,6 +1557,7 @@ mod tests {
         // Look up the WebRtcServer for this room's worker
         let worker_id = router_manager.get_worker_id(&room_id).await.unwrap();
         let webrtc_server = worker_manager.get_webrtc_server(worker_id).await.unwrap();
+        let consumer_counter = worker_manager.get_consumer_counter(worker_id).unwrap();
 
         // Create transports via WebRtcServer (shared port)
         let participant_id = "test-participant".to_string();
@@ -1641,9 +1661,12 @@ mod tests {
             .await
             .unwrap();
 
-        // Both active and paused producers require the same browser-ready
-        // acknowledgment. Producer pause must remain independent of it.
-        for producer_paused in [false, true] {
+        // Exercise more retries than the per-session cap. Closing each failed or
+        // retired receiver must release both native ownership and allocation load.
+        // Active and paused producers require the same browser-ready acknowledgment.
+        transport_manager.get_or_create_participant("other-session");
+        for attempt in 0..=consumer_cap_from(None) {
+            let producer_paused = attempt > 0;
             if producer_paused {
                 transport_manager
                     .pause_producer(&participant_id, &producer.id().to_string())
@@ -1660,11 +1683,19 @@ mod tests {
                     },
                     AppData::default(),
                     None,
-                    None,
+                    Some(consumer_counter.clone()),
                 )
                 .await
                 .unwrap();
             let info = crate::media::types::ConsumerInfo::from_consumer(&consumer);
+            assert_eq!(consumer_counter.load(Ordering::Relaxed), 1);
+            assert!(
+                !transport_manager
+                    .close_consumer("other-session", &info.id)
+                    .await
+                    .unwrap(),
+                "another participant cannot close the receiver"
+            );
             assert!(info.paused, "new consumers must wait for browser readiness");
             assert_eq!(info.producer_paused, producer_paused);
             assert!(consumer.dump().await.unwrap().paused);
@@ -1685,6 +1716,26 @@ mod tests {
                     .await
                     .unwrap(),
                 "repeated acknowledgments remain idempotent"
+            );
+            let weak = consumer.downgrade();
+            drop(consumer);
+            assert!(
+                transport_manager
+                    .close_consumer(&participant_id, &info.id)
+                    .await
+                    .unwrap()
+            );
+            assert!(
+                weak.upgrade().is_none(),
+                "no application consumer handle remains"
+            );
+            assert_eq!(consumer_counter.load(Ordering::Relaxed), 0);
+            assert!(
+                !transport_manager
+                    .close_consumer(&participant_id, &info.id)
+                    .await
+                    .unwrap(),
+                "repeated closure must be a no-op"
             );
         }
     }
@@ -1999,6 +2050,16 @@ mod tests {
             }),
             "a consumer created under a low tier starts capped without an extra request"
         );
+        drop(video);
+        assert!(
+            transport_manager
+                .close_consumer(&pid, &video_id)
+                .await
+                .unwrap()
+        );
+        let participant = transport_manager.get_participant(&pid).await.unwrap();
+        assert!(!participant.consumer_layers.contains_key(&video_id));
+        assert!(participant.consumers.contains_key(&late.id().to_string()));
     }
     /// A loopback port free for both UDP and TCP, so a TCP-enabled WebRtcServer
     /// can bind both in tests.

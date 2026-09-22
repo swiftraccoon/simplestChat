@@ -6,6 +6,46 @@ use crate::turn::IceServer;
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// IDs are opaque correlation tokens, not credentials or idempotency keys.
+pub(crate) fn valid_correlation_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+/// Read the envelope independently so a malformed command can still receive a
+/// correlated error. Serde skips the payload without allocating a JSON tree;
+/// the subsequent typed decode retains duplicate-field and payload validation.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct RequestHeader {
+    #[serde(default, deserialize_with = "deserialize_request_id")]
+    pub request_id: Option<String>,
+}
+
+fn deserialize_request_id<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    if !valid_correlation_id(&value) {
+        return Err(serde::de::Error::custom("Invalid request ID"));
+    }
+    Ok(Some(value))
+}
+
+/// Direct responses echo the request envelope. Broadcasts have no request ID.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ServerReply<'a> {
+    #[serde(flatten)]
+    pub message: &'a ServerMessage,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<&'a str>,
+}
+
 /// A signaling bearer is serialized only for transport, never for diagnostics.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -87,6 +127,9 @@ pub enum ClientMessage {
     /// Pause a consumer
     #[serde(rename_all = "camelCase")]
     PauseConsumer { consumer_id: String },
+    /// Release this receiver's consumer; repeated closure is a no-op.
+    #[serde(rename_all = "camelCase")]
+    CloseConsumer { consumer_id: String },
     /// Close a producer
     #[serde(rename_all = "camelCase")]
     CloseProducer { producer_id: String },
@@ -559,8 +602,52 @@ pub struct ProducerMetadata {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClientMessage, ServerMessage};
+    use super::{ClientMessage, RequestHeader, ServerMessage};
     use serde_json::{Value, json};
+
+    #[test]
+    fn request_headers_preserve_ids_without_weakening_payload_validation() {
+        for request_id in ["request-1", "A_0-z", &"x".repeat(64)] {
+            let wire = json!({"type": "consume", "requestId": request_id}).to_string();
+            let header: RequestHeader = serde_json::from_str(&wire).unwrap();
+            assert_eq!(header.request_id.as_deref(), Some(request_id));
+            assert!(serde_json::from_str::<ClientMessage>(&wire).is_err());
+        }
+        let legacy: RequestHeader =
+            serde_json::from_str(r#"{"type":"createSendTransport"}"#).unwrap();
+        assert!(legacy.request_id.is_none());
+        for invalid in [
+            Value::Null,
+            json!(""),
+            json!("x".repeat(65)),
+            json!("unsafe\n"),
+            json!("é"),
+            json!(1),
+            json!({}),
+            json!([]),
+            json!(true),
+        ] {
+            let wire = json!({"type": "createSendTransport", "requestId": invalid}).to_string();
+            assert!(serde_json::from_str::<RequestHeader>(&wire).is_err());
+        }
+        assert!(
+            serde_json::from_str::<RequestHeader>(
+                r#"{"type":"createSendTransport","requestId":"one","requestId":"two"}"#
+            )
+            .is_err()
+        );
+        // The payload's typed deserializer still detects duplicate fields.
+        let wire =
+            r#"{"type":"resumeConsumer","requestId":"one","consumerId":"a","consumerId":"b"}"#;
+        assert_eq!(
+            serde_json::from_str::<RequestHeader>(wire)
+                .unwrap()
+                .request_id
+                .as_deref(),
+            Some("one")
+        );
+        assert!(serde_json::from_str::<ClientMessage>(wire).is_err());
+    }
 
     #[test]
     fn authentication_renewal_is_correlated_and_debug_redacts_the_bearer() {

@@ -2,7 +2,7 @@
 
 // Worker pool management for mediasoup
 
-use crate::media::config::{MediaConfig, checked_worker_port};
+use crate::media::config::MediaConfig;
 use crate::media::types::{MediaError, MediaResult};
 use crate::saturation::{WorkerThreadInfo, WorkerThreads};
 use anyhow::Result;
@@ -13,7 +13,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex as TokioMutex, RwLock};
 use tracing::{debug, error, info, warn};
 
 /// Consumers remain the primary cost signal; reserved and registered routers
@@ -65,6 +65,9 @@ impl Drop for RouterLoadReservation {
 
 /// Manages a pool of mediasoup Workers
 pub struct WorkerManager {
+    /// Serializes pool changes without blocking reads of healthy capacity during
+    /// native worker/listener creation. Shutdown and recovery share this order.
+    reconfiguration: TokioMutex<()>,
     workers: Arc<RwLock<Vec<Worker>>>,
     // Selection and reservation share this short synchronous critical section.
     // No native IPC or await is allowed while it is held.
@@ -213,6 +216,7 @@ impl WorkerManager {
         }
 
         Ok(Self {
+            reconfiguration: TokioMutex::new(()),
             workers: Arc::new(RwLock::new(workers)),
             worker_load: Arc::new(Mutex::new(worker_load)),
             webrtc_servers: Arc::new(RwLock::new(webrtc_servers)),
@@ -291,7 +295,6 @@ impl WorkerManager {
         }
     }
 
-    /// Creates a single worker with the given configuration
     /// Creates a single worker with the given configuration, returning the
     /// Linux thread it runs on when exactly one worker thread appeared.
     /// Callers create workers one at a time, so the diff is unambiguous.
@@ -345,7 +348,7 @@ impl WorkerManager {
             })
             .detach();
 
-        // Handle new WebRTC server (for TCP/TLS connections)
+        // Observe new shared UDP/ICE-TCP listeners.
         worker
             .on_new_webrtc_server({
                 move |webrtc_server| {
@@ -474,7 +477,7 @@ impl WorkerManager {
 
     /// Gets current worker statistics
     pub async fn get_worker_stats(&self) -> Vec<WorkerDump> {
-        let workers = self.workers.read().await;
+        let workers = self.workers.read().await.clone();
         let mut stats = Vec::new();
 
         for worker in workers.iter() {
@@ -512,8 +515,14 @@ impl WorkerManager {
     pub async fn recreate_worker(&self, dead_worker_id: WorkerId) -> MediaResult<()> {
         warn!("Recreating dead worker: {}", dead_worker_id);
 
-        let mut workers = self.workers.write().await;
-        let Some(pos) = workers.iter().position(|w| w.id() == dead_worker_id) else {
+        let _reconfiguration = self.reconfiguration.lock().await;
+        let position = self
+            .workers
+            .read()
+            .await
+            .iter()
+            .position(|worker| worker.id() == dead_worker_id);
+        let Some(pos) = position else {
             warn!(
                 "Worker {} is not in the pool; nothing to recreate",
                 dead_worker_id
@@ -559,12 +568,14 @@ impl WorkerManager {
             })?;
 
         // Swap the registries only now that the replacement is ready.
+        // Acquire both registries before changing either; cancellation while
+        // waiting cannot leave a partially installed replacement. Reconfiguration
+        // holds the slot stable while native creation runs without registry locks.
+        let mut workers = self.workers.write().await;
+        let mut servers = self.webrtc_servers.write().await;
         let old_worker = std::mem::replace(&mut workers[pos], new_worker);
-        {
-            let mut servers = self.webrtc_servers.write().await;
-            servers.remove(&dead_worker_id);
-            servers.insert(new_worker_id, webrtc_server);
-        }
+        servers.remove(&dead_worker_id);
+        servers.insert(new_worker_id, webrtc_server);
         {
             let mut load = self.worker_load.lock().unwrap_or_else(|e| e.into_inner());
             load.remove(&dead_worker_id);
@@ -606,127 +617,16 @@ impl WorkerManager {
         Ok(())
     }
 
-    /// Updates worker settings (requires recreating workers)
-    ///
-    /// # Errors
-    /// Returns an error if worker recreation fails
-    pub async fn update_settings(
-        &self,
-        new_config: crate::media::config::WorkerConfig,
-    ) -> MediaResult<()> {
-        info!("Updating worker settings");
-
-        checked_worker_port(
-            self.config.webrtc_server_port_base,
-            new_config.num_workers,
-            new_config.num_workers.saturating_sub(1),
-        )
-        .map_err(|error| {
-            MediaError::ConfigurationError(format!("Invalid worker configuration: {error}"))
-        })?;
-
-        let announced_address = self
-            .config
-            .webrtc_transport_config
-            .listen_ips
-            .first()
-            .and_then(|li| li.announced_address.clone());
-
-        // This is a simplified version - in production you'd want graceful migration
-        let mut workers = self.workers.write().await;
-        let mut new_workers = Vec::new();
-        let mut new_load = HashMap::new();
-        let mut new_servers = HashMap::new();
-        let mut new_consumer_counts = HashMap::new();
-        let mut new_threads = HashMap::new();
-
-        // Close old workers - they close automatically when dropped
-
-        // Create new workers with updated settings
-        for i in 0..new_config.num_workers {
-            let (worker, tid) =
-                Self::create_worker_with_manager(&new_config, &self.mediasoup_worker_manager)
-                    .await
-                    .map_err(|e| {
-                        MediaError::WorkerError(format!("Failed to create worker: {e}"))
-                    })?;
-
-            let worker_id = worker.id();
-            new_threads.insert(
-                worker_id,
-                WorkerThreadInfo {
-                    worker_id,
-                    index: i,
-                    tid,
-                },
-            );
-            Self::setup_worker_handlers(&worker, i, self.deaths.clone());
-
-            // Create WebRtcServer for each new worker
-            let port = checked_worker_port(
-                self.config.webrtc_server_port_base,
-                new_config.num_workers,
-                i,
-            )
-            .map_err(|error| {
-                MediaError::ConfigurationError(format!(
-                    "Invalid worker port configuration: {error}"
-                ))
-            })?;
-            let server_options = WebRtcServerOptions::new(webrtc_server_listen_infos(
-                port,
-                announced_address.clone(),
-                self.config.webrtc_server_tcp,
-            ));
-            let webrtc_server = worker
-                .create_webrtc_server(server_options)
-                .await
-                .map_err(|e| {
-                    MediaError::WorkerError(format!(
-                        "Failed to create WebRtcServer on port {port} for worker {worker_id}: {e}"
-                    ))
-                })?;
-
-            new_load.insert(worker_id, 0);
-            new_servers.insert(worker_id, webrtc_server);
-            new_consumer_counts.insert(worker_id, Arc::new(AtomicUsize::new(0)));
-            new_workers.push(worker);
-        }
-
-        // Clear old servers before dropping old workers
-        self.webrtc_servers.write().await.clear();
-
-        *workers = new_workers;
-        *self.worker_load.lock().unwrap_or_else(|e| e.into_inner()) = new_load;
-        *self.webrtc_servers.write().await = new_servers;
-        {
-            let mut counts = self
-                .worker_consumer_counts
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
-            *counts = new_consumer_counts;
-        }
-        *self
-            .worker_threads
-            .write()
-            .unwrap_or_else(|e| e.into_inner()) = new_threads;
-        self.saturated_workers
-            .write()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
-
-        info!("Worker settings updated successfully");
-        Ok(())
-    }
-
     /// Gracefully shuts down all workers
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down all workers");
+        let _reconfiguration = self.reconfiguration.lock().await;
 
-        // Drop WebRtcServers first (they reference workers)
-        self.webrtc_servers.write().await.clear();
-
+        // Match recovery's lock order and obtain both locks before mutating.
         let mut workers = self.workers.write().await;
+        let mut servers = self.webrtc_servers.write().await;
+        // Drop WebRtcServers first (they reference workers).
+        servers.clear();
 
         // Workers are automatically closed when dropped
         workers.clear();
@@ -736,6 +636,14 @@ impl WorkerManager {
             .unwrap_or_else(|e| e.into_inner())
             .clear();
         self.worker_consumer_counts
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        self.worker_threads
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        self.saturated_workers
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
@@ -833,6 +741,37 @@ mod tests {
         assert!(manager.get_consumer_counter(replaced[0]).is_some());
         assert!(manager.get_consumer_counter(ids[0]).is_none());
         manager.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn native_worker_recreation_keeps_healthy_capacity_readable() {
+        use futures_util::FutureExt;
+        use std::sync::atomic::AtomicBool;
+
+        let manager = Arc::new(two_worker_manager().await);
+        let ids = worker_ids(&manager).await;
+        assert!(manager.release_worker_listener(ids[0]).await);
+        let readable = Arc::new(AtomicBool::new(false));
+        let checked = readable.clone();
+        let weak = Arc::downgrade(&manager);
+        let _handler = manager.mediasoup_worker_manager.on_new_worker(move |_| {
+            let Some(manager) = weak.upgrade() else {
+                return;
+            };
+            // This callback runs inside the real replacement creation. Neither
+            // readiness nor a new room on the other worker may wait for it.
+            let ready = manager.live_worker_count().now_or_never() == Some(1);
+            let allocated = manager.reserve_worker().now_or_never();
+            let usable = allocated.is_some_and(|result| {
+                result.is_ok_and(|(worker, _reservation)| worker.id() == ids[1])
+            });
+            checked.store(ready && usable, Ordering::Relaxed);
+        });
+        let retired = worker_ids(&manager).await[0];
+        manager.recreate_worker(retired).await.unwrap();
+        assert!(readable.load(Ordering::Relaxed));
+        manager.shutdown().await.unwrap();
+        assert!(manager.worker_threads().is_empty());
     }
 
     #[tokio::test]

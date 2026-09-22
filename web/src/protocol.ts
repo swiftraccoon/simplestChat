@@ -7,25 +7,38 @@ export type ClientMessage =
   | { type: 'renewAuthentication'; requestId: string; token: string }
   | { type: 'joinRoom'; roomId: string; participantName: string; password?: string }
   | { type: 'leaveRoom' }
-  | { type: 'getRouterRtpCapabilities' }
-  | { type: 'createSendTransport' }
-  | { type: 'createRecvTransport' }
-  | { type: 'connectTransport'; transportId: string; dtlsParameters: DtlsParameters }
+  | { type: 'getRouterRtpCapabilities'; requestId?: string }
+  | { type: 'createSendTransport'; requestId?: string }
+  | { type: 'createRecvTransport'; requestId?: string }
+  | {
+      type: 'connectTransport';
+      requestId?: string;
+      transportId: string;
+      dtlsParameters: DtlsParameters;
+    }
   | {
       type: 'produce';
+      requestId?: string;
       transportId: string;
       kind: MediaKind;
       rtpParameters: RtpParameters;
       source?: string;
     }
-  | { type: 'consume'; producerId: string; rtpCapabilities: RtpCapabilities }
-  | { type: 'resumeConsumer'; consumerId: string }
-  | { type: 'pauseConsumer'; consumerId: string }
+  | { type: 'consume'; requestId?: string; producerId: string; rtpCapabilities: RtpCapabilities }
+  | { type: 'resumeConsumer'; requestId?: string; consumerId: string }
+  | { type: 'pauseConsumer'; requestId?: string; consumerId: string }
+  | { type: 'closeConsumer'; consumerId: string }
   | { type: 'closeProducer'; producerId: string }
-  | { type: 'pauseProducer'; producerId: string }
-  | { type: 'resumeProducer'; producerId: string }
-  | { type: 'reconnect'; participantId: string; roomId: string; reconnectToken: string }
-  | { type: 'restartIce'; transportId: string }
+  | { type: 'pauseProducer'; requestId?: string; producerId: string }
+  | { type: 'resumeProducer'; requestId?: string; producerId: string }
+  | {
+      type: 'reconnect';
+      requestId?: string;
+      participantId: string;
+      roomId: string;
+      reconnectToken: string;
+    }
+  | { type: 'restartIce'; requestId?: string; transportId: string }
   | {
       type: 'setConsumerPreferredLayers';
       consumerId: string;
@@ -77,23 +90,25 @@ export type ServerMessage =
       yourRole: string;
       roomSettings?: RoomSettings;
     }
-  | { type: 'error'; message: string }
+  | { type: 'error'; requestId?: string; message: string }
   | { type: 'roomPasswordRequired' }
   | { type: 'roomClosed'; reason: string }
   | { type: 'serverRestarting'; reason: string }
-  | { type: 'routerRtpCapabilities'; rtpCapabilities: RtpCapabilitiesFinalized }
+  | { type: 'routerRtpCapabilities'; requestId?: string; rtpCapabilities: RtpCapabilitiesFinalized }
   | {
       type: 'transportCreated';
+      requestId?: string;
       transportId: string;
       iceParameters: IceParameters;
       iceCandidates: IceCandidate[];
       dtlsParameters: DtlsParameters;
       iceServers?: IceServerEntry[];
     }
-  | { type: 'transportConnected'; transportId: string }
-  | { type: 'producerCreated'; producerId: string }
+  | { type: 'transportConnected'; requestId?: string; transportId: string }
+  | { type: 'producerCreated'; requestId?: string; producerId: string }
   | {
       type: 'consumerCreated';
+      requestId?: string;
       consumerId: string;
       producerId: string;
       kind: MediaKind;
@@ -115,13 +130,20 @@ export type ServerMessage =
       source?: string;
     }
   | { type: 'producerClosed'; producerId: string }
-  | { type: 'producerPaused'; producerId: string }
-  | { type: 'producerResumed'; producerId: string }
-  | { type: 'consumerResumed'; consumerId: string }
-  | { type: 'consumerPaused'; consumerId: string }
-  | { type: 'reconnectResult'; success: boolean; participantId: string; reconnectToken?: string }
+  | { type: 'producerPaused'; requestId?: string; producerId: string }
+  | { type: 'producerResumed'; requestId?: string; producerId: string }
+  | { type: 'consumerResumed'; requestId?: string; consumerId: string }
+  | { type: 'consumerPaused'; requestId?: string; consumerId: string }
+  | {
+      type: 'reconnectResult';
+      requestId?: string;
+      success: boolean;
+      participantId: string;
+      reconnectToken?: string;
+    }
   | {
       type: 'iceRestarted';
+      requestId?: string;
       transportId: string;
       iceParameters: IceParameters;
       iceServers: IceServerEntry[];
@@ -159,6 +181,22 @@ export type ServerMessage =
   | { type: 'lobbyJoin'; participantId: string; displayName: string; authenticated: boolean }
   | { type: 'lobbyDenied'; reason?: string }
   | { type: 'lobbyAdmitted' };
+
+/** Only acknowledged commands use SignalingClient.request; events use send. */
+export interface RequestResponses {
+  getRouterRtpCapabilities: 'routerRtpCapabilities';
+  createSendTransport: 'transportCreated';
+  createRecvTransport: 'transportCreated';
+  connectTransport: 'transportConnected';
+  produce: 'producerCreated';
+  consume: 'consumerCreated';
+  resumeConsumer: 'consumerResumed';
+  pauseConsumer: 'consumerPaused';
+  pauseProducer: 'producerPaused';
+  resumeProducer: 'producerResumed';
+  reconnect: 'reconnectResult';
+  restartIce: 'iceRestarted';
+}
 
 // --- Shared types ---
 

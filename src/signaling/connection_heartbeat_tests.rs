@@ -10,7 +10,7 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message as
 const TEST_IDLE: Duration = Duration::from_millis(500);
 type Peer = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
-struct Fixture {
+pub(super) struct Fixture {
     peer: Peer,
     manager: Arc<RoomManager>,
     metrics: ServerMetrics,
@@ -29,7 +29,7 @@ impl Drop for Fixture {
 }
 
 impl Fixture {
-    async fn new() -> Self {
+    pub(super) async fn new() -> Self {
         Self::with_claims(None).await
     }
 
@@ -114,7 +114,7 @@ impl Fixture {
         }
     }
 
-    async fn join(&mut self) -> anyhow::Result<serde_json::Value> {
+    pub(super) async fn join(&mut self) -> anyhow::Result<serde_json::Value> {
         self.peer
             .send(PeerMessage::Text(
                 serde_json::json!({
@@ -139,7 +139,7 @@ impl Fixture {
         .await?
     }
 
-    async fn request(
+    pub(super) async fn request(
         &mut self,
         message: serde_json::Value,
         response_type: &str,
@@ -163,6 +163,18 @@ impl Fixture {
                 }
             }
             anyhow::bail!("connection closed before fixture response")
+        })
+        .await?
+    }
+
+    pub(super) async fn next_message(&mut self) -> anyhow::Result<serde_json::Value> {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while let Some(message) = self.peer.next().await {
+                if let PeerMessage::Text(text) = message? {
+                    return Ok(serde_json::from_str(&text)?);
+                }
+            }
+            anyhow::bail!("connection closed before fixture event")
         })
         .await?
     }
@@ -196,7 +208,7 @@ impl Fixture {
         self.did_complete
     }
 
-    async fn finish(mut self) {
+    pub(super) async fn finish(mut self) {
         self.manager.drain_signal().begin_draining();
         self.grace.close();
         assert!(

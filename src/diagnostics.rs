@@ -39,6 +39,7 @@ pub enum OperationKind {
     Consume,
     ResumeConsumer,
     PauseConsumer,
+    CloseConsumer,
     PauseProducer,
     ResumeProducer,
     CloseProducer,

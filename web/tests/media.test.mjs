@@ -1061,6 +1061,108 @@ test('forced screen-video closure cannot resurrect a pending screen-audio produc
   assert.equal(media.isScreenSharing, true);
 });
 
+test('ending screen capture during video publication cancels the whole pending share', async (t) => {
+  const { state, media } = await fixture(t);
+  const started = deferred(),
+    published = deferred();
+  let stopped = 0;
+  media.onScreenShareStopped = () => stopped++;
+  state.beforeProduce = (options) => {
+    if (options.appData.source === 'screen') {
+      started.resolve();
+      return published.promise;
+    }
+  };
+  const sharing = media.startScreenShare();
+  await started.promise;
+  state.tracks[0].endExternally();
+  assert.ok(state.tracks.every((track) => track.readyState === 'ended'));
+  published.resolve();
+  assert.equal(await sharing, null);
+  assert.equal(media.isScreenSharing, false);
+  assert.equal(stopped, 1);
+  assert.equal(state.producers.length, 1, 'cancelled sharing must not publish audio');
+  assert.ok(state.producers.every((producer) => producer.closed));
+  assert.equal(closeMessages(state, state.producers[0]).length, 1);
+  state.beforeProduce = null;
+  assert.ok(await media.startScreenShare(), 'a new capture can start after cancellation');
+});
+
+for (const stage of ['receiver', 'resume']) {
+  test(`failed consumer ${stage} closes the server subscription and permits a clean retry`, async (t) => {
+    const { state, media, newTrack } = await fixture(t);
+    let fail = true;
+    const consumers = [];
+    const capabilities = { codecs: [] };
+    media.device = { recvRtpCapabilities: capabilities };
+    media.signaling.request = async (message) => {
+      if (message.type === 'consume') {
+        assert.equal(message.rtpCapabilities, capabilities);
+        return {
+          consumerId: fail ? 'failed-consumer' : 'retried-consumer',
+          producerId: 'remote',
+          kind: 'video',
+          rtpParameters: {},
+        };
+      }
+      if (fail && stage === 'resume') throw new Error('resume failed');
+      return { type: 'consumerResumed', consumerId: message.consumerId };
+    };
+    media.recvTransport = {
+      close() {},
+      async consume(options) {
+        if (fail && stage === 'receiver') throw new Error('receiver failed');
+        const consumer = new Consumer({
+          ...options,
+          localId: options.id,
+          track: newTrack('video'),
+        });
+        consumers.push(consumer);
+        return consumer;
+      },
+    };
+    await assert.rejects(media.consume('remote'), /failed/);
+    assert.deepEqual(state.sent, [{ type: 'closeConsumer', consumerId: 'failed-consumer' }]);
+    assert.ok(consumers.every((consumer) => consumer.closed));
+    assert.equal(media.consumers.size, 0);
+    assert.equal(media.producerToConsumer.size, 0);
+    fail = false;
+    assert.equal((await media.consume('remote')).readyState, 'live');
+    assert.equal(media.consumers.size, 1);
+    assert.equal(media.producerToConsumer.get('remote'), 'retried-consumer');
+  });
+}
+
+for (const closure of ['session', 'producer', 'server']) {
+  test(`consumer quality state is released on ${closure} closure`, async (t) => {
+    const { state, media, newTrack } = await fixture(t);
+    const consumer = new Consumer({
+      id: 'consumer',
+      localId: '0',
+      producerId: 'remote',
+      track: newTrack('video'),
+      rtpParameters: { encodings: [{ scalabilityMode: 'L3T3' }] },
+    });
+    media.consumers.set(consumer.id, consumer);
+    media.producerToConsumer.set('remote', consumer.id);
+    media.setConsumerQualityByProducer('remote', 'low');
+    media.setConsumerSizeCapByProducer('remote', 1);
+    state.sent.length = 0;
+    if (closure === 'session') media.close();
+    else {
+      media.closeConsumerByProducer('remote', closure !== 'server');
+      media.closeConsumerByProducer('remote', closure !== 'server');
+    }
+    assert.equal(consumer.closed, true);
+    assert.equal(media.consumerQualities.size, 0);
+    assert.equal(media.consumerSizeCaps.size, 0);
+    assert.deepEqual(
+      state.sent,
+      closure === 'producer' ? [{ type: 'closeConsumer', consumerId: consumer.id }] : [],
+    );
+  });
+}
+
 test('leaving during microphone capture discards its late track', async (t) => {
   const { state, media, newTrack } = await fixture(t);
   const started = deferred(),
@@ -1272,7 +1374,13 @@ test('a tile-size cap bounds the requested layer and the manual choice stays the
   );
 });
 
-for (const stage of ['capabilities', 'device-load', 'send-transport', 'receive-transport']) {
+for (const stage of [
+  'capabilities',
+  'device-factory',
+  'device-load',
+  'send-transport',
+  'receive-transport',
+]) {
   test(`closing media during ${stage} setup prevents later transport work`, async (t) => {
     const pending = deferred(),
       started = deferred();
@@ -1289,6 +1397,13 @@ for (const stage of ['capabilities', 'device-load', 'send-transport', 'receive-t
           ? 'createSendTransport'
           : 'createRecvTransport';
     class Device {
+      static async factory() {
+        if (stage === 'device-factory') {
+          started.resolve();
+          await pending.promise;
+        }
+        return new Device();
+      }
       async load() {
         if (stage === 'device-load') {
           started.resolve();
@@ -1328,7 +1443,7 @@ for (const stage of ['capabilities', 'device-load', 'send-transport', 'receive-t
     const manager = new MediaManager({
       async request(message) {
         requests.push(message.type);
-        if (stage !== 'device-load' && message.type === expectedType) {
+        if (!stage.startsWith('device-') && message.type === expectedType) {
           started.resolve();
           await pending.promise;
         }
@@ -1357,7 +1472,7 @@ for (const stage of ['response', 'receiver', 'resume']) {
     let consumer,
       consumeCalls = 0;
     const requests = [];
-    media.device = { rtpCapabilities: {} };
+    media.device = { recvRtpCapabilities: {} };
     media.signaling.request = async (message) => {
       requests.push(message.type);
       if (

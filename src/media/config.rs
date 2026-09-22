@@ -88,10 +88,15 @@ impl MediaConfig {
         self.webrtc_transport_config.enable_tcp = tcp;
     }
 
-    /// Validates worker count and the corresponding dedicated UDP port span.
+    /// Validates worker capacity and transport settings before opening listeners.
     pub fn validate(&self) -> anyhow::Result<()> {
         validate_worker_count(self.worker_config.num_workers)?;
         self.worker_port(self.worker_config.num_workers - 1)?;
+        self.webrtc_transport_config.validate()?;
+        anyhow::ensure!(
+            !self.webrtc_transport_config.enable_tcp || self.webrtc_server_tcp,
+            "ICE-TCP requires the shared WebRTC server's TCP listener"
+        );
         Ok(())
     }
 
@@ -388,33 +393,36 @@ impl Default for WebRtcTransportConfig {
 }
 
 impl WebRtcTransportConfig {
+    /// Reject policies the native worker cannot apply. Zero preserves the native
+    /// default minimum or disables the maximum, as in the mediasoup API.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        for (name, bitrate) in [
+            ("minimum outgoing bitrate", self.min_outgoing_bitrate),
+            ("maximum outgoing bitrate", self.max_outgoing_bitrate),
+        ] {
+            anyhow::ensure!(
+                bitrate == 0 || bitrate >= 30_000,
+                "{name} must be zero or at least 30000 bit/s"
+            );
+        }
+        anyhow::ensure!(
+            self.max_outgoing_bitrate == 0
+                || self.min_outgoing_bitrate <= self.max_outgoing_bitrate,
+            "minimum outgoing bitrate must not exceed maximum outgoing bitrate"
+        );
+        anyhow::ensure!(
+            self.enable_udp || self.enable_tcp,
+            "at least one WebRTC transport protocol must be enabled"
+        );
+        Ok(())
+    }
+
     /// Sets the public IP address for the transport
     pub fn with_public_ip(mut self, public_ip: IpAddr) -> Self {
         if let Some(listen_ip) = self.listen_ips.first_mut() {
             listen_ip.announced_address = Some(public_ip.to_string());
         }
         self
-    }
-
-    /// Converts to WebRtcTransportOptions
-    pub fn to_transport_options(&self) -> WebRtcTransportOptions {
-        // Use the first listen IP, or create a default one
-        let listen_info = self
-            .listen_ips
-            .first()
-            .cloned()
-            .unwrap_or_else(|| ListenInfo {
-                protocol: Protocol::Udp,
-                ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                announced_address: None,
-                port: None,
-                port_range: None,
-                flags: None,
-                send_buffer_size: None,
-                recv_buffer_size: None,
-                expose_internal_ip: false,
-            });
-        WebRtcTransportOptions::new(WebRtcTransportListenInfos::new(listen_info))
     }
 }
 
@@ -458,6 +466,30 @@ mod tests {
         assert!(parse_bitrate("X", "50000001").is_err());
         assert!(parse_bitrate("X", "-1").is_err());
         assert!(parse_bitrate("X", "fast").is_err());
+    }
+
+    #[test]
+    fn transport_policies_fail_validation_before_native_creation() {
+        let mut config = MediaConfig::default();
+        for minimum in [1, 29_999, 3_000_001, 50_000_000] {
+            config.webrtc_transport_config.min_outgoing_bitrate = minimum;
+            assert!(config.validate().is_err(), "invalid floor {minimum}");
+        }
+        for minimum in [0, 30_000, 100_000, 3_000_000] {
+            config.webrtc_transport_config.min_outgoing_bitrate = minimum;
+            assert!(config.validate().is_ok(), "valid floor {minimum}");
+        }
+        config.webrtc_transport_config.max_outgoing_bitrate = 0;
+        assert!(config.validate().is_ok(), "zero removes the outgoing cap");
+        config.webrtc_transport_config.max_outgoing_bitrate = 29_999;
+        assert!(config.validate().is_err());
+        config.webrtc_transport_config = WebRtcTransportConfig::default();
+        config.webrtc_transport_config.enable_udp = false;
+        assert!(config.validate().is_err(), "a transport needs a protocol");
+        config.webrtc_transport_config.enable_tcp = true;
+        assert!(config.validate().is_err(), "TCP needs a listener");
+        config.set_tcp(true);
+        assert!(config.validate().is_ok());
     }
 
     #[test]

@@ -292,6 +292,34 @@ for (const fixture of fixtures) {
   });
 }
 
+test('request and error IDs survive decoding and reject malformed correlation tokens', () => {
+  const responseTypes = new Set([
+    'routerRtpCapabilities',
+    'transportCreated',
+    'transportConnected',
+    'producerCreated',
+    'consumerCreated',
+    'consumerResumed',
+    'consumerPaused',
+    'producerPaused',
+    'producerResumed',
+    'iceRestarted',
+    'reconnectResult',
+    'error',
+  ]);
+  for (const fixture of fixtures.filter((message) => responseTypes.has(message.type))) {
+    for (const requestId of ['request-1', 'A_0-z', 'x'.repeat(64)]) {
+      const decoded = decode({ ...fixture, requestId });
+      assert.equal(decoded.requestId, requestId);
+      assert.deepEqual(decoded, { ...decode(fixture), requestId });
+    }
+    for (const requestId of [null, '', 'x'.repeat(65), 'unsafe\n', 'é', 1, {}, [], true]) {
+      assert.throws(() => decode({ ...fixture, requestId }), invalid);
+    }
+    assert.equal(Object.hasOwn(decode(fixture), 'requestId'), false);
+  }
+});
+
 test('deferred authentication renewal requires bounded integer timing fields', () => {
   const deferred = fixtures.find((fixture) => fixture.type === 'authenticationRenewalDeferred');
   for (const retryAfterMs of [0, -1, 5001, 1.5, NaN, Infinity, '3000', null]) {

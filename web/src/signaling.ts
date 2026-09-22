@@ -1,4 +1,4 @@
-import type { ClientMessage, ServerMessage } from './protocol';
+import type { ClientMessage, RequestResponses, ServerMessage } from './protocol';
 import { decodeServerMessage } from './protocol-validation';
 
 export type MessageHandler = (msg: ServerMessage) => void;
@@ -41,12 +41,18 @@ export class SignalingClient {
     retryTimer: ReturnType<typeof setTimeout> | null;
   } | null = null;
 
-  // Pending request/response tracking
-  private pendingResolvers: Array<{
-    match: (msg: ServerMessage) => boolean;
-    resolve: (msg: ServerMessage) => void;
-    reject: (err: Error) => void;
-  }> = [];
+  // Never reset the sequence on room changes or reconnects. Authentication and
+  // social requests own separate ID namespaces and response handlers.
+  private requestSequence = 0n;
+  private pendingRequests = new Map<
+    string,
+    {
+      responseType: RequestResponses[keyof RequestResponses];
+      deadline: number;
+      resolve: (msg: ServerMessage) => void;
+      reject: (err: Error) => void;
+    }
+  >();
 
   constructor(url: string) {
     this.url = url;
@@ -175,17 +181,37 @@ export class SignalingClient {
           this.startReconnectDeadline();
           this.rejectAllPending('Server restarting');
         }
-        // Check pending resolvers first
-        const idx = this.pendingResolvers.findIndex((p) => p.match(msg));
-        if (idx !== -1) {
-          const pending = this.pendingResolvers.splice(idx, 1)[0]!;
-          if (msg.type === 'error') {
+        if (
+          'requestId' in msg &&
+          msg.requestId !== undefined &&
+          msg.type !== 'socialResponse' &&
+          msg.type !== 'socialError'
+        ) {
+          const pending = this.pendingRequests.get(msg.requestId);
+          // Unknown, duplicate and late replies are never application events.
+          if (!pending || (msg.type !== pending.responseType && msg.type !== 'error')) return;
+          this.pendingRequests.delete(msg.requestId);
+          if (performance.now() >= pending.deadline) {
+            pending.reject(new Error(`Timeout waiting for ${pending.responseType}`));
+          } else if (msg.type === 'error') {
             pending.reject(new Error(msg.message));
           } else {
             pending.resolve(msg);
           }
           return;
         }
+
+        // These are exclusively request replies. An ID-less reply from a legacy
+        // server must not satisfy a modern request or reach room/join handlers.
+        if (
+          msg.type === 'routerRtpCapabilities' ||
+          msg.type === 'transportCreated' ||
+          msg.type === 'transportConnected' ||
+          msg.type === 'producerCreated' ||
+          msg.type === 'consumerCreated' ||
+          msg.type === 'reconnectResult'
+        )
+          return;
 
         this.onMessage?.(msg);
       } catch (e) {
@@ -245,18 +271,25 @@ export class SignalingClient {
     this.ws.send(JSON.stringify(msg));
   }
 
-  /** Send a message and wait for a specific response type */
-  request<T extends ServerMessage>(
-    msg: ClientMessage,
-    responseType: T['type'],
+  /** Correlate a command's reply by a fresh ID and its protocol response type. */
+  request<Type extends keyof RequestResponses>(
+    msg: Extract<ClientMessage, { type: Type }> & { requestId?: never },
+    responseType: NoInfer<RequestResponses[Type]>,
     timeoutMs = 5000,
-  ): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
+  ): Promise<Extract<ServerMessage, { type: RequestResponses[Type] }>> {
+    if (!this.connected) return Promise.reject(new Error('WebSocket is not connected'));
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647)
+      return Promise.reject(new Error('Invalid request timeout'));
+    const requestId = `request-${++this.requestSequence}`;
+    return new Promise((resolve, reject) => {
       const pending = {
-        match: (m: ServerMessage) => m.type === responseType || m.type === 'error',
+        responseType,
+        deadline: performance.now() + timeoutMs,
         resolve: (m: ServerMessage) => {
           clearTimeout(timer);
-          resolve(m as T);
+          // The validated message's discriminant was matched before dispatch.
+          // TypeScript cannot narrow a discriminated union to a generic literal.
+          resolve(m as Extract<ServerMessage, { type: RequestResponses[Type] }>);
         },
         reject: (err: Error) => {
           clearTimeout(timer);
@@ -264,13 +297,17 @@ export class SignalingClient {
         },
       };
       const timer = setTimeout(() => {
-        const idx = this.pendingResolvers.indexOf(pending);
-        if (idx !== -1) this.pendingResolvers.splice(idx, 1);
+        if (!this.pendingRequests.delete(requestId)) return;
         pending.reject(new Error(`Timeout waiting for ${responseType}`));
       }, timeoutMs);
-      this.pendingResolvers.push(pending);
+      this.pendingRequests.set(requestId, pending);
 
-      this.send(msg);
+      try {
+        this.send({ ...msg, requestId });
+      } catch (error) {
+        this.pendingRequests.delete(requestId);
+        pending.reject(error instanceof Error ? error : new Error('Unable to send request'));
+      }
     });
   }
 
@@ -425,8 +462,9 @@ export class SignalingClient {
   }
 
   private rejectAllPending(reason: string): void {
-    const pending = this.pendingResolvers.splice(0);
-    for (const p of pending) {
+    const pending = this.pendingRequests;
+    this.pendingRequests = new Map();
+    for (const p of pending.values()) {
       p.reject(new Error(reason));
     }
   }

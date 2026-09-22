@@ -688,9 +688,7 @@ export class RoomClient {
 
     console.log('[room] attempting session reconnect...');
     try {
-      const result = await this.signaling.request<
-        Extract<ServerMessage, { type: 'reconnectResult' }>
-      >(
+      const result = await this.signaling.request(
         {
           type: 'reconnect',
           participantId: this.localId,
@@ -863,8 +861,8 @@ export class RoomClient {
       generation === this.generation &&
       this.media === media &&
       this.participants.get(participantId)?.producers.get(producerId) === metadata;
-    // Signaling consumer responses have no request ID, so only one consume
-    // transaction may be outstanding even when several newProducer events arrive.
+    // Keep receive setup and its UI updates ordered when several newProducer
+    // events arrive together. Signaling replies are independently correlated.
     const task = this.consumeQueue.then(async () => {
       if (!current()) return;
       try {
@@ -1008,7 +1006,7 @@ export class RoomClient {
         if (leaving) {
           for (const producerId of leaving.producers.keys()) {
             this.pausedProducers.delete(producerId);
-            this.media?.closeConsumerByProducer(producerId);
+            this.media?.closeConsumerByProducer(producerId, false);
           }
         }
         this.participants.delete(msg.participantId);
@@ -1043,7 +1041,7 @@ export class RoomClient {
           if (p.producers.has(msg.producerId)) {
             const meta = p.producers.get(msg.producerId)!;
             p.producers.delete(msg.producerId);
-            this.media?.closeConsumerByProducer(msg.producerId);
+            this.media?.closeConsumerByProducer(msg.producerId, false);
             this.events.onRemoteTrackRemoved(pid, msg.producerId, meta.kind, meta.source);
             break;
           }
@@ -1128,7 +1126,7 @@ export class RoomClient {
           if (p.producers.has(msg.producerId)) {
             const meta = p.producers.get(msg.producerId)!;
             p.producers.delete(msg.producerId);
-            this.media?.closeConsumerByProducer(msg.producerId);
+            this.media?.closeConsumerByProducer(msg.producerId, false);
             this.events.onRemoteTrackRemoved(pid, msg.producerId, meta.kind, meta.source);
             break;
           }
@@ -1280,7 +1278,7 @@ export class RoomClient {
       const current = incoming.get(id);
       for (const [producerId, metadata] of previous.producers) {
         if (!current?.producers.some((producer) => producer.id === producerId)) {
-          this.media?.closeConsumerByProducer(producerId);
+          this.media?.closeConsumerByProducer(producerId, false);
           this.pausedProducers.delete(producerId);
           this.events.onRemoteTrackRemoved(id, producerId, metadata.kind, metadata.source);
         }

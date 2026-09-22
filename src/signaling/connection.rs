@@ -2,7 +2,7 @@
 
 // WebSocket connection handler for individual clients
 
-use super::protocol::{ClientMessage, ServerMessage};
+use super::protocol::{ClientMessage, RequestHeader, ServerMessage, ServerReply};
 use crate::auth::types::Claims;
 use crate::diagnostics::{self, OperationKind, Outcome, Stage};
 use crate::metrics::ServerMetrics;
@@ -152,12 +152,25 @@ const TRANSPORT_MUTATION_RATE_LIMIT_MAX_TOKENS: u64 = 6;
 const TRANSPORT_MUTATION_RATE_LIMIT_REFILL_RATE: u64 = 1;
 const MAX_TRANSPORT_MUTATION_TOKENS_US: u64 = TRANSPORT_MUTATION_RATE_LIMIT_MAX_TOKENS * TOKEN_US;
 
-/// Joining a full default-size media session can create and resume sixteen
-/// consumers, with an optional layer selection for each. Preserve that burst
-/// while sharply bounding sustained consumer IPC churn.
-const CONSUMER_MUTATION_RATE_LIMIT_MAX_TOKENS: u64 = 48;
+/// Permit create, resume and one layer selection for every configured consumer.
+/// Keep sustained churn bounded independently of the initial join burst.
 const CONSUMER_MUTATION_RATE_LIMIT_REFILL_RATE: u64 = 4;
-const MAX_CONSUMER_MUTATION_TOKENS_US: u64 = CONSUMER_MUTATION_RATE_LIMIT_MAX_TOKENS * TOKEN_US;
+
+fn consumer_mutation_capacity(consumer_limit: usize) -> u64 {
+    u64::try_from(consumer_limit)
+        .unwrap_or(u64::MAX)
+        .saturating_mul(3 * TOKEN_US)
+}
+
+fn frame_capacity(consumer_capacity: u64) -> u64 {
+    // The outer frame limiter must also admit a full media setup, including
+    // join/capabilities and the independent producer/transport bursts.
+    consumer_capacity
+        .saturating_add(MAX_MEDIA_MUTATION_TOKENS_US)
+        .saturating_add(MAX_TRANSPORT_MUTATION_TOKENS_US)
+        .saturating_add(2 * TOKEN_US)
+        .max(MAX_TOKENS_US)
+}
 
 /// Moderation and room-settings messages can persist state or broadcast to an
 /// entire room. Keep them on a separate, human-scale budget so an authorized
@@ -260,6 +273,7 @@ fn is_consumer_mutation(message: &ClientMessage) -> bool {
         ClientMessage::Consume { .. }
             | ClientMessage::ResumeConsumer { .. }
             | ClientMessage::PauseConsumer { .. }
+            | ClientMessage::CloseConsumer { .. }
             | ClientMessage::SetConsumerPreferredLayers { .. }
     )
 }
@@ -277,6 +291,7 @@ struct MediaSessionRateState {
     transport_mutation_tokens_us: u64,
     transport_mutation_last_refill: Instant,
     consumer_mutation_tokens_us: u64,
+    consumer_mutation_capacity_us: u64,
     consumer_mutation_last_refill: Instant,
     violation_window_started: Option<Instant>,
     violations: u32,
@@ -288,12 +303,21 @@ impl MediaSessionRateState {
     }
 
     fn new_at(now: Instant) -> Self {
+        Self::with_consumer_limit(
+            now,
+            crate::media::transport_manager::max_consumers_per_participant(),
+        )
+    }
+
+    fn with_consumer_limit(now: Instant, consumer_limit: usize) -> Self {
+        let consumer_mutation_capacity_us = consumer_mutation_capacity(consumer_limit);
         Self {
             media_mutation_tokens_us: MAX_MEDIA_MUTATION_TOKENS_US,
             media_mutation_last_refill: now,
             transport_mutation_tokens_us: MAX_TRANSPORT_MUTATION_TOKENS_US,
             transport_mutation_last_refill: now,
-            consumer_mutation_tokens_us: MAX_CONSUMER_MUTATION_TOKENS_US,
+            consumer_mutation_tokens_us: consumer_mutation_capacity_us,
+            consumer_mutation_capacity_us,
             consumer_mutation_last_refill: now,
             violation_window_started: None,
             violations: 0,
@@ -323,7 +347,7 @@ impl MediaSessionRateState {
                 &mut self.consumer_mutation_last_refill,
                 now,
                 CONSUMER_MUTATION_RATE_LIMIT_REFILL_RATE,
-                MAX_CONSUMER_MUTATION_TOKENS_US,
+                self.consumer_mutation_capacity_us,
             )
         } else {
             false
@@ -511,11 +535,11 @@ impl GracePeriodMap {
     }
 }
 
-/// Serialize a ServerMessage and send it through the channel as pre-serialized JSON.
+/// Serialize a message or reply envelope into the bounded outbound queue.
 fn send_json(
     metrics: &ServerMetrics,
     sender: &mpsc::Sender<crate::OutboundJson>,
-    msg: &ServerMessage,
+    msg: &impl serde::Serialize,
 ) -> anyhow::Result<()> {
     let json = crate::OutboundJson::from(serde_json::to_string(msg)?);
     if let Err(error) = sender.try_send(json) {
@@ -526,6 +550,36 @@ fn send_json(
         anyhow::bail!("Outbound signaling queue unavailable");
     }
     Ok(())
+}
+
+/// The request ID belongs only to direct replies, never to room notifications.
+struct ReplySender<'a> {
+    metrics: &'a ServerMetrics,
+    sender: &'a mpsc::Sender<crate::OutboundJson>,
+    request_id: Option<&'a str>,
+}
+
+impl ReplySender<'_> {
+    fn send(&self, message: &ServerMessage) -> anyhow::Result<()> {
+        // These protocols already serialize their own IDs. Do not emit a
+        // duplicate JSON key or replace their independent correlation state.
+        let request_id = match message {
+            ServerMessage::AuthenticationRenewed { .. }
+            | ServerMessage::AuthenticationRenewalFailed { .. }
+            | ServerMessage::AuthenticationRenewalDeferred { .. }
+            | ServerMessage::SocialResponse { .. }
+            | ServerMessage::SocialError { .. } => None,
+            _ => self.request_id,
+        };
+        send_json(
+            self.metrics,
+            self.sender,
+            &ServerReply {
+                message,
+                request_id,
+            },
+        )
+    }
 }
 
 /// Only completed text writes increment sent; queue acceptance is not delivery.
@@ -583,6 +637,7 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         ClientMessage::Consume { .. } => OperationKind::Consume,
         ClientMessage::ResumeConsumer { .. } => OperationKind::ResumeConsumer,
         ClientMessage::PauseConsumer { .. } => OperationKind::PauseConsumer,
+        ClientMessage::CloseConsumer { .. } => OperationKind::CloseConsumer,
         ClientMessage::PauseProducer { .. } => OperationKind::PauseProducer,
         ClientMessage::ResumeProducer { .. } => OperationKind::ResumeProducer,
         ClientMessage::CloseProducer { .. } => OperationKind::CloseProducer,
@@ -950,7 +1005,10 @@ async fn handle_connection_with_timing(
     let mut bwe_sender: Option<mpsc::Sender<u32>> = None;
 
     // Token bucket rate limiter state
-    let mut frame_tokens_us: u64 = MAX_TOKENS_US;
+    let max_frame_tokens_us = frame_capacity(consumer_mutation_capacity(
+        crate::media::transport_manager::max_consumers_per_participant(),
+    ));
+    let mut frame_tokens_us = max_frame_tokens_us;
     let mut frame_last_refill = Instant::now();
     let mut rate_limit_window_started: Option<Instant> = None;
     let mut rate_limit_violations = 0_u32;
@@ -1159,7 +1217,7 @@ async fn handle_connection_with_timing(
             &mut frame_last_refill,
             now,
             RATE_LIMIT_REFILL_RATE,
-            MAX_TOKENS_US,
+            max_frame_tokens_us,
         ) {
             if matches!(&msg, Message::Close(_)) {
                 break;
@@ -1173,16 +1231,27 @@ async fn handle_connection_with_timing(
             rate_limit_violations = rate_limit_violations.saturating_add(1);
             if rate_limit_violations == 1 {
                 warn!("Rate limit exceeded for participant {}", participant_id);
-                let _ = send_json(
-                    &metrics,
-                    &tx,
-                    &ServerMessage::Error {
-                        message: format!(
-                            "Rate limit exceeded: max {} frames/second",
-                            RATE_LIMIT_REFILL_RATE
-                        ),
-                    },
-                );
+                // Inspect at most one bounded rejected frame per violation
+                // window so overload handling does not decode every payload.
+                let request_id = match &msg {
+                    Message::Text(text) if text.len() <= MAX_SIGNAL_MESSAGE_LEN => {
+                        serde_json::from_str::<RequestHeader>(text)
+                            .ok()
+                            .and_then(|header| header.request_id)
+                    }
+                    _ => None,
+                };
+                let reply = ReplySender {
+                    metrics: &metrics,
+                    sender: &tx,
+                    request_id: request_id.as_deref(),
+                };
+                let _ = reply.send(&ServerMessage::Error {
+                    message: format!(
+                        "Rate limit exceeded: max {} frames/second",
+                        RATE_LIMIT_REFILL_RATE
+                    ),
+                });
             }
             if rate_limit_violations >= RATE_LIMIT_MAX_VIOLATIONS {
                 warn!(
@@ -1205,6 +1274,25 @@ async fn handle_connection_with_timing(
                     break;
                 }
 
+                let header = match serde_json::from_str::<RequestHeader>(&text) {
+                    Ok(header) => header,
+                    Err(_) => {
+                        metrics.inc_errors();
+                        let _ = send_json(
+                            &metrics,
+                            &tx,
+                            &ServerMessage::Error {
+                                message: "Invalid message format".to_string(),
+                            },
+                        );
+                        continue;
+                    }
+                };
+                let reply = ReplySender {
+                    metrics: &metrics,
+                    sender: &tx,
+                    request_id: header.request_id.as_deref(),
+                };
                 match serde_json::from_str::<ClientMessage>(&text) {
                     Ok(client_msg) => {
                         // Renewal belongs to this socket, not to a room or media
@@ -1213,9 +1301,6 @@ async fn handle_connection_with_timing(
                         if let ClientMessage::RenewAuthentication { request_id, token } =
                             &client_msg
                         {
-                            if !crate::room::social::valid_correlation_id(request_id) {
-                                break;
-                            }
                             let outcome = if renewal_budget.allow(Instant::now()) {
                                 match (renewal_authenticator.as_ref(), authenticated_user.as_ref())
                                 {
@@ -1306,13 +1391,9 @@ async fn handle_connection_with_timing(
                             media_rate_state.limit_exceeded(&client_msg, now);
                         if media_limit_exceeded {
                             let media_mutation_violations = media_rate_state.record_violation(now);
-                            let _ = send_json(
-                                &metrics,
-                                &tx,
-                                &ServerMessage::Error {
-                                    message: "Media changes are rate limited".to_string(),
-                                },
-                            );
+                            let _ = reply.send(&ServerMessage::Error {
+                                message: "Media changes are rate limited".to_string(),
+                            });
                             if media_mutation_violations >= MEDIA_MUTATION_MAX_VIOLATIONS {
                                 warn!(
                                     participant_id,
@@ -1340,9 +1421,7 @@ async fn handle_connection_with_timing(
                                 admin_mutation_violations = 0;
                             }
                             admin_mutation_violations = admin_mutation_violations.saturating_add(1);
-                            let _ = send_json(
-                                &metrics,
-                                &tx,
+                            let _ = reply.send(
                                 &client_msg
                                     .social_error("Room administration changes are rate limited")
                                     .unwrap_or(ServerMessage::Error {
@@ -1373,9 +1452,7 @@ async fn handle_connection_with_timing(
                             MAX_CHAT_TOKENS_US,
                         ) {
                             warn!(participant_id, "Closing WebSocket for chat flooding");
-                            let _ = send_json(
-                                &metrics,
-                                &tx,
+                            let _ = reply.send(
                                 &client_msg
                                     .social_error("Chat rate limit exceeded")
                                     .unwrap_or(ServerMessage::Error {
@@ -1396,14 +1473,9 @@ async fn handle_connection_with_timing(
                             if last_room_password_hash.is_some_and(|previous| {
                                 now.duration_since(previous) < ROOM_PASSWORD_HASH_COOLDOWN
                             }) {
-                                let _ = send_json(
-                                    &metrics,
-                                    &tx,
-                                    &ServerMessage::Error {
-                                        message: "Room password updates are rate limited"
-                                            .to_string(),
-                                    },
-                                );
+                                let _ = reply.send(&ServerMessage::Error {
+                                    message: "Room password updates are rate limited".to_string(),
+                                });
                                 continue;
                             }
                             last_room_password_hash = Some(now);
@@ -1414,13 +1486,9 @@ async fn handle_connection_with_timing(
                         } = &client_msg
                             && !join_attempts.allow(room_id, password.is_some(), Instant::now())
                         {
-                            let _ = send_json(
-                                &metrics,
-                                &tx,
-                                &ServerMessage::Error {
-                                    message: "Join attempts are rate limited".to_string(),
-                                },
-                            );
+                            let _ = reply.send(&ServerMessage::Error {
+                                message: "Join attempts are rate limited".to_string(),
+                            });
                             continue;
                         }
 
@@ -1429,13 +1497,9 @@ async fn handle_connection_with_timing(
                             if last_voice_request.is_some_and(|previous| {
                                 now.duration_since(previous) < VOICE_REQUEST_COOLDOWN
                             }) {
-                                let _ = send_json(
-                                    &metrics,
-                                    &tx,
-                                    &ServerMessage::Error {
-                                        message: "Voice requests are rate limited".to_string(),
-                                    },
-                                );
+                                let _ = reply.send(&ServerMessage::Error {
+                                    message: "Voice requests are rate limited".to_string(),
+                                });
                                 continue;
                             }
                             last_voice_request = Some(now);
@@ -1457,15 +1521,11 @@ async fn handle_connection_with_timing(
                                     participant_id,
                                     "Rejected reconnect from a socket with an active room session"
                                 );
-                                let _ = send_json(
-                                    &metrics,
-                                    &tx,
-                                    &ServerMessage::ReconnectResult {
-                                        success: false,
-                                        participant_id: reconnect_id.clone(),
-                                        reconnect_token: None,
-                                    },
-                                );
+                                let _ = reply.send(&ServerMessage::ReconnectResult {
+                                    success: false,
+                                    participant_id: reconnect_id.clone(),
+                                    reconnect_token: None,
+                                });
                                 continue;
                             }
 
@@ -1534,19 +1594,15 @@ async fn handle_connection_with_timing(
                                 ));
                             }
 
-                            let response_sent = send_json(
-                                &metrics,
-                                &tx,
-                                &ServerMessage::ReconnectResult {
-                                    success,
-                                    participant_id: if success {
-                                        participant_id.clone()
-                                    } else {
-                                        reconnect_id.clone()
-                                    },
-                                    reconnect_token: fresh_reconnect_token.clone(),
+                            let response_sent = reply.send(&ServerMessage::ReconnectResult {
+                                success,
+                                participant_id: if success {
+                                    participant_id.clone()
+                                } else {
+                                    reconnect_id.clone()
                                 },
-                            );
+                                reconnect_token: fresh_reconnect_token.clone(),
+                            });
                             if response_sent.is_ok()
                                 && let Some(fresh_token) = fresh_reconnect_token
                             {
@@ -1575,10 +1631,9 @@ async fn handle_connection_with_timing(
                                     &participant_id,
                                     &mut current_room_id,
                                     &in_lobby,
-                                    &tx,
+                                    &reply,
                                     &room_manager,
                                     &turn_config,
-                                    &metrics,
                                     &mut reconnect_token,
                                     &bwe_sender,
                                     is_authenticated,
@@ -1631,7 +1686,7 @@ async fn handle_connection_with_timing(
                             let response = client_msg
                                 .social_error(public_message)
                                 .unwrap_or_else(|| client_error_response(&e));
-                            if send_json(&metrics, &tx, &response).is_err() {
+                            if reply.send(&response).is_err() {
                                 break;
                             }
                         }
@@ -1681,13 +1736,9 @@ async fn handle_connection_with_timing(
                             "Invalid client signaling message"
                         );
                         metrics.inc_errors();
-                        let _ = send_json(
-                            &metrics,
-                            &tx,
-                            &ServerMessage::Error {
-                                message: "Invalid message format".to_string(),
-                            },
-                        );
+                        let _ = reply.send(&ServerMessage::Error {
+                            message: "Invalid message format".to_string(),
+                        });
                     }
                 }
             }
@@ -1944,6 +1995,10 @@ mod close_tests;
 mod heartbeat_tests;
 
 #[cfg(test)]
+#[path = "connection_correlation_tests.rs"]
+mod correlation_tests;
+
+#[cfg(test)]
 #[path = "connection_credential_tests.rs"]
 mod credential_tests;
 
@@ -2147,16 +2202,17 @@ async fn handle_client_message(
     participant_id: &str,
     current_room_id: &mut Option<String>,
     in_lobby: &Arc<AtomicBool>,
-    sender: &mpsc::Sender<crate::OutboundJson>,
+    reply: &ReplySender<'_>,
     room_manager: &Arc<RoomManager>,
     turn_config: &Option<Arc<TurnConfig>>,
-    metrics: &ServerMetrics,
     reconnect_token: &mut String,
     bwe_sender: &Option<mpsc::Sender<u32>>,
     is_authenticated: bool,
     authenticated_display_name: Option<&str>,
     client_ip: Option<std::net::IpAddr>,
 ) -> anyhow::Result<()> {
+    let sender = reply.sender;
+    let metrics = reply.metrics;
     // Block media/moderation operations for lobby participants
     if in_lobby.load(Ordering::Acquire) {
         match message {
@@ -2245,17 +2301,13 @@ async fn handle_client_message(
                     in_lobby.store(false, Ordering::Release);
                     metrics.inc_joins();
 
-                    send_json(
-                        metrics,
-                        sender,
-                        &ServerMessage::RoomJoined {
-                            participant_id: participant_id.to_string(),
-                            participants,
-                            reconnect_token: session_reconnect_token,
-                            your_role: role,
-                            room_settings,
-                        },
-                    )?;
+                    reply.send(&ServerMessage::RoomJoined {
+                        participant_id: participant_id.to_string(),
+                        participants,
+                        reconnect_token: session_reconnect_token,
+                        your_role: role,
+                        room_settings,
+                    })?;
                 }
                 JoinResult::Lobbied => {
                     // Set current_room_id so disconnect cleanup removes from lobby
@@ -2308,13 +2360,9 @@ async fn handle_client_message(
                 let capabilities = room_manager
                     .get_router_rtp_capabilities(room_id, participant_id, sender)
                     .await?;
-                send_json(
-                    metrics,
-                    sender,
-                    &ServerMessage::RouterRtpCapabilities {
-                        rtp_capabilities: capabilities,
-                    },
-                )?;
+                reply.send(&ServerMessage::RouterRtpCapabilities {
+                    rtp_capabilities: capabilities,
+                })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2326,17 +2374,13 @@ async fn handle_client_message(
                     .create_send_transport(room_id, participant_id, sender)
                     .await?;
 
-                send_json(
-                    metrics,
-                    sender,
-                    &ServerMessage::TransportCreated {
-                        transport_id: transport_info.id,
-                        ice_parameters: transport_info.ice_parameters,
-                        ice_candidates: transport_info.ice_candidates,
-                        dtls_parameters: transport_info.dtls_parameters,
-                        ice_servers: make_ice_servers(turn_config),
-                    },
-                )?;
+                reply.send(&ServerMessage::TransportCreated {
+                    transport_id: transport_info.id,
+                    ice_parameters: transport_info.ice_parameters,
+                    ice_candidates: transport_info.ice_candidates,
+                    dtls_parameters: transport_info.dtls_parameters,
+                    ice_servers: make_ice_servers(turn_config),
+                })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2360,17 +2404,13 @@ async fn handle_client_message(
                     );
                 }
 
-                send_json(
-                    metrics,
-                    sender,
-                    &ServerMessage::TransportCreated {
-                        transport_id: transport_info.id,
-                        ice_parameters: transport_info.ice_parameters,
-                        ice_candidates: transport_info.ice_candidates,
-                        dtls_parameters: transport_info.dtls_parameters,
-                        ice_servers: make_ice_servers(turn_config),
-                    },
-                )?;
+                reply.send(&ServerMessage::TransportCreated {
+                    transport_id: transport_info.id,
+                    ice_parameters: transport_info.ice_parameters,
+                    ice_candidates: transport_info.ice_candidates,
+                    dtls_parameters: transport_info.dtls_parameters,
+                    ice_servers: make_ice_servers(turn_config),
+                })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2391,13 +2431,9 @@ async fn handle_client_message(
                     )
                     .await?;
 
-                send_json(
-                    metrics,
-                    sender,
-                    &ServerMessage::TransportConnected {
-                        transport_id: transport_id.clone(),
-                    },
-                )?;
+                reply.send(&ServerMessage::TransportConnected {
+                    transport_id: transport_id.clone(),
+                })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2441,11 +2477,7 @@ async fn handle_client_message(
                     .await?;
 
                 metrics.inc_producers_created();
-                send_json(
-                    metrics,
-                    sender,
-                    &ServerMessage::ProducerCreated { producer_id },
-                )?;
+                reply.send(&ServerMessage::ProducerCreated { producer_id })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2468,16 +2500,12 @@ async fn handle_client_message(
                     .await?;
 
                 metrics.inc_consumers_created();
-                send_json(
-                    metrics,
-                    sender,
-                    &ServerMessage::ConsumerCreated {
-                        consumer_id: consumer_info.id,
-                        producer_id: consumer_info.producer_id.clone(),
-                        kind: consumer_info.kind,
-                        rtp_parameters: consumer_info.rtp_parameters,
-                    },
-                )?;
+                reply.send(&ServerMessage::ConsumerCreated {
+                    consumer_id: consumer_info.id,
+                    producer_id: consumer_info.producer_id.clone(),
+                    kind: consumer_info.kind,
+                    rtp_parameters: consumer_info.rtp_parameters,
+                })?;
 
                 // If the producer is already paused, immediately notify the consuming client
                 // so it can hide the video tile instead of showing a black square.
@@ -2501,13 +2529,9 @@ async fn handle_client_message(
                     .resume_consumer(room_id, participant_id, sender, consumer_id)
                     .await?;
 
-                send_json(
-                    metrics,
-                    sender,
-                    &ServerMessage::ConsumerResumed {
-                        consumer_id: consumer_id.clone(),
-                    },
-                )?;
+                reply.send(&ServerMessage::ConsumerResumed {
+                    consumer_id: consumer_id.clone(),
+                })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2519,13 +2543,19 @@ async fn handle_client_message(
                     .pause_consumer(room_id, participant_id, sender, consumer_id)
                     .await?;
 
-                send_json(
-                    metrics,
-                    sender,
-                    &ServerMessage::ConsumerPaused {
-                        consumer_id: consumer_id.clone(),
-                    },
-                )?;
+                reply.send(&ServerMessage::ConsumerPaused {
+                    consumer_id: consumer_id.clone(),
+                })?;
+            } else {
+                anyhow::bail!("Not in a room");
+            }
+        }
+
+        ClientMessage::CloseConsumer { consumer_id } => {
+            if let Some(room_id) = current_room_id.as_ref() {
+                room_manager
+                    .close_consumer(room_id, participant_id, sender, consumer_id)
+                    .await?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2546,13 +2576,9 @@ async fn handle_client_message(
                 room_manager
                     .pause_producer(room_id, participant_id, sender, producer_id)
                     .await?;
-                send_json(
-                    metrics,
-                    sender,
-                    &ServerMessage::ProducerPaused {
-                        producer_id: producer_id.clone(),
-                    },
-                )?;
+                reply.send(&ServerMessage::ProducerPaused {
+                    producer_id: producer_id.clone(),
+                })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2563,13 +2589,9 @@ async fn handle_client_message(
                 room_manager
                     .resume_producer(room_id, participant_id, sender, producer_id)
                     .await?;
-                send_json(
-                    metrics,
-                    sender,
-                    &ServerMessage::ProducerResumed {
-                        producer_id: producer_id.clone(),
-                    },
-                )?;
+                reply.send(&ServerMessage::ProducerResumed {
+                    producer_id: producer_id.clone(),
+                })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -2586,17 +2608,13 @@ async fn handle_client_message(
                     .restart_ice(room_id, participant_id, sender, transport_id)
                     .await?;
 
-                send_json(
-                    metrics,
-                    sender,
-                    &ServerMessage::IceRestarted {
-                        transport_id: transport_id.clone(),
-                        ice_parameters,
-                        // Relay credentials minted at transport creation may
-                        // have expired; candidate gathering needs fresh ones.
-                        ice_servers: make_ice_servers(turn_config),
-                    },
-                )?;
+                reply.send(&ServerMessage::IceRestarted {
+                    transport_id: transport_id.clone(),
+                    ice_parameters,
+                    // Relay credentials minted at transport creation may
+                    // have expired; candidate gathering needs fresh ones.
+                    ice_servers: make_ice_servers(turn_config),
+                })?;
             } else {
                 anyhow::bail!("Not in a room");
             }
@@ -3196,6 +3214,9 @@ mod security_tests {
         assert!(is_consumer_mutation(&ClientMessage::PauseConsumer {
             consumer_id: Uuid::new_v4().to_string(),
         }));
+        assert!(is_consumer_mutation(&ClientMessage::CloseConsumer {
+            consumer_id: Uuid::new_v4().to_string(),
+        }));
         assert!(is_consumer_mutation(&ClientMessage::ResumeConsumer {
             consumer_id: Uuid::new_v4().to_string(),
         }));
@@ -3215,6 +3236,71 @@ mod security_tests {
         }));
     }
 
+    #[test]
+    fn consumer_and_frame_bursts_admit_the_configured_media_startup() {
+        let now = Instant::now();
+        for limit in [16, 64, 128] {
+            let mut session = MediaSessionRateState::with_consumer_limit(now, limit);
+            let capacity = frame_capacity(session.consumer_mutation_capacity_us);
+            let mut frame_tokens = capacity;
+            let mut frame_refill = now;
+            // Full producer and transport setup plus join and capabilities.
+            for _ in 0..MEDIA_MUTATION_RATE_LIMIT_MAX_TOKENS
+                + TRANSPORT_MUTATION_RATE_LIMIT_MAX_TOKENS
+                + 2
+            {
+                assert!(consume_rate_token(
+                    &mut frame_tokens,
+                    &mut frame_refill,
+                    now,
+                    RATE_LIMIT_REFILL_RATE,
+                    capacity,
+                ));
+            }
+            for index in 0..limit {
+                for message in [
+                    ClientMessage::Consume {
+                        producer_id: format!("producer-{index}"),
+                        rtp_capabilities: Default::default(),
+                    },
+                    ClientMessage::ResumeConsumer {
+                        consumer_id: format!("consumer-{index}"),
+                    },
+                    ClientMessage::SetConsumerPreferredLayers {
+                        consumer_id: format!("consumer-{index}"),
+                        spatial_layer: 1,
+                        temporal_layer: None,
+                    },
+                ] {
+                    assert!(!session.limit_exceeded(&message, now));
+                    assert!(consume_rate_token(
+                        &mut frame_tokens,
+                        &mut frame_refill,
+                        now,
+                        RATE_LIMIT_REFILL_RATE,
+                        capacity,
+                    ));
+                }
+            }
+            let extra = ClientMessage::ResumeConsumer {
+                consumer_id: "extra".into(),
+            };
+            assert!(session.limit_exceeded(&extra, now), "burst remains bounded");
+            let later = now + Duration::from_secs(1);
+            for _ in 0..CONSUMER_MUTATION_RATE_LIMIT_REFILL_RATE {
+                assert!(!session.limit_exceeded(&extra, later));
+            }
+            assert!(
+                session.limit_exceeded(&extra, later),
+                "sustained rate remains bounded"
+            );
+        }
+        if let Ok(overflowing_limit) = usize::try_from(u64::MAX / (3 * TOKEN_US) + 1) {
+            assert_eq!(consumer_mutation_capacity(overflowing_limit), u64::MAX);
+        }
+        assert_eq!(frame_capacity(u64::MAX), u64::MAX);
+    }
+
     #[tokio::test]
     async fn grace_reconnect_does_not_restore_consumer_burst_capacity() {
         let map = GracePeriodMap::new();
@@ -3230,7 +3316,7 @@ mod security_tests {
         let mut entry = grace_entry(&token);
         entry.media_rate_state = MediaSessionRateState::new_at(now);
 
-        for _ in 0..CONSUMER_MUTATION_RATE_LIMIT_MAX_TOKENS {
+        for _ in 0..entry.media_rate_state.consumer_mutation_capacity_us / TOKEN_US {
             assert!(
                 !entry
                     .media_rate_state

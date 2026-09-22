@@ -10,7 +10,7 @@ const web = fileURLToPath(new URL('..', import.meta.url));
 const linter = path.join(web, 'node_modules/oxlint/bin/oxlint');
 const ui = JSON.stringify(path.join(web, 'src/ui.ts'));
 
-test('the real typed lint configuration rejects discarded and misused promises and unsafe JSON', async (t) => {
+test('typed lint rejects discarded and misused promises, unsafe JSON and deprecated APIs', async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-lint-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await mkdir(path.join(directory, 'src'));
@@ -47,6 +47,9 @@ test('the real typed lint configuration rejects discarded and misused promises a
     export function floating() { Promise.resolve(); }
     export const misused = button('Async', async () => {});
     export function unchecked(text: string) { const data = JSON.parse(text); return data; }
+    /** @deprecated Use a current API instead. */
+    function obsolete() { return 1; }
+    export const deprecated = obsolete();
   `);
   assert.notEqual(rejected.status, 0, 'unsafe fixtures must fail the actual configured rules');
   for (const rule of [
@@ -55,6 +58,7 @@ test('the real typed lint configuration rejects discarded and misused promises a
     'no-misused-promises',
     'no-unsafe-assignment',
     'no-unsafe-return',
+    'no-deprecated',
   ]) {
     assert.ok(rejected.output.includes(rule), `Expected ${rule}: ${rejected.output}`);
   }

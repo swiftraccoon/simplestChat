@@ -139,33 +139,45 @@ reconnect grace. It runs before any disconnect-time database credential check.
 
 | Operation | Correlation and browser deadline |
 | --- | --- |
-| Generic `SignalingClient.request` | First pending request matching the response `type`; 5 seconds by default |
+| Media and reconnect `SignalingClient.request` | Generated `requestId` plus the command's expected response `type`; 5 seconds by default |
 | Authentication renewal | Dedicated `requestId`; 5 seconds, one in flight per socket |
 | Room join | Next `roomJoined`, `lobbyWaiting`, `roomPasswordRequired` or `error`; 10 seconds |
 | Social action | Generated `requestId` plus matching `action`; 10 seconds, at most 32 pending |
 | Chat send | `clientMessageId` reconciles the optimistic entry with an acknowledgement; 12 seconds before marking delivery unconfirmed |
 
-An `error` carries a human-readable `message`. It rejects the first pending generic
-request regardless of that request's expected response type; an unclaimed error
-can reach the join handler. `roomPasswordRequired` is a distinct retry/prompt
-result, while `roomClosed` is terminal room state. `serverRestarting` is a separate
-temporary process-shutdown event with a human-readable `reason`; it is not room
-deletion. Do not infer machine-readable error codes from message text.
+An `error` carries a human-readable `message`. An error with a `requestId` rejects
+only that pending request. Errors without IDs are connection or legacy command
+notifications and cannot settle a pending media/reconnect request; they can reach
+the join handler. `roomPasswordRequired` is a distinct retry/prompt result, while
+`roomClosed` is terminal room state. `serverRestarting` is a separate temporary
+process-shutdown event with a human-readable `reason`; it is not room deletion.
+Do not infer machine-readable error codes from message text.
 
-Generic requests have **no request ID**. Concurrent requests expecting the same
-response type cannot be distinguished by the client. Transport setup therefore
-runs sequentially, and the room client queues consume transactions. Removing a
-timed-out resolver prevents that resolver from consuming a later reply, but does
-not cancel server work: a late reply can still match a newer request of the same
-type. Avoid overlapping ambiguous transactions or assuming a retry proves the
-first operation did not happen. Reliable independent retries would require a
-coordinated wire-level correlation change.
+The browser assigns each acknowledged media/reconnect command a fresh `requestId`
+and retains its sequence across room changes and reconnects. IDs contain 1–64
+ASCII letters, digits, hyphens or underscores. The server echoes the ID on direct
+success and error replies, including malformed-command and rate-limit errors
+when the envelope contains a valid ID. Missing IDs remain supported for legacy
+clients; present invalid IDs are rejected before dispatch. The browser requires
+both the ID and the command's expected response type and never falls back to
+matching only the type. Concurrent requests for the same response type can
+therefore settle independently, in either order. Authentication and social
+responses retain their dedicated correlation handlers.
 
-Valid replies are offered to pending generic requests before event dispatch.
-Unmatched events update membership, moderation, chat or media state. Malformed
-messages cannot resolve requests. Socket close/disconnect rejects pending generic
-requests; callbacks from a replaced socket are ignored. `send` does not queue
-messages while disconnected.
+Unknown, duplicate and expired correlated replies are discarded before event
+dispatch. Deadlines use a monotonic clock and are checked on receipt as well as
+by timeout callbacks. Broadcasts and follow-up notifications have no request ID;
+for example, a paused producer's `producerPaused` event remains separate from
+the correlated `consumerCreated` reply. The receive-setup queue still orders
+media setup and UI updates. An ID correlates a reply; it does not cancel server
+work, roll back a timed-out mutation or make a retry idempotent.
+
+Unsolicited events update membership, moderation, chat or media state. Malformed
+messages cannot resolve requests. Socket close/disconnect rejects pending
+requests and clears their timers; callbacks from a replaced socket are ignored.
+`send` does not queue messages while disconnected. Deploy the server support
+with the browser: the new browser never matches requests to ID-less replies
+from older servers.
 
 ## Join, lobby and media
 
@@ -193,6 +205,10 @@ messages while disconnected.
    the browser consumer first, then send `resumeConsumer` and await
    `consumerResumed`. Neither acknowledgement establishes RTP delivery, decoded
    video, audible sound or permission to autoplay.
+   If receiver creation or resumption fails, send `closeConsumer` with its
+   `consumerId` to release the server subscription before retrying. This also
+   releases a receiver that is no longer needed. It has no acknowledgement and
+   repeated closure is harmless; only the current session's consumer is affected.
 
 Producer pause/resume/close events describe shared publishing state. Consumer
 pause/resume and preferred layers affect that receiver's subscription; local

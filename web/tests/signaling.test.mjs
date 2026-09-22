@@ -5,9 +5,10 @@ import { loadContractModules, loadTypeScript } from './source-loader.mjs';
 const validation = (await loadContractModules())['./protocol-validation'];
 const CLOCK_EPOCH_MS = 1_800_000_000_000;
 
-function transportReply(transportId) {
+function transportReply(transportId, requestId) {
   return {
     type: 'transportCreated',
+    ...(requestId === undefined ? {} : { requestId }),
     transportId,
     iceParameters: { usernameFragment: 'test-fragment', password: 'test-password', iceLite: true },
     iceCandidates: [],
@@ -147,7 +148,7 @@ test('refresh renews the same authenticated socket without disturbing room reque
     expiresAt: 1800000000,
   });
   assert.equal(timers.pendingCount, 1);
-  socket.receive(transportReply('unchanged'));
+  socket.receive(transportReply('unchanged', socket.sent[0].requestId));
   assert.equal((await pending).transportId, 'unchanged');
   client.setToken('refreshed');
   assert.equal(socket.sent.length, 2, 'adopted token is not redundantly renewed');
@@ -164,7 +165,11 @@ test('ordinary request errors cannot reject a correlated authentication renewal'
     client.request({ type: 'createSendTransport' }, 'transportCreated'),
     /Room operation failed/,
   );
-  socket.receive({ type: 'error', message: 'Room operation failed' });
+  socket.receive({
+    type: 'error',
+    requestId: socket.sent.at(-1).requestId,
+    message: 'Room operation failed',
+  });
   await rejected;
   assert.equal(timers.pendingCount, 1);
   socket.receive({
@@ -213,7 +218,7 @@ test('deferred renewal retries on the same socket without disturbing membership 
     requestId: retry.requestId,
     expiresAt: CLOCK_EPOCH_MS / 1000 + 120,
   });
-  socket.receive(transportReply('same-membership'));
+  socket.receive(transportReply('same-membership', socket.sent[0].requestId));
   assert.equal((await pending).transportId, 'same-membership');
   assert.equal(timers.pendingCount, 0);
   assert.equal(FakeWebSocket.instances.length, 1);
@@ -630,27 +635,39 @@ test('malformed replies neither resolve pending requests nor reach application h
   assert.deepEqual(messages, []);
   assert.equal(errors.length, 5);
   assert.equal(JSON.stringify(errors).includes('payload-sentinel'), false);
-  const reply = transportReply('valid');
+  const reply = transportReply('valid', socket.sent.at(-1).requestId);
   socket.receive(reply);
   assert.deepEqual(await pending, reply);
   assert.equal(timers.pendingCount, 0);
 });
 
-test('a timed-out request cannot consume the response to a later request', async (t) => {
+test('late success and error replies cannot settle a retry or become application events', async (t) => {
   const { client, socket, timers } = await connectedClient(t);
+  const events = [];
+  client.setOnMessage((message) => events.push(message));
   const expired = assert.rejects(
-    client.request({ type: 'getRouterRtpCapabilities' }, 'routerRtpCapabilities', 10),
-    /Timeout waiting for routerRtpCapabilities/,
+    client.request({ type: 'createSendTransport' }, 'transportCreated', 10),
+    /Timeout waiting for transportCreated/,
   );
+  const originalId = socket.sent[0].requestId;
+  const originalTimeout = timers.callbacks[0];
   timers.tick(10);
   await expired;
 
-  const retry = client.request({ type: 'getRouterRtpCapabilities' }, 'routerRtpCapabilities', 10);
-  const reply = { type: 'routerRtpCapabilities', rtpCapabilities: { codecs: [] } };
+  const retry = client.request({ type: 'createSendTransport' }, 'transportCreated', 10);
+  const retryId = socket.sent[1].requestId;
+  assert.notEqual(retryId, originalId);
+  socket.receive(transportReply('expired', originalId));
+  socket.receive({ type: 'error', requestId: originalId, message: 'Old operation failed' });
+  originalTimeout();
+  assert.equal(timers.pendingCount, 1);
+  assert.deepEqual(events, []);
+  const reply = transportReply('retry', retryId);
   socket.receive(reply);
-  timers.tick(10);
   assert.deepEqual(await retry, reply);
-  assert.equal(socket.sent.length, 2);
+  socket.receive(reply);
+  socket.receive({ type: 'error', requestId: retryId, message: 'Duplicate reply' });
+  assert.deepEqual(events, []);
   assert.equal(timers.pendingCount, 0);
 });
 
@@ -660,19 +677,147 @@ test('server errors reject the request and leave the next response available', a
     client.request({ type: 'createSendTransport' }, 'transportCreated', 10),
     /Transport limit reached/,
   );
-  socket.receive({ type: 'error', message: 'Transport limit reached' });
+  socket.receive({
+    type: 'error',
+    requestId: socket.sent.at(-1).requestId,
+    message: 'Transport limit reached',
+  });
   await rejected;
   assert.equal(timers.pendingCount, 0);
 
   const retry = client.request({ type: 'createSendTransport' }, 'transportCreated', 10);
-  const reply = transportReply('replacement');
+  const reply = transportReply('replacement', socket.sent.at(-1).requestId);
   socket.receive(reply);
   timers.tick(10);
   assert.deepEqual(await retry, reply);
 });
 
+test('simultaneous transport requests resolve by ID when replies arrive in reverse order', async (t) => {
+  const { client, socket, timers } = await connectedClient(t);
+  const send = client.request({ type: 'createSendTransport' }, 'transportCreated');
+  const recv = client.request({ type: 'createRecvTransport' }, 'transportCreated');
+  const sendId = socket.sent[0].requestId;
+  const recvId = socket.sent[1].requestId;
+  assert.match(sendId, /^[A-Za-z0-9_-]{1,64}$/);
+  assert.notEqual(sendId, recvId);
+  socket.receive(transportReply('receiver', recvId));
+  assert.equal((await recv).transportId, 'receiver');
+  assert.equal(timers.pendingCount, 1);
+  socket.receive(transportReply('sender', sendId));
+  assert.equal((await send).transportId, 'sender');
+  assert.equal(timers.pendingCount, 0);
+});
+
+test('a correlated error rejects only its operation regardless of request order', async (t) => {
+  const { client, socket, timers } = await connectedClient(t);
+  const send = client.request({ type: 'createSendTransport' }, 'transportCreated');
+  const recv = assert.rejects(
+    client.request({ type: 'createRecvTransport' }, 'transportCreated'),
+    /Receiver rejected/,
+  );
+  socket.receive({
+    type: 'error',
+    requestId: socket.sent[1].requestId,
+    message: 'Receiver rejected',
+  });
+  await recv;
+  assert.equal(timers.pendingCount, 1);
+  socket.receive(transportReply('sender', socket.sent[0].requestId));
+  assert.equal((await send).transportId, 'sender');
+  assert.equal(timers.pendingCount, 0);
+});
+
+test('missing or unknown IDs and mismatched response types cannot consume a request', async (t) => {
+  const { client, socket, timers } = await connectedClient(t);
+  const events = [];
+  client.setOnMessage((message) => events.push(message));
+  const pending = client.request({ type: 'createRecvTransport' }, 'transportCreated');
+  const requestId = socket.sent[0].requestId;
+  socket.receive(transportReply('legacy'));
+  socket.receive(transportReply('unknown', 'unknown'));
+  socket.receive({ type: 'producerCreated', requestId, producerId: 'wrong-type' });
+  socket.receive({ type: 'error', requestId: 'unknown', message: 'Unrelated error' });
+  assert.equal(timers.pendingCount, 1);
+  assert.deepEqual(events, []);
+
+  const notice = { type: 'error', message: 'Uncorrelated connection notice' };
+  const pause = { type: 'producerPaused', producerId: 'producer' };
+  const social = { type: 'socialError', requestId, message: 'Social operation failed' };
+  const socialReply = {
+    type: 'socialResponse',
+    requestId,
+    action: 'changeNickname',
+    data: { nickname: 'Guest' },
+  };
+  for (const event of [notice, pause, social, socialReply]) socket.receive(event);
+  assert.deepEqual(events, [notice, pause, social, socialReply]);
+  assert.equal(timers.pendingCount, 1);
+  socket.receive(transportReply('current', requestId));
+  assert.equal((await pending).transportId, 'current');
+});
+
+test('a reply at the deadline rejects even when browser timeout callbacks have been delayed', async (t) => {
+  for (const responseType of ['success', 'error']) {
+    const { client, socket, timers } = await connectedClient(t);
+    const expired = assert.rejects(
+      client.request({ type: 'createRecvTransport' }, 'transportCreated', 10),
+      /Timeout waiting for transportCreated/,
+    );
+    const requestId = socket.sent[0].requestId;
+    timers.advanceWithoutTimers(10);
+    socket.receive(
+      responseType === 'success'
+        ? transportReply('too-late', requestId)
+        : { type: 'error', requestId, message: 'Too late' },
+    );
+    await expired;
+    assert.equal(timers.pendingCount, 0);
+  }
+});
+
+test('invalid request deadlines fail before sending or retaining timers', async (t) => {
+  const { client, socket, timers } = await connectedClient(t);
+  for (const timeout of [0, -1, NaN, Infinity, 2 ** 31]) {
+    await assert.rejects(
+      client.request({ type: 'createRecvTransport' }, 'transportCreated', timeout),
+      /Invalid request timeout/,
+    );
+  }
+  assert.equal(socket.sent.length, 0);
+  assert.equal(timers.pendingCount, 0);
+});
+
+test('a synchronous send failure removes the pending media request before a retry', async (t) => {
+  const { client, socket, timers } = await connectedClient(t);
+  const send = socket.send;
+  socket.send = () => {
+    throw new Error('send failed');
+  };
+  await assert.rejects(
+    client.request({ type: 'createSendTransport' }, 'transportCreated', 10),
+    /send failed/,
+  );
+  assert.equal(timers.pendingCount, 0);
+  socket.send = send;
+  const retry = client.request({ type: 'createSendTransport' }, 'transportCreated', 10);
+  const reply = transportReply('replacement', socket.sent.at(-1).requestId);
+  socket.receive(reply);
+  timers.tick(10);
+  assert.deepEqual(await retry, reply);
+});
+
+test('a disconnected media request fails immediately without retaining a timeout', async (t) => {
+  const { client, timers } = await connectedClient(t);
+  client.disconnect();
+  await assert.rejects(
+    client.request({ type: 'createSendTransport' }, 'transportCreated', 10),
+    /not connected/,
+  );
+  assert.equal(timers.pendingCount, 0);
+});
+
 test('disconnect rejects all requests, cancels their timers, and permits a fresh connection', async (t) => {
-  const { client, timers, FakeWebSocket } = await connectedClient(t);
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t);
   const pending = [
     assert.rejects(
       client.request({ type: 'getRouterRtpCapabilities' }, 'routerRtpCapabilities', 10),
@@ -692,7 +837,11 @@ test('disconnect rejects all requests, cancels their timers, and permits a fresh
   const replacement = FakeWebSocket.instances.at(-1);
   replacement.open();
   const request = client.request({ type: 'createSendTransport' }, 'transportCreated', 10);
-  const reply = transportReply('new-connection');
+  const oldId = socket.sent[1].requestId;
+  assert.notEqual(replacement.sent[0].requestId, oldId);
+  replacement.receive(transportReply('old-connection', oldId));
+  assert.equal(timers.pendingCount, 1);
+  const reply = transportReply('new-connection', replacement.sent.at(-1).requestId);
   replacement.receive(reply);
   timers.tick(10);
   assert.deepEqual(await request, reply);
@@ -717,7 +866,7 @@ test('a replaced socket closing late cannot disconnect the current connection or
   assert.equal(statuses.at(-1), 'connected');
   assert.equal(client.connected, true);
   assert.equal(timers.pendingCount, 1, 'only the active request timer may remain');
-  const reply = transportReply('current');
+  const reply = transportReply('current', replacement.sent.at(-1).requestId);
   replacement.receive(reply);
   assert.deepEqual(await request, reply);
   assert.equal(timers.pendingCount, 0);
@@ -746,7 +895,7 @@ test('events from a retired socket cannot reach current message or reconnect han
   assert.deepEqual(messages, []);
   assert.equal(statuses.length, statusCount);
   assert.equal(reconnects, 0);
-  const reply = transportReply('current');
+  const reply = transportReply('current', replacement.sent.at(-1).requestId);
   replacement.receive(reply);
   assert.deepEqual(await request, reply);
 });
@@ -787,7 +936,7 @@ test('restart recovery keeps its deadline across socket open until room recovery
   assert.equal(timers.pendingCount, 0);
 });
 
-test('restart deadline rejects pending work, closes a stalled attempt, and preserves identity for explicit retry', async (t) => {
+test('restart deadline rejects unacknowledged work after socket open and preserves identity for retry', async (t) => {
   const { client, socket, timers, FakeWebSocket } = await connectedClient(t);
   const failures = [];
   client.setToken('fixture-current-token');
@@ -796,6 +945,7 @@ test('restart deadline rejects pending work, closes a stalled attempt, and prese
   socket.close();
   timers.tick(1500);
   const stalled = FakeWebSocket.instances.at(-1);
+  stalled.open();
   const pending = assert.rejects(
     client.request({ type: 'createRecvTransport' }, 'transportCreated', 180000),
     /Reconnection timed out/,

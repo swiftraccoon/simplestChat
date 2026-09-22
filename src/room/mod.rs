@@ -149,8 +149,7 @@ const ROOM_MEDIA_MUTATION_WINDOW: std::time::Duration = std::time::Duration::fro
 const MAX_ROOM_MEDIA_MUTATIONS_PER_WINDOW: usize = 20;
 // Consumer and transport requests are cheap to send but cross the mediasoup
 // worker boundary. Per-session limits alone still scale with room membership,
-// so retain a deliberately generous room-wide ceiling: enough for roughly 38
-// participants to perform a full 53-operation media startup burst per second.
+// so retain a room-wide ceiling independent of the configured per-viewer cap.
 const ROOM_MEDIA_CONTROL_IPC_WINDOW: std::time::Duration = std::time::Duration::from_secs(1);
 const MAX_ROOM_MEDIA_CONTROL_IPC_PER_WINDOW: usize = 2_048;
 const ROOM_VOICE_REQUEST_WINDOW: std::time::Duration = std::time::Duration::from_secs(10);
@@ -3326,6 +3325,34 @@ impl RoomManager {
                 "Paused consumer {} for participant {}",
                 consumer_id, participant_id
             );
+        }
+        Ok(())
+    }
+
+    /// Releases only the current sender's consumer. No acknowledgement is needed;
+    /// teardown may race producer closure or repeat after a lost connection.
+    pub async fn close_consumer(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
+        consumer_id: &str,
+    ) -> Result<()> {
+        let media_session_id = self
+            .media_session_for_sender(room_id, participant_id, expected_sender)
+            .await?;
+        let media_participant_id =
+            Self::media_participant_id(room_id, participant_id, media_session_id);
+        let ipc_reservation = self
+            .reserve_media_control_ipc_for_sender(room_id, participant_id, expected_sender)
+            .await?;
+        let closed = self
+            .media_server
+            .transport_manager()
+            .close_consumer(&media_participant_id, consumer_id)
+            .await?;
+        if !closed {
+            Self::refund_media_control_ipc(ipc_reservation).await;
         }
         Ok(())
     }

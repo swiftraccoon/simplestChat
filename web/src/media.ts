@@ -1,5 +1,4 @@
 import * as mediasoupClient from 'mediasoup-client';
-import type { ServerMessage } from './protocol';
 import type { SignalingClient } from './signaling';
 
 export interface CapturePreferences {
@@ -223,22 +222,25 @@ export class MediaManager {
     };
     assertCurrent();
     // 1. Get router RTP capabilities
-    const capsResponse = await this.signaling.request<
-      Extract<ServerMessage, { type: 'routerRtpCapabilities' }>
-    >({ type: 'getRouterRtpCapabilities' }, 'routerRtpCapabilities');
+    const capsResponse = await this.signaling.request(
+      { type: 'getRouterRtpCapabilities' },
+      'routerRtpCapabilities',
+    );
     assertCurrent();
 
     // 2. Load device
-    const device = new mediasoupClient.Device();
+    const device = await mediasoupClient.Device.factory();
+    assertCurrent();
     this.device = device;
     await device.load({ routerRtpCapabilities: capsResponse.rtpCapabilities });
     assertCurrent();
     console.log('[media] device loaded');
 
     // 3. Create send transport
-    const sendResponse = await this.signaling.request<
-      Extract<ServerMessage, { type: 'transportCreated' }>
-    >({ type: 'createSendTransport' }, 'transportCreated');
+    const sendResponse = await this.signaling.request(
+      { type: 'createSendTransport' },
+      'transportCreated',
+    );
     assertCurrent();
 
     const sendTransport = device.createSendTransport({
@@ -254,7 +256,7 @@ export class MediaManager {
       try {
         assertCurrent();
       } catch (error) {
-        errback(error as Error);
+        errback(error instanceof Error ? error : new Error('Media session closed'));
         return;
       }
       this.signaling
@@ -273,9 +275,7 @@ export class MediaManager {
       const produce = async () => {
         assertCurrent();
         const source: unknown = appData['source'];
-        const resp = await this.signaling.request<
-          Extract<ServerMessage, { type: 'producerCreated' }>
-        >(
+        const resp = await this.signaling.request(
           {
             type: 'produce',
             transportId: sendTransport.id,
@@ -298,9 +298,10 @@ export class MediaManager {
     console.log('[media] send transport created:', this.sendTransport.id);
 
     // 4. Create recv transport
-    const recvResponse = await this.signaling.request<
-      Extract<ServerMessage, { type: 'transportCreated' }>
-    >({ type: 'createRecvTransport' }, 'transportCreated');
+    const recvResponse = await this.signaling.request(
+      { type: 'createRecvTransport' },
+      'transportCreated',
+    );
     assertCurrent();
 
     const recvTransport = device.createRecvTransport({
@@ -316,7 +317,7 @@ export class MediaManager {
       try {
         assertCurrent();
       } catch (error) {
-        errback(error as Error);
+        errback(error instanceof Error ? error : new Error('Media session closed'));
         return;
       }
       this.signaling
@@ -338,7 +339,7 @@ export class MediaManager {
 
   /** Monitor transport connection state and request ICE restart on failure */
   private setupIceRecovery(transport: mediasoupClient.types.Transport): void {
-    transport.on('connectionstatechange', (state: string) => {
+    transport.on('connectionstatechange', (state) => {
       if (this.closed || (this.sendTransport !== transport && this.recvTransport !== transport))
         return;
       console.log(`[media] transport ${transport.id} connection state: ${state}`);
@@ -556,18 +557,20 @@ export class MediaManager {
       if (!isCurrent()) throw new Error('Media session closed');
     };
 
-    const response = await this.signaling.request<
-      Extract<ServerMessage, { type: 'consumerCreated' }>
-    >({ type: 'consume', producerId, rtpCapabilities: device.rtpCapabilities }, 'consumerCreated');
+    const response = await this.signaling.request(
+      { type: 'consume', producerId, rtpCapabilities: device.recvRtpCapabilities },
+      'consumerCreated',
+    );
     assertCurrent();
 
-    const consumer = await transport.consume({
-      id: response.consumerId,
-      producerId: response.producerId,
-      kind: response.kind,
-      rtpParameters: response.rtpParameters,
-    });
+    let consumer: mediasoupClient.types.Consumer | undefined;
     try {
+      consumer = await transport.consume({
+        id: response.consumerId,
+        producerId: response.producerId,
+        kind: response.kind,
+        rtpParameters: response.rtpParameters,
+      });
       assertCurrent();
       this.consumers.set(response.consumerId, consumer);
       this.producerToConsumer.set(producerId, response.consumerId);
@@ -577,16 +580,19 @@ export class MediaManager {
         'consumerResumed',
       );
       assertCurrent();
+      if (consumer.closed) throw new Error('Consumer closed');
       console.log(`[media] consuming ${response.kind} from producer ${producerId}`);
       return consumer.track;
     } catch (error) {
-      consumer.close();
+      consumer?.close();
       if (this.consumers.get(response.consumerId) === consumer)
         this.consumers.delete(response.consumerId);
+      this.consumerQualities.delete(response.consumerId);
+      this.consumerSizeCaps.delete(response.consumerId);
       if (this.producerToConsumer.get(producerId) === response.consumerId)
         this.producerToConsumer.delete(producerId);
       if (isCurrent())
-        this.signaling.send({ type: 'pauseConsumer', consumerId: response.consumerId });
+        this.signaling.send({ type: 'closeConsumer', consumerId: response.consumerId });
       throw error;
     }
   }
@@ -664,7 +670,7 @@ export class MediaManager {
   }
 
   /** Close and remove the consumer for a given producer */
-  closeConsumerByProducer(producerId: string): void {
+  closeConsumerByProducer(producerId: string, notifyServer = true): void {
     const consumerId = this.producerToConsumer.get(producerId);
     if (!consumerId) return;
     const consumer = this.consumers.get(consumerId);
@@ -672,7 +678,10 @@ export class MediaManager {
       consumer.close();
       this.consumers.delete(consumerId);
     }
+    this.consumerQualities.delete(consumerId);
+    this.consumerSizeCaps.delete(consumerId);
     this.producerToConsumer.delete(producerId);
+    if (notifyServer) this.signaling.send({ type: 'closeConsumer', consumerId });
   }
 
   /** Release a producer revoked by the server so it can be created again later. */
@@ -878,6 +887,7 @@ export class MediaManager {
     const isCurrent = () => version === this.screenVersion && transport === this.sendTransport;
     let stream: MediaStream | undefined;
     let started = false;
+    let unwatchCapture: (() => void) | undefined;
     try {
       try {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
@@ -888,6 +898,15 @@ export class MediaManager {
       this.pendingScreenStream = stream;
       const videoTrack = stream.getVideoTracks()[0];
       if (!videoTrack) return null;
+      // The browser can stop sharing before produce has adopted the track.
+      // Watch from capture onward so pending audio and late producers are retired too.
+      const onEnded = () => {
+        if (isCurrent()) this.stopScreenShare();
+      };
+      videoTrack.addEventListener('ended', onEnded, { once: true });
+      unwatchCapture = () => videoTrack.removeEventListener('ended', onEnded);
+      if (videoTrack.readyState === 'ended') onEnded();
+      if (!isCurrent()) return null;
 
       const videoProducer = await transport.produce({
         track: videoTrack,
@@ -899,9 +918,6 @@ export class MediaManager {
         return null;
       }
       this.screenProducer = videoProducer;
-      videoTrack.addEventListener('ended', () => {
-        if (this.screenProducer === videoProducer) this.stopScreenShare();
-      });
 
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
@@ -923,7 +939,10 @@ export class MediaManager {
       this.stopScreenShare();
       throw error;
     } finally {
-      if (!started) stream?.getTracks().forEach((track) => track.stop());
+      if (!started) {
+        unwatchCapture?.();
+        stream?.getTracks().forEach((track) => track.stop());
+      }
       if (isCurrent()) {
         this.screenStarting = false;
         this.pendingScreenStream = null;
@@ -990,6 +1009,8 @@ export class MediaManager {
     }
     this.consumers.clear();
     this.producerToConsumer.clear();
+    this.consumerQualities.clear();
+    this.consumerSizeCaps.clear();
 
     this.audioProducer?.close();
     this.videoProducer?.close();

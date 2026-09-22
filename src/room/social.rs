@@ -1,7 +1,7 @@
 //! Room-session chat and owner/moderator community tools.
 //! Private text is retained only in bounded memory, never in reports or logs.
 use super::*;
-use crate::signaling::protocol::{ChatEntry, ClientMessage};
+use crate::signaling::protocol::{ChatEntry, ClientMessage, valid_correlation_id};
 use serde::Serialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -966,14 +966,6 @@ impl std::fmt::Display for SocialFailure {
 impl std::error::Error for SocialFailure {}
 fn rejected(message: &str) -> anyhow::Error {
     SocialFailure(message.to_string()).into()
-}
-
-pub(crate) fn valid_correlation_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 64
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
 }
 
 /// Which room-wide budget a social request must reserve before it runs.

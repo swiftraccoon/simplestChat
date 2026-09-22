@@ -58,6 +58,15 @@ function message<K extends ServerMessage['type']>(
   };
 }
 
+// Absent IDs support unsolicited events and legacy peers. Present IDs must be
+// bounded ASCII tokens; null must not downgrade a response into an event.
+function requestId(value: unknown): string {
+  const id = text(value);
+  return /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : invalid();
+}
+const optionalRequestId: Decoder<string | undefined> = (value) =>
+  value === undefined ? undefined : requestId(value);
+
 const mediaKind = choice('audio', 'video');
 const direction = choice('sendrecv', 'sendonly', 'recvonly', 'inactive');
 const priority = choice('very-low', 'low', 'medium', 'high');
@@ -171,6 +180,8 @@ const candidate: Decoder<IceCandidate> = (value) => {
   // Current Rust emits address; older wire data used ip. The client API types
   // retain both names. Never invent an address when neither is present.
   const address = parsed.address ?? parsed.ip ?? invalid();
+  // The pinned client still requires this deprecated alias in its IceCandidate type.
+  // oxlint-disable-next-line typescript/no-deprecated
   return { ...parsed, address, ip: parsed.ip ?? address };
 };
 const fingerprint = object<DtlsFingerprint>({
@@ -311,7 +322,7 @@ const socialResponse: Decoder<Variant<'socialResponse'>> = (value) => {
   // TypeScript cannot retain that correlation through a computed map lookup.
   return {
     type: 'socialResponse',
-    requestId: text(source['requestId']),
+    requestId: requestId(source['requestId']),
     action,
     data: decodeSocialData(action, source['data']),
   } as SocialResponse;
@@ -332,12 +343,12 @@ const socialAction = choice(
 // Adding a ServerMessage variant fails typechecking until its decoder exists.
 const messages = {
   authenticationRenewed: message('authenticationRenewed', {
-    requestId: text,
+    requestId,
     expiresAt: integer(),
   }),
-  authenticationRenewalFailed: message('authenticationRenewalFailed', { requestId: text }),
+  authenticationRenewalFailed: message('authenticationRenewalFailed', { requestId }),
   authenticationRenewalDeferred: message('authenticationRenewalDeferred', {
-    requestId: text,
+    requestId,
     retryAfterMs: integer(5000, 1),
     expiresAt: integer(),
   }),
@@ -348,21 +359,29 @@ const messages = {
     yourRole: text,
     roomSettings: optional(settings),
   }),
-  error: message('error', { message: text }),
+  error: message('error', { requestId: optionalRequestId, message: text }),
   roomPasswordRequired: message('roomPasswordRequired', {}),
   roomClosed: message('roomClosed', { reason: text }),
   serverRestarting: message('serverRestarting', { reason: text }),
-  routerRtpCapabilities: message('routerRtpCapabilities', { rtpCapabilities: capabilities }),
+  routerRtpCapabilities: message('routerRtpCapabilities', {
+    requestId: optionalRequestId,
+    rtpCapabilities: capabilities,
+  }),
   transportCreated: message('transportCreated', {
+    requestId: optionalRequestId,
     transportId: text,
     iceParameters: ice,
     iceCandidates: list(candidate),
     dtlsParameters: dtls,
     iceServers: optional(list(iceServer)),
   }),
-  transportConnected: message('transportConnected', { transportId: text }),
-  producerCreated: message('producerCreated', { producerId: text }),
+  transportConnected: message('transportConnected', {
+    requestId: optionalRequestId,
+    transportId: text,
+  }),
+  producerCreated: message('producerCreated', { requestId: optionalRequestId, producerId: text }),
   consumerCreated: message('consumerCreated', {
+    requestId: optionalRequestId,
     consumerId: text,
     producerId: text,
     kind: mediaKind,
@@ -382,16 +401,18 @@ const messages = {
     source: optional(text),
   }),
   producerClosed: message('producerClosed', { producerId: text }),
-  producerPaused: message('producerPaused', { producerId: text }),
-  producerResumed: message('producerResumed', { producerId: text }),
-  consumerResumed: message('consumerResumed', { consumerId: text }),
-  consumerPaused: message('consumerPaused', { consumerId: text }),
+  producerPaused: message('producerPaused', { requestId: optionalRequestId, producerId: text }),
+  producerResumed: message('producerResumed', { requestId: optionalRequestId, producerId: text }),
+  consumerResumed: message('consumerResumed', { requestId: optionalRequestId, consumerId: text }),
+  consumerPaused: message('consumerPaused', { requestId: optionalRequestId, consumerId: text }),
   reconnectResult: message('reconnectResult', {
+    requestId: optionalRequestId,
     success: boolean,
     participantId: text,
     reconnectToken: optional(text),
   }),
   iceRestarted: message('iceRestarted', {
+    requestId: optionalRequestId,
     transportId: text,
     iceParameters: ice,
     iceServers: list(iceServer),
@@ -419,7 +440,7 @@ const messages = {
   messageAck: message('messageAck', { clientMessageId: text, message: chat }),
   socialResponse,
   socialError: message('socialError', {
-    requestId: optional(text),
+    requestId: optionalRequestId,
     clientMessageId: optional(text),
     message: text,
   }),
