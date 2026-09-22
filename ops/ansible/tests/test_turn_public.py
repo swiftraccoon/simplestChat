@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 from test_public_release import FixtureRunner
@@ -18,6 +19,9 @@ from test_support import array, at, obj, yaml_value
 # isort: split
 import release_public as release
 import turn_public as turn
+
+if TYPE_CHECKING:
+    from release_json import JsonObject
 
 
 class TurnTemplateTests(unittest.TestCase):
@@ -121,7 +125,7 @@ class TurnTemplateTests(unittest.TestCase):
                 patch.object(release, "CONFIG", config),
                 patch.object(release, "protected"),
             ):
-                report: release.JsonObject = {}
+                report: JsonObject = {}
                 turn.activate(runner, "relay.example.test", report)
                 self.assertTrue(report["alreadyConfigured"])
                 self.assertEqual(runner.ups, 0)
