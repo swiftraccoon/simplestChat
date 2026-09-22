@@ -188,6 +188,15 @@ a fresh join discards the old manager's pending controls. Creation and capture
 requests are never queued for replay. A second disconnect retires the previous
 recovery attempt without letting it close or resume the new socket's media.
 
+If signaling is lost during initial transport setup, the browser closes its
+partial local media manager. Recovery first reclaims the admitted session, then
+joins again so the server retires any transports whose creation replies were
+lost. Rejoining creates transports without starting camera, microphone or screen
+capture. Ordinary unsupported-browser setup errors remain chat-only; a rejected
+initial admission is never treated as automatic rejoin intent. A second loss
+during fresh admission cancels its waiter immediately, and late setup results
+cannot report a closed or replaced socket as connected.
+
 ## Join, lobby and media
 
 1. Send `joinRoom` with `roomId`, `participantName` and an optional password.

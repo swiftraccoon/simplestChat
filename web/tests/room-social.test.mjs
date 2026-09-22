@@ -957,6 +957,126 @@ test('leave during media setup cancels joining and closes the captured manager',
   assert.equal(h.records.admissions, 0);
 });
 
+for (const setupFinishes of ['before-reconnect', 'after-reconnect']) {
+  test(`an interrupted initial media setup recovers when it finishes ${setupFinishes}`, async (t) => {
+    const setup = deferred();
+    let setups = 0;
+    const h = await harness({ setup: () => (++setups === 1 ? setup.promise : undefined) });
+    t.after(() => h.room.leave());
+    const joining = h.room.join('room', 'Local', 'retained-password');
+    await flush();
+    h.signaling.connected = false;
+    h.signaling.onConnectionLost();
+    if (setupFinishes === 'before-reconnect') {
+      setup.reject(new Error('WebSocket closed'));
+      await joining;
+    }
+    h.signaling.connected = true;
+    h.signaling.onReconnected();
+    const recovery = h.room.recoveryPromise;
+    if (setupFinishes === 'after-reconnect') {
+      await flush();
+      setup.resolve();
+      await joining;
+    }
+    await flush();
+    // A successful retained reconnect must retire partial server transports
+    // through a fresh admission, not leave a permanently chat-only membership.
+    assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 2);
+    await recovery;
+    assert.equal(h.room.connected, true);
+    assert.equal(h.room.hasMedia, true);
+    assert.ok(h.instances[0].closes >= 1);
+    assert.equal(h.instances[1].closes, 0);
+    assert.deepEqual(
+      [h.room.audioEnabled, h.room.videoEnabled, h.room.isScreenSharing],
+      [false, false, false],
+    );
+  });
+}
+
+test('an ordinary browser media setup failure stays chat-only across a retained reconnect', async (t) => {
+  const h = await harness({ setup: () => Promise.reject(new Error('Unsupported browser')) });
+  t.after(() => h.room.leave());
+  await h.room.join('room', 'Local');
+  h.signaling.onConnectionLost();
+  const recovery = h.room.attemptReconnect();
+  await flush();
+  h.respond(h.sent.at(-1), snapshot());
+  await recovery;
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 1);
+  assert.equal(h.instances.length, 1);
+  assert.equal(h.room.connected, true);
+  assert.equal(h.room.hasMedia, false);
+});
+
+test('a second disconnect while an expired session rejoins retires admission before retrying', async (t) => {
+  const h = await harness({
+    fakeTimers: true,
+    reconnect: () => ({ type: 'reconnectResult', success: false, participantId: 'local' }),
+  });
+  t.after(() => h.room.leave());
+  await h.room.join('room', 'Local');
+  const send = h.signaling.send;
+  h.signaling.send = (message) => h.sent.push(message);
+  let finished = false;
+  const firstRecovery = h.room.attemptReconnect().then(() => {
+    finished = true;
+  });
+  await flush();
+  h.signaling.connected = false;
+  h.signaling.onConnectionLost();
+  await flush();
+  assert.equal(finished, true, 'the retired admission must not wait for its timeout');
+  await firstRecovery;
+  h.signaling.send = send;
+  h.signaling.connected = true;
+  h.signaling.onReconnected();
+  await h.room.recoveryPromise;
+  assert.equal(h.room.connected, true);
+  assert.equal(h.room.hasMedia, true);
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 3);
+  assert.ok(h.recovery.every(([state]) => state !== 'failed'));
+});
+
+for (const admission of ['restart', 'lobby']) {
+  test(`a disconnect during ${admission} media setup cannot report a connected room`, async (t) => {
+    const setup = deferred();
+    let setups = 0;
+    const h = await harness({
+      setup: () => (++setups === (admission === 'restart' ? 2 : 1) ? setup.promise : undefined),
+      joinReply:
+        admission === 'lobby'
+          ? () => ({ type: 'lobbyWaiting', roomName: 'Room', participantCount: 1 })
+          : undefined,
+    });
+    t.after(() => h.room.leave());
+    await h.room.join('room', 'Local');
+    let recovery;
+    if (admission === 'restart') {
+      h.reply({ type: 'serverRestarting', reason: 'Restart' });
+      recovery = h.room.attemptReconnect();
+    } else {
+      h.reply({ type: 'lobbyAdmitted' });
+      h.reply({
+        type: 'roomJoined',
+        participantId: 'local',
+        participants: [],
+        reconnectToken: 'admitted',
+      });
+    }
+    await flush();
+    h.signaling.connected = false;
+    h.signaling.onConnectionLost();
+    setup.resolve();
+    await recovery;
+    await flush();
+    assert.equal(h.room.hasMedia, false);
+    assert.equal(h.records.admissions, 0);
+    assert.ok(h.recovery.every(([state]) => state !== 'connected'));
+  });
+}
+
 test('an older setup result cannot close or replace a newer room membership', async () => {
   const first = deferred();
   let setups = 0;

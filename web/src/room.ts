@@ -110,6 +110,8 @@ export class RoomClient {
   private joinPassword: string | undefined;
   private generation = 0;
   private connectionGeneration = 0;
+  private initialJoin: Promise<'joined' | 'lobby'> | null = null;
+  private mediaSetupInterrupted = false;
   private cancelJoin: (() => void) | null = null;
   private hiddenParticipants = new Set<string>();
   private videoQualities = new Map<string, RemoteVideoQuality>();
@@ -136,9 +138,15 @@ export class RoomClient {
       this.recoveryPromise = null;
       this.rejectSocialRequests('Connection changed; please retry');
       this.media?.suspendSignaling();
+      if (this.media && !this.mediaReady) {
+        // Partial native transport creation cannot be resumed as live media.
+        // Rejoin after reclaiming the session so the server also retires it.
+        this.mediaSetupInterrupted = true;
+        this.closeMedia();
+      }
       // Retire a join waiter before the replacement socket can produce an
       // unrelated admission; the next open then owns one fresh rejoin attempt.
-      if (this.restarting) this.cancelJoin?.();
+      this.cancelJoin?.();
     });
     this.signaling.setOnReconnectFailed(() => {
       if (!this.roomId || !this.membershipEstablished) return;
@@ -250,9 +258,15 @@ export class RoomClient {
     this.restarting = false;
     this.membershipEstablished = false;
     this.signaling.completeRestartRecovery();
-    const outcome = await this.joinSession(roomId, participantName, password);
-    this.membershipEstablished = this.roomId === roomId;
-    return outcome;
+    const task = this.joinSession(roomId, participantName, password);
+    this.initialJoin = task;
+    try {
+      const outcome = await task;
+      this.membershipEstablished = this.roomId === roomId;
+      return outcome;
+    } finally {
+      if (this.initialJoin === task) this.initialJoin = null;
+    }
   }
 
   private async joinSession(
@@ -265,6 +279,7 @@ export class RoomClient {
     this.recoveryPromise = null;
     this.rejectSocialRequests('Room membership changed');
     this.closeMedia();
+    this.mediaSetupInterrupted = false;
     this.participants.clear();
     this.pausedProducers.clear();
     this.awaitingPostAdmission = false;
@@ -345,6 +360,9 @@ export class RoomClient {
 
     this.localId = response.participantId;
     this.reconnectToken = response.reconnectToken;
+    // Once admitted, another disconnect must reclaim this session before
+    // replacing partially created transports, even during a fresh rejoin.
+    this.restarting = false;
     this.localRole = response.yourRole ?? 'user';
     this._roomSettings = response.roomSettings ?? null;
     this.recovering = false;
@@ -418,6 +436,7 @@ export class RoomClient {
     this.videoSizeCaps.clear();
     this.rejectSocialRequests('Room left');
     this.closeMedia();
+    this.mediaSetupInterrupted = false;
     this.participants.clear();
     this.pausedProducers.clear();
     this.awaitingPostAdmission = false;
@@ -682,16 +701,26 @@ export class RoomClient {
   }
 
   private async reconnectSession(): Promise<void> {
-    if (!this.roomId || !this.membershipEstablished) return;
+    const generation = this.generation;
+    const connectionGeneration = this.connectionGeneration;
+    const isCurrent = () =>
+      generation === this.generation && connectionGeneration === this.connectionGeneration;
+    // Device loading may still be settling after a lost setup request. Wait
+    // for admission to finish without turning a rejected first join into retry
+    // intent, and do not let its late result own a different socket or room.
+    if (this.initialJoin) {
+      try {
+        await this.initialJoin;
+      } catch {
+        return;
+      }
+    }
+    if (!isCurrent() || !this.roomId || !this.membershipEstablished) return;
     if (this.restarting) {
       await this.fullRejoin();
       return;
     }
     if (!this.localId) return;
-    const generation = this.generation;
-    const connectionGeneration = this.connectionGeneration;
-    const isCurrent = () =>
-      generation === this.generation && connectionGeneration === this.connectionGeneration;
     this.recovering = true;
     this.rejectSocialRequests('Connection changed; please retry');
     this.events.onRecoveryState?.('reconnecting');
@@ -717,6 +746,10 @@ export class RoomClient {
           throw new Error('Reconnect response did not rotate its credential');
         }
         this.reconnectToken = result.reconnectToken;
+        if (this.mediaSetupInterrupted) {
+          await this.fullRejoin();
+          return;
+        }
         this.recovering = false;
         console.log('[room] session reconnected successfully');
         let snapshotError: string | undefined;
@@ -750,18 +783,24 @@ export class RoomClient {
     const name = this.participantName;
     const password = this.joinPassword;
     let generation = this.generation;
+    const connectionGeneration = this.connectionGeneration;
+    const isCurrent = () =>
+      generation === this.generation && connectionGeneration === this.connectionGeneration;
+    // Before admission supplies a reconnect credential, only a fresh join can
+    // recover another socket loss. joinSession clears this once admitted.
+    this.restarting = true;
 
     // Notify UI to remove all remote tiles before rejoining
     for (const pid of this.participants.keys()) {
       this.events.onParticipantLeft(pid);
-      if (generation !== this.generation) return;
+      if (!isCurrent()) return;
     }
 
     // Refresh controls immediately: a password prompt or failed rejoin must not
     // leave the stopped session's microphone, camera, or screen marked active.
     this.closeMedia();
     this.events.onLocalMediaChanged();
-    if (generation !== this.generation) return;
+    if (!isCurrent()) return;
     this.participants.clear();
     this.localId = null;
     this.roomId = null;
@@ -772,22 +811,22 @@ export class RoomClient {
         generation = this.generation + 1;
         outcome = await this.joinSession(roomId, name, password);
       } catch (error) {
-        if (generation !== this.generation) return;
+        if (!isCurrent()) return;
         if (!(error instanceof RoomPasswordRequiredError) || !this.events.onPasswordRequired)
           throw error;
         const supplied = await this.events.onPasswordRequired();
-        if (generation !== this.generation) return;
+        if (!isCurrent()) return;
         if (supplied === null) throw new Error('Rejoin cancelled');
         generation = this.generation + 1;
         outcome = await this.joinSession(roomId, name, supplied);
       }
-      if (generation !== this.generation) return;
+      if (!isCurrent()) return;
       this.restarting = false;
       this.recovering = false;
       this.signaling.completeRestartRecovery();
       if (outcome === 'joined') {
         this.events.onAdmissionComplete();
-        if (generation !== this.generation) return;
+        if (!isCurrent()) return;
         this.events.onRecoveryState?.(
           'connected',
           'Room rejoined. Your microphone, camera, and screen sharing are off; turn them on when you are ready.',
@@ -799,7 +838,7 @@ export class RoomClient {
         );
       }
     } catch (e) {
-      if (generation !== this.generation) return;
+      if (!isCurrent()) return;
       // A fresh join can race another disconnect during the restart window.
       // Keep only room intent; the next current socket may try again. A real
       // admission denial on a live socket is terminal for this recovery attempt.
@@ -822,6 +861,9 @@ export class RoomClient {
   private async handlePostAdmission(msg: ServerMessage): Promise<void> {
     if (msg.type !== 'roomJoined' || !this.roomId) return;
     const generation = this.generation;
+    const connectionGeneration = this.connectionGeneration;
+    const isCurrent = () =>
+      generation === this.generation && connectionGeneration === this.connectionGeneration;
 
     this.localId = msg.participantId;
     this.reconnectToken = msg.reconnectToken;
@@ -846,13 +888,14 @@ export class RoomClient {
     this.events.onParticipantsChanged(this.participants);
 
     await this.setupMedia(generation);
-    if (generation !== this.generation) return;
+    if (!isCurrent()) return;
 
     if (this.media) {
       await this.consumeExistingProducers();
     }
-    if (generation !== this.generation) return;
+    if (!isCurrent()) return;
     this.events.onAdmissionComplete();
+    if (!isCurrent()) return;
     this.events.onRecoveryState?.('connected');
   }
 

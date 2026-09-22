@@ -121,6 +121,13 @@ the UI while signaling is offline, then requires server resume acknowledgements
 and decoded audio/video progress after recovery with the original peers/tracks.
 This does not simulate UDP failure, a network outage or expired reconnect grace.
 
+The interrupted-setup check uses a separate routed signaling connection to the
+real server. After the server creates both transports, it closes the two owned
+socket ends before delivering the receive-transport reply. Recovery must reclaim
+and rejoin the room, create fresh transports without capture, and deliver decoded
+audio/video after the user explicitly enables the camera and microphone. No
+protocol success, native peer connection or RTP statistics are synthesized.
+
 Capture termination is simulated on owned fake tracks. The check verifies remote
 removal, controls, restart guidance, preservation of the other capture kind and
 no automatic recapture. Firefox suppresses the synthetic track event; the runner

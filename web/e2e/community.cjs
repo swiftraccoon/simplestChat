@@ -56,6 +56,7 @@ const report = {
     'External capture termination is simulated with stop() plus an ended event on an owned fake local-stream track.',
     'Mobile checks resize a desktop viewport; they do not run a mobile browser.',
     'Signaling recovery closes an owned WebSocket only; it is not a UDP outage or reconnect-grace-expiry test.',
+    'Interrupted setup closes a separate routed signaling connection after real transport creation; protocol replies and native RTC are not synthesized.',
   ],
 };
 function saveReport() {
@@ -98,11 +99,12 @@ async function step(name, work) {
   saveReport();
   console.log(`PASS ${name}`);
 }
-async function client(label, mobile = false) {
+async function client(label, mobile = false, configureContext) {
   const context = await browser.newContext({
     ...options.contextOptions,
     viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
   });
+  await configureContext?.(context);
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
   const entry = { label, context, page, errors: [], frames: [], warnings: [] };
@@ -1377,6 +1379,86 @@ async function setRole(owner, name, role) {
       await guest.locator('#cam-btn').click();
       await guest.locator('#mic-btn').click();
     });
+    await step(
+      'interrupted transport setup rejoins with working media and no automatic capture',
+      async () => {
+        let transportReplies = 0;
+        let interrupted = false;
+        let closing = Promise.resolve();
+        let closeFailed = false;
+        const probe = await client('interrupted-setup', false, async (context) => {
+          await context.routeWebSocket(`${base.replace(/^http/, 'ws')}/ws`, (route) => {
+            const server = route.connectToServer();
+            let retired = false;
+            server.onMessage((message) => {
+              if (retired) return;
+              const parsed = JSON.parse(String(message));
+              if (parsed.type === 'transportCreated') {
+                transportReplies++;
+                if (!interrupted && transportReplies === 2) {
+                  // The real server created both transports. Lose its receive
+                  // reply by closing both owned signaling ends, without forging
+                  // any protocol response or changing native RTC behavior.
+                  interrupted = retired = true;
+                  closing = Promise.all([server.close(), route.close()]);
+                  closing.catch(() => {
+                    closeFailed = true;
+                  });
+                  return;
+                }
+              }
+              route.send(message);
+            });
+          });
+        });
+        await join(probe, 'Setup recovery');
+        await probe.waitForFunction(() => {
+          const counts = window.__communitySignalingReconnect.snapshot().counters;
+          return (
+            counts.reconnectSuccess === 1 &&
+            counts.sentJoinRoom === 2 &&
+            counts.sentCreateSendTransport === 2 &&
+            counts.sentCreateRecvTransport === 2
+          );
+        });
+        await closing;
+        assert.equal(closeFailed, false);
+        assert.equal(interrupted, true);
+        assert.equal(transportReplies, 4);
+        await connected(probe);
+        assert.equal(await probe.evaluate(() => window.__communityCaptureRequests), 0);
+        await probe.locator('#cam-btn').click();
+        const setup = probe.getByRole('dialog', { name: 'Your settings', exact: true });
+        await setup.getByRole('button', { name: 'Save settings', exact: true }).click();
+        await setup.waitFor({ state: 'hidden' });
+        await probe.locator('#cam-btn:not(.muted)').waitFor({ state: 'visible' });
+        await probe.locator('#mic-btn').click();
+        await remotePlayback(owner, 'video');
+        await remotePlayback(owner, 'audio');
+        const identity = await reconnectMediaIdentity(owner);
+        try {
+          // This is a new receiver, so wait for its first native RTP report
+          // before measuring progress. The retained-reconnect checks already
+          // have live counters and deliberately do not need this startup wait.
+          await owner.waitForFunction(async (state) => {
+            try {
+              return (await state.sample()).audioPackets > 0;
+            } catch {
+              return false;
+            }
+          }, identity);
+          report.interruptedSetup = {
+            passed: true,
+            transportReplies,
+            media: await advancingReconnectMedia(owner, identity, 3000),
+          };
+        } finally {
+          await identity.dispose();
+        }
+        await leave(probe);
+        await probe.context().close();
+      },
+    );
     await step(
       'simulated capture termination updates both clients and permits explicit restart',
       async () => {
