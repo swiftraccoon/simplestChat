@@ -134,6 +134,15 @@ correlated server acknowledgement, removal of the remote audio element, unchange
 no replacement transports or producers. Explicit unmute must restore decoded
 audio/video progress.
 
+The ICE restart check sends real legacy no-ID restart commands through the owned
+server route, forwarding replies unchanged. Both native peer connections must
+install different remote ICE credentials, keep their identities and tracks,
+and resume decoded audio/video progress. Credentials stay inside the browser
+and are not written to reports. This checks actual restart application with no
+TURN server configured; it does not simulate a UDP failure or test relay access.
+Unit tests exercise the installed Firefox handler's unsupported TURN update and
+the room rebuild that obtains fresh credentials without automatic capture.
+
 Capture termination is simulated on owned fake tracks. The check verifies remote
 removal, controls, restart guidance, preservation of the other capture kind and
 no automatic recapture. Firefox suppresses the synthetic track event; the runner

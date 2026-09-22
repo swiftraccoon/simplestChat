@@ -57,6 +57,7 @@ const report = {
     'Mobile checks resize a desktop viewport; they do not run a mobile browser.',
     'Signaling recovery closes an owned WebSocket only; it is not a UDP outage or reconnect-grace-expiry test.',
     'Interrupted setup closes a separate routed signaling connection after real transport creation; protocol replies and native RTC are not synthesized.',
+    'ICE restarts use real legacy commands and native credential changes; no UDP failure or TURN relay is exercised.',
   ],
 };
 function saveReport() {
@@ -604,6 +605,9 @@ async function offlineViewerControls(publisher, receiver) {
       { timeout: 10000 },
     );
     await connected(receiver);
+    // An accepted resume precedes renewed RTP. Unlike the continuous-media
+    // reconnect check, this scenario deliberately paused both server consumers.
+    await waitForMediaStart(receiver, identities[1]);
     const after = await advancingReconnectMedia(receiver, identities[1], 3000);
     for (const identity of identities) await identity.evaluate((state) => state.verify());
     report.offlineViewerControls = { passed: true, before, after };
@@ -1399,6 +1403,7 @@ async function setRole(owner, name, role) {
       await guest.locator('#mic-btn').click();
     });
     let checkUnacknowledgedControl;
+    let checkIceRestart;
     await step(
       'interrupted transport setup rejoins with working media and no automatic capture',
       async () => {
@@ -1409,10 +1414,20 @@ async function setRole(owner, name, role) {
         let dropPause = false;
         let droppedPause = false;
         let acknowledgedPauses = 0;
+        const transportIds = [];
+        let restartCurrentTransports;
         const probe = await client('interrupted-setup', false, async (context) => {
           await context.routeWebSocket(`${base.replace(/^http/, 'ws')}/ws`, (route) => {
             const server = route.connectToServer();
             let retired = false;
+            restartCurrentTransports = () => {
+              assert.equal(retired, false, 'ICE restart must use the current signaling route');
+              assert.equal(transportIds.length, 2);
+              // Exercise real server restarts through the supported legacy
+              // no-ID command path. Forward the resulting replies unchanged.
+              for (const transportId of transportIds)
+                server.send(JSON.stringify({ type: 'restartIce', transportId }));
+            };
             const interrupt = (delayMs = 0) => {
               retired = true;
               closing = (async () => {
@@ -1440,6 +1455,8 @@ async function setRole(owner, name, role) {
               const parsed = JSON.parse(String(message));
               if (parsed.type === 'transportCreated') {
                 transportReplies++;
+                transportIds.push(parsed.transportId);
+                if (transportIds.length > 2) transportIds.shift();
                 if (!interrupted && transportReplies === 2) {
                   // The real server created both transports. Lose its receive
                   // reply by closing both owned signaling ends, without forging
@@ -1541,6 +1558,7 @@ async function setRole(owner, name, role) {
             await remotePlayback(owner, 'audio');
             const resumed = await reconnectMediaIdentity(owner);
             try {
+              await waitForMediaStart(owner, resumed);
               report.unacknowledgedControl = {
                 passed: true,
                 media: await advancingReconnectMedia(owner, resumed, 3000),
@@ -1551,6 +1569,50 @@ async function setRole(owner, name, role) {
           } finally {
             await peers.dispose();
           }
+        };
+        checkIceRestart = async () => {
+          const identity = await reconnectMediaIdentity(probe);
+          const receiver = await reconnectMediaIdentity(owner);
+          const credentials = await probe.evaluateHandle(() =>
+            window.__communityPeers
+              .filter((peer) => peer.connectionState !== 'closed' && peer.remoteDescription)
+              .map((peer) => ({
+                peer,
+                ufrag: peer.remoteDescription.sdp.match(/^a=ice-ufrag:(.+)$/m)?.[1],
+              })),
+          );
+          try {
+            assert.equal(await credentials.evaluate((entries) => entries.length), 2);
+            assert.equal(
+              await credentials.evaluate((entries) =>
+                entries.every(({ ufrag }) => typeof ufrag === 'string'),
+              ),
+              true,
+            );
+            restartCurrentTransports();
+            await probe.waitForFunction(
+              (entries) =>
+                entries.every(({ peer, ufrag }) => {
+                  const current = peer.remoteDescription?.sdp.match(/^a=ice-ufrag:(.+)$/m)?.[1];
+                  return (
+                    peer.connectionState === 'connected' &&
+                    typeof current === 'string' &&
+                    current !== ufrag
+                  );
+                }),
+              credentials,
+            );
+            await waitForMediaStart(owner, receiver);
+            report.iceRestart = {
+              passed: true,
+              identity: await identity.evaluate((state) => state.verify()),
+              media: await advancingReconnectMedia(owner, receiver, 3000),
+            };
+          } finally {
+            await credentials.dispose();
+            await receiver.dispose();
+            await identity.dispose();
+          }
           await leave(probe);
           await probe.context().close();
         };
@@ -1559,6 +1621,10 @@ async function setRole(owner, name, role) {
     await step(
       'a media control lost before server receipt is replayed after reconnect',
       checkUnacknowledgedControl,
+    );
+    await step(
+      'real ICE restarts update both native transports and retain working media',
+      checkIceRestart,
     );
     await step(
       'simulated capture termination updates both clients and permits explicit restart',

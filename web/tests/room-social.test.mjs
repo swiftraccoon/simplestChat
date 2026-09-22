@@ -995,6 +995,102 @@ for (const setupFinishes of ['before-reconnect', 'after-reconnect']) {
   });
 }
 
+for (const disconnected of [false, true]) {
+  test(`unsupported TURN refresh rebuilds media ${disconnected ? 'after reclaiming a disconnected session' : 'on the current connection'}`, async (t) => {
+    const h = await harness();
+    t.after(() => h.room.leave());
+    await h.room.join('room', 'Local');
+    const old = h.instances[0];
+    old.audioEnabled = old.videoEnabled = true;
+    if (disconnected) {
+      h.signaling.connected = false;
+      h.signaling.onConnectionLost();
+    }
+    old.onTransportRebuildRequired();
+    assert.equal(old.closes, 1);
+    if (disconnected) {
+      assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 1);
+      h.signaling.connected = true;
+      h.signaling.onReconnected();
+    }
+    await h.room.recoveryPromise;
+    assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 2);
+    assert.equal(h.room.hasMedia, true);
+    assert.equal(h.room.connected, true);
+    assert.deepEqual(
+      [h.room.audioEnabled, h.room.videoEnabled, h.room.isScreenSharing],
+      [false, false, false],
+    );
+    old.onTransportRebuildRequired();
+    await flush();
+    assert.equal(
+      h.sent.filter(({ type }) => type === 'joinRoom').length,
+      2,
+      'retired handlers cannot rejoin the new session',
+    );
+  });
+}
+
+test('unsupported TURN refresh during retained recovery waits for the current session before rejoining', async (t) => {
+  const response = deferred();
+  const h = await harness({ reconnect: () => response.promise });
+  t.after(() => h.room.leave());
+  await h.room.join('room', 'Local');
+  const recovering = h.room.attemptReconnect();
+  h.instances[0].onTransportRebuildRequired();
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 1);
+  response.resolve({
+    type: 'reconnectResult',
+    success: true,
+    participantId: 'local',
+    reconnectToken: 'fresh',
+  });
+  await recovering;
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 2);
+  assert.equal(h.room.hasMedia, true);
+  assert.equal(h.room.connected, true);
+});
+
+test('leaving from the TURN refresh notification prevents automatic rejoining', async (t) => {
+  let leave;
+  const h = await harness({
+    events: {
+      onLocalMediaChanged: () => {
+        leave = h.room.leave();
+      },
+    },
+  });
+  t.after(() => h.room.leave());
+  await h.room.join('room', 'Local');
+  h.instances[0].onTransportRebuildRequired();
+  await leave;
+  await flush();
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 1);
+  assert.equal(h.room.hasMedia, false);
+  assert.equal(h.room.localParticipantId, null);
+});
+
+test('a disconnect from the TURN refresh notification preserves session recovery before rejoining', async (t) => {
+  const h = await harness({
+    events: {
+      onRecoveryState(state) {
+        if (state === 'reconnecting') {
+          h.signaling.connected = false;
+          h.signaling.onConnectionLost();
+        }
+      },
+    },
+  });
+  t.after(() => h.room.leave());
+  await h.room.join('room', 'Local');
+  h.instances[0].onTransportRebuildRequired();
+  await flush();
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 1);
+  assert.equal(h.room.localParticipantId, 'local');
+  assert.equal(h.room.hasMedia, false);
+  assert.equal(h.room.restarting, false, 'the next socket must reclaim the existing session');
+});
+
 test('an ordinary browser media setup failure stays chat-only across a retained reconnect', async (t) => {
   const h = await harness({ setup: () => Promise.reject(new Error('Unsupported browser')) });
   t.after(() => h.room.leave());

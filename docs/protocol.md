@@ -250,7 +250,12 @@ playback volume is not producer moderation. `restartIce` / `iceRestarted` update
 an existing transport and are distinct from reconnecting signaling; `iceRestarted`
 carries fresh `iceServers` because the TURN credentials minted at transport
 creation expire after `TURN_TTL`, and the browser installs them before it
-regathers candidates.
+regathers candidates. An empty server list needs no configuration update.
+If the browser handler cannot update nonempty ICE-server settings (as with
+mediasoup-client's Firefox handler), the browser closes the old media manager
+and rejoins with fresh transports. It first reclaims the session if signaling
+is disconnected or recovery is pending. Capture remains off until explicitly
+enabled; late unsupported-update results cannot rebuild a replaced session.
 
 `leaveRoom` has no dedicated acknowledgement. The browser immediately retires its
 membership and media, and the server removes the corresponding membership.

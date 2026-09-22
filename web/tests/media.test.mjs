@@ -14,6 +14,9 @@ const { Producer } = await import(
 const { Consumer } = await import(
   new URL('./Consumer.js', import.meta.resolve('mediasoup-client'))
 );
+const { Firefox120 } = await import(
+  new URL('./handlers/Firefox120.js', import.meta.resolve('mediasoup-client'))
+);
 
 function deferred() {
   let resolve, reject;
@@ -567,6 +570,93 @@ test('ICE restart installs fresh TURN credentials before regathering', async (t)
   ]);
   assert.deepEqual(state.warnings, []);
 });
+
+for (const relayConfigured of [false, true]) {
+  test(`Firefox ICE recovery ${relayConfigured ? 'requests fresh transports for changed TURN credentials' : 'restarts without an unsupported empty server update'}`, async (t) => {
+    const { state, media } = await fixture(t);
+    const calls = [];
+    media.onTransportRebuildRequired = () => calls.push('rebuild');
+    media.sendTransport = {
+      id: 'current',
+      closed: false,
+      close() {},
+      async updateIceServers({ iceServers }) {
+        calls.push('update');
+        // Exercise the installed handler's actual UnsupportedError, not a
+        // guessed Firefox capability or a replacement implementation.
+        await Firefox120.prototype.updateIceServers.call({ assertNotClosed() {} }, iceServers);
+      },
+      async restartIce() {
+        calls.push('restart');
+      },
+    };
+    await media.handleIceRestarted(
+      'current',
+      {
+        usernameFragment: 'local-test',
+        password: 'local-test',
+      },
+      relayConfigured
+        ? [{ urls: ['turn:relay.example:3478'], username: 'fresh', credential: 'secret' }]
+        : [],
+    );
+    assert.deepEqual(calls, relayConfigured ? ['update', 'rebuild'] : ['restart']);
+    assert.deepEqual(state.captureCalls, []);
+    assert.deepEqual(state.warnings, []);
+    assert.equal(state.logs.length, relayConfigured ? 0 : 1);
+  });
+}
+
+test('an unexpected TURN update failure stays a sanitized failure instead of rebuilding the room', async (t) => {
+  const { state, media } = await fixture(t);
+  media.onTransportRebuildRequired = () =>
+    assert.fail('Only unsupported updates require rebuilding');
+  media.sendTransport = {
+    id: 'current',
+    closed: false,
+    close() {},
+    async updateIceServers() {
+      throw new Error('private relay credentials');
+    },
+    restartIce() {
+      assert.fail('Failed credential updates must not be reported as applied');
+    },
+  };
+  await media.handleIceRestarted('current', { usernameFragment: 'u', password: 'p' }, [
+    { urls: ['turn:relay.example'] },
+  ]);
+  assert.deepEqual(state.warnings, [['[media] ICE restart failed for transport current']]);
+  assert.deepEqual(state.logs, []);
+});
+
+for (const retirement of ['close', 'replace']) {
+  test(`an unsupported TURN update after ${retirement} cannot rebuild another media session`, async (t) => {
+    const { state, media } = await fixture(t);
+    const update = deferred();
+    let rebuilds = 0;
+    media.onTransportRebuildRequired = () => rebuilds++;
+    media.sendTransport = {
+      id: 'current',
+      closed: false,
+      close() {},
+      updateIceServers: () => update.promise,
+      restartIce() {
+        assert.fail('Retired transport must not restart');
+      },
+    };
+    const operation = media.handleIceRestarted(
+      'current',
+      { usernameFragment: 'u', password: 'p' },
+      [{ urls: ['turn:relay.example'] }],
+    );
+    if (retirement === 'close') media.close();
+    else media.sendTransport = null;
+    update.reject(Object.assign(new Error('private'), { name: 'UnsupportedError' }));
+    await operation;
+    assert.equal(rebuilds, 0);
+    assert.deepEqual(state.warnings, []);
+  });
+}
 
 for (const failure of ['throw', 'reject']) {
   test(`ICE restart handles a current transport ${failure} without exposing native error details`, async (t) => {

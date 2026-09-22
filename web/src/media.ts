@@ -166,6 +166,7 @@ export class MediaManager {
   private onScreenShareStoppedCb: (() => void) | null = null;
   private onLocalCaptureStoppedCb: ((kind: 'audio' | 'video') => void) | null = null;
   private onControlErrorCb: (() => void) | null = null;
+  private onTransportRebuildRequiredCb: (() => void) | null = null;
 
   constructor(signaling: SignalingClient) {
     this.signaling = signaling;
@@ -259,6 +260,11 @@ export class MediaManager {
   /** Report rejected or timed-out controls without exposing server/native error details. */
   set onControlError(callback: (() => void) | null) {
     this.onControlErrorCb = callback;
+  }
+
+  /** A browser without ICE-server updates needs new transports for fresh TURN credentials. */
+  set onTransportRebuildRequired(callback: (() => void) | null) {
+    this.onTransportRebuildRequiredCb = callback;
   }
 
   /** Register callback for when screen share stops */
@@ -530,7 +536,20 @@ export class MediaManager {
     try {
       // TURN credentials expire after the server's TURN_TTL; the ones minted at
       // transport creation cannot gather relay candidates on a long call.
-      if (iceServers) await transport.updateIceServers({ iceServers });
+      // The server emits an empty list when TURN is disabled. Firefox rejects
+      // even that no-op update, despite supporting ICE restart itself.
+      if (iceServers?.length) {
+        try {
+          await transport.updateIceServers({ iceServers });
+        } catch (error) {
+          if (!isCurrent()) return;
+          if (error instanceof Error && error.name === 'UnsupportedError') {
+            this.onTransportRebuildRequiredCb?.();
+            return;
+          }
+          throw error;
+        }
+      }
       if (!isCurrent()) return;
       await transport.restartIce({ iceParameters });
       if (isCurrent())

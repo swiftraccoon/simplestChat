@@ -111,7 +111,7 @@ export class RoomClient {
   private generation = 0;
   private connectionGeneration = 0;
   private initialJoin: Promise<'joined' | 'lobby'> | null = null;
-  private mediaSetupInterrupted = false;
+  private mediaNeedsRebuild = false;
   private cancelJoin: (() => void) | null = null;
   private hiddenParticipants = new Set<string>();
   private videoQualities = new Map<string, RemoteVideoQuality>();
@@ -141,7 +141,7 @@ export class RoomClient {
       if (this.media && !this.mediaReady) {
         // Partial native transport creation cannot be resumed as live media.
         // Rejoin after reclaiming the session so the server also retires it.
-        this.mediaSetupInterrupted = true;
+        this.mediaNeedsRebuild = true;
         this.closeMedia();
       }
       // Retire a join waiter before the replacement socket can produce an
@@ -279,7 +279,7 @@ export class RoomClient {
     this.recoveryPromise = null;
     this.rejectSocialRequests('Room membership changed');
     this.closeMedia();
-    this.mediaSetupInterrupted = false;
+    this.mediaNeedsRebuild = false;
     this.participants.clear();
     this.pausedProducers.clear();
     this.awaitingPostAdmission = false;
@@ -407,6 +407,24 @@ export class RoomClient {
         'A media change could not be confirmed. Try the control again.',
       );
     };
+    media.onTransportRebuildRequired = () => {
+      if (generation !== this.generation || this.media !== media) return;
+      this.mediaNeedsRebuild = true;
+      this.closeMedia();
+      this.events.onLocalMediaChanged();
+      if (generation !== this.generation || !this.signaling.connected || this.recovering) return;
+      this.recovering = true;
+      this.events.onRecoveryState?.(
+        'reconnecting',
+        'Refreshing the media connection. Your microphone, camera, and screen sharing are off.',
+      );
+      if (generation !== this.generation || !this.signaling.connected) return;
+      const task = this.fullRejoin().finally(() => {
+        if (this.recoveryPromise === task) this.recoveryPromise = null;
+      });
+      this.recoveryPromise = task;
+      this.observeTask(task, 'Refreshing the media connection');
+    };
     media.onLocalCaptureStopped = (kind) => {
       if (generation !== this.generation || this.media !== media) return;
       this.events.onLocalMediaChanged();
@@ -442,7 +460,7 @@ export class RoomClient {
     this.videoSizeCaps.clear();
     this.rejectSocialRequests('Room left');
     this.closeMedia();
-    this.mediaSetupInterrupted = false;
+    this.mediaNeedsRebuild = false;
     this.participants.clear();
     this.pausedProducers.clear();
     this.awaitingPostAdmission = false;
@@ -752,7 +770,7 @@ export class RoomClient {
           throw new Error('Reconnect response did not rotate its credential');
         }
         this.reconnectToken = result.reconnectToken;
-        if (this.mediaSetupInterrupted) {
+        if (this.mediaNeedsRebuild) {
           await this.fullRejoin();
           return;
         }
