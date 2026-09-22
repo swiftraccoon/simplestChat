@@ -877,6 +877,23 @@ class PublicReleaseTests(unittest.TestCase):
         self.assertEqual(self.runner.ups, 2)
         self.assert_config_unchanged()
 
+    def test_turn_and_image_selection_can_share_one_reviewed_replacement(self) -> None:
+        """A staged app update and first relay activation need only one interruption."""
+        staged = self.stage()
+        report: JsonObject = {}
+        turn = public.TurnConfiguration(domain="fixture.invalid", secret="a" * 64)
+        public.deploy(self.runner, self.manifest, staged, report, turn=turn)
+        self.assertEqual(self.runner.ups, 1)
+        self.assertEqual(self.runner.app_image, NEW_IMAGE)
+        self.assertEqual(report["phase"], "complete")
+        environment = dict(
+            line.split("=", 1) for line in (self.config / "app.env").read_text().splitlines()
+        )
+        self.assertEqual(environment["SIMPLESTCHAT_IMAGE"], NEW_IMAGE)
+        for key, value in turn.environment().items():
+            self.assertEqual(environment[key], value)
+        self.assertTrue(all(args[-1] == "simplestchat" for args in self.app_mutations()))
+
     def test_turn_activation_refuses_existing_settings_and_unrelated_preview_changes(self) -> None:
         """Rotation or hidden runtime changes must never enter the replacement phase."""
         turn = public.TurnConfiguration(domain="fixture.invalid", secret="a" * 64)
