@@ -1,3 +1,4 @@
+import type { TelemetryMediaSource } from './telemetry-types';
 import * as mediasoupClient from 'mediasoup-client';
 import type { ClientMessage, RequestResponses } from './protocol';
 import { SignalingRequestTimeoutError, type SignalingClient } from './signaling';
@@ -799,6 +800,27 @@ export class MediaManager {
     const cap = sizeCap === null || sizeCap === undefined ? top : Math.max(0, sizeCap);
     this.setPreferredLayers(consumer.id, Math.min(chosen, cap, top));
     return true;
+  }
+
+  /** Native reports stay local; the collector extracts only allowlisted numbers. */
+  telemetrySources(pausedProducers: ReadonlySet<string>): TelemetryMediaSource[] {
+    const result: TelemetryMediaSource[] = [];
+    for (const [producerId, consumerId] of this.producerToConsumer) {
+      const consumer = this.consumers.get(consumerId);
+      if (!consumer) continue;
+      result.push({
+        key: consumer,
+        kind: consumer.kind,
+        active: () =>
+          !this.closed &&
+          !consumer.closed &&
+          !consumer.paused &&
+          !pausedProducers.has(producerId) &&
+          consumer.track.readyState === 'live',
+        getStats: () => consumer.getStats(),
+      });
+    }
+    return result;
   }
 
   /** Get a consumer's track by its associated producer ID */

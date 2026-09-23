@@ -317,7 +317,8 @@ test('a refresh retired while waiting for its Web Lock does not fetch', async (t
   const names = [];
   const f = await fixture(t, {
     locks: {
-      request: async (name, request) => {
+      request: async (name, options, request) => {
+        assert.ok(options.signal instanceof AbortSignal);
         names.push(name);
         await waiting.promise;
         return request();
@@ -336,7 +337,8 @@ test('exact Invalid token refresh rejection retries after the existing replay gr
   const names = [];
   const f = await fixture(t, {
     locks: {
-      request: async (name, request) => {
+      request: async (name, options, request) => {
+        assert.ok(options.signal instanceof AbortSignal);
         names.push(name);
         return request();
       },
@@ -359,7 +361,6 @@ test('retirement during replay grace prevents a second refresh request', async (
   const restore = f.auth.tryRestore();
   await flush();
   f.auth.forgetSession();
-  await f.fire(REPLAY_MS);
   assert.equal(await restore, false);
   assert.equal(f.requests.length, 1);
   assert.equal(f.timers.size, 0);
@@ -695,16 +696,33 @@ test('scheduled refresh owns one abortable Web Lock wait and never fetches after
   assert.equal(f.timers.size, 0);
 });
 
-test('malformed authentication JSON never partially replaces a session', async (t) => {
+test('malformed successful authentication clears local identity and requires reload before another attempt', async (t) => {
   const f = await fixture(t);
   await f.login();
   f.enqueue(response({ token: 'new', user: { id: 'new' } }));
-  await assert.rejects(f.auth.login('new@example.test', 'password'), /incomplete/);
-  assert.equal(f.auth.userId, 'initial');
-  assert.equal(f.auth.jwt, session('initial').token);
-  assert.equal(f.timers.size, 1);
+  await assert.rejects(f.auth.login('new@example.test', 'password'), {
+    name: 'SessionOutcomeUnknownError',
+  });
+  assert.equal(f.auth.userId, null);
+  assert.equal(f.auth.jwt, null);
+  assert.equal(f.timers.size, 0);
+  await assert.rejects(f.auth.login('again@example.test', 'password'), {
+    name: 'SessionOutcomeUnknownError',
+  });
+  assert.equal(
+    f.requests.length,
+    2,
+    'an uncertain cookie cannot be overwritten by another local intent',
+  );
+});
+
+test('conclusive HTTP rejection remains retryable even when the error body is malformed', async (t) => {
+  const f = await fixture(t);
+  await f.login();
   f.enqueue(response({ error: { unexpected: true } }, 401));
   await assert.rejects(f.auth.login('new@example.test', 'password'), /^Error: Login failed$/);
+  assert.equal(f.auth.userId, 'initial');
+  assert.equal(f.timers.size, 1);
 });
 
 test('failed logout preserves the original refresh deadline instead of extending JWT lifetime', async (t) => {
@@ -808,3 +826,157 @@ for (const kind of ['register', 'login']) {
     assert.equal(f.auth.userId, 'new');
   });
 }
+
+for (const stalledStage of ['fetch', 'body', 'rejection-body', 'lock']) {
+  test(`initial restore deadline covers ${stalledStage}, returns guest and refuses late adoption`, async (t) => {
+    const pending = deferred();
+    let lockCallback;
+    let lockSignal;
+    const f = await fixture(
+      t,
+      stalledStage === 'lock'
+        ? {
+            locks: {
+              request: (_name, options, callback) => {
+                lockCallback = callback;
+                lockSignal = options.signal;
+                return pending.promise;
+              },
+            },
+          }
+        : {},
+    );
+    const events = [];
+    f.auth.setTelemetryHandler((event) => events.push(event));
+    if (stalledStage === 'fetch') f.enqueue(pending.promise);
+    else if (stalledStage === 'body') f.enqueue({ ...response(null), json: () => pending.promise });
+    else if (stalledStage === 'rejection-body')
+      f.enqueue({ ...response(null, 401), clone: () => ({ json: () => pending.promise }) });
+    const restore = f.auth.tryRestore();
+    await flush();
+    await f.fire(10000);
+    assert.equal(await restore, false);
+    assert.equal(f.auth.isLoggedIn, false);
+    assert.equal(events.at(-1).outcome, 'timeout');
+    assert.equal(events.at(-1).durationMs, 10000);
+    if (stalledStage === 'lock') {
+      assert.equal(lockSignal.aborted, true);
+      assert.throws(lockCallback);
+      pending.resolve(response(session('late')));
+      assert.equal(f.requests.length, 0);
+    } else {
+      assert.equal(f.requests[0].options.signal.aborted, true);
+      pending.resolve(stalledStage === 'fetch' ? response(session('late')) : session('late'));
+    }
+    await flush();
+    assert.equal(f.auth.isLoggedIn, false);
+    assert.equal(f.requests.length, stalledStage === 'lock' ? 0 : 1);
+    assert.equal(f.timers.size, 0);
+  });
+}
+
+test('restore checks wall deadline before accepting a late body even if watchdog has not run', async (t) => {
+  const pending = deferred();
+  const f = await fixture(t);
+  f.enqueue({ ...response(null), json: () => pending.promise });
+  const restore = f.auth.tryRestore();
+  await flush();
+  f.moveWallClock(10000);
+  pending.resolve(session('late'));
+  assert.equal(await restore, false);
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.equal(f.timers.size, 0);
+});
+
+test('telemetry callback failures cannot prevent restoring a valid session', async (t) => {
+  const f = await fixture(t);
+  f.auth.setTelemetryHandler(() => {
+    throw new Error('collector failed');
+  });
+  f.enqueue(response(session('restored')));
+  assert.equal(await f.auth.tryRestore(), true);
+  assert.equal(f.auth.userId, 'restored');
+});
+
+test('dismissed passkey challenge fetch is abortable and its late result cannot retain a ceremony', async (t) => {
+  const pending = deferred();
+  const f = await fixture(t);
+  const controller = new AbortController();
+  f.enqueue(pending.promise);
+  const start = f.auth.passkeyLoginStart('fixture@example.test', controller.signal);
+  const rejected = assert.rejects(start, superseded);
+  assert.equal(f.requests[0].options.signal, controller.signal);
+  controller.abort();
+  f.auth.cancelPasskeyAttempt();
+  pending.resolve(response(passkeyOptions('login')));
+  await rejected;
+  await assert.rejects(f.auth.passkeyLoginFinish(new PublicKeyCredential()), /was not started/);
+  assert.equal(f.requests.length, 1);
+});
+
+for (const stage of ['fetch', 'body']) {
+  test(`interactive authentication bounds stalled ${stage}, fences late adoption and refuses further authentication until reload`, async (t) => {
+    const pending = deferred();
+    const f = await fixture(t);
+    f.enqueue(
+      stage === 'fetch' ? pending.promise : { ...response(null), json: () => pending.promise },
+    );
+    const login = f.auth.login('fixture@example.test', 'password');
+    const rejected = assert.rejects(login, { name: 'SessionOutcomeUnknownError' });
+    await flush();
+    await f.fire(20000);
+    await rejected;
+    assert.equal(f.requests[0].options.signal.aborted, true);
+    assert.equal(f.auth.isLoggedIn, false);
+    assert.equal(f.timers.size, 0);
+    pending.resolve(stage === 'fetch' ? response(session('late')) : session('late'));
+    await flush();
+    assert.equal(f.auth.isLoggedIn, false);
+    await assert.rejects(f.auth.register('new@example.test', 'New', 'password'), {
+      name: 'SessionOutcomeUnknownError',
+    });
+    await assert.rejects(f.auth.passkeyLoginStart('new@example.test'), {
+      name: 'SessionOutcomeUnknownError',
+    });
+    assert.equal(f.requests.length, 1);
+  });
+}
+
+test('initial restore cannot fetch after a paused Web Lock resumes beyond the wall deadline', async (t) => {
+  const waiting = deferred();
+  const f = await fixture(t, {
+    locks: { request: (_name, _options, callback) => waiting.promise.then(callback) },
+  });
+  const restore = f.auth.tryRestore();
+  f.moveWallClock(10000);
+  waiting.resolve();
+  assert.equal(await restore, false);
+  assert.equal(f.requests.length, 0);
+  assert.equal(f.timers.size, 0);
+});
+
+test('an initial rejected-refresh body completing after its wall deadline cannot start replay', async (t) => {
+  const pending = deferred();
+  const f = await fixture(t);
+  f.enqueue({ ...response(null, 401), clone: () => ({ json: () => pending.promise }) });
+  const restore = f.auth.tryRestore();
+  await flush();
+  f.moveWallClock(10000);
+  pending.resolve({ error: 'Invalid token' });
+  assert.equal(await restore, false);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.timers.size, 0);
+});
+
+test('dismissing an idle authentication dialog does not cancel a valid startup restore', async (t) => {
+  const pending = deferred();
+  const f = await fixture(t);
+  const { AuthDialogFlow } = await loadTypeScript('src/auth-dialog.ts');
+  const flow = new AuthDialogFlow(() => f.auth.cancelPasskeyAttempt());
+  f.enqueue(pending.promise);
+  const restore = f.auth.tryRestore();
+  assert.equal(flow.dismiss(), true);
+  pending.resolve(response(session('restored')));
+  assert.equal(await restore, true);
+  assert.equal(f.auth.userId, 'restored');
+});

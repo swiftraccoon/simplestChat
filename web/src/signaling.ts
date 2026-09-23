@@ -1,3 +1,4 @@
+import type { TelemetryHandler, TelemetryOutcome } from './telemetry-types';
 import type { ClientMessage, RequestResponses, ServerMessage } from './protocol';
 import { decodeServerMessage } from './protocol-validation';
 
@@ -19,6 +20,18 @@ const AUTHENTICATION_RENEWAL_JITTER_MS = 250;
 
 export class SignalingClient {
   private ws: WebSocket | null = null;
+  private telemetry: TelemetryHandler | undefined;
+  private connectingAt = 0;
+
+  setTelemetryHandler(handler: TelemetryHandler): void {
+    this.telemetry = (event) => {
+      try {
+        handler(event);
+      } catch {
+        /* Telemetry cannot interrupt authentication or signaling. */
+      }
+    };
+  }
   private url: string;
   private onMessage: MessageHandler | null = null;
   private onStatusChange: ((status: 'connected' | 'disconnected' | 'connecting') => void) | null =
@@ -114,6 +127,8 @@ export class SignalingClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.connectingAt = performance.now();
+    this.telemetry?.({ name: 'connection', outcome: 'started' });
     this.onStatusChange?.('connecting');
 
     // Keep bearer credentials out of the request URL, where proxies and APM
@@ -129,6 +144,11 @@ export class SignalingClient {
 
     socket.onopen = () => {
       if (this.ws !== socket) return;
+      this.telemetry?.({
+        name: 'connection',
+        outcome: 'ok',
+        durationMs: performance.now() - this.connectingAt,
+      });
       console.log('[ws] connected');
       const wasReconnect = this.wasConnected;
       this.wasConnected = true;
@@ -227,10 +247,37 @@ export class SignalingClient {
       }
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       // Authentication can replace a socket before its queued close arrives.
       // Only the current connection owns status, requests, and reconnect timers.
       if (this.ws !== socket) return;
+      let outcome: TelemetryOutcome;
+      switch (event?.code) {
+        case 1000:
+          outcome = 'normal_close';
+          break;
+        case 1001:
+          outcome = 'going_away';
+          break;
+        case 1006:
+          outcome = 'abnormal_close';
+          break;
+        case 1008:
+          outcome = 'policy_close';
+          break;
+        case 1011:
+        case 1012:
+        case 1013:
+          outcome = 'server_close';
+          break;
+        default:
+          outcome = 'other_close';
+      }
+      this.telemetry?.({ name: 'connection', outcome });
+      this.telemetry?.({
+        name: 'connection',
+        outcome: event?.wasClean ? 'clean_close' : 'unclean_close',
+      });
       this.clearRenewal();
       this.ws = null;
       this.socketToken = undefined;

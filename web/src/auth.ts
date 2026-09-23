@@ -1,6 +1,22 @@
 import type { AuthResponse, UserInfo } from './protocol';
+import type { TelemetryHandler, TelemetryOutcome } from './telemetry-types';
 
 type AuthChangeHandler = (loggedIn: boolean, tokenRefresh: boolean) => void;
+
+const RESTORE_DEADLINE_MS = 10_000;
+const SESSION_DEADLINE_MS = 20_000;
+
+/** A request may have created an HttpOnly cookie even when its response is lost. */
+export class SessionOutcomeUnknownError extends Error {
+  constructor() {
+    super(
+      'The server may have signed you in, but its response could not be confirmed. Reload to check your session before trying again.',
+    );
+    this.name = 'SessionOutcomeUnknownError';
+  }
+}
+
+class AuthHttpRejection extends Error {}
 
 const REFRESH_LOCK_NAME = 'simplestchat-refresh-v1';
 // The server rejects, but does not revoke, the exact predecessor for two
@@ -40,6 +56,25 @@ export class AuthManager {
   private registrationCeremonyId: string | null = null;
   private authenticationCeremonyId: string | null = null;
   private generation = 0;
+  private uncertainSession = false;
+  private restoreController: AbortController | null = null;
+  private telemetry: TelemetryHandler | undefined;
+
+  setTelemetryHandler(handler: TelemetryHandler): void {
+    this.telemetry = (event) => {
+      try {
+        handler(event);
+      } catch {
+        /* Telemetry cannot interrupt authentication or signaling. */
+      }
+    };
+  }
+
+  /** Retire challenge creation/ceremony before any session-creating request. */
+  cancelPasskeyAttempt(): void {
+    const generation = this.beginAuthentication();
+    this.resumeRefresh(generation);
+  }
 
   get isLoggedIn(): boolean {
     return this._token !== null;
@@ -75,16 +110,54 @@ export class AuthManager {
   /** Try to restore session from refresh token cookie on page load */
   async tryRestore(): Promise<boolean> {
     const generation = this.beginAuthentication();
-    try {
-      const resp = await this.requestRefreshWithReplayConfirmation(generation);
-      if (!resp.ok) return false;
-      const data = await readSession(resp);
+    const started = performance.now();
+    const deadline = started + RESTORE_DEADLINE_MS;
+    const wallDeadline = Date.now() + RESTORE_DEADLINE_MS;
+    const controller = new AbortController();
+    this.restoreController = controller;
+    let outcome: TelemetryOutcome = 'error';
+    this.telemetry?.({ name: 'auth_restore', outcome: 'started' });
+    const assertLive = (): void => {
       this.assertCurrent(generation);
-      this.setSession(data);
-      return true;
+      if (controller.signal.aborted || performance.now() >= deadline || Date.now() >= wallDeadline)
+        throw new DOMException('Authentication restoration timed out', 'TimeoutError');
+    };
+    const timer = setTimeout(() => controller.abort(), RESTORE_DEADLINE_MS);
+    try {
+      // Race the entire operation, including Web Locks, JSON bodies and replay
+      // delays. Abort alone is insufficient for a stalled/late platform promise.
+      const work = async (): Promise<boolean> => {
+        const resp = await this.requestRefreshWithReplayConfirmation(
+          generation,
+          undefined,
+          controller.signal,
+          assertLive,
+        );
+        assertLive();
+        if (!resp.ok) {
+          outcome = resp.status === 401 ? 'unauthenticated' : 'error';
+          return false;
+        }
+        const data = await readSession(resp);
+        assertLive();
+        this.setSession(data);
+        outcome = 'ok';
+        return true;
+      };
+      return await abortable(work(), controller.signal);
     } catch {
+      outcome =
+        generation !== this.generation
+          ? 'superseded'
+          : controller.signal.aborted || performance.now() >= deadline || Date.now() >= wallDeadline
+            ? 'timeout'
+            : 'error';
       return false;
     } finally {
+      clearTimeout(timer);
+      if (this.restoreController === controller) this.restoreController = null;
+      controller.abort();
+      this.telemetry?.({ name: 'auth_restore', outcome, durationMs: performance.now() - started });
       this.resumeRefresh(generation);
     }
   }
@@ -104,7 +177,9 @@ export class AuthManager {
   async passkeyRegisterStart(
     email: string,
     displayName: string,
+    signal?: AbortSignal,
   ): Promise<CredentialCreationOptions> {
+    if (this.uncertainSession) throw new SessionOutcomeUnknownError();
     const generation = this.beginAuthentication();
     try {
       const options = record(
@@ -113,6 +188,7 @@ export class AuthManager {
           { email, display_name: displayName },
           'Passkey registration failed',
           generation,
+          signal,
         ),
       );
       this.assertCurrent(generation);
@@ -136,7 +212,8 @@ export class AuthManager {
     );
   }
 
-  async passkeyLoginStart(email: string): Promise<CredentialRequestOptions> {
+  async passkeyLoginStart(email: string, signal?: AbortSignal): Promise<CredentialRequestOptions> {
+    if (this.uncertainSession) throw new SessionOutcomeUnknownError();
     const generation = this.beginAuthentication();
     try {
       const options = record(
@@ -145,6 +222,7 @@ export class AuthManager {
           { email },
           'Passkey login failed',
           generation,
+          signal,
         ),
       );
       this.assertCurrent(generation);
@@ -186,6 +264,8 @@ export class AuthManager {
   // This does not cancel server-side effects of requests already sent.
   private beginAuthentication(): number {
     this.generation += 1;
+    this.restoreController?.abort();
+    this.restoreController = null;
     if (this.refreshTimer !== null) clearTimeout(this.refreshTimer);
     this.refreshTimer = null;
     this.stopScheduledRefresh();
@@ -225,18 +305,21 @@ export class AuthManager {
     body: object,
     failure: string,
     generation: number,
+    signal?: AbortSignal,
   ): Promise<unknown> {
+    if (signal?.aborted) throw new DOMException('Authentication request retired', 'AbortError');
     const response = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
     });
     this.assertCurrent(generation);
     const data: unknown = await response.json().catch(() => null);
     this.assertCurrent(generation);
     if (!response.ok) {
-      throw new Error(
+      throw new AuthHttpRejection(
         isRecord(data) && typeof data['error'] === 'string' ? data['error'] : failure,
       );
     }
@@ -244,12 +327,36 @@ export class AuthManager {
   }
 
   private async establishSession(path: string, body: object, failure: string): Promise<void> {
+    if (this.uncertainSession) throw new SessionOutcomeUnknownError();
     const generation = this.beginAuthentication();
-    try {
-      const data = parseSession(await this.requestJson(path, body, failure, generation));
+    const controller = new AbortController();
+    const deadline = performance.now() + SESSION_DEADLINE_MS;
+    const wallDeadline = Date.now() + SESSION_DEADLINE_MS;
+    const timer = setTimeout(() => controller.abort(), SESSION_DEADLINE_MS);
+    const assertLive = (): void => {
       this.assertCurrent(generation);
-      this.setSession(data);
+      if (controller.signal.aborted || performance.now() >= deadline || Date.now() >= wallDeadline)
+        throw new SessionOutcomeUnknownError();
+    };
+    try {
+      const work = async (): Promise<void> => {
+        const data = parseSession(
+          await this.requestJson(path, body, failure, generation, controller.signal),
+        );
+        assertLive();
+        this.setSession(data);
+      };
+      await abortable(work(), controller.signal);
+    } catch (error) {
+      if (generation !== this.generation || error instanceof AuthHttpRejection) throw error;
+      // A malformed successful body, lost connection or deadline cannot prove
+      // the server did not set a session cookie. Freeze new auth until reload.
+      this.uncertainSession = true;
+      this.clearSession();
+      throw new SessionOutcomeUnknownError();
     } finally {
+      clearTimeout(timer);
+      controller.abort();
       this.resumeRefresh(generation);
     }
   }
@@ -281,9 +388,14 @@ export class AuthManager {
   private async requestRefresh(
     generation: number,
     scheduled?: ScheduledRefresh,
+    restoreSignal?: AbortSignal,
+    restoreLive?: () => void,
   ): Promise<Response> {
     const request = (): Promise<Response> => {
       this.assertCurrent(generation);
+      restoreLive?.();
+      if (restoreSignal?.aborted)
+        throw new DOMException('Authentication request retired', 'AbortError');
       if (scheduled) {
         this.assertScheduledRefresh(scheduled);
         if (scheduled.budget.attempts >= REFRESH_MAX_ATTEMPTS) {
@@ -294,10 +406,11 @@ export class AuthManager {
         scheduled.budget.attempts += 1;
         scheduled.budget.nextAttemptAt = performance.now() + refreshRetryDelay();
       }
+      const signal = scheduled?.controller.signal ?? restoreSignal;
       return fetch('/api/auth/refresh', {
         method: 'POST',
         credentials: 'include',
-        ...(scheduled ? { signal: scheduled.controller.signal } : {}),
+        ...(signal ? { signal } : {}),
       });
     };
 
@@ -312,6 +425,8 @@ export class AuthManager {
           request,
         );
       }
+      if (restoreSignal)
+        return navigator.locks.request(REFRESH_LOCK_NAME, { signal: restoreSignal }, request);
       return navigator.locks.request(REFRESH_LOCK_NAME, request);
     }
     return request();
@@ -320,17 +435,21 @@ export class AuthManager {
   private async requestRefreshWithReplayConfirmation(
     generation: number,
     scheduled?: ScheduledRefresh,
+    restoreSignal?: AbortSignal,
+    restoreLive?: () => void,
   ): Promise<Response> {
-    const response = await this.requestRefresh(generation, scheduled);
+    const response = await this.requestRefresh(generation, scheduled, restoreSignal, restoreLive);
     this.assertCurrent(generation);
+    restoreLive?.();
     if (scheduled) this.assertScheduledRefresh(scheduled);
     const rejected = await isRejectedRefreshToken(response);
     this.assertCurrent(generation);
+    restoreLive?.();
     if (scheduled) this.assertScheduledRefresh(scheduled);
     if (!rejected) return response;
 
-    await delay(REFRESH_REPLAY_CONFIRM_DELAY_MS, scheduled?.controller.signal);
-    return this.requestRefresh(generation, scheduled);
+    await delay(REFRESH_REPLAY_CONFIRM_DELAY_MS, scheduled?.controller.signal ?? restoreSignal);
+    return this.requestRefresh(generation, scheduled, restoreSignal, restoreLive);
   }
 
   private scheduleRefresh(deadline = performance.now() + 12 * 60 * 1000): void {
@@ -675,4 +794,24 @@ function serializeCredential(cred: Credential): {
     throw new Error('Unsupported passkey response');
   }
   return { id: cred.id, rawId: base64urlEncode(cred.rawId), type: cred.type, response: encoded };
+}
+
+/** Consume late rejections while immediately retiring the caller on abort. */
+function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = (): void =>
+      reject(new DOMException('Authentication request retired', 'AbortError'));
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener('abort', abort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', abort);
+        reject(error instanceof Error ? error : new Error('Authentication restoration failed'));
+      },
+    );
+  });
 }

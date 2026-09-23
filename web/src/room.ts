@@ -1,3 +1,4 @@
+import type { TelemetryHandler, TelemetryMediaSource } from './telemetry-types';
 import type {
   RoomSettings,
   RoomSettingsPatch,
@@ -30,6 +31,7 @@ export class RoomPasswordRequiredError extends Error {
 }
 
 export type RoomEventHandler = {
+  onTelemetry?: TelemetryHandler;
   onParticipantsChanged: (participants: Map<string, Participant>) => void;
   onLocalStream: (stream: MediaStream) => void;
   onLocalMediaChanged: () => void;
@@ -82,6 +84,40 @@ export type RoomEventHandler = {
 
 export class RoomClient {
   private signaling: SignalingClient;
+  private telemetry: TelemetryHandler | undefined;
+  private recoveryStarted: number | null = null;
+  private admissionStarted: number | null = null;
+
+  private beginAdmission(): void {
+    if (this.admissionStarted !== null) return;
+    this.admissionStarted = performance.now();
+    this.telemetry?.({ name: 'room_admission', outcome: 'started' });
+  }
+
+  private finishAdmission(outcome: 'ok' | 'denied' | 'superseded'): void {
+    if (this.admissionStarted === null) return;
+    this.telemetry?.({
+      name: 'room_admission',
+      outcome,
+      durationMs: performance.now() - this.admissionStarted,
+    });
+    this.admissionStarted = null;
+  }
+
+  private reportRecovery(state: 'reconnecting' | 'connected' | 'failed', message?: string): void {
+    if (state === 'reconnecting' && this.recoveryStarted === null) {
+      this.recoveryStarted = performance.now();
+      this.telemetry?.({ name: 'reconnect', outcome: 'started' });
+    } else if (state !== 'reconnecting' && this.recoveryStarted !== null) {
+      this.telemetry?.({
+        name: 'reconnect',
+        outcome: state === 'connected' ? 'ok' : 'error',
+        durationMs: performance.now() - this.recoveryStarted,
+      });
+      this.recoveryStarted = null;
+    }
+    this.events.onRecoveryState?.(state, message);
+  }
   private media: MediaManager | null = null;
   private mediaReady = false;
   private participants = new Map<string, Participant>();
@@ -129,6 +165,13 @@ export class RoomClient {
   constructor(signaling: SignalingClient, events: RoomEventHandler) {
     this.signaling = signaling;
     this.events = events;
+    this.telemetry = (event) => {
+      try {
+        events.onTelemetry?.(event);
+      } catch {
+        /* Observations cannot interrupt room ownership. */
+      }
+    };
     this.signaling.setOnMessage((msg) => this.handleMessage(msg));
     this.signaling.setOnReconnected(() => {
       this.observeTask(this.attemptReconnect(), 'Room reconnection');
@@ -159,7 +202,7 @@ export class RoomClient {
       this.closeMedia();
       this.events.onLocalMediaChanged?.();
       if (generation !== this.generation) return;
-      this.events.onRecoveryState?.(
+      this.reportRecovery(
         'failed',
         'The server has not returned after two minutes. Retry the connection when ready. Your media is off.',
       );
@@ -204,7 +247,7 @@ export class RoomClient {
     const generation = this.generation;
     this.restarting = true;
     this.recovering = true;
-    this.events.onRecoveryState?.('reconnecting');
+    this.reportRecovery('reconnecting');
     if (generation !== this.generation) return;
     this.signaling.retryConnection();
     if (this.signaling.connected) this.observeTask(this.attemptReconnect(), 'Room reconnection');
@@ -258,12 +301,26 @@ export class RoomClient {
     this.restarting = false;
     this.membershipEstablished = false;
     this.signaling.completeRestartRecovery();
+    const started = performance.now();
+    this.telemetry?.({ name: 'room_join', outcome: 'started' });
     const task = this.joinSession(roomId, participantName, password);
     this.initialJoin = task;
     try {
       const outcome = await task;
       this.membershipEstablished = this.roomId === roomId;
+      this.telemetry?.({
+        name: 'room_join',
+        outcome: outcome === 'lobby' ? 'waiting' : 'ok',
+        durationMs: performance.now() - started,
+      });
       return outcome;
+    } catch (error) {
+      this.telemetry?.({
+        name: 'room_join',
+        outcome: error instanceof RoomPasswordRequiredError ? 'denied' : 'error',
+        durationMs: performance.now() - started,
+      });
+      throw error;
     } finally {
       if (this.initialJoin === task) this.initialJoin = null;
     }
@@ -274,6 +331,7 @@ export class RoomClient {
     participantName: string,
     password?: string,
   ): Promise<'joined' | 'lobby'> {
+    this.finishAdmission('superseded');
     this.cancelJoin?.();
     const generation = ++this.generation;
     this.recoveryPromise = null;
@@ -348,6 +406,7 @@ export class RoomClient {
     if (generation !== this.generation) throw new Error('Room join cancelled');
 
     if (response.type === 'lobbyWaiting') {
+      this.beginAdmission();
       this.events.onLobbyWaiting(response.roomName, response.topic, response.participantCount);
       return 'lobby';
     }
@@ -417,7 +476,7 @@ export class RoomClient {
       this.events.onLocalMediaChanged();
       if (generation !== this.generation || !this.signaling.connected || this.recovering) return;
       this.recovering = true;
-      this.events.onRecoveryState?.(
+      this.reportRecovery(
         'reconnecting',
         'Refreshing the media connection. Your microphone, camera, and screen sharing are off.',
       );
@@ -451,6 +510,15 @@ export class RoomClient {
   }
 
   async leave(): Promise<void> {
+    this.finishAdmission('superseded');
+    if (this.recoveryStarted !== null) {
+      this.telemetry?.({
+        name: 'reconnect',
+        outcome: 'superseded',
+        durationMs: performance.now() - this.recoveryStarted,
+      });
+      this.recoveryStarted = null;
+    }
     this.generation++;
     this.restarting = false;
     this.membershipEstablished = false;
@@ -537,6 +605,10 @@ export class RoomClient {
         reject(error instanceof Error ? error : new Error('Unable to send room request'));
       }
     });
+  }
+
+  telemetrySources(): TelemetryMediaSource[] {
+    return this.media?.telemetrySources(this.pausedProducers) ?? [];
   }
 
   setCapturePreferences(preferences: CapturePreferences): void {
@@ -750,7 +822,7 @@ export class RoomClient {
     if (!this.localId) return;
     this.recovering = true;
     this.rejectSocialRequests('Connection changed; please retry');
-    this.events.onRecoveryState?.('reconnecting');
+    this.reportRecovery('reconnecting');
     if (!isCurrent()) return;
 
     console.log('[room] attempting session reconnect...');
@@ -790,7 +862,7 @@ export class RoomClient {
         }
         if (!isCurrent()) return;
         this.media?.resumeSignaling();
-        this.events.onRecoveryState?.('connected', snapshotError);
+        this.reportRecovery('connected', snapshotError);
         // Media transports survive independently — only signaling needed reconnection
       } else {
         console.log('[room] session expired, performing full rejoin');
@@ -852,17 +924,15 @@ export class RoomClient {
       this.recovering = false;
       this.signaling.completeRestartRecovery();
       if (outcome === 'joined') {
+        this.finishAdmission('ok');
         this.events.onAdmissionComplete();
         if (!isCurrent()) return;
-        this.events.onRecoveryState?.(
+        this.reportRecovery(
           'connected',
           'Room rejoined. Your microphone, camera, and screen sharing are off; turn them on when you are ready.',
         );
       } else {
-        this.events.onRecoveryState?.(
-          'connected',
-          'Connection restored. Waiting for room admission.',
-        );
+        this.reportRecovery('connected', 'Connection restored. Waiting for room admission.');
       }
     } catch (e) {
       if (!isCurrent()) return;
@@ -873,7 +943,7 @@ export class RoomClient {
       this.restarting = false;
       this.signaling.completeRestartRecovery();
       console.error('[room] full rejoin failed:', e);
-      this.events.onRecoveryState?.('failed', e instanceof Error ? e.message : 'Unable to rejoin');
+      this.reportRecovery('failed', e instanceof Error ? e.message : 'Unable to rejoin');
     }
   }
 
@@ -921,9 +991,10 @@ export class RoomClient {
       await this.consumeExistingProducers();
     }
     if (!isCurrent()) return;
+    this.finishAdmission('ok');
     this.events.onAdmissionComplete();
     if (!isCurrent()) return;
-    this.events.onRecoveryState?.('connected');
+    this.reportRecovery('connected');
   }
 
   private consumeProducer(
@@ -1016,7 +1087,7 @@ export class RoomClient {
         this.closeMedia();
         this.events.onLocalMediaChanged?.();
         if (generation !== this.generation) break;
-        this.events.onRecoveryState?.(
+        this.reportRecovery(
           'reconnecting',
           'Server restarting. Your room will rejoin automatically; your media is off.',
         );
@@ -1291,6 +1362,7 @@ export class RoomClient {
       }
       // Lobby
       case 'lobbyWaiting': {
+        this.beginAdmission();
         this.events.onLobbyWaiting(msg.roomName, msg.topic, msg.participantCount);
         break;
       }
@@ -1304,6 +1376,7 @@ export class RoomClient {
         break;
       }
       case 'lobbyDenied': {
+        this.finishAdmission('denied');
         this.events.onLobbyDenied(msg.reason);
         break;
       }

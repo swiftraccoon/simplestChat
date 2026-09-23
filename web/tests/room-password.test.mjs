@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadTypeScript } from './source-loader.mjs';
 
-async function roomWithReplies(replies) {
+async function roomWithReplies(replies, telemetry = () => {}) {
   const sent = [];
   const signaling = {
     setOnMessage(handler) {
@@ -29,10 +29,12 @@ async function roomWithReplies(replies) {
     },
   });
   const events = {
+    onTelemetry: telemetry,
     onParticipantsChanged() {},
     onLobbyWaiting() {},
+    onLobbyDenied() {},
   };
-  return { room: new RoomClient(signaling, events), sent, RoomPasswordRequiredError };
+  return { room: new RoomClient(signaling, events), sent, signaling, RoomPasswordRequiredError };
 }
 
 test('password challenge permits a join retry carrying the entered password', async () => {
@@ -67,4 +69,42 @@ test('ordinary join errors do not prompt for a password based on their text', as
     return true;
   });
   assert.equal(room.localParticipantId, null);
+});
+
+test('a waiting-room entry does not count as a successful joined room and denial completes its separate duration', async () => {
+  const events = [];
+  const f = await roomWithReplies(
+    [{ type: 'lobbyWaiting', roomName: 'Private room', participantCount: 1 }],
+    (event) => events.push(event),
+  );
+  assert.equal(await f.room.join('room', 'Guest'), 'lobby');
+  assert.ok(events.some((event) => event.name === 'room_join' && event.outcome === 'waiting'));
+  assert.equal(
+    events.some((event) => event.name === 'room_join' && event.outcome === 'ok'),
+    false,
+  );
+  assert.ok(events.some((event) => event.name === 'room_admission' && event.outcome === 'started'));
+  f.signaling.onMessage({ type: 'lobbyDenied' });
+  assert.equal(events.at(-1).name, 'room_admission');
+  assert.equal(events.at(-1).outcome, 'denied');
+  assert.ok(events.at(-1).durationMs >= 0);
+  assert.equal(JSON.stringify(events).includes('Private room'), false);
+});
+
+test('a failed telemetry observer cannot interrupt a normal room join', async () => {
+  const f = await roomWithReplies(
+    [
+      {
+        type: 'roomJoined',
+        participantId: 'guest',
+        participants: [],
+        reconnectToken: 'session-token',
+        yourRole: 'guest',
+      },
+    ],
+    () => {
+      throw new Error('collector failed');
+    },
+  );
+  assert.equal(await f.room.join('room', 'Guest'), 'joined');
 });

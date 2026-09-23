@@ -1,3 +1,4 @@
+import type { TelemetryHandler, TelemetryOutcome } from './telemetry-types';
 import type { RoomClient } from './room';
 import type { ChatEntry, ServerMessage } from './protocol';
 import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
@@ -10,6 +11,7 @@ type Preferences = {
   ignored: { id: string; name: string }[];
 };
 type Options = {
+  telemetry?: TelemetryHandler;
   getRoom: () => RoomClient | null;
   getViewerKey: () => string;
   notify: (message: string) => void;
@@ -27,6 +29,7 @@ export class SocialChat {
   private readonly conversationStatus = el('span', '', 'conversation-status');
   private readonly closeButton = button('Close PM', () => this.closePrivate());
   private readonly emojiPanel = el('div', undefined, 'emoji-panel');
+  private readonly pendingStarted = new Map<string, number>();
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
   // Only the active conversation's visible, retained messages own DOM nodes.
   private readonly rows = new Map<string, MessageRow>();
@@ -211,6 +214,7 @@ export class SocialChat {
     this.preferencesDialog?.close();
     this.preferencesDialog = null;
     for (const timer of this.pending.values()) clearTimeout(timer);
+    for (const id of this.pendingStarted.keys()) this.finishSend(id, 'superseded');
     this.pending.clear();
     this.store.reset();
     for (const row of this.rows.values()) row.node.remove();
@@ -253,6 +257,7 @@ export class SocialChat {
     else if (message.type === 'privateMessageReceived') this.receive(message.message);
     else if (message.type === 'messageAck') this.receive(message.message);
     else if (message.type === 'socialError' && message.clientMessageId) {
+      this.finishSend(message.clientMessageId, 'denied');
       this.clearPending(message.clientMessageId);
       this.store.fail(message.clientMessageId, message.message);
       this.render();
@@ -352,7 +357,10 @@ export class SocialChat {
     )
       return false;
     const added = this.store.receive(message, replay);
-    if (message.participantId === this.store.localId) this.clearPending(message.clientMessageId);
+    if (message.participantId === this.store.localId) {
+      this.finishSend(message.clientMessageId, 'ok');
+      this.clearPending(message.clientMessageId);
+    }
     if (added && message.participantId !== this.store.localId) {
       if (
         this.store.conversation(message) === this.store.active &&
@@ -393,9 +401,12 @@ export class SocialChat {
       this.options.notify('This message could not be added to the conversation');
       return;
     }
+    this.pendingStarted.set(id, performance.now());
+    this.recordTelemetry({ name: 'chat_send', outcome: 'started' });
     this.pending.set(
       id,
       setTimeout(() => {
+        this.finishSend(id, 'timeout');
         this.pending.delete(id);
         this.store.fail(id, 'Delivery not confirmed. Reconnect to check before sending again.');
         this.render();
@@ -407,13 +418,34 @@ export class SocialChat {
       this.composition.sent(this.store.active, content);
       this.input.value = '';
     } catch (error) {
+      this.finishSend(id, 'error');
       this.clearPending(id);
       this.store.fail(id, error instanceof Error ? error.message : 'Send failed');
     }
     this.render(true);
   }
 
+  private recordTelemetry(event: Parameters<TelemetryHandler>[0]): void {
+    try {
+      this.options.telemetry?.(event);
+    } catch {
+      /* Delivery state must not depend on its observer. */
+    }
+  }
+
+  private finishSend(id: string, outcome: TelemetryOutcome): void {
+    const started = this.pendingStarted.get(id);
+    if (started === undefined) return;
+    this.pendingStarted.delete(id);
+    this.recordTelemetry({
+      name: 'chat_send',
+      outcome,
+      durationMs: performance.now() - started,
+    });
+  }
+
   private clearPending(id: string): void {
+    this.finishSend(id, 'superseded');
     const timer = this.pending.get(id);
     if (timer !== undefined) clearTimeout(timer);
     this.pending.delete(id);

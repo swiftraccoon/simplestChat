@@ -695,3 +695,75 @@ test('scroll-button icon initialization preserves the unread badge for SocialCha
   assert.equal(document.getElementById('unread-badge'), unreadBadge);
   assert.equal(unreadBadge.parentNode, scrollBottomBtn);
 });
+
+for (const change of ['leave', 'replacement', 'membership']) {
+  test(`a password prompt retired by ${change} cannot retry a stale or replacement room`, async () => {
+    const password = deferred();
+    class RoomPasswordRequiredError extends Error {}
+    let joins = 0;
+    let leaves = 0;
+    const owner = {
+      membershipVersion: 1,
+      join: async () => {
+        joins++;
+        throw new RoomPasswordRequiredError();
+      },
+    };
+    const api = evaluateTypeScript(
+      `let room = owner; ${await functionSource('joinRoomWithPassword')} export { joinRoomWithPassword }; export function replace(next) { room = next; }`,
+      {
+        globals: {
+          owner,
+          RoomPasswordRequiredError,
+          requestRoomPassword: () => password.promise,
+          leaveCurrentRoom: async () => {
+            leaves++;
+          },
+        },
+      },
+    );
+    const joining = api.joinRoomWithPassword(owner, 'private-room', 'Guest');
+    await flush();
+    if (change === 'membership') owner.membershipVersion++;
+    else
+      api.replace(
+        change === 'leave'
+          ? null
+          : {
+              join() {
+                throw new Error('Must not join replacement');
+              },
+            },
+      );
+    password.resolve('retired-password');
+    assert.equal(await joining, null);
+    assert.equal(joins, 1);
+    assert.equal(leaves, 0);
+  });
+}
+
+test('cancelling an owned password prompt disposes its room membership', async () => {
+  class RoomPasswordRequiredError extends Error {}
+  let leaves = 0;
+  const owner = {
+    membershipVersion: 1,
+    join: async () => {
+      throw new RoomPasswordRequiredError();
+    },
+  };
+  const api = evaluateTypeScript(
+    `let room = owner; ${await functionSource('joinRoomWithPassword')} export { joinRoomWithPassword };`,
+    {
+      globals: {
+        owner,
+        RoomPasswordRequiredError,
+        requestRoomPassword: async () => null,
+        leaveCurrentRoom: async () => {
+          leaves++;
+        },
+      },
+    },
+  );
+  assert.equal(await api.joinRoomWithPassword(owner, 'private-room', 'Guest'), null);
+  assert.equal(leaves, 1);
+});

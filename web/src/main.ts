@@ -7,7 +7,10 @@ import {
   type ConnectionQuality,
 } from './room';
 import * as icons from './icons';
-import { AuthManager } from './auth';
+import { AuthManager, SessionOutcomeUnknownError } from './auth';
+import { AuthDialogFlow, type AuthDialogAttempt } from './auth-dialog';
+import { ClientTelemetry } from './telemetry';
+import { MediaTelemetry, observeFirstVideoFrame } from './media-telemetry';
 import { MediaControls } from './media-controls';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
@@ -17,6 +20,13 @@ import { avatarColors } from './avatar-colors';
 import { spatialLayerForRenderedWidth } from './layer-cap';
 import './community.css';
 import type { CreateRoomRequest } from './protocol';
+
+declare const __APP_REVISION__: string;
+const telemetry = new ClientTelemetry(__APP_REVISION__);
+window.addEventListener('error', () => telemetry.record({ name: 'js_error', outcome: 'error' }));
+window.addEventListener('unhandledrejection', () =>
+  telemetry.record({ name: 'unhandled_rejection', outcome: 'error' }),
+);
 
 // --- DOM refs ---
 const connectionStatus = document.getElementById('connection-status')!;
@@ -142,6 +152,8 @@ document.getElementById('personal-settings-controls')!.remove();
 
 // --- Auth ---
 const auth = new AuthManager();
+auth.setTelemetryHandler(telemetry.record);
+const authFlow = new AuthDialogFlow(() => auth.cancelPasskeyAttempt());
 
 function updateAuthUI(): void {
   roomBrowser.hidden = false;
@@ -180,6 +192,7 @@ auth.setOnChange((loggedIn, tokenRefresh) => {
 
 // --- State ---
 let room: RoomClient | null = null;
+let roomPasswordView: { cancel: () => void } | null = null;
 const mediaControls = new MediaControls({
   getRoom: () => room,
   notify: (message) => showToast(message),
@@ -764,6 +777,7 @@ document.getElementById('copy-room-link')!.addEventListener(
     if (!activeRoom?.currentRoomId) return;
     const url = new URL(window.location.href);
     url.hash = activeRoom.currentRoomId;
+    url.search = '';
     try {
       await navigator.clipboard.writeText(url.toString());
       if (room === activeRoom) showToast('Room link copied');
@@ -807,7 +821,18 @@ scrollBottomBtn.appendChild(unreadBadge);
 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
 const signaling = new SignalingClient(wsUrl);
+signaling.setTelemetryHandler(telemetry.record);
+const mediaTelemetry = new MediaTelemetry(
+  () => (telemetry.sharingEnabled ? (room?.telemetrySources() ?? []) : []),
+  telemetry.record,
+);
+window.addEventListener('pagehide', (event) => {
+  if (event.persisted) return;
+  mediaTelemetry.dispose();
+  telemetry.dispose();
+});
 const socialChat = new SocialChat({
+  telemetry: telemetry.record,
   getRoom: () => room,
   getViewerKey: () => auth.userId ?? 'guest',
   notify: (message) => showToast(message),
@@ -1068,84 +1093,280 @@ roomLoadMore.addEventListener('click', () => {
 });
 
 // --- Auth Events ---
+function clearAuthSecrets(): void {
+  loginPassword.value = '';
+  registerPassword.value = '';
+  registerConfirm.value = '';
+}
+
+function authSessionPending(pending: boolean): void {
+  for (const element of [loginClose, registerClose, loginToRegister, registerToLogin]) {
+    (element as HTMLButtonElement).disabled = pending;
+    element.setAttribute('aria-disabled', String(pending));
+  }
+  loginModal.setAttribute('aria-busy', String(pending));
+  registerModal.setAttribute('aria-busy', String(pending));
+}
+
+function showAuthFailure(
+  attempt: AuthDialogAttempt,
+  node: HTMLElement,
+  error: unknown,
+  message: string,
+): void {
+  if (!authFlow.current(attempt)) return;
+  if (error instanceof SessionOutcomeUnknownError) {
+    authFlow.markUncertain(attempt);
+    clearAuthSecrets();
+    authSessionPending(true);
+    loginModal.setAttribute('aria-busy', 'false');
+    registerModal.setAttribute('aria-busy', 'false');
+    loginSubmit.disabled = true;
+    loginPasskeyBtn.disabled = true;
+    registerSubmit.disabled = true;
+    registerPasskeyBtn.disabled = true;
+    loginSubmit.textContent = 'Response not confirmed';
+    registerSubmit.textContent = 'Response not confirmed';
+    node.replaceChildren(
+      el('p', error.message),
+      button('Reload and check session', () => window.location.reload(), 'btn-primary'),
+    );
+  } else node.textContent = message;
+  node.hidden = false;
+}
+
+function dismissAuth(): boolean {
+  if (loginModal.hidden && registerModal.hidden) return true;
+  if (!authFlow.dismiss()) return false;
+  loginModal.hidden = true;
+  registerModal.hidden = true;
+  clearAuthSecrets();
+  loginError.hidden = true;
+  loginError.textContent = '';
+  registerError.hidden = true;
+  registerError.textContent = '';
+  authSessionPending(false);
+  loginSubmit.disabled = false;
+  loginPasskeyBtn.disabled = false;
+  registerSubmit.disabled = false;
+  registerPasskeyBtn.disabled = false;
+  loginPasskeyBtn.textContent = 'Use a passkey';
+  registerPasskeyBtn.textContent = 'Register with passkey';
+  return true;
+}
+
 signInBtn.addEventListener('click', () => {
-  loginModal.hidden = false;
+  if (dismissAuth()) loginModal.hidden = false;
 });
 logoutBtn.addEventListener('click', () => {
   auth.logout().catch((error) => {
     showToast(error instanceof Error ? error.message : 'Sign out failed');
   });
 });
-
-// Login
-loginClose.addEventListener('click', () => {
-  loginModal.hidden = true;
+loginClose.addEventListener('click', dismissAuth);
+registerClose.addEventListener('click', dismissAuth);
+loginModal.addEventListener('click', (event) => {
+  if (event.target === loginModal) dismissAuth();
 });
-loginModal.addEventListener('click', (e) => {
-  if (e.target === loginModal) loginModal.hidden = true;
+registerModal.addEventListener('click', (event) => {
+  if (event.target === registerModal) dismissAuth();
+});
+loginToRegister.addEventListener('click', () => {
+  if (dismissAuth()) registerModal.hidden = false;
+});
+registerToLogin.addEventListener('click', () => {
+  if (dismissAuth()) loginModal.hidden = false;
 });
 
 loginSubmit.addEventListener(
   'click',
   asyncUiAction(async () => {
+    const attempt = authFlow.begin(true);
+    if (!attempt) return;
+    authSessionPending(true);
     loginError.hidden = true;
     loginSubmit.disabled = true;
     loginPasskeyBtn.disabled = true;
     loginSubmit.textContent = 'Signing in...';
     try {
-      await auth.login(loginEmail.value.trim(), loginPassword.value);
-      loginModal.hidden = true;
-      loginEmail.value = '';
-      loginPassword.value = '';
-    } catch (e) {
-      loginError.textContent = e instanceof Error ? e.message : 'Login failed';
-      loginError.hidden = false;
+      await telemetry.measure('password_login', () =>
+        auth.login(loginEmail.value.trim(), loginPassword.value),
+      );
+      if (authFlow.finish(attempt)) {
+        dismissAuth();
+        loginEmail.value = '';
+      }
+    } catch (error) {
+      showAuthFailure(
+        attempt,
+        loginError,
+        error,
+        error instanceof Error ? error.message : 'Login failed',
+      );
     } finally {
-      loginSubmit.disabled = false;
-      loginPasskeyBtn.disabled = false;
-      loginSubmit.textContent = 'Sign In';
+      if (!authFlow.isUncertain(attempt)) {
+        authFlow.finish(attempt);
+        authSessionPending(false);
+        clearAuthSecrets();
+        loginSubmit.disabled = false;
+        loginPasskeyBtn.disabled = false;
+        loginSubmit.textContent = 'Sign In';
+      }
     }
   }, 'Could not complete sign-in'),
 );
-
-loginEmail.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') loginPassword.focus();
+loginEmail.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') loginPassword.focus();
 });
-loginPassword.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') loginSubmit.click();
+loginPassword.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') loginSubmit.click();
 });
 
-loginPasskeyBtn.addEventListener(
+registerSubmit.addEventListener(
   'click',
   asyncUiAction(async () => {
-    if (loginPasskeyBtn.disabled) return;
-    const email = loginEmail.value.trim();
-    if (!email) {
-      loginError.textContent = 'Enter your email first';
-      loginError.hidden = false;
+    registerError.hidden = true;
+    if (registerPassword.value !== registerConfirm.value || registerPassword.value.length < 8) {
+      registerError.textContent =
+        registerPassword.value !== registerConfirm.value
+          ? 'Passwords do not match'
+          : 'Password must be at least 8 characters';
+      registerError.hidden = false;
       return;
     }
-    loginError.hidden = true;
-    loginPasskeyBtn.disabled = true;
-    loginSubmit.disabled = true;
-    loginPasskeyBtn.textContent = 'Waiting for passkey...';
+    const attempt = authFlow.begin(true);
+    if (!attempt) return;
+    authSessionPending(true);
+    registerSubmit.disabled = true;
+    registerPasskeyBtn.disabled = true;
+    registerSubmit.textContent = 'Creating account...';
     try {
-      const options = await auth.passkeyLoginStart(email);
-      const credential = await navigator.credentials.get(options);
-      if (!credential) throw new Error('Passkey cancelled');
-      await auth.passkeyLoginFinish(credential);
-      loginModal.hidden = true;
-      loginEmail.value = '';
-      loginPassword.value = '';
-    } catch (e) {
-      loginError.textContent = passkeyErrorMessage(e, 'Passkey sign-in failed');
-      loginError.hidden = false;
+      await telemetry.measure('password_register', () =>
+        auth.register(
+          registerEmail.value.trim(),
+          registerName.value.trim(),
+          registerPassword.value,
+        ),
+      );
+      if (authFlow.finish(attempt)) {
+        dismissAuth();
+        registerEmail.value = '';
+        registerName.value = '';
+      }
+    } catch (error) {
+      showAuthFailure(
+        attempt,
+        registerError,
+        error,
+        error instanceof Error ? error.message : 'Registration failed',
+      );
     } finally {
-      loginPasskeyBtn.disabled = false;
-      loginSubmit.disabled = false;
-      loginPasskeyBtn.textContent = 'Use a passkey';
+      if (!authFlow.isUncertain(attempt)) {
+        authFlow.finish(attempt);
+        authSessionPending(false);
+        clearAuthSecrets();
+        registerSubmit.disabled = false;
+        registerPasskeyBtn.disabled = false;
+        registerSubmit.textContent = 'Create Account';
+      }
     }
-  }, 'Could not complete passkey sign-in'),
+  }, 'Could not complete registration'),
+);
+
+async function submitPasskey(registration: boolean): Promise<void> {
+  const email = (registration ? registerEmail : loginEmail).value.trim();
+  const displayName = registerName.value.trim();
+  const errorNode = registration ? registerError : loginError;
+  const passkeyButton = registration ? registerPasskeyBtn : loginPasskeyBtn;
+  const passwordButton = registration ? registerSubmit : loginSubmit;
+  if (!email || (registration && !displayName)) {
+    errorNode.textContent = registration
+      ? 'Fill in email and display name first'
+      : 'Enter your email first';
+    errorNode.hidden = false;
+    return;
+  }
+  const attempt = authFlow.begin(false);
+  if (!attempt) return;
+  errorNode.hidden = true;
+  passkeyButton.disabled = true;
+  passwordButton.disabled = true;
+  passkeyButton.textContent = 'Waiting for passkey...';
+  let completed = false;
+  try {
+    let credential: Credential | null;
+    if (registration) {
+      const options = await telemetry.measure('passkey_register_start', () =>
+        auth.passkeyRegisterStart(email, displayName, attempt.controller.signal),
+      );
+      if (!authFlow.current(attempt)) return;
+      credential = await telemetry.measure('passkey_register_ceremony', async () => {
+        const result = await navigator.credentials.create({
+          ...options,
+          signal: attempt.controller.signal,
+        });
+        if (!result) throw new DOMException('Passkey cancelled or timed out', 'NotAllowedError');
+        return result;
+      });
+    } else {
+      const options = await telemetry.measure('passkey_login_start', () =>
+        auth.passkeyLoginStart(email, attempt.controller.signal),
+      );
+      if (!authFlow.current(attempt)) return;
+      credential = await telemetry.measure('passkey_login_ceremony', async () => {
+        const result = await navigator.credentials.get({
+          ...options,
+          signal: attempt.controller.signal,
+        });
+        if (!result) throw new DOMException('Passkey cancelled or timed out', 'NotAllowedError');
+        return result;
+      });
+    }
+    if (!authFlow.current(attempt)) return;
+    if (!credential) throw new DOMException('Passkey cancelled or timed out', 'NotAllowedError');
+    if (!authFlow.establish(attempt)) return;
+    authSessionPending(true);
+    passkeyButton.textContent = registration ? 'Creating account...' : 'Signing in...';
+    if (registration)
+      await telemetry.measure('passkey_register_finish', () =>
+        auth.passkeyRegisterFinish(credential),
+      );
+    else await telemetry.measure('passkey_login_finish', () => auth.passkeyLoginFinish(credential));
+    if (authFlow.finish(attempt)) {
+      completed = true;
+      dismissAuth();
+      loginEmail.value = '';
+      registerEmail.value = '';
+      registerName.value = '';
+    }
+  } catch (error) {
+    showAuthFailure(
+      attempt,
+      errorNode,
+      error,
+      passkeyErrorMessage(
+        error,
+        registration ? 'Passkey registration failed' : 'Passkey sign-in failed',
+      ),
+    );
+  } finally {
+    if (!authFlow.isUncertain(attempt) && (authFlow.current(attempt) || completed)) {
+      authFlow.finish(attempt);
+      authSessionPending(false);
+      clearAuthSecrets();
+      passkeyButton.disabled = false;
+      passwordButton.disabled = false;
+      passkeyButton.textContent = registration ? 'Register with passkey' : 'Use a passkey';
+    }
+  }
+}
+loginPasskeyBtn.addEventListener(
+  'click',
+  asyncUiAction(() => submitPasskey(false), 'Could not complete passkey sign-in'),
+);
+registerPasskeyBtn.addEventListener(
+  'click',
+  asyncUiAction(() => submitPasskey(true), 'Could not complete passkey registration'),
 );
 
 function passkeyErrorMessage(error: unknown, fallback: string): string {
@@ -1154,108 +1375,88 @@ function passkeyErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-loginToRegister.addEventListener('click', () => {
-  loginModal.hidden = true;
-  registerModal.hidden = false;
-});
+function dismissCreateRoom(): void {
+  createRoomModal.hidden = true;
+  crPassword.value = '';
+  createRoomError.hidden = true;
+  createRoomError.textContent = '';
+}
 
-// Register
-registerClose.addEventListener('click', () => {
-  registerModal.hidden = true;
-});
-registerModal.addEventListener('click', (e) => {
-  if (e.target === registerModal) registerModal.hidden = true;
-});
+/** Owned, masked, disposable prompt; closing resolves cancellation exactly once. */
+function requestRoomPassword(owner: RoomClient, reconnecting = false): Promise<string | null> {
+  if (room !== owner) return Promise.resolve(null);
+  roomPasswordView?.cancel();
+  const membership = owner.membershipVersion;
+  const view = modal(reconnecting ? 'Reconnect to room' : 'Room password');
+  const field = el('input');
+  field.type = 'password';
+  field.autocomplete = 'current-password';
+  field.maxLength = 256;
+  field.id = 'join-room-password';
+  const label = el('label', 'Room password');
+  label.htmlFor = field.id;
+  const form = el('form');
+  const submit = el('button', reconnecting ? 'Reconnect' : 'Join room', 'btn-primary');
+  submit.type = 'submit';
+  form.append(label, field, submit);
+  view.body.append(form);
+  field.focus();
+  const ownedView = {
+    cancel: (): void => {
+      field.value = '';
+      view.close();
+    },
+  };
+  roomPasswordView = ownedView;
+  return new Promise((resolve) => {
+    let answer: string | null = null;
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      answer = field.value;
+      field.value = '';
+      view.close();
+    });
+    view.dialog.addEventListener(
+      'close',
+      () => {
+        field.value = '';
+        if (roomPasswordView === ownedView) roomPasswordView = null;
+        resolve(room === owner && owner.membershipVersion === membership ? answer : null);
+      },
+      { once: true },
+    );
+  });
+}
 
-registerSubmit.addEventListener(
-  'click',
-  asyncUiAction(async () => {
-    registerError.hidden = true;
-    if (registerPassword.value !== registerConfirm.value) {
-      registerError.textContent = 'Passwords do not match';
-      registerError.hidden = false;
-      return;
+/** A password prompt belongs to the exact room membership that requested it. */
+async function joinRoomWithPassword(
+  owner: RoomClient,
+  roomId: string,
+  name: string,
+): Promise<'joined' | 'lobby' | null> {
+  try {
+    return await owner.join(roomId, name);
+  } catch (error) {
+    if (room !== owner) return null;
+    if (!(error instanceof RoomPasswordRequiredError)) throw error;
+    const membership = owner.membershipVersion;
+    const password = await requestRoomPassword(owner);
+    if (room !== owner || owner.membershipVersion !== membership) return null;
+    if (password === null) {
+      await leaveCurrentRoom();
+      return null;
     }
-    if (registerPassword.value.length < 8) {
-      registerError.textContent = 'Password must be at least 8 characters';
-      registerError.hidden = false;
-      return;
-    }
-    registerSubmit.disabled = true;
-    registerPasskeyBtn.disabled = true;
-    registerSubmit.textContent = 'Creating account...';
-    try {
-      await auth.register(
-        registerEmail.value.trim(),
-        registerName.value.trim(),
-        registerPassword.value,
-      );
-      registerModal.hidden = true;
-      registerEmail.value = '';
-      registerName.value = '';
-      registerPassword.value = '';
-      registerConfirm.value = '';
-    } catch (e) {
-      registerError.textContent = e instanceof Error ? e.message : 'Registration failed';
-      registerError.hidden = false;
-    } finally {
-      registerSubmit.disabled = false;
-      registerPasskeyBtn.disabled = false;
-      registerSubmit.textContent = 'Create Account';
-    }
-  }, 'Could not complete registration'),
-);
-
-registerPasskeyBtn.addEventListener(
-  'click',
-  asyncUiAction(async () => {
-    if (registerPasskeyBtn.disabled) return;
-    const email = registerEmail.value.trim();
-    const displayName = registerName.value.trim();
-    if (!email || !displayName) {
-      registerError.textContent = 'Fill in email and display name first';
-      registerError.hidden = false;
-      return;
-    }
-    registerError.hidden = true;
-    registerPasskeyBtn.disabled = true;
-    registerSubmit.disabled = true;
-    registerPasskeyBtn.textContent = 'Waiting for passkey...';
-    try {
-      const options = await auth.passkeyRegisterStart(email, displayName);
-      const credential = await navigator.credentials.create(options);
-      if (!credential) throw new Error('Passkey registration cancelled');
-      await auth.passkeyRegisterFinish(credential);
-      registerModal.hidden = true;
-      registerEmail.value = '';
-      registerName.value = '';
-      registerPassword.value = '';
-      registerConfirm.value = '';
-    } catch (e) {
-      registerError.textContent = passkeyErrorMessage(e, 'Passkey registration failed');
-      registerError.hidden = false;
-    } finally {
-      registerPasskeyBtn.disabled = false;
-      registerSubmit.disabled = false;
-      registerPasskeyBtn.textContent = 'Register with passkey';
-    }
-  }, 'Could not complete passkey registration'),
-);
-
-registerToLogin.addEventListener('click', () => {
-  registerModal.hidden = true;
-  loginModal.hidden = false;
-});
+    return owner.join(roomId, name, password);
+  }
+}
 
 // --- Create Room ---
 createRoomBtn.addEventListener('click', () => {
   if (auth.isLoggedIn) createRoomModal.hidden = false;
 });
-createRoomClose.addEventListener('click', () => {
-  createRoomModal.hidden = true;
-});
+createRoomClose.addEventListener('click', dismissCreateRoom);
 createRoomModal.addEventListener('click', (e) => {
-  if (e.target === createRoomModal) createRoomModal.hidden = true;
+  if (e.target === createRoomModal) dismissCreateRoom();
 });
 
 createRoomSubmit.addEventListener(
@@ -1291,7 +1492,7 @@ createRoomSubmit.addEventListener(
 
       await api.createRoom(auth.jwt, body);
 
-      createRoomModal.hidden = true;
+      dismissCreateRoom();
       // Auto-join the created room
       roomInput.value = id;
       if (auth.displayName && !nameInput.value.trim()) {
@@ -1333,8 +1534,11 @@ joinBtn.addEventListener(
     localTextMuted = false;
     roomRecovering = false;
 
+    let joiningRoom: RoomClient | null = null;
     try {
+      roomPasswordView?.cancel();
       room = new RoomClient(signaling, {
+        onTelemetry: telemetry.record,
         onBackgroundError: (message) => showToast(message),
         onParticipantsChanged: (participants) => {
           observeUiTask(socialChat.activate(), 'Could not refresh room conversations');
@@ -1568,32 +1772,17 @@ joinBtn.addEventListener(
             }
           }
         },
-        onPasswordRequired: async () => prompt('The room password is required to reconnect:'),
+        onPasswordRequired: () =>
+          joiningRoom ? requestRoomPassword(joiningRoom, true) : Promise.resolve(null),
         onRoomClosed: (reason) => {
           observeUiTask(leaveCurrentRoom(), 'Could not finish leaving the room');
           showToast(reason, 8000);
         },
       });
 
-      let status: 'joined' | 'lobby';
-      try {
-        status = await room.join(roomId, name);
-      } catch (e) {
-        // Password-protected room: ask once and retry
-        if (e instanceof RoomPasswordRequiredError) {
-          const pw = prompt('This room requires a password:');
-          if (pw === null) {
-            room = null;
-            joinBtn.disabled = false;
-            joinBtn.textContent = 'Join Room';
-            updateJoinBtn();
-            return;
-          }
-          status = await room.join(roomId, name, pw);
-        } else {
-          throw e;
-        }
-      }
+      joiningRoom = room;
+      const status = await joinRoomWithPassword(joiningRoom, roomId, name);
+      if (room !== joiningRoom || status === null) return;
 
       if (status === 'lobby') {
         // onLobbyWaiting already switched to the lobby screen. Room UI is applied
@@ -1605,11 +1794,14 @@ joinBtn.addEventListener(
       roomScreen.hidden = false;
       applyJoinedRoomUI();
     } catch (e) {
+      if (room !== joiningRoom) return;
+      await leaveCurrentRoom();
+      if (room) return;
       console.error('Failed to join:', e);
       alert(`Failed to join: ${e instanceof Error ? e.message : String(e)}`);
-      room = null;
       joinBtn.disabled = false;
       joinBtn.textContent = 'Join Room';
+      updateJoinBtn();
     }
   }, 'Could not complete joining the room'),
 );
@@ -1710,6 +1902,8 @@ function leaveCurrentRoom(): Promise<void> {
 }
 
 async function leaveRoomAndShowHome(): Promise<void> {
+  roomPasswordView?.cancel();
+  roomPasswordView = null;
   roomTopicView?.close();
   document.getElementById('room-recovery-notice')?.remove();
   pttDeactivate();
@@ -2132,6 +2326,9 @@ handBtn.addEventListener('click', () => {
 
 // --- Room Settings Modal ---
 configureSettingsDialog(roomSettingsModal);
+roomSettingsModal.addEventListener('close', () => {
+  rsPassword.value = '';
+});
 roomSettingsBtn.addEventListener('click', () => {
   populateRoomSettingsModal();
   roomSettingsModal.showModal();
@@ -2528,6 +2725,7 @@ function renderRemoteTrack(
       video.playsInline = true;
       tile.insertBefore(video, tile.firstChild);
     }
+    observeFirstVideoFrame(video, telemetry.record);
     video.srcObject = new MediaStream([track]);
     if (!isScreen) observeTileSize(tileKey, participantId, video);
     const avatar = tile.querySelector('.no-video-avatar') as HTMLElement | null;
@@ -2650,9 +2848,8 @@ document.addEventListener('keydown', (e) => {
   if (key === 'escape') {
     // Native dialogs handle Escape themselves, including preview cleanup and focus restoration.
     if (document.querySelector('dialog[open]')) return;
-    loginModal.hidden = true;
-    registerModal.hidden = true;
-    createRoomModal.hidden = true;
+    dismissAuth();
+    dismissCreateRoom();
     document.getElementById('mod-menu')?.remove();
     return;
   }
@@ -2690,3 +2887,47 @@ document.addEventListener('keyup', (e) => {
 window.addEventListener('blur', () => {
   if (pttHeld) pttDeactivate();
 });
+
+const diagnosticsButton = button(
+  'Diagnostics',
+  () => {
+    const view = modal('Diagnostic summary');
+    view.body.append(
+      el(
+        'p',
+        'Review this summary before copying it to support. Its reference identifies this local report, not a server session. It contains app events, browser family and release information; it excludes names, messages, credentials and network addresses.',
+      ),
+    );
+    const sharing = el('input');
+    sharing.type = 'checkbox';
+    sharing.checked = telemetry.sharingEnabled;
+    sharing.addEventListener('change', () => telemetry.setSharing(sharing.checked));
+    const sharingLabel = el('label', ' Share anonymous reliability measurements');
+    sharingLabel.prepend(sharing);
+    view.body.append(
+      sharingLabel,
+      el(
+        'p',
+        'Optional. Sends fixed event categories and timings to this server without account, room or support identifiers. Media measurements run only while enabled and the page is visible. Turning this off discards queued uploads.',
+      ),
+    );
+    const preview = el('textarea');
+    preview.readOnly = true;
+    preview.rows = 16;
+    preview.value = telemetry.summary();
+    preview.setAttribute('aria-label', 'Diagnostic summary preview');
+    const copy = button('Copy summary', () => {
+      navigator.clipboard
+        .writeText(preview.value)
+        .then(() => showToast('Diagnostic summary copied'))
+        .catch(() => {
+          preview.focus();
+          preview.select();
+        });
+    });
+    view.body.append(preview, copy);
+  },
+  'auth-link-btn',
+);
+diagnosticsButton.id = 'diagnostics-btn';
+document.querySelector('.header-right')!.prepend(diagnosticsButton);
