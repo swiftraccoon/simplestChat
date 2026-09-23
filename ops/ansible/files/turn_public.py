@@ -29,7 +29,9 @@ CONFIG = Path("/etc/simplestchat-turn")
 CERTIFICATES = Path("/srv/simplestchat-public/caddy-data/caddy/certificates")
 RELAY_GID = 10002
 MAX_CERTIFICATE = 65536
+MAX_CERTIFICATE_AUTHORITIES = 64
 CONTAINER_IDENTITY_FIELDS = 2
+SOURCE_OWNERS = frozenset((0, 10001))
 
 
 def settings() -> JsonObject:
@@ -67,60 +69,135 @@ def settings() -> JsonObject:
     return result
 
 
-def certificate_source(domain: str) -> tuple[Path, Path]:
-    """Select Caddy's most recently written certificate for this exact hostname."""
-    choices = sorted(
-        CERTIFICATES.glob(f"*/{domain}/{domain}.crt"),
-        key=lambda path: path.stat().st_mtime_ns,
-        reverse=True,
+def _source_directory(path: Path) -> int:
+    """Open each directory component without following Caddy-controlled links."""
+    descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        for component in path.parts[1:]:
+            child = os.open(
+                component,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                dir_fd=descriptor,
+            )
+            os.close(descriptor)
+            descriptor = child
+            metadata = os.fstat(descriptor)
+            release.require(
+                metadata.st_uid in SOURCE_OWNERS and not metadata.st_mode & 0o022,
+                "Unsafe certificate directory",
+            )
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def read_certificate_file(directory: int, name: str, *, private_key: bool) -> tuple[bytes, int]:
+    """Read one opened regular file with a hard bound, including if it grows."""
+    descriptor = os.open(
+        name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=directory
     )
-    release.require(choices, "Caddy has not issued the relay hostname certificate")
-    certificate = choices[0]
-    key = certificate.with_suffix(".key")
-    release.require(
-        stat.S_IMODE(key.lstat().st_mode) in (0o400, 0o600), "Unsafe source key permissions"
-    )
-    for path in (certificate, key):
-        metadata = path.lstat()
+    try:
+        metadata = os.fstat(descriptor)
         release.require(
             stat.S_ISREG(metadata.st_mode)
-            and metadata.st_uid in (0, 10001)
+            and metadata.st_uid in SOURCE_OWNERS
             and not metadata.st_mode & 0o022
             and 0 < metadata.st_size <= MAX_CERTIFICATE,
             "Unsafe certificate source",
         )
-        for parent in path.parents:
-            if parent == CERTIFICATES.parent:
+        if private_key:
+            release.require(
+                stat.S_IMODE(metadata.st_mode) in (0o400, 0o600), "Unsafe source key permissions"
+            )
+        data = bytearray()
+        while len(data) <= MAX_CERTIFICATE:
+            chunk = os.read(descriptor, MAX_CERTIFICATE + 1 - len(data))
+            if not chunk:
                 break
-            release.require(not parent.is_symlink(), "Symlink in certificate source")
-    return certificate, key
+            data.extend(chunk)
+        release.require(0 < len(data) <= MAX_CERTIFICATE, "Oversized or empty certificate source")
+        return bytes(data), metadata.st_mtime_ns
+    finally:
+        os.close(descriptor)
+
+
+def certificate_source(domain: str) -> tuple[bytes, bytes]:
+    """Snapshot the newest exact-hostname pair using bounded descriptor reads."""
+    # The configured domain has already passed TurnConfiguration validation.
+    _ = release.TurnConfiguration(domain=domain, secret="0" * 64).environment()
+    root = _source_directory(CERTIFICATES)
+    newest: tuple[int, bytes, bytes] | None = None
+    try:
+        with os.scandir(root) as entries:
+            for index, entry in enumerate(entries):
+                release.require(
+                    index < MAX_CERTIFICATE_AUTHORITIES, "Too many certificate authorities"
+                )
+                issuer = os.open(
+                    entry.name,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    dir_fd=root,
+                )
+                try:
+                    try:
+                        host = os.open(
+                            domain,
+                            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                            dir_fd=issuer,
+                        )
+                    except FileNotFoundError:
+                        continue
+                    try:
+                        certificate, modified = read_certificate_file(
+                            host, f"{domain}.crt", private_key=False
+                        )
+                        key, _ = read_certificate_file(host, f"{domain}.key", private_key=True)
+                    finally:
+                        os.close(host)
+                finally:
+                    os.close(issuer)
+                if newest is None or modified > newest[0]:
+                    newest = (modified, certificate, key)
+    finally:
+        os.close(root)
+    release.require(newest is not None, "Caddy has not issued the relay hostname certificate")
+    if newest is None:
+        message = "No certificate snapshot"
+        raise release.ReleaseError(message)
+    return newest[1], newest[2]
 
 
 def publish_certificate(runner: release.RunnerProtocol, domain: str) -> bool:
-    """Validate the matching trusted pair, then atomically select a private copy."""
-    certificate, key = certificate_source(domain)
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.load_cert_chain(certificate, key)
-    _ = runner.run(
-        ["/usr/bin/openssl", "x509", "-in", str(certificate), "-checkend", "86400", "-noout"]
-    )
-    _ = runner.run(
-        [
-            "/usr/bin/openssl",
-            "verify",
-            "-purpose",
-            "sslserver",
-            "-verify_hostname",
-            domain,
-            "-CAfile",
-            "/etc/ssl/certs/ca-certificates.crt",
-            "-untrusted",
-            str(certificate),
-            str(certificate),
-        ]
-    )
-    certificate_data = certificate.read_bytes()
-    key_data = key.read_bytes()
+    """Validate private immutable snapshots and publish those exact same bytes."""
+    certificate_data, key_data = certificate_source(domain)
+    # Source owners cannot change these root-owned copies while OpenSSL reads
+    # them. A concurrent renewal can only produce an invalid pair that is rejected.
+    with tempfile.TemporaryDirectory(prefix=".certificate-", dir=CONFIG) as temporary:
+        snapshot = Path(temporary)
+        certificate, key = snapshot / "certificate.pem", snapshot / "key.pem"
+        release.atomic(certificate, certificate_data)
+        release.atomic(key, key_data)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certificate, key)
+        _ = runner.run(
+            ["/usr/bin/openssl", "x509", "-in", str(certificate), "-checkend", "86400", "-noout"]
+        )
+        _ = runner.run(
+            [
+                "/usr/bin/openssl",
+                "verify",
+                "-purpose",
+                "sslserver",
+                "-verify_hostname",
+                domain,
+                "-CAfile",
+                "/etc/ssl/certs/ca-certificates.crt",
+                "-untrusted",
+                str(certificate),
+                str(certificate),
+            ]
+        )
     generation = hashlib.sha256(certificate_data).hexdigest()
     tls = CONFIG / "tls"
     release.protected(tls, directory=True, modes=(0o750,))
@@ -243,6 +320,96 @@ def refresh_certificate(runner: release.RunnerProtocol, domain: str) -> bool:
     return changed
 
 
+METRICS_OPTIONS = "prometheus\nprometheus-address=127.0.0.1\nprometheus-port=9641\n"
+
+
+def verify_metrics(runner: release.RunnerProtocol) -> None:
+    """Require a real loopback-only metrics listener and native allocation counters."""
+    # The exact configuration below selects loopback. The socket listing proves
+    # the executable honored it; a wildcard listener is never accepted.
+    listeners = runner.run(["/usr/bin/ss", "-H", "-ltn", "sport = :9641"]).decode().splitlines()
+    release.require(
+        len(listeners) == 1 and listeners[0].split()[3] == "127.0.0.1:9641",
+        "Relay metrics must listen only on loopback",
+    )
+    metrics = runner.run(
+        [
+            "/usr/bin/curl",
+            "--silent",
+            "--show-error",
+            "--fail",
+            "--max-time",
+            "3",
+            "--noproxy",
+            "*",
+            "http://127.0.0.1:9641/metrics",
+        ]
+    )
+    release.require(b"turn_total_allocations" in metrics, "Relay allocation metrics missing")
+
+
+def enable_metrics(runner: release.RunnerProtocol, domain: str) -> bool:
+    """Replace only the relay with three reviewed metrics options and bounded rollback."""
+    identity = relay_container(runner)
+    original = (CONFIG / "turnserver.conf").read_bytes()
+    selected = (CONFIG / "settings.json").read_bytes()
+    if original.endswith(METRICS_OPTIONS.encode()):
+        verify_metrics(runner)
+        return False
+    release.require(
+        not any(line.startswith(b"prometheus") for line in original.splitlines()),
+        "Unexpected existing relay metrics options",
+    )
+    help_text = runner.docker("exec", identity, "/usr/bin/turnserver", "--help")
+    release.require(
+        b"--prometheus-address" in help_text, "Relay binary lacks bounded metrics support"
+    )
+    # Neither a TLS reload nor HUP activates the new HTTP listener: one explicit
+    # relay replacement is necessary. Auth, certificates and public ports stay fixed.
+    release.atomic(runner.attempt / "before-turnserver.conf", original)
+    release.atomic(runner.attempt / "before-settings.json", selected)
+    updated = original.rstrip(b"\n") + b"\n" + METRICS_OPTIONS.encode()
+    metadata = object_value(decode_json(selected))
+    metadata["configurationSha256"] = hashlib.sha256(updated).hexdigest()
+
+    def replace() -> None:
+        _ = runner.docker(
+            "compose",
+            "--project-name",
+            "simplestchat-turn",
+            "--project-directory",
+            str(CONFIG),
+            "-f",
+            str(CONFIG / "compose.yml"),
+            "up",
+            "--detach",
+            "--no-deps",
+            "--no-build",
+            "--pull",
+            "never",
+            "--force-recreate",
+            "turn",
+        )
+        _ = relay_container(runner)
+        verify_tls(domain)
+
+    try:
+        release.atomic(CONFIG / "turnserver.conf", updated)
+        os.chown(CONFIG / "turnserver.conf", 0, RELAY_GID)
+        (CONFIG / "turnserver.conf").chmod(0o440)
+        release.atomic(CONFIG / "settings.json", metadata)
+        replace()
+        verify_metrics(runner)
+    except BaseException:
+        release.atomic(CONFIG / "turnserver.conf", original)
+        os.chown(CONFIG / "turnserver.conf", 0, RELAY_GID)
+        (CONFIG / "turnserver.conf").chmod(0o440)
+        release.atomic(CONFIG / "settings.json", selected)
+        replace()
+        raise
+    return True
+
+
 def activate(runner: release.RunnerProtocol, domain: str, report: JsonObject) -> None:
     """Enable the already verified relay through the bounded app replacement."""
     release.protected(CONFIG / "secret", limit=64)
@@ -282,7 +449,8 @@ def main() -> None:
     """Perform one explicitly selected relay operation with private evidence."""
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument(
-        "action", choices=("prepare-certificate", "refresh-certificate", "activate")
+        "action",
+        choices=("prepare-certificate", "refresh-certificate", "activate", "enable-metrics"),
     )
     arguments = parser.parse_args(namespace=_Arguments())
     release.require(os.geteuid() == 0, "Run as root on the prepared public host")
@@ -305,7 +473,11 @@ def main() -> None:
             "passed": False,
         }
         try:
-            if arguments.action == "prepare-certificate":
+            if arguments.action == "enable-metrics":
+                report["metricsChanged"] = enable_metrics(runner, domain)
+                if report["metricsChanged"]:
+                    _ = sys.stdout.write("Relay metrics enabled\n")
+            elif arguments.action == "prepare-certificate":
                 report["certificateChanged"] = publish_certificate(runner, domain)
             else:
                 report["certificateChanged"] = refresh_certificate(runner, domain)

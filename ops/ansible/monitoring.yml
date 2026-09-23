@@ -1,0 +1,235 @@
+---
+- name: Install private bounded production monitoring without replacing public services
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: true
+  serial: 1
+  pre_tasks:
+    - name: Require an explicitly selected supported public deployment
+      ansible.builtin.assert:
+        that:
+          - scmon_enabled | bool
+          - scpub_enabled | bool
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - scpub_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+          - scmon_prometheus_image is match('^quay.io/prometheus/prometheus:v3.14.0@sha256:[a-f0-9]{64}$')
+          - scmon_node_exporter_image is match('^quay.io/prometheus/node-exporter:v1.12.1@sha256:[a-f0-9]{64}$')
+    - name: Refuse monitoring setup during unfinished owned host operations
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -E
+          - -B
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/release_preflight.py', rstrip=false) }}"
+          - '{}'
+      changed_when: false
+      check_mode: false
+  tasks:
+    - name: Create private monitoring configuration and bounded persistent state
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: '10003'
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: /etc/simplestchat-monitoring, owner: root, mode: '0750'}
+        - {path: /var/lib/simplestchat-monitoring, owner: root, mode: '0750'}
+        - {path: /var/lib/simplestchat-monitoring/prometheus, owner: '10003', mode: '0700'}
+        - {path: /var/lib/simplestchat-monitoring/textfile, owner: root, mode: '0755'}
+        - {path: /var/lib/simplestchat-monitoring/spool, owner: root, mode: '0700'}
+        - {path: /etc/systemd/journald.conf.d, owner: root, mode: '0755'}
+
+    - name: Read only the prepared metrics token into the collector credential file
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -E
+          - -c
+          - |
+            import os, re
+            from pathlib import Path
+            lines = Path('/etc/simplestchat-public/app.env').read_text().splitlines()
+            values = dict(line.split('=', 1) for line in lines if '=' in line and not line.startswith('#'))
+            token = values['METRICS_TOKEN']
+            if not re.fullmatch('[a-f0-9]{64}', token):
+                raise SystemExit('Invalid prepared metrics token')
+            path = Path('/etc/simplestchat-monitoring/metrics-token')
+            changed = not path.exists() or path.read_text() != token
+            if changed:
+                with path.open('w') as output:
+                    output.write(token)
+            os.chown(path, 0, 10003)
+            path.chmod(0o440)
+            print('changed' if changed else 'retained')
+      no_log: true
+      register: scmon_token
+      changed_when: scmon_token.stdout == 'changed'
+      when: not ansible_check_mode
+
+    - name: Install fixed monitoring settings without credentials
+      ansible.builtin.copy:
+        content: "{{ {'domain': scpub_domain} | to_nice_json }}\n"
+        dest: /etc/simplestchat-monitoring/settings.json
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Render the private monitoring stack and scrape configuration
+      ansible.builtin.template:
+        src: "{{ item.source }}"
+        dest: "{{ item.destination }}"
+        owner: root
+        group: '10003'
+        mode: '0440'
+      loop:
+        - {source: monitoring-compose.yml.j2, destination: /etc/simplestchat-monitoring/compose.yml}
+        - {source: monitoring-prometheus.yml.j2, destination: /etc/simplestchat-monitoring/prometheus.yml}
+
+    - name: Install fixed operational alert rules
+      ansible.builtin.copy:
+        src: monitoring-alerts.yml
+        dest: /etc/simplestchat-monitoring/alerts.yml
+        owner: root
+        group: '10003'
+        mode: '0440'
+
+    - name: Install bounded collector and private incident recorder
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - monitoring_collect.py
+        - monitoring_alerts.py
+        - monitoring_prepare.py
+        - monitoring-alerts.sql
+        - monitoring-schema.sql
+        - turn_public.py
+        - release_public.py
+        - release_artifact.py
+        - release_json.py
+
+    - name: Install hardened certificate refresh without replacing the public proxy
+      ansible.builtin.template:
+        src: turn-certificate.service.j2
+        dest: /etc/systemd/system/simplestchat-turn-certificate.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload monitoring units
+
+    - name: Enable native relay metrics through the reviewed relay-only transaction
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, -E, -B, /usr/local/libexec/simplestchat-public/turn_public.py, enable-metrics]
+      register: scmon_turn
+      changed_when: "'Relay metrics enabled' in scmon_turn.stdout"
+
+    - name: Back up the database and prepare only the private versioned operations schema
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, -E, -B, /usr/local/libexec/simplestchat-public/monitoring_prepare.py]
+      register: scmon_schema
+      changed_when: scmon_schema.stdout == 'created'
+
+    - name: Install collector units
+      ansible.builtin.template:
+        src: "monitoring-collector.{{ item }}.j2"
+        dest: "/etc/systemd/system/simplestchat-monitoring.{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: [service, timer]
+      notify: Reload monitoring units
+
+    - name: Persist the bounded host journal across application replacement
+      ansible.builtin.template:
+        src: monitoring-journal.conf.j2
+        dest: /etc/systemd/journald.conf.d/simplestchat-retention.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload persistent journal
+
+    - name: Pull only reviewed immutable monitoring images
+      ansible.builtin.command:
+        argv: [/usr/bin/docker, --host, 'unix:///var/run/docker.sock', image, pull, "{{ item }}"]
+      loop: ["{{ scmon_prometheus_image }}", "{{ scmon_node_exporter_image }}"]
+      register: scmon_pull
+      changed_when: "'Downloaded newer image' in scmon_pull.stdout"
+
+    - name: Validate scrape configuration and operational alert expressions
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/docker
+          - --host
+          - unix:///var/run/docker.sock
+          - run
+          - --rm
+          - --network=none
+          - --read-only
+          - --cap-drop=ALL
+          - --security-opt=no-new-privileges:true
+          - --user=10003:10003
+          - --memory=128m
+          - --cpus=0.25
+          - --volume=/etc/simplestchat-monitoring:/etc/prometheus:ro
+          - --entrypoint=/bin/promtool
+          - "{{ scmon_prometheus_image }}"
+          - check
+          - config
+          - /etc/prometheus/prometheus.yml
+      changed_when: false
+
+    - name: Start only the separately owned monitoring project
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/docker
+          - --host
+          - unix:///var/run/docker.sock
+          - compose
+          - --project-directory
+          - /etc/simplestchat-monitoring
+          - -f
+          - /etc/simplestchat-monitoring/compose.yml
+          - up
+          - -d
+          - --no-build
+          - --pull
+          - never
+      register: scmon_start
+      changed_when: "'Started' in scmon_start.stderr or 'Created' in scmon_start.stderr or 'Recreated' in scmon_start.stderr"
+
+    - name: Apply collector unit changes before enabling its timer
+      ansible.builtin.meta: flush_handlers
+
+    - name: Request journal logging during the next verified application replacement
+      ansible.builtin.copy:
+        content: "1\n"
+        dest: /etc/simplestchat-monitoring/application-journal.enabled
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Enable the bounded collector timer
+      ansible.builtin.systemd_service:
+        name: simplestchat-monitoring.timer
+        enabled: true
+        state: started
+
+    - name: Collect the initial operational snapshot
+      ansible.builtin.systemd_service:
+        name: simplestchat-monitoring.service
+        state: started
+
+  handlers:
+    - name: Reload monitoring units
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+    - name: Reload persistent journal
+      ansible.builtin.systemd_service:
+        name: systemd-journald.service
+        state: restarted

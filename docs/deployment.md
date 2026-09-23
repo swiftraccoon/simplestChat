@@ -168,9 +168,31 @@ Alert on the rejection counters as well: `simplestchat_api_requests_rejected_tot
 
 **Saturation.** `simplestchat_cpu_saturated` is 1 while the process's cgroup is throttled for more than half of its enforcement periods or its CPU pressure exceeds the configured level; `/ready` returns 503 and fresh joins are refused (counted by `simplestchat_joins_refused_saturated_total`) until the signals fall below half the thresholds. `simplestchat_cpu_throttled_fraction` and `simplestchat_cpu_pressure_some_avg10` are the raw readings, and the two `_available` gauges say whether the cgroup files were readable. `simplestchat_media_worker_cpu{worker="N"}` is each media worker thread's share of one core over the same window and `simplestchat_media_worker_saturated{worker="N"}` is 1 while it exceeds `CPU_SATURATION_WORKER_UTILIZATION`: a router lives on one worker, so a single busy room can pin a core while the quota still shows headroom; rooms on that worker refuse fresh joins (same counter), new rooms are placed on another worker, and `/ready` fails only when every worker is saturated. Alert on the saturated gauges and on the refusal counter: all mean users were turned away and the host, the quota, the worker count or the connection limit needs revisiting. See [capacity](performance-results.md) for how the limit was chosen.
 
-**Media quality, server side.** Every `QUALITY_SAMPLE_INTERVAL_SECS` the server samples what the SFU itself knows from RTCP and its send path, with no client-reported data: `simplestchat_quality_consumer_score` and `simplestchat_quality_producer_score` (mediasoup's 0–10 transmission scores as histograms), `simplestchat_quality_video_consumers_by_spatial_layer{layer}` (which simulcast layer viewers are actually receiving), `simplestchat_quality_downlink_loss` (loss viewers reported through transport-cc, as a histogram over sampled receive transports) and `simplestchat_quality_available_outgoing_bitrate` (the estimate toward each sampled viewer). Alert on the share of consumers below score 7, on the share of transports above 2 percent loss, and on a falling share of viewers at the top layer while the estimate histogram is unchanged; these are the field signals behind the [adaptive path](performance.md#production-shape-and-impaired-networks) checks. `simplestchat_consumer_layer_requests_total` counts the worker requests that changed a consumer's preferred layers: the viewer's tile-size or manual ceiling and the server's bandwidth tier are merged server-side, so the count only rises when the applied layers change.
+**Media quality, server side.** The bounded sampler reports SFU transmission scores,
+spatial layers, receive-transport loss and outgoing bitrate estimates. Current
+score/loss/bitrate distributions are disjoint **gauges** labeled `upper_bound`,
+with gauge `_count` and `_sum`; they are not cumulative histogram buckets. Score
+boundaries are exact values 0–10; loss/bitrate boundaries describe nonoverlapping
+intervals. Never apply `rate()` or `histogram_quantile()` to these snapshots.
+Check `simplestchat_quality_sample_available`, sample age/duration/completeness and
+participant/transport coverage before interpreting any distribution. Failed or
+unrequested transports are unknown, not healthy samples. Partial samples are
+expected when the configured budget cannot cover every participant; persistent
+budget exhaustion needs investigation. The layer-change counter remains a
+monotonic count of worker requests that actually change preferred layers.
 
-**Canary.** The [Canary workflow](../.github/workflows/canary.yml) runs two owned headless Chromium clients against the deployment every six hours when the `CANARY_ORIGIN` and `CANARY_ROOM` repository variables are set: one publishes a fake camera, the other must decode video at the top layer without loss, and the evidence is retained as an artifact. Create a room reserved for it; the publisher's synthetic video is visible to anyone who joins that room.
+**Canary.** The [Canary workflow](../.github/workflows/canary.yml) runs two owned
+headless Chromium clients hourly, first on the normal path and then forced through
+TURN. Both must decode video at least ten frames per second, receive audio packets and
+keep video packet loss at or below two percent with no three-second decoded-frame
+stall. The normal scenario verifies a direct current selected ICE pair; the relay
+scenario verifies selected
+local candidate types. Local impairment tests retain their stricter zero-loss baseline.
+Canary clients explicitly leave before closing, preventing reconnect-grace overlap. Synthetic media uses a dedicated reserved room; configure
+`CANARY_ORIGIN` and `CANARY_ROOM`. Missing configuration fails visibly. The separate
+[availability workflow](../.github/workflows/availability.yml) checks public HTTPS
+readiness every ten minutes. GitHub schedules may be delayed and are not a
+sub-minute uptime guarantee. No workflow posts chat messages.
 
 Use `GET /health` for process liveness and `GET /ready` for load-balancer
 readiness. `/ready` returns 503 when no media capacity remains, a configured
@@ -239,3 +261,135 @@ and [development](development.md) for native build requirements.
 - Private messages and SFU media are not application-layer end-to-end encrypted.
   DTLS/SRTP protects media hops, but the server terminates them and is inside the
   trust boundary.
+
+## Private operational monitoring
+
+Apply the separately owned [monitoring playbook](../ops/ansible/monitoring.yml)
+with `scmon_enabled=true` on an already prepared production host. It installs
+pinned Prometheus and node-exporter containers without changing the public
+application, PostgreSQL or proxy. Prometheus listens only on `127.0.0.1:9090`,
+node-exporter on `127.0.0.1:9100`; neither is proxied publicly. Scrapes use the
+existing application bearer token through a private credential file. The
+monitoring containers never receive the Docker socket or database credentials.
+Prometheus has a 512 MB memory limit, 0.5 CPU quota, 15-day retention and a 1 GB
+TSDB retention target; allow additional space for its WAL and active head block.
+The app scrape permits 15,000 series; HTTP and client instrumentation cap stored
+series at 256 and 512 respectively and count discarded observations.
+`TelemetrySeriesDropped` reports incomplete instrumentation.
+Node-exporter has 64 MB and 0.1 CPU limits. Its host mount is read-only and its
+collector list is explicit. See [Prometheus storage bounds](https://prometheus.io/docs/prometheus/latest/storage/)
+and the [node-exporter textfile collector](https://github.com/prometheus/node_exporter#textfile-collector).
+
+A hardened root timer samples fixed host/container/database/TLS/evidence signals
+each minute and writes an atomic textfile. Docker inspection excludes environment
+variables, command lines and log payloads. Database reads are aggregate statistics;
+there are no user-row reads. Failed subsystems report explicit failure gauges;
+`CollectorStale` detects a failed or stopped timer instead of treating its previous
+snapshot as current. Release storage is measured without deleting any release or
+incident evidence. Plan cleanup by listing retained revisions, preserving the
+current and rollback releases and reviewing backup/evidence obligations first.
+
+Operational incidents are stored separately from application migrations in the
+root-owned PostgreSQL `operations` schema. Initial setup takes and checks a private
+custom-format database backup, then creates schema version 1 transactionally.
+The application and migration roles receive no access. The recorder polls firing
+Prometheus rules, retains only fixed rule/severity/resource fields and the release
+revision, and tracks first/last observation and resolution. Repeated snapshots
+are idempotent. An incomplete Prometheus response cannot resolve existing
+incidents. Resolved history is bounded to 30 days and the most recent 10,000 rows;
+active incidents are retained. There is no external alert delivery configured.
+
+During database failure the recorder keeps up to 1,440 snapshots, each at most
+64 KiB, in a root-only disk spool. It keeps the earliest and latest evidence when
+that cap is exceeded and exposes a durable discarded-snapshot counter. Replay is
+bounded per invocation; spool depth distinguishes backlog from a successful
+individual database write. A database failure itself is retained, including when
+a SQL commit succeeded but its response was lost. If the entire host is offline,
+local recording cannot run; the external GitHub availability workflow retains its
+own failure evidence. Same-host PostgreSQL history is not an off-host backup.
+
+Read incidents privately, without granting the web application access:
+
+```sh
+docker exec --user postgres simplestchat-public-postgres-1 \
+  psql -X -h /run/simplestchat-postgres -U postgres -d simplestchat \
+  -c 'SELECT rule, severity, resource, first_seen, last_seen, resolved_at, release_revision FROM operations.alerts ORDER BY last_seen DESC LIMIT 100;'
+```
+
+Use an SSH tunnel to view Prometheus; leave its unauthenticated administrative UI
+bound to loopback. Rules cover scrape availability, sample freshness, saturation
+refusals, worker deaths, database/container/host pressure, disk space, public
+readiness, TURN health, certificate expiry, backup age and collector/recorder
+health. Thresholds are operational starting points, not measured capacity claims.
+Backup freshness currently measures nonempty release backups; this is not a
+scheduled backup policy or proof of recovery. `RestoreEvidenceMissing` remains
+active until an operator performs an actual isolated restore, verifies it, and
+records that exercise by updating the root-only
+`/var/lib/simplestchat-monitoring/restore-verified.timestamp`. Do not update that
+file merely because an archive listing succeeded.
+
+### Logging and rollout order
+
+Application logs default to JSON and include the release identity. The maintained
+public Compose template uses journald for the application, with a 4 MB
+nonblocking Docker buffer. The monitoring playbook configures a persistent host
+journal bounded to 256 MB, 15 days and a 2 GB free-space reserve. This includes
+other host journal entries; check existing retention requirements before applying
+on a shared host. Docker's nonblocking buffer can drop records under sustained
+backpressure, and journald can suppress bursts. Neither is an audit-grade guarantee
+of complete delivery. Bounded application warning families export occurrence and
+suppression counters; inspect journal suppression notices as well.
+
+For an existing deployment, apply monitoring first. Its explicit protected
+`application-journal.enabled` marker asks the next verified application release
+to change only application logging alongside the immutable image. The release
+helper still verifies that the live configuration exactly matches disk before
+constructing the candidate, permits only the reviewed logging delta, and restores
+the original configuration during rollback. Do not manually edit the live Compose
+file to change logging: that correctly triggers the configuration-drift gate.
+There is one application replacement and no PostgreSQL or Caddy replacement.
+
+The monitoring playbook installs the reviewed `turn_public.py`, its dependencies
+and hardened certificate unit and invokes relay metrics activation. The equivalent
+manual action after installing those reviewed files is `python3 -E -B /usr/local/libexec/simplestchat-public/turn_public.py enable-metrics`.
+This transaction checks the existing relay identity and binary support, backs up
+the configuration, adds only the metrics listener settings, updates its protected
+configuration digest and replaces the TURN container once. Auth, certificates and
+public ports are preserved. It verifies TLS and the actual loopback-only 9641
+listener with native allocation metrics, restoring the previous configuration and
+relay on failure. Existing allocations are interrupted by this explicit replacement;
+no room-idle wait is imposed. Future full relay provisioning must set
+`scpub_turn_metrics_enabled=true` to preserve that configuration. Metrics never
+enable username labels. `turn_total_allocations` is a current gauge; finished-session
+traffic counters do not measure instantaneous in-flight bandwidth.
+
+### Browser diagnostics and privacy
+
+The Diagnostics checkbox opts the browser into reliability uploads and persists
+that preference as `reliabilityTelemetry`. Reports have fixed typed names and
+outcomes: no raw console output, exception text, room/account identifiers, chat
+contents, credentials, SDP or candidate addresses. The client bounds pending
+reports to 64, local history to 80 and batches to 16, flushes every ten seconds,
+uses a five-second request deadline and does not retry failed uploads. Per-event
+burst limits and dropped-event counts make loss visible. The server validates and
+rate-limits this untrusted telemetry; it never affects admission or media control.
+
+Copying a diagnostic summary is a separate user action. The preview contains UTC
+generation time, build revision, coarse browser family, fixed events and relative
+timings. Its temporary local reference rotates after 30 minutes and is not a
+server lookup key. A user can review the summary before sharing it.
+
+Visible opted-in calls sample at low frequency (15 seconds) with bounded native
+statistics requests. Unsupported/reset counters and silence remain unknown rather
+than fabricated zeroes. First-video-frame timing begins at remote track attachment
+and ends at the browser's first presented frame; it is not room-join latency.
+Server transport quality and browser receipt/playback measurements describe
+different stages and must not be substituted for one another.
+
+Keep `Authorization`, `Cookie`, `Set-Cookie` and `Sec-WebSocket-Protocol` headers,
+query strings and URL fragments out of custom proxy/APM/access logs. The supplied
+proxy does not enable raw access logging. The WebSocket subprotocol carries an
+access token. Existing email-first passkey initiation reveals whether an account
+has a passkey; a discoverable-credential migration requires compatibility testing
+because existing credentials may be nonresident. Artificial negative challenges
+alone do not guarantee indistinguishable responses.

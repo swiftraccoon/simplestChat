@@ -1,0 +1,60 @@
+name: simplestchat-monitoring
+services:
+  prometheus:
+    image: "{{ scmon_prometheus_image }}"
+    user: "10003:10003"
+    network_mode: host
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=1GB
+      - --web.listen-address=127.0.0.1:9090
+      - --query.max-concurrency=2
+      - --query.max-samples=1000000
+      - --query.timeout=10s
+    volumes:
+      - /etc/simplestchat-monitoring:/etc/prometheus:ro
+      - /var/lib/simplestchat-monitoring/prometheus:/prometheus
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: '0.5'
+    logging:
+      driver: local
+      options: {max-size: '5m', max-file: '2'}
+  node-exporter:
+    image: "{{ scmon_node_exporter_image }}"
+    user: "10004:10004"
+    network_mode: host
+    command:
+      - --web.listen-address=127.0.0.1:9100
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host
+      - --collector.disable-defaults
+      - --collector.cpu
+      - --collector.meminfo
+      - --collector.filesystem
+      - --collector.loadavg
+      - --collector.pressure
+      - --collector.time
+      - --collector.textfile
+      - --collector.textfile.directory=/textfile
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker)($|/)
+    volumes:
+      - /:/host:ro,rslave
+      - /var/lib/simplestchat-monitoring/textfile:/textfile:ro
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 64m
+    cpus: '0.1'
+    logging:
+      driver: local
+      options: {max-size: '5m', max-file: '2'}

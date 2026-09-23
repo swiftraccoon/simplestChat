@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from unittest.mock import patch
 
 from test_public_release import FixtureRunner
@@ -138,6 +138,69 @@ class TurnTemplateTests(unittest.TestCase):
 class TurnCertificateTests(unittest.TestCase):
     """Use real certificate/key parsing with only trust commands and root ownership stubbed."""
 
+    def test_descriptor_snapshot_has_hard_size_and_regular_file_bounds(self) -> None:
+        """Opened source validation rejects empty, oversized and growing file contents."""
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(turn, "SOURCE_OWNERS", {os.getuid()}),
+        ):
+            root = Path(directory)
+            key = root / "key.pem"
+            descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+            self.addCleanup(os.close, descriptor)
+            _ = key.write_bytes(b"fixture")
+            key.chmod(0o600)
+            data, _ = turn.read_certificate_file(descriptor, "key.pem", private_key=True)
+            self.assertEqual(data, b"fixture")
+            for content in (b"", b"x" * (turn.MAX_CERTIFICATE + 1)):
+                _ = key.write_bytes(content)
+                with self.assertRaises(release.ReleaseError):
+                    _ = turn.read_certificate_file(descriptor, "key.pem", private_key=True)
+            _ = key.write_bytes(b"fixture")
+            with (
+                patch.object(os, "read", return_value=b"x" * (turn.MAX_CERTIFICATE + 1)),
+                self.assertRaises(release.ReleaseError),
+            ):
+                _ = turn.read_certificate_file(descriptor, "key.pem", private_key=True)
+
+    def test_metrics_transition_preserves_configuration_and_rolls_back(self) -> None:
+        """Only fixed metrics settings change; failed readiness restores previous bytes."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "config"
+            config.mkdir()
+            source = config / "turnserver.conf"
+            original = b"static-auth-secret=fixture-secret\nlistening-port=3478\n"
+            _ = source.write_bytes(original)
+            metadata = config / "settings.json"
+            before = json.dumps(
+                {"configurationSha256": hashlib.sha256(original).hexdigest()}
+            ).encode()
+            _ = metadata.write_bytes(before)
+            runner = FixtureRunner(root, config)
+            with (
+                patch.object(turn, "CONFIG", config),
+                patch.object(turn, "relay_container", return_value="a" * 64),
+                patch.object(runner, "docker", return_value=b"--prometheus-address"),
+                patch.object(turn, "verify_tls"),
+                patch.object(turn, "verify_metrics"),
+                patch.object(os, "chown"),
+            ):
+                self.assertTrue(turn.enable_metrics(runner, "relay.example.test"))
+                self.assertEqual(source.read_bytes(), original + turn.METRICS_OPTIONS.encode())
+                self.assertFalse(turn.enable_metrics(runner, "relay.example.test"))
+                release.atomic(source, original)
+                _ = metadata.write_bytes(before)
+                with (
+                    patch.object(
+                        turn, "verify_metrics", side_effect=release.ReleaseError("fixture")
+                    ),
+                    self.assertRaises(release.ReleaseError),
+                ):
+                    _ = turn.enable_metrics(runner, "relay.example.test")
+                self.assertEqual(source.read_bytes(), original)
+                self.assertEqual(metadata.read_bytes(), before)
+
     def test_publication_selects_a_complete_private_pair_and_is_repeatable(self) -> None:
         """New pairs are readable by the relay group even under the root helper's 077 umask."""
         executable = shutil.which("openssl")
@@ -176,9 +239,17 @@ class TurnCertificateTests(unittest.TestCase):
             runner = FixtureRunner(root, config)
             previous_umask = os.umask(0o077)
             self.addCleanup(os.umask, previous_umask)
+
+            def source_bytes(_domain: str) -> tuple[bytes, bytes]:
+                return certificate.read_bytes(), key.read_bytes()
+
             with (
                 patch.object(turn, "CONFIG", config),
-                patch.object(turn, "certificate_source", return_value=(certificate, key)),
+                patch.object(
+                    turn,
+                    "certificate_source",
+                    side_effect=source_bytes,
+                ),
                 patch.object(release, "protected"),
                 patch.object(os, "chown"),
                 patch.object(runner, "run", return_value=b"OK") as commands,
@@ -193,21 +264,11 @@ class TurnCertificateTests(unittest.TestCase):
                 self.assertEqual((selected / "key.pem").read_bytes(), key.read_bytes())
                 self.assertEqual((selected / "key.pem").stat().st_mode & 0o777, 0o440)
                 self.assertFalse(turn.publish_certificate(runner, "relay.example.test"))
-                commands.assert_any_call(
-                    [
-                        "/usr/bin/openssl",
-                        "verify",
-                        "-purpose",
-                        "sslserver",
-                        "-verify_hostname",
-                        "relay.example.test",
-                        "-CAfile",
-                        "/etc/ssl/certs/ca-certificates.crt",
-                        "-untrusted",
-                        str(certificate),
-                        str(certificate),
-                    ]
-                )
+                # Verification consumes root-owned snapshots, never mutable source paths.
+                verify_call = cast("list[str]", commands.call_args_list[1].args[0])
+                self.assertNotEqual(verify_call[-1], str(certificate))
+                self.assertTrue(str(verify_call[-1]).startswith(str(config / ".certificate-")))
+                self.assertEqual(verify_call[-1], verify_call[-2])
                 selection = selected.readlink()
                 with (
                     patch.object(

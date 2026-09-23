@@ -28,7 +28,7 @@ jobs:
       - name: Install isolated controller checks
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-venv shellcheck jq
+          sudo apt-get install -y python3-venv shellcheck jq postgresql
           python3 -m venv "${RUNNER_TEMP}/ansible-controller"
           "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r build/python-requirements.txt
           echo "${RUNNER_TEMP}/ansible-controller/bin" >> "${GITHUB_PATH}"
@@ -44,8 +44,25 @@ jobs:
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/release.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/reboot.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/turn.yml --syntax-check
+          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/monitoring.yml --syntax-check
           shellcheck ops/ansible/files/*.sh
           python -m unittest discover -s ops/ansible/tests -v
+
+      - name: Verify operational alert history in disposable PostgreSQL
+        run: |
+          postgres_bindir="$(pg_config --bindir)"
+          export PATH="${postgres_bindir}:$PATH"
+          build/with-test-postgres.sh python -m unittest discover \
+            -s ops/ansible/tests -p test_monitoring_database.py -v
+
+      - name: Verify production alert rule behavior with pinned Prometheus
+        run: |
+          docker run --rm --network=none --read-only --cap-drop=ALL \
+            --security-opt=no-new-privileges:true --memory=128m --cpus=0.25 --pids-limit=64 \
+            --volume "$PWD/ops/ansible:/work:ro" --workdir /work/tests \
+            --entrypoint /bin/promtool \
+            quay.io/prometheus/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0 \
+            test rules monitoring-rules.test.yml
 
   rust-lint:
     name: Rust format, lints and documentation
@@ -286,8 +303,27 @@ jobs:
           npm --prefix web ci --ignore-scripts
           npm --prefix web run build
           npm --prefix web/e2e ci --ignore-scripts
-          npm --prefix web/e2e exec -- playwright install --with-deps chromium
+          npm --prefix web/e2e exec -- playwright install --with-deps chromium firefox
           npm --prefix web/e2e audit --audit-level=moderate
+
+      - name: Authentication dialog and diagnostic privacy in Chromium and Firefox
+        timeout-minutes: 4
+        env:
+          AUTH_LIFECYCLE_E2E: "1"
+        run: |
+          for browser in chromium firefox; do
+            E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/auth-lifecycle-${browser}" \
+              build/with-test-server.sh node web/e2e/auth-lifecycle.cjs
+          done
+
+      - name: Preserve authentication lifecycle diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: auth-lifecycle
+          path: ${{ runner.temp }}/auth-lifecycle-*
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Homepage containment and responsive layout
         timeout-minutes: 3

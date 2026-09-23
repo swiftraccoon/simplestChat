@@ -188,7 +188,7 @@ class FixtureRunner:
             raise public.ReleaseError(message)
         return b'{"status":"ready"}'
 
-    def compose(  # noqa: C901, PLR0911 - explicit fixture command allowlist; no permissive fallback.
+    def compose(  # noqa: C901, PLR0911, PLR0912 - explicit fixture command allowlist; no permissive fallback.
         self,
         *args: str,
         filename: Path | None = None,
@@ -226,6 +226,11 @@ class FixtureRunner:
                     "caddy": {"image": self.proxy["image"]},
                 }
             }
+            source = selected_file.read_text()
+            if "    logging: *bounded-logging" in source:
+                obj(rendered, "services", "simplestchat")["logging"] = public.LOCAL_LOGGING
+            if "      driver: journald" in source:
+                obj(rendered, "services", "simplestchat")["logging"] = public.JOURNAL_LOGGING
             selected_environment = self.config / "app.env"
             candidate_environment = re.search(
                 r'- "([^"]+/candidate.env)"', selected_file.read_text()
@@ -814,6 +819,44 @@ class PublicReleaseTests(unittest.TestCase):
                 self.assertNotIn("build", args)
                 if "pg_restore" in args:
                     self.assertIn("--list", args, "A release must never restore the live database")
+
+    def test_journal_transition_shares_verified_replacement_and_rollback(self) -> None:
+        """Prepared logging is the only permitted configuration delta beyond the image."""
+        compose = self.config / "compose.public.yml"
+        original = compose.read_text().replace(
+            "  migrate:",
+            "    logging: *bounded-logging\n  postgres:\n    image: postgres-fixture\n  migrate:",
+        )
+        _ = compose.write_text(original)
+        marker = self.root / "journal.enabled"
+        _ = marker.write_text("1\n")
+        with patch.object(public, "JOURNAL_SELECTION", marker):
+            report: JsonObject = {}
+            public.deploy(self.runner, self.manifest, {"serverImage": NEW_IMAGE}, report)
+            self.assertIn("driver: journald", compose.read_text())
+            self.assertEqual(self.runner.ups, 1)
+            self.assertEqual(report["phase"], "complete")
+
+    def test_failed_journal_transition_restores_previous_logging_with_the_image(self) -> None:
+        """A candidate health failure rolls back the exact original Compose bytes."""
+        compose = self.config / "compose.public.yml"
+        original = compose.read_text().replace(
+            "  migrate:",
+            "    logging: *bounded-logging\n  postgres:\n    image: postgres-fixture\n  migrate:",
+        )
+        _ = compose.write_text(original)
+        marker = self.root / "journal.enabled"
+        _ = marker.write_text("1\n")
+        self.runner.candidate_unready = True
+        report: JsonObject = {}
+        with (
+            patch.object(public, "JOURNAL_SELECTION", marker),
+            self.assertRaises(public.ReleaseError),
+        ):
+            public.deploy(self.runner, self.manifest, {"serverImage": NEW_IMAGE}, report)
+        self.assertEqual(compose.read_text(), original)
+        self.assertEqual(self.runner.ups, 2)
+        self.assertIs(report["rollbackPassed"], expr2=True)
 
     def test_wrong_candidate_image_rolls_back_once_but_remains_failed(self) -> None:
         """Wrong candidate image rolls back once but remains failed."""

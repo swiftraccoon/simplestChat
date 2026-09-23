@@ -121,7 +121,21 @@ class PublicTemplateTests(unittest.TestCase):
         self.assertEqual(proxy["cap_add"], ["NET_BIND_SERVICE"])
         self.assertEqual(proxy["ports"], ["80:80/tcp", "443:443/tcp", "443:443/udp"])
         self.assertEqual(at(proxy, "sysctls", "net.ipv4.ip_unprivileged_port_start"), "0")
-        for service in services.values():
+        app_logging = obj(services, "simplestchat", "logging")
+        self.assertEqual(
+            app_logging,
+            {
+                "driver": "journald",
+                "options": {
+                    "tag": "simplestchat.app",
+                    "mode": "non-blocking",
+                    "max-buffer-size": "4m",
+                },
+            },
+        )
+        for name, service in services.items():
+            if name == "simplestchat":
+                continue
             self.assertEqual(at(service, "logging", "driver"), "local")
             self.assertEqual(
                 at(service, "logging", "options"), {"max-size": "10m", "max-file": "3"}

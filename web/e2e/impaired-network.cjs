@@ -63,6 +63,8 @@ const PROFILES = {
   silentAudio: { env: null, seconds: 20, silent: true },
 };
 const silentAudio = process.env.IMPAIRED_SILENT_AUDIO === '1';
+const forceRelay = process.env.CANARY_FORCE_RELAY === '1';
+const publicCanary = process.env.CANARY_MODE === '1';
 const blockUdp = process.env.IMPAIRED_BLOCK_UDP === '1';
 if (blockUdp && !impairmentEnabled)
   throw new Error('IMPAIRED_BLOCK_UDP needs the impairment script (IMPAIR_SCRIPT is none)');
@@ -83,6 +85,7 @@ const report = {
   runId,
   startedAt: new Date().toISOString(),
   base,
+  forcedRelay: forceRelay,
   impairment: impairmentEnabled
     ? { script: impairScript, udpBlocked: blockUdp }
     : { script: null, note: 'mechanics only' },
@@ -92,7 +95,9 @@ const report = {
   phases: [],
   layerEvents: [],
   limitations: [
-    'Two owned headless Chromium clients over loopback; fake capture, no real camera, network or device.',
+    publicCanary
+      ? 'Two owned headless Chromium clients over the public network; synthetic camera and microphone, no physical device coverage.'
+      : 'Two owned headless Chromium clients against the selected test server; synthetic capture, no physical device coverage.',
     'Impairment covers UDP leaving the server media port; signaling and the publisher uplink are untouched.',
     'The impairment script needs sudo and a platform that filters loopback (Linux netem); on macOS pf dummynet does not affect loopback and lossy/constrained assertions fail.',
     'Freeze counters are reported when the browser exposes them; absence is not a pass.',
@@ -130,6 +135,7 @@ async function sample(page) {
   return page.evaluate(async () => {
     const totals = {
       transportProtocols: [],
+      localCandidateTypes: [],
       framesDecoded: 0,
       framesDropped: 0,
       frameWidth: 0,
@@ -154,6 +160,11 @@ async function sample(page) {
     for (const peer of window.__communityPeers || []) {
       if (peer.connectionState === 'closed') continue;
       const stats = await peer.getStats();
+      const selectedPairs = new Set(
+        [...stats.values()]
+          .filter((report) => report.type === 'transport' && report.selectedCandidatePairId)
+          .map((report) => report.selectedCandidatePairId),
+      );
       for (const stat of stats.values()) {
         if (stat.type === 'inbound-rtp' && stat.kind === 'video' && stat.ssrc === 1234) {
           totals.probatorPliCount += stat.pliCount || 0;
@@ -183,14 +194,16 @@ async function sample(page) {
         }
         if (
           stat.type === 'candidate-pair' &&
-          stat.state === 'succeeded' &&
+          selectedPairs.has(stat.id) &&
           Number.isFinite(stat.currentRoundTripTime)
         ) {
           totals.roundTripTime = stat.currentRoundTripTime;
         }
-        if (stat.type === 'candidate-pair' && stat.state === 'succeeded' && stat.nominated) {
+        if (stat.type === 'candidate-pair' && selectedPairs.has(stat.id)) {
           const remote = stats.get(stat.remoteCandidateId);
           if (remote && remote.protocol) totals.transportProtocols.push(remote.protocol);
+          const local = stats.get(stat.localCandidateId);
+          totals.localCandidateTypes.push(local?.candidateType ?? 'unknown');
         }
       }
     }
@@ -204,16 +217,24 @@ async function samplePublisher(page) {
   return page.evaluate(async () => {
     const layers = {};
     const transportProtocols = [];
+    const localCandidateTypes = [];
     let keyFramesEncoded = 0;
     let pliCount = 0;
     let framesEncoded = 0;
     for (const peer of window.__communityPeers || []) {
       if (peer.connectionState === 'closed') continue;
       const stats = await peer.getStats();
+      const selectedPairs = new Set(
+        [...stats.values()]
+          .filter((report) => report.type === 'transport' && report.selectedCandidatePairId)
+          .map((report) => report.selectedCandidatePairId),
+      );
       for (const stat of stats.values()) {
-        if (stat.type === 'candidate-pair' && stat.state === 'succeeded' && stat.nominated) {
+        if (stat.type === 'candidate-pair' && selectedPairs.has(stat.id)) {
           const remote = stats.get(stat.remoteCandidateId);
           if (remote && remote.protocol) transportProtocols.push(remote.protocol);
+          const local = stats.get(stat.localCandidateId);
+          localCandidateTypes.push(local?.candidateType ?? 'unknown');
         }
         if (stat.type !== 'outbound-rtp' || stat.kind !== 'video') continue;
         keyFramesEncoded += stat.keyFramesEncoded || 0;
@@ -238,6 +259,7 @@ async function samplePublisher(page) {
       framesEncoded,
       layers,
       transportProtocols,
+      localCandidateTypes,
       sampledAtMs: performance.now(),
     };
   });
@@ -323,6 +345,7 @@ async function main() {
     page.setDefaultTimeout(15000);
     await page.addInitScript(installPeerEventTracing, {
       announcedIp: process.env.TEST_ANNOUNCE_IP || null,
+      forceRelay,
     });
     page.on('console', (message) => {
       const match = /\[room\] consumer (\S+) layers: spatial=(\S+), temporal=(\S+)/.exec(
@@ -426,6 +449,7 @@ async function main() {
         }
       }
       const before = await sample(viewer);
+      const beforeAt = (performance.now() - started) / 1000;
       const publisherBefore = await samplePublisher(publisher);
       const series = [];
       const layerEventsBefore = report.layerEvents.length;
@@ -492,6 +516,30 @@ async function main() {
         change.framesDecoded > 0 && after.videoReports > 0,
         change.framesPerSecond,
       );
+      if (forceRelay) {
+        const viewer = after.localCandidateTypes;
+        const publisher = publisherAfter.localCandidateTypes;
+        ok =
+          check(
+            'publisher and viewer selected TURN relay candidates',
+            viewer.length > 0 &&
+              publisher.length > 0 &&
+              [...viewer, ...publisher].every((kind) => kind === 'relay'),
+            { viewer, publisher },
+          ) && ok;
+      }
+      if (publicCanary && !forceRelay) {
+        const viewer = after.localCandidateTypes;
+        const publisher = publisherAfter.localCandidateTypes;
+        ok =
+          check(
+            'publisher and viewer selected direct candidates',
+            viewer.length > 0 &&
+              publisher.length > 0 &&
+              [...viewer, ...publisher].every((kind) => ['host', 'srflx', 'prflx'].includes(kind)),
+            { viewer, publisher },
+          ) && ok;
+      }
       if (blockUdp) {
         const viewerProtocols = [...new Set(after.transportProtocols)];
         const publisherProtocols = [...new Set(publisherAfter.transportProtocols)];
@@ -507,7 +555,48 @@ async function main() {
       if (name === 'baseline') {
         baselineWidth = phase.maxFrameWidth;
         baselineFps = change.framesPerSecond;
-        ok = check('no loss on the clean path', change.packetsLost === 0, change.packetsLost) && ok;
+        if (publicCanary) {
+          let lastAdvance = beforeAt;
+          let frames = before.framesDecoded;
+          let longestGap = 0;
+          let reset = false;
+          for (const point of [
+            ...series,
+            {
+              atSeconds: (performance.now() - started) / 1000,
+              framesDecoded: after.framesDecoded,
+            },
+          ]) {
+            reset ||= point.framesDecoded < frames;
+            longestGap = Math.max(longestGap, point.atSeconds - lastAdvance);
+            if (point.framesDecoded > frames) lastAdvance = point.atSeconds;
+            frames = point.framesDecoded;
+          }
+          ok =
+            check('public decoded video never stalls for three seconds', !reset && longestGap < 3, {
+              longestGapSeconds: longestGap,
+              counterReset: reset,
+            }) && ok;
+          const loss =
+            Math.max(0, change.packetsLost) /
+            Math.max(1, change.packetsReceived + Math.max(0, change.packetsLost));
+          ok = check('public video loss stays at or below 2 percent', loss <= 0.02, loss) && ok;
+          ok =
+            check(
+              'public video decodes at least ten frames per second',
+              change.framesPerSecond >= 10,
+              change.framesPerSecond,
+            ) && ok;
+          ok =
+            check(
+              'public audio packets advance',
+              change.audioPacketsPerSecond > 0,
+              change.audioPacketsPerSecond,
+            ) && ok;
+        } else {
+          ok =
+            check('no loss on the clean path', change.packetsLost === 0, change.packetsLost) && ok;
+        }
         ok = check('top layer delivered', baselineWidth >= 480, baselineWidth) && ok;
       }
       if (name === 'lossy') {
@@ -613,7 +702,26 @@ async function main() {
     }
     report.finishedAt = new Date().toISOString();
     save();
-    for (const context of contexts) await context.close().catch(() => {});
+    for (const context of contexts) {
+      if (publicCanary) {
+        for (const page of context.pages()) {
+          try {
+            const leave = page.locator('#leave-btn');
+            if (await leave.isVisible()) {
+              await leave.click({ timeout: 5000 });
+              await leave.waitFor({ state: 'hidden', timeout: 5000 });
+            }
+          } catch {
+            report.passed = false;
+            report.failure ??= {
+              message: 'owned canary could not leave its reserved room cleanly',
+            };
+          }
+        }
+      }
+      await context.close().catch(() => {});
+    }
+    save();
     await browser.close().catch(() => {});
   }
   assert.equal(

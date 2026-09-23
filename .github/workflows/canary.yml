@@ -10,11 +10,15 @@ name: Canary
 
 on:
   schedule:
-    - cron: '41 */6 * * *'
+    - cron: '41 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: production-media-canary
+  cancel-in-progress: false
 
 jobs:
   canary:
@@ -29,8 +33,8 @@ jobs:
           CANARY_ROOM: ${{ vars.CANARY_ROOM }}
         run: |
           if [ -z "${CANARY_ORIGIN}" ] || [ -z "${CANARY_ROOM}" ]; then
-            echo "CANARY_ORIGIN and CANARY_ROOM repository variables are not set; skipping."
-            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "::error::Canary is not monitored: CANARY_ORIGIN and CANARY_ROOM are required."
+            exit 1
           else
             echo "enabled=true" >> "${GITHUB_OUTPUT}"
           fi
@@ -48,6 +52,7 @@ jobs:
           cache-dependency-path: web/e2e/package-lock.json
 
       - name: Install pinned browser tooling
+        id: tooling
         if: steps.configured.outputs.enabled == 'true'
         run: |
           npm --prefix web/e2e ci --ignore-scripts
@@ -59,8 +64,21 @@ jobs:
           BASE_URL: ${{ vars.CANARY_ORIGIN }}
           IMPAIRED_ROOM: ${{ vars.CANARY_ROOM }}
           IMPAIRED_PROFILES: baseline
+          CANARY_MODE: '1'
           IMPAIR_SCRIPT: none
-          E2E_ARTIFACTS: ${{ runner.temp }}/canary
+          E2E_ARTIFACTS: ${{ runner.temp }}/canary/direct
+        run: node web/e2e/impaired-network.cjs
+
+      - name: Require decoded media through TURN
+        if: ${{ !cancelled() && steps.configured.outputs.enabled == 'true' && steps.tooling.outcome == 'success' }}
+        env:
+          BASE_URL: ${{ vars.CANARY_ORIGIN }}
+          IMPAIRED_ROOM: ${{ vars.CANARY_ROOM }}
+          IMPAIRED_PROFILES: baseline
+          CANARY_MODE: '1'
+          IMPAIR_SCRIPT: none
+          CANARY_FORCE_RELAY: '1'
+          E2E_ARTIFACTS: ${{ runner.temp }}/canary/relay
         run: node web/e2e/impaired-network.cjs
 
       - name: Retain the canary evidence

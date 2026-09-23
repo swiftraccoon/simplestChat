@@ -26,14 +26,20 @@ from pathlib import Path
 record = Path('/srv/simplestchat-public/release-state.json')
 if record.exists() or record.is_symlink():
     metadata = record.lstat()
-    assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
-    assert stat.S_IMODE(metadata.st_mode) == 0o600 and 0 < metadata.st_size <= 16384
+    if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):
+        raise SystemExit('Operational precondition failed')
+    if not (stat.S_IMODE(metadata.st_mode) == 0o600 and 0 < metadata.st_size <= 16384):
+        raise SystemExit('Operational precondition failed')
     parent = record.parent.lstat()
-    assert stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0
-    assert stat.S_IMODE(parent.st_mode) == 0o700
+    if not (stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0):
+        raise SystemExit('Operational precondition failed')
+    if not (stat.S_IMODE(parent.st_mode) == 0o700):
+        raise SystemExit('Operational precondition failed')
     value = json.loads(record.read_text())
-    assert isinstance(value, dict) and type(value.get('schemaVersion')) is int
-    assert value.get('schemaVersion') == 1 and value.get('finalized') is True, 'Inspect and recover the unfinished public release first'
+    if not (isinstance(value, dict) and type(value.get('schemaVersion')) is int):
+        raise SystemExit('Operational precondition failed')
+    if not (value.get('schemaVersion') == 1 and value.get('finalized') is True):
+        raise SystemExit('Inspect and recover the unfinished public release first')
 print('No unfinished public release.')
 PY
 compose() { timeout --signal=TERM --kill-after=5s 180s /usr/local/bin/simplestchat-public "$@"; }
@@ -149,9 +155,11 @@ expected = {int(path.name.split('_')[0]): hashlib.sha384(path.read_bytes()).hexd
 actual = {}
 for line in Path(sys.argv[2]).read_text().splitlines():
     version, success, checksum = line.split()
-    assert success == 't' and int(version) not in actual
+    if not (success == 't' and int(version) not in actual):
+        raise SystemExit('Operational precondition failed')
     actual[int(version)] = checksum
-assert expected and actual == expected, 'Migration ledger differs from the verified source image'
+if not (expected and actual == expected):
+    raise SystemExit('Migration ledger differs from the verified source image')
 print('Packaged migration checksums match.')
 PY
 compose --profile maintenance stop --timeout 30 migrate >"$attempt/migration-stop.log" 2>&1

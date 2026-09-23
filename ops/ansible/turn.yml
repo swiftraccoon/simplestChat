@@ -46,11 +46,15 @@
             for name, digest in expected.items():
                 path = Path('/usr/local/libexec/simplestchat-public') / name
                 metadata = path.lstat()
-                assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
-                assert stat.S_IMODE(metadata.st_mode) == 0o644
-                assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, 'Installed relay helpers differ'
+                if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):
+                    raise SystemExit('Operational precondition failed')
+                if not (stat.S_IMODE(metadata.st_mode) == 0o644):
+                    raise SystemExit('Operational precondition failed')
+                if not (hashlib.sha256(path.read_bytes()).hexdigest() == digest):
+                    raise SystemExit('Installed relay helpers differ')
             selected = json.loads(Path('/etc/simplestchat-turn/settings.json').read_text())
-            assert {key: selected[key] for key in ('domain', 'image')} == json.loads(sys.argv[2]), 'Selected relay identity differs'
+            if not ({key: selected[key] for key in ('domain', 'image')} == json.loads(sys.argv[2])):
+                raise SystemExit('Selected relay identity differs')
           - >-
             {{ {
               'turn_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/turn_public.py', rstrip=false) | hash('sha256'),
@@ -82,7 +86,8 @@
               - |
                 import ipaddress, socket, sys
                 address = ipaddress.IPv4Address(sys.argv[1])
-                assert address.is_global, 'A local public IPv4 address is required'
+                if not (address.is_global):
+                    raise SystemExit('A local public IPv4 address is required')
                 sockets = []
                 try:
                     for kind, port in [(socket.SOCK_DGRAM, 3478), (socket.SOCK_STREAM, 3478), (socket.SOCK_STREAM, 5349)]:
@@ -123,9 +128,12 @@
                 path = Path('/etc/simplestchat-turn/secret')
                 if path.exists() or path.is_symlink():
                     metadata = path.lstat()
-                    assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
-                    assert stat.S_IMODE(metadata.st_mode) == 0o600 and metadata.st_size == 64
-                    assert re.fullmatch('[a-f0-9]{64}', path.read_text())
+                    if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):
+                        raise SystemExit('Operational precondition failed')
+                    if not (stat.S_IMODE(metadata.st_mode) == 0o600 and metadata.st_size == 64):
+                        raise SystemExit('Operational precondition failed')
+                    if not (re.fullmatch('[a-f0-9]{64}', path.read_text())):
+                        raise SystemExit('Operational precondition failed')
                     print('retained')
                 else:
                     with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as output:

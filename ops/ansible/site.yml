@@ -65,13 +65,18 @@
             record = Path('/run/simplestchat-bench/current.json')
             if record.exists() or record.is_symlink():
                 metadata = record.lstat()
-                assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
-                assert stat.S_IMODE(metadata.st_mode) == 0o600 and metadata.st_size <= 16384
+                if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):
+                    raise SystemExit('Operational precondition failed')
+                if not (stat.S_IMODE(metadata.st_mode) == 0o600 and metadata.st_size <= 16384):
+                    raise SystemExit('Operational precondition failed')
                 parent = record.parent.lstat()
-                assert stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0
-                assert stat.S_IMODE(parent.st_mode) == 0o700
+                if not (stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0):
+                    raise SystemExit('Operational precondition failed')
+                if not (stat.S_IMODE(parent.st_mode) == 0o700):
+                    raise SystemExit('Operational precondition failed')
                 value = json.loads(record.read_text())
-                assert value.get('schemaVersion') == 1 and value.get('finalized') is True, 'Finish owned container cleanup first'
+                if not (value.get('schemaVersion') == 1 and value.get('finalized') is True):
+                    raise SystemExit('Finish owned container cleanup first')
             print('No unfinished owned container cleanup.')
       changed_when: false
       check_mode: false
@@ -89,14 +94,20 @@
             record = Path('/srv/simplestchat-public/release-state.json')
             if record.exists() or record.is_symlink():
                 metadata = record.lstat()
-                assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
-                assert stat.S_IMODE(metadata.st_mode) == 0o600 and 0 < metadata.st_size <= 16384
+                if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):
+                    raise SystemExit('Operational precondition failed')
+                if not (stat.S_IMODE(metadata.st_mode) == 0o600 and 0 < metadata.st_size <= 16384):
+                    raise SystemExit('Operational precondition failed')
                 parent = record.parent.lstat()
-                assert stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0
-                assert stat.S_IMODE(parent.st_mode) == 0o700
+                if not (stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0):
+                    raise SystemExit('Operational precondition failed')
+                if not (stat.S_IMODE(parent.st_mode) == 0o700):
+                    raise SystemExit('Operational precondition failed')
                 value = json.loads(record.read_text())
-                assert isinstance(value, dict) and type(value.get('schemaVersion')) is int
-                assert value.get('schemaVersion') == 1 and value.get('finalized') is True, 'Inspect and recover the unfinished public release first'
+                if not (isinstance(value, dict) and type(value.get('schemaVersion')) is int):
+                    raise SystemExit('Operational precondition failed')
+                if not (value.get('schemaVersion') == 1 and value.get('finalized') is True):
+                    raise SystemExit('Inspect and recover the unfinished public release first')
             print('No unfinished public release.')
       changed_when: false
       check_mode: false
@@ -115,7 +126,8 @@
                     ['/usr/bin/docker', '--host', 'unix:///var/run/docker.sock', 'ps', '--quiet',
                      '--filter', 'label=com.docker.compose.project=simplestchat-public'],
                     check=True, capture_output=True, text=True, timeout=15)
-                assert not result.stdout.strip(), 'Stop the public project before host maintenance'
+                if not (not result.stdout.strip()):
+                    raise SystemExit('Stop the public project before host maintenance')
             print('No running public project would be interrupted by host maintenance.')
       changed_when: false
       check_mode: false

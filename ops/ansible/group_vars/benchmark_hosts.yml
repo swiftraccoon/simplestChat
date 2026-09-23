@@ -31,3 +31,8 @@ scpub_caddy_image: docker.io/library/caddy:2.11.4-alpine@sha256:5f5c8640aae01df9
 scpub_turn_enabled: false
 scpub_turn_activate: false
 scpub_turn_image: docker.io/coturn/coturn:4.18.0@sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3
+
+# Private, separately applied production monitoring; verified upstream manifests 2026-09-23.
+scmon_enabled: false
+scmon_prometheus_image: quay.io/prometheus/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+scmon_node_exporter_image: quay.io/prometheus/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0

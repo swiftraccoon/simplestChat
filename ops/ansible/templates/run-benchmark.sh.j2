@@ -9,14 +9,20 @@ from pathlib import Path
 record = Path('/srv/simplestchat-public/release-state.json')
 if record.exists() or record.is_symlink():
     metadata = record.lstat()
-    assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
-    assert stat.S_IMODE(metadata.st_mode) == 0o600 and 0 < metadata.st_size <= 16384
+    if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):
+        raise SystemExit('Operational precondition failed')
+    if not (stat.S_IMODE(metadata.st_mode) == 0o600 and 0 < metadata.st_size <= 16384):
+        raise SystemExit('Operational precondition failed')
     parent = record.parent.lstat()
-    assert stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0
-    assert stat.S_IMODE(parent.st_mode) == 0o700
+    if not (stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0):
+        raise SystemExit('Operational precondition failed')
+    if not (stat.S_IMODE(parent.st_mode) == 0o700):
+        raise SystemExit('Operational precondition failed')
     value = json.loads(record.read_text())
-    assert isinstance(value, dict) and type(value.get('schemaVersion')) is int
-    assert value.get('schemaVersion') == 1 and value.get('finalized') is True, 'Inspect and recover the unfinished public release first'
+    if not (isinstance(value, dict) and type(value.get('schemaVersion')) is int):
+        raise SystemExit('Operational precondition failed')
+    if not (value.get('schemaVersion') == 1 and value.get('finalized') is True):
+        raise SystemExit('Inspect and recover the unfinished public release first')
 print('No unfinished public release.')
 PY
 manifest='{{ scbench_root }}/artifacts/{{ scbench_revision }}/images.json'

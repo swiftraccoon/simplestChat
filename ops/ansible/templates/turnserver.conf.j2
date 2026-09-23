@@ -29,3 +29,8 @@ stale-nonce=600
 relay-threads=1
 log-file=stdout
 log-min-level=warning
+{% if scpub_turn_metrics_enabled | default(false) %}
+prometheus
+prometheus-address=127.0.0.1
+prometheus-port=9641
+{% endif %}

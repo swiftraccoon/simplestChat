@@ -348,10 +348,10 @@ class AutomationTests(unittest.TestCase):
                     redirect_stdout(io.StringIO()),
                 ):
                     if permitted:
-                        exec(compile(guard, "<release-guard>", "exec"), {})
+                        exec(compile(guard, "<release-guard>", "exec", optimize=2), {})
                     else:
-                        with self.assertRaises((AssertionError, ValueError)):
-                            exec(compile(guard, "<release-guard>", "exec"), {})
+                        with self.assertRaises((SystemExit, ValueError)):
+                            exec(compile(guard, "<release-guard>", "exec", optimize=2), {})
                     factory.assert_called_once_with("/srv/simplestchat-public/release-state.json")
 
     def test_static_units_are_inspected_without_repeated_disable_changes(self) -> None:

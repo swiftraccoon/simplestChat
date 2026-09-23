@@ -1,5 +1,5 @@
 /** Passive, bounded ICE event history; self-contained for page.addInitScript(). */
-function installPeerEventTracing({ announcedIp = null } = {}) {
+function installPeerEventTracing({ announcedIp = null, forceRelay = false } = {}) {
   const read = (object, key) => {
     try {
       return object?.[key];
@@ -98,6 +98,7 @@ function installPeerEventTracing({ announcedIp = null } = {}) {
   if (!window.RTCPeerConnection) return;
   window.RTCPeerConnection = new Proxy(window.RTCPeerConnection, {
     construct(target, args, newTarget) {
+      if (forceRelay) args[0] = { ...args[0], iceTransportPolicy: 'relay' };
       const peer = Reflect.construct(target, args, newTarget);
       window.__communityPeers.push(peer);
       const started = performance.now();

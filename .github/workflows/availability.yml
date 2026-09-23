@@ -1,0 +1,30 @@
+name: Public availability
+on:
+  schedule:
+    - cron: '7,17,27,37,47,57 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: production-availability
+  cancel-in-progress: false
+jobs:
+  readiness:
+    name: External HTTPS readiness
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require configured origin and check readiness through the public proxy
+        env:
+          CANARY_ORIGIN: ${{ vars.CANARY_ORIGIN }}
+        run: |
+          node --input-type=module <<'JS'
+          const origin = process.env.CANARY_ORIGIN;
+          const url = new URL(origin || 'about:blank');
+          if (url.protocol !== 'https:' || url.origin !== origin || url.username || url.password) {
+            throw new Error('Availability is not monitored: configure CANARY_ORIGIN as an HTTPS origin');
+          }
+          const response = await fetch(`${origin}/ready`, { redirect: 'error', signal: AbortSignal.timeout(10000) });
+          if (response.status !== 200) throw new Error(`Public readiness failed (${response.status})`);
+          console.log('Public HTTPS readiness passed');
+          JS

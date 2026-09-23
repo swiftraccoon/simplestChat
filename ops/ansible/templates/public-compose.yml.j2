@@ -21,7 +21,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    logging: *bounded-logging
+    # Host journald retention is configured by monitoring.yml. This stream survives
+    # container removal; non-blocking delivery bounds application backpressure.
+    logging:
+      driver: journald
+      options:
+        tag: simplestchat.app
+        mode: non-blocking
+        max-buffer-size: 4m
 
   postgres:
     image: "{{ scpub_postgres_image }}"

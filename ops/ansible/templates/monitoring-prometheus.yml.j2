@@ -1,0 +1,38 @@
+global:
+  scrape_interval: 30s
+  scrape_timeout: 5s
+  evaluation_interval: 30s
+rule_files:
+  - /etc/prometheus/alerts.yml
+scrape_configs:
+  - job_name: app
+    static_configs:
+      - targets: ['127.0.0.1:3000']
+    authorization:
+      credentials_file: /etc/prometheus/metrics-token
+    sample_limit: 15000
+    label_limit: 12
+    label_value_length_limit: 128
+  - job_name: host
+    static_configs:
+      - targets: ['127.0.0.1:9100']
+    sample_limit: 5000
+    label_limit: 12
+    label_value_length_limit: 128
+  - job_name: monitoring
+    static_configs:
+      - targets: ['127.0.0.1:9090']
+    sample_limit: 5000
+  - job_name: turn
+    static_configs:
+      - targets: ['127.0.0.1:9641']
+    sample_limit: 1000
+    label_limit: 8
+    label_value_length_limit: 128
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'turn_.*'
+        action: keep
+      - source_labels: [username]
+        regex: '.+'
+        action: drop

@@ -708,6 +708,40 @@ def ready(runner: RunnerProtocol, *, origin: str | None = None, seconds: float =
             return
 
 
+JOURNAL_SELECTION = Path("/etc/simplestchat-monitoring/application-journal.enabled")
+JOURNAL_LOGGING: JsonObject = {
+    "driver": "journald",
+    "options": {"tag": "simplestchat.app", "mode": "non-blocking", "max-buffer-size": "4m"},
+}
+LOCAL_LOGGING: JsonObject = {"driver": "local", "options": {"max-size": "10m", "max-file": "3"}}
+JOURNAL_COMPOSE = """    logging:
+      driver: journald
+      options:
+        tag: simplestchat.app
+        mode: non-blocking
+        max-buffer-size: 4m"""
+
+
+def journal_selection(compose: str, before: JsonObject) -> tuple[str, bool]:
+    """Enable only the explicitly prepared persistent journal in the same replacement."""
+    if not JOURNAL_SELECTION.exists():
+        return compose, False
+    protected(JOURNAL_SELECTION, limit=2)
+    require(JOURNAL_SELECTION.read_bytes() == b"1\n", "Invalid journal selection")
+    application = object_value(object_value(before["services"])["simplestchat"])
+    current = application.get("logging")
+    if current == JOURNAL_LOGGING:
+        return compose, False
+    require(current == LOCAL_LOGGING, "Unexpected application logging configuration")
+    app, separator, dependencies = compose.partition("\n  postgres:")
+    require(
+        separator and app.count("    logging: *bounded-logging") == 1, "Unexpected logging layout"
+    )
+    return app.replace(
+        "    logging: *bounded-logging", JOURNAL_COMPOSE
+    ) + separator + dependencies, True
+
+
 def candidate_selection(
     runner: RunnerProtocol,
     new_image: str,
@@ -716,6 +750,10 @@ def candidate_selection(
 ) -> tuple[bytes, bytes]:
     """Allow image selection and, explicitly, enabling the managed TURN relay."""
     compose = (CONFIG / "compose.public.yml").read_text()
+    before = object_value(
+        decode_json(runner.compose("--profile", "maintenance", "config", "--format", "json"))
+    )
+    compose, journal_changed = journal_selection(compose, before)
     needle = f'image: "{old["serverImage"]}"'
     require(
         compose.count(needle) == IMAGE_SELECTIONS,
@@ -754,9 +792,6 @@ def candidate_selection(
         # Compose file continues to reference its ordinary protected app.env.
         require(compose.count("- ./app.env") == 1, "Unexpected application env_file selection")
         atomic(preview, selected_compose.replace(b"- ./app.env", f'- "{preview_env}"'.encode()))
-    before = object_value(
-        decode_json(runner.compose("--profile", "maintenance", "config", "--format", "json"))
-    )
     after = object_value(
         decode_json(
             runner.compose(
@@ -771,6 +806,10 @@ def candidate_selection(
         )
     )
     expected = deepcopy(before)
+    if journal_changed:
+        object_value(object_value(expected["services"])["simplestchat"])["logging"] = (
+            JOURNAL_LOGGING
+        )
     for service in ("simplestchat", "migrate"):
         object_value(object_value(expected["services"])[service])["image"] = new_image
     if turn is not None:

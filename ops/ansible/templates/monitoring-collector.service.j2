@@ -1,0 +1,20 @@
+[Unit]
+Description=Collect bounded simplestChat operational signals and retain alert incidents
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -E -B /usr/local/libexec/simplestchat-public/monitoring_collect.py
+UMask=0077
+TimeoutStartSec=55
+MemoryMax=128M
+TasksMax=32
+CPUQuota=20%
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/simplestchat-monitoring
+RestrictSUIDSGID=true
+LockPersonality=true

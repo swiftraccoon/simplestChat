@@ -1,0 +1,99 @@
+groups:
+  - name: simplestchat
+    rules:
+      - alert: MetricsUnavailable
+        expr: up{job="app"} == 0
+        for: 2m
+        labels: {severity: critical}
+      - alert: QualitySampleStale
+        expr: simplestchat_quality_sample_age_seconds > 45 or simplestchat_quality_sample_available == 0 or absent(simplestchat_quality_sample_available)
+        for: 2m
+        labels: {severity: warning}
+      - alert: QualityBudgetExhausted
+        expr: simplestchat_quality_sample_budget_exhausted == 1
+        for: 5m
+        labels: {severity: warning}
+      - alert: WorkerDeath
+        expr: increase(simplestchat_media_worker_deaths_total[5m]) > 0
+        labels: {severity: critical}
+      - alert: HostDiskLow
+        expr: min(node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.15
+        for: 5m
+        labels: {severity: critical}
+      - alert: HostMemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.1
+        for: 5m
+        labels: {severity: warning}
+      - alert: ContainerUnavailable
+        expr: simplestchat_ops_container_running == 0 or simplestchat_ops_container_collection_ok == 0
+        for: 2m
+        labels: {severity: critical}
+      - alert: ContainerRestart
+        expr: changes(simplestchat_ops_container_restarts[10m]) > 0 or simplestchat_ops_container_oom == 1
+        labels: {severity: warning}
+      - alert: ContainerMemoryPressure
+        expr: simplestchat_ops_container_memory_percent > 85
+        for: 5m
+        labels: {severity: warning}
+      - alert: PostgresUnavailable
+        expr: simplestchat_ops_postgres_collection_ok == 0
+        for: 2m
+        labels: {severity: critical}
+      - alert: PostgresConnectionPressure
+        expr: simplestchat_ops_postgres_connections / simplestchat_ops_postgres_connection_limit > 0.8
+        for: 5m
+        labels: {severity: warning}
+      - alert: DatabasePoolPressure
+        expr: simplestchat_db_pool_connections{state="used"} / ignoring(state) simplestchat_db_pool_connections{state="max"} > 0.8
+        for: 5m
+        labels: {severity: warning}
+      - alert: PublicReadinessFailed
+        expr: simplestchat_ops_public_ready == 0
+        for: 2m
+        labels: {severity: critical}
+      - alert: TurnCertificateExpiring
+        expr: simplestchat_ops_turn_certificate_expiry_seconds - time() < 604800
+        labels: {severity: warning}
+      - alert: TurnTLSUnavailable
+        expr: simplestchat_ops_turn_tls_ok == 0
+        for: 2m
+        labels: {severity: critical}
+      - alert: CollectorStale
+        expr: time() - simplestchat_ops_collector_timestamp_seconds > 180 or absent(simplestchat_ops_collector_timestamp_seconds) or up{job="host"} == 0
+        for: 2m
+        labels: {severity: critical}
+      - alert: CollectorFailed
+        expr: simplestchat_ops_evidence_collection_ok == 0 or node_textfile_scrape_error == 1
+        for: 2m
+        labels: {severity: warning}
+      - alert: BackupStale
+        expr: time() - simplestchat_ops_backup_last_success_seconds > 86400
+        labels: {severity: warning}
+      - alert: RestoreEvidenceMissing
+        expr: time() - simplestchat_ops_restore_last_success_seconds > 2592000
+        labels: {severity: warning}
+      - alert: RecorderUnavailable
+        expr: simplestchat_ops_recorder_ok == 0
+        for: 2m
+        labels: {severity: critical}
+      - alert: RecorderSpoolLoss
+        expr: increase(simplestchat_ops_recorder_spool_dropped_total[1h]) > 0
+        labels: {severity: critical}
+      - alert: ServerErrors
+        expr: sum(rate(simplestchat_http_requests_total{status=~"5xx|503"}[5m])) > 0.05
+        for: 5m
+        labels: {severity: warning}
+      - alert: TurnMetricsUnavailable
+        expr: up{job="turn"} == 0
+        for: 2m
+        labels: {severity: critical}
+      - alert: TurnAllocationPressure
+        expr: sum(turn_total_allocations) > 320
+        for: 5m
+        labels: {severity: warning}
+      - alert: AdmissionRefusals
+        expr: increase(simplestchat_joins_refused_saturated_total[5m]) > 0
+        labels: {severity: warning}
+      - alert: TelemetrySeriesDropped
+        expr: increase(simplestchat_http_series_dropped_total[5m]) > 0 or increase(simplestchat_client_series_dropped_total[5m]) > 0
+        labels: {severity: warning}

@@ -5,8 +5,15 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 -B /usr/local/libexec/simplestchat-public/turn_public.py refresh-certificate
+ExecStart=/usr/bin/python3 -E -B /usr/local/libexec/simplestchat-public/turn_public.py refresh-certificate
 UMask=0077
 TimeoutStartSec=60
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/simplestchat-turn /srv/simplestchat-public/results /run/simplestchat-bench
+MemoryMax=128M
+TasksMax=32
+RestrictSUIDSGID=true
+LockPersonality=true

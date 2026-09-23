@@ -1,0 +1,35 @@
+rule_files:
+  - ../files/monitoring-alerts.yml
+evaluation_interval: 30s
+tests:
+  - name: Failed scrapes become incidents after the configured debounce
+    interval: 30s
+    input_series:
+      - series: 'up{job="app",instance="127.0.0.1:3000"}'
+        values: '0x8'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: MetricsUnavailable
+        exp_alerts:
+          - exp_labels: {severity: critical, job: app, instance: '127.0.0.1:3000'}
+  - name: A healthy scrape does not trigger an availability incident
+    interval: 30s
+    input_series:
+      - series: 'up{job="app",instance="127.0.0.1:3000"}'
+        values: '1x8'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: MetricsUnavailable
+        exp_alerts: []
+  - name: A published sample must remain fresh
+    interval: 30s
+    input_series:
+      - series: 'simplestchat_quality_sample_available{job="app"}'
+        values: '1x8'
+      - series: 'simplestchat_quality_sample_age_seconds{job="app"}'
+        values: '60x8'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: QualitySampleStale
+        exp_alerts:
+          - exp_labels: {severity: warning, job: app}
