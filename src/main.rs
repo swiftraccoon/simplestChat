@@ -15,7 +15,7 @@ use simplestChat::{
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, info, warn};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 async fn shutdown_signal() -> std::io::Result<()> {
     #[cfg(unix)]
@@ -46,13 +46,23 @@ fn main() -> Result<()> {
 }
 
 async fn run() -> Result<()> {
-    // Initialize tracing
+    // JSON survives aggregation without parsing human messages. Operators may
+    // select text locally; credentials and arbitrary request data are not fields.
+    let format = std::env::var("LOG_FORMAT").unwrap_or_else(|_| "json".to_owned());
+    let formatter = match format.as_str() {
+        "json" => tracing_subscriber::fmt::layer()
+            .json()
+            .with_ansi(false)
+            .boxed(),
+        "text" => tracing_subscriber::fmt::layer().with_ansi(false).boxed(),
+        _ => anyhow::bail!("LOG_FORMAT must be json or text"),
+    };
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "simplestChat=info,mediasoup=warn".into()),
+                .unwrap_or_else(|_| "simplestChat=info,mediasoup=warn,sqlx::pool=warn".into()),
         )
-        .with(tracing_subscriber::fmt::layer())
+        .with(formatter)
         .init();
 
     let diagnostics = Diagnostics::from_env()?;
@@ -64,7 +74,11 @@ async fn run() -> Result<()> {
 }
 
 async fn run_server(diagnostics: Diagnostics) -> Result<()> {
-    info!("SimplestChat - Starting server");
+    let revision = std::env::var("SOURCE_REVISION")
+        .ok()
+        .filter(|value| value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .unwrap_or_else(|| "unknown".to_owned());
+    info!(revision, "simplestChat server starting");
 
     // Create room manager (includes media server)
     let mut media_config = MediaConfig::from_env()?;

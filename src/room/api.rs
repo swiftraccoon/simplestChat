@@ -154,6 +154,11 @@ fn list_window(params: &ListParams) -> Result<(i64, i64), &'static str> {
     Ok((limit, offset))
 }
 
+fn room_database_error(error: sqlx::Error) -> Response {
+    crate::db::record_error(&error);
+    AuthError::DatabaseError(error.to_string()).into_response()
+}
+
 /// GET /api/rooms
 pub async fn list_rooms(
     State(server): State<SignalingServer>,
@@ -207,6 +212,7 @@ pub async fn list_rooms(
         .await
     }
     .map_err(|error| {
+        crate::db::record_error(&error);
         warn!(%error, "Failed to list rooms");
         (StatusCode::INTERNAL_SERVER_ERROR, "Unable to list rooms").into_response()
     })?;
@@ -284,6 +290,7 @@ pub async fn create_room(
                 )
                     .into_response();
             }
+            crate::db::record_error(&error);
             warn!(room_id = %req.id, %error, "Failed to create room");
             AuthError::DatabaseError("room creation failed".to_string()).into_response()
         })?
@@ -325,6 +332,7 @@ pub async fn delete_room(
         .delete_persisted_room(&room_id, &user_id)
         .await
         .map_err(|error| {
+            crate::db::record_error(&error);
             warn!(room_id, %error, "Failed to delete room");
             AuthError::DatabaseError("room deletion failed".to_string()).into_response()
         })?;
@@ -354,7 +362,7 @@ pub async fn owned_rooms(
         .map_err(|_| AuthError::InvalidToken.into_response())?;
     let rows = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret FROM rooms WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2")
         .bind(owner).bind(settings::MAX_PERSISTED_ROOMS_PER_OWNER).fetch_all(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?)
-        .await.map_err(|error| AuthError::DatabaseError(error.to_string()).into_response())?;
+        .await.map_err(room_database_error)?;
     let mut response_headers = HeaderMap::new();
     response_headers.insert(
         header::CACHE_CONTROL,
@@ -393,7 +401,7 @@ pub async fn update_room_identity(
         .room_manager()
         .update_room_identity(&id, owner, request)
         .await
-        .map_err(|error| AuthError::DatabaseError(error.to_string()).into_response())?
+        .map_err(room_database_error)?
     {
         return Err((StatusCode::NOT_FOUND, "Room not found")
             .into_response()
@@ -401,7 +409,7 @@ pub async fn update_room_identity(
     }
     let row = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret FROM rooms WHERE id = $1 AND owner_id = $2")
         .bind(&id).bind(owner).fetch_optional(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?).await
-        .map_err(|error| AuthError::DatabaseError(error.to_string()).into_response())?
+        .map_err(room_database_error)?
         .ok_or_else(|| (StatusCode::NOT_FOUND, "Room not found").into_response())?;
     Ok(Json(room_list_item(&server, row)))
 }

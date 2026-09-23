@@ -6,6 +6,7 @@ pub mod connection;
 mod media_diagnostics;
 pub mod protocol;
 mod readiness;
+pub(crate) mod telemetry;
 
 use crate::auth::webauthn::ChallengeStore;
 use crate::metrics::ServerMetrics;
@@ -14,7 +15,7 @@ use crate::turn::TurnConfig;
 use axum::{
     Json, Router,
     body::Body,
-    extract::{ConnectInfo, DefaultBodyLimit, Query, State, ws::WebSocketUpgrade},
+    extract::{ConnectInfo, DefaultBodyLimit, MatchedPath, Query, State, ws::WebSocketUpgrade},
     http::{HeaderMap, HeaderValue, Request, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -32,7 +33,7 @@ use std::{
 use tokio::sync::Semaphore;
 use tower_http::services::ServeDir;
 use tower_http::timeout::{RequestBodyTimeoutLayer, TimeoutLayer};
-use tracing::{info, warn};
+use tracing::{Instrument, info, warn};
 
 pub use connection::GracePeriodMap;
 
@@ -90,9 +91,16 @@ struct AuthRateEntry {
     requests: u32,
 }
 
+#[derive(Default)]
+struct AuthRateTable {
+    entries: HashMap<IpAddr, AuthRateEntry>,
+    order: std::collections::VecDeque<(IpAddr, Instant)>,
+    overflow: Option<AuthRateEntry>,
+}
+
 #[derive(Clone)]
 struct AuthGuard {
-    entries: Arc<Mutex<HashMap<IpAddr, AuthRateEntry>>>,
+    entries: Arc<Mutex<AuthRateTable>>,
     max_requests_per_minute: u32,
     concurrency: Arc<Semaphore>,
     trusted_proxy_secret: Arc<Option<String>>,
@@ -109,7 +117,7 @@ impl AuthGuard {
         metrics: ServerMetrics,
     ) -> Self {
         Self {
-            entries: Arc::new(Mutex::new(HashMap::new())),
+            entries: Arc::new(Mutex::new(AuthRateTable::default())),
             max_requests_per_minute,
             concurrency: Arc::new(Semaphore::new(max_concurrency)),
             trusted_proxy_secret,
@@ -119,24 +127,36 @@ impl AuthGuard {
     }
 
     fn allow(&self, ip: IpAddr) -> bool {
+        self.allow_at(ip, Instant::now())
+    }
+
+    fn allow_at(&self, ip: IpAddr, now: Instant) -> bool {
         let ip = rate_limit_ip(ip);
-        let now = Instant::now();
-        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
-
-        if entries.len() >= MAX_TRACKED_AUTH_IPS && !entries.contains_key(&ip) {
-            // Capacity is a memory bound, not a global deny switch. Constant-
-            // time arbitrary eviction avoids both global lockout and an O(n)
-            // cache scan for every attacker-chosen key after saturation.
-            if let Some(evicted) = entries.keys().next().copied() {
-                entries.remove(&evicted);
+        let mut table = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        while let Some((address, started)) = table.order.front().copied() {
+            if now.duration_since(started) < PRINCIPAL_RATE_WINDOW {
+                break;
             }
+            table.order.pop_front();
+            table.entries.remove(&address);
         }
-
-        let entry = entries.entry(ip).or_insert(AuthRateEntry {
-            window_started: now,
-            requests: 0,
-        });
-        if now.duration_since(entry.window_started) >= Duration::from_secs(60) {
+        let entry = if table.entries.contains_key(&ip) {
+            table.entries.get_mut(&ip).expect("existing address")
+        } else if table.entries.len() < MAX_TRACKED_AUTH_IPS {
+            table.order.push_back((ip, now));
+            table.entries.entry(ip).or_insert(AuthRateEntry {
+                window_started: now,
+                requests: 0,
+            })
+        } else {
+            // Unknown sources share one finite allowance while capacity is full.
+            // A live source's allowance can never be reset by identity churn.
+            table.overflow.get_or_insert(AuthRateEntry {
+                window_started: now,
+                requests: 0,
+            })
+        };
+        if now.duration_since(entry.window_started) >= PRINCIPAL_RATE_WINDOW {
             entry.window_started = now;
             entry.requests = 0;
         }
@@ -288,6 +308,7 @@ pub struct SignalingServer {
     principal_auth_limiter: PrincipalRateLimiter,
     room_creation_limiter: PrincipalRateLimiter,
     room_api_guard: AuthGuard,
+    telemetry_guard: AuthGuard,
     db_pool: Option<PgPool>,
     jwt_secret: Option<String>,
     metrics_token: Option<String>,
@@ -448,6 +469,13 @@ impl SignalingServer {
                 allowed_origins.clone(),
                 metrics.clone(),
             ),
+            telemetry_guard: AuthGuard::new(
+                30,
+                8,
+                trusted_proxy_secret.clone(),
+                allowed_origins.clone(),
+                metrics.clone(),
+            ),
             db_pool,
             jwt_secret,
             metrics_token,
@@ -549,7 +577,11 @@ impl SignalingServer {
     }
 
     pub(crate) fn try_acquire_password_work(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
-        self.password_work.clone().try_acquire_owned().ok()
+        let permit = self.password_work.clone().try_acquire_owned().ok();
+        if permit.is_none() {
+            self.metrics.inc_password_work_rejected();
+        }
+        permit
     }
 
     /// Notify active sockets and release media retained for reconnect. Version
@@ -644,7 +676,21 @@ impl SignalingServer {
                 HTTP_REQUEST_TIMEOUT,
             ));
 
+        let metrics = self.metrics.clone();
+        let telemetry_routes = Router::new()
+            .route("/api/telemetry", post(telemetry::ingest))
+            .layer(DefaultBodyLimit::max(8 * 1024))
+            .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT))
+            .layer(middleware::from_fn_with_state(
+                self.telemetry_guard.clone(),
+                guarded_api_request,
+            ))
+            .layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                HTTP_REQUEST_TIMEOUT,
+            ));
         let routes = Router::new()
+            .merge(telemetry_routes)
             .route("/ws", get(ws_handler))
             .route("/health", get(health_handler))
             .route("/ready", get(readiness_handler))
@@ -658,7 +704,10 @@ impl SignalingServer {
             ))
             .with_state(self);
 
-        with_static_fallback_and_security(routes)
+        with_static_fallback_and_security(routes).layer(middleware::from_fn_with_state(
+            metrics,
+            observe_http_request,
+        ))
     }
 
     /// Starts the signaling server on the specified port
@@ -786,6 +835,65 @@ async fn metrics_handler(State(server): State<SignalingServer>, headers: HeaderM
         "Connection permits held by accepted sockets and by handshake authentication work; MAX_CONNECTIONS is enforced against this, not against connections_active",
         server.connection_count() as u64,
     );
+    use std::fmt::Write as _;
+    crate::db::append_error_metrics(&mut body);
+    let revision = std::env::var("SOURCE_REVISION")
+        .ok()
+        .filter(|value| value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .unwrap_or_else(|| "unknown".to_owned());
+    let _ = writeln!(
+        body,
+        "# HELP simplestchat_build_info Deployed server source revision\n# TYPE simplestchat_build_info gauge\nsimplestchat_build_info{{revision=\"{revision}\"}} 1"
+    );
+    if let Some(pool) = &server.db_pool {
+        let total = pool.size() as u64;
+        let idle = pool.num_idle() as u64;
+        let _ = writeln!(
+            body,
+            "# HELP simplestchat_db_pool_connections Current idle and in-use connections plus configured maximum; component reads are not atomic\n# TYPE simplestchat_db_pool_connections gauge"
+        );
+        for (state, count) in [
+            ("idle", idle),
+            ("used", total.saturating_sub(idle)),
+            ("max", u64::from(pool.options().get_max_connections())),
+        ] {
+            let _ = writeln!(
+                body,
+                "simplestchat_db_pool_connections{{state=\"{state}\"}} {count}"
+            );
+        }
+    }
+    let _ = writeln!(
+        body,
+        "# HELP simplestchat_password_work_in_use Password jobs holding permits including jobs whose request was cancelled\n# TYPE simplestchat_password_work_in_use gauge"
+    );
+    for (lane, count) in [
+        (
+            "auth",
+            server
+                .max_password_work
+                .saturating_sub(server.password_work.available_permits()),
+        ),
+        ("room", server.room_manager.pending_password_work()),
+    ] {
+        let _ = writeln!(
+            body,
+            "simplestchat_password_work_in_use{{lane=\"{lane}\"}} {count}"
+        );
+    }
+    let _ = writeln!(
+        body,
+        "# HELP simplestchat_password_work_capacity Configured maximum concurrent password jobs\n# TYPE simplestchat_password_work_capacity gauge"
+    );
+    for (lane, capacity) in [
+        ("auth", server.max_password_work),
+        ("room", server.room_manager.password_work_capacity()),
+    ] {
+        let _ = writeln!(
+            body,
+            "simplestchat_password_work_capacity{{lane=\"{lane}\"}} {capacity}"
+        );
+    }
     (
         StatusCode::OK,
         [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
@@ -832,7 +940,13 @@ async fn ws_handler(
         return (StatusCode::FORBIDDEN, "Origin not allowed").into_response();
     }
     if !server.ws_handshake_guard.allow(client_ip) {
-        warn!(%client_ip, "WebSocket handshake rate limit reached");
+        if server
+            .metrics
+            .telemetry()
+            .warning_should_log(telemetry::WarningFamily::Handshake)
+        {
+            warn!("WebSocket handshake rate limit reached; further instances counted in metrics");
+        }
         server.metrics.inc_upgrade_rejected();
         return (
             StatusCode::TOO_MANY_REQUESTS,
@@ -1026,6 +1140,35 @@ fn trusted_client_ip(
     } else {
         peer.ip()
     }
+}
+
+/// Outermost route layer observes responses from body, deadline, origin, rate
+/// and drain guards. Only Axum's matched template enters metrics or logs.
+async fn observe_http_request(
+    State(metrics): State<ServerMetrics>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let started = Instant::now();
+    let route = request
+        .extensions()
+        .get::<MatchedPath>()
+        .map(|path| path.as_str().to_owned());
+    let method = request.method().as_str().to_owned();
+    let request_id = uuid::Uuid::new_v4().to_string();
+    let span = tracing::info_span!("http_request", request_id = %request_id, route = telemetry::fixed_route(route.as_deref()));
+    let mut response = next.run(request).instrument(span).await;
+    metrics.telemetry().record_http(
+        route.as_deref(),
+        &method,
+        response.status().as_u16(),
+        started.elapsed(),
+    );
+    response.headers_mut().insert(
+        "x-request-id",
+        HeaderValue::from_str(&request_id).expect("UUID is a header value"),
+    );
+    response
 }
 
 async fn guarded_api_request(
@@ -1269,6 +1412,84 @@ fn tuned_listener(
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    #[test]
+    fn ip_capacity_preserves_live_buckets_and_bounds_overflow() {
+        let guard = AuthGuard::new(
+            1,
+            1,
+            Arc::new(None),
+            Arc::new(Vec::new()),
+            ServerMetrics::new(),
+        );
+        let started = Instant::now();
+        for index in 0..MAX_TRACKED_AUTH_IPS as u32 {
+            assert!(guard.allow_at(IpAddr::V4(std::net::Ipv4Addr::from(index)), started));
+        }
+        let victim = IpAddr::V4(std::net::Ipv4Addr::from(0_u32));
+        assert!(!guard.allow_at(victim, started));
+        // These are local keys, not network requests. Capacity is tested without
+        // interacting with production services or exhausting live resources.
+        assert!(guard.allow_at(IpAddr::from([192, 0, 2, 1]), started));
+        for last in 2..=32 {
+            assert!(!guard.allow_at(IpAddr::from([192, 0, 2, last]), started));
+        }
+        assert!(!guard.allow_at(victim, started));
+        let table = guard.entries.lock().unwrap();
+        assert_eq!(table.entries.len(), MAX_TRACKED_AUTH_IPS);
+        assert_eq!(table.order.len(), MAX_TRACKED_AUTH_IPS);
+        drop(table);
+        assert!(guard.allow_at(victim, started + PRINCIPAL_RATE_WINDOW));
+        assert_eq!(guard.entries.lock().unwrap().entries.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn http_metrics_include_outer_timeouts_and_guard_rejections() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let metrics = ServerMetrics::new();
+        let guard = AuthGuard::new(1, 1, Arc::new(None), Arc::new(Vec::new()), metrics.clone());
+        let router = Router::new()
+            .route(
+                "/api/auth/login",
+                axum::routing::post(|| async {
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                    StatusCode::OK
+                }),
+            )
+            .layer(middleware::from_fn_with_state(guard, guarded_api_request))
+            .layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                Duration::from_millis(5),
+            ))
+            .layer(middleware::from_fn_with_state(
+                metrics.clone(),
+                observe_http_request,
+            ));
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        let result = tokio::time::timeout(Duration::from_secs(2), async {
+            for status in [408, 429] {
+                let mut connection = tokio::net::TcpStream::connect(address).await.unwrap();
+                connection.write_all(b"POST /api/auth/login HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 0\r\n\r\n").await.unwrap();
+                let mut response = String::new();
+                connection.read_to_string(&mut response).await.unwrap();
+                assert!(response.starts_with(&format!("HTTP/1.1 {status} ")), "{response}");
+                assert!(response.contains("x-request-id:"));
+            }
+        }).await;
+        task.abort();
+        let _ = task.await;
+        result.unwrap();
+        let snapshot = metrics.render_prometheus(0, 0, 0);
+        for status in [408, 429] {
+            assert!(snapshot.contains(&format!("simplestchat_http_requests_total{{route=\"/api/auth/login\",method=\"POST\",status=\"{status}\"}} 1")), "{snapshot}");
+        }
+    }
 
     #[test]
     fn password_lane_is_sized_from_cpu_quota_not_http_concurrency() {

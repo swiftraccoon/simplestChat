@@ -976,7 +976,13 @@ impl TransportManager {
         cursor: &mut usize,
         max_transport_stats: usize,
     ) -> crate::media::quality::QualitySample {
-        use crate::media::quality::QualitySample;
+        use crate::media::quality::{QualitySample, TransportReading, collect_transport_stats};
+        use std::time::Duration;
+        // One budget covers lock inspection and worker IPC. Busy participants
+        // are skipped immediately: diagnostic work must never queue behind a
+        // media operation. At most eight worker requests run concurrently.
+        let started = std::time::Instant::now();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let participants: Vec<Arc<TokioMutex<ParticipantMedia>>> = {
             let map = self.participants.read().unwrap_or_else(|e| e.into_inner());
             let mut ids: Vec<&String> = map.keys().collect();
@@ -985,10 +991,20 @@ impl TransportManager {
                 .filter_map(|id| map.get(id).cloned())
                 .collect()
         };
-        let mut sample = QualitySample::default();
+        let mut sample = QualitySample {
+            participants_available: participants.len() as u64,
+            ..QualitySample::default()
+        };
         let mut transports = Vec::new();
         for participant in &participants {
-            let participant = participant.lock().await;
+            if tokio::time::Instant::now() >= deadline {
+                sample.budget_exhausted = true;
+                break;
+            }
+            let Ok(participant) = participant.try_lock() else {
+                continue;
+            };
+            sample.participants_sampled += 1;
             for consumer in participant.consumers.values() {
                 if consumer.closed() {
                     continue;
@@ -1001,10 +1017,9 @@ impl TransportManager {
                 );
             }
             for producer in participant.producers.values() {
-                if producer.closed() {
-                    continue;
+                if !producer.closed() {
+                    sample.record_producer(producer.score().iter().map(|score| score.score));
                 }
-                sample.record_producer(producer.score().iter().map(|score| score.score));
             }
             if let Some(transport) = participant.recv_transport.as_ref().filter(|t| !t.closed()) {
                 transports.push(transport.clone());
@@ -1013,22 +1028,25 @@ impl TransportManager {
         let total = transports.len();
         let take = max_transport_stats.min(total);
         let start = if total > 0 { *cursor % total } else { 0 };
-        for offset in 0..take {
-            let transport = &transports[(start + offset) % total];
-            match tokio::time::timeout(std::time::Duration::from_secs(2), transport.get_stats())
-                .await
-            {
-                Ok(Ok(stats)) => {
-                    let stat = stats.first();
-                    sample.record_transport(
-                        stat.and_then(|s| s.rtp_packet_loss_sent),
-                        stat.and_then(|s| s.available_outgoing_bitrate),
-                    );
-                }
-                _ => sample.transport_stats_failed += 1,
+        sample.transports_available = total as u64;
+        sample.transports_selected = take as u64;
+        let requests = (0..take).map(|offset| {
+            let transport = transports[(start + offset) % total].clone();
+            async move {
+                let stats = transport.get_stats().await.ok()?;
+                let stat = stats.first()?;
+                Some(TransportReading {
+                    loss_sent: stat.rtp_packet_loss_sent,
+                    available_outgoing_bitrate: stat.available_outgoing_bitrate,
+                })
             }
-        }
-        *cursor = start + take;
+        });
+        collect_transport_stats(&mut sample, requests, deadline).await;
+        // Advance by work actually started, including failures, for fair retry.
+        *cursor = start + sample.transports_requested as usize;
+        sample.duration = started.elapsed();
+        sample.completed_at = Some(std::time::Instant::now());
+        sample.completed_wall_time = Some(std::time::SystemTime::now());
         sample
     }
 
@@ -1410,6 +1428,35 @@ mod tests {
     use crate::media::router_manager::RouterManager;
     use crate::media::worker_manager::WorkerManager;
     use std::num::{NonZeroU8, NonZeroU32};
+
+    #[tokio::test]
+    async fn quality_sampler_skips_busy_locks_and_reports_partial_coverage() {
+        let manager = TransportManager::new();
+        let busy = Arc::new(TokioMutex::new(ParticipantMedia::new("busy".to_owned())));
+        let available = Arc::new(TokioMutex::new(ParticipantMedia::new(
+            "available".to_owned(),
+        )));
+        manager.participants.write().unwrap().extend([
+            ("busy".to_owned(), busy.clone()),
+            ("available".to_owned(), available),
+        ]);
+        let held = busy.lock().await;
+        let mut cursor = 0;
+        let sample = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            manager.quality_sample(&mut cursor, 100),
+        )
+        .await
+        .expect("sampling must not wait for a busy participant");
+        assert_eq!(sample.participants_available, 2);
+        assert_eq!(sample.participants_sampled, 1);
+        assert!(!sample.budget_exhausted);
+        assert!(sample.completed_at.is_some());
+        drop(held);
+        let next = manager.quality_sample(&mut cursor, 0).await;
+        assert_eq!(next.participants_sampled, 2);
+        assert_eq!(next.transports_requested, 0);
+    }
 
     struct DropCounter(Arc<AtomicUsize>);
 

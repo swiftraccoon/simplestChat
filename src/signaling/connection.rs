@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::sync::{Notify, OwnedSemaphorePermit};
-use tracing::{debug, error, info, warn};
+use tracing::{Instrument, debug, error, info, warn};
 use uuid::Uuid;
 
 #[path = "connection_authentication.rs"]
@@ -909,7 +909,7 @@ async fn handle_connection_with_timing(
     let mut auth_exp = authenticated_user.as_ref().map(|claims| claims.exp as u64);
     let mut auth_deadline = auth_exp.map(credential_expiry_deadline);
 
-    let diagnostic_connection_id = metrics.diagnostics().connection_id();
+    let diagnostic_connection_id = Some(metrics.next_connection_id());
     info!(
         connection_id = diagnostic_connection_id,
         authenticated = is_authenticated,
@@ -1239,7 +1239,15 @@ async fn handle_connection_with_timing(
             }
             rate_limit_violations = rate_limit_violations.saturating_add(1);
             if rate_limit_violations == 1 {
-                warn!("Rate limit exceeded for participant {}", participant_id);
+                if metrics
+                    .telemetry()
+                    .warning_should_log(super::telemetry::WarningFamily::FrameRate)
+                {
+                    warn!(
+                        connection_id = diagnostic_connection_id,
+                        "WebSocket frame rate limit exceeded; further instances counted in metrics"
+                    );
+                }
                 // Inspect at most one bounded rejected frame per violation
                 // window so overload handling does not decode every payload.
                 let request_id = match &msg {
@@ -1460,7 +1468,15 @@ async fn handle_connection_with_timing(
                             CHAT_RATE_LIMIT_REFILL_RATE,
                             MAX_CHAT_TOKENS_US,
                         ) {
-                            warn!(participant_id, "Closing WebSocket for chat flooding");
+                            if metrics
+                                .telemetry()
+                                .warning_should_log(super::telemetry::WarningFamily::ChatRate)
+                            {
+                                warn!(
+                                    connection_id = diagnostic_connection_id,
+                                    "Closing WebSocket for chat flooding; further instances counted in metrics"
+                                );
+                            }
                             let _ = reply.send(
                                 &client_msg
                                     .social_error("Chat rate limit exceeded")
@@ -1538,6 +1554,7 @@ async fn handle_connection_with_timing(
                                 continue;
                             }
 
+                            let reconnect_started = Instant::now();
                             let operation = metrics
                                 .diagnostics()
                                 .operation(OperationKind::Reconnect, diagnostic_connection_id);
@@ -1564,6 +1581,14 @@ async fn handle_connection_with_timing(
                             });
 
                             let success = restored_media_rate_state.is_some();
+                            if success {
+                                metrics.inc_reconnect();
+                            }
+                            metrics.telemetry().record_signaling(
+                                OperationKind::Reconnect,
+                                success,
+                                reconnect_started.elapsed(),
+                            );
                             let fresh_reconnect_token = success.then(|| Uuid::new_v4().to_string());
 
                             if let Some(restored_media_rate_state) = restored_media_rate_state {
@@ -1650,6 +1675,7 @@ async fn handle_connection_with_timing(
                                     client_ip,
                                 ),
                             ))
+                            .instrument(tracing::info_span!("signaling_operation", connection_id = diagnostic_connection_id, operation = ?diagnostic_operation(&client_msg)))
                             .await;
                         operation.finish(match &result {
                             Ok(()) => Outcome::Ok,
@@ -1657,6 +1683,11 @@ async fn handle_connection_with_timing(
                             Err(_) => Outcome::Error,
                         });
                         metrics.observe_message_handling(start.elapsed());
+                        metrics.telemetry().record_signaling(
+                            diagnostic_operation(&client_msg),
+                            result.is_ok(),
+                            start.elapsed(),
+                        );
 
                         // A successful JoinRoom creates a new media-session
                         // incarnation and rotates its reconnect token. Give that

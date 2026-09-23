@@ -20,6 +20,15 @@ fn bucket<T: PartialOrd>(bounds: &[T], value: T) -> usize {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct QualitySample {
+    pub completed_at: Option<std::time::Instant>,
+    pub completed_wall_time: Option<std::time::SystemTime>,
+    pub duration: std::time::Duration,
+    pub participants_available: u64,
+    pub participants_sampled: u64,
+    pub transports_available: u64,
+    pub transports_selected: u64,
+    pub transports_requested: u64,
+    pub budget_exhausted: bool,
     pub consumers: u64,
     pub consumers_paused: u64,
     pub consumer_scores: [u64; SCORE_BUCKETS],
@@ -93,9 +102,123 @@ impl QualitySample {
     }
 }
 
+pub(super) struct TransportReading {
+    pub loss_sent: Option<f64>,
+    pub available_outgoing_bitrate: Option<u32>,
+}
+
+/// Requests are owned futures, so leaving the total budget drops every pending
+/// wait. Per-request deadlines and concurrency are independent of the number of
+/// selected transports; missed/failed observations remain explicitly counted.
+pub(super) async fn collect_transport_stats<F>(
+    sample: &mut QualitySample,
+    requests: impl Iterator<Item = F>,
+    deadline: tokio::time::Instant,
+) where
+    F: std::future::Future<Output = Option<TransportReading>>,
+{
+    use futures_util::{StreamExt, stream};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let requested = AtomicU64::new(0);
+    let requests = stream::iter(requests.map(|request| {
+        let requested = &requested;
+        async move {
+            requested.fetch_add(1, Ordering::Relaxed);
+            tokio::time::timeout(std::time::Duration::from_millis(250), request).await
+        }
+    }))
+    .buffer_unordered(8);
+    tokio::pin!(requests);
+    loop {
+        match tokio::time::timeout_at(deadline, requests.next()).await {
+            Ok(Some(Ok(Some(stat)))) => {
+                sample.record_transport(stat.loss_sent, stat.available_outgoing_bitrate)
+            }
+            Ok(Some(_)) => {}
+            Ok(None) => break,
+            Err(_) => {
+                sample.budget_exhausted = true;
+                break;
+            }
+        }
+    }
+    sample.transports_requested = requested.load(Ordering::Relaxed);
+    sample.transport_stats_failed = sample.transports_requested - sample.transports_sampled;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn stalled_transport_requests_obey_one_budget_and_a_concurrency_cap() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct Active<'a>(&'a AtomicUsize);
+        impl Drop for Active<'_> {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, Ordering::SeqCst);
+            }
+        }
+        let active = AtomicUsize::new(0);
+        let maximum = AtomicUsize::new(0);
+        let requests = (0..100).map(|_| async {
+            let concurrent = active.fetch_add(1, Ordering::SeqCst) + 1;
+            maximum.fetch_max(concurrent, Ordering::SeqCst);
+            let _active = Active(&active);
+            std::future::pending::<Option<TransportReading>>().await
+        });
+        let mut sample = QualitySample::default();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            collect_transport_stats(
+                &mut sample,
+                requests,
+                tokio::time::Instant::now() + std::time::Duration::from_millis(20),
+            ),
+        )
+        .await
+        .expect("the entire sample has one short budget");
+        assert_eq!(maximum.load(Ordering::SeqCst), 8);
+        assert_eq!(
+            active.load(Ordering::SeqCst),
+            0,
+            "pending requests dropped at the deadline"
+        );
+        assert_eq!(sample.transports_requested, 8);
+        assert_eq!(sample.transports_sampled, 0);
+        assert_eq!(sample.transport_stats_failed, 8);
+        assert!(sample.budget_exhausted);
+    }
+
+    #[tokio::test]
+    async fn transport_successes_failures_and_missing_estimates_are_distinct() {
+        let requests = (0..3).map(|index| async move {
+            match index {
+                0 => Some(TransportReading {
+                    loss_sent: Some(0.02),
+                    available_outgoing_bitrate: Some(300_000),
+                }),
+                1 => Some(TransportReading {
+                    loss_sent: None,
+                    available_outgoing_bitrate: None,
+                }),
+                _ => None,
+            }
+        });
+        let mut sample = QualitySample::default();
+        collect_transport_stats(
+            &mut sample,
+            requests,
+            tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+        )
+        .await;
+        assert_eq!(sample.transports_requested, 3);
+        assert_eq!(sample.transports_sampled, 2);
+        assert_eq!(sample.transport_stats_failed, 1);
+        assert_eq!(sample.loss_count(), 1);
+        assert_eq!(sample.bitrate_count(), 1);
+        assert!(!sample.budget_exhausted);
+    }
 
     #[test]
     fn consumers_are_bucketed_by_score_and_active_video_layer() {

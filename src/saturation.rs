@@ -386,6 +386,7 @@ impl SaturationMonitor {
                 worker_state.retain(|id, _| threads.iter().any(|t| t.worker_id == *id));
                 let mut snapshots = Vec::with_capacity(threads.len());
                 let mut any_reading = false;
+                let mut any_cpu_sample = false;
                 let mut every_saturated = true;
                 for thread in threads {
                     let sample = match thread.tid {
@@ -402,6 +403,7 @@ impl SaturationMonitor {
                         .or_insert_with(|| VecDeque::with_capacity(capacity));
                     match sample {
                         Some(cpu_ns) => {
+                            any_cpu_sample = true;
                             if history.len() == capacity {
                                 history.pop_front();
                             }
@@ -442,7 +444,7 @@ impl SaturationMonitor {
                         saturated,
                     });
                 }
-                if !any_reading && !snapshots.is_empty() && !warned_workers {
+                if !any_cpu_sample && !snapshots.is_empty() && !warned_workers {
                     warned_workers = true;
                     warn!(
                         "CPU saturation monitor cannot read media worker thread time; per-worker admission stays unguarded"

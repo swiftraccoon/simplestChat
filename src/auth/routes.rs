@@ -172,6 +172,7 @@ fn authentication_credential_id(result: &AuthenticationResult) -> String {
 }
 
 pub(super) fn database_error(error: sqlx::Error) -> AuthError {
+    crate::db::record_error(&error);
     AuthError::DatabaseError(error.to_string())
 }
 

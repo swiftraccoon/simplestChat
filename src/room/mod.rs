@@ -175,6 +175,7 @@ struct RateWindow {
 struct RateTable<K> {
     entries: HashMap<K, RateWindow>,
     order: std::collections::VecDeque<(K, std::time::Instant)>,
+    overflow: Option<RateWindow>,
 }
 
 impl<K> RateTable<K>
@@ -198,24 +199,6 @@ where
             }
         }
     }
-
-    /// Evicts the live window with the oldest start, never an arbitrary one,
-    /// so a recently limited key keeps its state under capacity pressure.
-    fn evict_oldest(&mut self) {
-        while let Some((key, stamp)) = self.order.pop_front() {
-            if self
-                .entries
-                .get(&key)
-                .is_some_and(|window| window.started_at == stamp)
-            {
-                self.entries.remove(&key);
-                return;
-            }
-        }
-        if let Some(key) = self.entries.keys().next().cloned() {
-            self.entries.remove(&key);
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -233,6 +216,7 @@ where
             table: Arc::new(StdMutex::new(RateTable {
                 entries: HashMap::new(),
                 order: std::collections::VecDeque::new(),
+                overflow: None,
             })),
             max_attempts,
         }
@@ -242,8 +226,21 @@ where
         let mut table = self.table.lock().unwrap_or_else(|error| error.into_inner());
         table.reclaim_expired(now);
         if table.entries.len() >= MAX_TRACKED_JOIN_KEYS && !table.entries.contains_key(&key) {
-            // Memory capacity must not become a global deny switch.
-            table.evict_oldest();
+            // Share a bounded overflow allowance; never renew a live identity's
+            // allowance by evicting its state to accommodate a new identity.
+            let overflow = table.overflow.get_or_insert(RateWindow {
+                started_at: now,
+                attempts: 0,
+            });
+            if now.duration_since(overflow.started_at) >= JOIN_RATE_WINDOW {
+                overflow.started_at = now;
+                overflow.attempts = 0;
+            }
+            if overflow.attempts >= self.max_attempts {
+                return false;
+            }
+            overflow.attempts += 1;
+            return true;
         }
 
         let fresh_window = match table.entries.get_mut(&key) {
@@ -266,9 +263,6 @@ where
         };
         if fresh_window {
             table.order.push_back((key.clone(), now));
-            while table.order.len() > 2 * MAX_TRACKED_JOIN_KEYS {
-                table.evict_oldest();
-            }
         }
         let entry = table.entries.get_mut(&key).expect("window inserted above");
         if entry.attempts >= self.max_attempts {
@@ -1375,6 +1369,10 @@ impl RoomManager {
         });
     }
 
+    pub(crate) fn password_work_capacity(&self) -> usize {
+        self.max_password_verify_work + 1
+    }
+
     /// Jobs retain these permits inside `spawn_blocking`, including after their
     /// requesting socket/HTTP future is cancelled. Includes hash and verify lanes.
     pub(crate) fn pending_password_work(&self) -> usize {
@@ -1781,12 +1779,13 @@ impl RoomManager {
             "Media worker died; recreating it and asking its rooms to rejoin"
         );
         // Capacity first: when this was the only worker, rejoins need it back.
-        if let Err(error) = self
+        let replacement = self
             .media_server
             .worker_manager()
             .recreate_worker(dead_worker)
-            .await
-        {
+            .await;
+        self.metrics.inc_media_worker_recovery(replacement.is_ok());
+        if let Err(error) = replacement {
             error!(
                 %dead_worker,
                 %error,
@@ -5169,6 +5168,7 @@ impl RoomManager {
         room.participants
             .insert(entry.participant_id.clone(), participant);
 
+        self.metrics.inc_lobby_admission();
         // Clear the connection task's lobby guard BEFORE notifying the client,
         // so its follow-up media-setup messages are not rejected.
         entry.in_lobby_flag.store(false, Ordering::Release);
@@ -6677,7 +6677,27 @@ mod security_tests {
     }
 
     #[test]
-    fn join_rate_limiter_reclaims_expired_windows_before_evicting_live_ones() {
+    fn join_capacity_preserves_all_live_windows_and_bounds_overflow() {
+        let limiter = SharedRateLimiter::new(1);
+        let now = std::time::Instant::now();
+        for key in 0..MAX_TRACKED_JOIN_KEYS {
+            assert!(limiter.allow(key, now));
+        }
+        assert!(limiter.allow(MAX_TRACKED_JOIN_KEYS, now));
+        assert!(!limiter.allow(MAX_TRACKED_JOIN_KEYS + 1, now));
+        for key in 0..MAX_TRACKED_JOIN_KEYS {
+            assert!(!limiter.allow(key, now));
+        }
+        assert_eq!(limiter.tracked_keys(), MAX_TRACKED_JOIN_KEYS);
+        let table = limiter.table.lock().unwrap();
+        assert_eq!(table.order.len(), MAX_TRACKED_JOIN_KEYS);
+        drop(table);
+        assert!(limiter.allow(0, now + JOIN_RATE_WINDOW));
+        assert_eq!(limiter.tracked_keys(), 1);
+    }
+
+    #[test]
+    fn join_rate_limiter_reclaims_expired_windows_before_using_capacity() {
         let limiter = SharedRateLimiter::new(1);
         let t0 = std::time::Instant::now();
         let later = |secs: u64| t0 + std::time::Duration::from_secs(secs);

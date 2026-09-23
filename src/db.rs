@@ -8,6 +8,62 @@ use std::str::FromStr;
 use std::time::Duration;
 use tracing::info;
 
+// Process-wide counters let error conversions classify a SQLx error before its
+// private details are redacted, without threading a metrics handle through all
+// transactions. These count instrumented boundaries, not statements or retries.
+const ERROR_KINDS: [&str; 9] = [
+    "pool_timeout",
+    "pool_closed",
+    "connection",
+    "lock_timeout",
+    "cancelled",
+    "serialization",
+    "deadlock",
+    "constraint",
+    "other",
+];
+static DATABASE_ERRORS: [std::sync::atomic::AtomicU64; 9] =
+    [const { std::sync::atomic::AtomicU64::new(0) }; 9];
+
+fn error_kind(error: &sqlx::Error) -> usize {
+    match error {
+        sqlx::Error::PoolTimedOut => 0,
+        sqlx::Error::PoolClosed => 1,
+        sqlx::Error::Io(_) | sqlx::Error::Tls(_) | sqlx::Error::Protocol(_) => 2,
+        sqlx::Error::Database(error) => match error.code().as_deref() {
+            Some("55P03") => 3,
+            Some("57014") => 4,
+            Some("40001") => 5,
+            Some("40P01") => 6,
+            Some(code) if code.starts_with("23") => 7,
+            Some(code) if code.starts_with("08") => 2,
+            _ => 8,
+        },
+        _ => 8,
+    }
+}
+
+/// Count a failure at one error-conversion boundary, before redacting details.
+/// Do not call this twice while propagating the same error.
+pub fn record_error(error: &sqlx::Error) {
+    DATABASE_ERRORS[error_kind(error)].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub(crate) fn append_error_metrics(out: &mut String) {
+    use std::fmt::Write as _;
+    let _ = writeln!(
+        out,
+        "# HELP simplestchat_database_errors_total Database errors at instrumented API conversion boundaries, not all statements; cancelled includes statement deadlines\n# TYPE simplestchat_database_errors_total counter"
+    );
+    for (kind, counter) in ERROR_KINDS.iter().zip(&DATABASE_ERRORS) {
+        let _ = writeln!(
+            out,
+            "simplestchat_database_errors_total{{kind=\"{kind}\"}} {}",
+            counter.load(std::sync::atomic::Ordering::Relaxed)
+        );
+    }
+}
+
 pub async fn connect() -> anyhow::Result<Option<PgPool>> {
     let url = match std::env::var("DATABASE_URL") {
         Ok(url) => url,
@@ -33,6 +89,7 @@ pub async fn connect() -> anyhow::Result<Option<PgPool>> {
         .idle_timeout(Duration::from_secs(600))
         .max_lifetime(Duration::from_secs(1800))
         .acquire_timeout(Duration::from_secs(3))
+        .acquire_slow_threshold(Duration::from_millis(500))
         .connect_with(options)
         .await?;
 
@@ -99,6 +156,26 @@ fn run_migrations() -> anyhow::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pool_failures_are_classified_without_error_text() {
+        assert_eq!(
+            ERROR_KINDS[error_kind(&sqlx::Error::PoolTimedOut)],
+            "pool_timeout"
+        );
+        assert_eq!(
+            ERROR_KINDS[error_kind(&sqlx::Error::PoolClosed)],
+            "pool_closed"
+        );
+        assert_eq!(
+            ERROR_KINDS[error_kind(&sqlx::Error::Protocol("private details".to_owned()))],
+            "connection"
+        );
+        assert_eq!(ERROR_KINDS[error_kind(&sqlx::Error::RowNotFound)], "other");
+        let mut snapshot = String::new();
+        append_error_metrics(&mut snapshot);
+        assert!(!snapshot.contains("private details"));
+    }
 
     #[test]
     fn rejects_remote_database_without_full_verification() {
