@@ -3,16 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SimplestChat</title>
+    <title>simplestChat</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div id="app">
       <header>
         <div class="header-left">
-          <h1>SimplestChat</h1>
+          <h1><a id="home-link" href="/" aria-label="simplestChat home">simplestChat</a></h1>
           <span id="room-label" class="room-label" hidden></span>
-          <span id="room-topic" class="room-topic" hidden></span>
+          <button
+            id="room-topic"
+            class="room-topic"
+            type="button"
+            aria-haspopup="dialog"
+            title="Read room topic"
+            hidden
+          ></button>
         </div>
         <div class="header-right">
           <a
@@ -51,13 +58,13 @@
         <div class="join-card">
           <!-- Auth bar: shown when logged out -->
           <div id="auth-bar-guest" class="auth-bar">
-            <div class="join-brand">SimplestChat</div>
+            <div class="join-brand">simplestChat</div>
             <div class="join-subtitle">Video chat, simplified</div>
             <button id="sign-in-btn" class="auth-link-btn">Sign in</button>
           </div>
           <!-- Auth bar: shown when logged in -->
           <div id="auth-bar-user" class="auth-bar" hidden>
-            <div class="join-brand">SimplestChat</div>
+            <div class="join-brand">simplestChat</div>
             <div class="auth-user-info">
               <span id="auth-display-name"></span>
               <button id="logout-btn" class="auth-link-btn">Sign out</button>
@@ -413,6 +420,12 @@
               <button id="login-passkey-btn" class="auth-link-btn">Use a passkey</button>
               <button id="login-to-register" class="auth-link-btn">Create account</button>
             </div>
+            <p class="auth-passkey-help">
+              Use your password manager's browser extension or your device.
+              <a href="/help.html#passkeys" target="_blank" rel="noopener"
+                >Passkey help (new tab)</a
+              >
+            </p>
           </div>
         </div>
       </div>
@@ -469,6 +482,13 @@
                 Already have an account? Sign in
               </button>
             </div>
+            <p class="auth-passkey-help">
+              A passkey replaces your password. Save it in your password manager's browser extension
+              or on your device.
+              <a href="/help.html#passkeys" target="_blank" rel="noopener"
+                >Passkey help (new tab)</a
+              >
+            </p>
           </div>
         </div>
       </div>

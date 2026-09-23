@@ -1880,7 +1880,8 @@ async function setRole(owner, name, role) {
       await mine.getByRole('button', { name: 'Edit room', exact: true }).click();
       const edit = owner.getByRole('dialog', { name: 'Edit E2E Community Room', exact: true });
       await edit.getByLabel('Room display name', { exact: true }).fill('E2E Edited Room');
-      await edit.getByLabel('Topic', { exact: true }).fill('Edited live topic');
+      const topic = 'Edited live topic. ' + 'Everyone can read the full room topic. '.repeat(8);
+      await edit.getByLabel('Topic', { exact: true }).fill(topic);
       await edit
         .getByLabel('Description / room rules', { exact: true })
         .fill('Browser-tested room description');
@@ -1889,10 +1890,26 @@ async function setRole(owner, name, role) {
       await edit.waitFor({ state: 'hidden' });
       await visible(owner, 'E2E Edited Room');
       await close(mine);
-      await guest
-        .locator('#room-topic')
-        .filter({ hasText: 'Edited live topic' })
-        .waitFor({ state: 'visible' });
+      await guest.locator('#room-topic').filter({ hasText: topic }).waitFor({ state: 'visible' });
+      const topicBounds = await guest.locator('#room-topic').boundingBox();
+      assert.ok(topicBounds.width > 300, 'topic uses the available desktop header width');
+      assert.ok(
+        await guest
+          .locator('#room-topic')
+          .evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+        'full topic wraps without clipping',
+      );
+      await guest.locator('#room-topic').focus();
+      await guest.keyboard.press('Enter');
+      const topicDialog = guest.getByRole('dialog', { name: 'Room topic', exact: true });
+      await topicDialog.getByText(topic, { exact: true }).waitFor({ state: 'visible' });
+      assert.equal(await topicDialog.getByRole('button', { name: 'Edit topic' }).count(), 0);
+      await guest.keyboard.press('Escape');
+      await topicDialog.waitFor({ state: 'hidden' });
+      assert.equal(
+        await guest.locator('#room-topic').evaluate((node) => node === document.activeElement),
+        true,
+      );
     });
     let recoveryKey;
     await step('save-once recovery key and password change signs out current room', async () => {
@@ -1957,6 +1974,12 @@ async function setRole(owner, name, role) {
         fullPage: true,
       });
       await close(nickname);
+      await mobile.getByRole('link', { name: 'simplestChat home', exact: true }).focus();
+      await mobile.keyboard.press('Enter');
+      await mobile.locator('#join-screen').waitFor({ state: 'visible' });
+      assert.equal(new URL(mobile.url()).pathname, '/');
+      assert.equal(new URL(mobile.url()).search, '');
+      await join(mobile, 'Mobile Guest');
       await leave(mobile);
       await owner.setViewportSize({ width: 390, height: 844 });
       assert.ok(

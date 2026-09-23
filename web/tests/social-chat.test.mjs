@@ -439,7 +439,7 @@ test('batched replay preserves unread counts, scroll position, input focus and d
   const retained = rows(f);
   assert.equal(f.chat.messages.scrollTop, 40);
   assert.equal(f.chat.store.unread.get('public'), 300);
-  assert.equal(f.document.title, '(300) SimplestChat');
+  assert.equal(f.document.title, '(300) simplestChat');
   f.chat.handleEvent(snapshot(history));
   assert.equal(f.chat.store.unread.get('public'), 300);
   assert.deepEqual(rows(f), retained);
@@ -448,7 +448,7 @@ test('batched replay preserves unread counts, scroll position, input focus and d
   f.document.getElementById('scroll-bottom-btn').click();
   assert.equal(f.chat.messages.scrollTop, 1000);
   assert.equal(f.chat.store.unread.size, 0);
-  assert.equal(f.document.title, 'SimplestChat');
+  assert.equal(f.document.title, 'simplestChat');
   f.document.getElementById('chat-panel').className = '';
   f.chat.handleEvent(snapshot([entry(300)]));
   assert.equal(f.chat.store.unread.get('public'), 1, 'a hidden panel must not mark replay as read');
@@ -695,14 +695,14 @@ test('public and PM unread counts survive hidden panels, deduplicate replay, and
   f.chat.receive(entry('private', { recipientId: 'local' }), true);
   assert.equal(f.chat.store.unread.get('public'), 1);
   assert.equal(f.chat.store.unread.get('alice'), 1);
-  assert.equal(f.document.title, '(2) SimplestChat');
+  assert.equal(f.document.title, '(2) simplestChat');
   f.document.getElementById('chat-panel').className = 'active';
   f.chat.participantsChanged();
   assert.equal(f.chat.store.unread.has('public'), false);
   assert.equal(f.chat.store.unread.get('alice'), 1);
   f.chat.openPrivate('alice', 'Alice');
   assert.equal(f.chat.store.unread.size, 0);
-  assert.equal(f.document.title, 'SimplestChat');
+  assert.equal(f.document.title, 'simplestChat');
 });
 
 test('saved sound preferences unlock on the next gesture and audio failure is nonfatal', async () => {

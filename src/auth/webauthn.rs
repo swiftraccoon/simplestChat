@@ -252,7 +252,7 @@ pub fn init_webauthn() -> anyhow::Result<Option<(Webauthn, Arc<ChallengeStore>)>
 
     let webauthn = WebauthnBuilder::new(&rp_id, &origin)
         .map_err(|error| anyhow::anyhow!("Invalid WebAuthn relying party: {error}"))?
-        .rp_name("SimplestChat")
+        .rp_name("simplestChat")
         .build()
         .map_err(|error| anyhow::anyhow!("Invalid WebAuthn configuration: {error}"))?;
 

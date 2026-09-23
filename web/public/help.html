@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Help · SimplestChat</title>
+    <title>Help · simplestChat</title>
     <link rel="stylesheet" href="/help.css" />
   </head>
   <body>
     <a class="skip-link" href="#help-content">Skip to help</a>
     <header>
-      <a href="/">SimplestChat</a>
+      <a href="/">simplestChat</a>
       <span>Help</span>
     </header>
     <main id="help-content">
@@ -23,6 +23,7 @@
         <a href="#messages">Messages and privacy</a>
         <a href="#hosting">Hosting a room</a>
         <a href="#account">Accounts and recovery</a>
+        <a href="#passkeys">Passkeys and password managers</a>
         <a href="#trouble">When something goes wrong</a>
       </nav>
       <section aria-labelledby="join">
@@ -140,6 +141,30 @@
           There is no password-reset email flow. Do not assume an operator can recover an account
           without a working sign-in method or saved recovery key. Never send passwords, passkeys,
           recovery keys or session credentials in chat or reports.
+        </p>
+      </section>
+      <section aria-labelledby="passkeys">
+        <h2 id="passkeys">Passkeys and password managers</h2>
+        <p>
+          Choose <strong>Register with passkey</strong> after entering your email and display name.
+          You do not need to fill in the password fields. Your browser or password manager asks
+          where to save the passkey. simplestChat cannot select a particular provider for you.
+        </p>
+        <p>
+          To save in Bitwarden, use its browser extension. If the system prompt opens instead,
+          cancel it before checking the extension. In Bitwarden's
+          <strong>Settings → Notifications</strong>, enable
+          <strong>Ask to save and use passkeys</strong> and check that this site is not in the
+          excluded or blocked domains. Reload the page and try again.
+          <a href="https://bitwarden.com/help/storing-passkeys/" target="_blank" rel="noopener"
+            >Bitwarden's passkey instructions (new tab)</a
+          >
+        </p>
+        <p>
+          A passkey QR code in the browser's system prompt is for continuing on a nearby phone. Use
+          that phone's camera when choosing this route. Bitwarden's screen scanner for verification
+          codes does not import a passkey from this QR code. Cancel the system prompt to return to
+          the browser and use the extension instead.
         </p>
       </section>
       <section aria-labelledby="trouble">

@@ -11,7 +11,7 @@ import { AuthManager } from './auth';
 import { MediaControls } from './media-controls';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
-import { api, ApiError, safeRasterUrl } from './ui';
+import { api, ApiError, button, el, modal, safeRasterUrl } from './ui';
 import { configureSettingsDialog } from './settings-dialog';
 import { avatarColors } from './avatar-colors';
 import { spatialLayerForRenderedWidth } from './layer-cap';
@@ -24,6 +24,7 @@ const joinScreen = document.getElementById('join-screen')!;
 const roomScreen = document.getElementById('room-screen')!;
 const roomLabel = document.getElementById('room-label')!;
 const roomTopic = document.getElementById('room-topic')!;
+const homeLink = document.getElementById('home-link')!;
 const nameInput = document.getElementById('name-input') as HTMLInputElement;
 const roomInput = document.getElementById('room-input') as HTMLInputElement;
 const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
@@ -78,7 +79,7 @@ const loginEmail = document.getElementById('login-email') as HTMLInputElement;
 const loginPassword = document.getElementById('login-password') as HTMLInputElement;
 const loginSubmit = document.getElementById('login-submit') as HTMLButtonElement;
 const loginError = document.getElementById('login-error')!;
-const loginPasskeyBtn = document.getElementById('login-passkey-btn')!;
+const loginPasskeyBtn = document.getElementById('login-passkey-btn') as HTMLButtonElement;
 const loginToRegister = document.getElementById('login-to-register')!;
 
 // Register modal
@@ -90,7 +91,7 @@ const registerPassword = document.getElementById('register-password') as HTMLInp
 const registerConfirm = document.getElementById('register-confirm') as HTMLInputElement;
 const registerSubmit = document.getElementById('register-submit') as HTMLButtonElement;
 const registerError = document.getElementById('register-error')!;
-const registerPasskeyBtn = document.getElementById('register-passkey-btn')!;
+const registerPasskeyBtn = document.getElementById('register-passkey-btn') as HTMLButtonElement;
 const registerToLogin = document.getElementById('register-to-login')!;
 
 // Create room modal
@@ -1089,6 +1090,7 @@ loginSubmit.addEventListener(
   asyncUiAction(async () => {
     loginError.hidden = true;
     loginSubmit.disabled = true;
+    loginPasskeyBtn.disabled = true;
     loginSubmit.textContent = 'Signing in...';
     try {
       await auth.login(loginEmail.value.trim(), loginPassword.value);
@@ -1100,6 +1102,7 @@ loginSubmit.addEventListener(
       loginError.hidden = false;
     } finally {
       loginSubmit.disabled = false;
+      loginPasskeyBtn.disabled = false;
       loginSubmit.textContent = 'Sign In';
     }
   }, 'Could not complete sign-in'),
@@ -1115,6 +1118,7 @@ loginPassword.addEventListener('keydown', (e) => {
 loginPasskeyBtn.addEventListener(
   'click',
   asyncUiAction(async () => {
+    if (loginPasskeyBtn.disabled) return;
     const email = loginEmail.value.trim();
     if (!email) {
       loginError.textContent = 'Enter your email first';
@@ -1122,6 +1126,9 @@ loginPasskeyBtn.addEventListener(
       return;
     }
     loginError.hidden = true;
+    loginPasskeyBtn.disabled = true;
+    loginSubmit.disabled = true;
+    loginPasskeyBtn.textContent = 'Waiting for passkey...';
     try {
       const options = await auth.passkeyLoginStart(email);
       const credential = await navigator.credentials.get(options);
@@ -1131,11 +1138,21 @@ loginPasskeyBtn.addEventListener(
       loginEmail.value = '';
       loginPassword.value = '';
     } catch (e) {
-      loginError.textContent = e instanceof Error ? e.message : 'Passkey login failed';
+      loginError.textContent = passkeyErrorMessage(e, 'Passkey sign-in failed');
       loginError.hidden = false;
+    } finally {
+      loginPasskeyBtn.disabled = false;
+      loginSubmit.disabled = false;
+      loginPasskeyBtn.textContent = 'Use a passkey';
     }
   }, 'Could not complete passkey sign-in'),
 );
+
+function passkeyErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && (error.name === 'NotAllowedError' || error.name === 'AbortError'))
+    return 'Passkey request cancelled or timed out. You can try again. See Passkey help if your password manager did not appear.';
+  return error instanceof Error ? error.message : fallback;
+}
 
 loginToRegister.addEventListener('click', () => {
   loginModal.hidden = true;
@@ -1165,6 +1182,7 @@ registerSubmit.addEventListener(
       return;
     }
     registerSubmit.disabled = true;
+    registerPasskeyBtn.disabled = true;
     registerSubmit.textContent = 'Creating account...';
     try {
       await auth.register(
@@ -1182,6 +1200,7 @@ registerSubmit.addEventListener(
       registerError.hidden = false;
     } finally {
       registerSubmit.disabled = false;
+      registerPasskeyBtn.disabled = false;
       registerSubmit.textContent = 'Create Account';
     }
   }, 'Could not complete registration'),
@@ -1190,6 +1209,7 @@ registerSubmit.addEventListener(
 registerPasskeyBtn.addEventListener(
   'click',
   asyncUiAction(async () => {
+    if (registerPasskeyBtn.disabled) return;
     const email = registerEmail.value.trim();
     const displayName = registerName.value.trim();
     if (!email || !displayName) {
@@ -1198,6 +1218,9 @@ registerPasskeyBtn.addEventListener(
       return;
     }
     registerError.hidden = true;
+    registerPasskeyBtn.disabled = true;
+    registerSubmit.disabled = true;
+    registerPasskeyBtn.textContent = 'Waiting for passkey...';
     try {
       const options = await auth.passkeyRegisterStart(email, displayName);
       const credential = await navigator.credentials.create(options);
@@ -1209,8 +1232,12 @@ registerPasskeyBtn.addEventListener(
       registerPassword.value = '';
       registerConfirm.value = '';
     } catch (e) {
-      registerError.textContent = e instanceof Error ? e.message : 'Passkey registration failed';
+      registerError.textContent = passkeyErrorMessage(e, 'Passkey registration failed');
       registerError.hidden = false;
+    } finally {
+      registerPasskeyBtn.disabled = false;
+      registerSubmit.disabled = false;
+      registerPasskeyBtn.textContent = 'Register with passkey';
     }
   }, 'Could not complete passkey registration'),
 );
@@ -1633,15 +1660,36 @@ function applyJoinedRoomUI(): void {
   community.refresh();
 }
 
-// Topic click-to-edit for Admin+ — registered once at module level.
-// (Registering inside the join handler stacked one listener per join.)
+let roomTopicView: ReturnType<typeof modal> | null = null;
+
+// Every participant can read the full topic; editing still uses room permissions.
 roomTopic.addEventListener('click', () => {
-  const role = room?.role ?? 'user';
-  if (role !== 'owner' && role !== 'admin') return;
-  const current = room?.roomSettings?.topic ?? '';
-  const newTopic = prompt('Enter new topic:', current);
-  if (newTopic !== null && newTopic !== current) {
-    room?.setTopic(newTopic);
+  if (!room || !roomTopic.textContent) return;
+  const activeRoom = room;
+  const membership = room.membershipVersion;
+  roomTopicView?.close();
+  const view = modal('Room topic');
+  roomTopicView = view;
+  view.dialog.addEventListener(
+    'close',
+    () => {
+      if (roomTopicView === view) roomTopicView = null;
+    },
+    { once: true },
+  );
+  view.body.append(el('p', roomTopic.textContent, 'room-topic-full'));
+  if (room.role === 'owner' || room.role === 'admin') {
+    view.body.append(
+      button('Edit topic', () => {
+        view.close();
+        if (
+          room === activeRoom &&
+          room.membershipVersion === membership &&
+          (room.role === 'owner' || room.role === 'admin')
+        )
+          roomSettingsBtn.click();
+      }),
+    );
   }
 });
 
@@ -1652,7 +1700,17 @@ lobbyCancelBtn.addEventListener(
 );
 
 // --- Leave ---
-async function leaveCurrentRoom(): Promise<void> {
+let departureInProgress: Promise<void> | null = null;
+
+function leaveCurrentRoom(): Promise<void> {
+  departureInProgress ??= leaveRoomAndShowHome().finally(() => {
+    departureInProgress = null;
+  });
+  return departureInProgress;
+}
+
+async function leaveRoomAndShowHome(): Promise<void> {
+  roomTopicView?.close();
   document.getElementById('room-recovery-notice')?.remove();
   pttDeactivate();
   mediaControls.reset();
@@ -1731,6 +1789,20 @@ leaveBtn.addEventListener(
   'click',
   asyncUiAction(leaveCurrentRoom, 'Could not finish leaving the room'),
 );
+
+homeLink.addEventListener('click', (event) => {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+    return;
+  event.preventDefault();
+  observeUiTask(
+    (async () => {
+      await leaveCurrentRoom();
+      history.replaceState(null, '', '/');
+      homeLink.focus();
+    })(),
+    'Could not return to the homepage',
+  );
+});
 
 // --- Control buttons ---
 function updateMicButton(enabled: boolean): void {

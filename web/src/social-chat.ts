@@ -576,7 +576,7 @@ export class SocialChat {
 
   private updateBadges(): void {
     const total = [...this.store.unread.values()].reduce((sum, count) => sum + count, 0);
-    document.title = total ? `(${Math.min(total, 999)}) SimplestChat` : 'SimplestChat';
+    document.title = total ? `(${Math.min(total, 999)}) simplestChat` : 'simplestChat';
     const badge = document.getElementById('unread-badge')!;
     const activeUnread = this.store.unread.get(this.store.active) ?? 0;
     badge.textContent = String(activeUnread);

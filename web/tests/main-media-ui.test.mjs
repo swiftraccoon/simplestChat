@@ -44,6 +44,39 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+test('concurrent home and leave actions share cleanup until it finishes', async () => {
+  let cleanup = deferred();
+  let departures = 0;
+  const api = evaluateTypeScript(
+    `let departureInProgress = null;
+     ${await functionSource('leaveCurrentRoom')}
+     export { leaveCurrentRoom };`,
+    {
+      globals: {
+        leaveRoomAndShowHome() {
+          departures++;
+          return cleanup.promise;
+        },
+      },
+    },
+  );
+  const first = api.leaveCurrentRoom();
+  assert.equal(api.leaveCurrentRoom(), first);
+  assert.equal(departures, 1);
+  cleanup.resolve();
+  await first;
+  cleanup = deferred();
+  const next = api.leaveCurrentRoom();
+  assert.equal(departures, 2);
+  cleanup.reject(new Error('Cleanup failed'));
+  await assert.rejects(next, /Cleanup failed/);
+  cleanup = deferred();
+  const retry = api.leaveCurrentRoom();
+  assert.equal(departures, 3, 'failed cleanup must not latch future departures');
+  cleanup.resolve();
+  await retry;
+});
+
 for (const scenario of ['cancel', 'leave', 'rejoin', 'save']) {
   test(`camera setup ${scenario} honors the current room before publishing`, async () => {
     const pending = deferred();
