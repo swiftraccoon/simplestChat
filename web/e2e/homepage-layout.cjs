@@ -109,6 +109,16 @@ async function geometry(page) {
     const intersects = (first, second) =>
       Math.min(first.right, second.right) - Math.max(first.left, second.left) > 1 &&
       Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > 1;
+    const header = document.querySelector('header');
+    const headerControls = [...header.querySelectorAll('a, button, .status, .quality-dot')].filter(
+      (node) => node.getClientRects().length,
+    );
+    for (let index = 0; index < headerControls.length; index++) {
+      inside(box(headerControls[index]), box(header), 'header control');
+      for (const sibling of headerControls.slice(index + 1))
+        if (intersects(box(headerControls[index]), box(sibling)))
+          problem('header controls: overlap');
+    }
     for (const room of document.querySelectorAll('.room-card')) {
       const children = [...room.children];
       for (let index = 0; index < children.length; index++) {
