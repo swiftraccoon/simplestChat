@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadTypeScript } from './source-loader.mjs';
 
-async function fixture(t) {
+async function fixture(t, cryptoApi = globalThis.crypto) {
   const requests = [];
   const intervals = new Map();
   const timeouts = new Map();
@@ -11,6 +11,7 @@ async function fixture(t) {
   let now = 0;
   const api = await loadTypeScript('src/telemetry.ts', {
     globals: {
+      crypto: cryptoApi,
       navigator: { userAgent: 'Secret profile Firefox/150.0' },
       performance: { now: () => now },
       localStorage: {
@@ -47,6 +48,22 @@ async function fixture(t) {
     },
   };
 }
+
+test('diagnostics initialize without secure-context randomUUID and survive unavailable randomness', async (t) => {
+  const insecure = await fixture(t, {
+    getRandomValues: (bytes) => bytes.fill(42),
+  });
+  assert.match(JSON.parse(insecure.telemetry.summary()).localReportReference, /^[a-f0-9]{32}$/);
+  const unavailable = await fixture(t, {
+    getRandomValues: () => {
+      throw new Error('Unavailable browser API');
+    },
+  });
+  unavailable.telemetry.record({ name: 'connection', outcome: 'started' });
+  const summary = JSON.parse(unavailable.telemetry.summary());
+  assert.equal(summary.localReportReference, 'unavailable');
+  assert.equal(summary.events.length, 1);
+});
 
 test('network reporting is opt-in and projects only fixed fields without IDs, secrets, referrers or cookies', async (t) => {
   const f = await fixture(t);

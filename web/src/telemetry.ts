@@ -12,6 +12,17 @@ const FLUSH_MS = 10_000;
 const FETCH_TIMEOUT_MS = 5_000;
 const SESSION_MS = 30 * 60_000;
 
+function createLocalReportReference(): string {
+  try {
+    // randomUUID is unavailable on non-secure origins. This local report ID
+    // must never make optional diagnostics a prerequisite for app startup.
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return 'unavailable';
+  }
+}
+
 export function browserFamily(agent: string): 'firefox' | 'chromium' | 'safari' | 'other' {
   if (/Firefox\//i.test(agent)) return 'firefox';
   if (/(Chrome|Chromium|Edg)\//i.test(agent)) return 'chromium';
@@ -58,7 +69,7 @@ export class ClientTelemetry {
     }
   }
   private epoch = performance.now();
-  private localReportReference = crypto.randomUUID();
+  private localReportReference = createLocalReportReference();
   private attemptSequence = 0;
   private recentCounts = new Map<string, number>();
   private timer: ReturnType<typeof setInterval>;
@@ -91,7 +102,7 @@ export class ClientTelemetry {
     const now = performance.now();
     if (now - this.epoch >= SESSION_MS) {
       this.epoch = now;
-      this.localReportReference = crypto.randomUUID();
+      this.localReportReference = createLocalReportReference();
       this.history = [];
     }
     const key = `${event.name}:${event.outcome}`;
