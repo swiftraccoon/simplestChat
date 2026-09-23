@@ -17,6 +17,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Include the PR head beneath GitHub's synthetic merge commit.
+          fetch-depth: 2
+      - name: Check the branch tip commit subject
+        env:
+          COMMIT_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          git log -1 --format=%B "$COMMIT_REVISION" > "${RUNNER_TEMP}/commit-message"
+          .githooks/commit-msg "${RUNNER_TEMP}/commit-message"
       - name: Install isolated controller checks
         run: |
           sudo apt-get update

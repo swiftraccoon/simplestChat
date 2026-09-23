@@ -71,12 +71,14 @@ async function fixture(t, { installedWeb = true, installedOpenSsl = true, omitte
     mkdir(path.join(root, 'build/tests'), { recursive: true }),
     mkdir(path.join(root, 'load_tests'), { recursive: true }),
     mkdir(path.join(root, 'web'), { recursive: true }),
+    mkdir(path.join(root, '.githooks'), { recursive: true }),
     mkdir(toolchainBin, { recursive: true }),
     mkdir(bin),
     writeFile(dispatcher, fakeTool),
     writeFile(log, ''),
   ]);
   await copyFile(checker, path.join(root, 'build/check.sh'));
+  await writeFile(path.join(root, '.githooks/commit-msg'), '#!/bin/sh\nexit 99 # must never execute\n');
   for (const name of helperNames.filter(name => !['check.sh', 'check-python.sh'].includes(name))) {
     await writeFile(path.join(root, 'build', name), '#!/bin/sh\nexit 99 # must never execute\n');
   }
@@ -205,12 +207,12 @@ test('helper checks syntax-check every shell file individually before running on
   const result = await setup.run(['--helpers']);
   assert.equal(result.status, 0, result.output);
   assert.deepEqual(result.events.filter(event => event.command === 'sh').map(event => event.args), [
-    ['-n', 'build/check.sh'], ['-n', 'build/run-local.sh'],
+    ['-n', 'build/check.sh'], ['-n', 'build/run-local.sh'], ['-n', '.githooks/commit-msg'],
   ]);
   assert.deepEqual(result.events.filter(event => event.command === 'bash').map(event => event.args),
     setup.helperNames.map(name => ['-n', `build/${name}`]));
   assert.deepEqual(result.events.find(event => event.command === 'shellcheck').args,
-    setup.helperNames.map(name => `build/${name}`));
+    [...setup.helperNames.map(name => `build/${name}`), '.githooks/commit-msg']);
   assert.deepEqual(result.events.at(-1).args, [
     '--test', 'build/tests/first.test.mjs', 'build/tests/second.test.mjs', 'load_tests/benchmark-local.test.mjs',
   ]);
@@ -249,7 +251,7 @@ test('default quality check runs web, Rust, Python and helper groups in order', 
   assert.equal(result.status, 0, result.output);
   assert.deepEqual(result.events.map(event => event.command), [
     'npm', 'npm', 'npm', 'npm', 'rustup', 'rustup', 'rustup', 'rustup', 'rustup',
-    'python-check', 'sh', 'sh', ...setup.helperNames.map(() => 'bash'), 'shellcheck', 'node',
+    'python-check', 'sh', 'sh', 'sh', ...setup.helperNames.map(() => 'bash'), 'shellcheck', 'node',
   ]);
 });
 
@@ -289,7 +291,7 @@ for (const [phase, lastCommand] of [
   ['rustup-which-rustc', 'rustup'], ['rustup-which-rustdoc', 'rustup'],
   ['cargo-fmt', 'rustup'], ['cargo-clippy', 'rustup'], ['cargo-doc', 'rustup'],
   ['python-check', 'python-check'],
-  ['sh:build/run-local.sh', 'sh'], ['bash:build/helper with spaces.sh', 'bash'], ['shellcheck', 'shellcheck'], ['helper-tests', 'node'],
+  ['sh:build/run-local.sh', 'sh'], ['sh:.githooks/commit-msg', 'sh'], ['bash:build/helper with spaces.sh', 'bash'], ['shellcheck', 'shellcheck'], ['helper-tests', 'node'],
 ]) {
   test(`default quality check stops immediately and preserves ${phase} failure status`, async t => {
     const setup = await fixture(t);

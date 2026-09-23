@@ -149,7 +149,15 @@ Public-platform readiness also needs current capacity measurements, recovery
 drills and operational monitoring. Keep those limitations visible until the
 corresponding behavior is implemented and verified.
 
-Use focused commits with an imperative subject and explain the reason for
-non-obvious changes in the body. Keep mechanical formatting separate from
+Use focused commits with a Conventional Commit subject: `type(scope): description`
+or `type: description`, for example `fix(web): prevent overlapping controls`.
+Use an imperative description and explain non-obvious changes in the body.
+Enable the shared check in each checkout with
+`git config --local core.hooksPath .githooks`. The hook rejects malformed subjects
+before creating a commit; CI also checks the branch tip, including the actual
+PR head instead of GitHub's generated merge message. Supported types are `feat`,
+`fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`,
+and `ops`; breaking changes may add `!` before the colon.
+Keep mechanical formatting separate from
 behavior changes where practical. Do not commit secrets, captured user data,
 generated build outputs or local agent instructions.

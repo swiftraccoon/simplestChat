@@ -1,0 +1,16 @@
+#!/bin/sh
+# Shared commit-subject check; enable with git config --local core.hooksPath .githooks.
+set -eu
+
+if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+    echo 'Usage: .githooks/commit-msg COMMIT_MESSAGE_FILE' >&2
+    exit 2
+fi
+
+subject="$(head -n 1 "$1")"
+if ! printf '%s\n' "$subject" | LC_ALL=C grep -Eq \
+    '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|ops)(\([a-z0-9][a-z0-9._/-]*\))?!?: [^[:space:]].*$'; then
+    echo 'Commit subject must use type(scope): description, or type: description.' >&2
+    echo 'Example: fix(web): prevent header controls from overlapping' >&2
+    exit 1
+fi

@@ -72,8 +72,8 @@ if [ "$check_group" = all ] || [ "$check_group" = python ]; then
 fi
 
 if [ "$check_group" = all ] || [ "$check_group" = helpers ]; then
-    for helper_script in build/check.sh build/run-local.sh; do sh -n "$helper_script"; done
+    for helper_script in build/check.sh build/run-local.sh .githooks/commit-msg; do sh -n "$helper_script"; done
     for helper_script in build/*.sh; do bash -n "$helper_script"; done
-    shellcheck build/*.sh
+    shellcheck build/*.sh .githooks/commit-msg
     node --test build/tests/*.test.mjs load_tests/benchmark-local.test.mjs
 fi
