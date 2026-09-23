@@ -59,6 +59,7 @@ jobs:
         run: |
           docker run --rm --network=none --read-only --cap-drop=ALL \
             --security-opt=no-new-privileges:true --memory=128m --cpus=0.25 --pids-limit=64 \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m \
             --volume "$PWD/ops/ansible:/work:ro" --workdir /work/tests \
             --entrypoint /bin/promtool \
             quay.io/prometheus/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0 \
