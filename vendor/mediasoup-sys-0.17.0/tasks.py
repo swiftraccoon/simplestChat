@@ -63,7 +63,6 @@ MESON_ARGS = (
 NINJA_VERSION = os.getenv("NINJA_VERSION") or "1.13.2"
 RUFF_VERSION = os.getenv("RUFF_VERSION") or "0.15.15"
 NPM = os.getenv("NPM") or "npm"
-DOCKER = os.getenv("DOCKER") or "docker"
 # pty=True in ctx.run() is not available on Windows so if stdout is not a TTY
 # let's assume PTY is not supported. Related issue in invoke project:
 # https://github.com/pyinvoke/invoke/issues/561
@@ -118,37 +117,13 @@ def meson_ninja(ctx):
     if os.path.isfile(MESON):
         return
 
-    # Updated pip and setuptools are needed for meson.
-    # `--system` is not present everywhere and is only needed as workaround for
-    # Debian-specific issue (copied from https://github.com/gluster/gstatus/pull/33),
-    # fallback to command without `--system` if the first one fails.
-    try:
-        ctx.run(
-            f'"{PYTHON}" -m pip install --system --upgrade --no-user --target "{PIP_MESON_NINJA_DIR}" pip setuptools',
-            echo=True,
-            hide=True,
-            shell=SHELL,
-        )
-    except Exception:
-        ctx.run(
-            f'"{PYTHON}" -m pip install --upgrade --no-user --target "{PIP_MESON_NINJA_DIR}" pip setuptools',
-            echo=True,
-            pty=PTY_SUPPORTED,
-            shell=SHELL,
-        )
-
-    # Workaround for NixOS and Guix that don't work with pre-built binaries, see:
-    # https://github.com/NixOS/nixpkgs/issues/142383.
-    pip_build_binaries = (
-        "--no-binary :all:"
-        if os.path.isfile("/etc/NIXOS") or os.path.isdir("/etc/guix")
-        else ""
-    )
-
-    # Install meson and ninja using pip into our custom location, so we don't
-    # depend on system-wide installation.
+    # Reviewed wheel-only locks are part of the immutable worker snapshot.
+    # Unsupported platforms fail instead of executing an unreviewed source build.
+    if MESON_VERSION != "1.12.0" or NINJA_VERSION != "1.13.2":
+        raise RuntimeError("Update the reviewed Python lock before changing native tools")
     ctx.run(
-        f'"{PYTHON}" -m pip install --upgrade --no-user --target "{PIP_MESON_NINJA_DIR}" {pip_build_binaries} meson=={MESON_VERSION} ninja=={NINJA_VERSION}',
+        f'"{PYTHON}" -m pip install --upgrade --no-user --target "{PIP_MESON_NINJA_DIR}" '
+        f'--require-hashes --only-binary=:all: --requirement "{WORKER_DIR}/python-tools-requirements.txt"',
         echo=True,
         pty=PTY_SUPPORTED,
         shell=SHELL,
@@ -626,119 +601,35 @@ def fuzzer_run_all(ctx):
         )
 
 
+# The upstream container Dockerfiles are absent from this crate snapshot. Keep
+# old task names fail-closed so no registry image or privileged container runs.
+
 @task
 def docker(ctx):
-    """
-    Build a Linux Ubuntu Docker image with fuzzer capable clang++
-    """
-
-    if os.getenv("DOCKER_NO_CACHE") == "true":
-        with cd_worker():
-            ctx.run(
-                f'"{DOCKER}" build -f Dockerfile --no-cache --tag mediasoup/docker:latest .',
-                echo=True,
-                pty=PTY_SUPPORTED,
-                shell=SHELL,
-            )
-    else:
-        with cd_worker():
-            ctx.run(
-                f'"{DOCKER}" build -f Dockerfile --tag mediasoup/docker:latest .',
-                echo=True,
-                pty=PTY_SUPPORTED,
-                shell=SHELL,
-            )
-
+    """Unsupported upstream developer task; use the repository Dockerfile."""
+    raise RuntimeError("Vendored Docker tasks are disabled; use the repository Dockerfile")
 
 @task
 def docker_run(ctx):
-    """
-    Run a container of the Ubuntu Docker image created in the docker task
-    """
-
-    with cd_worker():
-        ctx.run(
-            f'"{DOCKER}" run --name=mediasoupDocker -it --rm --privileged --cap-add SYS_PTRACE -v "{WORKER_DIR}/../:/foo bar/mediasoup" mediasoup/docker:latest',
-            echo=True,
-            pty=True,  # NOTE: Needed to enter the terminal of the Docker image.
-            shell=SHELL,
-        )
-
+    """Unsupported upstream developer task; use the repository Dockerfile."""
+    raise RuntimeError("Vendored Docker tasks are disabled; use the repository Dockerfile")
 
 @task
 def docker_alpine(ctx):
-    """
-    Build a Linux Alpine Docker image
-    """
-
-    if os.getenv("DOCKER_NO_CACHE") == "true":
-        with cd_worker():
-            ctx.run(
-                f'"{DOCKER}" build -f Dockerfile.alpine --no-cache --tag mediasoup/docker-alpine:latest .',
-                echo=True,
-                pty=PTY_SUPPORTED,
-                shell=SHELL,
-            )
-    else:
-        with cd_worker():
-            ctx.run(
-                f'"{DOCKER}" build -f Dockerfile.alpine --tag mediasoup/docker-alpine:latest .',
-                echo=True,
-                pty=PTY_SUPPORTED,
-                shell=SHELL,
-            )
-
+    """Unsupported upstream developer task; use the repository Dockerfile."""
+    raise RuntimeError("Vendored Docker tasks are disabled; use the repository Dockerfile")
 
 @task
 def docker_alpine_run(ctx):
-    """
-    Run a container of the Alpine Docker image created in the docker_alpine task
-    """
-
-    with cd_worker():
-        ctx.run(
-            f'"{DOCKER}" run --name=mediasoupDockerAlpine -it --rm --privileged --cap-add SYS_PTRACE -v "{WORKER_DIR}/../:/foo bar/mediasoup" mediasoup/docker-alpine:latest',
-            echo=True,
-            pty=True,  # NOTE: Needed to enter the terminal of the Docker image.
-            shell=SHELL,
-        )
-
+    """Unsupported upstream developer task; use the repository Dockerfile."""
+    raise RuntimeError("Vendored Docker tasks are disabled; use the repository Dockerfile")
 
 @task
 def docker_386(ctx):
-    """
-    Build a 386 Linux Debian (32 bits arch) Docker image
-    """
-
-    if os.getenv("DOCKER_NO_CACHE") == "true":
-        with cd_worker():
-            ctx.run(
-                f'"{DOCKER}" build --platform linux/386 -f Dockerfile.386 --no-cache --tag mediasoup/docker-386:latest .',
-                echo=True,
-                pty=PTY_SUPPORTED,
-                shell=SHELL,
-            )
-    else:
-        with cd_worker():
-            ctx.run(
-                f'"{DOCKER}" build --platform linux/386 -f Dockerfile.386 --tag mediasoup/docker-386:latest .',
-                echo=True,
-                pty=PTY_SUPPORTED,
-                shell=SHELL,
-            )
-
+    """Unsupported upstream developer task; use the repository Dockerfile."""
+    raise RuntimeError("Vendored Docker tasks are disabled; use the repository Dockerfile")
 
 @task
 def docker_386_run(ctx):
-    """
-    Run a container of the 386 Linux Debian (32 bits arch) Docker image created
-    in the docker_386 task
-    """
-
-    with cd_worker():
-        ctx.run(
-            f'"{DOCKER}" run --name=mediasoupDocker386 -it --rm --privileged --cap-add SYS_PTRACE -v "{WORKER_DIR}/../:/foo bar/mediasoup" mediasoup/docker-386:latest',
-            echo=True,
-            pty=True,  # NOTE: Needed to enter the terminal of the Docker image.
-            shell=SHELL,
-        )
+    """Unsupported upstream developer task; use the repository Dockerfile."""
+    raise RuntimeError("Vendored Docker tasks are disabled; use the repository Dockerfile")

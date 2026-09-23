@@ -296,12 +296,14 @@ class PythonPolicyTests(unittest.TestCase):
     def test_checker_requirements_pin_versions_and_share_controller_dependencies(self) -> None:
         """Install one pinned checker/controller environment without VPS tool additions."""
         lines = {
-            line.strip()
+            line.strip().removesuffix("\\").strip()
             for line in (ROOT / "build/python-requirements.txt").read_text().splitlines()
             if line.strip() and not line.startswith("#")
         }
         self.assertIn("-r ../ops/ansible/requirements.txt", lines)
-        for name in ("ruff", "basedpyright", "types-PyYAML"):
+        self.assertIn("--require-hashes", lines)
+        self.assertIn("--only-binary=:all:", lines)
+        for name in ("ruff", "basedpyright", "types-pyyaml"):
             self.assertEqual(sum(line.startswith(name + "==") for line in lines), 1)
         config = json_value(cast("object", tomllib.loads((ROOT / "pyproject.toml").read_text())))
         self.assertIn("ruff" + string(config, "tool", "ruff", "required-version"), lines)

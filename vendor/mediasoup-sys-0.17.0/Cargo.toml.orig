@@ -30,6 +30,8 @@ include = [
     "/Cargo.toml",
     "/meson.build",
     "/meson_options.txt",
+    "/python-invoke-requirements.txt",
+    "/python-tools-requirements.txt",
     "/tasks.py"
 ]
 

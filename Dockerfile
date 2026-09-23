@@ -12,6 +12,8 @@ COPY web/tsconfig.json web/tsconfig.app.json web/tsconfig.tools.json web/vite.co
 COPY web/scripts/check-bundle.mjs ./scripts/check-bundle.mjs
 COPY web/public ./public
 COPY web/src ./src
+ARG SOURCE_REVISION=unknown
+ENV FRONTEND_REVISION=${SOURCE_REVISION}
 RUN npm run build
 
 # Build on the same supported Fedora release used at runtime. mediasoup-sys
@@ -134,9 +136,11 @@ RUN test -n "${FEDORA_REFRESH_EPOCH}" \
     && dnf clean all
 
 WORKDIR /app
-COPY --from=builder --chown=10001:10001 /app/target/release/simplestChat /app/simplestChat
-COPY --from=builder --chown=10001:10001 /app/migrations /app/migrations
-COPY --from=web-builder --chown=10001:10001 /web/dist /app/web/dist
+ARG SOURCE_REVISION=unknown
+ENV SOURCE_REVISION=${SOURCE_REVISION}
+COPY --from=builder /app/target/release/simplestChat /app/simplestChat
+COPY --from=builder /app/migrations /app/migrations
+COPY --from=web-builder /web/dist /app/web/dist
 RUN ldd /app/simplestChat > /tmp/simplestchat-ldd \
     && ! grep -Fq 'not found' /tmp/simplestchat-ldd \
     && rm /tmp/simplestchat-ldd

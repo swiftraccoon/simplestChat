@@ -1,0 +1,6 @@
+# Reviewed PyPI wheel hashes; pinned versions include transitive dependencies.
+# Native build tools: reviewed wheel artifacts only; no source builds.
+--require-hashes
+--only-binary=:all:
+invoke==3.0.3 \
+    --hash=sha256:f11327165e5cbb89b2ad1d88d3292b5113332c43b8553b494da435d6ec6f5053

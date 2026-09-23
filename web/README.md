@@ -7,7 +7,7 @@ release. Dependencies and development tools resolve through the lockfile.
 ## Build and develop
 
 ```sh
-npm ci --prefix web
+npm ci --ignore-scripts --prefix web
 build/check.sh --web
 ```
 

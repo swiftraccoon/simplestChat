@@ -578,6 +578,8 @@ def build_release(  # noqa: C901, PLR0915 -- Keep ordered transaction checks tog
                         "production",
                         "--provenance=false",
                         "--sbom=false",
+                        "--build-arg",
+                        f"SOURCE_REVISION={revision}",
                         "--label",
                         f"org.opencontainers.image.revision={revision}",
                         "--tag",

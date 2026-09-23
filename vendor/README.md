@@ -42,14 +42,15 @@ echo 'b4193421652913559e68e6640d5fbe862241f313fa00cc446561e0d3f69ec684  mediasou
 and `put` API surface; this removes RUSTSEC-2026-0253 from the active graph.
 
 `mediasoup-sys-0.17.0` changes only `Cargo.toml`, `Cargo.toml.orig`,
-`build.rs`, `tasks.py`, `meson.build`, `deps/libwebrtc/meson.build`,
+`build.rs`, `tasks.py`, `scripts/get-dep.sh`, `meson.build`, `deps/libwebrtc/meson.build`,
 `src/RTC/TransportCongestionControlClient.cpp`, `src/RTC/RTP/RtpStreamRecv.cpp`,
 `subprojects/abseil-cpp.wrap`, `subprojects/libuv.wrap`,
 `subprojects/unordered-dense.wrap`, `subprojects/catch2.wrap`, the two files under
 `subprojects/packagefiles/abseil-cpp/`, the four files under
 `subprojects/packagefiles/libuv/`, and
 `subprojects/packagefiles/ankerl-unordered-dense/meson.build`, and removes the package-local
-`Cargo.lock` and `subprojects/openssl.wrap`.
+`Cargo.lock` and `subprojects/openssl.wrap`. It adds the two reviewed
+`python-invoke-requirements.txt` and `python-tools-requirements.txt` wheel locks.
 
 The C++ change in `TransportCongestionControlClient::SetDesiredBitrate`
 bounds the congestion controller's start bitrate by the configured minimum
@@ -112,9 +113,21 @@ repository uses `build/pip-constraints.txt`; CI, containers, checked-in VS Code
 settings, deployment scripts, and the README build examples set it explicitly
 so PyPI build tools cannot float between otherwise identical Cargo builds.
 The maintained `tasks.py` also selects Meson 1.12.0 and Ninja 1.13.2,
-matching the exact constraints. These replace the archive's older build-tool
-defaults; all other task definitions are unchanged. Keep both locations aligned
-when updating these tools, and verify the complete native worker rebuild.
+matching the exact constraints. `python-invoke-requirements.txt` and
+`python-tools-requirements.txt` pin the accepted PyPI wheel SHA-256 hashes for
+Invoke, pip, setuptools, Meson and Ninja. `build.rs` and `tasks.py` install with
+`--require-hashes --only-binary=:all:`; unsupported platforms fail instead of
+running an unreviewed source build. These lock files are included in the package
+manifest and immutable source snapshot. Hashes were obtained from the versioned
+PyPI release metadata; review wheel changes and verify a clean native rebuild
+when refreshing them. This authenticates previously reviewed bytes, not package
+publisher identity or the absence of malicious code.
+
+The optional upstream Docker tasks are disabled: this crate does not contain
+their Dockerfiles, and the old helpers could pull mutable registry images with
+privileged host access. `scripts/get-dep.sh` is also disabled because it imported
+a mutable fuzzer branch and rewrote the checkout. Use the repository Dockerfile
+for supported builds and reviewed immutable inputs for dependency refreshes.
 
 The Abseil wrap is pinned to the official `20240722.2` LTS archive (SHA-256
 `ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8`).

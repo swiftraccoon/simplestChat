@@ -21,6 +21,11 @@ Run commands from the repository root.
   ```
 
   These controller/checking dependencies are not installed on the chat server.
+  The requirements enforce wheel-only, hash-verified installation, including
+  transitive dependencies. Refresh versions and accepted wheel hashes together,
+  review the resulting artifacts, and verify resolution on Linux/Python 3.12 and
+  macOS before updating the shared environment. The native worker has separate
+  [reviewed tool locks](../vendor/README.md); do not bypass either hash policy.
 
 ## Guest-only local UI
 
@@ -93,7 +98,7 @@ export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
 export OPENSSL_STATIC=1
 export PIP_CONSTRAINT="$PWD/build/pip-constraints.txt"
 
-npm ci --prefix web
+npm ci --ignore-scripts --prefix web
 npm --prefix web run build
 cargo build --locked --release --bin simplestChat
 ```

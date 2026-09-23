@@ -23,6 +23,8 @@ const PACKAGE_SOURCE_PATHS: &[&str] = &[
     "Cargo.toml",
     "meson.build",
     "meson_options.txt",
+    "python-invoke-requirements.txt",
+    "python-tools-requirements.txt",
     "tasks.py",
 ];
 
@@ -385,7 +387,10 @@ fn main() {
         .arg("--upgrade")
         .arg("--target")
         .arg(&pip_invoke_dir)
-        .arg("invoke");
+        .arg("--require-hashes")
+        .arg("--only-binary=:all:")
+        .arg("--requirement")
+        .arg(source_dir.join("python-invoke-requirements.txt"));
     add_pip_constraint(&mut install_invoke, pip_constraint.as_deref());
     if !install_invoke
         .spawn()

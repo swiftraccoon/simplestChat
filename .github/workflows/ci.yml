@@ -488,6 +488,7 @@ jobs:
               --provenance=false --sbom=false \
               "${cache_from[@]}" \
               --cache-to "type=local,dest=${cache_dir}-next,mode=max" \
+              --build-arg "SOURCE_REVISION=${GITHUB_SHA}" \
               --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
               --iidfile "${RUNNER_TEMP}/production.iid" \
               --tag "${PRODUCTION_IMAGE}" .
@@ -529,6 +530,9 @@ jobs:
             "${PRODUCTION_IMAGE}" -eu -c '
               test "$(id -u)" = 10001
               test "$(id -g)" = 10001
+              test "$(stat -c %u /app/simplestChat)" = 0
+              test "$(stat -c %u /app/web/dist/index.html)" = 0
+              test "$(stat -c %u /app/migrations)" = 0
               test -x /app/simplestChat
               test -s /app/web/dist/index.html
               test ! -e /app/load_test
