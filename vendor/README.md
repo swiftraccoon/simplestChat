@@ -43,7 +43,7 @@ and `put` API surface; this removes RUSTSEC-2026-0253 from the active graph.
 
 `mediasoup-sys-0.17.0` changes only `Cargo.toml`, `Cargo.toml.orig`,
 `build.rs`, `tasks.py`, `meson.build`, `deps/libwebrtc/meson.build`,
-`src/RTC/TransportCongestionControlClient.cpp`,
+`src/RTC/TransportCongestionControlClient.cpp`, `src/RTC/RTP/RtpStreamRecv.cpp`,
 `subprojects/abseil-cpp.wrap`, `subprojects/libuv.wrap`,
 `subprojects/unordered-dense.wrap`, `subprojects/catch2.wrap`, the two files under
 `subprojects/packagefiles/abseil-cpp/`, the four files under
@@ -51,7 +51,7 @@ and `put` API surface; this removes RUSTSEC-2026-0253 from the active graph.
 `subprojects/packagefiles/ankerl-unordered-dense/meson.build`, and removes the package-local
 `Cargo.lock` and `subprojects/openssl.wrap`.
 
-The one C++ change, in `TransportCongestionControlClient::SetDesiredBitrate`,
+The C++ change in `TransportCongestionControlClient::SetDesiredBitrate`
 bounds the congestion controller's start bitrate by the configured minimum
 outgoing bitrate (`std::max(minBitrate, availableBitrate)`) instead of only
 the built-in 30 kbit/s floor. libwebrtc's `GoogCcNetworkController::
@@ -59,7 +59,33 @@ ClampConstraints` already raises a start rate below the minimum, but logs an
 error each time; with the application's 100 kbit/s floor that line repeated
 on every bitrate update of a transport whose estimate had decayed to the
 floor (941 lines in one 100-client run). Behaviour is unchanged apart from the
-log line. Drop the change when upstream bounds the start bitrate itself. Cargo ignores a dependency's
+log line. Drop the change when upstream bounds the start bitrate itself.
+
+`RtpStreamRecv::ReceiveRtxPacket` updates the primary sequence state only when
+RTX carries a newer original packet, using the worker's wrap-aware comparison.
+Older RTX goes through the existing NACK generator, which accepts a still-missing
+packet once and rejects duplicates. Applying the primary stream's 1,500-packet
+misorder limit first rejected legitimate requested repairs, counted old duplicate
+probes as discarded media, and allowed two consecutive old originals to trigger
+a spurious sequence reset. This is a packet-processing fix; warning levels and
+primary RTP, RTX-header, and large-forward-jump validation remain unchanged.
+Transport congestion feedback still sees each probe before producer processing.
+
+Browsers can send old payloads in RTX for bandwidth probing (see libwebrtc's
+[`GeneratePadding`](https://webrtc.googlesource.com/src/+/main/modules/rtp_rtcp/source/rtp_sender.cc)
+and [`GetPayloadPaddingPacket`](https://webrtc.googlesource.com/src/+/main/modules/rtp_rtcp/source/rtp_packet_history.cc)).
+A local Firefox/Chromium call reproduced 765 paired sequence/RTX warnings with
+no sender NACK requests or receiver freezes. The regressions in
+`src/media/rtx_tests.rs` send actual RTP through the native worker's direct
+transport: stale probes and late requested repairs fail against the original
+worker, including tests of wraparound, duplicate recovery, newer RTX, and retained
+primary/forward-jump rejection. Run them with
+`cargo test --locked --all-features --lib media::rtx_tests -- --test-threads=1`
+after the documented native setup, and verify real browser decoding separately.
+Drop this patch when an upstream release handles old RTX without applying primary
+restart detection.
+
+Cargo ignores a dependency's
 nested lockfile, so removing that generated package artifact does not change
 workspace resolution. The replacement build:
 

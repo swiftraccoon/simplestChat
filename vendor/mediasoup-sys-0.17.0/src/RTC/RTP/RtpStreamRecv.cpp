@@ -4,6 +4,7 @@
 #include "RTC/RTP/RtpStreamRecv.hpp"
 #include "Logger.hpp"
 #include "RTC/RTP/Codecs/Tools.hpp"
+#include "RTC/SeqManager.hpp"
 #include "Utils.hpp"
 
 namespace RTC
@@ -424,8 +425,14 @@ namespace RTC
 			  packet->GetSsrc(),
 			  packet->GetSequenceNumber());
 
-			// If not a valid packet ignore it.
-			if (!RTP::RtpStream::UpdateSeq(packet))
+			// RTX can carry old media for recovery or bandwidth probing. Applying
+			// primary-stream misorder/restart detection to it would reject requested
+			// repairs and let duplicate probes reset the primary sequence state.
+			// Only advance that state for newer media; the NackGenerator below
+			// decides whether an older packet is still needed or is a duplicate.
+			if (
+			  RTC::SeqManager<uint16_t>::IsSeqHigherThan(packet->GetSequenceNumber(), this->maxSeq) &&
+			  !RTP::RtpStream::UpdateSeq(packet))
 			{
 				MS_WARN_TAG(
 				  rtx,

@@ -11,6 +11,9 @@ pub mod transport_manager;
 pub mod types;
 pub mod worker_manager;
 
+#[cfg(test)]
+mod rtx_tests;
+
 pub use config::{MediaConfig, RouterConfig, WorkerConfig};
 pub use router_manager::RouterManager;
 pub use transport_manager::TransportManager;
