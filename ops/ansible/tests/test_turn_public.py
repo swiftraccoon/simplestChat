@@ -3,13 +3,14 @@
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import ssl
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Unpack, cast
 from unittest.mock import patch
 
 from test_public_release import FixtureRunner
@@ -163,6 +164,60 @@ class TurnCertificateTests(unittest.TestCase):
             ):
                 _ = turn.read_certificate_file(descriptor, "key.pem", private_key=True)
 
+    def test_metrics_support_probe_handles_pinned_help_stderr_and_exit_status(self) -> None:
+        """The exact probe accepts stderr help with 255, but rejects failed or incomplete help."""
+        identity = "a" * 64
+        cases = (
+            (0, True, True),
+            (255, True, True),
+            (255, False, False),
+            (0, False, False),
+            (1, True, False),
+            (127, True, False),
+        )
+        for status, has_options, accepted in cases:
+            with (
+                self.subTest(status=status, has_options=has_options),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                executable = root / "fixture turnserver"
+                help_text = (
+                    " ".join(option.decode() for option in turn.METRICS_HELP_OPTIONS)
+                    if has_options
+                    else "fixture version help"
+                )
+                _ = executable.write_text(
+                    f"#!/bin/sh\nprintf '%s\\n' '{help_text}' >&2\nexit {status}\n"
+                )
+                executable.chmod(0o700)
+                runner = release.Runner(root)
+
+                def docker(
+                    *arguments: str,
+                    fixture_executable: Path = executable,
+                    fixture_runner: release.Runner = runner,
+                    **options: Unpack[release.CommandOptions],
+                ) -> bytes:
+                    self.assertEqual(
+                        arguments, ("exec", identity, "/bin/sh", "-c", turn.METRICS_HELP_PROBE)
+                    )
+                    # Only replace the pinned executable with this owned fixture.
+                    # Stream redirection and status handling execute unchanged.
+                    command = arguments[-1].replace(
+                        "/usr/bin/turnserver", shlex.quote(str(fixture_executable))
+                    )
+                    return fixture_runner.run(["/bin/sh", "-c", command], **options)
+
+                with patch.object(runner, "docker", side_effect=docker):
+                    if accepted:
+                        turn.require_metrics_support(runner, identity)
+                    else:
+                        with self.assertRaises(release.ReleaseError):
+                            turn.require_metrics_support(runner, identity)
+                self.assertEqual((root / "001.stderr").read_bytes(), b"")
+                self.assertEqual((root / "001.stdout").read_text(), help_text + "\n")
+
     def test_metrics_transition_preserves_configuration_and_rolls_back(self) -> None:
         """Only fixed metrics settings change; failed readiness restores previous bytes."""
         with tempfile.TemporaryDirectory() as directory:
@@ -181,7 +236,7 @@ class TurnCertificateTests(unittest.TestCase):
             with (
                 patch.object(turn, "CONFIG", config),
                 patch.object(turn, "relay_container", return_value="a" * 64),
-                patch.object(runner, "docker", return_value=b"--prometheus-address"),
+                patch.object(runner, "docker", return_value=b" ".join(turn.METRICS_HELP_OPTIONS)),
                 patch.object(turn, "verify_tls"),
                 patch.object(turn, "verify_metrics"),
                 patch.object(os, "chown"),

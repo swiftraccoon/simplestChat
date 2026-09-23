@@ -348,6 +348,28 @@ def verify_metrics(runner: release.RunnerProtocol) -> None:
     release.require(b"turn_total_allocations" in metrics, "Relay allocation metrics missing")
 
 
+# The pinned coturn 4.18.0 binary writes --help to stderr and exits 255.
+# Normalize only that observed help status and zero for this fixed probe;
+# every other command retains the runner's ordinary zero-status requirement.
+METRICS_HELP_PROBE = """/usr/bin/turnserver --help 2>&1
+status=$?
+case "$status" in
+    0|255) exit 0 ;;
+    *) exit "$status" ;;
+esac
+"""
+METRICS_HELP_OPTIONS = (b"--prometheus", b"--prometheus-address", b"--prometheus-port")
+
+
+def require_metrics_support(runner: release.RunnerProtocol, identity: str) -> None:
+    """Inspect the pinned relay's help streams without weakening other command checks."""
+    help_text = runner.docker("exec", identity, "/bin/sh", "-c", METRICS_HELP_PROBE)
+    release.require(
+        all(option in help_text for option in METRICS_HELP_OPTIONS),
+        "Relay binary lacks bounded metrics support",
+    )
+
+
 def enable_metrics(runner: release.RunnerProtocol, domain: str) -> bool:
     """Replace only the relay with three reviewed metrics options and bounded rollback."""
     identity = relay_container(runner)
@@ -360,10 +382,7 @@ def enable_metrics(runner: release.RunnerProtocol, domain: str) -> bool:
         not any(line.startswith(b"prometheus") for line in original.splitlines()),
         "Unexpected existing relay metrics options",
     )
-    help_text = runner.docker("exec", identity, "/usr/bin/turnserver", "--help")
-    release.require(
-        b"--prometheus-address" in help_text, "Relay binary lacks bounded metrics support"
-    )
+    require_metrics_support(runner, identity)
     # Neither a TLS reload nor HUP activates the new HTTP listener: one explicit
     # relay replacement is necessary. Auth, certificates and public ports stay fixed.
     release.atomic(runner.attempt / "before-turnserver.conf", original)
