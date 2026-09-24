@@ -202,7 +202,10 @@ impl RouterManager {
             .on_close({
                 let room_id = room_id.clone();
                 move || {
-                    warn!("Router closed for room: {}", room_id);
+                    // mediasoup fires this for ordinary final-handle Drop as
+                    // well as worker closure. The distinct worker-close event
+                    // below retains its warning; worker death is logged as an error.
+                    debug!("Router closed for room: {}", room_id);
                 }
             })
             .detach();

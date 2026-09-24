@@ -1,7 +1,7 @@
 # Maintained Cargo patches
 
 This directory contains source for two exact crates.io releases that need
-small, auditable security fixes which have not yet shipped upstream.  Their
+small, auditable security and interoperability fixes. Their
 package names and versions are intentionally unchanged: Cargo's
 `[patch.crates-io]` mechanism records that the source is local without
 pretending this is a new upstream release.
@@ -44,6 +44,7 @@ and `put` API surface; this removes RUSTSEC-2026-0253 from the active graph.
 `mediasoup-sys-0.17.0` changes only `Cargo.toml`, `Cargo.toml.orig`,
 `build.rs`, `tasks.py`, `scripts/get-dep.sh`, `meson.build`, `deps/libwebrtc/meson.build`,
 `src/RTC/TransportCongestionControlClient.cpp`, `src/RTC/RTP/RtpStreamRecv.cpp`,
+`include/RTC/Producer.hpp`, `src/RTC/Producer.cpp`, `src/RTC/Transport.cpp`,
 `subprojects/abseil-cpp.wrap`, `subprojects/libuv.wrap`,
 `subprojects/unordered-dense.wrap`, `subprojects/catch2.wrap`, the two files under
 `subprojects/packagefiles/abseil-cpp/`, the four files under
@@ -85,6 +86,23 @@ primary/forward-jump rejection. Run them with
 after the documented native setup, and verify real browser decoding separately.
 Drop this patch when an upstream release handles old RTX without applying primary
 restart detection.
+
+`Producer::ReceiveRtpPacket` recognizes valid padding-only RTX on a negotiated
+encoding before its primary RTP stream exists. Three owned two-Chromium startup
+runs reproduced one warning each; native debug identified the repaired-RID
+lookup before primary stream creation, and bounded packet metadata confirmed
+RTX payload type 97, zero payload bytes and 255 padding bytes. This carries no
+encoded media to recover. The transport already feeds the packet to congestion
+feedback; the patch accounts for its RTX bytes without treating it as an unknown
+stream. It preserves the existing cleanup of SRTP state that no media stream
+owns yet, and does not create a media stream from padding. Actual repair
+payloads before primary, empty non-padding packets,
+unknown encodings and invalid packets retain their existing rejection paths.
+The direct-transport regressions in `src/media/rtx_tests.rs` cover SSRC, repaired
+RID and single-encoding lookup, padding boundaries, subsequent media/RTX and
+negative cases. The accepted-padding accounting regression fails against the
+unpatched producer. Drop this patch when upstream distinguishes startup RTX
+padding from an unknown media stream.
 
 Cargo ignores a dependency's
 nested lockfile, so removing that generated package artifact does not change

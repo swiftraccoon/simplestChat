@@ -98,7 +98,8 @@ namespace RTC
 		{
 			DISCARDED,
 			MEDIA,
-			RETRANSMISSION
+			RETRANSMISSION,
+			RTX_PADDING
 		};
 
 	private:
@@ -168,7 +169,7 @@ namespace RTC
 		void HandleNotification(Channel::ChannelNotification* notification) override;
 
 	private:
-		RTC::RTP::RtpStreamRecv* GetRtpStream(const RTC::RTP::Packet* packet);
+		RTC::RTP::RtpStreamRecv* GetRtpStream(const RTC::RTP::Packet* packet, bool& isRtxBeforeMedia);
 		RTC::RTP::RtpStreamRecv* CreateRtpStream(
 		  const RTC::RTP::Packet* packet, const RTC::RtpCodecParameters& mediaCodec, size_t encodingIdx);
 		void NotifyNewRtpStream(RTC::RTP::RtpStreamRecv* rtpStream);

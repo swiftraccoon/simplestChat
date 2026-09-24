@@ -565,10 +565,22 @@ namespace RTC
 		// Count number of RTP streams.
 		auto numRtpStreamsBefore = this->mapSsrcRtpStream.size();
 
-		auto* rtpStream = GetRtpStream(packet);
+		bool isRtxBeforeMedia{ false };
+		auto* rtpStream = GetRtpStream(packet, isRtxBeforeMedia);
 
 		if (!rtpStream)
 		{
+			// Browsers can probe bandwidth with padding on a negotiated RTX encoding
+			// before its first media packet. There is no payload to recover or primary
+			// sequence state to initialize. Congestion feedback has already seen this
+			// packet; distinguish it so the transport can account for RTX bytes while
+			// still releasing receive state that no media stream owns yet.
+			// Real early repairs and unknown encodings still take the discard path.
+			if (isRtxBeforeMedia && packet->GetPaddingLength() > 0 && packet->GetPayloadLength() == 0)
+			{
+				return ReceiveRtpPacketResult::RTX_PADDING;
+			}
+
 			MS_WARN_TAG(rtp, "no stream found for received packet [ssrc:%" PRIu32 "]", packet->GetSsrc());
 
 #ifdef MS_RTC_LOGGER_RTP
@@ -826,7 +838,8 @@ namespace RTC
 		this->keyFrameRequestManager->KeyFrameNeeded(ssrc);
 	}
 
-	RTC::RTP::RtpStreamRecv* Producer::GetRtpStream(const RTC::RTP::Packet* packet)
+	RTC::RTP::RtpStreamRecv* Producer::GetRtpStream(
+	  const RTC::RTP::Packet* packet, bool& isRtxBeforeMedia)
 	{
 		MS_TRACE();
 
@@ -882,6 +895,7 @@ namespace RTC
 				if (it == this->mapSsrcRtpStream.end())
 				{
 					MS_DEBUG_2TAGS(rtp, rtx, "ignoring RTX packet for not yet created RtpStream (ssrc lookup)");
+					isRtxBeforeMedia = true;
 
 					return nullptr;
 				}
@@ -973,6 +987,7 @@ namespace RTC
 					}
 
 					MS_DEBUG_2TAGS(rtp, rtx, "ignoring RTX packet for not yet created RtpStream (RID lookup)");
+					isRtxBeforeMedia = true;
 
 					return nullptr;
 				}
@@ -1020,6 +1035,7 @@ namespace RTC
 				{
 					MS_DEBUG_2TAGS(
 					  rtp, rtx, "ignoring RTX packet for not yet created RtpStream (single stream lookup)");
+					isRtxBeforeMedia = true;
 
 					return nullptr;
 				}

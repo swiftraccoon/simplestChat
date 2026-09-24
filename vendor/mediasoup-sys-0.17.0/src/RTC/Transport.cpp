@@ -1637,6 +1637,14 @@ namespace RTC
 				break;
 			}
 
+			case RTC::Producer::ReceiveRtpPacketResult::RTX_PADDING:
+			{
+				this->recvRtxTransmission.Update(packet);
+				// No media stream owns this startup RTX SSRC yet. Preserve the
+				// existing cleanup rather than retaining unbounded SRTP contexts.
+				[[fallthrough]];
+			}
+
 			case RTC::Producer::ReceiveRtpPacketResult::DISCARDED:
 			{
 				// Tell the child class to remove this SSRC.

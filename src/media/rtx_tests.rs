@@ -16,9 +16,24 @@ const RTX_SSRC: u32 = 654_321;
 const MEDIA_PT: u8 = 96;
 const RTX_PT: u8 = 97;
 
+#[derive(Clone, Copy, Debug)]
+enum EncodingLookup {
+    Ssrc,
+    Rid,
+    Single,
+}
+
 async fn with_producer<F, Fut>(test: F)
 where
     F: FnOnce(DirectProducer) -> Fut,
+    Fut: Future<Output = ()>,
+{
+    with_encoding(EncodingLookup::Ssrc, |producer, _transport| test(producer)).await;
+}
+
+async fn with_encoding<F, Fut>(lookup: EncodingLookup, test: F)
+where
+    F: FnOnce(DirectProducer, DirectTransport) -> Fut,
     Fut: Future<Output = ()>,
 {
     tokio::time::timeout(Duration::from_secs(10), async {
@@ -42,6 +57,7 @@ where
             .produce(ProducerOptions::new(
                 MediaKind::Video,
                 RtpParameters {
+                    mid: Some("0".to_owned()),
                     codecs: vec![
                         RtpCodecParameters::Video {
                             mime_type: MimeTypeVideo::Vp8,
@@ -58,11 +74,35 @@ where
                             rtcp_feedback: vec![],
                         },
                     ],
-                    encodings: vec![RtpEncodingParameters {
-                        ssrc: Some(MEDIA_SSRC),
-                        rtx: Some(RtpEncodingParametersRtx { ssrc: RTX_SSRC }),
-                        ..RtpEncodingParameters::default()
+                    encodings: vec![match lookup {
+                        EncodingLookup::Ssrc => RtpEncodingParameters {
+                            ssrc: Some(MEDIA_SSRC),
+                            rtx: Some(RtpEncodingParametersRtx { ssrc: RTX_SSRC }),
+                            ..RtpEncodingParameters::default()
+                        },
+                        EncodingLookup::Rid => RtpEncodingParameters {
+                            rid: Some("r0".to_owned()),
+                            ..RtpEncodingParameters::default()
+                        },
+                        EncodingLookup::Single => RtpEncodingParameters::default(),
                     }],
+                    header_extensions: vec![
+                        RtpHeaderExtensionParameters {
+                            uri: RtpHeaderExtensionUri::RtpStreamId,
+                            id: 1,
+                            encrypt: false,
+                        },
+                        RtpHeaderExtensionParameters {
+                            uri: RtpHeaderExtensionUri::RepairRtpStreamId,
+                            id: 2,
+                            encrypt: false,
+                        },
+                        RtpHeaderExtensionParameters {
+                            uri: RtpHeaderExtensionUri::Mid,
+                            id: 3,
+                            encrypt: false,
+                        },
+                    ],
                     ..RtpParameters::default()
                 },
             ))
@@ -71,7 +111,7 @@ where
         let Producer::Direct(producer) = producer else {
             panic!("direct transport must create a direct producer");
         };
-        test(producer).await;
+        test(producer, transport).await;
         // Dropping this owned graph releases the direct transport and worker.
     })
     .await
@@ -97,6 +137,139 @@ fn packet(sequence: u16, original_sequence: Option<u16>) -> Vec<u8> {
     }
     bytes.extend_from_slice(&[0x10, 0x01]);
     bytes
+}
+
+/// Route SSRC-less encodings through MID and, for simulcast, RID/repaired RID.
+fn with_route_extensions(mut bytes: Vec<u8>, lookup: EncodingLookup) -> Vec<u8> {
+    if matches!(lookup, EncodingLookup::Ssrc) {
+        return bytes;
+    }
+    let mut extensions = vec![0x30, b'0'];
+    if matches!(lookup, EncodingLookup::Rid) {
+        let id = if bytes[1] & 0x7f == RTX_PT { 2 } else { 1 };
+        extensions.extend_from_slice(&[(id << 4) | 1, b'r', b'0']);
+    }
+    while !extensions.len().is_multiple_of(4) {
+        extensions.push(0);
+    }
+    let words = u16::try_from(extensions.len() / 4).unwrap();
+    let mut header = vec![0xbe, 0xde];
+    header.extend_from_slice(&words.to_be_bytes());
+    header.extend(extensions);
+    bytes[0] |= 0x10;
+    bytes.splice(12..12, header);
+    bytes
+}
+
+fn padding_packet(lookup: EncodingLookup, padding: u8) -> Vec<u8> {
+    let mut bytes = packet(1000, Some(1));
+    bytes.truncate(12);
+    if padding > 0 {
+        bytes[0] |= 0x20;
+        bytes.resize(12 + usize::from(padding), 0);
+        *bytes.last_mut().unwrap() = padding;
+    }
+    with_route_extensions(bytes, lookup)
+}
+
+#[tokio::test]
+async fn startup_rtx_padding_is_accounted_without_creating_a_media_stream() {
+    for lookup in [
+        EncodingLookup::Ssrc,
+        EncodingLookup::Rid,
+        EncodingLookup::Single,
+    ] {
+        with_encoding(lookup, |producer, transport| async move {
+            let mut expected_bytes = 0;
+            for padding in [1, 255] {
+                let bytes = padding_packet(lookup, padding);
+                expected_bytes += u64::try_from(bytes.len()).unwrap();
+                producer.send(bytes).unwrap();
+            }
+            let transport_stats = transport.get_stats().await.unwrap();
+            assert_eq!(
+                transport_stats[0].rtx_bytes_received, expected_bytes,
+                "{lookup:?}"
+            );
+            assert_eq!(transport_stats[0].rtp_bytes_received, 0);
+            assert!(
+                Producer::Direct(producer.clone())
+                    .get_stats()
+                    .await
+                    .unwrap()
+                    .is_empty()
+            );
+
+            // Padding has no media sequence number and must not initialize or
+            // reset the primary sequence state. Real primary and RTX still work.
+            producer
+                .send(with_route_extensions(packet(10, None), lookup))
+                .unwrap();
+            producer
+                .send(with_route_extensions(packet(1001, Some(11)), lookup))
+                .unwrap();
+            let next = stats(&producer).await;
+            assert_eq!(next.packet_count, 2);
+            assert_eq!(next.packets_repaired, 1);
+            assert_eq!(next.packets_discarded, 0);
+            assert_eq!(next.rtx_ssrc, Some(RTX_SSRC));
+
+            // Once RTX is associated, a different RTX SSRC is still rejected;
+            // zero payload must not bypass the existing stream identity check.
+            let before = transport.get_stats().await.unwrap()[0].rtx_bytes_received;
+            let mut changed_ssrc = padding_packet(lookup, 255);
+            changed_ssrc[8..12].copy_from_slice(&(RTX_SSRC + 1).to_be_bytes());
+            producer.send(changed_ssrc).unwrap();
+            assert_eq!(
+                transport.get_stats().await.unwrap()[0].rtx_bytes_received,
+                before
+            );
+        })
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn startup_rtx_requires_padding_and_keeps_unexpected_packets_rejected() {
+    for lookup in [
+        EncodingLookup::Ssrc,
+        EncodingLookup::Rid,
+        EncodingLookup::Single,
+    ] {
+        with_encoding(lookup, |producer, transport| async move {
+            // Actual repair payload before primary, empty non-padding, and an
+            // unnegotiated payload type cannot take the padding-only path.
+            producer
+                .send(with_route_extensions(packet(1000, Some(1)), lookup))
+                .unwrap();
+            producer.send(padding_packet(lookup, 0)).unwrap();
+            let mut wrong_type = padding_packet(lookup, 255);
+            wrong_type[1] = 98;
+            producer.send(wrong_type).unwrap();
+            let mut invalid_padding = padding_packet(lookup, 1);
+            *invalid_padding.last_mut().unwrap() = 255;
+            producer.send(invalid_padding).unwrap();
+            if matches!(lookup, EncodingLookup::Rid) {
+                let mut unknown_rid = padding_packet(lookup, 255);
+                // MID still selects this producer, but repaired RID r9 is not
+                // one of its negotiated encodings.
+                assert_eq!(&unknown_rid[19..21], b"r0");
+                unknown_rid[20] = b'9';
+                producer.send(unknown_rid).unwrap();
+            }
+            let transport_stats = transport.get_stats().await.unwrap();
+            assert_eq!(transport_stats[0].rtx_bytes_received, 0, "{lookup:?}");
+            assert_eq!(transport_stats[0].rtp_bytes_received, 0);
+            assert!(
+                Producer::Direct(producer.clone())
+                    .get_stats()
+                    .await
+                    .unwrap()
+                    .is_empty()
+            );
+        })
+        .await;
+    }
 }
 
 async fn stats(producer: &DirectProducer) -> ProducerStat {
