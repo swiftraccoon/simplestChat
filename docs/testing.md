@@ -162,6 +162,33 @@ the discoverable flow. Credentials remain in memory and the disposable database;
 reports contain only outcomes. Native Bitwarden/Keychain selection and physical
 authenticator behavior still require device testing.
 
+The companion management suite exercises fresh proof, backup-key enrollment,
+last-sign-in-method protection, session revocation and recovery using native
+credentials and an owned disposable account:
+
+```sh
+PASSKEY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+  node web/e2e/passkey-management.cjs
+```
+
+Run `build/check-native-dtls.sh` after configuring the pinned OpenSSL installation
+to exercise the worker's DTLS closure reasons. It builds a separate temporary
+worker test target, leaving Cargo's production archive untouched. Paired native
+transports cover orderly shutdown, fatal errors, fingerprint/SRTP failures and
+handshake timeout; the orderly-close case also checks warning-level output.
+
+Exercise call outcomes with real browser decoding on owned loopback services:
+
+```sh
+CALL_OUTCOME_E2E=1 IMPAIR_SCRIPT=none IMPAIRED_PROFILES=baseline \
+  build/with-test-postgres.sh build/with-test-server.sh \
+  node web/e2e/impaired-network.cjs
+```
+
+This mode checks one terminal observation for an empty room, a video-only join,
+an audio-only join and an audio reconnect using the diagnostic preview. It uses
+synthetic devices and cannot establish physical output audibility.
+
 ### Authenticated chat continuity
 
 Run the opt-in 20-minute session soak against a fresh local database and server:
@@ -340,11 +367,11 @@ default CI or a substitute for physical-device checks. See
 
 Record the OS and browser version, result and any reproduction steps for each:
 
-| Device | Browser |
-| --- | --- |
-| macOS | Chrome and Firefox, tested separately and together |
-| iPhone | Kagi |
-| iPad | Safari |
+| Device | Browser                                            |
+| ------ | -------------------------------------------------- |
+| macOS  | Chrome and Firefox, tested separately and together |
+| iPhone | Kagi                                               |
+| iPad   | Safari                                             |
 
 On the Mac, run `build/run-local.sh`, open `http://localhost:3000` in Chrome
 and Firefox, and join the same room with different names. Guest-only local mode

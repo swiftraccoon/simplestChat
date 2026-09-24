@@ -305,8 +305,91 @@ that cap is exceeded and exposes a durable discarded-snapshot counter. Replay is
 bounded per invocation; spool depth distinguishes backlog from a successful
 individual database write. A database failure itself is retained, including when
 a SQL commit succeeded but its response was lost. If the entire host is offline,
-local recording cannot run; the external GitHub availability workflow retains its
-own failure evidence. Same-host PostgreSQL history is not an off-host backup.
+local recording cannot run. The external GitHub workflows retain their own evidence,
+which the separate importer backfills after the host recovers, within the bounds
+below. Same-host PostgreSQL history is not an off-host backup.
+
+The separate `simplestchat-monitoring-external.timer` imports the public repository's
+availability and media-canary evidence every ten minutes. It calls only GitHub's
+fixed HTTPS API for `swiftraccoon/simplestChat`, without a token, redirects or an
+inherited proxy. A durable cadence guard permits at most eight requests per
+invocation (normally at most 48 per hour), with bounded response sizes, timeouts
+and rate-limit backoff. This shares GitHub's unauthenticated per-IP quota with any
+other callers on that public IP. Applying the playbook validates and reloads the
+Prometheus rules; neither application nor public proxy replacement is required.
+
+Each completed run attempt has an immutable `(run_id, attempt)` record. Reruns
+remain distinct. Actual required job steps must complete successfully: a green
+outer workflow, empty job list, skipped setup or missing direct/TURN check cannot
+be recorded as a successful probe. Failed media/readiness checks are distinct from
+incomplete checks caused by setup or scheduling. The importer stores only fixed
+results, step outcomes, timestamps and revision identifiers; it does not download
+logs, artifacts, user records or credentials. The source revision identifies the
+workflow code; `deployed_revision_at_import` identifies the release observed when
+importing. Neither field proves which release was running throughout an earlier
+probe. Job duration measures the job's execution, not incident downtime.
+
+Backfill covers runs **created within the preceding 24 hours**, at most 200 runs
+per workflow and the latest ten attempts per run. The API request budget prioritizes
+current attempts, then fills historical gaps across later polls. Older reruns are
+outside this window. Incomplete pages, API failures and pending attempts cannot
+resolve a known failure; recovery requires a newer conclusive successful check
+and a complete pull. Missing or setup-only checks remain explicitly incomplete.
+`external_status.history_gap_since` records when polling missed more than the
+backfill window; later healthy checks do not erase that historical gap. GitHub
+may delay, drop or disable scheduled runs, so this is **not continuous or real-time
+availability monitoring**. Coverage becomes stale after 30 minutes for readiness
+or two hours for media; import freshness and incomplete coverage are separate
+signals. Actual failure, missing/stale coverage, importer failure and spool loss
+feed the existing private PostgreSQL incident recorder. No external notifications
+or public administrative endpoint are added.
+
+The additive private tables have their own `external_schema_version = 1`; setup
+backs up the database before creating them, and reapplication checks required
+columns, ownership and application-role exclusion. Existing complete backups from
+before this extension remain restorable. If any extension tables are present,
+restore verification requires the complete supported extension. External attempts
+are retained for 30 days and at most the newest 10,000 rows; retention runs on each
+successful replay. Two fixed workflow status rows preserve known failures and
+coverage gaps even if individual attempts age out. These retained counts are not
+all-time uptime statistics. During database failure, the importer keeps at most
+144 private snapshots of at most 120 KiB each (about 24 hours at normal cadence),
+replays at most four per invocation, and counts discarded snapshots durably. The
+private report exposes that loss even if the discarded data never reached SQL.
+The root-only importer has 128 MiB memory, a 20% CPU quota and a 90-second deadline.
+
+Review incidents, observed duration, retained recurrence, release identifiers,
+external attempts, coverage and local spool health in one private read-only report:
+
+```sh
+sudo /usr/bin/python3 -E -B /usr/local/libexec/simplestchat-public/monitoring_report.py
+```
+
+The JSON output is bounded to 50 incident rows and 50 external attempts. An incident's
+`observed_duration_seconds` spans first observation through resolution (or now for
+an active incident); check `recorderObservedAt` before trusting active duration.
+`retained_recurrences` counts additional retained episodes for the same incident key,
+not discarded history. `coverage=current` means evidence is fresh and complete;
+check `latest_result` and `failure_since` to assess health. Report output remains
+private operational metadata. If PostgreSQL is unavailable, the report fails
+explicitly; inspect the private service journal and bounded spool health instead.
+
+To inspect rollout and freshness without forcing another API poll:
+
+```sh
+sudo systemctl status simplestchat-monitoring-external.timer
+sudo journalctl -u simplestchat-monitoring-external.service -n 20 --no-pager
+sudo /usr/bin/python3 -E -B /usr/local/libexec/simplestchat-public/monitoring_report.py
+```
+
+The first timer invocation may need several polls to backfill one day. A manual
+`systemctl start simplestchat-monitoring-external.service` obeys the same persisted
+ten-minute budget. Do not clear its state/spool to bypass the limit or falsely
+reset missing-history evidence. GitHub's public API documentation describes the
+[workflow-run](https://docs.github.com/en/rest/actions/workflow-runs),
+[attempt-job](https://docs.github.com/en/rest/actions/workflow-jobs) and
+[rate-limit](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)
+contracts used here.
 
 Read incidents privately, without granting the web application access:
 
@@ -423,6 +506,20 @@ and ends at the browser's first presented frame; it is not room-join latency.
 Server transport quality and browser receipt/playback measurements describe
 different stages and must not be substituted for one another.
 
+The separate `call_join`, `call_admission` and `call_reconnect` events follow an
+owned room attempt through received media. Each produces one terminal result,
+using a 30-second observation window from the start of the join, admission or
+reconnect attempt. Browser scheduling can delay recording that result. A presented video frame or decoded audio
+progress with playback readiness can establish success; audio readiness does not
+establish audibility at the physical output device. A settled empty producer
+roster, user-disabled media, blocked autoplay, missing/unsupported evidence,
+hidden tabs, failure and superseded attempts have distinct outcomes. Local
+attempt numbers are not uploaded; they appear only in locally previewed diagnostics
+that the user may choose to share. While an opted-in visible attempt is
+pending, the existing sampler temporarily checks at one-second intervals using
+the same four-native-request bound. Regular quality uploads retain their
+15-second cadence.
+
 Keep `Authorization`, `Cookie`, `Set-Cookie` and `Sec-WebSocket-Protocol` headers,
 query strings and URL fragments out of custom proxy/APM/access logs. The supplied
 proxy does not enable raw access logging. The WebSocket subprotocol carries an
@@ -445,3 +542,15 @@ discoverable credentials continue to work; nonresident credentials cannot sign i
 through this flow. Before upgrading an installation that must retain such accounts,
 validate an alternate sign-in method or a discoverable replacement. There is no
 public legacy lookup fallback.
+
+The Account screen lists passkey record identifiers and registration dates and
+supports adding backup passkeys, removing keys and generating a saved recovery
+key. Every management action requires a fresh current-password check or a
+one-use passkey assertion bound to the account, authentication version and exact
+operation. Enrollment then requires its own account-bound registration ceremony;
+both ceremonies expire after 60 seconds. The account is limited to ten passkeys.
+Removal must leave a password or another passkey and atomically revokes all
+sessions. A recovery key alone does not permit removing the last direct sign-in
+method. Recovery secrets are shown once and only their hashes are stored.
+Cancelled ceremonies and lost mutation responses must not be reported as
+confirmed changes; the UI asks for a reload when the server outcome is unknown.

@@ -232,6 +232,19 @@ jobs:
             exit 1
           fi
 
+      - name: Verify native DTLS close reasons in an isolated worker build
+        timeout-minutes: 12
+        run: build/check-native-dtls.sh
+
+      - name: Preserve native DTLS failure diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-dtls-failure
+          path: ${{ runner.temp }}/simplestchat-native-dtls.*/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Migrate disposable test database with the real server
         run: build/with-test-server.sh true
 
@@ -358,6 +371,22 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Passkey management and recovery with native credentials
+        timeout-minutes: 4
+        env:
+          PASSKEY_E2E: "1"
+          E2E_ARTIFACTS: ${{ runner.temp }}/passkey-management
+        run: build/with-test-server.sh node web/e2e/passkey-management.cjs
+
+      - name: Preserve passkey management diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: passkey-management
+          path: ${{ runner.temp }}/passkey-management
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Homepage containment and responsive layout
         timeout-minutes: 3
         env:
@@ -393,6 +422,24 @@ jobs:
         env:
           E2E_ARTIFACTS: ${{ runner.temp }}/community-e2e
         run: build/with-test-server.sh npm --prefix web/e2e test
+
+      - name: Received call outcomes with real browser media
+        timeout-minutes: 4
+        env:
+          CALL_OUTCOME_E2E: "1"
+          IMPAIR_SCRIPT: none
+          IMPAIRED_PROFILES: baseline
+          E2E_ARTIFACTS: ${{ runner.temp }}/call-outcomes
+        run: build/with-test-server.sh node web/e2e/impaired-network.cjs
+
+      - name: Preserve call outcome diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: call-outcomes
+          path: ${{ runner.temp }}/call-outcomes
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Chat delivery and UI stress harness smoke
         timeout-minutes: 4
