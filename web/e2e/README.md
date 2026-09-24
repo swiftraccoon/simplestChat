@@ -69,10 +69,18 @@ AUTH_CROSS_TAB_E2E=1 E2E_BROWSER=firefox \
 ROOM_CONTROL_E2E=1 E2E_BROWSER=firefox \
   build/with-test-server.sh node web/e2e/room-control-confirmation.cjs
 MEDIA_CONTINUITY_E2E=1 E2E_BROWSER=chromium \
+  TEST_ANNOUNCE_IP="$(node build/test-media-ip.mjs)" \
   build/with-test-server.sh node web/e2e/media-continuity.cjs
 CHAT_RETRY_E2E=1 \
   build/with-test-server.sh node web/e2e/chat-retry.cjs
 ```
+
+Native Firefox media requires an owned non-loopback IPv4 candidate in this
+fixture; enabling its loopback preference alone does not establish connectivity.
+The address helper reads the default route and assigned host interfaces on Linux
+or macOS and fails on missing or ambiguous routes. HTTP and PostgreSQL still use
+loopback. Failed media reports include bounded transport states, camera state and
+numeric receive-frame observations, without raw addresses, SDP or device IDs.
 
 The chat fixture selectively withholds an owned message or its acknowledgement,
 then verifies reconciliation against the native server. Recipient wire-message

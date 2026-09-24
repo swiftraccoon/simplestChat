@@ -42,6 +42,7 @@ const report = {
 };
 let stage = 'launch';
 const contexts = [];
+const clients = [];
 const roomName = `continuity-${Date.now().toString(36)}`;
 
 function installDeviceFixtures() {
@@ -124,11 +125,14 @@ async function join(browser, label) {
   });
   contexts.push(context);
   const page = await context.newPage();
+  clients.push({ label, page });
   page.on('pageerror', () => {
     report.pageErrors = Math.min(100, report.pageErrors + 1);
   });
   page.setDefaultTimeout(15000);
-  await page.addInitScript(installPeerEventTracing);
+  await page.addInitScript(installPeerEventTracing, {
+    announcedIp: process.env.TEST_ANNOUNCE_IP || null,
+  });
   await page.addInitScript(installSignalingReconnectObservation);
   await page.addInitScript(installDeviceFixtures);
   await page.goto(origin.toString());
@@ -252,16 +256,26 @@ async function decoded(page) {
     const presented = [...document.querySelectorAll('.video-tile:not(.local) video')].some(
       (video) => !video.paused && video.videoWidth > 0 && video.readyState >= 2,
     );
-    return { frames, receivers, presented };
+    const states = ['new', 'connecting', 'connected', 'disconnected', 'failed', 'closed'];
+    return {
+      frames,
+      receivers,
+      presented,
+      transportStates: window.__communityPeers
+        .slice(-8)
+        .map((peer) => (states.includes(peer.connectionState) ? peer.connectionState : 'unknown')),
+    };
   });
 }
 
 async function progressing(page, name) {
   const deadline = Date.now() + 20000;
   let before = await decoded(page);
+  report.lastMediaObservation = { check: name, ...before };
   while (Date.now() < deadline) {
     await page.waitForTimeout(600);
     const after = await decoded(page);
+    report.lastMediaObservation = { check: name, ...after };
     if (after.presented && after.receivers > 0 && after.frames >= before.frames + 3) {
       report.checks.push({
         name,
@@ -412,6 +426,48 @@ async function main() {
     report.passed = true;
   } finally {
     report.failureStage = report.passed ? null : stage;
+    if (!report.passed) {
+      report.failureClients = await Promise.all(
+        clients.map(async ({ label, page }) => {
+          let timer;
+          try {
+            return {
+              label,
+              ...(await Promise.race([
+                page.evaluate(() => {
+                  const states = [
+                    'new',
+                    'connecting',
+                    'connected',
+                    'disconnected',
+                    'failed',
+                    'closed',
+                  ];
+                  return {
+                    cameraEnabled:
+                      document.querySelector('#cam-btn')?.classList.contains('active') === true,
+                    microphoneEnabled:
+                      document.querySelector('#mic-btn')?.classList.contains('active') === true,
+                    transportStates: window.__communityPeers
+                      .slice(-8)
+                      .map((peer) =>
+                        states.includes(peer.connectionState) ? peer.connectionState : 'unknown',
+                      ),
+                  };
+                }),
+                new Promise((_, reject) => {
+                  timer = setTimeout(() => reject(new Error('Snapshot deadline')), 2000);
+                }),
+              ])),
+            };
+          } catch {
+            return { label, unavailable: true };
+          } finally {
+            clearTimeout(timer);
+          }
+        }),
+      );
+    }
     await Promise.allSettled(contexts.map((context) => context.close()));
     await browser.close();
     fs.writeFileSync(

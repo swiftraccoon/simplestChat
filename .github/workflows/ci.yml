@@ -448,8 +448,11 @@ jobs:
         env:
           MEDIA_CONTINUITY_E2E: "1"
         run: |
+          # Firefox native ICE needs an owned non-loopback candidate, even
+          # when the HTTP origin and disposable database remain on loopback.
+          test_media_ip="$(node build/test-media-ip.mjs)"
           for browser in chromium firefox; do
-            E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/media-continuity-${browser}" \
+            TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/media-continuity-${browser}" \
               build/with-test-server.sh node web/e2e/media-continuity.cjs
           done
 
