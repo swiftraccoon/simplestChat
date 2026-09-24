@@ -4,6 +4,7 @@
 #include "Channel/ChannelRequest.hpp"
 #include "RTC/ICE/IceCandidate.hpp"
 #include "RTC/ICE/StunPacket.hpp"
+#include "RTC/MediaDiagnostics.hpp"
 #include "RTC/TcpConnection.hpp"
 #include "RTC/TcpServer.hpp"
 #include "RTC/TransportTuple.hpp"
@@ -125,6 +126,8 @@ namespace RTC
 		    mapTupleWebRtcTransport;
 		// Whether the destructor has been called.
 		bool closing{ false };
+		RTC::MediaDiagnostics::RecentTuples recentTuples;
+		std::unique_ptr<RTC::MediaDiagnostics::PacketDrops> packetDrops;
 	};
 } // namespace RTC
 

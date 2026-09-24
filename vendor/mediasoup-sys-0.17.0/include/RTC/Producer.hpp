@@ -118,7 +118,8 @@ namespace RTC
 		  SharedInterface* shared,
 		  const std::string& id,
 		  RTC::Producer::Listener* listener,
-		  const FBS::Transport::ProduceRequest* data);
+		  const FBS::Transport::ProduceRequest* data,
+		  std::string_view diagnosticTransportId = {});
 		~Producer() override;
 
 	public:
@@ -212,6 +213,7 @@ namespace RTC
 		// Passed by argument.
 		SharedInterface* shared{ nullptr };
 		RTC::Producer::Listener* listener{ nullptr };
+		RTC::MediaDiagnostics::Identifier diagnosticTransportId;
 		// Allocated by this.
 		ankerl::unordered_dense::map<uint32_t, RTC::RTP::RtpStreamRecv*> mapSsrcRtpStream;
 		RTC::KeyFrameRequestManager* keyFrameRequestManager{ nullptr };

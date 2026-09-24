@@ -57,9 +57,27 @@ namespace RTC
 	  SharedInterface* shared,
 	  const std::string& id,
 	  const flatbuffers::Vector<flatbuffers::Offset<FBS::Transport::ListenInfo>>* listenInfos)
-	  : id(id), shared(shared)
+		  : id(id), shared(shared)
 	{
 		MS_TRACE();
+		this->packetDrops = std::make_unique<RTC::MediaDiagnostics::PacketDrops>(shared,
+		  [serverId = RTC::MediaDiagnostics::Identifier(id)](const auto& event)
+		  {
+			  const auto* provenance = event.recentlyRemoved ? "recently_removed_tuple" : "unattributed";
+			  if (event.summary)
+			  {
+				  MS_WARN_TAG(ice,
+				    "coalesced unknown-tuple drops [server:%s, family:%s, provenance:%s, count:%" PRIu64 "]",
+				    serverId.Get(), RTC::MediaDiagnostics::PacketFamilyName(event.family), provenance, event.count);
+			  }
+			  else
+			  {
+				  MS_WARN_TAG(ice,
+				    "ignoring received non STUN data from unknown tuple [server:%s, family:%s, provenance:%s, previousTransport:%s, removedAgeMs:%" PRIu64 "]",
+				    serverId.Get(), RTC::MediaDiagnostics::PacketFamilyName(event.family), provenance,
+				    event.previousTransport.Get(), event.removedAgeMs);
+			  }
+		  });
 
 		if (listenInfos->size() == 0)
 		{
@@ -245,6 +263,8 @@ namespace RTC
 			webRtcTransport->ListenServerClosed();
 		}
 		this->webRtcTransports.clear();
+		// Flush bounded pending counts before the server and its timer are gone.
+		this->packetDrops.reset();
 
 		for (auto& item : this->udpSocketOrTcpServers)
 		{
@@ -479,7 +499,13 @@ namespace RTC
 
 		if (it == this->mapTupleWebRtcTransport.end())
 		{
-			MS_WARN_TAG(ice, "ignoring received non STUN data from unknown tuple");
+			using Family = RTC::MediaDiagnostics::PacketFamily;
+			const auto family = RTC::RTCP::Packet::IsRtcp(data, len) ? Family::Rtcp :
+			  RTC::RTP::Packet::IsRtp(data, len) ? Family::Rtp :
+			  RTC::DtlsTransport::IsDtls(data, len) ? Family::Dtls : Family::Other;
+			const auto nowMs = this->shared->GetTimeMs();
+			// The historical match is not proof of sender identity or expected traffic.
+			this->packetDrops->Record(family, this->recentTuples.Find(tuple, nowMs), nowMs);
 
 			return;
 		}
@@ -559,10 +585,11 @@ namespace RTC
 		}
 
 		this->mapTupleWebRtcTransport[tupleKey] = webRtcTransport;
+		this->recentTuples.Add(tuple);
 	}
 
 	inline void WebRtcServer::OnWebRtcTransportTransportTupleRemoved(
-	  RTC::WebRtcTransport* /*webRtcTransport*/, RTC::TransportTuple* tuple)
+	  RTC::WebRtcTransport* webRtcTransport, RTC::TransportTuple* tuple)
 	{
 		MS_TRACE();
 
@@ -575,6 +602,10 @@ namespace RTC
 			return;
 		}
 
+		if (!this->closing && it->second == webRtcTransport)
+		{
+			this->recentTuples.Remove(tuple, webRtcTransport->id, this->shared->GetTimeMs());
+		}
 		this->mapTupleWebRtcTransport.erase(it);
 	}
 

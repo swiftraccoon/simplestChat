@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test the maintained native DTLS patch without changing Cargo's worker archive.
+# Test native DTLS and media diagnostic patches without changing Cargo's worker archive.
 set -euo pipefail
 umask 077
 
@@ -73,17 +73,25 @@ set -euo pipefail
   --requirement "$1/worker/python-invoke-requirements.txt"
 "$PYTHON" -m invoke --search-root "$1/worker" test > "$1/dtls.log" 2>&1
 "$BUILD_DIR/mediasoup-worker-test" '[dtls-close]' > "$1/orderly-close.log" 2>&1
-"$PYTHON" - "$1/orderly-close.log" <<'PY'
+"$PYTHON" - "$1/orderly-close.log" "$1/dtls.log" <<'PY'
 import pathlib
 import sys
 
 output = pathlib.Path(sys.argv[1]).read_text()
 if "RTC::DtlsTransport::" in output:
     raise SystemExit("Orderly authenticated DTLS close unexpectedly logged a warning/error")
+diagnostics = pathlib.Path(sys.argv[2]).read_text()
+expected = (
+    "producer:11112233-4455-6677-8899-aabbccddeeff, "
+    "transport:00112233-4455-6677-8899-aabbccddeeff, kind:audio, encodingIdx:2, "
+    "workerMs:2500, timeoutMs:1500, mediaObserved:1, lastMediaMs:1000, paused:0"
+)
+if expected not in diagnostics:
+    raise SystemExit("Native RTP inactivity log lost its bounded stream/activity context")
 PY
 SH
 bash -n "${dtls_temp}/run.sh"
-echo 'Building isolated native DTLS regressions with pinned OpenSSL and Python tools...'
+echo 'Building isolated native DTLS and media diagnostic regressions with pinned tools...'
 
 # Do not inherit Python modules, pip configuration, Meson options or test tags.
 # The fixed source snapshot and reviewed wheel hashes define this test build.
@@ -97,7 +105,7 @@ env -i PATH="${PATH}" \
   CC="${dtls_cc}" CXX="${dtls_cxx}" \
   MEDIASOUP_OUT_DIR="${dtls_temp}/out" \
   MEDIASOUP_INSTALL_DIR="${dtls_temp}/install" BUILD_DIR="${dtls_temp}/build" \
-  MEDIASOUP_TEST_TAGS='[dtls]' MS_TEST_LOG_LEVEL=warn MS_TEST_LOG_TAGS=dtls \
+  MEDIASOUP_TEST_TAGS='[dtls],[media-diagnostics]' MS_TEST_LOG_LEVEL=warn MS_TEST_LOG_TAGS='dtls rtp ice score' \
   bash "${dtls_temp}/run.sh" "${dtls_temp}" >"${dtls_temp}/build.log" 2>&1 &
 dtls_pid=$!
 set +m
@@ -105,3 +113,4 @@ wait "${dtls_pid}"
 dtls_pid=''
 tail -n 3 "${dtls_temp}/dtls.log"
 echo 'Authenticated orderly DTLS close emitted no warning/error logs.'
+echo 'RTP inactivity logs retain stream and media activity context.'

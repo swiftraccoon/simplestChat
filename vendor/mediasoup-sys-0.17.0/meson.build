@@ -429,6 +429,7 @@ test_sources = [
   'test/src/testHelpers.cpp',
   'test/src/RTC/TestConsumer.cpp',
   'test/src/RTC/TestDtlsTransport.cpp',
+  'test/src/RTC/TestMediaDiagnostics.cpp',
   'test/src/RTC/TestPipeProducerStreamManager.cpp',
   'test/src/RTC/TestSimpleProducerStreamManager.cpp',
   'test/src/RTC/TestSimulcastProducerStreamManager.cpp',

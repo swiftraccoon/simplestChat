@@ -28,8 +28,10 @@ namespace RTC
 	  SharedInterface* shared,
 	  const std::string& id,
 	  RTC::Producer::Listener* listener,
-	  const FBS::Transport::ProduceRequest* data)
-	  : id(id), shared(shared), listener(listener), kind(RTC::Media::Kind(data->kind()))
+	  const FBS::Transport::ProduceRequest* data,
+	  std::string_view diagnosticTransportId)
+	  : id(id), shared(shared), listener(listener), diagnosticTransportId(diagnosticTransportId),
+	    kind(RTC::Media::Kind(data->kind()))
 	{
 		MS_TRACE();
 
@@ -1154,7 +1156,8 @@ namespace RTC
 
 		// Create a RtpStreamRecv for receiving a media stream.
 		auto* rtpStream =
-		  new RTC::RTP::RtpStreamRecv(this, this->shared, params, SendNackDelay, useRtpInactivityCheck);
+		  new RTC::RTP::RtpStreamRecv(this, this->shared, params, SendNackDelay, useRtpInactivityCheck,
+		    this->id, this->diagnosticTransportId.Get());
 
 		// Insert into the maps.
 		this->mapSsrcRtpStream[ssrc]              = rtpStream;

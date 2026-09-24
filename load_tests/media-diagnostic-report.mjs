@@ -19,7 +19,7 @@ const failure = code => Object.assign(new Error(code), { code });
 export function validateMediaSnapshot(value) {
   const invalid = () => { throw failure('invalid_media_schema'); };
   if (!keys(value, ['schemaVersion', 'correlationSalt', 'sampleId', 'startedUs', 'finishedUs', 'coverage', 'entities']) ||
-      value.schemaVersion !== 1 || !hex(value.correlationSalt, 32) || !uint(value.sampleId) || !value.sampleId ||
+      ![1, 2].includes(value.schemaVersion) || !hex(value.correlationSalt, 32) || !uint(value.sampleId) || !value.sampleId ||
       !uint(value.startedUs) || !uint(value.finishedUs) || value.finishedUs < value.startedUs ||
       !keys(value.coverage, ['complete', 'registryBusy', 'participantsObserved', 'participantsVisited', 'busyParticipants',
         'participantLimitReached', 'entityLimitReached', 'deadlineReached']) ||
@@ -41,9 +41,19 @@ export function validateMediaSnapshot(value) {
     if (references.has(reference)) invalid();
     references.add(reference);
     const ssrcs = new Set();
+    const encodingIndices = new Set();
     for (const stream of entity.streams) {
-      if (!keys(stream, ['ssrc', 'packetCount', 'rtpBytes', 'workerTimestampMs']) ||
-          !Object.values(stream).every(uint) || stream.ssrc > 0xffffffff || ssrcs.has(stream.ssrc)) invalid();
+      const counters = ['ssrc', 'packetCount', 'rtpBytes', 'workerTimestampMs'];
+      const fields = value.schemaVersion === 2 ? [...counters, 'score', 'encodingIndex'] : counters;
+      if (!keys(stream, fields) || !counters.every(name => uint(stream[name])) ||
+          stream.ssrc > 0xffffffff || ssrcs.has(stream.ssrc)) invalid();
+      if (value.schemaVersion === 2 && (!uint(stream.score) || stream.score > 10 ||
+          !nullable(stream.encodingIndex, index => uint(index) && index <= 255) ||
+          (entity.entityType === 'consumer' && stream.encodingIndex !== null))) invalid();
+      if (value.schemaVersion === 2 && stream.encodingIndex !== null) {
+        if (encodingIndices.has(stream.encodingIndex)) invalid();
+        encodingIndices.add(stream.encodingIndex);
+      }
       ssrcs.add(stream.ssrc);
     }
   }

@@ -187,10 +187,14 @@ namespace RTC
 		  SharedInterface* shared,
 		  RTP::RtpStream::Params& params,
 		  uint32_t sendNackDelayMs,
-		  bool useRtpInactivityCheck)
+		  bool useRtpInactivityCheck,
+		  std::string_view diagnosticProducerId,
+		  std::string_view diagnosticTransportId)
 		  : RTP::RtpStream::RtpStream(listener, shared, params, 10),
 		    sendNackDelayMs(sendNackDelayMs),
 		    useRtpInactivityCheck(useRtpInactivityCheck),
+		    diagnosticProducerId(diagnosticProducerId),
+		    diagnosticTransportId(diagnosticTransportId),
 		    transmissionCounter(
 		      shared, params.spatialLayers, params.temporalLayers, this->params.useDtx ? 6000 : 2500),
 		    mediaTransmissionCounter(shared, /*ignorePaddingOnlyPackets*/ true)
@@ -357,6 +361,7 @@ namespace RTC
 			// Restart the inactivityCheckPeriodicTimer.
 			if (this->inactivityCheckPeriodicTimer)
 			{
+				this->diagnosticActivity.mediaMs = this->shared->GetTimeMs();
 				this->inactivityCheckPeriodicTimer->Restart();
 			}
 
@@ -480,6 +485,7 @@ namespace RTC
 				// Restart the inactivityCheckPeriodicTimer.
 				if (this->inactivityCheckPeriodicTimer)
 				{
+					this->diagnosticActivity.mediaMs = this->shared->GetTimeMs();
 					this->inactivityCheckPeriodicTimer->Restart();
 				}
 
@@ -802,6 +808,8 @@ namespace RTC
 		void RtpStreamRecv::Pause()
 		{
 			MS_TRACE();
+			this->diagnosticActivity.paused = true;
+			this->diagnosticActivity.pauseMs = this->shared->GetTimeMs();
 
 			if (this->inactivityCheckPeriodicTimer)
 			{
@@ -821,6 +829,8 @@ namespace RTC
 		void RtpStreamRecv::Resume()
 		{
 			MS_TRACE();
+			this->diagnosticActivity.paused = false;
+			this->diagnosticActivity.resumeMs = this->shared->GetTimeMs();
 
 			if (this->inactivityCheckPeriodicTimer && !this->inactive)
 			{
@@ -1004,8 +1014,21 @@ namespace RTC
 
 				if (GetScore() != 0)
 				{
+					const auto nowMs = this->shared->GetTimeMs();
+					const auto& activity = this->diagnosticActivity;
 					MS_WARN_2TAGS(
-					  rtp, score, "RTP inactivity detected, resetting score to 0 [ssrc:%" PRIu32 "]", GetSsrc());
+					  rtp, score,
+					  "RTP inactivity detected, resetting score to 0 [ssrc:%" PRIu32
+					  ", producer:%s, transport:%s, kind:%s, encodingIdx:%" PRIu32 ", workerMs:%" PRIu64
+					  ", timeoutMs:%" PRIu64 ", mediaObserved:%u, lastMediaMs:%" PRIu64
+					  ", paused:%u, pauseObserved:%u, lastPauseMs:%" PRIu64
+					  ", resumeObserved:%u, lastResumeMs:%" PRIu64 "]",
+					  GetSsrc(), this->diagnosticProducerId.Get(), this->diagnosticTransportId.Get(),
+					  GetMimeType().type == RTC::RtpCodecMimeType::Type::VIDEO ? "video" : "audio",
+					  GetEncodingIdx(), nowMs, this->inactivityCheckPeriodicTimer->GetTimeout(),
+					  unsigned(activity.mediaMs.has_value()), activity.mediaMs.value_or(0),
+					  unsigned(activity.paused), unsigned(activity.pauseMs.has_value()), activity.pauseMs.value_or(0),
+					  unsigned(activity.resumeMs.has_value()), activity.resumeMs.value_or(0));
 				}
 
 				ResetScore(0, /*notify*/ true);

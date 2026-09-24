@@ -607,7 +607,7 @@ namespace RTC
 				CheckNoProducer(producerId, request->methodCStr);
 
 				// This may throw.
-				auto* producer = new RTC::Producer(this->shared, producerId, this, body);
+				auto* producer = new RTC::Producer(this->shared, producerId, this, body, this->id);
 
 				// Insert the Producer into the RtpListener.
 				// This may throw. If so, delete the Producer and throw.

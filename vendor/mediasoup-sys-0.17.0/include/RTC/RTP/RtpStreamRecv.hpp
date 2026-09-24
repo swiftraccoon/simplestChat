@@ -3,6 +3,7 @@
 
 #include "handles/TimerHandleInterface.hpp"
 #include "RTC/NackGenerator.hpp"
+#include "RTC/MediaDiagnosticId.hpp"
 #include "RTC/RTCP/XrDelaySinceLastRr.hpp"
 #include "RTC/RTP/RtpStream.hpp"
 #include "RTC/RateCalculator.hpp"
@@ -129,9 +130,22 @@ namespace RTC
 			  SharedInterface* shared,
 			  RTP::RtpStream::Params& params,
 			  uint32_t sendNackDelayMs,
-			  bool useRtpInactivityCheck);
+			  bool useRtpInactivityCheck,
+			  std::string_view diagnosticProducerId = {},
+			  std::string_view diagnosticTransportId = {});
 
 			~RtpStreamRecv() override;
+
+			// Observations only; these fields never participate in packet acceptance,
+			// scoring or timer decisions. Missing timestamps remain explicit.
+			struct Activity
+			{
+				std::optional<uint64_t> mediaMs;
+				std::optional<uint64_t> pauseMs;
+				std::optional<uint64_t> resumeMs;
+				bool paused{ false };
+			};
+			const Activity& GetDiagnosticActivity() const { return this->diagnosticActivity; }
 
 		public:
 			flatbuffers::Offset<FBS::RtpStream::Stats> FillBufferStats(
@@ -290,6 +304,9 @@ namespace RTC
 			// Passed by argument.
 			uint32_t sendNackDelayMs{ 0u };
 			bool useRtpInactivityCheck{ false };
+			RTC::MediaDiagnostics::Identifier diagnosticProducerId;
+			RTC::MediaDiagnostics::Identifier diagnosticTransportId;
+			Activity diagnosticActivity;
 			// Others.
 			// Packets expected at last interval.
 			uint32_t expectedPrior{ 0u };

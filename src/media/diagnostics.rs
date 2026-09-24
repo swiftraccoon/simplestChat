@@ -9,7 +9,7 @@
 use super::types::ParticipantMedia;
 use futures_util::{StreamExt, stream};
 use mediasoup::consumer::{Consumer, ConsumerStat, ConsumerStats, WeakConsumer};
-use mediasoup::producer::{Producer, ProducerStat, WeakProducer};
+use mediasoup::producer::{Producer, ProducerScore, ProducerStat, WeakProducer};
 use mediasoup_types::rtp_parameters::MediaKind;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -174,6 +174,10 @@ pub struct StreamSnapshot {
     pub packet_count: u64,
     pub rtp_bytes: u64,
     pub worker_timestamp_ms: u64,
+    pub score: u8,
+    /// Cached producer metadata, joined by SSRC; null for consumers or when the
+    /// independently observed score notification has not arrived yet.
+    pub encoding_index: Option<u8>,
 }
 
 enum WeakEntity {
@@ -337,7 +341,7 @@ pub(super) async fn collect_snapshot(
         && !coverage.deadline_reached
         && entities.iter().all(|row| row.status == EntityStatus::Ok);
     MediaSnapshot {
-        schema_version: 1,
+        schema_version: 2,
         correlation_salt: context.correlation_salt(),
         sample_id,
         started_us,
@@ -385,7 +389,10 @@ async fn collect_entity(
                     row.status = EntityStatus::Closed;
                 } else {
                     match bounded_request(deadline, producer.get_stats()).await {
-                        Ok(stats) if !producer.closed() => apply_producer_stats(&mut row, stats),
+                        Ok(stats) if !producer.closed() => {
+                            apply_producer_stats(&mut row, stats);
+                            apply_encoding_indices(&mut row, producer.score());
+                        }
                         _ if producer.closed() => row.status = EntityStatus::Closed,
                         Err(status) => row.status = status,
                         Ok(_) => row.status = EntityStatus::Closed,
@@ -419,6 +426,8 @@ fn consumer_stream(stat: ConsumerStat) -> (MediaKind, StreamSnapshot) {
             packet_count: stat.packet_count,
             rtp_bytes: stat.byte_count,
             worker_timestamp_ms: stat.timestamp,
+            score: stat.score,
+            encoding_index: None,
         },
     )
 }
@@ -447,10 +456,36 @@ fn apply_producer_stats(row: &mut EntitySnapshot, stats: Vec<ProducerStat>) {
                     packet_count: stat.packet_count,
                     rtp_bytes: stat.byte_count,
                     worker_timestamp_ms: stat.timestamp,
+                    score: stat.score,
+                    encoding_index: None,
                 },
             )
         }),
     );
+}
+
+fn apply_encoding_indices(row: &mut EntitySnapshot, scores: Vec<ProducerScore>) {
+    if scores.len() > MAX_STREAMS {
+        row.status = EntityStatus::StreamLimit;
+        return;
+    }
+    let mut by_ssrc = HashMap::new();
+    let mut indices = HashSet::new();
+    for score in scores {
+        let Ok(index) = u8::try_from(score.encoding_idx) else {
+            row.status = EntityStatus::Error;
+            row.streams.clear();
+            return;
+        };
+        if by_ssrc.insert(score.ssrc, index).is_some() || !indices.insert(index) {
+            row.status = EntityStatus::Error;
+            row.streams.clear();
+            return;
+        }
+    }
+    for stream in &mut row.streams {
+        stream.encoding_index = by_ssrc.get(&stream.ssrc).copied();
+    }
 }
 
 fn apply_streams(
@@ -470,6 +505,7 @@ fn apply_streams(
             || stream.packet_count > MAX_SAFE_INTEGER
             || stream.rtp_bytes > MAX_SAFE_INTEGER
             || stream.worker_timestamp_ms > MAX_SAFE_INTEGER
+            || stream.score > 10
         {
             row.status = EntityStatus::Error;
             row.streams.clear();
@@ -714,6 +750,8 @@ mod tests {
             assert_eq!(row.streams[0].packet_count, 3);
             assert_eq!(row.streams[0].rtp_bytes, 456);
             assert_eq!(row.streams[0].worker_timestamp_ms, 1234);
+            assert_eq!(row.streams[0].score, 10);
+            assert_eq!(row.streams[0].encoding_index, None);
         }
     }
 
@@ -766,6 +804,59 @@ mod tests {
         );
         assert_eq!(mismatched.status, EntityStatus::Error);
         assert!(mismatched.streams.is_empty());
+        let mut invalid_score = consumer_stat(1, 1);
+        invalid_score.score = 11;
+        mismatched.kind = MediaKind::Audio;
+        apply_consumer_stats(
+            &mut mismatched,
+            ConsumerStats::JustConsumer((invalid_score,)),
+        );
+        assert_eq!(mismatched.status, EntityStatus::Error);
+        assert!(mismatched.streams.is_empty());
+    }
+
+    #[test]
+    fn encoding_indices_are_nullable_ssrc_joins_and_reject_ambiguous_metadata() {
+        let score = |ssrc, encoding_idx| ProducerScore {
+            encoding_idx,
+            ssrc,
+            rid: Some("private-rid-is-never-serialized".into()),
+            score: 0,
+        };
+        let mut producer = row();
+        producer.entity_type = EntityType::Producer;
+        apply_producer_stats(
+            &mut producer,
+            vec![producer_stat(7, 5), producer_stat(8, 6)],
+        );
+        apply_encoding_indices(&mut producer, vec![score(8, 2)]);
+        assert_eq!(producer.streams[0].encoding_index, None);
+        assert_eq!(producer.streams[1].encoding_index, Some(2));
+        assert_eq!(producer.streams[1].score, 10);
+        assert!(
+            !serde_json::to_string(&producer)
+                .unwrap()
+                .contains("private-rid")
+        );
+        for scores in [
+            vec![score(7, 256)],
+            vec![score(7, 0), score(7, 1)],
+            vec![score(7, 0), score(8, 0)],
+        ] {
+            apply_producer_stats(&mut producer, vec![producer_stat(7, 1)]);
+            apply_encoding_indices(&mut producer, scores);
+            assert_eq!(producer.status, EntityStatus::Error);
+            assert!(producer.streams.is_empty());
+        }
+        apply_producer_stats(&mut producer, vec![producer_stat(7, 1)]);
+        apply_encoding_indices(
+            &mut producer,
+            (0..=MAX_STREAMS as u32)
+                .map(|index| score(index, index))
+                .collect(),
+        );
+        assert_eq!(producer.status, EntityStatus::StreamLimit);
+        assert_eq!(producer.streams[0].encoding_index, None);
     }
 
     #[tokio::test]
@@ -778,6 +869,7 @@ mod tests {
         );
         snapshot.entities.push(entity);
         let value = serde_json::to_value(snapshot).unwrap();
+        assert_eq!(value["schemaVersion"], 2);
         fn keys(value: &Value) -> Vec<&str> {
             let mut keys = value
                 .as_object()
@@ -842,8 +934,16 @@ mod tests {
         }
         assert_eq!(
             keys(&entity["streams"][0]),
-            ["packetCount", "rtpBytes", "ssrc", "workerTimestampMs"]
+            [
+                "encodingIndex",
+                "packetCount",
+                "rtpBytes",
+                "score",
+                "ssrc",
+                "workerTimestampMs"
+            ]
         );
+        assert!(entity["streams"][0]["encodingIndex"].is_null());
     }
 
     #[tokio::test]

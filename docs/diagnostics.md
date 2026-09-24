@@ -179,13 +179,73 @@ forwarding alone is not peer receipt, and an empty server snapshot is not worklo
 coverage. Samples and pause flags are non-atomic lifetime observations; server,
 worker and generator clocks have separate origins.
 
-Schema version 1 contains fixed field names, media kind, bounded counters and
+Schema version 2 contains fixed field names, media kind, bounded counters and
 process-scoped hashed media references; see the
 [typed contract](../src/media/diagnostics.rs). The response includes a public
 correlation salt, not a credential. References omit raw media UUIDs, participant
 and room IDs, addresses, SDP and native errors. This is pseudonymization, not
 anonymization: someone holding generator artifacts can match the media identities
 within that server process. Keep samples and generator output private together.
+
+Each stream also includes its native score (0–10) and a nullable `encodingIndex`.
+The index is a producer's encoding position, matched by SSRC from cached producer
+metadata; consumer rows and unavailable matches use null. A zero score is a
+worker observation, not proof of a receiver freeze. The counter request and
+cached metadata are separate observations. The local reader still accepts exact
+version 1 snapshots, whose encoding and score context is unavailable.
+
+### Correlate native media warnings
+
+RTP inactivity warnings include the private producer/transport identities,
+encoding position, SSRC, worker clock, configured timeout and observed activity,
+pause and resume timestamps. The inactivity timer applies to multi-encoding
+simulcast producers. It resets the stream score when accepted media stops;
+this alone does not establish why the sender stopped or whether a receiver was
+using that encoding. Keep the warning's observed/missing flags with its numeric
+timestamps. Worker times are monotonic, not UTC.
+
+Unknown-connection warnings describe the packet's apparent protocol family and
+whether its UDP tuple matches a recent removal from that worker's listener.
+The history is bounded to 256 entries with a 30-second lookup window and is
+invalidated when a tuple is registered again. TCP pointer identities are not
+reused for historical attribution. A match records prior registration, not
+packet authentication or proof of harmless teardown. No address, ICE credential,
+SDP or packet body is logged. Repeated warnings are coalesced by fixed protocol
+family and history class; a timer reports the additional count after ten seconds,
+and orderly listener destruction flushes pending counts.
+
+For two owned clients in a reserved canary room, the browser helper can retain
+explicitly enabled private SSRC/counter evidence:
+
+```sh
+canary_dir=$(mktemp -d "${TMPDIR:-/tmp}/simplestchat-canary.XXXXXXXX")
+mkdir -m 700 "$canary_dir/public" "$canary_dir/private"
+BASE_URL=https://YOUR_OWNED_HOST IMPAIRED_ROOM=YOUR_RESERVED_CANARY_ROOM \
+  CANARY_MODE=1 IMPAIR_SCRIPT=none IMPAIRED_PROFILES=baseline \
+  E2E_ARTIFACTS="$canary_dir/public/direct" \
+  CANARY_CORRELATION_FILE="$canary_dir/private/direct.json" \
+  node web/e2e/impaired-network.cjs
+```
+
+For TURN, use `CANARY_FORCE_RELAY=1` and fresh output paths. Private correlation
+requires a baseline-only canary without impairment, creates an exclusive `0600`
+file outside `E2E_ARTIFACTS`, and is refused in GitHub Actions. Never upload its
+directory or a common parent containing it. Ordinary canary artifacts use local
+consumer/layer ordinals and do not contain these stream identities.
+
+Collection is bounded to 40 samples, 16 RTP streams per sample and a 512 KiB file.
+Native calls have deadlines and remain busy until they settle, preventing hung
+requests from accumulating. Missing RTX identities/counters remain null. Inspect
+the independent `privateCorrelation` coverage result; successful media delivery
+does not establish complete diagnostic evidence. The optional sampling adds work
+and is not a performance benchmark.
+
+Match an inactivity SSRC to the publisher's send stream, not the viewer's rewritten
+receive SSRC. Compare the warning with per-layer packet/frame progress and the
+separate receive/playback checks. Browser, worker and host clocks have different
+origins; retained observation intervals do not provide exact packet timing or
+prove a cause. Historical logs without this context cannot be attributed
+retroactively.
 
 ### Correlate receiver stalls
 

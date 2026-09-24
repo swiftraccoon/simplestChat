@@ -1017,6 +1017,47 @@ test('native media decoder enforces exact private-safe schema and bounded counte
   assert.equal(validateMediaSnapshot(closed).entities[0].status, 'closed');
 });
 
+test('native media v2 retains exact legacy decoding and validates score and encoding context', () => {
+  function current(producer = false) {
+    const value = mediaSnapshot();
+    value.schemaVersion = 2;
+    Object.assign(value.entities[0].streams[0], { score: 10, encodingIndex: null });
+    if (producer) Object.assign(value.entities[0], { entityType: 'producer',
+      reference: mediaReference(mediaSalt, 'producer', producerId), producerReference: null });
+    return value;
+  }
+  assert.equal(validateMediaSnapshot(mediaSnapshot()).schemaVersion, 1);
+  assert.equal(validateMediaSnapshot(current()).entities[0].streams[0].encodingIndex, null);
+  for (const score of [0, 10]) {
+    for (const encodingIndex of [null, 0, 255]) {
+      const value = current(true);
+      Object.assign(value.entities[0].streams[0], { score, encodingIndex });
+      assert.equal(validateMediaSnapshot(value).entities[0].streams[0].encodingIndex, encodingIndex);
+    }
+  }
+  const mutations = [
+    value => { value.schemaVersion = 1; },
+    value => { value.schemaVersion = 3; },
+    value => { delete value.entities[0].streams[0].score; },
+    value => { delete value.entities[0].streams[0].encodingIndex; },
+    value => { value.entities[0].streams[0].nativeId = 'PRIVATE'; },
+    ...[null, -1, 11, 0.5, '10', NaN].map(score => value => { value.entities[0].streams[0].score = score; }),
+    ...[-1, 256, 0.5, '0', NaN].map(index => value => { value.entities[0].streams[0].encodingIndex = index; }),
+  ];
+  for (const mutate of mutations) {
+    const value = current(true);
+    mutate(value);
+    assert.throws(() => validateMediaSnapshot(value), /invalid_media_schema/);
+  }
+  const consumer = current();
+  consumer.entities[0].streams[0].encodingIndex = 0;
+  assert.throws(() => validateMediaSnapshot(consumer), /invalid_media_schema/);
+  const duplicate = current(true);
+  duplicate.entities[0].streams[0].encodingIndex = 0;
+  duplicate.entities[0].streams.push({ ...duplicate.entities[0].streams[0], ssrc: 43 });
+  assert.throws(() => validateMediaSnapshot(duplicate), /invalid_media_schema/);
+});
+
 test('media fetch targets only loopback with auth, no redirects, no retries and no raw error output', async () => {
   let calls = 0;
   const result = await fetchMediaSnapshot({ origin: 'http://127.0.0.1:3119', token: 'PRIVATE' }, { fetch: async (url, options) => {

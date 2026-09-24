@@ -47,6 +47,9 @@ and `put` API surface; this removes RUSTSEC-2026-0253 from the active graph.
 `include/RTC/Producer.hpp`, `src/RTC/Producer.cpp`, `src/RTC/Transport.cpp`,
 `include/RTC/DtlsTransport.hpp`, `src/RTC/DtlsTransport.cpp`,
 `src/RTC/WebRtcTransport.cpp`, `test/src/RTC/TestDtlsTransport.cpp`,
+`include/RTC/RTP/RtpStreamRecv.hpp`, `include/RTC/MediaDiagnosticId.hpp`,
+`include/RTC/MediaDiagnostics.hpp`, `include/RTC/WebRtcServer.hpp`,
+`src/RTC/WebRtcServer.cpp`, `test/src/RTC/TestMediaDiagnostics.cpp`,
 `subprojects/abseil-cpp.wrap`, `subprojects/libuv.wrap`,
 `subprojects/unordered-dense.wrap`, `subprojects/catch2.wrap`, the two files under
 `subprojects/packagefiles/abseil-cpp/`, the four files under
@@ -132,6 +135,39 @@ occurred before and after the patch, while six native warning lines became zero.
 Both runs decoded 300 frames over 15 seconds with zero media loss or freezes.
 Drop this patch when upstream preserves equivalent failure classification and
 logs orderly protocol shutdown without a warning.
+
+Native RTP inactivity warnings retain their severity and score behavior, while
+adding bounded private producer/transport UUIDs, encoding index, media kind,
+worker time and last accepted non-padding media/pause/resume timestamps. UUID
+fields accept only the generated lowercase UUID representation; arbitrary text,
+RIDs, addresses, ICE credentials and packet contents are not logged. The existing
+inactivity timer is enabled only for multi-encoding simulcast producers. Its
+activity observation adds one cached-clock scalar assignment when accepted media
+already restarts that timer; it never changes packet acceptance or scoring.
+
+Unknown-tuple warnings classify only the packet header family and an optional
+historical UDP-tuple match. Each WebRtcServer retains at most 256 removed UDP
+tuples, with a 30-second lookup window, owned address storage and bounded UUID metadata.
+Registering the tuple again removes its history. A match names the previous
+transport and elapsed removal time, not an authenticated sender or an expected
+shutdown. TCP remains unattributed because its tuple key is a recyclable object
+pointer. Live routing entries and packet acceptance are unchanged. The first
+event in each of eight fixed family/history classes is logged immediately; a
+10-second one-shot timer reports coalesced counts even after a finite burst ends.
+Server destruction flushes pending counts and removes its timer. No packet bytes
+or peer addresses enter these logs, and normal routed packets do no new lookup.
+
+`build/check-native-dtls.sh` compiles the `[dtls]` and `[media-diagnostics]`
+groups together in its private worker build. Fake-clock regressions cover timer
+expiry, padding exclusion, recovery and pause/resume behavior, missing activity,
+DTX timeout, owned tuple storage, expiry/reuse/capacity, explicit TCP non-attribution,
+finite-burst summaries and timer destruction. The helper also checks that a real
+native inactivity warning contains its expected fixture identity and timestamps.
+Public authenticated media snapshots expose only salted entity references; their
+version-2 stream fields add native score and a nullable producer encoding index.
+Drop the native diagnostic patch when upstream provides equivalent bounded,
+privacy-preserving evidence; production warning classification still requires
+correlated observations, not these diagnostics alone.
 
 Cargo ignores a dependency's
 nested lockfile, so removing that generated package artifact does not change

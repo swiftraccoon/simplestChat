@@ -232,7 +232,7 @@ mod tests {
             .await
             .unwrap();
         let snapshot: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(snapshot["schemaVersion"], 1);
+        assert_eq!(snapshot["schemaVersion"], 2);
         assert_eq!(snapshot["coverage"]["complete"], true);
         assert_eq!(snapshot["entities"], serde_json::json!([]));
         assert!(!String::from_utf8(body.to_vec()).unwrap().contains(TOKEN));
