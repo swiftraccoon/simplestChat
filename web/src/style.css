@@ -415,10 +415,6 @@ header h1 {
   pointer-events: none;
 }
 
-.video-tile.local video {
-  transform: scaleX(-1);
-}
-
 /* Speaking indicator — glowing blue border */
 .video-tile.speaking {
   box-shadow:
