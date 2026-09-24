@@ -8,7 +8,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode, header},
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -31,9 +31,8 @@ pub struct PasskeyRegisterStartRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PasskeyLoginStartRequest {
-    email: String,
-}
+#[serde(deny_unknown_fields)]
+pub struct PasskeyLoginStartRequest {}
 
 #[derive(Debug, Deserialize)]
 pub struct PasskeyRegisterFinishRequest {
@@ -523,9 +522,10 @@ pub(crate) async fn passkey_register_start(
     }
 
     let user_id = Uuid::new_v4();
-    let (challenge, state) = webauthn
+    let (mut challenge, state) = webauthn
         .start_passkey_registration(user_id, &email, &req.display_name, None)
         .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
+    require_discoverable_registration(&mut challenge)?;
     let ceremony_id = store
         .store_registration(state, user_id, email, req.display_name.clone(), source_ip)
         .ok_or_else(|| {
@@ -603,59 +603,77 @@ pub async fn passkey_register_finish(
     ))
 }
 
+/// Adapt the pinned library's browser policy while retaining its verifier.
+/// Resident-key selection is a browser requirement, not signed evidence about
+/// authenticator storage. Successful usernameless authentication is the usable
+/// compatibility check; an unsigned `credProps.rk` hint is never authorization.
+fn require_discoverable_registration(
+    challenge: &mut CreationChallengeResponse,
+) -> Result<(), AuthError> {
+    let selection = challenge
+        .public_key
+        .authenticator_selection
+        .as_mut()
+        .ok_or_else(|| AuthError::WebAuthnError("Registration selection policy missing".into()))?;
+    selection.resident_key = Some(webauthn_rs_proto::ResidentKeyRequirement::Required);
+    selection.require_resident_key = true;
+    Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModalLoginOptions {
+    public_key: webauthn_rs_proto::PublicKeyCredentialRequestOptions,
+    mediation: ModalMediation,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+enum ModalMediation {
+    Required,
+}
+
+fn modal_login_options(challenge: RequestChallengeResponse) -> Result<Value, AuthError> {
+    // webauthn-rs 0.5.5 exposes discoverable verification under conditional-ui.
+    // Mediation only controls browser presentation: it is not in the signed
+    // assertion or server AuthenticationState. This explicit button uses a modal
+    // prompt while keeping the generated challenge, required UV and RP intact.
+    serde_json::to_value(ModalLoginOptions {
+        public_key: challenge.public_key,
+        mediation: ModalMediation::Required,
+    })
+    .map_err(|error| AuthError::WebAuthnError(error.to_string()))
+}
+
 /// POST /api/auth/passkey/login/start
+///
+/// Anonymous challenge creation never looks up an account or returns credential
+/// IDs. Unknown JSON fields (including the retired email selector) are rejected
+/// before account state could influence the response.
 pub(crate) async fn passkey_login_start(
     State(server): State<SignalingServer>,
     Extension(ClientIp(source_ip)): Extension<ClientIp>,
-    Json(body): Json<PasskeyLoginStartRequest>,
+    Json(_body): Json<PasskeyLoginStartRequest>,
 ) -> Result<Json<Value>, AuthError> {
-    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+    let _pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
     if !jwt::secret_is_strong(secret) {
         return Err(AuthError::NotConfigured);
     }
-    let email = canonicalize_email(&body.email)?;
-    if !server.allow_auth_principal(&email) {
-        return Err(AuthError::RateLimited);
-    }
     let _request_permit = acquire_auth_request(&server)?;
 
-    let user_id: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
-        .bind(&email)
-        .fetch_optional(pool)
-        .await
-        .map_err(database_error)?
-        .ok_or(AuthError::InvalidCredentials)?;
-    let credential_rows: Vec<Value> =
-        sqlx::query_scalar("SELECT credential_json FROM webauthn_credentials WHERE user_id = $1")
-            .bind(user_id)
-            .fetch_all(pool)
-            .await
-            .map_err(database_error)?;
-    if credential_rows.is_empty() {
-        return Err(AuthError::InvalidCredentials);
-    }
-    let passkeys = credential_rows
-        .into_iter()
-        .map(|value| {
-            serde_json::from_value(value)
-                .map_err(|error| AuthError::DatabaseError(format!("Invalid credential: {error}")))
-        })
-        .collect::<Result<Vec<Passkey>, AuthError>>()?;
-
     let (challenge, state) = webauthn
-        .start_passkey_authentication(&passkeys)
+        .start_discoverable_authentication()
         .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
     let ceremony_id = store
-        .store_authentication(state, user_id, source_ip)
-        .ok_or_else(|| {
-            AuthError::WebAuthnError("Too many pending authentications, try again later".into())
-        })?;
-    let response = serde_json::to_value(challenge)
-        .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
-    Ok(Json(add_ceremony_id(response, ceremony_id)?))
+        .store_authentication(state, source_ip)
+        .ok_or(AuthError::RateLimited)?;
+    Ok(Json(add_ceremony_id(
+        modal_login_options(challenge)?,
+        ceremony_id,
+    )?))
 }
 
 /// POST /api/auth/passkey/login/finish
@@ -675,67 +693,77 @@ pub async fn passkey_login_finish(
 
     let authentication = store
         .take_authentication(&body.ceremony_id)
-        .ok_or_else(|| {
-            AuthError::WebAuthnError("No pending authentication or challenge expired".into())
-        })?;
-    let result = webauthn
-        .finish_passkey_authentication(&body.credential, &authentication.state)
-        .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
-    let passkey_id = authentication_credential_id(&result);
-    let refresh_token = session::generate_refresh_token()?;
+        .ok_or(AuthError::InvalidPasskey)?;
+    // The handle and credential ID are untrusted selectors until verification.
+    // Resolve them together; never accept a credential owned by another account.
+    let (account_id, presented_id) = webauthn
+        .identify_discoverable_authentication(&body.credential)
+        .map_err(|_| AuthError::InvalidPasskey)?;
+    let passkey_id = URL_SAFE_NO_PAD.encode(presented_id);
     let mut transaction = pool.begin().await.map_err(database_error)?;
 
+    // Keep the same users-before-credentials lock order as account mutation.
+    // The verifier reads the locked current credential, so parallel assertions
+    // cannot verify against a stale counter or a removed credential.
     let user = sqlx::query_as::<_, (String, String, i64)>(
         "SELECT email, display_name, auth_version FROM users WHERE id = $1 FOR NO KEY UPDATE",
     )
-    .bind(authentication.user_id)
+    .bind(account_id)
     .fetch_optional(&mut *transaction)
     .await
     .map_err(database_error)?
-    .ok_or(AuthError::UserNotFound)?;
+    .ok_or(AuthError::InvalidPasskey)?;
     let credential_json: Value = sqlx::query_scalar(
         "SELECT credential_json FROM webauthn_credentials WHERE user_id = $1 AND credential_id = $2 FOR UPDATE",
     )
-    .bind(authentication.user_id)
+    .bind(account_id)
     .bind(&passkey_id)
     .fetch_optional(&mut *transaction)
     .await
     .map_err(database_error)?
-    .ok_or_else(|| AuthError::WebAuthnError("Credential not registered to user".into()))?;
+    .ok_or(AuthError::InvalidPasskey)?;
+    let mut passkey: Passkey = serde_json::from_value(credential_json.clone())
+        .map_err(|error| AuthError::DatabaseError(format!("Invalid credential: {error}")))?;
+    let result = webauthn
+        .finish_discoverable_authentication(
+            &body.credential,
+            authentication.state,
+            &[DiscoverableKey::from(&passkey)],
+        )
+        .map_err(|_| AuthError::InvalidPasskey)?;
+    if authentication_credential_id(&result) != passkey_id {
+        return Err(AuthError::InvalidPasskey);
+    }
 
-    // The WebAuthn state contains the counter observed at ceremony start. Check
-    // the locked, current row too so concurrent ceremonies cannot accept a
-    // stale or rolled-back counter.
+    // Keep the strict application counter policy as well as library validation:
+    // positive counters must advance, including concurrent ceremonies.
     let stored_counter = credential_json
         .pointer("/cred/counter")
         .and_then(Value::as_u64)
         .unwrap_or(0);
     let presented_counter = u64::from(result.counter());
     if (stored_counter > 0 || presented_counter > 0) && presented_counter <= stored_counter {
-        return Err(AuthError::WebAuthnError(
-            "Credential counter indicates possible cloning".into(),
-        ));
+        return Err(AuthError::InvalidPasskey);
     }
 
-    let mut passkey: Passkey = serde_json::from_value(credential_json)
-        .map_err(|error| AuthError::DatabaseError(format!("Invalid credential: {error}")))?;
     passkey
         .update_credential(&result)
-        .ok_or_else(|| AuthError::WebAuthnError("Credential mismatch".into()))?;
+        .ok_or(AuthError::InvalidPasskey)?;
     let updated_credential = serde_json::to_value(passkey)
         .map_err(|error| AuthError::WebAuthnError(error.to_string()))?;
     sqlx::query(
         "UPDATE webauthn_credentials SET credential_json = $3 WHERE user_id = $1 AND credential_id = $2",
     )
-    .bind(authentication.user_id)
+    .bind(account_id)
     .bind(&passkey_id)
     .bind(updated_credential)
     .execute(&mut *transaction)
     .await
     .map_err(database_error)?;
-    session::create_session_with(&mut transaction, &authentication.user_id, &refresh_token).await?;
+    let refresh_token = session::generate_refresh_token()?;
+    session::create_session_with(&mut transaction, &account_id, &refresh_token).await?;
 
-    let user_id = authentication.user_id.to_string();
+    let user_id = account_id.to_string();
     let token = jwt::create_token_with_version(&user_id, &user.1, secret, user.2)?;
     transaction.commit().await.map_err(database_error)?;
     info!(user_id, "User logged in via passkey");
@@ -756,6 +784,49 @@ pub async fn passkey_login_finish(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn passkey_login_start_accepts_no_account_selector() {
+        assert!(serde_json::from_value::<PasskeyLoginStartRequest>(serde_json::json!({})).is_ok());
+        for value in [
+            serde_json::json!({"email": "user@example.test"}),
+            serde_json::json!({"user_id": Uuid::new_v4()}),
+            serde_json::json!({"credential_id": "credential"}),
+            serde_json::json!(null),
+        ] {
+            assert!(serde_json::from_value::<PasskeyLoginStartRequest>(value).is_err());
+        }
+    }
+
+    #[test]
+    fn passkey_browser_policy_requires_discovery_without_restricting_provider() {
+        let webauthn = WebauthnBuilder::new("localhost", &Url::parse("https://localhost").unwrap())
+            .unwrap()
+            .build()
+            .unwrap();
+        let (mut registration, _) = webauthn
+            .start_passkey_registration(Uuid::new_v4(), "user@example.test", "User", None)
+            .unwrap();
+        require_discoverable_registration(&mut registration).unwrap();
+        let registration = serde_json::to_value(registration).unwrap();
+        let selection = &registration["publicKey"]["authenticatorSelection"];
+        assert_eq!(selection["residentKey"], "required");
+        assert_eq!(selection["requireResidentKey"], true);
+        assert_eq!(selection["userVerification"], "required");
+        assert!(selection.get("authenticatorAttachment").is_none());
+        assert_eq!(registration["publicKey"]["attestation"], "none");
+
+        let (challenge, _) = webauthn.start_discoverable_authentication().unwrap();
+        let expected_public_key = serde_json::to_value(&challenge.public_key).unwrap();
+        let response = modal_login_options(challenge).unwrap();
+        assert_eq!(response["publicKey"], expected_public_key);
+        assert_eq!(response["mediation"], "required");
+        assert_eq!(
+            response["publicKey"]["allowCredentials"],
+            serde_json::json!([])
+        );
+        assert_eq!(response["publicKey"]["userVerification"], "required");
+    }
 
     #[test]
     fn validates_bounded_email_addresses() {

@@ -57,14 +57,19 @@ class PublicKeyCredential {
   id = 'credential';
   rawId = new Uint8Array([9, 10]).buffer;
   type = 'public-key';
+  extensions = {};
   constructor(value = new AuthenticatorAssertionResponse()) {
     this.response = value;
+  }
+  getClientExtensionResults() {
+    return this.extensions;
   }
 }
 
 function passkeyOptions(kind) {
   return {
     ceremony_id: `ceremony-${kind}`,
+    ...(kind === 'login' ? { mediation: 'required' } : {}),
     publicKey:
       kind === 'register'
         ? {
@@ -73,12 +78,16 @@ function passkeyOptions(kind) {
             user: { id: 'AwQ', name: 'person@example.test', displayName: 'Person' },
             pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
             excludeCredentials: [{ type: 'public-key', id: 'BQY', transports: ['internal'] }],
-            authenticatorSelection: { userVerification: 'required' },
+            authenticatorSelection: {
+              userVerification: 'required',
+              residentKey: 'required',
+              requireResidentKey: true,
+            },
           }
         : {
             challenge: 'AQI',
             rpId: 'localhost',
-            allowCredentials: [{ type: 'public-key', id: 'BQY', transports: ['internal'] }],
+            allowCredentials: [],
             userVerification: 'required',
             timeout: 60000,
           },
@@ -756,9 +765,19 @@ for (const kind of ['register', 'login']) {
     const decoded =
       kind === 'register'
         ? await f.auth.passkeyRegisterStart('person@example.test', 'Person')
-        : await f.auth.passkeyLoginStart('person@example.test');
+        : await f.auth.passkeyLoginStart();
     assert.deepEqual([...new Uint8Array(decoded.publicKey.challenge)], [1, 2]);
     assert.deepEqual(options, original, 'server JSON is not mutated');
+    if (kind === 'login') {
+      assert.deepEqual(JSON.parse(f.requests[0].options.body), {});
+      assert.equal(f.requests[0].url, '/api/auth/passkey/login/start');
+      assert.equal(decoded.mediation, 'required');
+      assert.deepEqual(decoded.publicKey.allowCredentials, []);
+    } else {
+      assert.equal(decoded.publicKey.authenticatorSelection.residentKey, 'required');
+      assert.equal(decoded.publicKey.authenticatorSelection.requireResidentKey, true);
+      assert.equal(decoded.publicKey.authenticatorSelection.authenticatorAttachment, undefined);
+    }
     const credential = new PublicKeyCredential(
       kind === 'register'
         ? new AuthenticatorAttestationResponse()
@@ -791,7 +810,7 @@ for (const kind of ['register', 'login']) {
     const pending = assert.rejects(
       kind === 'register'
         ? f.auth.passkeyRegisterStart('person@example.test', 'Person')
-        : f.auth.passkeyLoginStart('person@example.test'),
+        : f.auth.passkeyLoginStart(),
       superseded,
     );
     f.auth.forgetSession();
@@ -810,7 +829,7 @@ for (const kind of ['register', 'login']) {
     const f = await fixture(t);
     f.enqueue(response(passkeyOptions(kind)));
     if (kind === 'register') await f.auth.passkeyRegisterStart('person@example.test', 'Person');
-    else await f.auth.passkeyLoginStart('person@example.test');
+    else await f.auth.passkeyLoginStart();
     const gate = deferred();
     f.enqueue(gate.promise);
     const credential = new PublicKeyCredential();
@@ -824,6 +843,37 @@ for (const kind of ['register', 'login']) {
     gate.resolve(response(session('passkey')));
     await pending;
     assert.equal(f.auth.userId, 'new');
+  });
+}
+
+test('passkey options reject invalid mediation without retaining a ceremony', async (t) => {
+  const f = await fixture(t);
+  f.enqueue(response({ ...passkeyOptions('login'), mediation: { unexpected: true } }));
+  await assert.rejects(f.auth.passkeyLoginStart(), /Unsupported passkey mediation/);
+  await assert.rejects(f.auth.passkeyLoginFinish(new PublicKeyCredential()), /was not started/);
+  assert.equal(f.requests.length, 1);
+});
+
+for (const extensions of [
+  {},
+  { credProps: { rk: true }, appid: false, unrelated: 'must-not-send' },
+  { credProps: { rk: false, unexpected: 'must-not-send' } },
+  { credProps: { rk: 'true' }, appid: 'false' },
+]) {
+  test(`passkey extension serialization permits only typed known properties: ${JSON.stringify(extensions)}`, async (t) => {
+    const f = await fixture(t);
+    f.enqueue(response(passkeyOptions('register')));
+    await f.auth.passkeyRegisterStart('person@example.test', 'Person');
+    const credential = new PublicKeyCredential(new AuthenticatorAttestationResponse());
+    credential.extensions = extensions;
+    f.enqueue(response(session('passkey')));
+    await f.auth.passkeyRegisterFinish(credential);
+    const sent = JSON.parse(f.requests[1].options.body).credential.clientExtensionResults;
+    const expected = {};
+    if (typeof extensions.credProps?.rk === 'boolean')
+      expected.credProps = { rk: extensions.credProps.rk };
+    if (typeof extensions.appid === 'boolean') expected.appid = extensions.appid;
+    assert.deepEqual(sent, Object.keys(expected).length ? expected : undefined);
   });
 }
 
@@ -903,7 +953,7 @@ test('dismissed passkey challenge fetch is abortable and its late result cannot 
   const f = await fixture(t);
   const controller = new AbortController();
   f.enqueue(pending.promise);
-  const start = f.auth.passkeyLoginStart('fixture@example.test', controller.signal);
+  const start = f.auth.passkeyLoginStart(controller.signal);
   const rejected = assert.rejects(start, superseded);
   assert.equal(f.requests[0].options.signal, controller.signal);
   controller.abort();
@@ -935,7 +985,7 @@ for (const stage of ['fetch', 'body']) {
     await assert.rejects(f.auth.register('new@example.test', 'New', 'password'), {
       name: 'SessionOutcomeUnknownError',
     });
-    await assert.rejects(f.auth.passkeyLoginStart('new@example.test'), {
+    await assert.rejects(f.auth.passkeyLoginStart(), {
       name: 'SessionOutcomeUnknownError',
     });
     assert.equal(f.requests.length, 1);

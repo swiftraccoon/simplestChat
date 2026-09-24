@@ -1279,10 +1279,8 @@ async function submitPasskey(registration: boolean): Promise<void> {
   const errorNode = registration ? registerError : loginError;
   const passkeyButton = registration ? registerPasskeyBtn : loginPasskeyBtn;
   const passwordButton = registration ? registerSubmit : loginSubmit;
-  if (!email || (registration && !displayName)) {
-    errorNode.textContent = registration
-      ? 'Fill in email and display name first'
-      : 'Enter your email first';
+  if (registration && (!email || !displayName)) {
+    errorNode.textContent = 'Fill in email and display name first';
     errorNode.hidden = false;
     return;
   }
@@ -1310,7 +1308,7 @@ async function submitPasskey(registration: boolean): Promise<void> {
       });
     } else {
       const options = await telemetry.measure('passkey_login_start', () =>
-        auth.passkeyLoginStart(email, attempt.controller.signal),
+        auth.passkeyLoginStart(attempt.controller.signal),
       );
       if (!authFlow.current(attempt)) return;
       credential = await telemetry.measure('passkey_login_ceremony', async () => {

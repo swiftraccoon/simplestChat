@@ -44,6 +44,11 @@ if [[ "${TURN_E2E:-}" == 1 && "$(env -i PATH="${PATH}" turnserver --version)" !=
 fi
 test -x "${server_binary}"
 export BASE_URL="http://127.0.0.1:${test_port}"
+if [[ "${PASSKEY_E2E:-}" == 1 ]]; then
+  # WebAuthn relying party IDs are domains. Keep the owned HTTP bind on IPv4
+  # loopback, but use localhost for both the browser origin and relying party.
+  export BASE_URL="http://localhost:${test_port}"
+fi
 # Probe both sockets; a non-HTTP listener must not be mistaken for a free port.
 # The server still owns the final bind and must remain alive after readiness.
 node --input-type=module - "${test_port}" "${media_port}" "${test_announce_ip}" "${TURN_E2E:-}" "${turn_port}" <<'JS'
@@ -212,6 +217,9 @@ trap 'exit 143' TERM
 # Lifecycle and product-load checks need protected server counts. Never inherit an
 # operator credential or publish this disposable token in logs/artifacts.
 test_metrics_environment=("PATH=${PATH}")
+if [[ "${PASSKEY_E2E:-}" == 1 ]]; then
+  test_metrics_environment+=("WEBAUTHN_RP_ID=localhost" "WEBAUTHN_ORIGIN=${BASE_URL}")
+fi
 unset TEST_METRICS_TOKEN TEST_SERVER_PID
 if [[ "${LIFECYCLE_E2E:-}" == 1 || "${UI_STRESS_E2E:-}" == 1 || "${SESSION_SOAK_E2E:-}" == 1 ]]; then
   TEST_METRICS_TOKEN="$(env -i PATH="${PATH}" node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"

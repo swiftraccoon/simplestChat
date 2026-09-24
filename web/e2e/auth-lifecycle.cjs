@@ -26,6 +26,7 @@ async function run() {
   let pendingLogin;
   let logins = 0;
   let passkeyFinishes = 0;
+  let passkeyStarts = 0;
   let uploads = 0;
   try {
     const page = await context.newPage();
@@ -59,8 +60,9 @@ async function run() {
       }
       window.WebSocket = FixtureSocket;
       Object.defineProperty(navigator.credentials, 'get', {
-        value: () =>
+        value: (request) =>
           new Promise((resolve) => {
+            window.ceremonyOptionsFixture = request;
             window.finishCeremonyFixture = resolve;
           }),
       });
@@ -73,13 +75,16 @@ async function run() {
         return;
       }
       if (path === '/api/auth/passkey/login/start') {
+        passkeyStarts++;
+        assert.deepEqual(route.request().postDataJSON(), {}, 'passkey start has no email');
         await route.fulfill({
           json: {
             ceremony_id: 'fixture',
+            mediation: 'required',
             publicKey: {
               challenge: 'AQI',
               rpId: 'localhost',
-              allowCredentials: [{ type: 'public-key', id: 'AwQ' }],
+              allowCredentials: [],
               userVerification: 'required',
             },
           },
@@ -136,9 +141,15 @@ async function run() {
     );
     await page.locator('#logout-btn').click();
     await page.locator('#sign-in-btn').click();
-    await page.locator('#login-email').fill('fixture@example.test');
+    await page.locator('#login-email').fill('');
     await page.locator('#login-passkey-btn').click();
     await page.waitForFunction(() => typeof window.finishCeremonyFixture === 'function');
+    assert.equal(passkeyStarts, 1, 'passkey sign-in requires no email');
+    assert.equal(await page.evaluate(() => window.ceremonyOptionsFixture.mediation), 'required');
+    assert.deepEqual(
+      await page.evaluate(() => window.ceremonyOptionsFixture.publicKey.allowCredentials),
+      [],
+    );
     await page.keyboard.press('Escape');
     await page.locator('#login-modal').waitFor({ state: 'hidden' });
     await page.locator('#sign-in-btn').click();
@@ -234,6 +245,7 @@ async function run() {
         browser: options.name,
         checks: [
           'session-dismissal-cookie-boundary',
+          'usernameless-passkey-options',
           'late-ceremony-ownership',
           'masked-password-teardown',
           'password-prompt-membership-ownership',

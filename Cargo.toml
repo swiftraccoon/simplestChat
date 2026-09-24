@@ -55,7 +55,8 @@ base64 = "0.23.1"
 sqlx = { version = "0.9.0", default-features = false, features = ["postgres", "runtime-tokio", "tls-native-tls", "uuid", "chrono", "json", "derive", "migrate"] }
 argon2 = "0.6.0"
 jsonwebtoken = { version = "11.0.0", default-features = false, features = ["aws_lc_rs"] }
-webauthn-rs = "0.5.5"
+webauthn-rs = { version = "0.5.5", features = ["conditional-ui"] }
+webauthn-rs-proto = "=0.5.5"
 url = "2.5.8"
 sha2 = "0.11.0"
 hex = "0.4.3"

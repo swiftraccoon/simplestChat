@@ -143,6 +143,25 @@ For browser tests, replace the Cargo test command with
 `npm --prefix web/e2e test` after the [browser installation steps](../web/e2e/README.md).
 Build the UI first; do not rebuild assets during a browser run.
 
+### Passkey verification
+
+Run native WebAuthn ceremonies with Chromium's owned virtual authenticator:
+
+```sh
+PASSKEY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+  node web/e2e/passkey.cjs
+```
+
+The opt-in helper uses `http://localhost` as the browser origin and fixes the RP
+to `localhost`; the HTTP bind and database remain on loopback. The suite exercises
+resident-key registration and usernameless login against the actual verifier,
+including rejected email selectors, wrong handles, changed signatures, replay,
+stale/equal counters and a natively signed assertion from a different origin.
+It also verifies that an otherwise functional nonresident credential cannot enter
+the discoverable flow. Credentials remain in memory and the disposable database;
+reports contain only outcomes. Native Bitwarden/Keychain selection and physical
+authenticator behavior still require device testing.
+
 ### Authenticated chat continuity
 
 Run the opt-in 20-minute session soak against a fresh local database and server:

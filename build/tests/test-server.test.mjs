@@ -125,6 +125,35 @@ test('helper requires disposable opt-in and rejects nonlocal/effective-host over
   }
 });
 
+test('passkey opt-in fixes relying party and origin to the owned localhost server', async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-passkey-helper.'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  for (const enabled of [false, true]) {
+    const server = path.join(directory, `server-${enabled}.mjs`);
+    await writeFile(server, `#!/usr/bin/env node
+      import assert from 'node:assert/strict';
+      assert.equal(process.env.BIND_ADDR, '127.0.0.1');
+      assert.equal(process.env.WEBAUTHN_RP_ID, ${enabled ? "'localhost'" : 'undefined'});
+      assert.equal(process.env.WEBAUTHN_ORIGIN, ${enabled ? "'http://localhost:' + process.env.PORT" : 'undefined'});
+      assert.equal(process.env.ALLOWED_ORIGINS, 'http://${enabled ? 'localhost' : '127.0.0.1'}:' + process.env.PORT);
+      const { createServer } = await import('node:http');
+      const server = createServer((request, response) => response.end('[]'));
+      server.listen(Number(process.env.PORT), process.env.BIND_ADDR);
+      process.on('SIGTERM', () => server.close());
+    `);
+    await chmod(server, 0o755);
+    const result = await run(t, {
+      TEST_SERVER_BINARY: server,
+      PASSKEY_E2E: enabled ? '1' : '0',
+      WEBAUTHN_RP_ID: 'inherited.example',
+      WEBAUTHN_ORIGIN: 'https://inherited.example',
+    }, [process.execPath, '-e', `
+      require('node:assert/strict').equal(new URL(process.env.BASE_URL).hostname, '${enabled ? 'localhost' : '127.0.0.1'}');
+    `]);
+    assert.equal(result.status, 0, result.output);
+  }
+});
+
 test('helper rejects empty, nonliteral, and unassigned media announcements before spawning', async t => {
   const environment = await announcementFixture(t, 'must-not-launch');
   for (const address of ['', 'localhost', '127.0.0.1.example.test', '::1', '127.1', ' 127.0.0.1',

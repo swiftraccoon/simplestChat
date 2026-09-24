@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 pub enum AuthError {
     InvalidInput(&'static str),
     InvalidCredentials,
+    InvalidPasskey,
     EmailAlreadyExists,
     UserNotFound,
     InvalidToken,
@@ -32,6 +33,7 @@ impl IntoResponse for AuthError {
             AuthError::InvalidCredentials => {
                 (StatusCode::UNAUTHORIZED, "Invalid email or password")
             }
+            AuthError::InvalidPasskey => (StatusCode::UNAUTHORIZED, "Passkey sign-in failed"),
             AuthError::EmailAlreadyExists => (StatusCode::CONFLICT, "Email already registered"),
             AuthError::UserNotFound => (StatusCode::NOT_FOUND, "User not found"),
             AuthError::InvalidToken => (StatusCode::UNAUTHORIZED, "Invalid token"),

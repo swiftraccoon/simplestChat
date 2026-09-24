@@ -17,8 +17,7 @@ pub struct RegistrationData {
 }
 
 pub struct AuthenticationData {
-    pub state: PasskeyAuthentication,
-    pub user_id: Uuid,
+    pub state: DiscoverableAuthentication,
 }
 
 struct TimedChallenge<T> {
@@ -131,20 +130,13 @@ impl ChallengeStore {
 
     pub fn store_authentication(
         &self,
-        state: PasskeyAuthentication,
-        user_id: Uuid,
+        state: DiscoverableAuthentication,
         source_ip: IpAddr,
     ) -> Option<String> {
         let source_ip = rate_limit_ip(source_ip);
         let mut challenges = self.challenges.write().unwrap_or_else(|e| e.into_inner());
         challenges.retain_live();
 
-        let principal_at_limit = challenges
-            .authentications
-            .values()
-            .filter(|challenge| challenge.data.user_id == user_id)
-            .count()
-            >= MAX_CHALLENGES_PER_PRINCIPAL;
         let source_at_limit = challenges
             .authentications
             .values()
@@ -152,23 +144,17 @@ impl ChallengeStore {
             .count()
             >= MAX_AUTHENTICATION_CHALLENGES_PER_IP;
 
-        if principal_at_limit || source_at_limit || challenges.len() >= MAX_CHALLENGES {
-            let replacement = challenges
-                .authentications
-                .iter()
-                .filter(|(_, challenge)| {
-                    challenge.data.user_id == user_id && challenge.source_ip == source_ip
-                })
-                .min_by_key(|(_, challenge)| challenge.created_at)
-                .map(|(ceremony_id, _)| ceremony_id.clone());
-            challenges.authentications.remove(&replacement?);
+        if source_at_limit || challenges.len() >= MAX_CHALLENGES {
+            // Anonymous starts have no authenticated owner. Even a retry from
+            // the same NAT must not evict somebody else's active ceremony.
+            return None;
         }
 
         let ceremony_id = fresh_ceremony_id(&challenges.authentications);
         challenges.authentications.insert(
             ceremony_id.clone(),
             TimedChallenge {
-                data: AuthenticationData { state, user_id },
+                data: AuthenticationData { state },
                 created_at: Instant::now(),
                 source_ip,
             },
@@ -253,6 +239,7 @@ pub fn init_webauthn() -> anyhow::Result<Option<(Webauthn, Arc<ChallengeStore>)>
     let webauthn = WebauthnBuilder::new(&rp_id, &origin)
         .map_err(|error| anyhow::anyhow!("Invalid WebAuthn relying party: {error}"))?
         .rp_name("simplestChat")
+        .timeout(CHALLENGE_TTL)
         .build()
         .map_err(|error| anyhow::anyhow!("Invalid WebAuthn configuration: {error}"))?;
 
@@ -513,5 +500,94 @@ mod tests {
         drop(challenges);
 
         assert!(store.take_registration(&victim_id).is_some());
+    }
+
+    #[test]
+    fn anonymous_authentication_is_single_use_and_expires() {
+        let webauthn = test_webauthn();
+        let store = ChallengeStore::new();
+        let (_, state) = webauthn.start_discoverable_authentication().unwrap();
+        let address = IpAddr::from([192, 0, 2, 10]);
+        let first = store.store_authentication(state.clone(), address).unwrap();
+        let second = store.store_authentication(state, address).unwrap();
+        assert_ne!(first, second);
+        assert!(store.take_authentication(&first).is_some());
+        assert!(store.take_authentication(&first).is_none());
+
+        store
+            .challenges
+            .write()
+            .unwrap()
+            .authentications
+            .get_mut(&second)
+            .unwrap()
+            .created_at = Instant::now() - CHALLENGE_TTL;
+        assert!(store.take_authentication(&second).is_none());
+        assert!(store.challenges.read().unwrap().authentications.is_empty());
+    }
+
+    #[test]
+    fn anonymous_authentication_bounds_a_shared_source_without_eviction() {
+        let webauthn = test_webauthn();
+        let store = ChallengeStore::new();
+        let (_, state) = webauthn.start_discoverable_authentication().unwrap();
+        let mut ids = Vec::new();
+        for index in 0..MAX_AUTHENTICATION_CHALLENGES_PER_IP {
+            // IPv6 addresses within a /64 share the same admission budget.
+            let address = format!("2001:db8:1:2::{:x}", index + 1).parse().unwrap();
+            ids.push(store.store_authentication(state.clone(), address).unwrap());
+        }
+        assert!(
+            store
+                .store_authentication(state.clone(), "2001:db8:1:2::ffff".parse().unwrap())
+                .is_none()
+        );
+        assert!(
+            store
+                .store_authentication(state, "2001:db8:1:3::1".parse().unwrap())
+                .is_some()
+        );
+        for id in ids {
+            assert!(store.take_authentication(&id).is_some());
+        }
+    }
+
+    #[test]
+    fn anonymous_authentication_respects_shared_global_capacity() {
+        let webauthn = test_webauthn();
+        let store = ChallengeStore::new();
+        let (_, registration) = webauthn
+            .start_passkey_registration(Uuid::new_v4(), "owner@example.test", "Owner", None)
+            .unwrap();
+        let original = store
+            .store_registration(
+                registration,
+                Uuid::new_v4(),
+                "owner@example.test".into(),
+                "Owner".into(),
+                IpAddr::from([192, 0, 2, 1]),
+            )
+            .unwrap();
+        let (_, authentication) = webauthn.start_discoverable_authentication().unwrap();
+        for index in 0..(MAX_CHALLENGES - 1) {
+            let address = IpAddr::from([
+                198,
+                18,
+                u8::try_from(index / 256).unwrap(),
+                u8::try_from(index % 256).unwrap(),
+            ]);
+            assert!(
+                store
+                    .store_authentication(authentication.clone(), address)
+                    .is_some()
+            );
+        }
+        assert!(
+            store
+                .store_authentication(authentication, IpAddr::from([203, 0, 113, 1]))
+                .is_none()
+        );
+        assert_eq!(store.challenges.read().unwrap().len(), MAX_CHALLENGES);
+        assert!(store.take_registration(&original).is_some());
     }
 }

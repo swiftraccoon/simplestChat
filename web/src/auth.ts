@@ -212,14 +212,14 @@ export class AuthManager {
     );
   }
 
-  async passkeyLoginStart(email: string, signal?: AbortSignal): Promise<CredentialRequestOptions> {
+  async passkeyLoginStart(signal?: AbortSignal): Promise<CredentialRequestOptions> {
     if (this.uncertainSession) throw new SessionOutcomeUnknownError();
     const generation = this.beginAuthentication();
     try {
       const options = record(
         await this.requestJson(
           '/api/auth/passkey/login/start',
-          { email },
+          {},
           'Passkey login failed',
           generation,
           signal,
@@ -762,7 +762,17 @@ function deserializeCreationOptions(options: Record<string, unknown>): Credentia
 
 function deserializeRequestOptions(options: Record<string, unknown>): CredentialRequestOptions {
   const pk = record(options['publicKey']);
+  const mediation = options['mediation'];
+  if (
+    mediation !== undefined &&
+    mediation !== 'required' &&
+    mediation !== 'optional' &&
+    mediation !== 'conditional' &&
+    mediation !== 'silent'
+  )
+    throw new Error('Unsupported passkey mediation');
   return {
+    ...(mediation === undefined ? {} : { mediation }),
     publicKey: {
       ...pk,
       challenge: base64urlDecode(string(pk['challenge'])),
@@ -778,6 +788,7 @@ function serializeCredential(cred: Credential): {
   rawId: string;
   type: string;
   response: Record<string, string>;
+  clientExtensionResults?: { credProps?: { rk: boolean }; appid?: boolean };
 } {
   if (!(cred instanceof PublicKeyCredential)) throw new Error('Expected a public-key credential');
   const response = cred.response;
@@ -793,7 +804,20 @@ function serializeCredential(cred: Credential): {
   } else {
     throw new Error('Unsupported passkey response');
   }
-  return { id: cred.id, rawId: base64urlEncode(cred.rawId), type: cred.type, response: encoded };
+  // Forward only the properties understood by this server. Extension results
+  // can contain unrelated binary outputs; they are not evidence of residency.
+  const extensions = cred.getClientExtensionResults();
+  const clientExtensionResults: { credProps?: { rk: boolean }; appid?: boolean } = {};
+  const rk = extensions.credProps?.rk;
+  if (typeof rk === 'boolean') clientExtensionResults.credProps = { rk };
+  if (typeof extensions.appid === 'boolean') clientExtensionResults.appid = extensions.appid;
+  return {
+    id: cred.id,
+    rawId: base64urlEncode(cred.rawId),
+    type: cred.type,
+    response: encoded,
+    ...(Object.keys(clientExtensionResults).length > 0 ? { clientExtensionResults } : {}),
+  };
 }
 
 /** Consume late rejections while immediately retiring the caller on abort. */
