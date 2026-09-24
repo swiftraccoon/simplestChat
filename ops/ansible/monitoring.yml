@@ -109,6 +109,8 @@
         - monitoring_prepare.py
         - monitoring-alerts.sql
         - monitoring-schema.sql
+        - restore_verify.py
+        - restore-verify.sql
         - turn_public.py
         - release_public.py
         - release_artifact.py
