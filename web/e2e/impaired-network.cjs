@@ -16,6 +16,9 @@
  * silentAudio profile), IMPAIRED_BLOCK_UDP=1 (drop UDP to and from the media
  * port before any client joins, so every client must connect over ICE-TCP;
  * the server needs WEBRTC_SERVER_TCP=true and only the baseline profile runs).
+ * CANARY_CORRELATION_FILE optionally writes private numeric RTP identities for
+ * a two-client baseline canary; absolute exclusive path outside E2E_ARTIFACTS,
+ * unavailable in GitHub Actions. Keep it outside any parent upload directory.
  */
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
@@ -25,6 +28,7 @@ const path = require('node:path');
 const { browserOptions } = require('./browser-options.cjs');
 const { installPeerEventTracing } = require('./peer-events.cjs');
 const { installSignalingReconnectObservation } = require('./signaling-reconnect.cjs');
+const { collectCanaryMediaSample, openCanaryCorrelation } = require('./canary-correlation.cjs');
 
 const base = process.env.BASE_URL || 'http://127.0.0.1:3109';
 const impairScript =
@@ -100,9 +104,24 @@ const profiles = (process.env.IMPAIRED_PROFILES || defaultProfiles.join(','))
   .map((name) => name.trim())
   .filter(Boolean);
 for (const name of profiles) if (!PROFILES[name]) throw new Error(`Unknown profile ${name}`);
+const correlation = openCanaryCorrelation({
+  file: process.env.CANARY_CORRELATION_FILE,
+  artifacts,
+  enabled:
+    publicCanary &&
+    !callOutcomes &&
+    !blockUdp &&
+    !silentAudio &&
+    Boolean(process.env.IMPAIRED_ROOM),
+  profiles,
+  impairmentEnabled,
+  githubActions: process.env.GITHUB_ACTIONS === 'true',
+});
+const consumerOrdinals = new Map();
+const pendingCorrelation = new WeakMap();
 
 const report = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   runId,
   startedAt: new Date().toISOString(),
   base,
@@ -115,11 +134,12 @@ const report = {
   completed: false,
   phases: [],
   layerEvents: [],
+  droppedLayerEvents: 0,
   callOutcomes: [],
   limitations: [
     publicCanary
-      ? 'Two owned headless Chromium clients over the public network; synthetic camera and microphone, no physical device coverage.'
-      : 'Two owned headless Chromium clients against the selected test server; synthetic capture, no physical device coverage.',
+      ? 'Two owned headless browser clients over the public network; synthetic camera and microphone, no physical device coverage.'
+      : 'Two owned headless browser clients against the selected test server; synthetic capture, no physical device coverage.',
     'Impairment covers UDP leaving the server media port; signaling and the publisher uplink are untouched.',
     'The impairment script needs sudo and a platform that filters loopback (Linux netem); on macOS pf dummynet does not affect loopback and lossy/constrained assertions fail.',
     'Freeze counters are reported when the browser exposes them; absence is not a pass.',
@@ -127,6 +147,7 @@ const report = {
   failure: null,
 };
 function save() {
+  if (correlation) report.privateCorrelation = correlation.summary();
   fs.writeFileSync(
     path.join(artifacts, 'impaired-network-results.json'),
     `${JSON.stringify(report, null, 2)}\n`,
@@ -237,6 +258,7 @@ async function sample(page) {
 /** Publisher-side encoder counters: keyframes and PLIs received per simulcast layer. */
 async function samplePublisher(page) {
   return page.evaluate(async () => {
+    const identities = (window.__canaryPublisherLayers ??= { peers: new WeakMap(), next: 0 });
     const layers = {};
     const transportProtocols = [];
     const localCandidateTypes = [];
@@ -246,6 +268,11 @@ async function samplePublisher(page) {
     for (const peer of window.__communityPeers || []) {
       if (peer.connectionState === 'closed') continue;
       const stats = await peer.getStats();
+      let layerNames = identities.peers.get(peer);
+      if (!layerNames) {
+        layerNames = new Map();
+        identities.peers.set(peer, layerNames);
+      }
       const selectedPairs = new Set(
         [...stats.values()]
           .filter((report) => report.type === 'transport' && report.selectedCandidatePairId)
@@ -262,7 +289,13 @@ async function samplePublisher(page) {
         keyFramesEncoded += stat.keyFramesEncoded || 0;
         pliCount += stat.pliCount || 0;
         framesEncoded += stat.framesEncoded || 0;
-        layers[stat.rid || stat.ssrc] = {
+        let layerName = layerNames.get(stat.id);
+        if (!layerName) {
+          if (identities.next === 64) continue;
+          layerName = `layer-${++identities.next}`;
+          layerNames.set(stat.id, layerName);
+        }
+        layers[layerName] = {
           active: stat.active,
           frameWidth: stat.frameWidth || 0,
           frameHeight: stat.frameHeight || 0,
@@ -378,10 +411,23 @@ async function main() {
         message.text(),
       );
       if (match) {
+        let consumerOrdinal = consumerOrdinals.get(match[1]);
+        if (!consumerOrdinal) {
+          if (consumerOrdinals.size === 64) {
+            report.droppedLayerEvents++;
+            return;
+          }
+          consumerOrdinal = consumerOrdinals.size + 1;
+          consumerOrdinals.set(match[1], consumerOrdinal);
+        }
+        if (report.layerEvents.length === 256) {
+          report.droppedLayerEvents++;
+          return;
+        }
         report.layerEvents.push({
           client: label,
           atSeconds: (performance.now() - started) / 1000,
-          consumerId: match[1],
+          consumerOrdinal,
           spatial: match[2] === 'undefined' || match[2] === 'null' ? null : Number(match[2]),
           temporal: match[3] === 'undefined' || match[3] === 'null' ? null : Number(match[3]),
         });
@@ -397,6 +443,47 @@ async function main() {
       () => document.querySelector('#connection-status').textContent === 'Connected',
     );
     return page;
+  }
+  async function correlate(publisher, viewer) {
+    if (!correlation) return;
+    await Promise.all(
+      [
+        ['publisher', publisher],
+        ['viewer', viewer],
+      ].map(async ([role, page]) => {
+        const clock = { startedAtMs: performance.now() - started, epochAtStartMs: Date.now() };
+        let sample;
+        let timer;
+        try {
+          if (pendingCorrelation.has(page)) {
+            sample = { status: 'incomplete', issues: ['collection_pending'], streams: [] };
+          } else {
+            const request = page
+              .evaluate(collectCanaryMediaSample)
+              .catch(() => ({ status: 'incomplete', issues: ['collection_failed'], streams: [] }))
+              .finally(() => pendingCorrelation.delete(page));
+            pendingCorrelation.set(page, request);
+            sample = await Promise.race([
+              request,
+              new Promise((resolve) => {
+                timer = setTimeout(
+                  () =>
+                    resolve({ status: 'incomplete', issues: ['collection_timeout'], streams: [] }),
+                  2000,
+                );
+              }),
+            ]);
+          }
+        } catch {
+          sample = { status: 'incomplete', issues: ['collection_failed'], streams: [] };
+        } finally {
+          clearTimeout(timer);
+        }
+        clock.finishedAtMs = performance.now() - started;
+        clock.epochAtFinishMs = Date.now();
+        correlation.add(role, sample, clock);
+      }),
+    );
   }
   async function expectCall(page, name, outcome) {
     const deadline = performance.now() + 15000;
@@ -505,12 +592,14 @@ async function main() {
       const before = await sample(viewer);
       const beforeAt = (performance.now() - started) / 1000;
       const publisherBefore = await samplePublisher(publisher);
+      await correlate(publisher, viewer);
       const series = [];
       const layerEventsBefore = report.layerEvents.length;
       const end = performance.now() + profile.seconds * 1000;
       while (performance.now() < end) {
         await viewer.waitForTimeout(1000);
         const current = await sample(viewer);
+        await correlate(publisher, viewer);
         series.push({
           atSeconds: (performance.now() - started) / 1000,
           frameWidth: current.frameWidth,
@@ -525,6 +614,7 @@ async function main() {
       }
       const after = await sample(viewer);
       const publisherAfter = await samplePublisher(publisher);
+      await correlate(publisher, viewer);
       const change = delta(before, after);
       phase.publisher = {
         keyFramesEncoded: publisherAfter.keyFramesEncoded - publisherBefore.keyFramesEncoded,
@@ -777,6 +867,7 @@ async function main() {
       report.failure ??= { message: `impairment clear failed: ${error.message}` };
     }
     report.finishedAt = new Date().toISOString();
+    correlation?.finish();
     save();
     for (const context of contexts) {
       if (publicCanary) {
@@ -809,6 +900,7 @@ async function main() {
 }
 
 main().catch((error) => {
+  correlation?.finish();
   console.error(error.message);
   process.exitCode = 1;
 });
