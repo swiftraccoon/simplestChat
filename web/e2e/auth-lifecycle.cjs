@@ -24,6 +24,7 @@ async function run() {
   const context = await browser.newContext();
   const failures = [];
   let pendingLogin;
+  let loginObserved;
   let logins = 0;
   let passkeyFinishes = 0;
   let passkeyStarts = 0;
@@ -72,6 +73,7 @@ async function run() {
       if (path === '/api/auth/login') {
         logins++;
         pendingLogin = route;
+        loginObserved?.();
         return;
       }
       if (path === '/api/auth/passkey/login/start') {
@@ -99,11 +101,28 @@ async function run() {
         await route.fulfill({ status: 204 });
       else await route.fulfill({ json: [] });
     });
+    const submitLogin = async () => {
+      const expected = logins + 1;
+      let timer;
+      const submitted = new Promise((resolve, reject) => {
+        loginObserved = resolve;
+        timer = setTimeout(() => reject(new Error('Login did not reach the HTTP fixture')), 5000);
+      });
+      try {
+        // Disabled controls precede Web Lock acquisition. Observe submission
+        // before testing cookie effects or advancing the request deadline.
+        await Promise.all([page.locator('#login-submit').click(), submitted]);
+        assert.equal(logins, expected);
+      } finally {
+        clearTimeout(timer);
+        loginObserved = undefined;
+      }
+    };
     await page.goto(origin.toString());
     await page.locator('#sign-in-btn').click();
     await page.locator('#login-email').fill('fixture@example.test');
     await page.locator('#login-password').fill('Disposable-test-password');
-    await page.locator('#login-submit').click();
+    await submitLogin();
     await page.waitForFunction(() => document.getElementById('login-close').disabled);
     assert.equal(logins, 1);
     for (const action of ['close', 'switch', 'backdrop', 'escape']) {
@@ -154,7 +173,7 @@ async function run() {
     await page.locator('#login-modal').waitFor({ state: 'hidden' });
     await page.locator('#sign-in-btn').click();
     await page.locator('#login-password').fill('New-test-password');
-    await page.locator('#login-submit').click();
+    await submitLogin();
     await page.waitForFunction(() => document.getElementById('login-close').disabled);
     await page.evaluate(() => window.finishCeremonyFixture({ id: 'retired-fixture' }));
     await page.waitForTimeout(50);
@@ -236,7 +255,7 @@ async function run() {
     await page.locator('#sign-in-btn').click();
     await page.locator('#login-email').fill('fixture@example.test');
     await page.locator('#login-password').fill('Unconfirmed-test-password');
-    await page.locator('#login-submit').click();
+    await submitLogin();
     await page.waitForFunction(() => document.getElementById('login-close').disabled);
     const uncertainCount = logins;
     await page.clock.runFor(20000);
