@@ -144,3 +144,64 @@ test('first-frame latency uses presentation callbacks and hidden elements remain
   observeFirstVideoFrame(video, (event) => events.push(event));
   assert.equal(events.at(-1).outcome, 'unknown');
 });
+
+test('pending calls share bounded sampling while quality events keep their normal cadence', async () => {
+  let tick;
+  let nativeCalls = 0;
+  let callSamples = 0;
+  const events = [];
+  const calls = { pending: true, sample: () => callSamples++ };
+  const { MediaTelemetry } = await loadTypeScript('src/media-telemetry.ts', {
+    globals: {
+      document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} },
+      setInterval: (callback) => {
+        tick = callback;
+        return 1;
+      },
+      clearInterval() {},
+    },
+  });
+  const sampler = new MediaTelemetry(
+    () => [
+      {
+        key: {},
+        kind: 'audio',
+        active: () => true,
+        getStats: async () => {
+          nativeCalls++;
+          return report({ totalSamplesReceived: nativeCalls * 100, concealedSamples: 0 });
+        },
+      },
+    ],
+    (event) => events.push(event),
+    calls,
+  );
+  for (let index = 0; index < 3; index++) {
+    tick();
+    await flush();
+  }
+  assert.equal(nativeCalls, 3);
+  assert.equal(callSamples, 3);
+  assert.equal(events.length, 0, 'fast readiness observations do not flood the upload queue');
+  calls.pending = false;
+  for (let index = 0; index < 11; index++) {
+    tick();
+    await flush();
+  }
+  assert.equal(nativeCalls, 3);
+  tick();
+  await flush();
+  assert.equal(nativeCalls, 4);
+  assert.ok(events.some((event) => event.name === 'media_sample'));
+  sampler.dispose();
+  const broken = new MediaTelemetry(
+    () => {
+      throw new Error('retired getter');
+    },
+    () => {
+      throw new Error('retired recorder');
+    },
+  );
+  assert.doesNotThrow(() => broken.sample());
+  broken.dispose();
+});

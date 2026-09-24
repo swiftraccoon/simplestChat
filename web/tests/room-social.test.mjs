@@ -218,6 +218,94 @@ function snapshot(overrides = {}) {
   };
 }
 
+test('call outcomes wait for settled admission and include only expected selected remote producers', async () => {
+  const setup = deferred();
+  const signals = [];
+  const h = await harness({
+    setup: () => setup.promise,
+    joinReply: () => ({
+      type: 'roomJoined',
+      participantId: 'local',
+      reconnectToken: 'token',
+      participants: [
+        { id: 'remote', name: 'Remote', role: 'user', producers: [{ id: 'audio', kind: 'audio' }] },
+      ],
+    }),
+    events: { onCallSignal: (signal) => signals.push(signal) },
+  });
+  const join = h.room.join('room', 'Local');
+  await flush();
+  assert.deepEqual(h.room.telemetryCallState(), {
+    settled: false,
+    rosterKnown: true,
+    expected: 1,
+    selected: 1,
+    unavailable: false,
+  });
+  assert.deepEqual(signals, [{ type: 'start', kind: 'join' }]);
+  setup.resolve();
+  await join;
+  assert.equal(h.room.telemetryCallState().settled, true);
+  assert.deepEqual(signals.at(-1), { type: 'ready' });
+  h.room.setRemoteMediaHidden('remote', true);
+  assert.equal(h.room.telemetryCallState().selected, 0);
+  assert.equal(h.room.telemetryCallState().expected, 1);
+  h.reply({ type: 'producerPaused', producerId: 'audio' });
+  assert.equal(h.room.telemetryCallState().expected, 0);
+  await h.room.leave();
+  assert.deepEqual(signals.at(-1), { type: 'superseded' });
+  assert.equal(h.room.telemetryCallState().rosterKnown, false);
+});
+
+test('reconnect observation begins at socket loss and empty stale roster is never authoritative', async () => {
+  const signals = [];
+  const h = await harness({ events: { onCallSignal: (signal) => signals.push(signal) } });
+  await h.room.join('room', 'Local');
+  h.signaling.onConnectionLost();
+  assert.deepEqual(signals.at(-1), { type: 'start', kind: 'reconnect' });
+  assert.equal(h.room.telemetryCallState().rosterKnown, false);
+  h.signaling.onReconnected();
+  await flush();
+  assert.equal(signals.filter((signal) => signal.kind === 'reconnect').length, 1);
+  h.respond(h.sent.at(-1), snapshot());
+  await flush();
+  assert.deepEqual(h.room.telemetryCallState(), {
+    settled: true,
+    rosterKnown: true,
+    expected: 0,
+    selected: 0,
+    unavailable: false,
+  });
+  await h.room.leave();
+});
+
+test('failed subscription evidence is retired with the producer and telemetry cannot interrupt membership', async () => {
+  const h = await harness({
+    consume: () => {
+      throw new Error('Subscription unavailable');
+    },
+    events: {
+      onCallSignal: () => {
+        throw new Error('Broken reporter');
+      },
+    },
+  });
+  await h.room.join('room', 'Local');
+  h.reply({
+    type: 'participantJoined',
+    participantId: 'remote',
+    participantName: 'Remote',
+    role: 'user',
+  });
+  h.reply({ type: 'newProducer', participantId: 'remote', producerId: 'video', kind: 'video' });
+  await flush();
+  assert.equal(h.room.telemetryCallState().unavailable, true);
+  h.reply({ type: 'producerClosed', producerId: 'video' });
+  assert.equal(h.room.telemetryCallState().unavailable, false);
+  assert.equal(h.room.failedConsumes.size, 0);
+  await h.room.leave();
+});
+
 for (const departure of ['event', 'snapshot', 'leave']) {
   test(`tile-size limits are bounded by current participants after ${departure}`, async () => {
     const h = await harness();

@@ -41,6 +41,9 @@ vocabulary!(ClientName {
     PasskeyRegisterFinish,
     RoomJoin,
     RoomAdmission,
+    CallJoin,
+    CallReconnect,
+    CallAdmission,
     ChatSend,
     Connection,
     Reconnect,
@@ -74,6 +77,11 @@ vocabulary!(ClientOutcome {
     CleanClose,
     UncleanClose,
     Unknown,
+    VideoReady,
+    AudioPlaybackReady,
+    NoMediaExpected,
+    PlaybackBlocked,
+    MediaDisabled,
 });
 
 #[derive(Debug, Deserialize)]
@@ -474,6 +482,10 @@ const HTTP_ROUTES: &[&str] = &[
     "/api/auth/passkey/register/finish",
     "/api/auth/passkey/login/start",
     "/api/auth/passkey/login/finish",
+    "/api/auth/passkeys",
+    "/api/auth/passkeys/start",
+    "/api/auth/passkeys/authorize",
+    "/api/auth/passkeys/enroll",
     "/api/rooms",
     "/api/rooms/",
     "/api/rooms/mine",
@@ -737,6 +749,28 @@ mod tests {
         }
         let batch: ClientBatch = serde_json::from_value(serde_json::json!({"version":1,"browser":"other","events":vec![serde_json::json!({"name":"room_join","outcome":"ok"});17]})).unwrap();
         assert!(!batch.valid());
+    }
+
+    #[test]
+    fn call_outcomes_accept_only_finite_observations_without_local_correlation() {
+        for name in ["call_join", "call_reconnect", "call_admission"] {
+            for outcome in [
+                "video_ready",
+                "audio_playback_ready",
+                "no_media_expected",
+                "playback_blocked",
+                "media_disabled",
+                "unknown",
+            ] {
+                let event = serde_json::json!({"name":name,"outcome":outcome,"durationMs":30_000});
+                let batch: ClientBatch = serde_json::from_value(
+                    serde_json::json!({"version":1,"browser":"firefox","events":[event]}),
+                )
+                .unwrap();
+                assert!(batch.valid());
+            }
+        }
+        assert!(serde_json::from_value::<ClientBatch>(serde_json::json!({"version":1,"browser":"firefox","events":[{"name":"call_join","outcome":"video_ready","attempt":1}]})).is_err());
     }
 
     #[test]

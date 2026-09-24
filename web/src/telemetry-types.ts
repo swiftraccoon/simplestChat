@@ -11,6 +11,9 @@ export type TelemetryName =
   | 'passkey_register_finish'
   | 'room_join'
   | 'room_admission'
+  | 'call_join'
+  | 'call_reconnect'
+  | 'call_admission'
   | 'chat_send'
   | 'connection'
   | 'reconnect'
@@ -43,6 +46,11 @@ export type TelemetryOutcome =
   | 'clean_close'
   | 'unclean_close'
   | 'unknown'
+  | 'video_ready'
+  | 'audio_playback_ready'
+  | 'no_media_expected'
+  | 'playback_blocked'
+  | 'media_disabled'
   | 'waiting';
 
 export interface TelemetryEvent {
@@ -59,7 +67,26 @@ export type TelemetryHandler = (event: TelemetryEvent) => void;
 /** Keys remain local and are never included in telemetry or diagnostic exports. */
 export interface TelemetryMediaSource {
   key: object;
+  track?: MediaStreamTrack;
   kind: 'audio' | 'video';
   active: () => boolean;
   getStats: () => Promise<RTCStatsReport>;
+}
+
+/** Room state and native objects stay local; only finite outcomes are exported. */
+export interface TelemetryCallState {
+  settled: boolean;
+  rosterKnown: boolean;
+  expected: number;
+  selected: number;
+  unavailable: boolean;
+}
+
+export type TelemetryCallSignal =
+  | { type: 'start'; kind: 'join' | 'reconnect' | 'admission' }
+  | { type: 'ready' | 'waiting' | 'failed' | 'superseded' };
+
+export interface TelemetryPlaybackSource {
+  source: TelemetryMediaSource;
+  element: HTMLMediaElement;
 }

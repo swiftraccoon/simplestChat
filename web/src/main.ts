@@ -10,7 +10,7 @@ import * as icons from './icons';
 import { AuthManager, SessionOutcomeUnknownError } from './auth';
 import { AuthDialogFlow, type AuthDialogAttempt } from './auth-dialog';
 import { ClientTelemetry } from './telemetry';
-import { MediaTelemetry, observeFirstVideoFrame } from './media-telemetry';
+import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './media-telemetry';
 import { MediaControls } from './media-controls';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
@@ -196,6 +196,7 @@ let roomPasswordView: { cancel: () => void } | null = null;
 const mediaControls = new MediaControls({
   getRoom: () => room,
   notify: (message) => showToast(message),
+  onPlaybackResult: (element, blocked) => callTelemetry.playbackResult(element, blocked),
   appearanceControls,
   microphoneControls,
 });
@@ -822,13 +823,42 @@ const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
 const signaling = new SignalingClient(wsUrl);
 signaling.setTelemetryHandler(telemetry.record);
+const callTelemetry = new CallOutcomeTelemetry(
+  () =>
+    room?.telemetryCallState() ?? {
+      settled: false,
+      rosterKnown: false,
+      expected: 0,
+      selected: 0,
+      unavailable: false,
+    },
+  () => {
+    const elements = new Map<MediaStreamTrack, HTMLMediaElement>();
+    for (const tile of remoteTiles.values()) {
+      for (const element of tile.querySelectorAll<HTMLMediaElement>('audio, video')) {
+        if (!(element.srcObject instanceof MediaStream)) continue;
+        for (const track of element.srcObject.getTracks()) {
+          if (!elements.has(track)) elements.set(track, element);
+        }
+      }
+    }
+    return (room?.telemetrySources() ?? []).flatMap((source) => {
+      const element = source.track ? elements.get(source.track) : undefined;
+      return element ? [{ source, element }] : [];
+    });
+  },
+  telemetry.record,
+  () => telemetry.nextAttemptId(),
+);
 const mediaTelemetry = new MediaTelemetry(
   () => (telemetry.sharingEnabled ? (room?.telemetrySources() ?? []) : []),
   telemetry.record,
+  callTelemetry,
 );
 window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   mediaTelemetry.dispose();
+  callTelemetry.dispose();
   telemetry.dispose();
 });
 const socialChat = new SocialChat({
@@ -1537,6 +1567,9 @@ joinBtn.addEventListener(
       roomPasswordView?.cancel();
       room = new RoomClient(signaling, {
         onTelemetry: telemetry.record,
+        onCallSignal: (signal) => {
+          if (room === joiningRoom) callTelemetry.signal(signal);
+        },
         onBackgroundError: (message) => showToast(message),
         onParticipantsChanged: (participants) => {
           observeUiTask(socialChat.activate(), 'Could not refresh room conversations');

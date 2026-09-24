@@ -1,4 +1,9 @@
-import type { TelemetryHandler, TelemetryMediaSource } from './telemetry-types';
+import type {
+  TelemetryCallSignal,
+  TelemetryCallState,
+  TelemetryHandler,
+  TelemetryMediaSource,
+} from './telemetry-types';
 import type {
   RoomSettings,
   RoomSettingsPatch,
@@ -32,6 +37,7 @@ export class RoomPasswordRequiredError extends Error {
 
 export type RoomEventHandler = {
   onTelemetry?: TelemetryHandler;
+  onCallSignal?: (signal: TelemetryCallSignal) => void;
   onParticipantsChanged: (participants: Map<string, Participant>) => void;
   onLocalStream: (stream: MediaStream) => void;
   onLocalMediaChanged: () => void;
@@ -87,6 +93,28 @@ export class RoomClient {
   private telemetry: TelemetryHandler | undefined;
   private recoveryStarted: number | null = null;
   private admissionStarted: number | null = null;
+  private callAttempt = 0;
+  private callRecovering = false;
+  private callSettled = false;
+  private callRosterKnown = false;
+  private failedConsumes = new Set<string>();
+
+  private signalCall(signal: TelemetryCallSignal, attempt = this.callAttempt): void {
+    if (attempt !== this.callAttempt) return;
+    try {
+      this.events.onCallSignal?.(signal);
+    } catch {
+      /* Telemetry cannot own membership. */
+    }
+  }
+
+  private beginCall(kind: 'join' | 'reconnect' | 'admission'): number {
+    this.callAttempt++;
+    this.callSettled = false;
+    this.callRosterKnown = false;
+    this.signalCall({ type: 'start', kind });
+    return this.callAttempt;
+  }
 
   private beginAdmission(): void {
     if (this.admissionStarted !== null) return;
@@ -105,6 +133,14 @@ export class RoomClient {
   }
 
   private reportRecovery(state: 'reconnecting' | 'connected' | 'failed', message?: string): void {
+    if (state === 'reconnecting' && !this.callRecovering) {
+      this.callRecovering = true;
+      this.beginCall('reconnect');
+    } else if (state !== 'reconnecting') {
+      this.callRecovering = false;
+      this.callSettled = true;
+      this.signalCall({ type: state === 'connected' ? 'ready' : 'failed' });
+    }
     if (state === 'reconnecting' && this.recoveryStarted === null) {
       this.recoveryStarted = performance.now();
       this.telemetry?.({ name: 'reconnect', outcome: 'started' });
@@ -177,6 +213,10 @@ export class RoomClient {
       this.observeTask(this.attemptReconnect(), 'Room reconnection');
     });
     this.signaling.setOnConnectionLost(() => {
+      if (this.membershipEstablished && this.localId && !this.callRecovering) {
+        this.callRecovering = true;
+        this.beginCall('reconnect');
+      }
       this.connectionGeneration++;
       this.recoveryPromise = null;
       this.rejectSocialRequests('Connection changed; please retry');
@@ -289,6 +329,7 @@ export class RoomClient {
     this.media = null;
     this.mediaReady = false;
     this.pendingConsumes.clear();
+    this.failedConsumes.clear();
     this.consumeQueue = Promise.resolve();
     media?.close();
   }
@@ -298,6 +339,8 @@ export class RoomClient {
     participantName: string,
     password?: string,
   ): Promise<'joined' | 'lobby'> {
+    this.callRecovering = false;
+    const callAttempt = this.beginCall('join');
     this.restarting = false;
     this.membershipEstablished = false;
     this.signaling.completeRestartRecovery();
@@ -315,6 +358,7 @@ export class RoomClient {
       });
       return outcome;
     } catch (error) {
+      this.signalCall({ type: 'failed' }, callAttempt);
       this.telemetry?.({
         name: 'room_join',
         outcome: error instanceof RoomPasswordRequiredError ? 'denied' : 'error',
@@ -406,6 +450,7 @@ export class RoomClient {
     if (generation !== this.generation) throw new Error('Room join cancelled');
 
     if (response.type === 'lobbyWaiting') {
+      this.signalCall({ type: 'waiting' });
       this.beginAdmission();
       this.events.onLobbyWaiting(response.roomName, response.topic, response.participantCount);
       return 'lobby';
@@ -438,6 +483,7 @@ export class RoomClient {
         ),
       });
     }
+    this.callRosterKnown = true;
     this.events.onParticipantsChanged(this.participants);
     if (generation !== this.generation) throw new Error('Room join cancelled');
     // Conversations must observe the retained room intent when a rejoin gives
@@ -456,6 +502,8 @@ export class RoomClient {
       await this.consumeExistingProducers();
     }
     if (generation !== this.generation) throw new Error('Room join cancelled');
+    this.callSettled = true;
+    this.signalCall({ type: 'ready' });
     return 'joined';
   }
 
@@ -510,6 +558,11 @@ export class RoomClient {
   }
 
   async leave(): Promise<void> {
+    this.signalCall({ type: 'superseded' });
+    this.callAttempt++;
+    this.callRecovering = false;
+    this.callSettled = false;
+    this.callRosterKnown = false;
     this.finishAdmission('superseded');
     if (this.recoveryStarted !== null) {
       this.telemetry?.({
@@ -609,6 +662,30 @@ export class RoomClient {
 
   telemetrySources(): TelemetryMediaSource[] {
     return this.media?.telemetrySources(this.pausedProducers) ?? [];
+  }
+
+  telemetryCallState(): TelemetryCallState {
+    let expected = 0;
+    let selected = 0;
+    let failed = false;
+    for (const participant of this.participants.values()) {
+      if (participant.id === this.localId) continue;
+      for (const producerId of participant.producers.keys()) {
+        if (this.pausedProducers.has(producerId)) continue;
+        expected++;
+        if (!this.hiddenParticipants.has(participant.id)) {
+          selected++;
+          if (this.failedConsumes.has(producerId)) failed = true;
+        }
+      }
+    }
+    return {
+      settled: this.callSettled,
+      rosterKnown: this.callRosterKnown,
+      expected,
+      selected,
+      unavailable: selected > 0 && ((!this.mediaReady && this.callSettled) || failed),
+    };
   }
 
   setCapturePreferences(preferences: CapturePreferences): void {
@@ -957,6 +1034,7 @@ export class RoomClient {
 
   private async handlePostAdmission(msg: ServerMessage): Promise<void> {
     if (msg.type !== 'roomJoined' || !this.roomId) return;
+    this.beginCall('admission');
     const generation = this.generation;
     const connectionGeneration = this.connectionGeneration;
     const isCurrent = () =>
@@ -982,6 +1060,7 @@ export class RoomClient {
         ),
       });
     }
+    this.callRosterKnown = true;
     this.events.onParticipantsChanged(this.participants);
 
     await this.setupMedia(generation);
@@ -991,6 +1070,8 @@ export class RoomClient {
       await this.consumeExistingProducers();
     }
     if (!isCurrent()) return;
+    this.callSettled = true;
+    this.signalCall({ type: 'ready' });
     this.finishAdmission('ok');
     this.events.onAdmissionComplete();
     if (!isCurrent()) return;
@@ -1024,6 +1105,7 @@ export class RoomClient {
           media.closeConsumerByProducer(producerId);
           return;
         }
+        this.failedConsumes.delete(producerId);
         if (this.hiddenParticipants.has(participantId))
           media.setConsumerHiddenByProducer(producerId, true);
         const quality = this.videoQualities.get(participantId);
@@ -1042,6 +1124,7 @@ export class RoomClient {
         }
       } catch (error) {
         if (!current()) return;
+        this.failedConsumes.add(producerId);
         console.warn('[room] remote media unavailable:', producerId, error);
         this.events.onRemoteMediaUnavailable?.(
           participantId,
@@ -1158,6 +1241,7 @@ export class RoomClient {
         const leaving = this.participants.get(msg.participantId);
         if (leaving) {
           for (const producerId of leaving.producers.keys()) {
+            this.failedConsumes.delete(producerId);
             this.pausedProducers.delete(producerId);
             this.media?.closeConsumerByProducer(producerId, false);
           }
@@ -1185,6 +1269,7 @@ export class RoomClient {
         break;
       }
       case 'producerClosed': {
+        this.failedConsumes.delete(msg.producerId);
         this.pausedProducers.delete(msg.producerId);
         if (this.media?.closeLocalProducer(msg.producerId)) {
           this.events.onLocalMediaChanged();
@@ -1270,6 +1355,7 @@ export class RoomClient {
       }
       // Moderation broadcasts
       case 'forceClosedProducer': {
+        this.failedConsumes.delete(msg.producerId);
         // Handle same as producerClosed — remove from participants and clean up
         this.pausedProducers.delete(msg.producerId);
         if (this.media?.closeLocalProducer(msg.producerId)) {
@@ -1362,6 +1448,7 @@ export class RoomClient {
       }
       // Lobby
       case 'lobbyWaiting': {
+        this.signalCall({ type: 'waiting' });
         this.beginAdmission();
         this.events.onLobbyWaiting(msg.roomName, msg.topic, msg.participantCount);
         break;
@@ -1376,6 +1463,7 @@ export class RoomClient {
         break;
       }
       case 'lobbyDenied': {
+        this.signalCall({ type: 'failed' });
         this.finishAdmission('denied');
         this.events.onLobbyDenied(msg.reason);
         break;
@@ -1426,6 +1514,7 @@ export class RoomClient {
       throw new Error('The room snapshot was incomplete');
     }
     const oldPaused = this.pausedProducers;
+    this.callRosterKnown = true;
     this.pausedProducers = new Set(snapshot.pausedProducerIds ?? oldPaused);
     const incoming = new Map(
       snapshot.participants.filter((p) => p.id !== this.localId).map((p) => [p.id, p]),
@@ -1434,6 +1523,7 @@ export class RoomClient {
       const current = incoming.get(id);
       for (const [producerId, metadata] of previous.producers) {
         if (!current?.producers.some((producer) => producer.id === producerId)) {
+          this.failedConsumes.delete(producerId);
           this.media?.closeConsumerByProducer(producerId, false);
           this.pausedProducers.delete(producerId);
           this.events.onRemoteTrackRemoved(id, producerId, metadata.kind, metadata.source);

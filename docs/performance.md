@@ -12,10 +12,10 @@ CSS and HTML, including lazy chunks and the help page. Splitting an asset does
 not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
-| --- | --- | --- |
-| JavaScript | 450 KiB | 100 KiB |
-| CSS | 64 KiB | 12 KiB |
-| HTML | 48 KiB | 10 KiB |
+| ----------- | ------------------ | ---------- |
+| JavaScript  | 480 KiB            | 100 KiB    |
+| CSS         | 64 KiB             | 12 KiB     |
+| HTML        | 48 KiB             | 10 KiB     |
 
 Limits are defined in [bundle-budget.json](../web/bundle-budget.json). Gzip uses
 level 6 independently for each file; the checker then sums each group. Run
@@ -29,6 +29,16 @@ These gates constrain delivery and parsing size; they do **not** establish
 startup latency, memory use, media quality or server capacity. Images, fonts,
 source maps and other non-JS/CSS/HTML files are not covered by these budgets.
 Measure runtime performance separately with the workflows below.
+
+The September 2026 account-security and complete-call-outcome additions raised
+the raw JavaScript ceiling from 450 to 480 KiB, retaining the 100 KiB gzip limit.
+Isolated builds measured 450,677 bytes at `4216538` and 469,222 bytes in the first
+candidate (95,541 and 100,698 gzip bytes). Source-map attribution assigned about
+10.4 kB to the new account-security workflow, 4.4 kB to call observation, 1.9 kB
+to room lifecycle tracking and 1.2 kB to strict response decoders; existing
+mediasoup dependencies were unchanged. Subsequent lifecycle race fixes are
+included in the same ceiling. These figures explain the reviewed feature growth,
+not a runtime-performance guarantee.
 
 ## Controlled local comparison
 
@@ -72,13 +82,13 @@ of the same graph, not ring and hotspot as equivalent workloads.
 
 ### Choose a workload
 
-| Scenario | Workload |
-| --- | --- |
-| `conference` | Every client publishes in one room |
-| `multi-room` | Publishers distributed across up to four rooms |
-| `webinar` | One percent of clients publish, rounded up |
-| `audio` | Audio-only conference |
-| `churn` | About one fifth of clients repeatedly join with fresh media sessions |
+| Scenario     | Workload                                                             |
+| ------------ | -------------------------------------------------------------------- |
+| `conference` | Every client publishes in one room                                   |
+| `multi-room` | Publishers distributed across up to four rooms                       |
+| `webinar`    | One percent of clients publish, rounded up                           |
+| `audio`      | Audio-only conference                                                |
+| `churn`      | About one fifth of clients repeatedly join with fresh media sessions |
 
 Start with the ten-client example. For 30 clients, use `--scenarios multi-room`.
 For churn, start with `--clients 3 --scenarios churn --duration 120`.
@@ -117,13 +127,13 @@ The runner saves `server-exit.json` after stopping each owned server; a nonzero,
 signaled or unavailable exit prevents a valid comparison, even if delivery and
 room cleanup passed. Failed runs retain their evidence and original failure.
 
-| Metric | Interpretation |
-| --- | --- |
-| Admission latency | WebSocket connection through room admission |
-| Send/receive readiness | Time until the respective ICE/DTLS connection is ready |
-| Received packets/second | Delivery during the shared interval, excluding ramp and warmup |
-| CPU | Percentage of one core; server and generator are reported separately |
-| Peak RSS | Highest sampled resident memory, not total allocations |
+| Metric                  | Interpretation                                                       |
+| ----------------------- | -------------------------------------------------------------------- |
+| Admission latency       | WebSocket connection through room admission                          |
+| Send/receive readiness  | Time until the respective ICE/DTLS connection is ready               |
+| Received packets/second | Delivery during the shared interval, excluding ramp and warmup       |
+| CPU                     | Percentage of one core; server and generator are reported separately |
+| Peak RSS                | Highest sampled resident memory, not total allocations               |
 
 CPU and RSS come from process samples every 500 ms (`/proc/<pid>/stat` on Linux
 at clock-tick resolution, `ps` on macOS). A resource summary is refused, and the

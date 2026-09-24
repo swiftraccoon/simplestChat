@@ -24,6 +24,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { browserOptions } = require('./browser-options.cjs');
 const { installPeerEventTracing } = require('./peer-events.cjs');
+const { installSignalingReconnectObservation } = require('./signaling-reconnect.cjs');
 
 const base = process.env.BASE_URL || 'http://127.0.0.1:3109';
 const impairScript =
@@ -65,6 +66,26 @@ const PROFILES = {
 const silentAudio = process.env.IMPAIRED_SILENT_AUDIO === '1';
 const forceRelay = process.env.CANARY_FORCE_RELAY === '1';
 const publicCanary = process.env.CANARY_MODE === '1';
+const callOutcomes = process.env.CALL_OUTCOME_E2E === '1';
+if (callOutcomes) {
+  const origin = new URL(base);
+  if (
+    process.env.DISPOSABLE_TEST_DATABASE !== '1' ||
+    publicCanary ||
+    origin.protocol !== 'http:' ||
+    !['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname) ||
+    origin.username ||
+    origin.password ||
+    origin.pathname !== '/' ||
+    origin.search ||
+    origin.hash ||
+    impairmentEnabled ||
+    silentAudio
+  )
+    throw new Error(
+      'Call outcome regression requires owned loopback services, fake tone audio and IMPAIR_SCRIPT=none',
+    );
+}
 const blockUdp = process.env.IMPAIRED_BLOCK_UDP === '1';
 if (blockUdp && !impairmentEnabled)
   throw new Error('IMPAIRED_BLOCK_UDP needs the impairment script (IMPAIR_SCRIPT is none)');
@@ -94,6 +115,7 @@ const report = {
   completed: false,
   phases: [],
   layerEvents: [],
+  callOutcomes: [],
   limitations: [
     publicCanary
       ? 'Two owned headless Chromium clients over the public network; synthetic camera and microphone, no physical device coverage.'
@@ -347,6 +369,10 @@ async function main() {
       announcedIp: process.env.TEST_ANNOUNCE_IP || null,
       forceRelay,
     });
+    if (callOutcomes) {
+      await page.addInitScript(() => localStorage.setItem('reliabilityTelemetry', 'true'));
+      await page.addInitScript(installSignalingReconnectObservation);
+    }
     page.on('console', (message) => {
       const match = /\[room\] consumer (\S+) layers: spatial=(\S+), temporal=(\S+)/.exec(
         message.text(),
@@ -372,11 +398,35 @@ async function main() {
     );
     return page;
   }
+  async function expectCall(page, name, outcome) {
+    const deadline = performance.now() + 15000;
+    while (performance.now() < deadline) {
+      await page.locator('#diagnostics-btn').click();
+      const dialog = page.getByRole('dialog', { name: 'Diagnostic summary', exact: true });
+      const summary = JSON.parse(
+        await dialog.getByLabel('Diagnostic summary preview').inputValue(),
+      );
+      await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+      const terminal = summary.events.filter(
+        (event) => event.name === name && event.outcome !== 'started',
+      );
+      if (terminal.length) {
+        assert.equal(terminal.length, 1, 'exactly one terminal result per owned call attempt');
+        assert.equal(terminal[0].outcome, outcome);
+        assert.ok(terminal[0].durationMs >= 0 && terminal[0].durationMs <= 30000);
+        report.callOutcomes.push({ name, outcome, durationMs: terminal[0].durationMs });
+        return;
+      }
+      await page.waitForTimeout(250);
+    }
+    throw new Error(`Missing ${name} ${outcome} observation`);
+  }
   try {
     // With UDP dropped before anyone joins, ICE can only succeed over the
     // server's TCP candidates; every client and both directions prove it.
     if (blockUdp) impair('block-udp');
     const publisher = await client('publisher');
+    if (callOutcomes) await expectCall(publisher, 'call_join', 'no_media_expected');
     // The first camera request opens the capture settings dialog; saving it
     // with the fake devices selected starts the camera.
     await publisher.locator('#cam-btn').click();
@@ -398,7 +448,7 @@ async function main() {
       null,
       { timeout: 20000 },
     );
-    await publisher.locator('#mic-btn').click();
+    if (!callOutcomes) await publisher.locator('#mic-btn').click();
     await publisher.waitForTimeout(1200);
     const viewer = await client('viewer');
     await viewer.waitForFunction(
@@ -410,6 +460,10 @@ async function main() {
       { timeout: 30000 },
     );
     await viewer.waitForTimeout(3000);
+    if (callOutcomes) {
+      await expectCall(viewer, 'call_join', 'video_ready');
+      await publisher.locator('#mic-btn').click();
+    }
     let baselineWidth = null;
     let baselineFps = null;
     for (const name of profiles) {
@@ -687,6 +741,28 @@ async function main() {
       console.log(
         `${ok ? 'PASS' : 'FAIL'} ${name}: fps=${change.framesPerSecond.toFixed(1)} audioPps=${change.audioPacketsPerSecond.toFixed(1)} lost=${change.packetsLost} nack=${change.nackCount} pliSent=${change.pliCount} publisherKeyframes=${phase.publisher.keyFramesEncoded} publisherPli=${phase.publisher.pliReceived} width=${phase.minFrameWidth}-${phase.maxFrameWidth} layers=${layerEvents.map((event) => event.spatial).join(',') || '-'}`,
       );
+    }
+    if (callOutcomes) {
+      await publisher.locator('#cam-btn').click();
+      await viewer.waitForFunction(
+        () =>
+          ![...document.querySelectorAll('.video-tile:not(.local) video')].some(
+            (video) => video.srcObject,
+          ),
+      );
+      const audioReceiver = await client('audio-receiver');
+      await audioReceiver.waitForFunction(() =>
+        [...document.querySelectorAll('.video-tile:not(.local) audio')].some(
+          (audio) => !audio.paused && audio.readyState >= 2 && !audio.muted && audio.volume > 0,
+        ),
+      );
+      await expectCall(audioReceiver, 'call_join', 'audio_playback_ready');
+      await audioReceiver.evaluate(() => window.__communitySignalingReconnect.closeCurrent());
+      await audioReceiver.waitForFunction(
+        () => window.__communitySignalingReconnect.snapshot().counters.reconnectSuccess === 1,
+      );
+      await expectCall(audioReceiver, 'call_reconnect', 'audio_playback_ready');
+      await audioReceiver.context().close();
     }
     report.completed = true;
     report.passed = report.phases.every((phase) => phase.passed);

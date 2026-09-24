@@ -810,6 +810,7 @@ export class MediaManager {
       if (!consumer) continue;
       result.push({
         key: consumer,
+        track: consumer.track,
         kind: consumer.kind,
         active: () =>
           !this.closed &&

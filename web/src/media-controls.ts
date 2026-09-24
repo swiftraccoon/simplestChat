@@ -23,6 +23,7 @@ interface MediaControlsRoom {
 interface MediaControlsOptions {
   getRoom: () => MediaControlsRoom | null;
   notify: (message: string) => void;
+  onPlaybackResult?: (element: HTMLMediaElement, blocked: boolean) => void;
   appearanceControls?: HTMLElement;
   microphoneControls?: HTMLElement;
 }
@@ -705,6 +706,11 @@ export class MediaControls {
         ) {
           info.blocked.set(element, element.srcObject);
         } else info.blocked.delete(element);
+        try {
+          this.options.onPlaybackResult?.(element, info.blocked.has(element));
+        } catch {
+          /* Diagnostics cannot interrupt playback controls. */
+        }
         this.updatePlaybackNotice(tile, info, state);
       });
       this.updatePlaybackNotice(tile, info, state);

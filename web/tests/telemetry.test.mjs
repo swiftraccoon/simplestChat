@@ -144,3 +144,22 @@ test('support references rotate locally and measurements expose cancellation unc
   assert.equal(summary.events.at(-1).outcome, 'cancelled_or_timeout');
   assert.equal(f.telemetry.summary().includes('private credential detail'), false);
 });
+
+test('call outcomes use local correlation shared with measurements and omit it from uploads', async (t) => {
+  const f = await fixture(t);
+  f.telemetry.setSharing(true);
+  const attempt = f.telemetry.nextAttemptId();
+  f.telemetry.record({ name: 'call_join', outcome: 'started', attempt });
+  f.telemetry.record({
+    name: 'call_join',
+    outcome: 'audio_playback_ready',
+    attempt,
+    durationMs: 2100,
+  });
+  await f.telemetry.measure('chat_send', async () => {});
+  const events = JSON.parse(f.telemetry.summary()).events;
+  assert.equal(events[0].attempt, events[1].attempt);
+  assert.notEqual(events[1].attempt, events[2].attempt);
+  await f.telemetry.flush();
+  assert.ok(JSON.parse(f.requests[0].options.body).events.every((event) => !('attempt' in event)));
+});

@@ -134,9 +134,13 @@ export class ClientTelemetry {
     this.pending.push(safe);
   }
 
+  nextAttemptId(): number {
+    return ++this.attemptSequence;
+  }
+
   async measure<T>(name: TelemetryName, work: () => Promise<T>): Promise<T> {
     const start = performance.now();
-    const attempt = ++this.attemptSequence;
+    const attempt = this.nextAttemptId();
     this.record({ name, outcome: 'started', attempt });
     try {
       const result = await work();
