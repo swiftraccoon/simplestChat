@@ -148,7 +148,7 @@ pub(super) fn validate_display_name(display_name: &str) -> Result<(), AuthError>
     }
 }
 
-fn validate_ceremony_id(ceremony_id: &str) -> Result<(), AuthError> {
+pub(super) fn validate_ceremony_id(ceremony_id: &str) -> Result<(), AuthError> {
     Uuid::parse_str(ceremony_id)
         .map(|_| ())
         .map_err(|_| AuthError::WebAuthnError("Invalid ceremony".into()))
@@ -162,7 +162,7 @@ fn add_ceremony_id(mut response: Value, ceremony_id: String) -> Result<Value, Au
     Ok(response)
 }
 
-fn credential_id(passkey: &Passkey) -> String {
+pub(super) fn credential_id(passkey: &Passkey) -> String {
     URL_SAFE_NO_PAD.encode(passkey.cred_id().as_ref())
 }
 
@@ -184,7 +184,7 @@ fn user_insert_error(error: sqlx::Error) -> AuthError {
     database_error(error)
 }
 
-fn credential_insert_error(error: sqlx::Error) -> AuthError {
+pub(super) fn credential_insert_error(error: sqlx::Error) -> AuthError {
     if let sqlx::Error::Database(database_error) = &error
         && database_error.code().as_deref() == Some("23505")
     {
@@ -607,7 +607,7 @@ pub async fn passkey_register_finish(
 /// Resident-key selection is a browser requirement, not signed evidence about
 /// authenticator storage. Successful usernameless authentication is the usable
 /// compatibility check; an unsigned `credProps.rk` hint is never authorization.
-fn require_discoverable_registration(
+pub(super) fn require_discoverable_registration(
     challenge: &mut CreationChallengeResponse,
 ) -> Result<(), AuthError> {
     let selection = challenge
@@ -633,7 +633,7 @@ enum ModalMediation {
     Required,
 }
 
-fn modal_login_options(challenge: RequestChallengeResponse) -> Result<Value, AuthError> {
+pub(super) fn modal_login_options(challenge: RequestChallengeResponse) -> Result<Value, AuthError> {
     // webauthn-rs 0.5.5 exposes discoverable verification under conditional-ui.
     // Mediation only controls browser presentation: it is not in the signed
     // assertion or server AuthenticationState. This explicit button uses a modal
@@ -713,23 +713,59 @@ pub async fn passkey_login_finish(
     .await
     .map_err(database_error)?
     .ok_or(AuthError::InvalidPasskey)?;
+    verify_discoverable_assertion(
+        &mut transaction,
+        webauthn,
+        &body.credential,
+        authentication.state,
+        account_id,
+        &passkey_id,
+    )
+    .await?;
+    let refresh_token = session::generate_refresh_token()?;
+    session::create_session_with(&mut transaction, &account_id, &refresh_token).await?;
+
+    let user_id = account_id.to_string();
+    let token = jwt::create_token_with_version(&user_id, &user.1, secret, user.2)?;
+    transaction.commit().await.map_err(database_error)?;
+    info!(user_id, "User logged in via passkey");
+
+    Ok((
+        refresh_cookie_headers(&refresh_token.raw),
+        Json(AuthResponse {
+            token,
+            user: UserInfo {
+                id: user_id,
+                email: user.0,
+                display_name: user.1,
+            },
+        }),
+    ))
+}
+
+/// Verify against the locked current credential. The caller must first lock its user row.
+/// The same counter and ownership policy protects login and sensitive account operations.
+pub(super) async fn verify_discoverable_assertion(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    webauthn: &Webauthn,
+    credential: &PublicKeyCredential,
+    state: DiscoverableAuthentication,
+    account_id: Uuid,
+    passkey_id: &str,
+) -> Result<(), AuthError> {
     let credential_json: Value = sqlx::query_scalar(
         "SELECT credential_json FROM webauthn_credentials WHERE user_id = $1 AND credential_id = $2 FOR UPDATE",
     )
     .bind(account_id)
-    .bind(&passkey_id)
-    .fetch_optional(&mut *transaction)
+    .bind(passkey_id)
+    .fetch_optional(&mut **transaction)
     .await
     .map_err(database_error)?
     .ok_or(AuthError::InvalidPasskey)?;
     let mut passkey: Passkey = serde_json::from_value(credential_json.clone())
         .map_err(|error| AuthError::DatabaseError(format!("Invalid credential: {error}")))?;
     let result = webauthn
-        .finish_discoverable_authentication(
-            &body.credential,
-            authentication.state,
-            &[DiscoverableKey::from(&passkey)],
-        )
+        .finish_discoverable_authentication(credential, state, &[DiscoverableKey::from(&passkey)])
         .map_err(|_| AuthError::InvalidPasskey)?;
     if authentication_credential_id(&result) != passkey_id {
         return Err(AuthError::InvalidPasskey);
@@ -755,30 +791,12 @@ pub async fn passkey_login_finish(
         "UPDATE webauthn_credentials SET credential_json = $3 WHERE user_id = $1 AND credential_id = $2",
     )
     .bind(account_id)
-    .bind(&passkey_id)
+    .bind(passkey_id)
     .bind(updated_credential)
-    .execute(&mut *transaction)
+    .execute(&mut **transaction)
     .await
     .map_err(database_error)?;
-    let refresh_token = session::generate_refresh_token()?;
-    session::create_session_with(&mut transaction, &account_id, &refresh_token).await?;
-
-    let user_id = account_id.to_string();
-    let token = jwt::create_token_with_version(&user_id, &user.1, secret, user.2)?;
-    transaction.commit().await.map_err(database_error)?;
-    info!(user_id, "User logged in via passkey");
-
-    Ok((
-        refresh_cookie_headers(&refresh_token.raw),
-        Json(AuthResponse {
-            token,
-            user: UserInfo {
-                id: user_id,
-                email: user.0,
-                display_name: user.1,
-            },
-        }),
-    ))
+    Ok(())
 }
 
 #[cfg(test)]

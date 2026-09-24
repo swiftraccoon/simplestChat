@@ -1,4 +1,5 @@
 import type { AuthManager } from './auth';
+import { mountAccountSecurity, type AccountSecurityFlow } from './account-security';
 import type { RoomClient } from './room';
 import type { AccountProfile, PublicProfile, RoomListItem } from './protocol';
 import {
@@ -45,6 +46,8 @@ export class CommunityUI {
   private readonly manageButton = button('Manage room', () => this.openManagement());
   private profiles = new Map<string, Promise<PublicProfile | null>>();
   private generation = 0;
+  private accountGeneration = 0;
+  private accountIdentity = '';
   private identity = '';
 
   constructor(private readonly options: Options) {
@@ -58,14 +61,20 @@ export class CommunityUI {
 
   refresh(): void {
     const room = this.options.getRoom();
+    const accountIdentity = this.options.auth.userId ?? '';
+    const accountChanged = accountIdentity !== this.accountIdentity;
+    if (accountChanged) {
+      this.accountIdentity = accountIdentity;
+      this.accountGeneration++;
+    }
     const identity = `${this.options.auth.userId ?? ''}:${room?.currentRoomId ?? ''}:${room?.localParticipantId ?? ''}`;
     if (identity !== this.identity) {
       this.identity = identity;
       this.generation++;
       this.profiles.clear();
-      document
-        .querySelectorAll<HTMLDialogElement>('.community-dialog')
-        .forEach((dialog) => dialog.close());
+      document.querySelectorAll<HTMLDialogElement>('.community-dialog').forEach((dialog) => {
+        if (accountChanged || dialog.getAttribute('data-account-dialog') !== 'true') dialog.close();
+      });
     }
     this.accountButton.hidden = !this.options.auth.isLoggedIn;
     this.roomsButton.hidden = !this.options.auth.isLoggedIn;
@@ -191,12 +200,16 @@ export class CommunityUI {
   }
 
   private async openAccount(): Promise<void> {
-    const view = modal('Account');
+    let security: AccountSecurityFlow | null = null;
+    const view = modal('Account', () => security?.canDismiss ?? true);
+    view.dialog.setAttribute('data-account-dialog', 'true');
     const token = this.options.auth.jwt;
     const accountId = this.options.auth.userId;
-    const generation = this.generation;
+    const generation = this.accountGeneration;
     const stillCurrent = (): boolean =>
-      generation === this.generation && this.options.auth.userId === accountId && view.dialog.open;
+      generation === this.accountGeneration &&
+      this.options.auth.userId === accountId &&
+      view.dialog.open;
     try {
       const profile = await api.accountProfile(token);
       if (!stillCurrent()) return;
@@ -214,36 +227,57 @@ export class CommunityUI {
       );
       const save = asyncButton(
         'Save profile',
-        () =>
-          busy(save, view.error, async () => {
-            if (!stillCurrent()) return;
-            const updated = await api.updateProfile(token, {
-              display_name: name.value.trim(),
-              bio: bio.value.trim(),
-              avatar_url: avatar.value(),
-            });
-            if (!stillCurrent()) return;
-            this.profiles.delete(updated.id);
-            this.options.onProfileChanged(updated);
-            this.options.notify('Profile saved');
-          }),
+        async () => {
+          if (!stillCurrent() || !security?.canStart) return;
+          const update = {
+            display_name: name.value.trim(),
+            bio: bio.value.trim(),
+            avatar_url: avatar.value(),
+          };
+          await security.change(
+            (currentToken, signal) => api.updateProfile(currentToken, update, signal),
+            (updated) => {
+              this.profiles.delete(updated.id);
+              this.options.onProfileChanged(updated);
+              this.options.notify('Profile saved');
+            },
+          );
+        },
         (error) => this.showError(view.error, error),
         'btn-primary',
       );
-      view.body.append(save, el('h3', 'Password and recovery'));
-      view.body.append(
-        el(
-          'p',
-          'Password changes sign out all sessions. These controls require your current password; passkey-only accounts can continue signing in with their passkey.',
-          'setting-hint',
-        ),
-      );
+      view.body.append(save);
+      let changePassword: HTMLButtonElement | null = null;
+      const passwordFields: HTMLInputElement[] = [];
+      security = mountAccountSecurity({
+        container: view.body,
+        dialog: view.dialog,
+        token: () => this.options.auth.jwt,
+        current: stillCurrent,
+        interactionChanged: (canStart) => {
+          save.disabled = !canStart;
+          if (changePassword) changePassword.disabled = !canStart;
+          if (!canStart) for (const secret of passwordFields) secret.value = '';
+        },
+        removed: () => {
+          view.dialog.close();
+          this.options.notify('Passkey removed. Sign in again with a remaining sign-in method.');
+          this.options.onSignedOut().catch(() => {
+            this.options.notify('Passkey removed. Reload to finish signing out.');
+          });
+        },
+      });
+      await security.load();
+      if (!stillCurrent() || !security.settings?.password_enabled) return;
+      view.body.append(el('h3', 'Change password'));
+      view.body.append(el('p', 'Changing your password signs out all sessions.', 'setting-hint'));
       const current = input('', 'password', 128);
       current.autocomplete = 'current-password';
       const password = input('', 'password', 128);
       password.autocomplete = 'new-password';
       const confirm = input('', 'password', 128);
       confirm.autocomplete = 'new-password';
+      passwordFields.push(current, password, confirm);
       view.body.append(
         field('Current password', current),
         field('New password', password),
@@ -251,72 +285,39 @@ export class CommunityUI {
       );
       const change = asyncButton(
         'Change password',
-        () =>
-          busy(change, view.error, async () => {
-            if (!stillCurrent()) return;
-            validatePassword(password.value, confirm.value);
-            await api.changePassword(token, {
-              current_password: current.value,
-              new_password: password.value,
-            });
-            view.close();
-            if (this.options.auth.userId === accountId) await this.options.onSignedOut();
-            this.options.notify('Password changed. Sign in again with your new password.');
-          }),
+        async () => {
+          if (!stillCurrent() || !security?.canStart) return;
+          validatePassword(password.value, confirm.value);
+          const update = {
+            current_password: current.value,
+            new_password: password.value,
+          };
+          await security.change(
+            (currentToken, signal) => api.changePassword(currentToken, update, signal),
+            () => {
+              view.dialog.close();
+              this.options.notify('Password changed. Sign in again with your new password.');
+              this.options
+                .onSignedOut()
+                .catch(() =>
+                  this.options.notify('Password changed. Reload to finish signing out.'),
+                );
+            },
+          );
+        },
         (error) => this.showError(view.error, error),
       );
-      const generate = asyncButton(
-        profile.recovery_enabled ? 'Replace recovery key' : 'Generate recovery key',
-        () =>
-          busy(generate, view.error, async () => {
-            if (!stillCurrent()) return;
-            if (!current.value)
-              throw new Error('Enter your current password to generate a recovery key');
-            if (
-              profile.recovery_enabled &&
-              !window.confirm(
-                'Replace your saved recovery key? The previous key will stop working.',
-              )
-            )
-              return;
-            const result = await api.recoveryKey(token, { current_password: current.value });
-            if (!stillCurrent()) {
-              result.recovery_key = '';
-              return;
-            }
-            profile.recovery_enabled = true;
-            generate.textContent = 'Replace recovery key';
-            const keyView = modal('Save your recovery key');
-            const key = el('textarea');
-            key.readOnly = true;
-            key.value = result.recovery_key;
-            key.rows = 3;
-            keyView.body.append(
-              el(
-                'p',
-                'Store this key in a password manager. It is shown only now and can reset your password once. Replacing it invalidates the old key. No email is sent.',
-              ),
-              field('Recovery key', key),
-            );
-            const copy = asyncButton(
-              'Copy recovery key',
-              () =>
-                busy(copy, keyView.error, async () => {
-                  await navigator.clipboard.writeText(key.value);
-                  copy.textContent = 'Copied';
-                }),
-              (error) => this.showError(keyView.error, error),
-            );
-            keyView.body.append(copy);
-            keyView.dialog.addEventListener('close', () => {
-              key.value = '';
-              result.recovery_key = '';
-            });
-            current.value = '';
-          }),
-        (error) => this.showError(view.error, error),
+      changePassword = change;
+      view.dialog.addEventListener(
+        'close',
+        () => {
+          current.value = '';
+          password.value = '';
+          confirm.value = '';
+        },
+        { once: true },
       );
-      view.body.append(change, generate);
+      view.body.append(change);
     } catch (error) {
       if (stillCurrent()) this.showError(view.error, error);
     }

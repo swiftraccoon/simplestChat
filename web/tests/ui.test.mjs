@@ -42,6 +42,28 @@ test('native modal retains inside clicks, closes on backdrop, and removes its DO
   assert.equal(escaped.dialog.isConnected, false);
 });
 
+test('guarded modal blocks every user dismissal but identity teardown may force close', async () => {
+  const { ui } = await uiFixture();
+  let allowed = false;
+  const view = ui.modal('Confirming account change', () => allowed);
+  view.dialog.querySelectorAll('button')[0].click();
+  view.dialog.emit('click', { clientX: 0, clientY: 0 });
+  let prevented = false;
+  view.dialog.emit('cancel', {
+    preventDefault: () => {
+      prevented = true;
+    },
+  });
+  assert.equal(prevented, true);
+  assert.equal(view.dialog.open, true);
+  allowed = true;
+  view.close();
+  assert.equal(view.dialog.open, false);
+  const retired = ui.modal('Retired identity', () => false);
+  retired.dialog.close();
+  assert.equal(retired.dialog.isConnected, false);
+});
+
 test('async buttons invoke work within the click gesture and route rejection exactly once', async () => {
   const { ui } = await uiFixture();
   const pending = deferred();

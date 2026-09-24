@@ -5,6 +5,9 @@ import {
   decodeRecoveryKey,
   decodeRoomDirectory,
   decodeRoomListItem,
+  decodePasskeyAction,
+  decodePasskeySettings,
+  type PasskeyOperation,
 } from './api-validation';
 import { decodeRoomSettings } from './protocol-validation';
 import { type Decoder, isRecord } from './validation';
@@ -68,7 +71,10 @@ export function input(value = '', type = 'text', maxLength = 128): HTMLInputElem
   return node;
 }
 
-export function modal(title: string): {
+export function modal(
+  title: string,
+  canDismiss: () => boolean = () => true,
+): {
   dialog: HTMLDialogElement;
   body: HTMLDivElement;
   error: HTMLParagraphElement;
@@ -80,7 +86,7 @@ export function modal(title: string): {
   dialog.setAttribute('aria-labelledby', heading.id);
   const header = el('div', undefined, 'community-dialog-header');
   const close = (): void => {
-    dialog.close();
+    if (canDismiss()) dialog.close();
   };
   const closeButton = button('Close', close);
   header.append(heading, closeButton);
@@ -90,6 +96,9 @@ export function modal(title: string): {
   error.setAttribute('role', 'alert');
   dialog.append(header, error, body);
   dialog.addEventListener('close', () => dialog.remove(), { once: true });
+  dialog.addEventListener('cancel', (event) => {
+    if (!canDismiss()) event.preventDefault();
+  });
   dialog.addEventListener('click', (event) => {
     if (event.target !== dialog) return;
     const rect = dialog.getBoundingClientRect();
@@ -141,6 +150,7 @@ async function apiResponse(
   token: string | null,
   method = 'GET',
   data?: unknown,
+  signal?: AbortSignal,
 ): Promise<Response> {
   const response = await fetch(path, {
     method,
@@ -150,6 +160,7 @@ async function apiResponse(
       ...(data === undefined ? {} : { 'Content-Type': 'application/json' }),
     },
     ...(data === undefined ? {} : { body: JSON.stringify(data) }),
+    ...(signal ? { signal } : {}),
   });
   if (!response.ok) {
     const raw = await response.text();
@@ -174,8 +185,9 @@ async function apiJson<T>(
   token: string | null,
   method = 'GET',
   data?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
-  const response = await apiResponse(path, token, method, data);
+  const response = await apiResponse(path, token, method, data, signal);
   try {
     if (response.status === 204) throw new Error('Expected JSON response');
     const value: unknown = await response.json();
@@ -192,14 +204,38 @@ async function apiNoContent(
   token: string | null,
   method: 'POST' | 'DELETE',
   data?: unknown,
+  signal?: AbortSignal,
 ): Promise<void> {
-  const response = await apiResponse(path, token, method, data);
+  const response = await apiResponse(path, token, method, data, signal);
   if (response.status !== 204)
     throw new Error('The server returned an unexpected response. Please try again.');
 }
 
 /** Endpoint-owned contracts: callers cannot select an arbitrary response type or decoder. */
 export const api = {
+  passkeySettings: (token: string, signal: AbortSignal) =>
+    apiJson(decodePasskeySettings, '/api/auth/passkeys', token, 'GET', undefined, signal),
+  passkeyAction: (
+    token: string,
+    data: { operation: PasskeyOperation; current_password?: string },
+    signal: AbortSignal,
+  ) => apiJson(decodePasskeyAction, '/api/auth/passkeys/start', token, 'POST', data, signal),
+  passkeyAuthorize: (
+    token: string,
+    data: {
+      ceremony_id: string;
+      credential: ReturnType<typeof import('./auth').serializeCredential>;
+    },
+    signal: AbortSignal,
+  ) => apiJson(decodePasskeyAction, '/api/auth/passkeys/authorize', token, 'POST', data, signal),
+  passkeyEnroll: (
+    token: string,
+    data: {
+      ceremony_id: string;
+      credential: ReturnType<typeof import('./auth').serializeCredential>;
+    },
+    signal: AbortSignal,
+  ) => apiJson(decodePasskeyAction, '/api/auth/passkeys/enroll', token, 'POST', data, signal),
   publicProfile: (id: string, token: string | null) =>
     apiJson(decodePublicProfile, `/api/auth/profiles/${encodeURIComponent(id)}`, token),
   accountProfile: (token: string | null) =>
@@ -207,11 +243,13 @@ export const api = {
   updateProfile: (
     token: string | null,
     data: { display_name: string; bio: string; avatar_url: string | null },
-  ) => apiJson(decodeAccountProfile, '/api/auth/profile', token, 'PATCH', data),
+    signal?: AbortSignal,
+  ) => apiJson(decodeAccountProfile, '/api/auth/profile', token, 'PATCH', data, signal),
   changePassword: (
     token: string | null,
     data: { current_password: string; new_password: string },
-  ) => apiNoContent('/api/auth/password', token, 'POST', data),
+    signal?: AbortSignal,
+  ) => apiNoContent('/api/auth/password', token, 'POST', data, signal),
   recoveryKey: (token: string | null, data: { current_password: string }) =>
     apiJson(decodeRecoveryKey, '/api/auth/recovery/key', token, 'POST', data),
   redeemRecovery: (data: { email: string; recovery_key: string; new_password: string }) =>

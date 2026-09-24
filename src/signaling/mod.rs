@@ -645,6 +645,13 @@ impl SignalingServer {
                 "/passkey/login/finish",
                 post(crate::auth::routes::passkey_login_finish),
             )
+            .route("/passkeys", get(crate::auth::passkeys::list))
+            .route("/passkeys/start", post(crate::auth::passkeys::start))
+            .route(
+                "/passkeys/authorize",
+                post(crate::auth::passkeys::authorize),
+            )
+            .route("/passkeys/enroll", post(crate::auth::passkeys::enroll))
             .layer(DefaultBodyLimit::max(16 * 1024))
             .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT))
             .layer(middleware::from_fn_with_state(

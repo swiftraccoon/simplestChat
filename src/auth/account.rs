@@ -313,7 +313,7 @@ pub async fn public_profile(
     Ok((routes::no_store_headers(), Json(profile)))
 }
 
-async fn verified_password_hash(
+pub(super) async fn verified_password_hash(
     server: &SignalingServer,
     claims: &Claims,
     password: String,
@@ -394,7 +394,7 @@ pub async fn change_password(
     ))
 }
 
-fn generate_recovery_key() -> Result<String, AuthError> {
+pub(super) fn generate_recovery_key() -> Result<String, AuthError> {
     let mut secret = [0u8; 32];
     SysRng.try_fill_bytes(&mut secret).map_err(|error| {
         AuthError::DatabaseError(format!("Recovery generation failed: {error}"))

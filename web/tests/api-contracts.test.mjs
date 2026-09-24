@@ -83,6 +83,67 @@ const endpoints = [
   ],
 ];
 
+test('passkey management endpoints have fixed strict contracts and preserve cancellation signals', async () => {
+  const { ui, state } = await uiFixture();
+  const signal = new AbortController().signal;
+  const summary = {
+    password_enabled: false,
+    recovery_enabled: true,
+    passkeys: [{ id: '11111111-1111-4111-8111-111111111111', created_at: '2026-09-23T12:00:00Z' }],
+    maximum: 10,
+  };
+  for (const [invoke, path, body] of [
+    [() => ui.api.passkeySettings('token', signal), '/api/auth/passkeys', summary],
+    [
+      () => ui.api.passkeyAction('token', { operation: { action: 'add' } }, signal),
+      '/api/auth/passkeys/start',
+      {
+        kind: 'authenticate',
+        ceremony_id: 'owned',
+        options: { publicKey: {}, mediation: 'required' },
+      },
+    ],
+    [
+      () => ui.api.passkeyAuthorize('token', { ceremony_id: 'owned', credential: {} }, signal),
+      '/api/auth/passkeys/authorize',
+      { kind: 'register', ceremony_id: 'owned-next', options: { publicKey: {} } },
+    ],
+    [
+      () => ui.api.passkeyEnroll('token', { ceremony_id: 'owned', credential: {} }, signal),
+      '/api/auth/passkeys/enroll',
+      { kind: 'added' },
+    ],
+  ]) {
+    state.response = { ok: true, status: 200, json: async () => body };
+    assert.deepEqual(await invoke(), body);
+    assert.equal(state.requests.at(-1)[0], path);
+    assert.equal(state.requests.at(-1)[1].signal, signal);
+    state.response.json = async () => ({ ...body, private: 'server secret' });
+    await assert.rejects(invoke, /invalid data/);
+  }
+  for (const invalid of [
+    { ...summary, password_enabled: 'false' },
+    { ...summary, maximum: 10000 },
+    { ...summary, passkeys: [...summary.passkeys, ...summary.passkeys] },
+    { ...summary, passkeys: [{ ...summary.passkeys[0], id: 'credential-private' }] },
+    { ...summary, passkeys: [{ ...summary.passkeys[0], created_at: 'not a date' }] },
+  ]) {
+    state.response.json = async () => invalid;
+    await assert.rejects(() => ui.api.passkeySettings('token', signal), /invalid data/);
+  }
+  for (const invalid of [
+    { kind: 'login' },
+    { kind: 'recovery_key', recovery_key: '' },
+    { kind: 'authenticate', ceremony_id: '', options: { publicKey: {} } },
+  ]) {
+    state.response.json = async () => invalid;
+    await assert.rejects(
+      () => ui.api.passkeyAction('token', { operation: { action: 'add' } }, signal),
+      /invalid data/,
+    );
+  }
+});
+
 for (const [name, request, path, method, valid] of endpoints) {
   test(`${name} uses its fixed endpoint decoder and never forwards unknown fields`, async () => {
     const { ui, state } = await uiFixture();

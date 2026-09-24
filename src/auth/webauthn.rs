@@ -20,6 +20,33 @@ pub struct AuthenticationData {
     pub state: DiscoverableAuthentication,
 }
 
+pub struct AccountAuthenticationData {
+    pub state: DiscoverableAuthentication,
+    pub user_id: Uuid,
+    pub auth_version: i64,
+    pub action: super::passkeys::PasskeyAction,
+}
+
+pub struct AccountRegistrationData {
+    pub state: PasskeyRegistration,
+    pub user_id: Uuid,
+    pub auth_version: i64,
+}
+
+pub enum AccountChallenge {
+    Authentication(AccountAuthenticationData),
+    Registration(AccountRegistrationData),
+}
+
+impl AccountChallenge {
+    fn owner(&self) -> (Uuid, i64) {
+        match self {
+            Self::Authentication(data) => (data.user_id, data.auth_version),
+            Self::Registration(data) => (data.user_id, data.auth_version),
+        }
+    }
+}
+
 struct TimedChallenge<T> {
     data: T,
     created_at: Instant,
@@ -34,6 +61,7 @@ pub struct ChallengeStore {
 struct ChallengeMaps {
     registrations: HashMap<String, TimedChallenge<RegistrationData>>,
     authentications: HashMap<String, TimedChallenge<AuthenticationData>>,
+    accounts: HashMap<String, TimedChallenge<AccountChallenge>>,
 }
 
 impl ChallengeMaps {
@@ -42,10 +70,12 @@ impl ChallengeMaps {
             .retain(|_, challenge| challenge.created_at.elapsed() < CHALLENGE_TTL);
         self.authentications
             .retain(|_, challenge| challenge.created_at.elapsed() < CHALLENGE_TTL);
+        self.accounts
+            .retain(|_, challenge| challenge.created_at.elapsed() < CHALLENGE_TTL);
     }
 
     fn len(&self) -> usize {
-        self.registrations.len() + self.authentications.len()
+        self.registrations.len() + self.authentications.len() + self.accounts.len()
     }
 }
 
@@ -167,6 +197,63 @@ impl ChallengeStore {
         let challenge = challenges.authentications.remove(ceremony_id)?;
         (challenge.created_at.elapsed() < CHALLENGE_TTL).then_some(challenge.data)
     }
+
+    /// A management ceremony belongs to one account/version and one operation.
+    /// Admission never evicts somebody else's in-flight operation, including on a shared NAT.
+    pub fn store_account(&self, data: AccountChallenge, source_ip: IpAddr) -> Option<String> {
+        let source_ip = rate_limit_ip(source_ip);
+        let mut challenges = self
+            .challenges
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
+        challenges.retain_live();
+        let account = data.owner().0;
+        if challenges.len() >= MAX_CHALLENGES
+            || challenges
+                .accounts
+                .values()
+                .filter(|item| item.data.owner().0 == account)
+                .count()
+                >= MAX_CHALLENGES_PER_PRINCIPAL
+            || challenges
+                .accounts
+                .values()
+                .filter(|item| item.source_ip == source_ip)
+                .count()
+                >= MAX_AUTHENTICATION_CHALLENGES_PER_IP
+        {
+            return None;
+        }
+        let id = fresh_ceremony_id(&challenges.accounts);
+        challenges.accounts.insert(
+            id.clone(),
+            TimedChallenge {
+                data,
+                source_ip,
+                created_at: Instant::now(),
+            },
+        );
+        Some(id)
+    }
+
+    /// A mismatched account cannot consume a ceremony; matching uses are one-shot,
+    /// including failed cryptographic verification or a wrong finish endpoint.
+    pub fn take_account(
+        &self,
+        id: &str,
+        user_id: Uuid,
+        auth_version: i64,
+    ) -> Option<AccountChallenge> {
+        let mut challenges = self
+            .challenges
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
+        if challenges.accounts.get(id)?.data.owner() != (user_id, auth_version) {
+            return None;
+        }
+        let challenge = challenges.accounts.remove(id)?;
+        (challenge.created_at.elapsed() < CHALLENGE_TTL).then_some(challenge.data)
+    }
 }
 
 fn rate_limit_ip(address: IpAddr) -> IpAddr {
@@ -261,6 +348,84 @@ mod tests {
         .rp_name("test")
         .build()
         .expect("valid WebAuthn configuration")
+    }
+
+    #[test]
+    fn account_challenges_are_owner_version_bound_one_use_and_expiring() {
+        let webauthn = test_webauthn();
+        let store = ChallengeStore::new();
+        let owner = Uuid::new_v4();
+        let make = || {
+            let (_, state) = webauthn.start_discoverable_authentication().unwrap();
+            AccountChallenge::Authentication(AccountAuthenticationData {
+                state,
+                user_id: owner,
+                auth_version: 7,
+                action: super::super::passkeys::PasskeyAction::RecoveryKey {},
+            })
+        };
+        let source = IpAddr::from([192, 0, 2, 1]);
+        let id = store.store_account(make(), source).unwrap();
+        assert!(store.take_account(&id, Uuid::new_v4(), 7).is_none());
+        assert!(store.take_account(&id, owner, 6).is_none());
+        assert!(matches!(
+            store.take_account(&id, owner, 7),
+            Some(AccountChallenge::Authentication(_))
+        ));
+        assert!(store.take_account(&id, owner, 7).is_none());
+        let expired = store.store_account(make(), source).unwrap();
+        store
+            .challenges
+            .write()
+            .unwrap()
+            .accounts
+            .get_mut(&expired)
+            .unwrap()
+            .created_at = Instant::now() - CHALLENGE_TTL;
+        assert!(store.take_account(&expired, owner, 7).is_none());
+    }
+
+    #[test]
+    fn account_challenges_share_capacity_across_operations_without_eviction() {
+        let webauthn = test_webauthn();
+        let store = ChallengeStore::new();
+        let owner = Uuid::new_v4();
+        let source = IpAddr::from([192, 0, 2, 1]);
+        let mut ids = Vec::new();
+        for _ in 0..MAX_CHALLENGES_PER_PRINCIPAL {
+            let (_, state) = webauthn
+                .start_passkey_registration(owner, "owner@example.test", "Owner", None)
+                .unwrap();
+            ids.push(
+                store
+                    .store_account(
+                        AccountChallenge::Registration(AccountRegistrationData {
+                            state,
+                            user_id: owner,
+                            auth_version: 0,
+                        }),
+                        source,
+                    )
+                    .unwrap(),
+            );
+        }
+        let (_, state) = webauthn.start_discoverable_authentication().unwrap();
+        assert!(
+            store
+                .store_account(
+                    AccountChallenge::Authentication(AccountAuthenticationData {
+                        state,
+                        user_id: owner,
+                        auth_version: 0,
+                        action: super::super::passkeys::PasskeyAction::Add {},
+                    }),
+                    source
+                )
+                .is_none()
+        );
+        for id in ids {
+            assert!(store.take_account(&id, owner, 0).is_some());
+        }
     }
 
     #[test]

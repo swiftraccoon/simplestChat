@@ -2,6 +2,7 @@
 
 pub mod account;
 pub mod jwt;
+pub mod passkeys;
 pub mod password;
 pub mod routes;
 pub mod session;

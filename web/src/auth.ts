@@ -725,7 +725,9 @@ function descriptors(value: unknown): PublicKeyCredentialDescriptor[] {
   });
 }
 
-function deserializeCreationOptions(options: Record<string, unknown>): CredentialCreationOptions {
+export function deserializeCreationOptions(
+  options: Record<string, unknown>,
+): CredentialCreationOptions {
   const pk = record(options['publicKey']);
   const rp = record(pk['rp']);
   const user = record(pk['user']);
@@ -760,7 +762,9 @@ function deserializeCreationOptions(options: Record<string, unknown>): Credentia
   };
 }
 
-function deserializeRequestOptions(options: Record<string, unknown>): CredentialRequestOptions {
+export function deserializeRequestOptions(
+  options: Record<string, unknown>,
+): CredentialRequestOptions {
   const pk = record(options['publicKey']);
   const mediation = options['mediation'];
   if (
@@ -783,7 +787,7 @@ function deserializeRequestOptions(options: Record<string, unknown>): Credential
   };
 }
 
-function serializeCredential(cred: Credential): {
+export function serializeCredential(cred: Credential): {
   id: string;
   rawId: string;
   type: string;

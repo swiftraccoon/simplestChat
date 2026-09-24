@@ -20,34 +20,48 @@ async function fixture() {
     updated: [],
     signedOut: 0,
     room: null,
-    handle: async () => ({ ...profile }),
+    handle: async (path) =>
+      path === '/api/auth/passkeys'
+        ? { password_enabled: true, recovery_enabled: false, passkeys: [], maximum: 10 }
+        : { ...profile },
     upload: dom.ui.rasterUpload,
   };
   const request = async (...args) => {
     state.requests.push(args);
     return state.handle(...args);
   };
-  const api = await loadTypeScript('src/community-ui.ts', {
-    modules: {
-      './ui': {
-        ...dom.ui,
-        api: {
-          publicProfile: (id, token) =>
-            request(`/api/auth/profiles/${encodeURIComponent(id)}`, token),
-          accountProfile: (token) => request('/api/auth/profile', token),
-          updateProfile: (token, data) => request('/api/auth/profile', token, 'PATCH', data),
-          changePassword: (token, data) => request('/api/auth/password', token, 'POST', data),
-          recoveryKey: (token, data) => request('/api/auth/recovery/key', token, 'POST', data),
-          redeemRecovery: (data) => request('/api/auth/recovery/redeem', null, 'POST', data),
-          ownRooms: (token) => request('/api/rooms/mine', token),
-          updateRoomIdentity: (id, token, data) =>
-            request(`/api/rooms/${encodeURIComponent(id)}/identity`, token, 'PATCH', data),
-          deleteRoom: (id, token) =>
-            request(`/api/rooms/${encodeURIComponent(id)}`, token, 'DELETE'),
+  const ui = {
+    ...dom.ui,
+    api: {
+      publicProfile: (id, token) => request(`/api/auth/profiles/${encodeURIComponent(id)}`, token),
+      accountProfile: (token) => request('/api/auth/profile', token),
+      updateProfile: (token, data) => request('/api/auth/profile', token, 'PATCH', data),
+      changePassword: (token, data) => request('/api/auth/password', token, 'POST', data),
+      passkeySettings: (token) => request('/api/auth/passkeys', token),
+      passkeyAction: (token, data) => request('/api/auth/passkeys/start', token, 'POST', data),
+      redeemRecovery: (data) => request('/api/auth/recovery/redeem', null, 'POST', data),
+      ownRooms: (token) => request('/api/rooms/mine', token),
+      updateRoomIdentity: (id, token, data) =>
+        request(`/api/rooms/${encodeURIComponent(id)}/identity`, token, 'PATCH', data),
+      deleteRoom: (id, token) => request(`/api/rooms/${encodeURIComponent(id)}`, token, 'DELETE'),
+    },
+    rasterUpload: (...args) => state.upload(...args),
+  };
+  const security = await loadTypeScript('src/account-security.ts', {
+    modules: { './ui': ui, './auth': await loadTypeScript('src/auth.ts') },
+    globals: {
+      document: dom.document,
+      navigator: {
+        clipboard: {
+          writeText: async (value) => {
+            state.copied = value;
+          },
         },
-        rasterUpload: (...args) => state.upload(...args),
       },
     },
+  });
+  const api = await loadTypeScript('src/community-ui.ts', {
+    modules: { './ui': ui, './account-security': security },
     globals: {
       document: dom.document,
       TextEncoder,
@@ -290,7 +304,11 @@ test('identity changes close account dialogs and reject actions from stale contr
   assert.equal(view.open, false);
   save.click();
   await flush();
-  assert.equal(f.state.requests.length, 1, 'only the original account GET should be sent');
+  assert.equal(
+    f.state.requests.length,
+    2,
+    'only the original account and security GETs should be sent',
+  );
   assert.equal(f.state.updated.length, 0);
 });
 
@@ -329,24 +347,27 @@ test('recovery key is shown once, copies exactly, and clears on dialog close', a
   const f = await fixture();
   await f.community.openAccount();
   const account = dialog(f, 'Account');
-  control(account, 'Current password').value = 'current-password';
-  const result = { recovery_key: 'sc-recovery-test-only' };
+  control(account, 'Current password for verification').value = 'current-password';
+  const result = { kind: 'recovery_key', recovery_key: 'sc-recovery-test-only' };
   f.state.handle = async () => result;
   action(account, 'Generate recovery key').click();
   await flush();
   assert.deepEqual(f.state.requests.at(-1), [
-    '/api/auth/recovery/key',
+    '/api/auth/passkeys/start',
     'token-a',
     'POST',
-    { current_password: 'current-password' },
+    { operation: { action: 'recovery_key' }, current_password: 'current-password' },
   ]);
-  const view = dialog(f, 'Save your recovery key');
+  const view = account;
   const key = control(view, 'Recovery key');
   assert.equal(key.readOnly, true);
   action(view, 'Copy recovery key').click();
   await flush();
   assert.equal(f.state.copied, 'sc-recovery-test-only');
-  assert.equal(control(account, 'Current password').value, '');
+  assert.equal(
+    f.created.filter((node) => node.type === 'password').every((node) => node.value === ''),
+    true,
+  );
   view.close();
   assert.equal(key.value, '');
   assert.equal(result.recovery_key, '');
@@ -357,7 +378,7 @@ for (const reason of ['close', 'identity change']) {
     const f = await fixture();
     await f.community.openAccount();
     const account = dialog(f, 'Account');
-    control(account, 'Current password').value = 'current-password';
+    control(account, 'Current password for verification').value = 'current-password';
     const pending = deferred();
     f.state.handle = () => pending.promise;
     action(account, 'Generate recovery key').click();
@@ -368,7 +389,7 @@ for (const reason of ['close', 'identity change']) {
       f.auth.jwt = 'token-b';
       f.community.refresh();
     }
-    const result = { recovery_key: 'sc-recovery-test-only' };
+    const result = { kind: 'recovery_key', recovery_key: 'sc-recovery-test-only' };
     pending.resolve(result);
     await flush();
     assert.equal(f.document.querySelectorAll('dialog').length, 0);
@@ -377,7 +398,7 @@ for (const reason of ['close', 'identity change']) {
 }
 
 for (const changedIdentity of [false, true]) {
-  test(`successful pending password change ${changedIdentity ? 'does not sign out a new identity' : 'signs out the same account even after dialog close'}`, async () => {
+  test(`successful pending password change ${changedIdentity ? 'does not sign out a new identity' : 'blocks dismissal until the same account is signed out'}`, async () => {
     const f = await fixture();
     await f.community.openAccount();
     const view = dialog(f, 'Account');
@@ -389,7 +410,8 @@ for (const changedIdentity of [false, true]) {
     action(view, 'Change password').click();
     await flush();
     assert.equal(f.state.requests.at(-1)[1], 'token-a');
-    view.close();
+    action(view, 'Close').click();
+    assert.equal(view.open, true, 'a submitted password mutation owns dismissal');
     if (changedIdentity) {
       f.auth.userId = 'account-b';
       f.auth.jwt = 'token-b';
@@ -405,3 +427,96 @@ test('room links preserve the current origin and path while removing unrelated q
   const f = await fixture();
   assert.equal(f.roomLink('friendly room'), 'http://localhost:3000/#friendly%20room');
 });
+
+test('password, profile and passkey changes share ownership and stale controls cannot submit concurrently', async () => {
+  const f = await fixture();
+  await f.community.openAccount();
+  const account = dialog(f, 'Account');
+  const staleAdd = action(account, 'Add passkey');
+  const save = action(account, 'Save profile');
+  const change = action(account, 'Change password');
+  control(account, 'Current password').value = 'old-password';
+  control(account, 'New password').value = control(account, 'Confirm new password').value =
+    'new-password';
+  const pending = deferred();
+  f.state.handle = () => pending.promise;
+  change.click();
+  staleAdd.click();
+  save.click();
+  await flush();
+  assert.equal(f.state.requests.filter((request) => request[2] === 'POST').length, 1);
+  assert.equal(f.state.requests.at(-1)[0], '/api/auth/password');
+  assert.equal(save.disabled, true);
+  assert.equal(change.disabled, true);
+  f.auth.userId = 'account-b';
+  f.community.refresh();
+  pending.resolve();
+  await flush();
+  assert.equal(f.state.signedOut, 0);
+});
+
+test('profile completion cannot re-enable a control during a later uncertain account mutation', async () => {
+  const f = await fixture();
+  await f.community.openAccount();
+  const account = dialog(f, 'Account');
+  const staleAdd = action(account, 'Add passkey');
+  const save = action(account, 'Save profile');
+  const pending = deferred();
+  f.state.handle = () => pending.promise;
+  save.click();
+  staleAdd.click();
+  await flush();
+  assert.equal(f.state.requests.at(-1)[0], '/api/auth/profile');
+  assert.equal(f.state.requests.at(-1)[2], 'PATCH');
+  assert.equal(f.state.requests.length, 3, 'the second mutation was refused');
+  pending.resolve({ ...f.profile });
+  await flush();
+  assert.equal(save.disabled, false);
+  control(account, 'Current password for verification').value = 'old-password';
+  f.state.handle = async () => {
+    throw new Error('Lost mutation response');
+  };
+  action(account, 'Generate recovery key').click();
+  await flush();
+  assert.equal(save.disabled, true);
+  assert.equal(action(account, 'Change password').disabled, true);
+  assert.match(account.textContent, /may have completed/);
+});
+
+for (const phase of ['pending', 'uncertain', 'recovery']) {
+  test(`same-account room membership changes preserve ${phase} account ownership`, async () => {
+    const f = await fixture();
+    await f.community.openAccount();
+    const account = dialog(f, 'Account');
+    control(account, 'Current password for verification').value = 'old-password';
+    const pending = deferred();
+    f.state.handle = () => pending.promise;
+    action(account, 'Generate recovery key').click();
+    await flush();
+    if (phase === 'uncertain') pending.reject(new Error('Response lost'));
+    if (phase === 'recovery') pending.resolve({ kind: 'recovery_key', recovery_key: 'save-once' });
+    await flush();
+    f.state.room = {
+      currentRoomId: 'different-room',
+      localParticipantId: 'new-membership',
+      role: 'user',
+    };
+    f.community.refresh();
+    assert.equal(account.open, true);
+    if (phase === 'pending' || phase === 'uncertain') {
+      action(account, 'Close').click();
+      assert.equal(account.open, true);
+    } else assert.equal(control(account, 'Recovery key').value, 'save-once');
+    f.auth.userId = 'account-b';
+    f.auth.jwt = 'token-b';
+    f.community.refresh();
+    assert.equal(account.open, false);
+    if (phase === 'pending') pending.resolve({ kind: 'recovery_key', recovery_key: 'late-secret' });
+    await flush();
+    assert.ok(
+      f.created
+        .filter((node) => node.tagName === 'TEXTAREA' && node.readOnly)
+        .every((node) => node.value === ''),
+    );
+  });
+}
