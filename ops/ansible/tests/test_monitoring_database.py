@@ -155,6 +155,25 @@ class IncidentDatabaseTests(unittest.TestCase):
         failure = attempt(1, 1, "failure", -180)
         skipped = attempt(2, 1, "incomplete", -120)
         first = snapshot(0, [failure, skipped], complete=True)
+        # Check the actual importer plan even on PostgreSQL builds without LLVM.
+        # Unanalyzed temp tables were estimated as 1,360 snapshots, multiplying
+        # the two JSON expansions into 13.6 million rows and expensive JIT work.
+        insert_prefix = record.split("INSERT INTO operations.external_status", 1)[0]
+        explained = insert_prefix.replace(
+            "INSERT INTO operations.external_runs",
+            "EXPLAIN (FORMAT JSON) INSERT INTO operations.external_runs",
+            1,
+        )
+        plans = array_value(decode_json(self.sql(explained + "\nROLLBACK;", first)))
+        nodes = [object_value(object_value(plans[0])["Plan"])]
+        snapshot_scans = 0
+        while nodes:
+            node = nodes.pop()
+            if node.get("Relation Name") == "incoming_external":
+                self.assertEqual(node["Plan Rows"], 1)
+                snapshot_scans += 1
+            nodes.extend(object_value(child) for child in array_value(node.get("Plans", [])))
+        self.assertGreater(snapshot_scans, 0)
         _ = self.sql(record, first)
         _ = self.sql(record, first)
         self.assertEqual(self.sql("SELECT count(*) FROM operations.external_runs;"), "2")

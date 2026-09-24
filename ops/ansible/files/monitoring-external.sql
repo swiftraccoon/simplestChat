@@ -4,6 +4,10 @@ SET LOCAL statement_timeout='5s';
 SELECT pg_advisory_xact_lock(1935892842);
 CREATE TEMP TABLE incoming_external ON COMMIT DROP AS
 SELECT :'payload'::jsonb AS value;
+-- This always contains one snapshot. Default temp-table cardinality estimates
+-- multiply through both JSON expansions and can trigger costly LLVM JIT work
+-- that consumes the statement budget before these small batches are inserted.
+ANALYZE incoming_external;
 INSERT INTO operations.external_runs(workflow,run_id,attempt,source_revision,
     deployed_revision_at_import,started_at,completed_at,result,conclusion,checks,imported_at)
 SELECT batch->>'workflow',(run->>'runId')::bigint,(run->>'attempt')::integer,
