@@ -330,7 +330,7 @@ export class MediaControls {
           <section id="media-appearance-panel" role="tabpanel" aria-labelledby="media-appearance-tab" hidden></section>
         </div>
         <div class="settings-dialog-footer">
-          <p class="settings-description">Device changes apply on Save. Layout and talk mode save automatically.</p>
+          <p class="settings-description">Camera and microphone changes apply on Save. Layout and talk mode save automatically.</p>
           <button type="submit" value="save" class="btn-primary">Save settings</button>
         </div>
       </form>`;

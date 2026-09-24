@@ -45,7 +45,7 @@ The subsequent seven product improvements raise the JavaScript ceiling to
 controls, duplicate-safe chat reconciliation, incoming-media repair, screen-share
 results, live audio-device controls, and explicit room navigation. The previous
 build measured 472,453 bytes raw / 101,607 gzip; the validated product build
-measured 505,471 / 110,157. These additions use browser APIs and the existing
+measured 505,486 / 110,161. These additions use browser APIs and the existing
 libraries; no runtime dependency was added. All emitted chunks remain counted,
 including optional code. The revised ceiling accommodates these workflows while
 keeping a bounded margin for final correctness fixes; it is not evidence of
