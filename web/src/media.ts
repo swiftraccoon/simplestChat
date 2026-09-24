@@ -41,6 +41,23 @@ export interface CapturePreferences {
 
 export type RemoteVideoQuality = 'auto' | 'low' | 'medium' | 'high';
 
+export type ScreenShareAudio = 'off' | 'sharing' | 'not_provided' | 'failed' | 'ended';
+export type ScreenShareResult =
+  | { status: 'started'; audio: Exclude<ScreenShareAudio, 'off'> }
+  | {
+      status: 'not_started';
+      reason:
+        | 'cancelled_or_denied'
+        | 'unavailable'
+        | 'not_ready'
+        | 'busy'
+        | 'superseded'
+        | 'not_readable'
+        | 'no_source'
+        | 'invalid_state'
+        | 'failed';
+    };
+
 export const DEFAULT_CAPTURE_PREFERENCES: CapturePreferences = {
   cameraDeviceId: '',
   microphoneDeviceId: '',
@@ -156,6 +173,9 @@ export class MediaManager {
   private consumers = new Map<string, mediasoupClient.types.Consumer>();
   // Map producerId → consumerId for cleanup when producer closes
   private producerToConsumer = new Map<string, string>();
+  // A lost close reply must not lose the server resource identity. Never evict
+  // an unconfirmed retirement to make room for another subscription.
+  private consumerRetirements = new Map<string, { id: string; task?: Promise<void> }>();
   /** Viewer-chosen quality per consumer; 'auto' leaves only the size cap. */
   private consumerQualities = new Map<string, RemoteVideoQuality>();
   /** Highest spatial layer the rendered tile can use, per consumer, or null. */
@@ -165,6 +185,9 @@ export class MediaManager {
   private iceRestartTimers = new Map<string, ReturnType<typeof setTimeout>>();
   // Callback when screen share stops (browser "Stop sharing" or explicit stop)
   private onScreenShareStoppedCb: (() => void) | null = null;
+  private screenAudioState: ScreenShareAudio = 'off';
+  private onScreenShareAudioChangedCb: ((state: ScreenShareAudio) => void) | null = null;
+  private unwatchScreenAudio: (() => void) | null = null;
   private onLocalCaptureStoppedCb: ((kind: 'audio' | 'video') => void) | null = null;
   private onControlErrorCb: (() => void) | null = null;
   private onTransportRebuildRequiredCb: (() => void) | null = null;
@@ -271,6 +294,23 @@ export class MediaManager {
   /** Register callback for when screen share stops */
   set onScreenShareStopped(cb: (() => void) | null) {
     this.onScreenShareStoppedCb = cb;
+  }
+
+  set onScreenShareAudioChanged(cb: ((state: ScreenShareAudio) => void) | null) {
+    this.onScreenShareAudioChangedCb = cb;
+  }
+
+  get screenShareAudio(): ScreenShareAudio {
+    return this.screenAudioState;
+  }
+
+  private setScreenAudio(state: ScreenShareAudio): void {
+    this.screenAudioState = state;
+    try {
+      this.onScreenShareAudioChangedCb?.(state);
+    } catch {
+      /* A stale view must not interrupt capture cleanup. */
+    }
   }
 
   /** Report external capture termination without automatically reopening a device. */
@@ -697,6 +737,11 @@ export class MediaManager {
       if (!isCurrent()) throw new Error('Media session closed');
     };
 
+    if (this.consumerRetirements.has(producerId)) {
+      await this.retireConsumerByProducer(producerId);
+      assertCurrent();
+    }
+
     const response = await this.signaling.request(
       { type: 'consume', producerId, rtpCapabilities: device.recvRtpCapabilities },
       'consumerCreated',
@@ -849,6 +894,44 @@ export class MediaManager {
     this.consumerSizeCaps.delete(consumerId);
     this.producerToConsumer.delete(producerId);
     if (notifyServer) this.sendControl({ type: 'closeConsumer', consumerId });
+  }
+
+  /** Explicit receive-only recovery: wait for retirement before resubscribing. */
+  async retireConsumerByProducer(producerId: string): Promise<void> {
+    const generation = this.lifecycle;
+    const transport = this.recvTransport;
+    const current = () =>
+      !this.closed &&
+      !!transport &&
+      !transport.closed &&
+      generation === this.lifecycle &&
+      transport === this.recvTransport;
+    if (!current() || this.signalingSuspended || !this.signaling.connected)
+      throw new Error('Media connection is not ready.');
+    let retirement = this.consumerRetirements.get(producerId);
+    if (!retirement) {
+      const consumerId = this.producerToConsumer.get(producerId);
+      if (!consumerId) return;
+      if (this.consumerRetirements.size >= 256)
+        throw new Error('Incoming media cleanup is still pending. Leave and rejoin to reset it.');
+      retirement = { id: consumerId };
+      this.consumerRetirements.set(producerId, retirement);
+      this.closeConsumerByProducer(producerId, false);
+    }
+    if (retirement.task) return retirement.task;
+    const owned = retirement;
+    const task = this.signaling
+      .request({ type: 'closeConsumer', consumerId: owned.id }, 'mediaControlApplied')
+      .then(() => {
+        if (!current()) throw new Error('Media session changed.');
+        if (this.consumerRetirements.get(producerId) === owned)
+          this.consumerRetirements.delete(producerId);
+      })
+      .finally(() => {
+        if (owned.task === task) delete owned.task;
+      });
+    owned.task = task;
+    return task;
   }
 
   /** Release a producer revoked by the server so it can be created again later. */
@@ -1051,12 +1134,13 @@ export class MediaManager {
   }
 
   /** Start screen sharing — creates screen video producer (and optional audio) */
-  async startScreenShare(): Promise<{
-    videoTrack: MediaStreamTrack;
-    audioTrack?: MediaStreamTrack;
-  } | null> {
+  async startScreenShare(): Promise<ScreenShareResult> {
     const transport = this.sendTransport;
-    if (!transport || this.screenProducer || this.screenStarting) return null;
+    if (!transport) return { status: 'not_started', reason: 'not_ready' };
+    if (this.screenProducer || this.screenStarting)
+      return { status: 'not_started', reason: 'busy' };
+    if (!navigator.mediaDevices?.getDisplayMedia)
+      return { status: 'not_started', reason: 'unavailable' };
     const version = ++this.screenVersion;
     this.screenStarting = true;
     const isCurrent = () => version === this.screenVersion && transport === this.sendTransport;
@@ -1066,13 +1150,26 @@ export class MediaManager {
     try {
       try {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      } catch {
-        return null; // Picker cancellation or permission denial.
+      } catch (error) {
+        if (!isCurrent()) return { status: 'not_started', reason: 'superseded' };
+        const name = error instanceof Error ? error.name : '';
+        // Browsers deliberately conflate picker dismissal and denied permission.
+        const reason =
+          name === 'NotAllowedError'
+            ? 'cancelled_or_denied'
+            : name === 'NotReadableError'
+              ? 'not_readable'
+              : name === 'NotFoundError'
+                ? 'no_source'
+                : name === 'InvalidStateError'
+                  ? 'invalid_state'
+                  : 'failed';
+        return { status: 'not_started', reason };
       }
-      if (!isCurrent()) return null;
+      if (!isCurrent()) return { status: 'not_started', reason: 'superseded' };
       this.pendingScreenStream = stream;
       const videoTrack = stream.getVideoTracks()[0];
-      if (!videoTrack) return null;
+      if (!videoTrack) return { status: 'not_started', reason: 'no_source' };
       // The browser can stop sharing before produce has adopted the track.
       // Watch from capture onward so pending audio and late producers are retired too.
       const onEnded = () => {
@@ -1081,7 +1178,7 @@ export class MediaManager {
       videoTrack.addEventListener('ended', onEnded, { once: true });
       unwatchCapture = () => videoTrack.removeEventListener('ended', onEnded);
       if (videoTrack.readyState === 'ended') onEnded();
-      if (!isCurrent()) return null;
+      if (!isCurrent()) return { status: 'not_started', reason: 'superseded' };
 
       const videoProducer = await transport.produce({
         track: videoTrack,
@@ -1090,29 +1187,58 @@ export class MediaManager {
       if (!isCurrent()) {
         videoProducer.close();
         this.sendControl({ type: 'closeProducer', producerId: videoProducer.id });
-        return null;
+        return { status: 'not_started', reason: 'superseded' };
       }
       this.screenProducer = videoProducer;
 
       const audioTrack = stream.getAudioTracks()[0];
+      this.setScreenAudio('not_provided');
       if (audioTrack) {
-        const audioProducer = await transport.produce({
-          track: audioTrack,
-          appData: { source: 'screen-audio' },
-        });
-        if (!isCurrent()) {
-          audioProducer.close();
-          this.sendControl({ type: 'closeProducer', producerId: audioProducer.id });
-          return null;
-        }
-        this.screenAudioProducer = audioProducer;
+        const audioLive = () => audioTrack.readyState === 'live';
+        const audioEnded = () => {
+          if (!isCurrent()) return;
+          const producer = this.screenAudioProducer;
+          this.screenAudioProducer = null;
+          producer?.close();
+          if (producer) this.sendControl({ type: 'closeProducer', producerId: producer.id });
+          this.setScreenAudio('ended');
+        };
+        audioTrack.addEventListener('ended', audioEnded, { once: true });
+        this.unwatchScreenAudio = () => audioTrack.removeEventListener('ended', audioEnded);
+        if (!audioLive()) audioEnded();
+        else
+          try {
+            const audioProducer = await transport.produce({
+              track: audioTrack,
+              appData: { source: 'screen-audio' },
+            });
+            if (!isCurrent() || !audioLive()) {
+              audioProducer.close();
+              this.sendControl({ type: 'closeProducer', producerId: audioProducer.id });
+              if (!isCurrent()) return { status: 'not_started', reason: 'superseded' };
+              this.setScreenAudio('ended');
+            } else {
+              this.screenAudioProducer = audioProducer;
+              this.setScreenAudio('sharing');
+            }
+          } catch {
+            audioTrack.stop();
+            if (!isCurrent()) return { status: 'not_started', reason: 'superseded' };
+            this.unwatchScreenAudio?.();
+            this.unwatchScreenAudio = null;
+            this.setScreenAudio('failed');
+          }
       }
+      if (!isCurrent()) return { status: 'not_started', reason: 'superseded' };
       started = true;
-      return { videoTrack, ...(audioTrack !== undefined && { audioTrack }) };
-    } catch (error) {
-      if (!isCurrent()) return null;
+      return {
+        status: 'started',
+        audio: this.screenAudioState === 'off' ? 'not_provided' : this.screenAudioState,
+      };
+    } catch {
+      if (!isCurrent()) return { status: 'not_started', reason: 'superseded' };
       this.stopScreenShare();
-      throw error;
+      return { status: 'not_started', reason: 'failed' };
     } finally {
       if (!started) {
         unwatchCapture?.();
@@ -1134,6 +1260,9 @@ export class MediaManager {
     const sap = this.screenAudioProducer;
     this.screenProducer = null;
     this.screenAudioProducer = null;
+    this.unwatchScreenAudio?.();
+    this.unwatchScreenAudio = null;
+    this.setScreenAudio('off');
 
     if (sp) {
       const track = sp.track;
@@ -1174,6 +1303,9 @@ export class MediaManager {
     this.videoVersion++;
     this.videoStarting = false;
     this.pendingVideoTrack?.stop();
+    this.unwatchScreenAudio?.();
+    this.unwatchScreenAudio = null;
+    this.setScreenAudio('off');
     this.cancelScreenStart();
     // Clear ICE restart timers
     for (const timer of this.iceRestartTimers.values()) {
@@ -1186,6 +1318,7 @@ export class MediaManager {
     }
     this.consumers.clear();
     this.producerToConsumer.clear();
+    this.consumerRetirements.clear();
     this.consumerQualities.clear();
     this.consumerSizeCaps.clear();
 

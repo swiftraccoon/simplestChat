@@ -159,7 +159,10 @@ export class CommunityUI {
   ban(id: string, name: string): void {
     const room = this.options.getRoom();
     if (!room) return;
-    const view = modal(`Ban ${name}`);
+    let pending = false;
+    const membership = room.membershipVersion;
+    const current = () => this.options.getRoom() === room && room.membershipVersion === membership;
+    const view = modal(`Ban ${name}`, () => !pending);
     const reason = input('', 'text', 500);
     const duration = el('select');
     for (const [value, label] of [
@@ -173,20 +176,37 @@ export class CommunityUI {
       duration.append(option);
     }
     view.body.append(field('Reason (optional)', reason), field('Duration', duration));
-    view.body.append(
-      button(
-        'Ban from room',
-        () => {
-          room.ban(
-            id,
-            reason.value.trim() || undefined,
-            duration.value ? Number(duration.value) : undefined,
-          );
-          view.close();
-        },
-        'btn-secondary danger',
-      ),
+    const submit = asyncButton(
+      'Ban from room',
+      () =>
+        busy(submit, view.error, async () => {
+          if (pending || !view.dialog.open) return;
+          if (!current()) {
+            view.close();
+            return;
+          }
+          pending = true;
+          reason.disabled = true;
+          duration.disabled = true;
+          try {
+            await room.ban(
+              id,
+              reason.value.trim() || undefined,
+              duration.value ? Number(duration.value) : undefined,
+            );
+            pending = false;
+            view.close();
+          } finally {
+            pending = false;
+            reason.disabled = false;
+            duration.disabled = false;
+            if (!current()) view.close();
+          }
+        }),
+      (error) => this.showError(view.error, error),
+      'btn-secondary danger',
     );
+    view.body.append(submit);
   }
 
   private async profile(id: string): Promise<PublicProfile | null> {

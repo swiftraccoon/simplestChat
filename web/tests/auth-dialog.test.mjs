@@ -51,3 +51,45 @@ test('idle dialog dismissal does not retire startup restoration and uncertain se
   assert.equal(flow.begin(true), null);
   assert.equal(retirements, 0);
 });
+
+test('an external account change retires ceremony, creating, and uncertain attempts', async () => {
+  const { AuthDialogFlow } = await loadTypeScript('src/auth-dialog.ts');
+  for (const state of ['ceremony', 'creating', 'uncertain']) {
+    let retirements = 0;
+    const flow = new AuthDialogFlow(() => retirements++);
+    const old = flow.begin(state !== 'ceremony');
+    assert.ok(old, state);
+    if (state === 'uncertain') flow.markUncertain(old);
+    flow.retire();
+    assert.equal(old.controller.signal.aborted, true, state);
+    assert.equal(flow.current(old), false, state);
+    assert.equal(flow.isUncertain(old), false, state);
+    assert.equal(retirements, 1, state);
+    const current = flow.begin(false);
+    assert.ok(current, state);
+    assert.equal(flow.establish(old), false, state);
+    assert.equal(flow.finish(old), false, state);
+    flow.markUncertain(old);
+    assert.equal(flow.isUncertain(current), false, state);
+    assert.equal(flow.current(current), true, state);
+    assert.equal(flow.finish(current), true, state);
+    flow.retire();
+    assert.equal(retirements, 1, 'idle retirement does not cancel unrelated restoration');
+  }
+});
+
+test('external retirement resets dialog ownership before abort callbacks run', async () => {
+  const { AuthDialogFlow } = await loadTypeScript('src/auth-dialog.ts');
+  const flow = new AuthDialogFlow(() => {});
+  const old = flow.begin(true);
+  let replacement;
+  old.controller.signal.addEventListener('abort', () => {
+    replacement = flow.begin(false);
+  });
+  flow.markUncertain(old);
+  flow.retire();
+  assert.ok(replacement);
+  assert.equal(flow.current(replacement), true);
+  assert.equal(flow.isUncertain(replacement), false);
+  assert.equal(flow.finish(old), false);
+});

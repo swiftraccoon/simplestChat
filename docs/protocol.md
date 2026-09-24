@@ -102,7 +102,14 @@ renewal attempts per minute per socket under the shared authentication budget.
 The browser retains the newest token for future handshakes. Terminal rejection,
 a missing response after five seconds, or exhaustion of the deferred-retry budget
 falls back to ordinary bounded reconnection.
-Logout and identity changes still leave and replace the socket.
+Logout and identity changes still leave and replace the socket. A refreshed token
+preserves membership only when its account ID matches the current account.
+Same-origin tabs publish random revision hints over BroadcastChannel and storage,
+then reconcile identity from the shared HttpOnly session cookie. Hints contain no
+account IDs or credentials. Interactive cookie mutations and refresh share a
+Web Lock when available; epoch guards retire stale results when coordination is
+unavailable. A received hint retires pending dialogs before reconciliation; focus
+and visibility changes check for missed hints.
 
 Open authenticated sockets revalidate account state every five seconds after the
 previous check completes. A database error or validation timeout permits retaining
@@ -141,6 +148,7 @@ reconnect grace. It runs before any disconnect-time database credential check.
 | --- | --- |
 | Media and reconnect `SignalingClient.request` | Generated `requestId` plus the command's expected response `type`; 5 seconds by default |
 | Authentication renewal | Dedicated `requestId`; 5 seconds, one in flight per socket |
+| Room/moderation control | Generated `requestId` and `roomControlApplied`; 25 seconds, followed by snapshot reconciliation on an unconfirmed result |
 | Room join | Next `roomJoined`, `lobbyWaiting`, `roomPasswordRequired` or `error`; 10 seconds |
 | Social action | Generated `requestId` plus matching `action`; 10 seconds, at most 32 pending |
 | Chat send | `clientMessageId` reconciles the optimistic entry with an acknowledgement; 12 seconds before marking delivery unconfirmed |
@@ -212,6 +220,14 @@ initial admission is never treated as automatic rejoin intent. A second loss
 during fresh admission cancels its waiter immediately, and late setup results
 cannot report a closed or replaced socket as connected.
 
+Room settings, topic, role, voice, lobby and moderation commands carrying a
+request ID return `roomControlApplied` only after their operation completes.
+Legacy commands without an ID remain silent. The browser prevents duplicate
+pending actions, retains failed form edits, and reads current room state after
+an uncertain result. A timeout is not rollback; checking the snapshot does not
+establish whether an absent admission/voice notification was delivered. Retrying
+is a separate user decision, never automatic replay of a moderation mutation.
+
 ## Join, lobby and media
 
 1. Send `joinRoom` with `roomId`, `participantName` and an optional password.
@@ -220,7 +236,13 @@ cannot report a closed or replaced socket as connected.
    participants/producers, role and optional persisted-room settings.
 2. `lobbyWaiting` is not admission: do not initialize media while waiting.
    Moderators receive `lobbyJoin`. Admission sends `lobbyAdmitted` followed by
-   `roomJoined`; denial sends `lobbyDenied`.
+   `roomJoined`; denial sends `lobbyDenied`. `lobbyWaiting` includes
+   `participantCount` and `moderatorCount`; `lobbyStatus` updates those counts as
+   connected membership or roles change. Disconnected grace sessions do not
+   count as available moderators. Disconnect pushes are best effort: a busy room
+   lock is allowed at most 100 ms after socket closure, and draining skips this
+   notification. Later counts still exclude closed queues. A connected moderator
+   is not an approval or a response-time promise.
 3. Once admitted, request `getRouterRtpCapabilities`, load the mediasoup client
    device, then request `createSendTransport` and `createRecvTransport` in order.
    `transportCreated` carries ICE/DTLS parameters and optional ICE-server entries.
@@ -288,11 +310,30 @@ membership, together with participants, producer state, settings and permissions
 Visibility respects join/session boundaries and private-message/ignore rules.
 It is not a durable mailbox or unrestricted room-history endpoint.
 
-Within retained history, repeating a `clientMessageId` from the same sender
-session and with the same content/recipient returns the existing acknowledgement;
-conflicting reuse is rejected. Eviction, full rejoin or server restart ends that
-deduplication protection. An acknowledgement timeout means **unconfirmed**, not
-definitely undelivered. Replay is bounded recovery, not exactly-once delivery.
+Modern chat sends include a strictly increasing safe-integer `sequence` alongside
+`clientMessageId`. The room snapshot supplies a separate `chatSessionId` for this
+membership; it survives grace reconnection and changes on a fresh join. A
+`retryChatMessage` carries that ID and the original sequence, message ID, content
+and optional recipient. It never generates a new message ID for the old attempt.
+
+Accepted-message receipts are separate from visible history, bounded to 512
+entries / 512 KiB per room and 128 per membership, retained for up to five
+minutes. Earlier FIFO eviction at member/room count or byte limits admits new
+messages without throttling chat for confirmation storage.
+Matching retained receipts return the existing acknowledgement without delivering
+again. A per-membership sequence watermark survives receipt/history eviction;
+missing old receipts yield `messageRetryResult` with `outcome: "unknown"` and a
+finite reason, never another broadcast. A public retry newer than the watermark
+may make its first delivery. A private retry without a receipt is lookup-only:
+the server cannot establish that the recipient is still the original membership.
+Legacy sends without a sequence retain only bounded-history/receipt deduplication.
+
+The UI distinguishes confirmed, rejected and unconfirmed sends, and lets users
+reconcile/retry a retained uncertain attempt or copy it back to a draft. Explicit
+new delivery from a draft is a new decision. Full rejoin or server restart retires
+retry ownership; messages and receipts are not a durable mailbox. An
+acknowledgement confirms server acceptance, not that every recipient read it.
+These bounds are not an exactly-once-delivery guarantee.
 
 ## Reconnection and ownership
 
@@ -326,6 +367,12 @@ changes and explicit departure still clear conversation state. Rejoined media
 starts off and requires the user's action to publish again. This is automatic
 room recovery, not uninterrupted text delivery, capture or WebRTC transport
 continuity, and does not persist runtime history across server restarts.
+
+“Refresh incoming media” explicitly retires existing receive consumers, awaits
+closure acknowledgement, then resubscribes to still-current remote producers.
+It preserves local capture/mute state and reapplies viewer hide, quality and size
+preferences. Completion confirms subscription setup, not decoded frames. It is
+separate from transport-failure ICE/rejoin recovery and never captures a device.
 
 Each socket, membership, media manager and auth operation owns its pending work.
 After an `await`, code must confirm that owner is still current before adopting

@@ -1,8 +1,9 @@
 import type { ChatEntry } from './protocol';
 
 export interface ChatItem extends ChatEntry {
-  status: 'pending' | 'sent' | 'failed';
+  status: 'pending' | 'sent' | 'failed' | 'unknown';
   error?: string;
+  retry?: { sequence: number; chatSessionId: string; expiresAt: number };
 }
 
 type Composition = { draft: string; history: string[]; cursor: number; beforeRecall: string };
@@ -147,6 +148,7 @@ export class ChatStore {
     if (existing) {
       if (this.conversation(existing) !== conversation) return false;
       Object.assign(existing, entry, { status: 'sent', error: undefined });
+      delete existing.retry;
       this.rememberName(entry);
       this.trim();
       return false;
@@ -166,24 +168,35 @@ export class ChatStore {
     return this.messages.includes(item);
   }
 
-  pending(entry: ChatEntry): boolean {
+  pending(entry: ChatEntry, retry?: ChatItem['retry']): boolean {
     if (!this.accepts(entry) || entry.participantId !== this.localId) return false;
     if (this.messages.some((item) => this.key(item) === this.key(entry))) return false;
     this.rememberName(entry);
-    const item: ChatItem = { ...entry, status: 'pending' };
+    const item: ChatItem = { ...entry, status: 'pending', ...(retry && { retry }) };
     this.messages.push(item);
     this.trim();
     return this.messages.includes(item);
   }
 
-  fail(clientMessageId: string, message: string): void {
+  fail(clientMessageId: string, message: string, unknown = false): void {
     const existing = this.messages.find(
       (item) => item.clientMessageId === clientMessageId && item.participantId === this.localId,
     );
-    if (existing?.status === 'pending') {
-      existing.status = 'failed';
+    if (existing && (existing.status === 'pending' || existing.status === 'unknown')) {
+      existing.status = unknown ? 'unknown' : 'failed';
       existing.error = message.slice(0, 1024);
+      if (!unknown) delete existing.retry;
       this.trim();
+    }
+  }
+
+  retireAttempts(): void {
+    for (const item of this.messages) {
+      if (item.status === 'pending' || item.status === 'unknown') {
+        item.status = 'unknown';
+        item.error = 'Delivery not confirmed. The room session changed; retry is unavailable.';
+      }
+      delete item.retry;
     }
   }
 
@@ -245,6 +258,7 @@ export class ChatStore {
       item.participantId.length +
       (item.recipientId?.length ?? 0) +
       item.sentAt.length +
+      (item.retry ? item.retry.chatSessionId.length + 24 : 0) +
       (item.error?.length ?? 0)
     );
   }

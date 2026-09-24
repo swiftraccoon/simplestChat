@@ -58,7 +58,24 @@ export class AuthManager {
   private generation = 0;
   private uncertainSession = false;
   private restoreController: AbortController | null = null;
+  private sessionController: AbortController | null = null;
+  private sessionMutation: (() => void) | null = null;
+  private challengeGeneration: number | null = null;
   private telemetry: TelemetryHandler | undefined;
+
+  /** Notify other tabs that their shared HttpOnly cookie may have changed.
+   * The callback carries no identity, token or credential. */
+  setSessionMutationHandler(handler: (() => void) | null): void {
+    this.sessionMutation = handler;
+  }
+
+  private notifySessionMutation(): void {
+    try {
+      this.sessionMutation?.();
+    } catch {
+      /* Browser coordination is optional; the server remains authoritative. */
+    }
+  }
 
   setTelemetryHandler(handler: TelemetryHandler): void {
     this.telemetry = (event) => {
@@ -101,6 +118,7 @@ export class AuthManager {
   /** Clear local identity after a server-side password change revoked all sessions. */
   forgetSession(): void {
     this.clearSession();
+    this.notifySessionMutation();
   }
 
   setOnChange(handler: AuthChangeHandler): void {
@@ -109,6 +127,33 @@ export class AuthManager {
 
   /** Try to restore session from refresh token cookie on page load */
   async tryRestore(): Promise<boolean> {
+    return this.restoreSession(false);
+  }
+
+  /** Revalidate after a cross-tab cookie change. Retire stale ceremonies and
+   * requests; only an authoritative response can retain the current identity.
+   * Failure clears this tab without broadcasting another invalidation. */
+  async reconcileSharedSession(): Promise<void> {
+    await this.restoreSession(true);
+  }
+
+  /** Synchronous fence for a newer external cookie hint while reconciliation
+   * is already pending. The coordinator follows this with a bounded restore. */
+  invalidateSharedSession(): void {
+    this.beginAuthentication();
+  }
+
+  get canCheckSharedSession(): boolean {
+    return (
+      this.sessionController === null &&
+      this.restoreController === null &&
+      this.challengeGeneration === null &&
+      this.registrationCeremonyId === null &&
+      this.authenticationCeremonyId === null
+    );
+  }
+
+  private async restoreSession(shared: boolean): Promise<boolean> {
     const generation = this.beginAuthentication();
     const started = performance.now();
     const deadline = started + RESTORE_DEADLINE_MS;
@@ -136,11 +181,18 @@ export class AuthManager {
         assertLive();
         if (!resp.ok) {
           outcome = resp.status === 401 ? 'unauthenticated' : 'error';
+          if (shared) {
+            if (resp.status === 401) this.uncertainSession = false;
+            this.restoreController = null;
+            this.clearSession();
+          }
           return false;
         }
         const data = await readSession(resp);
         assertLive();
-        this.setSession(data);
+        this.uncertainSession = false;
+        if (this.restoreController === controller) this.restoreController = null;
+        this.setSession(data, shared);
         outcome = 'ok';
         return true;
       };
@@ -152,6 +204,7 @@ export class AuthManager {
           : controller.signal.aborted || performance.now() >= deadline || Date.now() >= wallDeadline
             ? 'timeout'
             : 'error';
+      if (shared && generation === this.generation) this.clearSession();
       return false;
     } finally {
       clearTimeout(timer);
@@ -181,6 +234,7 @@ export class AuthManager {
   ): Promise<CredentialCreationOptions> {
     if (this.uncertainSession) throw new SessionOutcomeUnknownError();
     const generation = this.beginAuthentication();
+    this.challengeGeneration = generation;
     try {
       const options = record(
         await this.requestJson(
@@ -197,6 +251,7 @@ export class AuthManager {
       this.registrationCeremonyId = ceremonyId;
       return result;
     } finally {
+      if (this.challengeGeneration === generation) this.challengeGeneration = null;
       this.resumeRefresh(generation);
     }
   }
@@ -215,6 +270,7 @@ export class AuthManager {
   async passkeyLoginStart(signal?: AbortSignal): Promise<CredentialRequestOptions> {
     if (this.uncertainSession) throw new SessionOutcomeUnknownError();
     const generation = this.beginAuthentication();
+    this.challengeGeneration = generation;
     try {
       const options = record(
         await this.requestJson(
@@ -231,6 +287,7 @@ export class AuthManager {
       this.authenticationCeremonyId = ceremonyId;
       return result;
     } finally {
+      if (this.challengeGeneration === generation) this.challengeGeneration = null;
       this.resumeRefresh(generation);
     }
   }
@@ -248,14 +305,51 @@ export class AuthManager {
 
   async logout(): Promise<void> {
     const generation = this.beginAuthentication();
+    const controller = new AbortController();
+    this.sessionController = controller;
+    const deadline = performance.now() + SESSION_DEADLINE_MS;
+    const wallDeadline = Date.now() + SESSION_DEADLINE_MS;
+    const timer = setTimeout(() => controller.abort(), SESSION_DEADLINE_MS);
+    let submitted = false;
     try {
-      const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await abortable(
+        this.withSessionLock(controller.signal, async () => {
+          this.assertCurrent(generation);
+          if (
+            controller.signal.aborted ||
+            performance.now() >= deadline ||
+            Date.now() >= wallDeadline
+          )
+            throw new Error('Sign out timed out; please check your session again');
+          let response: Response;
+          submitted = true;
+          try {
+            response = await fetch('/api/auth/logout', {
+              method: 'POST',
+              credentials: 'include',
+              signal: controller.signal,
+            });
+          } catch (error) {
+            this.notifySessionMutation();
+            throw error;
+          }
+          if (response.ok) this.notifySessionMutation();
+          this.assertCurrent(generation);
+          if (!response.ok)
+            throw new Error('Sign out could not revoke the session; please try again');
+          if (this.sessionController === controller) this.sessionController = null;
+          this.clearSession();
+        }),
+        controller.signal,
+      );
+    } catch (error) {
+      if (submitted && controller.signal.aborted) this.notifySessionMutation();
       this.assertCurrent(generation);
-      if (!response.ok) {
-        throw new Error('Sign out could not revoke the session; please try again');
-      }
-      this.clearSession();
+      throw error;
     } finally {
+      clearTimeout(timer);
+      if (this.sessionController === controller) this.sessionController = null;
+      controller.abort();
       this.resumeRefresh(generation);
     }
   }
@@ -266,11 +360,14 @@ export class AuthManager {
     this.generation += 1;
     this.restoreController?.abort();
     this.restoreController = null;
+    this.sessionController?.abort();
+    this.sessionController = null;
     if (this.refreshTimer !== null) clearTimeout(this.refreshTimer);
     this.refreshTimer = null;
     this.stopScheduledRefresh();
     this.registrationCeremonyId = null;
     this.authenticationCeremonyId = null;
+    this.challengeGeneration = null;
     return this.generation;
   }
 
@@ -306,15 +403,24 @@ export class AuthManager {
     failure: string,
     generation: number,
     signal?: AbortSignal,
+    sessionMutation = false,
   ): Promise<unknown> {
     if (signal?.aborted) throw new DOMException('Authentication request retired', 'AbortError');
-    const response = await fetch(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(body),
-      ...(signal ? { signal } : {}),
-    });
+    let response: Response;
+    try {
+      response = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+        ...(signal ? { signal } : {}),
+      });
+    } catch (error) {
+      if (sessionMutation) this.notifySessionMutation();
+      throw error;
+    }
+    // Even a retired request may have installed a cookie before its response.
+    if (sessionMutation && response.ok) this.notifySessionMutation();
     this.assertCurrent(generation);
     const data: unknown = await response.json().catch(() => null);
     this.assertCurrent(generation);
@@ -330,9 +436,11 @@ export class AuthManager {
     if (this.uncertainSession) throw new SessionOutcomeUnknownError();
     const generation = this.beginAuthentication();
     const controller = new AbortController();
+    this.sessionController = controller;
     const deadline = performance.now() + SESSION_DEADLINE_MS;
     const wallDeadline = Date.now() + SESSION_DEADLINE_MS;
     const timer = setTimeout(() => controller.abort(), SESSION_DEADLINE_MS);
+    let submitted = false;
     const assertLive = (): void => {
       this.assertCurrent(generation);
       if (controller.signal.aborted || performance.now() >= deadline || Date.now() >= wallDeadline)
@@ -340,15 +448,21 @@ export class AuthManager {
     };
     try {
       const work = async (): Promise<void> => {
+        assertLive();
+        submitted = true;
         const data = parseSession(
-          await this.requestJson(path, body, failure, generation, controller.signal),
+          await this.requestJson(path, body, failure, generation, controller.signal, true),
         );
         assertLive();
+        if (this.sessionController === controller) this.sessionController = null;
         this.setSession(data);
       };
-      await abortable(work(), controller.signal);
+      await abortable(this.withSessionLock(controller.signal, work), controller.signal);
     } catch (error) {
-      if (generation !== this.generation || error instanceof AuthHttpRejection) throw error;
+      this.assertCurrent(generation);
+      if (error instanceof AuthHttpRejection) throw error;
+      if (!submitted) throw new Error('Sign-in timed out before it was sent. Please try again.');
+      if (controller.signal.aborted) this.notifySessionMutation();
       // A malformed successful body, lost connection or deadline cannot prove
       // the server did not set a session cookie. Freeze new auth until reload.
       this.uncertainSession = true;
@@ -356,6 +470,7 @@ export class AuthManager {
       throw new SessionOutcomeUnknownError();
     } finally {
       clearTimeout(timer);
+      if (this.sessionController === controller) this.sessionController = null;
       controller.abort();
       this.resumeRefresh(generation);
     }
@@ -372,6 +487,7 @@ export class AuthManager {
   }
 
   private setSession(data: AuthResponse, tokenRefresh = false): void {
+    const sameAccount = tokenRefresh && this._user?.id === data.user.id;
     this.stopScheduledRefresh();
     this.clearRefreshBudget();
     this._token = data.token;
@@ -382,7 +498,20 @@ export class AuthManager {
         ? null
         : performance.now() + Math.max(0, this.tokenExpiresAt - Date.now());
     this.scheduleRefresh();
-    this.onChange?.(true, tokenRefresh);
+    this.onChange?.(true, sameAccount);
+  }
+
+  private withSessionLock<T>(signal: AbortSignal, action: () => Promise<T>): Promise<T> {
+    const run = (): Promise<T> => {
+      if (signal.aborted)
+        return Promise.reject(new DOMException('Authentication request retired', 'AbortError'));
+      // Release the browser lock when a bounded caller expires, even if a
+      // platform promise ignores abort; generation checks still fence results.
+      return abortable(action(), signal);
+    };
+    return 'locks' in navigator && navigator.locks
+      ? navigator.locks.request(REFRESH_LOCK_NAME, { signal }, run)
+      : run();
   }
 
   private async requestRefresh(

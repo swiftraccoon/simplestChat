@@ -123,22 +123,34 @@ pub enum ClientMessage {
     },
     /// Resume a consumer
     #[serde(rename_all = "camelCase")]
-    ResumeConsumer { consumer_id: String },
+    ResumeConsumer {
+        consumer_id: String,
+    },
     /// Pause a consumer
     #[serde(rename_all = "camelCase")]
-    PauseConsumer { consumer_id: String },
+    PauseConsumer {
+        consumer_id: String,
+    },
     /// Release this receiver's consumer; repeated closure is a no-op.
     #[serde(rename_all = "camelCase")]
-    CloseConsumer { consumer_id: String },
+    CloseConsumer {
+        consumer_id: String,
+    },
     /// Close a producer
     #[serde(rename_all = "camelCase")]
-    CloseProducer { producer_id: String },
+    CloseProducer {
+        producer_id: String,
+    },
     /// Pause a producer (mute)
     #[serde(rename_all = "camelCase")]
-    PauseProducer { producer_id: String },
+    PauseProducer {
+        producer_id: String,
+    },
     /// Resume a producer (unmute)
     #[serde(rename_all = "camelCase")]
-    ResumeProducer { producer_id: String },
+    ResumeProducer {
+        producer_id: String,
+    },
     /// Reconnect to an existing session after WS disconnect
     #[serde(rename_all = "camelCase")]
     Reconnect {
@@ -148,7 +160,9 @@ pub enum ClientMessage {
     },
     /// Request ICE restart on a transport
     #[serde(rename_all = "camelCase")]
-    RestartIce { transport_id: String },
+    RestartIce {
+        transport_id: String,
+    },
     /// Set preferred simulcast layers for a consumer
     #[serde(rename_all = "camelCase")]
     SetConsumerPreferredLayers {
@@ -162,13 +176,18 @@ pub enum ClientMessage {
         content: String,
         #[serde(default)]
         client_message_id: Option<String>,
+        #[serde(default)]
+        sequence: Option<u64>,
     },
     #[serde(rename_all = "camelCase")]
     PrivateMessage {
         target_participant_id: String,
         content: String,
         client_message_id: String,
+        #[serde(default)]
+        sequence: Option<u64>,
     },
+    RetryChatMessage(RetryChatMessage),
     #[serde(rename_all = "camelCase")]
     SetChatPreferences {
         request_id: String,
@@ -181,7 +200,9 @@ pub enum ClientMessage {
         nickname: String,
     },
     #[serde(rename_all = "camelCase")]
-    GetRoomSnapshot { request_id: String },
+    GetRoomSnapshot {
+        request_id: String,
+    },
     #[serde(rename_all = "camelCase")]
     ListRoomBans {
         request_id: String,
@@ -189,7 +210,10 @@ pub enum ClientMessage {
         offset: Option<u32>,
     },
     #[serde(rename_all = "camelCase")]
-    RemoveRoomBan { request_id: String, ban_id: String },
+    RemoveRoomBan {
+        request_id: String,
+        ban_id: String,
+    },
     #[serde(rename_all = "camelCase")]
     ListRoomMembers {
         request_id: String,
@@ -224,7 +248,9 @@ pub enum ClientMessage {
     // === Moderation ===
     /// Force-close a participant's camera/screen producer
     #[serde(rename_all = "camelCase")]
-    CloseCam { target_participant_id: String },
+    CloseCam {
+        target_participant_id: String,
+    },
     /// Ban a participant from producing video/screen
     #[serde(rename_all = "camelCase")]
     CamBan {
@@ -233,13 +259,19 @@ pub enum ClientMessage {
     },
     /// Unban a participant from producing video/screen
     #[serde(rename_all = "camelCase")]
-    CamUnban { target_participant_id: String },
+    CamUnban {
+        target_participant_id: String,
+    },
     /// Mute a participant's text chat
     #[serde(rename_all = "camelCase")]
-    TextMute { target_participant_id: String },
+    TextMute {
+        target_participant_id: String,
+    },
     /// Unmute a participant's text chat
     #[serde(rename_all = "camelCase")]
-    TextUnmute { target_participant_id: String },
+    TextUnmute {
+        target_participant_id: String,
+    },
     /// Kick a participant from the room
     #[serde(rename_all = "camelCase")]
     Kick {
@@ -255,7 +287,9 @@ pub enum ClientMessage {
     },
     /// Unban a user (stub — no persistent ban list yet)
     #[serde(rename_all = "camelCase")]
-    Unban { target_user_id: String },
+    Unban {
+        target_user_id: String,
+    },
     /// Set a participant's role
     #[serde(rename_all = "camelCase")]
     SetRole {
@@ -300,15 +334,21 @@ pub enum ClientMessage {
         password: Option<Option<String>>,
     },
     /// Set the room topic
-    SetTopic { topic: String },
+    SetTopic {
+        topic: String,
+    },
 
     // === Lobby ===
     /// Admit a participant from the lobby
     #[serde(rename_all = "camelCase")]
-    AdmitFromLobby { target_participant_id: String },
+    AdmitFromLobby {
+        target_participant_id: String,
+    },
     /// Deny a participant from the lobby
     #[serde(rename_all = "camelCase")]
-    DenyFromLobby { target_participant_id: String },
+    DenyFromLobby {
+        target_participant_id: String,
+    },
 }
 
 /// Server-to-Client messages
@@ -414,6 +454,9 @@ pub enum ServerMessage {
     /// A correlated closure or preferred-layer command completed successfully.
     /// Sent only inside a reply envelope with the caller's request ID.
     MediaControlApplied,
+    /// A room mutation completed. The request ID identifies only this command;
+    /// state broadcasts remain independent and a timeout is not a rollback.
+    RoomControlApplied,
     /// Result of reconnection attempt
     #[serde(rename_all = "camelCase")]
     ReconnectResult {
@@ -457,6 +500,12 @@ pub enum ServerMessage {
     MessageAck {
         client_message_id: String,
         message: ChatEntry,
+    },
+    #[serde(rename_all = "camelCase")]
+    MessageRetryResult {
+        client_message_id: String,
+        outcome: ChatRetryOutcome,
+        reason: ChatRetryReason,
     },
     #[serde(rename_all = "camelCase")]
     PrivateMessageReceived { message: ChatEntry },
@@ -543,6 +592,12 @@ pub enum ServerMessage {
         room_name: String,
         topic: Option<String>,
         participant_count: u32,
+        moderator_count: u32,
+    },
+    #[serde(rename_all = "camelCase")]
+    LobbyStatus {
+        participant_count: u32,
+        moderator_count: u32,
     },
     /// A participant joined the lobby (sent to Moderator+)
     #[serde(rename_all = "camelCase")]
@@ -591,6 +646,33 @@ pub struct ChatEntry {
     pub recipient_name: Option<String>,
     pub content: String,
     pub sent_at: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatRetryOutcome {
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatRetryReason {
+    SessionChanged,
+    ReceiptExpired,
+    SequenceSuperseded,
+    Capacity,
+    Conflict,
+    RecipientUnconfirmed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RetryChatMessage {
+    pub client_message_id: String,
+    pub sequence: u64,
+    pub chat_session_id: String,
+    pub content: String,
+    pub target_participant_id: Option<String>,
 }
 
 /// Producer metadata

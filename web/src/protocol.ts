@@ -46,12 +46,21 @@ export type ClientMessage =
       spatialLayer: number;
       temporalLayer?: number;
     }
-  | { type: 'chatMessage'; content: string; clientMessageId?: string }
+  | { type: 'chatMessage'; content: string; clientMessageId?: string; sequence?: number }
   | {
       type: 'privateMessage';
       targetParticipantId: string;
       content: string;
       clientMessageId: string;
+      sequence?: number;
+    }
+  | {
+      type: 'retryChatMessage';
+      clientMessageId: string;
+      sequence: number;
+      chatSessionId: string;
+      content: string;
+      targetParticipantId?: string;
     }
   | SocialRequest
   // Moderation
@@ -136,6 +145,7 @@ export type ServerMessage =
   | { type: 'consumerResumed'; requestId?: string; consumerId: string }
   | { type: 'consumerPaused'; requestId?: string; consumerId: string }
   | { type: 'mediaControlApplied'; requestId: string }
+  | { type: 'roomControlApplied'; requestId: string }
   | {
       type: 'reconnectResult';
       requestId?: string;
@@ -160,6 +170,18 @@ export type ServerMessage =
   | ({ type: 'chatReceived' } & ChatEntry)
   | { type: 'privateMessageReceived'; message: ChatEntry }
   | { type: 'messageAck'; clientMessageId: string; message: ChatEntry }
+  | {
+      type: 'messageRetryResult';
+      clientMessageId: string;
+      outcome: 'unknown';
+      reason:
+        | 'session_changed'
+        | 'receipt_expired'
+        | 'sequence_superseded'
+        | 'capacity'
+        | 'conflict'
+        | 'recipient_unconfirmed';
+    }
   | SocialResponse
   | { type: 'socialError'; requestId?: string; clientMessageId?: string; message: string }
   | { type: 'nicknameChanged'; participantId: string; nickname: string }
@@ -179,7 +201,14 @@ export type ServerMessage =
   | { type: 'roomSettingsChanged'; settings: RoomSettings }
   | { type: 'topicChanged'; topic: string; changedBy: string }
   // Lobby
-  | { type: 'lobbyWaiting'; roomName: string; topic?: string; participantCount: number }
+  | {
+      type: 'lobbyWaiting';
+      roomName: string;
+      topic?: string;
+      participantCount: number;
+      moderatorCount: number;
+    }
+  | { type: 'lobbyStatus'; participantCount: number; moderatorCount: number }
   | { type: 'lobbyJoin'; participantId: string; displayName: string; authenticated: boolean }
   | { type: 'lobbyDenied'; reason?: string }
   | { type: 'lobbyAdmitted' };
@@ -201,7 +230,33 @@ export interface RequestResponses {
   resumeProducer: 'producerResumed';
   reconnect: 'reconnectResult';
   restartIce: 'iceRestarted';
+  closeCam: 'roomControlApplied';
+  camBan: 'roomControlApplied';
+  camUnban: 'roomControlApplied';
+  textMute: 'roomControlApplied';
+  textUnmute: 'roomControlApplied';
+  kick: 'roomControlApplied';
+  ban: 'roomControlApplied';
+  unban: 'roomControlApplied';
+  setRole: 'roomControlApplied';
+  requestVoice: 'roomControlApplied';
+  updateRoomSettings: 'roomControlApplied';
+  setTopic: 'roomControlApplied';
+  admitFromLobby: 'roomControlApplied';
+  denyFromLobby: 'roomControlApplied';
 }
+
+/** Mutations acknowledge application separately from their room broadcasts. */
+export type RoomControl = Extract<
+  ClientMessage,
+  {
+    type: {
+      [Type in keyof RequestResponses]: RequestResponses[Type] extends 'roomControlApplied'
+        ? Type
+        : never;
+    }[keyof RequestResponses];
+  }
+>;
 
 // --- Shared types ---
 
@@ -283,6 +338,7 @@ export interface ChatEntry {
 }
 
 export interface RoomSnapshot {
+  chatSessionId?: string;
   participants: ParticipantInfo[];
   messages: ChatEntry[];
   yourRole: string;

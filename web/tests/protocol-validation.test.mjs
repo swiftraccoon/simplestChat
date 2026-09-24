@@ -207,6 +207,7 @@ const fixtures = [
   })),
   ...['consumerResumed', 'consumerPaused'].map((type) => ({ type, consumerId: 'consumer' })),
   { type: 'mediaControlApplied', requestId: 'control-1' },
+  { type: 'roomControlApplied', requestId: 'room-control-1' },
   { type: 'reconnectResult', success: false, participantId: '' },
   {
     type: 'iceRestarted',
@@ -227,6 +228,12 @@ const fixtures = [
     message: { ...chat, recipientId: 'self', recipientName: 'Recipient' },
   },
   { type: 'messageAck', clientMessageId: 'draft', message: chat },
+  {
+    type: 'messageRetryResult',
+    clientMessageId: 'draft',
+    outcome: 'unknown',
+    reason: 'receipt_expired',
+  },
   { type: 'socialResponse', requestId: 'request', action: 'getRoomSnapshot', data: snapshot },
   { type: 'socialError', requestId: 'request', clientMessageId: 'draft', message: 'Test error' },
   { type: 'nicknameChanged', participantId: 'participant', nickname: 'New name' },
@@ -246,7 +253,8 @@ const fixtures = [
   { type: 'voiceRequested', participantId: 'participant', displayName: 'Person' },
   { type: 'roomSettingsChanged', settings },
   { type: 'topicChanged', topic: '', changedBy: 'moderator' },
-  { type: 'lobbyWaiting', roomName: 'Room', topic: null, participantCount: 1 },
+  { type: 'lobbyWaiting', roomName: 'Room', topic: null, participantCount: 1, moderatorCount: 1 },
+  { type: 'lobbyStatus', participantCount: 1, moderatorCount: 0 },
   { type: 'lobbyJoin', participantId: 'participant', displayName: 'Guest', authenticated: false },
   { type: 'lobbyDenied', reason: null },
   { type: 'lobbyAdmitted' },
@@ -329,6 +337,41 @@ test('media control acknowledgements require a bounded correlation ID', () => {
     type: 'mediaControlApplied',
     requestId: 'control-1',
   });
+});
+
+test('chat retry results use bounded identity and finite reasons; session binding is a UUID', () => {
+  const result = {
+    type: 'messageRetryResult',
+    clientMessageId: 'draft-1',
+    outcome: 'unknown',
+    reason: 'receipt_expired',
+  };
+  for (const clientMessageId of ['', 'x'.repeat(65), 'unsafe\n', 1, null]) {
+    assert.throws(() => decode({ ...result, clientMessageId }), invalid);
+  }
+  for (const reason of ['missing', '', 1, null])
+    assert.throws(() => decode({ ...result, reason }), invalid);
+  assert.throws(() => decode({ ...result, outcome: 'sent' }), invalid);
+  for (const chatSessionId of ['', 'not-a-session', 'x'.repeat(1000), 1]) {
+    assert.throws(
+      () =>
+        decode({
+          type: 'socialResponse',
+          requestId: 'snapshot',
+          action: 'getRoomSnapshot',
+          data: { ...snapshot, chatSessionId },
+        }),
+      invalid,
+    );
+  }
+  const chatSessionId = 'ea1ed7c7-e66a-43ec-bd9d-106731208902';
+  const valid = decode({
+    type: 'socialResponse',
+    requestId: 'snapshot',
+    action: 'getRoomSnapshot',
+    data: { ...snapshot, chatSessionId },
+  });
+  assert.equal(valid.data.chatSessionId, chatSessionId);
 });
 
 test('deferred authentication renewal requires bounded integer timing fields', () => {

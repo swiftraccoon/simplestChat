@@ -43,6 +43,11 @@
           password. A link does not bypass the room's entry rules. Keep passwords separate and share
           them only with the people you intend to invite.
         </p>
+        <p>
+          Room links, cards, and browser Back or Forward select a room. Press Join to enter it. The
+          simplestChat name at the top and Leave return you home. The lobby shows whether a
+          moderator is connected; you can keep waiting or cancel if nobody is available.
+        </p>
       </section>
       <section aria-labelledby="media">
         <h2 id="media">Camera and sound</h2>
@@ -70,6 +75,10 @@
           your view. They do not mute that person's microphone for anyone else. A browser may block
           sound until you interact with the page; use the playback recovery control when offered.
         </p>
+        <p>
+          Screen-sharing status tells you whether screen audio is included. Browser and source
+          support varies; sharing a window or screen does not always include its sound.
+        </p>
       </section>
       <section aria-labelledby="messages">
         <h2 id="messages">Messages and privacy</h2>
@@ -79,9 +88,11 @@
           conversation before sending. Drafts and sent-message recall stay with that conversation.
         </p>
         <p>
-          A pending message has not yet been confirmed. If delivery remains unconfirmed, reconnect
-          and check before sending it again: it may already have arrived. Private messages cannot be
-          sent to someone who has left, opted out or blocked delivery.
+          A pending message has not yet been confirmed. If it stays unconfirmed, use
+          <strong>Retry</strong> to check the original send. Confirmation is limited to the current
+          room session and may become unavailable. Copying it to a draft and sending again creates a
+          new message that could duplicate the original. Private messages cannot be sent to someone
+          who has left, opted out or blocked delivery.
         </p>
         <p>
           Chat preferences let you turn private messages off and ignore participants. Ignoring is
@@ -106,9 +117,10 @@
           your rooms. Availability depends on the server's account and registration settings.
         </p>
         <p>
-          <strong>Room settings</strong> change the room for everyone and apply immediately. Entry
-          rules, lobby approval and participation permissions are separate: admitting someone does
-          not necessarily let them broadcast or speak in a moderated room.
+          <strong>Room settings</strong> change the room for everyone. Wait for confirmation; failed
+          edits stay visible so you can check the room state and retry. Entry rules, lobby approval
+          and participation permissions are separate: admitting someone does not necessarily let
+          them broadcast or speak in a moderated room.
         </p>
         <p>
           Use membership roles to delegate moderation carefully. Moderation actions are not the same
@@ -185,14 +197,17 @@
           <dd>
             Check your output device, system volume, room volume and that person's viewing controls.
             Ask whether they are broadcasting. Use the playback recovery control if the browser
-            requests a gesture.
+            requests a gesture. Your settings also offers a short speaker test and, in supported
+            browsers, an output-device choice. Other browsers use your system output device.
           </dd>
           <dt>Chat connects but video does not arrive</dt>
           <dd>
             Chat and media use different connections. A connected status alone does not prove video
-            is working. Check whether the person is publishing; if the problem persists, leave and
-            rejoin explicitly. That stops your current capture and may interrupt private
-            conversations. A network restriction may need help from the server operator.
+            is working. Check whether the person is publishing, then try
+            <strong>Refresh incoming media</strong>. This keeps your microphone and camera settings.
+            If the problem persists, leave and rejoin explicitly; that stops your capture and may
+            interrupt private conversations. A network restriction may need help from the server
+            operator.
           </dd>
           <dt>I was disconnected</dt>
           <dd>

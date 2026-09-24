@@ -5,6 +5,7 @@ import type {
   TelemetryMediaSource,
 } from './telemetry-types';
 import type {
+  ClientMessage,
   RoomSettings,
   RoomSettingsPatch,
   ServerMessage,
@@ -14,9 +15,16 @@ import type {
   SocialResponse,
   SocialResponses,
   RoomSnapshot,
+  RoomControl,
 } from './protocol';
 import { SignalingClient } from './signaling';
-import { MediaManager, type CapturePreferences, type RemoteVideoQuality } from './media';
+import {
+  MediaManager,
+  type CapturePreferences,
+  type RemoteVideoQuality,
+  type ScreenShareResult,
+  type ScreenShareAudio,
+} from './media';
 
 export interface Participant {
   id: string;
@@ -74,7 +82,13 @@ export type RoomEventHandler = {
   onRoomSettingsChanged: (settings: RoomSettings) => void;
   onTopicChanged: (topic: string, changedBy: string) => void;
   onVoiceRequested: (participantId: string, displayName: string) => void;
-  onLobbyWaiting: (roomName: string, topic: string | undefined, count: number) => void;
+  onLobbyWaiting: (
+    roomName: string,
+    topic: string | undefined,
+    count: number,
+    moderators: number,
+  ) => void;
+  onLobbyStatus?: (count: number, moderators: number) => void;
   onLobbyJoin: (participantId: string, displayName: string) => void;
   onLobbyAdmitted: () => void;
   onLobbyDenied: (reason?: string) => void;
@@ -174,6 +188,7 @@ export class RoomClient {
   private membershipEstablished = false;
   private recoveryPromise: Promise<void> | null = null;
   private consumeQueue: Promise<void> = Promise.resolve();
+  private incomingRefresh: Promise<void> | null = null;
   private pendingConsumes = new Map<string, Promise<void>>();
   // Producers known to be paused — prevents showing black tiles from race condition
   // where ProducerPaused arrives before consumeProducer finishes
@@ -196,6 +211,10 @@ export class RoomClient {
       reject: (error: Error) => void;
       timer: ReturnType<typeof setTimeout>;
     }
+  >();
+  private pendingControls = new Map<
+    RoomControl['type'],
+    { generation: number; connection: number }
   >();
 
   constructor(signaling: SignalingClient, events: RoomEventHandler) {
@@ -452,7 +471,12 @@ export class RoomClient {
     if (response.type === 'lobbyWaiting') {
       this.signalCall({ type: 'waiting' });
       this.beginAdmission();
-      this.events.onLobbyWaiting(response.roomName, response.topic, response.participantCount);
+      this.events.onLobbyWaiting(
+        response.roomName,
+        response.topic,
+        response.participantCount,
+        response.moderatorCount,
+      );
       return 'lobby';
     }
 
@@ -608,16 +632,37 @@ export class RoomClient {
     }
   }
 
-  sendChat(content: string, clientMessageId = crypto.randomUUID()): void {
+  sendChat(content: string, clientMessageId = crypto.randomUUID(), sequence?: number): void {
     if (!this.connected) throw new Error('Reconnecting — wait before sending');
     if (!this.canChat) throw new Error('You are not allowed to chat');
-    this.signaling.send({ type: 'chatMessage', content, clientMessageId });
+    this.signaling.send({
+      type: 'chatMessage',
+      content,
+      clientMessageId,
+      ...(sequence !== undefined && { sequence }),
+    });
   }
 
-  sendPrivate(targetParticipantId: string, content: string, clientMessageId: string): void {
+  sendPrivate(
+    targetParticipantId: string,
+    content: string,
+    clientMessageId: string,
+    sequence?: number,
+  ): void {
     if (!this.connected) throw new Error('Reconnecting — wait before sending');
     if (!this.canChat) throw new Error('You are not allowed to chat');
-    this.signaling.send({ type: 'privateMessage', targetParticipantId, content, clientMessageId });
+    this.signaling.send({
+      type: 'privateMessage',
+      targetParticipantId,
+      content,
+      clientMessageId,
+      ...(sequence !== undefined && { sequence }),
+    });
+  }
+
+  retryChat(message: Omit<Extract<ClientMessage, { type: 'retryChatMessage' }>, 'type'>): void {
+    if (!this.connected) throw new Error('Reconnecting — wait before retrying');
+    this.signaling.send({ type: 'retryChatMessage', ...message });
   }
 
   requestSocial<const Args extends SocialRequestArguments<SocialAction>>(
@@ -746,15 +791,75 @@ export class RoomClient {
     return this.media !== null && this.mediaReady;
   }
 
-  async startScreenShare(): Promise<boolean> {
-    if (!this.media) return false;
-    try {
-      const result = await this.media.startScreenShare();
-      return result !== null;
-    } catch (e) {
-      console.error('[room] screen share failed:', e);
-      return false;
+  /** Explicitly replace incoming subscriptions without touching local capture or mute intent.
+   * Completion confirms subscription setup; decoded media may still be unavailable.
+   * Membership/transport replacement retires this action before any new subscription.
+   */
+  refreshIncomingMedia(): Promise<void> {
+    if (this.incomingRefresh) return this.incomingRefresh;
+    const task = this.refreshIncomingSubscriptions().finally(() => {
+      if (this.incomingRefresh === task) this.incomingRefresh = null;
+    });
+    this.incomingRefresh = task;
+    return task;
+  }
+
+  private async refreshIncomingSubscriptions(): Promise<void> {
+    const media = this.media;
+    if (!media || !this.mediaReady || !this.connected)
+      throw new Error('Wait for the room to reconnect before retrying incoming media');
+    const generation = this.generation;
+    const connection = this.connectionGeneration;
+    const current = () =>
+      this.media === media &&
+      this.generation === generation &&
+      this.connectionGeneration === connection &&
+      this.connected;
+    await this.consumeQueue;
+    if (!current()) throw new Error('The room connection changed');
+    // Snapshot this action's bounded roster. Live Map iterators can otherwise
+    // keep visiting producers added while earlier retirement ACKs are pending.
+    const subscriptions = Array.from(this.participants.values()).flatMap((participant) =>
+      participant.id === this.localId
+        ? []
+        : Array.from(participant.producers, ([producerId, metadata]) => ({
+            participantId: participant.id,
+            producerId,
+            metadata,
+          })),
+    );
+    let failures = 0;
+    for (const { participantId, producerId, metadata } of subscriptions) {
+      if (!current()) throw new Error('The room connection changed');
+      if (this.participants.get(participantId)?.producers.get(producerId) !== metadata) continue;
+      try {
+        await media.retireConsumerByProducer(producerId);
+        if (!current()) throw new Error('The room connection changed');
+        if (this.participants.get(participantId)?.producers.get(producerId) !== metadata) continue;
+        await this.consumeProducer(participantId, producerId, metadata.kind, metadata.source);
+        if (this.failedConsumes.has(producerId)) failures++;
+      } catch {
+        if (!current()) throw new Error('The room connection changed');
+        failures++;
+      }
     }
+    if (!current()) throw new Error('The room connection changed');
+    if (failures > 0)
+      throw new Error(
+        'Some incoming media could not be refreshed. Check your connection and try again.',
+      );
+  }
+
+  async startScreenShare(): Promise<ScreenShareResult> {
+    return this.media?.startScreenShare() ?? { status: 'not_started', reason: 'not_ready' };
+  }
+
+  get screenShareAudio(): ScreenShareAudio {
+    return this.media?.screenShareAudio ?? 'off';
+  }
+
+  set onScreenShareAudioChanged(cb: ((state: ScreenShareAudio) => void) | null) {
+    if (this.media) this.media.onScreenShareAudioChanged = cb;
   }
 
   stopScreenShare(): void {
@@ -798,40 +903,40 @@ export class RoomClient {
 
   // --- Moderation methods ---
 
-  closeCam(targetId: string): void {
-    this.signaling.send({ type: 'closeCam', targetParticipantId: targetId });
+  closeCam(targetId: string): Promise<void> {
+    return this.requestControl({ type: 'closeCam', targetParticipantId: targetId });
   }
 
-  camBan(targetId: string, reason?: string): void {
-    this.signaling.send({
+  camBan(targetId: string, reason?: string): Promise<void> {
+    return this.requestControl({
       type: 'camBan',
       targetParticipantId: targetId,
       ...(reason !== undefined && { reason }),
     });
   }
 
-  camUnban(targetId: string): void {
-    this.signaling.send({ type: 'camUnban', targetParticipantId: targetId });
+  camUnban(targetId: string): Promise<void> {
+    return this.requestControl({ type: 'camUnban', targetParticipantId: targetId });
   }
 
-  textMute(targetId: string): void {
-    this.signaling.send({ type: 'textMute', targetParticipantId: targetId });
+  textMute(targetId: string): Promise<void> {
+    return this.requestControl({ type: 'textMute', targetParticipantId: targetId });
   }
 
-  textUnmute(targetId: string): void {
-    this.signaling.send({ type: 'textUnmute', targetParticipantId: targetId });
+  textUnmute(targetId: string): Promise<void> {
+    return this.requestControl({ type: 'textUnmute', targetParticipantId: targetId });
   }
 
-  kick(targetId: string, reason?: string): void {
-    this.signaling.send({
+  kick(targetId: string, reason?: string): Promise<void> {
+    return this.requestControl({
       type: 'kick',
       targetParticipantId: targetId,
       ...(reason !== undefined && { reason }),
     });
   }
 
-  ban(targetId: string, reason?: string, duration?: number): void {
-    this.signaling.send({
+  ban(targetId: string, reason?: string, duration?: number): Promise<void> {
+    return this.requestControl({
       type: 'ban',
       targetParticipantId: targetId,
       ...(reason !== undefined && { reason }),
@@ -839,32 +944,67 @@ export class RoomClient {
     });
   }
 
-  unban(targetUserId: string): void {
-    this.signaling.send({ type: 'unban', targetUserId });
+  unban(targetUserId: string): Promise<void> {
+    return this.requestControl({ type: 'unban', targetUserId });
   }
 
-  setRole(targetId: string, role: number): void {
-    this.signaling.send({ type: 'setRole', targetParticipantId: targetId, role });
+  setRole(targetId: string, role: number): Promise<void> {
+    return this.requestControl({ type: 'setRole', targetParticipantId: targetId, role });
   }
 
-  requestVoice(): void {
-    this.signaling.send({ type: 'requestVoice' });
+  requestVoice(): Promise<void> {
+    return this.requestControl({ type: 'requestVoice' });
   }
 
-  updateRoomSettings(settings: RoomSettingsPatch): void {
-    this.signaling.send({ type: 'updateRoomSettings', ...settings });
+  updateRoomSettings(settings: RoomSettingsPatch): Promise<void> {
+    return this.requestControl({ type: 'updateRoomSettings', ...settings });
   }
 
-  setTopic(topic: string): void {
-    this.signaling.send({ type: 'setTopic', topic });
+  setTopic(topic: string): Promise<void> {
+    return this.requestControl({ type: 'setTopic', topic });
   }
 
-  admitFromLobby(targetId: string): void {
-    this.signaling.send({ type: 'admitFromLobby', targetParticipantId: targetId });
+  admitFromLobby(targetId: string): Promise<void> {
+    return this.requestControl({ type: 'admitFromLobby', targetParticipantId: targetId });
   }
 
-  denyFromLobby(targetId: string): void {
-    this.signaling.send({ type: 'denyFromLobby', targetParticipantId: targetId });
+  denyFromLobby(targetId: string): Promise<void> {
+    return this.requestControl({ type: 'denyFromLobby', targetParticipantId: targetId });
+  }
+
+  /** Confirm application, then reconcile uncertain results without resending a mutation. */
+  private async requestControl(message: RoomControl): Promise<void> {
+    if (!this.connected) throw new Error('Reconnect to the room before changing it');
+    const generation = this.generation;
+    const connection = this.connectionGeneration;
+    const pending = this.pendingControls.get(message.type);
+    if (pending?.generation === generation && pending.connection === connection)
+      throw new Error('This action is still awaiting confirmation');
+    const current = () =>
+      generation === this.generation && connection === this.connectionGeneration;
+    const attempt = { generation, connection };
+    this.pendingControls.set(message.type, attempt);
+    try {
+      // Room control allows five seconds for admission and fifteen for persistence.
+      await this.signaling.request(message, 'roomControlApplied', 25_000);
+      if (!current()) throw new Error('The room session changed before confirmation');
+    } catch (error) {
+      if (!current()) throw new Error('The room session changed; check its current state');
+      try {
+        await this.requestSocial('getRoomSnapshot');
+      } catch {
+        throw new Error(
+          'The result could not be confirmed. Reconnect and check before trying again.',
+        );
+      }
+      if (!current()) throw new Error('The room session changed; check its current state');
+      throw new Error(
+        `${error instanceof Error ? error.message : 'The action could not be confirmed'}. Current room state has been refreshed; check it before retrying.`,
+      );
+    } finally {
+      if (this.pendingControls.get(message.type) === attempt)
+        this.pendingControls.delete(message.type);
+    }
   }
 
   private attemptReconnect(): Promise<void> {
@@ -1088,10 +1228,12 @@ export class RoomClient {
     if (pending) return pending;
     const media = this.media;
     const generation = this.generation;
+    const connection = this.connectionGeneration;
     const metadata = this.participants.get(participantId)?.producers.get(producerId);
     if (!media || !this.mediaReady || !metadata) return Promise.resolve();
     const current = (): boolean =>
       generation === this.generation &&
+      connection === this.connectionGeneration &&
       this.media === media &&
       this.participants.get(participantId)?.producers.get(producerId) === metadata;
     // Keep receive setup and its UI updates ordered when several newProducer
@@ -1209,6 +1351,7 @@ export class RoomClient {
         break;
       }
       case 'messageAck':
+      case 'messageRetryResult':
       case 'privateMessageReceived': {
         this.events.onSocialEvent?.(msg);
         break;
@@ -1450,7 +1593,16 @@ export class RoomClient {
       case 'lobbyWaiting': {
         this.signalCall({ type: 'waiting' });
         this.beginAdmission();
-        this.events.onLobbyWaiting(msg.roomName, msg.topic, msg.participantCount);
+        this.events.onLobbyWaiting(
+          msg.roomName,
+          msg.topic,
+          msg.participantCount,
+          msg.moderatorCount,
+        );
+        break;
+      }
+      case 'lobbyStatus': {
+        this.events.onLobbyStatus?.(msg.participantCount, msg.moderatorCount);
         break;
       }
       case 'lobbyJoin': {
@@ -1481,6 +1633,7 @@ export class RoomClient {
       case 'consumerPaused':
       case 'consumerResumed':
       case 'mediaControlApplied':
+      case 'roomControlApplied':
       case 'error':
       case 'producerCreated':
       case 'reconnectResult':

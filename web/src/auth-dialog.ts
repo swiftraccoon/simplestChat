@@ -45,6 +45,18 @@ export class AuthDialogFlow {
     return true;
   }
 
+  /** An external account change supersedes even an unresolved cookie mutation. */
+  retire(): void {
+    const attempt = this.attempt;
+    this.attempt = null;
+    this.creatingSession = false;
+    this.uncertain = false;
+    if (attempt) {
+      attempt.controller.abort();
+      this.retireCeremony();
+    }
+  }
+
   dismiss(): boolean {
     // Remain visible until the session result is known. Cancelling an HTTP
     // request would not reliably prevent its HttpOnly cookie being installed.

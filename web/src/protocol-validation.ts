@@ -66,6 +66,10 @@ function requestId(value: unknown): string {
 }
 const optionalRequestId: Decoder<string | undefined> = (value) =>
   value === undefined ? undefined : requestId(value);
+const chatSessionId: Decoder<string> = (value) => {
+  const id = text(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id) ? id : invalid();
+};
 
 const mediaKind = choice('audio', 'video');
 const direction = choice('sendrecv', 'sendonly', 'recvonly', 'inactive');
@@ -116,6 +120,7 @@ const lobbyEntry = object<{ participantId: string; displayName: string; authenti
   authenticated: boolean,
 });
 const snapshot = object<RoomSnapshot>({
+  chatSessionId: optional(chatSessionId),
   participants: list(participant),
   messages: list(chat),
   yourRole: text,
@@ -406,6 +411,7 @@ const messages = {
   consumerResumed: message('consumerResumed', { requestId: optionalRequestId, consumerId: text }),
   consumerPaused: message('consumerPaused', { requestId: optionalRequestId, consumerId: text }),
   mediaControlApplied: message('mediaControlApplied', { requestId }),
+  roomControlApplied: message('roomControlApplied', { requestId }),
   reconnectResult: message('reconnectResult', {
     requestId: optionalRequestId,
     success: boolean,
@@ -439,6 +445,18 @@ const messages = {
   }),
   privateMessageReceived: message('privateMessageReceived', { message: chat }),
   messageAck: message('messageAck', { clientMessageId: text, message: chat }),
+  messageRetryResult: message('messageRetryResult', {
+    clientMessageId: requestId,
+    outcome: choice('unknown'),
+    reason: choice(
+      'session_changed',
+      'receipt_expired',
+      'sequence_superseded',
+      'capacity',
+      'conflict',
+      'recipient_unconfirmed',
+    ),
+  }),
   socialResponse,
   socialError: message('socialError', {
     requestId: optionalRequestId,
@@ -470,7 +488,9 @@ const messages = {
     roomName: text,
     topic: optional(text),
     participantCount: uint32,
+    moderatorCount: uint32,
   }),
+  lobbyStatus: message('lobbyStatus', { participantCount: uint32, moderatorCount: uint32 }),
   lobbyJoin: message('lobbyJoin', {
     participantId: text,
     displayName: text,

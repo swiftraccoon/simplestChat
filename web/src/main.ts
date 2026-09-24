@@ -9,6 +9,9 @@ import {
 import * as icons from './icons';
 import { AuthManager, SessionOutcomeUnknownError } from './auth';
 import { AuthDialogFlow, type AuthDialogAttempt } from './auth-dialog';
+import { AccountSessionSync } from './account-session-sync';
+import { RoomNavigation } from './room-navigation';
+import type { ScreenShareResult } from './media';
 import { ClientTelemetry } from './telemetry';
 import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './media-telemetry';
 import { MediaControls } from './media-controls';
@@ -19,7 +22,7 @@ import { configureSettingsDialog } from './settings-dialog';
 import { avatarColors } from './avatar-colors';
 import { spatialLayerForRenderedWidth } from './layer-cap';
 import './community.css';
-import type { CreateRoomRequest } from './protocol';
+import type { CreateRoomRequest, RoomSettingsPatch } from './protocol';
 
 declare const __APP_REVISION__: string;
 const telemetry = new ClientTelemetry(__APP_REVISION__);
@@ -232,6 +235,11 @@ function stopObservingTileSize(tileKey: string): void {
   tileLayerCaps.delete(tileKey);
 }
 const lobbyWaiters = new Map<string, string>(); // participantId → displayName
+const lobbyActions = new Map<string, { pending: boolean; error?: string }>();
+let roomSettingsPending = false;
+let roomSettingsAttempt = 0;
+let navigationPending = false;
+let departureInProgress: Promise<void> | null = null;
 
 // Active speaker / audio level tracking — avoids querySelectorAll on every event
 const AUDIO_LEVEL_THRESHOLD = -50; // dB; only highlight above this
@@ -248,10 +256,6 @@ let pttActivation = 0;
 // Restore display name from localStorage
 const savedName = localStorage.getItem('displayName');
 if (savedName) nameInput.value = savedName;
-
-// Check for room in URL hash
-const hashRoom = window.location.hash.slice(1);
-if (hashRoom) roomInput.value = hashRoom;
 
 // --- Utility ---
 function clearChildren(el: HTMLElement): void {
@@ -326,7 +330,10 @@ function showModerationMenu(targetId: string, targetName: string, x: number, y: 
   const isMod = role === 'owner' || role === 'admin' || role === 'moderator';
   const isAdmin = role === 'owner' || role === 'admin';
 
-  const items: { label: string; action: () => void; danger?: boolean }[] = [];
+  const owner = room;
+  if (!owner) return;
+  const membership = owner.membershipVersion;
+  const items: { label: string; action: () => void | Promise<void>; danger?: boolean }[] = [];
 
   const isSelf = targetId === room?.localParticipantId;
   const authenticated = isSelf
@@ -360,16 +367,16 @@ function showModerationMenu(targetId: string, targetName: string, x: number, y: 
 
   // Mod+ actions
   if (isMod && !isSelf) {
-    items.push({ label: 'Close Camera', action: () => room?.closeCam(targetId) });
-    items.push({ label: 'Cam Unban', action: () => room?.camUnban(targetId) });
-    items.push({ label: 'Mute Text', action: () => room?.textMute(targetId) });
-    items.push({ label: 'Text Unmute', action: () => room?.textUnmute(targetId) });
-    items.push({ label: 'Kick', action: () => room?.kick(targetId), danger: true });
+    items.push({ label: 'Close Camera', action: () => owner.closeCam(targetId) });
+    items.push({ label: 'Cam Unban', action: () => owner.camUnban(targetId) });
+    items.push({ label: 'Mute Text', action: () => owner.textMute(targetId) });
+    items.push({ label: 'Text Unmute', action: () => owner.textUnmute(targetId) });
+    items.push({ label: 'Kick', action: () => owner.kick(targetId), danger: true });
   }
 
   // Admin+ actions
   if (isAdmin && !isSelf) {
-    items.push({ label: 'Cam Ban', action: () => room?.camBan(targetId), danger: true });
+    items.push({ label: 'Cam Ban', action: () => owner.camBan(targetId), danger: true });
     items.push({ label: 'Ban…', action: () => community.ban(targetId, targetName), danger: true });
   }
 
@@ -377,14 +384,42 @@ function showModerationMenu(targetId: string, targetName: string, x: number, y: 
   menu.id = 'mod-menu';
   menu.className = 'mod-context-menu';
 
+  let pending = false;
+  const error = el('p', '', 'auth-error');
+  error.setAttribute('role', 'alert');
+  error.hidden = true;
+  const apply = async (action: () => void | Promise<void>): Promise<void> => {
+    if (pending || room !== owner || owner.membershipVersion !== membership) return;
+    pending = true;
+    error.hidden = true;
+    menu.setAttribute('aria-busy', 'true');
+    for (const button of menu.querySelectorAll('button')) button.disabled = true;
+    try {
+      await action();
+      menu.remove();
+    } catch (failure) {
+      if (room === owner && owner.membershipVersion === membership) {
+        const message = failure instanceof Error ? failure.message : 'The action was not confirmed';
+        if (menu.isConnected) {
+          error.textContent = message;
+          error.hidden = false;
+        } else showToast(message, 7000);
+      }
+    } finally {
+      pending = false;
+      menu.setAttribute('aria-busy', 'false');
+      for (const button of menu.querySelectorAll('button')) button.disabled = false;
+    }
+  };
+
   for (const item of items) {
     const btn = document.createElement('button');
     btn.textContent = item.label;
     if (item.danger) btn.className = 'danger';
-    btn.addEventListener('click', () => {
-      item.action();
-      menu.remove();
-    });
+    btn.addEventListener(
+      'click',
+      asyncUiAction(() => apply(item.action), 'Could not apply room action'),
+    );
     menu.appendChild(btn);
   }
 
@@ -412,10 +447,13 @@ function showModerationMenu(targetId: string, targetName: string, x: number, y: 
     for (const opt of roleOptions) {
       const btn = document.createElement('button');
       btn.textContent = opt.label;
-      btn.addEventListener('click', () => {
-        room?.setRole(targetId, opt.value);
-        menu.remove();
-      });
+      btn.addEventListener(
+        'click',
+        asyncUiAction(
+          () => apply(() => owner.setRole(targetId, opt.value)),
+          'Could not change role',
+        ),
+      );
       group.appendChild(btn);
     }
     menu.appendChild(group);
@@ -426,10 +464,11 @@ function showModerationMenu(targetId: string, targetName: string, x: number, y: 
   menu.style.top = `${Math.max(8, parseInt(menu.style.top, 10))}px`;
   menu.style.maxHeight = `${window.innerHeight - 16}px`;
   menu.style.overflowY = 'auto';
+  menu.append(error);
   document.body.appendChild(menu);
 
   const close = (e: MouseEvent) => {
-    if (!menu.contains(e.target as Node)) {
+    if (!pending && !menu.contains(e.target as Node)) {
       menu.remove();
       document.removeEventListener('click', close);
     }
@@ -535,21 +574,29 @@ function renderLobbyPanel(): void {
     const admitBtn = document.createElement('button');
     admitBtn.className = 'lobby-admit-btn';
     admitBtn.textContent = 'Admit';
-    admitBtn.addEventListener('click', () => {
-      room?.admitFromLobby(id);
-      lobbyWaiters.delete(id);
-      renderLobbyPanel();
-    });
+    admitBtn.addEventListener(
+      'click',
+      asyncUiAction(() => applyLobbyAction(id, 'admit'), 'Could not admit participant'),
+    );
 
     const denyBtn = document.createElement('button');
     denyBtn.className = 'lobby-deny-btn';
     denyBtn.textContent = 'Deny';
-    denyBtn.addEventListener('click', () => {
-      room?.denyFromLobby(id);
-      lobbyWaiters.delete(id);
-      renderLobbyPanel();
-    });
+    denyBtn.addEventListener(
+      'click',
+      asyncUiAction(() => applyLobbyAction(id, 'deny'), 'Could not deny participant'),
+    );
 
+    const state = lobbyActions.get(id);
+    admitBtn.disabled = Boolean(state?.pending) || !room?.connected;
+    denyBtn.disabled = admitBtn.disabled;
+    li.setAttribute('aria-busy', String(Boolean(state?.pending)));
+    if (state?.pending) nameSpan.append(el('span', ' · Awaiting confirmation…'));
+    if (state?.error) {
+      const error = el('p', state.error, 'auth-error');
+      error.setAttribute('role', 'alert');
+      li.append(error);
+    }
     actions.appendChild(admitBtn);
     actions.appendChild(denyBtn);
     li.appendChild(nameSpan);
@@ -558,7 +605,36 @@ function renderLobbyPanel(): void {
   }
 }
 
+async function applyLobbyAction(id: string, action: 'admit' | 'deny'): Promise<void> {
+  const owner = room;
+  if (!owner || lobbyActions.get(id)?.pending) return;
+  const membership = owner.membershipVersion;
+  const current = () => room === owner && owner.membershipVersion === membership;
+  lobbyActions.set(id, { pending: true });
+  renderLobbyPanel();
+  try {
+    if (action === 'admit') await owner.admitFromLobby(id);
+    else await owner.denyFromLobby(id);
+    if (current()) {
+      lobbyWaiters.delete(id);
+      lobbyActions.delete(id);
+    }
+  } catch (error) {
+    if (current()) {
+      const message = error instanceof Error ? error.message : 'The result was not confirmed';
+      if (lobbyWaiters.has(id)) lobbyActions.set(id, { pending: false, error: message });
+      else {
+        lobbyActions.delete(id);
+        showToast(message);
+      }
+    }
+  } finally {
+    if (current()) renderLobbyPanel();
+  }
+}
+
 function populateRoomSettingsModal(): void {
+  if (roomSettingsPending) return;
   const settings = room?.roomSettings;
   if (!settings) return;
   rsModerated.checked = settings.moderated;
@@ -858,6 +934,8 @@ const mediaTelemetry = new MediaTelemetry(
 );
 window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
+  navigation.dispose();
+  accountSync.dispose();
   mediaTelemetry.dispose();
   callTelemetry.dispose();
   telemetry.dispose();
@@ -893,7 +971,7 @@ signaling.setOnStatusChange((status) => {
     ? 'Rejoining room…'
     : status.charAt(0).toUpperCase() + status.slice(1);
   connectionStatus.className = `status ${awaitingRoom ? 'connecting' : status}`;
-  joinBtn.disabled = status !== 'connected' || !nameInput.value.trim() || !roomInput.value.trim();
+  updateJoinBtn();
   document.getElementById('connection-retry-notice')?.remove();
   if (status === 'connected' && !room?.currentRoomId) signaling.completeRestartRecovery();
   if (status === 'disconnected' && signaling.reconnectExhausted && !room?.currentRoomId) {
@@ -906,6 +984,35 @@ signaling.setOnStatusChange((status) => {
   }
 });
 
+const navigation = new RoomNavigation({
+  leave: leaveCurrentRoom,
+  select: (id) => {
+    roomInput.value = id;
+    updateJoinBtn();
+    if (document.activeElement?.closest('.room-card')) {
+      if (!joinBtn.disabled) joinBtn.focus();
+      else if (!nameInput.value.trim()) nameInput.focus();
+      else roomInput.focus();
+    }
+  },
+  pending: (pending) => {
+    navigationPending = pending;
+    updateJoinBtn();
+  },
+  error: (error) => showToast(error instanceof Error ? error.message : 'Could not change rooms'),
+});
+
+const accountSync = new AccountSessionSync({
+  reconcile: () => auth.reconcileSharedSession(),
+  invalidate: () => {
+    authFlow.retire();
+    dismissAuth();
+    auth.invalidateSharedSession();
+  },
+  canCheck: () => auth.canCheckSharedSession,
+});
+auth.setSessionMutationHandler(() => accountSync.publish());
+
 // Try to restore auth session from cookie, then connect WS
 observeUiTask(
   auth.tryRestore().then(() => {
@@ -917,7 +1024,13 @@ observeUiTask(
 
 // --- Join form ---
 function updateJoinBtn(): void {
-  joinBtn.disabled = !signaling.connected || !nameInput.value.trim() || !roomInput.value.trim();
+  joinBtn.disabled =
+    navigationPending ||
+    departureInProgress !== null ||
+    room !== null ||
+    !signaling.connected ||
+    !nameInput.value.trim() ||
+    !/^[A-Za-z0-9_-]{1,128}$/.test(roomInput.value.trim());
 }
 
 nameInput.addEventListener('input', updateJoinBtn);
@@ -1004,7 +1117,7 @@ async function loadRoomBrowser(append = false): Promise<void> {
       card.className = 'room-card';
       card.tabIndex = 0;
       card.setAttribute('role', 'button');
-      card.setAttribute('aria-label', `Join ${r.display_name}`);
+      card.setAttribute('aria-label', `Select room ${r.display_name}`);
       card.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
@@ -1012,13 +1125,11 @@ async function loadRoomBrowser(append = false): Promise<void> {
         }
       });
       card.addEventListener('click', () => {
-        roomInput.value = r.id;
+        navigation.selectRoom(r.id);
         if (auth.displayName && !nameInput.value.trim()) {
           nameInput.value = auth.displayName;
         }
         updateJoinBtn();
-        if (nameInput.value.trim()) joinBtn.focus();
-        else nameInput.focus();
       });
 
       const info = document.createElement('div');
@@ -1181,6 +1292,8 @@ function dismissAuth(): boolean {
   loginPasskeyBtn.disabled = false;
   registerSubmit.disabled = false;
   registerPasskeyBtn.disabled = false;
+  loginSubmit.textContent = 'Sign In';
+  registerSubmit.textContent = 'Create Account';
   loginPasskeyBtn.textContent = 'Use a passkey';
   registerPasskeyBtn.textContent = 'Register with passkey';
   return true;
@@ -1235,7 +1348,7 @@ loginSubmit.addEventListener(
         error instanceof Error ? error.message : 'Login failed',
       );
     } finally {
-      if (!authFlow.isUncertain(attempt)) {
+      if (authFlow.current(attempt) && !authFlow.isUncertain(attempt)) {
         authFlow.finish(attempt);
         authSessionPending(false);
         clearAuthSecrets();
@@ -1292,7 +1405,7 @@ registerSubmit.addEventListener(
         error instanceof Error ? error.message : 'Registration failed',
       );
     } finally {
-      if (!authFlow.isUncertain(attempt)) {
+      if (authFlow.current(attempt) && !authFlow.isUncertain(attempt)) {
         authFlow.finish(attempt);
         authSessionPending(false);
         clearAuthSecrets();
@@ -1553,10 +1666,17 @@ joinBtn.addEventListener(
   asyncUiAction(async () => {
     const name = nameInput.value.trim();
     const roomId = roomInput.value.trim();
-    if (!name || !roomId) return;
+    if (
+      !name ||
+      !roomId ||
+      room ||
+      departureInProgress ||
+      navigationPending ||
+      !navigation.join(roomId)
+    )
+      return;
 
     localStorage.setItem('displayName', name);
-    window.location.hash = roomId;
 
     joinBtn.disabled = true;
     joinBtn.textContent = 'Joining...';
@@ -1698,6 +1818,8 @@ joinBtn.addEventListener(
               : participantId.slice(0, 8));
           if (participantId === room?.localParticipantId) {
             showToast(`Your role has been changed to ${newRole}`);
+            if (newRole !== 'owner' && newRole !== 'admin') roomSettingsModal.close();
+            handBtn.classList.remove('hand-raised');
           } else {
             showToast(`${targetName} is now ${newRole}`);
           }
@@ -1724,14 +1846,21 @@ joinBtn.addEventListener(
           const canGrant = role === 'owner' || role === 'admin' || role === 'moderator';
           if (canGrant) {
             showActionToast(`${displayName} is requesting voice`, [
-              { label: 'Grant', action: () => room?.setRole(participantId, 2) },
+              {
+                label: 'Grant',
+                action: () => {
+                  const owner = room;
+                  if (owner)
+                    observeUiTask(owner.setRole(participantId, 2), 'Could not grant voice');
+                },
+              },
               { label: 'Dismiss', action: () => {} },
             ]);
           } else {
             showToast(`${displayName} is requesting voice`);
           }
         },
-        onLobbyWaiting: (roomName, topic, count) => {
+        onLobbyWaiting: (roomName, topic, count, moderators) => {
           mediaControls.reset();
           roomTools.hidden = true;
           joinScreen.hidden = true;
@@ -1740,8 +1869,9 @@ joinBtn.addEventListener(
           lobbyRoomName.textContent = roomName;
           lobbyTopic.textContent = topic ?? '';
           lobbyTopic.hidden = !topic;
-          lobbyCount.textContent = `${count} participant${count !== 1 ? 's' : ''} in room`;
+          updateLobbyStatus(count, moderators);
         },
+        onLobbyStatus: updateLobbyStatus,
         onLobbyJoin: (participantId, displayName) => {
           lobbyWaiters.set(participantId, displayName);
           renderLobbyPanel();
@@ -1765,6 +1895,7 @@ joinBtn.addEventListener(
         onRecoveryState: (state, message) => {
           document.getElementById('room-recovery-notice')?.remove();
           roomRecovering = state !== 'connected';
+          if (state !== 'connected') retireRoomSettingsAction();
           if (state === 'connected') {
             connectionStatus.textContent = 'Connected';
             connectionStatus.className = 'status connected';
@@ -1831,7 +1962,7 @@ joinBtn.addEventListener(
       if (room) return;
       console.error('Failed to join:', e);
       alert(`Failed to join: ${e instanceof Error ? e.message : String(e)}`);
-      joinBtn.disabled = false;
+      updateJoinBtn();
       joinBtn.textContent = 'Join Room';
       updateJoinBtn();
     }
@@ -1863,8 +1994,14 @@ function applyJoinedRoomUI(): void {
     updateCamButton(room.videoEnabled);
     updateScreenButton(room.isScreenSharing);
     // Register callback so UI updates when browser's "Stop sharing" button is clicked
+    const owner = room;
+    const membership = owner.membershipVersion;
     room.onScreenShareStopped = () => {
-      updateScreenButton(false);
+      if (room === owner && owner.membershipVersion === membership) updateScreenButton(false);
+    };
+    room.onScreenShareAudioChanged = () => {
+      if (room === owner && owner.membershipVersion === membership)
+        updateScreenButton(owner.isScreenSharing);
     };
   } else {
     // Media unavailable (or not yet set up while waiting in lobby)
@@ -1917,23 +2054,27 @@ roomTopic.addEventListener('click', () => {
   }
 });
 
+function updateLobbyStatus(count: number, moderators: number): void {
+  lobbyCount.textContent = `${count} connected participant${count !== 1 ? 's' : ''} in room · ${moderators > 0 ? `${moderators} moderator${moderators !== 1 ? 's' : ''} connected` : 'No moderator is currently connected'}. ${moderators > 0 ? 'Your request is waiting for approval.' : 'You can wait here or return home; a moderator must join to admit you.'}`;
+  lobbyCount.setAttribute('role', 'status');
+}
+
 // --- Lobby Cancel ---
-lobbyCancelBtn.addEventListener(
-  'click',
-  asyncUiAction(leaveCurrentRoom, 'Could not finish leaving the room'),
-);
+lobbyCancelBtn.addEventListener('click', () => navigation.home());
 
 // --- Leave ---
-let departureInProgress: Promise<void> | null = null;
 
 function leaveCurrentRoom(): Promise<void> {
   departureInProgress ??= leaveRoomAndShowHome().finally(() => {
     departureInProgress = null;
+    updateJoinBtn();
   });
+  updateJoinBtn();
   return departureInProgress;
 }
 
 async function leaveRoomAndShowHome(): Promise<void> {
+  retireRoomSettingsAction();
   roomPasswordView?.cancel();
   roomPasswordView = null;
   roomTopicView?.close();
@@ -1960,6 +2101,7 @@ async function leaveRoomAndShowHome(): Promise<void> {
   scrollBottomBtn.hidden = true;
   remoteTiles.clear();
   lobbyWaiters.clear();
+  lobbyActions.clear();
 
   // Remove classic users panel if present
   document.getElementById('classic-users-panel')?.remove();
@@ -1977,7 +2119,7 @@ async function leaveRoomAndShowHome(): Promise<void> {
   camBtn.style.opacity = '';
   micBtn.classList.remove('active', 'muted', 'ptt-active');
   camBtn.classList.remove('active', 'muted');
-  screenBtn.classList.remove('active');
+  updateScreenButton(false);
   handBtn.hidden = true;
   handBtn.classList.remove('hand-raised');
   roomSettingsBtn.hidden = true;
@@ -2011,23 +2153,14 @@ async function leaveRoomAndShowHome(): Promise<void> {
   observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory');
 }
 
-leaveBtn.addEventListener(
-  'click',
-  asyncUiAction(leaveCurrentRoom, 'Could not finish leaving the room'),
-);
+leaveBtn.addEventListener('click', () => navigation.home());
 
 homeLink.addEventListener('click', (event) => {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
     return;
   event.preventDefault();
-  observeUiTask(
-    (async () => {
-      await leaveCurrentRoom();
-      history.replaceState(null, '', '/');
-      homeLink.focus();
-    })(),
-    'Could not return to the homepage',
-  );
+  navigation.home();
+  homeLink.focus();
 });
 
 // --- Control buttons ---
@@ -2067,13 +2200,30 @@ function updateCamButton(enabled: boolean): void {
   camBtn.classList.toggle('muted', !enabled);
 }
 
+function screenAudioLabel(): string {
+  switch (room?.screenShareAudio) {
+    case 'sharing':
+      return 'screen audio included';
+    case 'failed':
+      return 'screen audio failed';
+    case 'ended':
+      return 'screen audio ended';
+    case undefined:
+    case 'off':
+    case 'not_provided':
+      return 'no screen audio';
+  }
+}
+
 function updateScreenButton(active: boolean): void {
   setButtonContent(
     screenBtn,
     active ? icons.screenShareOff() : icons.screenShare(),
-    active ? 'Stop Sharing (S)' : 'Screen (S)',
+    active ? `Stop Sharing (S) — ${screenAudioLabel()}` : 'Screen (S)',
   );
   screenBtn.classList.toggle('active', active);
+  screenShareStatus.hidden = !active;
+  screenShareStatus.textContent = active ? `Sharing your screen · ${screenAudioLabel()}` : '';
 }
 
 /** Show/hide/update the local video tile based on current mic+cam state */
@@ -2315,6 +2465,64 @@ async function toggleCamera(): Promise<void> {
   }
 }
 
+const refreshMediaBtn = button(
+  'Refresh incoming media',
+  () => {
+    const owner = room;
+    if (!owner?.hasMedia || refreshMediaBtn.disabled) return;
+    const membership = owner.membershipVersion;
+    refreshMediaBtn.disabled = true;
+    refreshMediaBtn.setAttribute('aria-busy', 'true');
+    observeUiTask(
+      (async () => {
+        try {
+          await owner.refreshIncomingMedia();
+          if (room === owner && owner.membershipVersion === membership)
+            showToast(
+              'Incoming subscriptions refreshed. Your microphone and camera settings are unchanged.',
+            );
+        } catch (error) {
+          if (room === owner && owner.membershipVersion === membership)
+            showToast(
+              error instanceof Error ? error.message : 'Incoming media could not be refreshed',
+              7000,
+            );
+        } finally {
+          refreshMediaBtn.disabled = false;
+          refreshMediaBtn.setAttribute('aria-busy', 'false');
+        }
+      })(),
+      'Could not refresh incoming media',
+    );
+  },
+  'btn-secondary',
+);
+refreshMediaBtn.id = 'refresh-incoming-media';
+roomTools.appendChild(refreshMediaBtn);
+
+const screenShareStatus = el('span', '', 'settings-description');
+screenShareStatus.id = 'screen-share-status';
+screenShareStatus.setAttribute('role', 'status');
+screenShareStatus.hidden = true;
+roomTools.appendChild(screenShareStatus);
+
+const screenShareFailure: Record<
+  Extract<ScreenShareResult, { status: 'not_started' }>['reason'],
+  string
+> = {
+  cancelled_or_denied:
+    'Screen sharing was cancelled or permission was denied. Try again to choose a screen, window, or tab.',
+  unavailable: 'Screen sharing is not supported in this browser.',
+  not_ready: 'The call is reconnecting. Try sharing when it is ready.',
+  busy: 'A screen-sharing request is already in progress.',
+  superseded: 'Screen sharing was cancelled because the room changed.',
+  not_readable:
+    'Your browser could not access that screen. Check screen-recording permission in your system settings.',
+  no_source: 'No shareable screen or window was available.',
+  invalid_state: 'Return to this tab and click Screen to choose what to share.',
+  failed: 'Screen sharing could not start. Try choosing a source again.',
+};
+
 async function toggleScreenShare(): Promise<void> {
   const activeRoom = room;
   if (!activeRoom?.hasMedia) return;
@@ -2323,9 +2531,15 @@ async function toggleScreenShare(): Promise<void> {
     activeRoom.stopScreenShare();
     updateScreenButton(false);
   } else if (canStartBroadcast('screen')) {
-    const success = await activeRoom.startScreenShare();
-    if (room === activeRoom && membership === activeRoom.membershipVersion)
-      updateScreenButton(success);
+    const result = await activeRoom.startScreenShare();
+    if (room !== activeRoom || membership !== activeRoom.membershipVersion) return;
+    updateScreenButton(activeRoom.isScreenSharing);
+    if (result.status === 'not_started') showToast(screenShareFailure[result.reason], 7000);
+    else if (result.audio === 'failed')
+      showToast(
+        'Your screen is shared, but its audio could not start. Stop and share again to retry audio.',
+        7000,
+      );
   }
 }
 
@@ -2349,12 +2563,26 @@ micBtn.addEventListener('touchend', () => pttDeactivate());
 micBtn.addEventListener('touchcancel', () => pttDeactivate());
 
 // --- Hand raise ---
-handBtn.addEventListener('click', () => {
-  if (!room) return;
-  room.requestVoice();
-  handBtn.classList.toggle('hand-raised');
-  showToast(handBtn.classList.contains('hand-raised') ? 'Hand raised' : 'Hand lowered');
-});
+let voiceRequestPending = false;
+handBtn.addEventListener(
+  'click',
+  asyncUiAction(async () => {
+    const owner = room;
+    if (!owner || voiceRequestPending || handBtn.classList.contains('hand-raised')) return;
+    const membership = owner.membershipVersion;
+    voiceRequestPending = true;
+    handBtn.setAttribute('aria-busy', 'true');
+    try {
+      await owner.requestVoice();
+      if (room !== owner || membership !== owner.membershipVersion) return;
+      handBtn.classList.add('hand-raised');
+      showToast('Voice request sent to moderators');
+    } finally {
+      voiceRequestPending = false;
+      handBtn.setAttribute('aria-busy', 'false');
+    }
+  }, 'Could not request voice'),
+);
 
 // --- Room Settings Modal ---
 configureSettingsDialog(roomSettingsModal);
@@ -2362,12 +2590,104 @@ roomSettingsModal.addEventListener('close', () => {
   rsPassword.value = '';
 });
 roomSettingsBtn.addEventListener('click', () => {
+  if (roomSettingsPending) {
+    showToast('A room change is still awaiting confirmation');
+    return;
+  }
   populateRoomSettingsModal();
   roomSettingsModal.showModal();
 });
 
+const roomSettingsStatus = el('p', '', 'settings-description');
+roomSettingsStatus.id = 'room-settings-result';
+roomSettingsStatus.setAttribute('role', 'status');
+roomSettingsStatus.hidden = true;
+roomSettingsModal.querySelector('.settings-dialog-body')!.prepend(roomSettingsStatus);
+const roomSettingsRetry = button('Retry change', () => {}, 'btn-secondary');
+roomSettingsRetry.hidden = true;
+roomSettingsStatus.after(roomSettingsRetry);
+roomSettingsModal.addEventListener('close', () => {
+  roomSettingsRetry.hidden = true;
+  roomSettingsRetry.onclick = null;
+  roomSettingsStatus.textContent = '';
+  roomSettingsStatus.hidden = true;
+});
+
+function retireRoomSettingsAction(): void {
+  roomSettingsAttempt++;
+  roomSettingsPending = false;
+  roomSettingsModal.setAttribute('aria-busy', 'false');
+  for (const field of roomSettingsModal.querySelectorAll<
+    HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+  >('input, select, textarea'))
+    field.disabled = false;
+  roomSettingsModal.close();
+  roomSettingsRetry.hidden = true;
+  roomSettingsRetry.onclick = null;
+  roomSettingsStatus.textContent = '';
+  roomSettingsStatus.hidden = true;
+}
+
+async function applyRoomSetting(change: (owner: RoomClient) => Promise<void>): Promise<void> {
+  const owner = room;
+  if (!owner || roomSettingsPending) return;
+  const membership = owner.membershipVersion;
+  const attempt = ++roomSettingsAttempt;
+  const current = () =>
+    attempt === roomSettingsAttempt && room === owner && owner.membershipVersion === membership;
+  const fields = roomSettingsModal.querySelectorAll<
+    HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+  >('input, select, textarea');
+  const drafts = Array.from(fields, (field) => ({
+    field,
+    value: field.value,
+    checked: field instanceof HTMLInputElement ? field.checked : undefined,
+  }));
+  roomSettingsPending = true;
+  roomSettingsStatus.hidden = false;
+  roomSettingsStatus.textContent = 'Saving change…';
+  roomSettingsModal.setAttribute('aria-busy', 'true');
+  roomSettingsRetry.hidden = true;
+  roomSettingsRetry.onclick = null;
+  for (const field of fields) field.disabled = true;
+  let confirmed = false;
+  try {
+    await change(owner);
+    confirmed = true;
+    if (current()) roomSettingsStatus.textContent = 'Change saved';
+  } catch (error) {
+    if (current()) {
+      roomSettingsStatus.textContent =
+        error instanceof Error ? error.message : 'The change was not confirmed';
+      roomSettingsStatus.scrollIntoView({ block: 'nearest' });
+    }
+  } finally {
+    if (current()) {
+      roomSettingsPending = false;
+      roomSettingsModal.setAttribute('aria-busy', 'false');
+      for (const field of fields) field.disabled = false;
+      populateRoomSettingsModal();
+      if (!confirmed && roomSettingsModal.open) {
+        for (const draft of drafts) {
+          draft.field.value = draft.value;
+          if (draft.field instanceof HTMLInputElement && draft.checked !== undefined)
+            draft.field.checked = draft.checked;
+        }
+        roomSettingsRetry.hidden = false;
+        roomSettingsRetry.onclick = asyncUiAction(
+          () => (current() ? applyRoomSetting(change) : Promise.resolve()),
+          'Could not save the room setting',
+        );
+      }
+    }
+  }
+}
+
 // Room settings toggle handlers
-const settingsToggles: [HTMLInputElement, string][] = [
+type BooleanRoomSetting = {
+  [K in keyof RoomSettingsPatch]-?: NonNullable<RoomSettingsPatch[K]> extends boolean ? K : never;
+}[keyof RoomSettingsPatch];
+const settingsToggles: [HTMLInputElement, BooleanRoomSetting][] = [
   [rsModerated, 'moderated'],
   [rsLobby, 'lobbyEnabled'],
   [rsScreen, 'allowScreenSharing'],
@@ -2382,37 +2702,77 @@ const settingsToggles: [HTMLInputElement, string][] = [
 ];
 
 for (const [el, key] of settingsToggles) {
-  el.addEventListener('change', () => {
-    room?.updateRoomSettings({ [key]: el.checked });
-  });
+  el.addEventListener(
+    'change',
+    asyncUiAction(() => {
+      const value = el.checked;
+      return applyRoomSetting((owner) => owner.updateRoomSettings({ [key]: value }));
+    }, 'Could not save the room setting'),
+  );
 }
 
-rsTopic.addEventListener('change', () => {
-  const topic = rsTopic.value.trim();
-  room?.setTopic(topic);
-});
+rsTopic.addEventListener(
+  'change',
+  asyncUiAction(() => {
+    const topic = rsTopic.value.trim();
+    return applyRoomSetting((owner) => owner.setTopic(topic));
+  }, 'Could not save the topic'),
+);
 
-rsPassword.addEventListener('change', () => {
-  const password = rsPassword.value;
-  const passwordBytes = new TextEncoder().encode(password).length;
-  if (password && (passwordBytes < 8 || passwordBytes > 256)) {
-    showToast('Room password must be 8-256 bytes');
-    rsPassword.focus();
-    return;
+rsPassword.addEventListener(
+  'change',
+  asyncUiAction(async () => {
+    const password = rsPassword.value;
+    const passwordBytes = new TextEncoder().encode(password).length;
+    if (password && (passwordBytes < 8 || passwordBytes > 256)) {
+      showToast('Room password must be 8-256 bytes');
+      rsPassword.focus();
+      return;
+    }
+    await applyRoomSetting((owner) => owner.updateRoomSettings({ password: password || null }));
+  }, 'Could not update the room password'),
+);
+
+/** Blank clears a limit; malformed or fractional input must never silently clear it. */
+function roomLimit(input: HTMLInputElement): number | null | undefined {
+  if (input.validity.badInput) {
+    input.reportValidity();
+    return undefined;
   }
-  room?.updateRoomSettings({ password: password || null });
-});
+  if (input.value === '') return null;
+  const value = input.valueAsNumber;
+  if (
+    !input.checkValidity() ||
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value > 4_294_967_295
+  ) {
+    roomSettingsStatus.hidden = false;
+    roomSettingsStatus.textContent =
+      'Enter a whole number from 0 to 4294967295, or leave the limit blank.';
+    input.focus();
+    return undefined;
+  }
+  return value;
+}
 
-rsMaxBroadcasters.addEventListener('change', () => {
-  const val = parseInt(rsMaxBroadcasters.value, 10);
-  // null (not undefined) so "clear the limit" survives JSON serialization
-  room?.updateRoomSettings({ maxBroadcasters: isNaN(val) ? null : val });
-});
+rsMaxBroadcasters.addEventListener(
+  'change',
+  asyncUiAction(async () => {
+    const value = roomLimit(rsMaxBroadcasters);
+    if (value === undefined) return;
+    await applyRoomSetting((owner) => owner.updateRoomSettings({ maxBroadcasters: value }));
+  }, 'Could not update the broadcaster limit'),
+);
 
-rsMaxParticipants.addEventListener('change', () => {
-  const val = parseInt(rsMaxParticipants.value, 10);
-  room?.updateRoomSettings({ maxParticipants: isNaN(val) ? null : val });
-});
+rsMaxParticipants.addEventListener(
+  'change',
+  asyncUiAction(async () => {
+    const value = roomLimit(rsMaxParticipants);
+    if (value === undefined) return;
+    await applyRoomSetting((owner) => owner.updateRoomSettings({ maxParticipants: value }));
+  }, 'Could not update the participant limit'),
+);
 
 // --- Personal settings ---
 settingsBtn.addEventListener(

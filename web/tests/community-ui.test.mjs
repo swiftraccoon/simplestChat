@@ -115,6 +115,132 @@ function action(view, text) {
   return node;
 }
 
+test('ban dismissal remains blocked until acknowledgement, then the owned dialog closes', async () => {
+  const f = await fixture();
+  const pending = deferred();
+  const calls = [];
+  f.state.room = {
+    membershipVersion: 1,
+    ban: (...args) => {
+      calls.push(args);
+      return pending.promise;
+    },
+  };
+  f.community.ban('target', 'Participant');
+  const view = dialog(f, 'Ban Participant');
+  const reason = control(view, 'Reason (optional)');
+  const duration = control(view, 'Duration');
+  reason.value = 'Repeated interruption';
+  duration.value = '3600';
+  const submit = action(view, 'Ban from room');
+  submit.click();
+  submit.click();
+  await flush();
+  assert.deepEqual(calls, [['target', 'Repeated interruption', 3600]]);
+  assert.equal(reason.disabled, true);
+  assert.equal(duration.disabled, true);
+  assert.equal(submit.disabled, true);
+  action(view, 'Close').click();
+  view.emit('click', { clientX: 0, clientY: 0 });
+  let prevented = false;
+  view.emit('cancel', {
+    preventDefault: () => {
+      prevented = true;
+    },
+  });
+  assert.equal(prevented, true);
+  assert.equal(view.open, true);
+  pending.resolve();
+  await flush();
+  assert.equal(view.open, false);
+  assert.equal(view.isConnected, false);
+});
+
+test('ban rejection retains reason and duration with a visible error and working retry', async () => {
+  const f = await fixture();
+  const first = deferred();
+  const second = deferred();
+  const calls = [];
+  f.state.room = {
+    membershipVersion: 1,
+    ban: (...args) => {
+      calls.push(args);
+      return calls.length === 1 ? first.promise : second.promise;
+    },
+  };
+  f.community.ban('target', 'Participant');
+  const view = dialog(f, 'Ban Participant');
+  const reason = control(view, 'Reason (optional)');
+  const duration = control(view, 'Duration');
+  const submit = action(view, 'Ban from room');
+  reason.value = 'Keep this explanation';
+  duration.value = '86400';
+  submit.click();
+  first.reject(new Error('The change was not confirmed'));
+  await flush();
+  assert.equal(view.open, true);
+  assert.equal(view.children[1].hidden, false);
+  assert.match(view.children[1].textContent, /not confirmed/);
+  assert.equal(reason.value, 'Keep this explanation');
+  assert.equal(duration.value, '86400');
+  assert.equal(reason.disabled, false);
+  assert.equal(duration.disabled, false);
+  assert.equal(submit.disabled, false);
+  submit.click();
+  await flush();
+  assert.deepEqual(calls, [
+    ['target', 'Keep this explanation', 86400],
+    ['target', 'Keep this explanation', 86400],
+  ]);
+  assert.equal(view.children[1].hidden, true);
+  second.resolve();
+  await flush();
+  assert.equal(view.isConnected, false);
+});
+
+test('a stale ban form closes without submitting against a replacement membership', async () => {
+  const f = await fixture();
+  let requests = 0;
+  f.state.room = {
+    membershipVersion: 1,
+    ban: async () => {
+      requests++;
+    },
+  };
+  f.community.ban('target', 'Participant');
+  const view = dialog(f, 'Ban Participant');
+  f.state.room.membershipVersion++;
+  action(view, 'Ban from room').click();
+  await flush();
+  assert.equal(requests, 0);
+  assert.equal(view.isConnected, false);
+});
+
+test('a late ban result retires only its old dialog and cannot dismiss a newer pending ban', async () => {
+  const f = await fixture();
+  const old = deferred();
+  f.state.room = { membershipVersion: 1, ban: () => old.promise };
+  f.community.ban('old-target', 'Old participant');
+  const oldView = dialog(f, 'Ban Old participant');
+  action(oldView, 'Ban from room').click();
+  const current = deferred();
+  f.state.room = { membershipVersion: 2, ban: () => current.promise };
+  f.community.ban('new-target', 'New participant');
+  const currentView = dialog(f, 'Ban New participant');
+  action(currentView, 'Ban from room').click();
+  old.reject(new Error('Old response'));
+  await flush();
+  assert.equal(oldView.isConnected, false);
+  assert.equal(currentView.open, true);
+  assert.equal(action(currentView, 'Ban from room').disabled, true);
+  assert.equal(currentView.children[1].hidden, true);
+  action(currentView, 'Close').click();
+  assert.equal(currentView.open, true);
+  current.resolve();
+  await flush();
+  assert.equal(currentView.isConnected, false);
+});
+
 test('recovery validates UTF-8 byte boundaries, confirmation, and control characters before sending', async () => {
   const f = await fixture();
   f.community.openRecovery();

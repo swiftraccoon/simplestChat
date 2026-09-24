@@ -199,6 +199,37 @@ async function harness(options = {}) {
   };
 }
 
+for (const boundary of ['membership', 'connection']) {
+  test(`room control completion cannot own another ${boundary}'s pending action`, async () => {
+    const first = deferred();
+    const second = deferred();
+    let requests = 0;
+    const f = await harness({
+      reconnect: () => (++requests === 1 ? first.promise : second.promise),
+    });
+    await f.room.join('room', 'Local');
+    const old = f.room.setTopic('old');
+    const oldRejected = assert.rejects(old, /session changed/);
+    if (boundary === 'membership') {
+      await f.room.leave();
+      await f.room.join('another-room', 'Local');
+    } else {
+      f.signaling.connected = false;
+      f.signaling.onConnectionLost();
+      f.signaling.connected = true;
+    }
+    const current = f.room.setTopic('current');
+    assert.equal(requests, 2, 'a stale action must not block the current owner');
+    first.resolve({ type: 'roomControlApplied' });
+    await oldRejected;
+    await assert.rejects(f.room.setTopic('duplicate'), /still awaiting confirmation/);
+    assert.equal(requests, 2, 'old cleanup must preserve the new pending token');
+    second.resolve({ type: 'roomControlApplied' });
+    await current;
+    await f.room.leave();
+  });
+}
+
 function snapshot(overrides = {}) {
   return {
     participants: [],

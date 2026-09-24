@@ -237,6 +237,7 @@ export class SignalingClient {
           msg.type === 'transportConnected' ||
           msg.type === 'producerCreated' ||
           msg.type === 'consumerCreated' ||
+          msg.type === 'roomControlApplied' ||
           msg.type === 'reconnectResult'
         )
           return;

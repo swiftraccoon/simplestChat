@@ -170,9 +170,10 @@ test('login validates identity and refreshes with the existing token-refresh not
   await f.login();
   assert.equal(f.auth.userId, 'initial');
   assert.deepEqual(f.changes, [[true, false]]);
-  f.enqueue(response(session('rotated')));
+  const rotated = { ...session('initial'), token: `${session('initial').token}-rotated` };
+  f.enqueue(response(rotated));
   await f.fire(REFRESH_MS);
-  assert.equal(f.auth.jwt, session('rotated').token);
+  assert.equal(f.auth.jwt, rotated.token);
   assert.deepEqual(f.changes, [
     [true, false],
     [true, true],
@@ -187,6 +188,121 @@ test('login validates identity and refreshes with the existing token-refresh not
       options: { method: 'POST', credentials: 'include' },
     },
   );
+});
+
+test('a refresh returning another account is an identity change rather than a socket renewal', async (t) => {
+  const f = await fixture(t);
+  await f.login('first');
+  f.enqueue(response(f.session('second')));
+  await f.fire(REFRESH_MS);
+  assert.equal(f.auth.userId, 'second');
+  assert.deepEqual(f.changes, [
+    [true, false],
+    [true, false],
+  ]);
+});
+
+test('shared-cookie reconciliation preserves same-account membership and clears a signed-out tab', async (t) => {
+  const f = await fixture(t);
+  await f.login();
+  f.enqueue(response(f.session('initial')));
+  await f.auth.reconcileSharedSession();
+  assert.deepEqual(f.changes, [
+    [true, false],
+    [true, true],
+  ]);
+  f.enqueue(response(null, 401));
+  await f.auth.reconcileSharedSession();
+  assert.equal(f.auth.userId, null);
+  assert.deepEqual(f.changes.at(-1), [false, false]);
+  assert.equal(f.timers.size, 0);
+});
+
+test('a newer cross-tab hint fences an older cookie response before a replacement is accepted', async (t) => {
+  const f = await fixture(t);
+  await f.login('first');
+  const old = deferred();
+  f.enqueue(old.promise);
+  const checking = f.auth.reconcileSharedSession();
+  f.auth.invalidateSharedSession();
+  f.enqueue(response(f.session('second')));
+  await f.auth.reconcileSharedSession();
+  old.resolve(response(f.session('retired')));
+  await checking;
+  assert.equal(f.auth.userId, 'second');
+  assert.deepEqual(f.changes, [
+    [true, false],
+    [true, false],
+  ]);
+});
+
+test('shared-cookie reconciliation bounds failure and never leaves the old account active', async (t) => {
+  const f = await fixture(t);
+  await f.login();
+  const never = deferred();
+  f.enqueue(never.promise);
+  const checking = f.auth.reconcileSharedSession();
+  await f.fire(10000);
+  await checking;
+  assert.equal(f.auth.isLoggedIn, false);
+  never.resolve(response(f.session('late')));
+  await flush();
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.equal(f.timers.size, 0);
+});
+
+test('session mutation hints carry no payload and late retired successes still announce possible cookie changes', async (t) => {
+  const f = await fixture(t);
+  const hints = [];
+  f.auth.setSessionMutationHandler((...args) => hints.push(args));
+  const old = deferred();
+  f.enqueue(old.promise);
+  const pending = assert.rejects(f.auth.login('old@example.test', 'secret'), superseded);
+  f.auth.invalidateSharedSession();
+  old.resolve(response(f.session('old')));
+  await pending;
+  assert.deepEqual(hints, [[]]);
+  await f.login('new');
+  assert.deepEqual(hints, [[], []]);
+  f.enqueue(response(null, 204));
+  await f.auth.logout();
+  assert.deepEqual(hints, [[], [], []]);
+});
+
+test('waiting for a session mutation lock expires before fetch without creating an uncertain session', async (t) => {
+  const waiting = deferred();
+  let release;
+  let calls = 0;
+  const f = await fixture(t, {
+    locks: {
+      request: (_name, _options, callback) => {
+        if (calls++ > 0) return callback();
+        release = callback;
+        return waiting.promise;
+      },
+    },
+  });
+  const failed = assert.rejects(f.auth.login('old@example.test', 'secret'), /before it was sent/);
+  await f.fire(20000);
+  await failed;
+  await assert.rejects(release(), { name: 'AbortError' });
+  waiting.resolve();
+  assert.equal(f.requests.length, 0);
+  await f.login('new');
+  assert.equal(f.auth.userId, 'new');
+});
+
+test('focus reconciliation is unavailable while a local passkey challenge or session request owns intent', async (t) => {
+  const f = await fixture(t);
+  const pending = deferred();
+  f.enqueue(pending.promise);
+  const start = f.auth.passkeyLoginStart();
+  assert.equal(f.auth.canCheckSharedSession, false);
+  pending.resolve(response(passkeyOptions('login')));
+  await start;
+  assert.equal(f.auth.canCheckSharedSession, false);
+  f.auth.cancelPasskeyAttempt();
+  assert.equal(f.auth.canCheckSharedSession, true);
 });
 
 for (const action of ['login', 'register', 'restore']) {
@@ -268,7 +384,7 @@ for (const failure of ['http', 'network']) {
       f.auth.logout(),
       failure === 'http' ? /could not revoke/ : /offline/,
     );
-    assert.equal(f.timers.size, 0);
+    assert.equal(f.timers.size, 1, 'logout owns a bounded request watchdog');
     if (failure === 'http') gate.resolve(response(null, 500));
     else gate.reject(new Error('offline'));
     await logout;
@@ -404,7 +520,7 @@ for (const failure of [500, 502, 503, 504, 'network']) {
       [RETRY_MS, RETRY_WINDOW_MS],
     );
 
-    const refreshed = f.session('refreshed');
+    const refreshed = f.session('initial');
     f.enqueue(response(refreshed));
     await f.fire(RETRY_MS);
     assert.equal(f.auth.jwt, refreshed.token);
@@ -616,7 +732,7 @@ test('scheduled refresh still accepts the exact-401 replay-confirmation successo
   assert.equal(f.auth.userId, 'successor');
   assert.deepEqual(f.changes, [
     [true, false],
-    [true, true],
+    [true, false],
   ]);
   assert.equal(f.timers.size, 1);
 });
@@ -674,6 +790,7 @@ test('scheduled refresh owns one abortable Web Lock wait and never fetches after
         assert.equal(name, 'simplestchat-refresh-v1');
         assert.ok(options.signal instanceof AbortSignal);
         lockRequests += 1;
+        if (lockRequests === 1) return request();
         waitingSignal = options.signal;
         return new Promise((resolve, reject) => {
           const abort = () => reject(new Error('Lock request aborted'));
@@ -692,7 +809,7 @@ test('scheduled refresh owns one abortable Web Lock wait and never fetches after
   });
   await f.login();
   await f.fire(REFRESH_MS);
-  assert.equal(lockRequests, 1);
+  assert.equal(lockRequests, 2);
   assert.equal(f.requests.length, 1);
   assert.equal(f.timers.size, 1);
   await f.fire(RETRY_WINDOW_MS);
@@ -700,7 +817,7 @@ test('scheduled refresh owns one abortable Web Lock wait and never fetches after
   await release();
   await flush();
   assert.equal(f.auth.isLoggedIn, false);
-  assert.equal(lockRequests, 1);
+  assert.equal(lockRequests, 2);
   assert.equal(f.requests.length, 1);
   assert.equal(f.timers.size, 0);
 });
@@ -1029,4 +1146,18 @@ test('dismissing an idle authentication dialog does not cancel a valid startup r
   pending.resolve(response(session('restored')));
   assert.equal(await restore, true);
   assert.equal(f.auth.userId, 'restored');
+});
+
+test('authoritative cross-tab sign-out clears uncertainty and permits a fresh explicit sign-in', async (t) => {
+  const f = await fixture(t);
+  f.enqueue(response({ unexpected: 'malformed successful login' }));
+  await assert.rejects(f.auth.login('fixture@example.test', 'password'), {
+    name: 'SessionOutcomeUnknownError',
+  });
+  f.auth.invalidateSharedSession();
+  f.enqueue(response({ error: 'No session' }, 401));
+  await f.auth.reconcileSharedSession();
+  assert.equal(f.auth.isLoggedIn, false);
+  await f.login('fresh');
+  assert.equal(f.auth.userId, 'fresh');
 });

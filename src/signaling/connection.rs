@@ -569,6 +569,13 @@ impl ReplySender<'_> {
         Ok(())
     }
 
+    fn acknowledge_room_control(&self) -> anyhow::Result<()> {
+        if self.request_id.is_some() {
+            self.send(&ServerMessage::RoomControlApplied)?;
+        }
+        Ok(())
+    }
+
     fn send(&self, message: &ServerMessage) -> anyhow::Result<()> {
         // These protocols already serialize their own IDs. Do not emit a
         // duplicate JSON key or replace their independent correlation state.
@@ -654,6 +661,13 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         ClientMessage::SetConsumerPreferredLayers { .. } => OperationKind::SetPreferredLayers,
         ClientMessage::ChatMessage { .. } => OperationKind::Chat,
         ClientMessage::PrivateMessage { .. } => OperationKind::PrivateMessage,
+        ClientMessage::RetryChatMessage(retry) => {
+            if retry.target_participant_id.is_some() {
+                OperationKind::PrivateMessage
+            } else {
+                OperationKind::Chat
+            }
+        }
         ClientMessage::SetChatPreferences { .. }
         | ClientMessage::ChangeNickname { .. }
         | ClientMessage::GetRoomSnapshot { .. }
@@ -1461,6 +1475,7 @@ async fn handle_connection_with_timing(
                             &client_msg,
                             ClientMessage::ChatMessage { .. }
                                 | ClientMessage::PrivateMessage { .. }
+                                | ClientMessage::RetryChatMessage(_)
                         ) && !consume_rate_token(
                             &mut chat_tokens_us,
                             &mut chat_last_refill,
@@ -1801,6 +1816,7 @@ async fn handle_connection_with_timing(
     }
 
     let disconnected_at = Instant::now();
+    let disconnected_room_id = current_room_id.clone();
     // Stop stats task
     if let Some(task) = stats_task.take() {
         task.abort();
@@ -1996,7 +2012,6 @@ async fn handle_connection_with_timing(
     // _conn_guard dropped here → dec_connections_active
     // _permit dropped here → release semaphore
 
-    drop(tx);
     if peer_close_received {
         // The peer-close path has already consumed the writer's join result.
     } else if drain.is_draining() {
@@ -2019,6 +2034,17 @@ async fn handle_connection_with_timing(
         send_task.abort();
         let _ = (&mut send_task.0).await;
     }
+
+    // Availability is best effort and may contend with a room mutation. Finish
+    // the socket first, and never delay server drain for this notification.
+    if !drain.is_draining()
+        && let Some(room_id) = disconnected_room_id.as_deref()
+    {
+        let _ = room_manager
+            .mark_participant_disconnected(room_id, &participant_id, &tx)
+            .await;
+    }
+    drop(tx);
 
     info!(
         "Connection handler finished for participant: {}",
@@ -2684,44 +2710,25 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::ChatMessage {
-            content,
-            client_message_id,
-        } => {
-            if let Some(room_id) = current_room_id.as_ref() {
-                room_manager
-                    .send_social_chat(
-                        room_id,
-                        participant_id,
-                        sender,
-                        content.clone(),
-                        client_message_id.clone(),
-                        None,
-                    )
-                    .await?;
-            } else {
-                anyhow::bail!("Not in a room");
-            }
-        }
-
-        ClientMessage::PrivateMessage {
-            target_participant_id,
-            content,
-            client_message_id,
-        } => {
+        ClientMessage::ChatMessage { .. }
+        | ClientMessage::PrivateMessage { .. }
+        | ClientMessage::RetryChatMessage(_) => {
             let room_id = current_room_id
                 .as_deref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_participant_id)?;
+            let target = match message {
+                ClientMessage::PrivateMessage {
+                    target_participant_id,
+                    ..
+                } => Some(target_participant_id.as_str()),
+                ClientMessage::RetryChatMessage(retry) => retry.target_participant_id.as_deref(),
+                _ => None,
+            };
+            if let Some(target) = target {
+                validate_target_id(target)?;
+            }
             room_manager
-                .send_social_chat(
-                    room_id,
-                    participant_id,
-                    sender,
-                    content.clone(),
-                    Some(client_message_id.clone()),
-                    Some(target_participant_id),
-                )
+                .handle_chat_command(room_id, participant_id, sender, message)
                 .await?;
         }
         ClientMessage::SetChatPreferences { .. }
@@ -2971,6 +2978,26 @@ async fn handle_client_message(
         }
     }
 
+    if matches!(
+        message,
+        ClientMessage::CloseCam { .. }
+            | ClientMessage::CamBan { .. }
+            | ClientMessage::CamUnban { .. }
+            | ClientMessage::TextMute { .. }
+            | ClientMessage::TextUnmute { .. }
+            | ClientMessage::Kick { .. }
+            | ClientMessage::Ban { .. }
+            | ClientMessage::Unban { .. }
+            | ClientMessage::SetRole { .. }
+            | ClientMessage::RequestVoice
+            | ClientMessage::UpdateRoomSettings { .. }
+            | ClientMessage::SetTopic { .. }
+            | ClientMessage::AdmitFromLobby { .. }
+            | ClientMessage::DenyFromLobby { .. }
+    ) {
+        reply.acknowledge_room_control()?;
+    }
+
     Ok(())
 }
 
@@ -3040,6 +3067,34 @@ mod security_tests {
                 assert_eq!(
                     reply,
                     serde_json::json!({ "type": "mediaControlApplied", "requestId": request_id })
+                );
+            } else {
+                assert!(matches!(
+                    receiver.try_recv(),
+                    Err(mpsc::error::TryRecvError::Empty)
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn room_control_acknowledgement_requires_and_echoes_request_id() {
+        let metrics = ServerMetrics::new();
+        let (sender, mut receiver) = mpsc::channel(2);
+        for request_id in [None, Some("room-control-1")] {
+            ReplySender {
+                metrics: &metrics,
+                sender: &sender,
+                request_id,
+            }
+            .acknowledge_room_control()
+            .unwrap();
+            if let Some(request_id) = request_id {
+                let reply: serde_json::Value =
+                    serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
+                assert_eq!(
+                    reply,
+                    serde_json::json!({"type":"roomControlApplied", "requestId": request_id})
                 );
             } else {
                 assert!(matches!(
@@ -3304,6 +3359,7 @@ mod security_tests {
         assert!(!is_media_mutation(&ClientMessage::ChatMessage {
             content: "hello".to_string(),
             client_message_id: None,
+            sequence: None,
         }));
     }
 
@@ -3503,6 +3559,7 @@ mod security_tests {
         assert!(!is_admin_mutation(&ClientMessage::ChatMessage {
             content: "hello".to_string(),
             client_message_id: None,
+            sequence: None,
         }));
     }
 

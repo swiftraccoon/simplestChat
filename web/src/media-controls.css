@@ -180,6 +180,18 @@
   opacity: 0.5;
   cursor: default;
 }
+.media-speaker-panel {
+  display: grid;
+  gap: 0.65rem;
+  margin-block: 1rem;
+}
+.media-speaker-panel > label {
+  display: grid;
+  gap: 0.4rem;
+}
+.media-speaker-panel button[hidden] {
+  display: none;
+}
 .media-setup-dialog .settings-dialog-footer > button {
   flex-shrink: 0;
 }

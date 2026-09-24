@@ -49,6 +49,37 @@ COMMUNITY_E2E=1 BASE_URL=http://127.0.0.1:3119 npm --prefix web/e2e test
 `PLAYWRIGHT_MODULE` and `PLAYWRIGHT_BROWSERS_PATH` support isolated tool/browser
 installations.
 
+## Account, navigation, chat and media continuity
+
+The following opt-in fixtures require the same owned loopback services and
+rebuilt assets. `auth-cross-tab.cjs` intercepts account APIs and signaling to test
+native shared cookies, BroadcastChannel/storage fallback and history in two tabs.
+It does not validate backend authentication. `room-control-confirmation.cjs`
+uses controlled replies to check pending controls, retained failed edits, and
+retired dialog ownership across room changes. `media-continuity.cjs` uses native
+WebRTC for camera off/on, explicit incoming-subscription repair, and signaling
+reconnect; Chromium also exercises page freeze/resume. Output chooser, hardware
+lists and display-capture outcomes use controlled browser API fixtures. Physical
+hardware, OS sleep, real picker permissions and actual speaker sound remain
+manual checks.
+
+```sh
+AUTH_CROSS_TAB_E2E=1 E2E_BROWSER=firefox \
+  build/with-test-server.sh node web/e2e/auth-cross-tab.cjs
+ROOM_CONTROL_E2E=1 E2E_BROWSER=firefox \
+  build/with-test-server.sh node web/e2e/room-control-confirmation.cjs
+MEDIA_CONTINUITY_E2E=1 E2E_BROWSER=chromium \
+  build/with-test-server.sh node web/e2e/media-continuity.cjs
+CHAT_RETRY_E2E=1 \
+  build/with-test-server.sh node web/e2e/chat-retry.cjs
+```
+
+The chat fixture selectively withholds an owned message or its acknowledgement,
+then verifies reconciliation against the native server. Recipient wire-message
+counts verify that DOM deduplication is not hiding a repeated delivery. These
+fixtures retain bounded results, never credentials or private message transcripts.
+They do not run against production.
+
 ## Homepage layout without a backend
 
 After building `web/dist` and installing the browser tooling above:

@@ -555,6 +555,58 @@ struct MediaControlIpcReservation {
 }
 
 impl Room {
+    fn lobby_counts(&self) -> (u32, u32) {
+        let connected = self
+            .participants
+            .values()
+            .filter(|participant| participant.social.connected && !participant.sender.is_closed());
+        let mut participants = 0_u32;
+        let mut moderators = 0_u32;
+        for participant in connected {
+            participants = participants.saturating_add(1);
+            if participant.role.can_admit_lobby() {
+                moderators = moderators.saturating_add(1);
+            }
+        }
+        (participants, moderators)
+    }
+
+    fn notify_lobby_status(&self) {
+        if self.lobby.is_empty() {
+            return;
+        }
+        let (participant_count, moderator_count) = self.lobby_counts();
+        let Ok(json) = serde_json::to_string(&ServerMessage::LobbyStatus {
+            participant_count,
+            moderator_count,
+        }) else {
+            return;
+        };
+        let json = crate::OutboundJson::from(json);
+        for entry in self
+            .lobby
+            .values()
+            .filter(|entry| !entry.sender.is_closed())
+        {
+            let _ = try_send_essential(&self.metrics, &entry.sender, json.clone());
+        }
+    }
+
+    fn mark_disconnected(
+        &mut self,
+        participant_id: &str,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
+    ) {
+        let Some(participant) = self.participants.get_mut(participant_id) else {
+            return;
+        };
+        if !participant.sender.same_channel(expected_sender) || !participant.social.connected {
+            return;
+        }
+        participant.social.connected = false;
+        self.notify_lobby_status();
+    }
+
     #[cfg(test)]
     fn new(
         id: String,
@@ -2515,13 +2567,14 @@ impl RoomManager {
                     .as_ref()
                     .map_or_else(|| room.id.clone(), |s| s.display_name.clone());
                 let topic = room.settings.as_ref().and_then(|s| s.topic.clone());
-                let participant_count = room.participants.len() as u32;
+                let (participant_count, moderator_count) = room.lobby_counts();
 
                 // Send LobbyWaiting to the participant
                 let lobby_waiting = ServerMessage::LobbyWaiting {
                     room_name,
                     topic,
                     participant_count,
+                    moderator_count,
                 };
                 if let Ok(json) = serde_json::to_string(&lobby_waiting) {
                     let _ =
@@ -2579,6 +2632,7 @@ impl RoomManager {
 
             room.participants
                 .insert(participant_id.clone(), participant);
+            room.notify_lobby_status();
             pending_join.complete_locked(&mut room);
             // The membership is committed. Do not serialize response snapshots
             // under the process-wide admission guard.
@@ -2742,6 +2796,7 @@ impl RoomManager {
                 audio_obs = room.audio_level_observer.clone();
 
                 room.broadcast_participant_left(participant_id);
+                room.notify_lobby_status();
 
                 room_empty = room.participants.is_empty() && room.lobby.is_empty();
             }
@@ -3686,6 +3741,32 @@ impl RoomManager {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
+    /// Best-effort exclusion of this exact socket from lobby availability during grace.
+    pub async fn mark_participant_disconnected(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
+    ) -> Result<()> {
+        if self.drain.is_draining() {
+            return Ok(());
+        }
+        let room_lock = self.get_room(room_id)?;
+        // The writer is already closed in connection cleanup. A contended
+        // notification must not hold a connection permit indefinitely; later
+        // snapshots also exclude closed queues even if this update is skipped.
+        let mut room = tokio::select! {
+            biased;
+            _ = self.drain.wait() => return Ok(()),
+            result = tokio::time::timeout(std::time::Duration::from_millis(100), room_lock.write()) => {
+                let Ok(room) = result else { return Ok(()); };
+                room
+            }
+        };
+        room.mark_disconnected(participant_id, expected_sender);
+        Ok(())
+    }
+
     /// Rebinds a participant's WS sender after reconnection
     pub async fn rebind_participant_sender(
         &self,
@@ -3721,6 +3802,8 @@ impl RoomManager {
                 return Ok(false);
             }
             participant.sender = new_sender;
+            participant.social.connected = true;
+            room.notify_lobby_status();
             Ok(true)
         } else {
             Ok(false)
@@ -4562,6 +4645,7 @@ impl RoomManager {
 
             // Broadcast leave to remaining participants
             room.broadcast_participant_left(target_participant_id);
+            room.notify_lobby_status();
             target_media_session_id
         };
 
@@ -4768,6 +4852,7 @@ impl RoomManager {
                     let _ = try_send_essential(&room.metrics, &entry.sender, json);
                 }
             }
+            room.notify_lobby_status();
             target_sessions
         };
         drop(control);
@@ -5003,6 +5088,7 @@ impl RoomManager {
             .get_mut(target_participant_id)
             .expect("role target is stable under the room control guard");
         target.role = new_role;
+        room.notify_lobby_status();
         room.policy_revision = room.policy_revision.wrapping_add(1);
         let revoked = Self::revoke_unauthorized_producers(
             &mut room,
@@ -5222,6 +5308,7 @@ impl RoomManager {
             "admit_from_lobby: {} admitted {} to room {}",
             moderator_id, target_id, room_id
         );
+        room.notify_lobby_status();
         Ok(())
     }
 
@@ -6232,6 +6319,150 @@ mod security_tests {
         assert_eq!(RoomManager::readable_participant_count(&room), None);
         assert_eq!(RoomManager::readable_broadcaster_count(&room), None);
         drop(held);
+    }
+
+    #[tokio::test]
+    async fn lobby_status_tracks_live_admission_authority_across_membership_changes() {
+        let manager = drain_test_manager().await;
+        let mut channels = Vec::new();
+        for id in ["owner", "member", "waiting", "other-waiting"] {
+            if id == "waiting" {
+                let room = manager.get_room("lobby-status").unwrap();
+                let mut settings = RoomManager::default_room_settings("lobby-status");
+                settings.lobby_enabled = true;
+                room.write().await.settings = Some(settings);
+            }
+            let (sender, receiver) = mpsc::channel(32);
+            manager
+                .add_participant(
+                    "lobby-status",
+                    id.into(),
+                    id.into(),
+                    sender.clone(),
+                    false,
+                    Arc::new(AtomicBool::new(false)),
+                    None,
+                    "test-token",
+                    None,
+                )
+                .await
+                .unwrap();
+            channels.push((sender, receiver));
+        }
+        let read = |receiver: &mut mpsc::Receiver<crate::OutboundJson>| -> serde_json::Value {
+            serde_json::from_str(&receiver.try_recv().unwrap()).unwrap()
+        };
+        for index in [2, 3] {
+            let waiting = read(&mut channels[index].1);
+            assert_eq!(waiting["type"], "lobbyWaiting");
+            assert_eq!(waiting["participantCount"], 2);
+            assert_eq!(waiting["moderatorCount"], 1);
+        }
+        let status = |receiver: &mut mpsc::Receiver<crate::OutboundJson>,
+                      participants: u32,
+                      moderators: u32| {
+            assert_eq!(
+                read(receiver),
+                serde_json::json!({"type":"lobbyStatus", "participantCount":participants,"moderatorCount":moderators})
+            );
+        };
+        manager
+            .mark_participant_disconnected("lobby-status", "owner", &channels[0].0)
+            .await
+            .unwrap();
+        assert!(
+            !channels[0].0.is_closed(),
+            "availability cannot rely on dropped receivers"
+        );
+        for index in [2, 3] {
+            status(&mut channels[index].1, 1, 0);
+        }
+        let (rebound, _rebound_receiver) = mpsc::channel(32);
+        assert!(
+            manager
+                .rebind_participant_sender(
+                    "lobby-status",
+                    "owner",
+                    None,
+                    &channels[0].0,
+                    rebound.clone()
+                )
+                .await
+                .unwrap()
+        );
+        for index in [2, 3] {
+            status(&mut channels[index].1, 2, 1);
+        }
+        manager
+            .mark_participant_disconnected("lobby-status", "owner", &channels[0].0)
+            .await
+            .unwrap();
+        for index in [2, 3] {
+            assert!(channels[index].1.try_recv().is_err());
+        }
+        manager
+            .set_participant_role(
+                "lobby-status",
+                "owner",
+                &rebound,
+                "member",
+                roles::Role::Moderator,
+            )
+            .await
+            .unwrap();
+        for index in [2, 3] {
+            status(&mut channels[index].1, 2, 2);
+        }
+        manager
+            .kick_participant("lobby-status", "owner", &rebound, "member", None)
+            .await
+            .unwrap();
+        for index in [2, 3] {
+            status(&mut channels[index].1, 1, 1);
+        }
+        manager
+            .admit_from_lobby("lobby-status", "owner", &rebound, "waiting")
+            .await
+            .unwrap();
+        status(&mut channels[3].1, 2, 1);
+        manager
+            .ban_participant("lobby-status", "owner", &rebound, "waiting", None, None)
+            .await
+            .unwrap();
+        status(&mut channels[3].1, 1, 1);
+        manager
+            .remove_participant("lobby-status", "owner")
+            .await
+            .unwrap();
+        status(&mut channels[3].1, 0, 0);
+        manager.shutdown().await.unwrap();
+        manager.media_server().shutdown().await.unwrap();
+    }
+
+    #[test]
+    fn lobby_counts_exclude_closed_queues_and_disconnected_grace_members() {
+        let mut room = Room::new("room".into(), "router".into(), None, false, None);
+        room.participants.insert(
+            "closed".into(),
+            participant(
+                "closed",
+                roles::Role::Owner,
+                moderation::PunitiveState::default(),
+                None,
+            ),
+        );
+        let (sender, _receiver) = mpsc::channel(1);
+        let mut connected = participant(
+            "live",
+            roles::Role::User,
+            moderation::PunitiveState::default(),
+            None,
+        );
+        connected.sender = sender;
+        room.participants.insert("live".into(), connected);
+        assert_eq!(room.lobby_counts(), (1, 0));
+        room.participants.get_mut("live").unwrap().social.connected = false;
+        assert_eq!(room.lobby_counts(), (0, 0));
     }
 
     #[tokio::test]

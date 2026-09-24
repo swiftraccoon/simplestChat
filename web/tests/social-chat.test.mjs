@@ -118,6 +118,9 @@ async function fixture() {
     sendPrivate(...args) {
       state.sent.push(['private', ...args]);
     },
+    retryChat(message) {
+      state.sent.push(['retry', message]);
+    },
   };
   class AudioContext {
     state = 'suspended';
@@ -199,6 +202,211 @@ function observeRows(f) {
 const rows = (f) => [...f.chat.messages.children];
 const contents = (f) => rows(f).map((node) => node.querySelector('.msg-text').textContent);
 const createdRows = (f) => f.created.filter((node) => node.classList.contains('chat-msg'));
+
+function retrySession(f) {
+  f.chat.handleEvent({
+    ...snapshot([]),
+    data: { messages: [], chatSessionId: 'c7c476a0-ea20-4357-b48a-23001edc0a03' },
+  });
+}
+
+function expireSend(f) {
+  const [id, callback] = f.timers.entries().next().value;
+  f.timers.delete(id);
+  callback();
+}
+
+test('an unconfirmed public send retries the same identity and reconciles a late ACK once', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  retrySession(f);
+  f.chat.input.value = 'original text';
+  f.chat.send();
+  const original = f.chat.store.messages[0];
+  expireSend(f);
+  assert.equal(original.status, 'unknown');
+  assert.match(rows(f)[0].textContent, /Delivery not confirmed/);
+  f.chat.input.value = 'new unsent draft';
+  rows(f)[0]
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Retry same message')
+    .click();
+  assert.equal(original.status, 'pending');
+  assert.deepEqual(f.state.sent.at(-1), [
+    'retry',
+    {
+      clientMessageId: original.clientMessageId,
+      sequence: 1,
+      chatSessionId: 'c7c476a0-ea20-4357-b48a-23001edc0a03',
+      content: 'original text',
+    },
+  ]);
+  assert.equal(f.chat.input.value, 'new unsent draft');
+  f.chat.handleEvent({
+    type: 'messageAck',
+    message: { ...original, messageId: 'server-confirmed' },
+  });
+  assert.equal(original.status, 'sent');
+  assert.equal(f.chat.store.messages.length, 1);
+  assert.equal(f.timers.size, 0);
+  f.chat.handleEvent({
+    type: 'messageRetryResult',
+    clientMessageId: original.clientMessageId,
+    outcome: 'unknown',
+    reason: 'receipt_expired',
+  });
+  assert.equal(original.status, 'sent', 'late uncertainty cannot downgrade confirmation');
+});
+
+test('private retry retains original recipient even when another conversation is active', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  retrySession(f);
+  f.chat.openPrivate('alice', 'Alice');
+  f.chat.input.value = 'private original';
+  f.chat.send();
+  const original = f.chat.store.messages[0];
+  expireSend(f);
+  f.chat.switchConversation('public');
+  f.chat.input.value = 'public draft';
+  f.chat.retry(original);
+  assert.equal(f.state.sent.at(-1)[1].targetParticipantId, 'alice');
+  assert.equal(f.state.sent.at(-1)[1].clientMessageId, original.clientMessageId);
+  assert.equal(f.chat.input.value, 'public draft');
+  f.chat.handleEvent({
+    type: 'messageRetryResult',
+    clientMessageId: original.clientMessageId,
+    outcome: 'unknown',
+    reason: 'recipient_unconfirmed',
+  });
+  assert.equal(original.status, 'unknown');
+  assert.equal(original.retry, undefined);
+  assert.match(original.error, /recipient session/);
+  f.chat.reset();
+});
+
+for (const boundary of ['expiry', 'membership', 'snapshot-session', 'identity', 'reset']) {
+  test(`uncertain send cannot retry across ${boundary}`, async () => {
+    const f = await fixture();
+    await f.chat.activate();
+    retrySession(f);
+    f.chat.input.value = 'old original';
+    f.chat.send();
+    const original = f.chat.store.messages[0];
+    expireSend(f);
+    if (boundary === 'expiry') original.retry.expiresAt = 0;
+    if (boundary === 'membership') f.state.room.membershipVersion++;
+    if (boundary === 'snapshot-session')
+      f.chat.handleEvent({
+        ...snapshot([]),
+        data: { messages: [], chatSessionId: 'af77d00d-c653-4b54-a253-cd830e435f11' },
+      });
+    if (boundary === 'identity') f.state.viewer = 'another-viewer';
+    if (boundary === 'reset') f.chat.reset();
+    f.chat.retry(original);
+    assert.equal(f.state.sent.length, 1);
+    assert.equal(f.timers.size, 0);
+  });
+}
+
+test('grace reconnect keeps retry identity but explicit membership activation retires it', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  retrySession(f);
+  f.chat.input.value = 'original';
+  f.chat.send();
+  const original = f.chat.store.messages[0];
+  expireSend(f);
+  f.state.room.connected = false;
+  f.chat.retry(original);
+  assert.equal(f.state.sent.length, 1);
+  f.state.room.connected = true;
+  f.chat.retry(original);
+  assert.equal(f.state.sent.length, 2);
+  f.state.room.membershipVersion++;
+  await f.chat.activate();
+  assert.equal(original.status, 'unknown');
+  assert.equal(original.retry, undefined);
+  assert.equal(f.timers.size, 0);
+});
+
+test('retry rejection stays unconfirmed and does not overwrite the next draft', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  retrySession(f);
+  f.chat.input.value = 'original';
+  f.chat.send();
+  const original = f.chat.store.messages[0];
+  expireSend(f);
+  f.chat.input.value = 'new draft';
+  f.chat.retry(original);
+  f.chat.retry(original);
+  assert.equal(f.state.sent.length, 2, 'only one retry may be pending');
+  f.chat.handleEvent({
+    type: 'socialError',
+    clientMessageId: original.clientMessageId,
+    message: 'Room unavailable',
+  });
+  assert.equal(
+    original.status,
+    'unknown',
+    'rejecting the check cannot prove the original was unsent',
+  );
+  assert.equal(f.chat.input.value, 'new draft');
+  assert.equal(f.timers.size, 0);
+  f.chat.reset();
+});
+
+test('a rejection arriving after a retry timeout cannot mark the original as unsent', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  retrySession(f);
+  f.chat.input.value = 'original';
+  f.chat.send();
+  const original = f.chat.store.messages[0];
+  const retryIdentity = original.retry;
+  expireSend(f);
+  f.chat.retry(original);
+  expireSend(f);
+  f.chat.input.value = 'next draft';
+  f.chat.handleEvent({
+    type: 'socialError',
+    clientMessageId: original.clientMessageId,
+    message: 'Room unavailable',
+  });
+  assert.equal(original.status, 'unknown');
+  assert.equal(original.retry, retryIdentity);
+  assert.match(original.error, /Delivery not confirmed/);
+  assert.equal(f.chat.input.value, 'next draft');
+  assert.equal(f.state.sent.length, 2, 'no automatic resend');
+  assert.equal(f.timers.size, 0);
+  f.chat.reset();
+});
+
+test('a full receipt window allows later same-ID checking without automatic retry', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  retrySession(f);
+  f.chat.input.value = 'original';
+  f.chat.send();
+  const original = f.chat.store.messages[0];
+  expireSend(f);
+  f.chat.retry(original);
+  f.chat.handleEvent({
+    type: 'messageRetryResult',
+    clientMessageId: original.clientMessageId,
+    outcome: 'unknown',
+    reason: 'capacity',
+  });
+  assert.equal(original.status, 'unknown');
+  assert.ok(original.retry);
+  assert.equal(f.timers.size, 0);
+  assert.equal(f.state.sent.length, 2);
+  f.chat.retry(original);
+  assert.equal(f.state.sent.length, 3);
+  assert.equal(f.state.sent.at(-1)[1].clientMessageId, original.clientMessageId);
+  f.chat.reset();
+});
 
 test('a full snapshot renders once and unchanged replay performs no row allocation or insertion', async () => {
   const f = await fixture();
@@ -301,6 +509,16 @@ test('mutable acknowledgement and failure fields update the retained row without
   assert.equal(row.querySelector('.delivery-error') !== null, true);
   assert.equal(f.chat.input.value, 'another unsent draft');
   assert.equal(f.document.activeElement, f.chat.input);
+  row
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Edit & resend')
+    .click();
+  assert.equal(
+    f.chat.input.value,
+    'another unsent draft',
+    'copying does not overwrite another draft',
+  );
+  f.chat.input.value = '';
   row
     .querySelectorAll('button')
     .find((node) => node.textContent === 'Edit & resend')

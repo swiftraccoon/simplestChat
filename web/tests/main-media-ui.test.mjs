@@ -53,6 +53,7 @@ test('concurrent home and leave actions share cleanup until it finishes', async 
      export { leaveCurrentRoom };`,
     {
       globals: {
+        updateJoinBtn() {},
         leaveRoomAndShowHome() {
           departures++;
           return cleanup.promise;
@@ -257,6 +258,7 @@ test('failed recovery actions persist and cannot retry or leave a replacement ro
         connectionStatus: {},
         pttDeactivate() {},
         applyRoomSettingsToUI() {},
+        retireRoomSettingsAction() {},
         observeUiTask() {},
         leaveCurrentRoom: () => leaves++,
         showActionToast(message, actions, duration) {
@@ -766,4 +768,31 @@ test('cancelling an owned password prompt disposes its room membership', async (
   );
   assert.equal(await api.joinRoomWithPassword(owner, 'private-room', 'Guest'), null);
   assert.equal(leaves, 1);
+});
+
+test('room limits distinguish blank, invalid and complete numeric values', async () => {
+  const status = { textContent: '' };
+  const { roomLimit } = evaluateTypeScript(`export ${await functionSource('roomLimit')}`, {
+    globals: { roomSettingsStatus: status },
+  });
+  const input = (value, number, valid = true, bad = false) => ({
+    value,
+    valueAsNumber: number,
+    validity: { badInput: bad },
+    checkValidity: () => valid,
+    reportValidity() {},
+    focus() {},
+  });
+  assert.equal(roomLimit(input('', NaN)), null);
+  assert.equal(roomLimit(input('3e1', 30)), 30);
+  assert.equal(roomLimit(input('0', 0)), 0);
+  for (const field of [
+    input('', NaN, false, true),
+    input('2.5', 2.5),
+    input('-1', -1),
+    input('4294967296', 4294967296),
+    input('2', 2, false),
+  ]) {
+    assert.equal(roomLimit(field), undefined);
+  }
 });

@@ -1,7 +1,9 @@
 //! Room-session chat and owner/moderator community tools.
 //! Private text is retained only in bounded memory, never in reports or logs.
 use super::*;
-use crate::signaling::protocol::{ChatEntry, ClientMessage, valid_correlation_id};
+use crate::signaling::protocol::{
+    ChatEntry, ChatRetryOutcome, ChatRetryReason, ClientMessage, valid_correlation_id,
+};
 use serde::Serialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -12,6 +14,11 @@ const MAX_IGNORED: usize = 100;
 const MAX_REPORTS: usize = 500;
 const MAX_RUNTIME_BANS: usize = 2000;
 const PAGE_SIZE: usize = 100;
+const CHAT_RECEIPT_TTL: std::time::Duration = std::time::Duration::from_secs(300);
+const CHAT_RECEIPTS: usize = 512;
+const CHAT_RECEIPT_BYTES: usize = 512 * 1024;
+const CHAT_RECEIPTS_PER_MEMBER: usize = 128;
+const MAX_CHAT_SEQUENCE: u64 = 9_007_199_254_740_991;
 
 type BanRow = (
     Uuid,
@@ -34,6 +41,9 @@ type ReportRow = (
 
 #[derive(Clone)]
 pub(crate) struct ParticipantSocial {
+    pub(super) connected: bool,
+    chat_session_id: Uuid,
+    chat_high_water: u64,
     joined_sequence: u64,
     allow_private_messages: bool,
     ignored: HashSet<String>,
@@ -297,6 +307,394 @@ mod tests {
         );
     }
 
+    fn sequenced_chat(
+        room: &mut Room,
+        sender: &Participant,
+        id: &str,
+        sequence: u64,
+        target: Option<&str>,
+        retry: Option<String>,
+    ) -> Result<()> {
+        RoomManager::process_chat_attempt(
+            room,
+            &sender.id,
+            &sender.sender,
+            ChatAttempt {
+                content: "hello".into(),
+                client_message_id: Some(id.into()),
+                recipient_id: target.map(String::from),
+                sequence: Some(sequence),
+                retry_session: retry,
+            },
+        )
+    }
+
+    #[test]
+    fn receipts_survive_history_eviction_and_reack_without_redelivery() {
+        let (mut room, alice, _, _, mut receivers) = fixture();
+        let session = alice.social.chat_session_id.to_string();
+        sequenced_chat(&mut room, &alice, "original", 1, None, None).unwrap();
+        let ack = receivers[0].try_recv().unwrap();
+        for receiver in receivers.iter_mut().skip(1) {
+            receiver.try_recv().unwrap();
+        }
+        room.social.history.clear();
+        room.social.history_bytes = 0;
+        sequenced_chat(&mut room, &alice, "original", 1, None, Some(session)).unwrap();
+        assert_eq!(receivers[0].try_recv().unwrap(), ack);
+        for receiver in receivers.iter_mut().skip(1) {
+            assert!(receiver.try_recv().is_err());
+        }
+        assert!(room.social.history.is_empty());
+        assert_eq!(room.social.receipts.len(), 1);
+    }
+
+    #[test]
+    fn expired_receipts_keep_the_watermark_and_never_rebroadcast() {
+        let (mut room, alice, _, _, mut receivers) = fixture();
+        let session = alice.social.chat_session_id.to_string();
+        sequenced_chat(&mut room, &alice, "original", 1, None, None).unwrap();
+        for receiver in &mut receivers {
+            receiver.try_recv().unwrap();
+        }
+        room.social
+            .prune_receipts(std::time::Instant::now() + CHAT_RECEIPT_TTL);
+        assert!(room.social.receipts.is_empty());
+        assert_eq!(room.social.receipt_bytes, 0);
+        sequenced_chat(&mut room, &alice, "original", 1, None, Some(session)).unwrap();
+        let result: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
+        assert_eq!(result["outcome"], "unknown");
+        assert_eq!(result["reason"], "receipt_expired");
+        for receiver in receivers.iter_mut().skip(1) {
+            assert!(receiver.try_recv().is_err());
+        }
+        assert_eq!(room.social.history.len(), 1);
+    }
+
+    #[test]
+    fn an_unreceived_latest_public_attempt_can_be_retried_once() {
+        let (mut room, alice, _, _, mut receivers) = fixture();
+        let session = alice.social.chat_session_id.to_string();
+        sequenced_chat(
+            &mut room,
+            &alice,
+            "unreceived",
+            1,
+            None,
+            Some(session.clone()),
+        )
+        .unwrap();
+        sequenced_chat(
+            &mut room,
+            &alice,
+            "unreceived",
+            1,
+            None,
+            Some(session.clone()),
+        )
+        .unwrap();
+        let first = receivers[0].try_recv().unwrap();
+        assert_eq!(first, receivers[0].try_recv().unwrap());
+        for receiver in receivers.iter_mut().skip(1) {
+            receiver.try_recv().unwrap();
+            assert!(receiver.try_recv().is_err());
+        }
+        sequenced_chat(&mut room, &alice, "later", 3, None, None).unwrap();
+        for receiver in &mut receivers {
+            receiver.try_recv().unwrap();
+        }
+        sequenced_chat(
+            &mut room,
+            &alice,
+            "earlier-unreceived",
+            2,
+            None,
+            Some(session),
+        )
+        .unwrap();
+        let result: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
+        assert_eq!(result["reason"], "sequence_superseded");
+        for receiver in receivers.iter_mut().skip(1) {
+            assert!(receiver.try_recv().is_err());
+        }
+    }
+
+    #[test]
+    fn retry_is_bound_to_membership_but_survives_sender_rebinding() {
+        let (mut room, alice, _, _, mut receivers) = fixture();
+        let session = alice.social.chat_session_id.to_string();
+        sequenced_chat(&mut room, &alice, "original", 1, None, None).unwrap();
+        let original = receivers[0].try_recv().unwrap();
+        for receiver in receivers.iter_mut().skip(1) {
+            receiver.try_recv().unwrap();
+        }
+        let (replacement_sender, mut replacement_rx) = mpsc::channel(16);
+        let actor = room.participants.get_mut(&alice.id).unwrap();
+        actor.sender = replacement_sender;
+        let rebound = actor.clone();
+        sequenced_chat(
+            &mut room,
+            &rebound,
+            "original",
+            1,
+            None,
+            Some(session.clone()),
+        )
+        .unwrap();
+        assert_eq!(original, replacement_rx.try_recv().unwrap());
+        let actor = room.participants.get_mut(&alice.id).unwrap();
+        actor.media_session_id = Uuid::new_v4();
+        actor.social = ParticipantSocial::new(room.social.next_sequence);
+        let fresh = actor.clone();
+        sequenced_chat(&mut room, &fresh, "original", 1, None, Some(session)).unwrap();
+        let result: Value = serde_json::from_str(&replacement_rx.try_recv().unwrap()).unwrap();
+        assert_eq!(result["reason"], "session_changed");
+        for receiver in receivers.iter_mut().skip(1) {
+            assert!(receiver.try_recv().is_err());
+        }
+    }
+
+    #[test]
+    fn private_retry_only_reconciles_a_receipt_never_a_replacement_recipient() {
+        let (mut room, alice, bob, _, mut receivers) = fixture();
+        let session = alice.social.chat_session_id.to_string();
+        sequenced_chat(&mut room, &alice, "private", 1, Some(&bob.id), None).unwrap();
+        let original = receivers[0].try_recv().unwrap();
+        receivers[1].try_recv().unwrap();
+        room.participants.get_mut(&bob.id).unwrap().media_session_id = Uuid::new_v4();
+        sequenced_chat(
+            &mut room,
+            &alice,
+            "private",
+            1,
+            Some(&bob.id),
+            Some(session.clone()),
+        )
+        .unwrap();
+        assert_eq!(original, receivers[0].try_recv().unwrap());
+        sequenced_chat(
+            &mut room,
+            &alice,
+            "missing-private",
+            2,
+            Some(&bob.id),
+            Some(session),
+        )
+        .unwrap();
+        let result: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
+        assert_eq!(result["reason"], "recipient_unconfirmed");
+        for receiver in receivers.iter_mut().skip(1) {
+            assert!(receiver.try_recv().is_err());
+        }
+    }
+
+    fn fill_receipt_cache(room: &mut Room, sender_session: Uuid, count: usize, bytes: usize) {
+        let template = room.social.receipts.front().unwrap().message.clone();
+        for index in 1..count {
+            let mut message = template.clone();
+            message.client_message_id = format!("cached-{index}");
+            room.social.receipts.push_back(ChatReceipt {
+                sender_session: if count > CHAT_RECEIPTS_PER_MEMBER {
+                    Uuid::new_v4()
+                } else {
+                    sender_session
+                },
+                sequence: None,
+                accepted_at: std::time::Instant::now(),
+                bytes,
+                message,
+            });
+            room.social.receipt_bytes += bytes;
+        }
+    }
+
+    #[test]
+    fn full_receipt_cache_admits_new_chat_without_redelivering_evicted_attempts() {
+        let (mut room, alice, _, _, mut receivers) = fixture();
+        sequenced_chat(&mut room, &alice, "original", 1, None, None).unwrap();
+        for receiver in &mut receivers {
+            receiver.try_recv().unwrap();
+        }
+        let original_bytes = room.social.receipts.front().unwrap().bytes;
+        // These are accepted entries from other memberships. The oldest room
+        // entry belongs to Alice, while her own receipt budget still has space.
+        fill_receipt_cache(&mut room, Uuid::new_v4(), CHAT_RECEIPTS, original_bytes);
+        sequenced_chat(&mut room, &alice, "new", 2, None, None).unwrap();
+        assert_eq!(room.social.receipts.len(), CHAT_RECEIPTS);
+        assert_eq!(
+            room.social
+                .receipts
+                .back()
+                .unwrap()
+                .message
+                .client_message_id,
+            "new"
+        );
+        assert!(room.social.receipt_bytes <= CHAT_RECEIPT_BYTES);
+        for receiver in &mut receivers {
+            receiver.try_recv().unwrap();
+        }
+        sequenced_chat(
+            &mut room,
+            &alice,
+            "original",
+            1,
+            None,
+            Some(alice.social.chat_session_id.to_string()),
+        )
+        .unwrap();
+        let result: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
+        assert_eq!(result["reason"], "sequence_superseded");
+        for receiver in receivers.iter_mut().skip(1) {
+            assert!(receiver.try_recv().is_err());
+        }
+        assert_eq!(room.social.history.len(), 2);
+    }
+
+    #[test]
+    fn member_and_byte_receipt_budgets_evict_oldest_before_new_confirmation() {
+        let (mut room, alice, _, _, mut receivers) = fixture();
+        sequenced_chat(&mut room, &alice, "original", 1, None, None).unwrap();
+        for receiver in &mut receivers {
+            receiver.try_recv().unwrap();
+        }
+        let original_bytes = room.social.receipts.front().unwrap().bytes;
+        fill_receipt_cache(
+            &mut room,
+            alice.media_session_id,
+            CHAT_RECEIPTS_PER_MEMBER,
+            original_bytes,
+        );
+        sequenced_chat(&mut room, &alice, "new", 2, None, None).unwrap();
+        assert_eq!(room.social.receipts.len(), CHAT_RECEIPTS_PER_MEMBER);
+        assert_eq!(
+            room.social
+                .receipts
+                .front()
+                .unwrap()
+                .message
+                .client_message_id,
+            "cached-1"
+        );
+        assert_eq!(
+            room.social
+                .receipts
+                .back()
+                .unwrap()
+                .message
+                .client_message_id,
+            "new"
+        );
+        assert_eq!(
+            room.social.receipt_bytes,
+            room.social
+                .receipts
+                .iter()
+                .map(|entry| entry.bytes)
+                .sum::<usize>()
+        );
+
+        // Test byte pressure independently of count pressure. Bookkeeping here
+        // represents serialized bounded messages without allocating their text.
+        room.social.receipts.truncate(2);
+        for entry in &mut room.social.receipts {
+            entry.bytes = CHAT_RECEIPT_BYTES / 2;
+        }
+        room.social.receipt_bytes = CHAT_RECEIPT_BYTES;
+        sequenced_chat(&mut room, &alice, "newer", 3, None, None).unwrap();
+        assert_eq!(room.social.receipts.len(), 2);
+        assert_eq!(
+            room.social
+                .receipts
+                .front()
+                .unwrap()
+                .message
+                .client_message_id,
+            "cached-2"
+        );
+        assert_eq!(
+            room.social
+                .receipts
+                .back()
+                .unwrap()
+                .message
+                .client_message_id,
+            "newer"
+        );
+        assert!(room.social.receipt_bytes <= CHAT_RECEIPT_BYTES);
+        assert_eq!(
+            room.social.receipt_bytes,
+            room.social
+                .receipts
+                .iter()
+                .map(|entry| entry.bytes)
+                .sum::<usize>()
+        );
+    }
+
+    #[test]
+    fn full_receipt_cache_preserves_existing_ack_and_conflict_without_eviction() {
+        let (mut room, alice, _, _, mut receivers) = fixture();
+        sequenced_chat(&mut room, &alice, "original", 1, None, None).unwrap();
+        let ack = receivers[0].try_recv().unwrap();
+        for receiver in receivers.iter_mut().skip(1) {
+            receiver.try_recv().unwrap();
+        }
+        let original_bytes = room.social.receipts.front().unwrap().bytes;
+        fill_receipt_cache(
+            &mut room,
+            alice.media_session_id,
+            CHAT_RECEIPTS_PER_MEMBER,
+            original_bytes,
+        );
+        let original_total = room.social.receipt_bytes;
+        let session = alice.social.chat_session_id.to_string();
+        sequenced_chat(
+            &mut room,
+            &alice,
+            "original",
+            1,
+            None,
+            Some(session.clone()),
+        )
+        .unwrap();
+        assert_eq!(receivers[0].try_recv().unwrap(), ack);
+        sequenced_chat(&mut room, &alice, "original", 2, None, Some(session)).unwrap();
+        let result: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
+        assert_eq!(result["reason"], "conflict");
+        assert_eq!(room.social.receipts.len(), CHAT_RECEIPTS_PER_MEMBER);
+        assert_eq!(room.social.receipt_bytes, original_total);
+        assert_eq!(
+            room.social
+                .receipts
+                .front()
+                .unwrap()
+                .message
+                .client_message_id,
+            "original"
+        );
+        for receiver in receivers.iter_mut().skip(1) {
+            assert!(receiver.try_recv().is_err());
+        }
+    }
+
+    #[test]
+    fn retry_schema_and_sequences_are_bounded() {
+        let valid = json!({"type":"retryChatMessage","clientMessageId":"original","sequence":1,"chatSessionId":Uuid::new_v4().to_string(),"content":"hello"});
+        assert!(serde_json::from_value::<ClientMessage>(valid.clone()).is_ok());
+        let mut extra = valid;
+        extra["unexpected"] = json!(true);
+        assert!(serde_json::from_value::<ClientMessage>(extra).is_err());
+        let (mut room, alice, _, _, mut receivers) = fixture();
+        for sequence in [0, MAX_CHAT_SEQUENCE + 1] {
+            assert!(sequenced_chat(&mut room, &alice, "invalid", sequence, None, None).is_err());
+        }
+        assert!(room.social.receipts.is_empty());
+        for receiver in &mut receivers {
+            assert!(receiver.try_recv().is_err());
+        }
+    }
+
     #[test]
     fn history_is_bounded_and_new_members_do_not_receive_prejoin_text() {
         let (mut room, alice, _, carol, _) = fixture();
@@ -446,8 +844,8 @@ mod tests {
                 .try_send(crate::OutboundJson::from("queued"))
                 .unwrap();
         }
-        assert!(chat(&mut room, &alice, "same-id", None).is_err());
-        assert!(chat(&mut room, &alice, "same-id", None).is_err());
+        chat(&mut room, &alice, "same-id", None).unwrap();
+        chat(&mut room, &alice, "same-id", None).unwrap();
         assert_eq!(room.social.history.len(), 1);
         for receiver in receivers.iter_mut().skip(1) {
             assert!(receiver.try_recv().is_ok());
@@ -874,6 +1272,9 @@ mod tests {
 impl ParticipantSocial {
     pub(crate) fn new(joined_sequence: u64) -> Self {
         Self {
+            connected: true,
+            chat_session_id: Uuid::new_v4(),
+            chat_high_water: 0,
             joined_sequence,
             allow_private_messages: true,
             ignored: HashSet::new(),
@@ -886,6 +1287,22 @@ struct HistoryEntry {
     sender_session: Uuid,
     recipient_session: Option<Uuid>,
     message: ChatEntry,
+}
+
+struct ChatReceipt {
+    sender_session: Uuid,
+    sequence: Option<u64>,
+    accepted_at: std::time::Instant,
+    bytes: usize,
+    message: ChatEntry,
+}
+
+struct ChatAttempt {
+    content: String,
+    client_message_id: Option<String>,
+    recipient_id: Option<String>,
+    sequence: Option<u64>,
+    retry_session: Option<String>,
 }
 
 const REPORT_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(30);
@@ -909,6 +1326,8 @@ pub(crate) struct RoomSocial {
     report_cooldowns: HashMap<String, std::time::Instant>,
     history: VecDeque<HistoryEntry>,
     history_bytes: usize,
+    receipts: VecDeque<ChatReceipt>,
+    receipt_bytes: usize,
     bans: HashMap<String, RuntimeBan>,
     reports: VecDeque<ReportEntry>,
 }
@@ -1017,6 +1436,7 @@ impl ClientMessage {
             Self::PrivateMessage {
                 client_message_id, ..
             } => Some(client_message_id.clone()),
+            Self::RetryChatMessage(message) => Some(message.client_message_id.clone()),
             _ => None,
         };
         if request_id.is_none() && client_message_id.is_none() {
@@ -1041,6 +1461,22 @@ fn send(
         crate::OutboundJson::from(serde_json::to_string(message)?),
     )
     .map_err(|_| rejected("Connection is busy; please retry"))
+}
+
+fn acknowledge_chat(
+    metrics: &ServerMetrics,
+    sender: &mpsc::Sender<crate::OutboundJson>,
+    message: ChatEntry,
+) -> Result<()> {
+    let json = crate::OutboundJson::from(serde_json::to_string(&ServerMessage::MessageAck {
+        client_message_id: message.client_message_id.clone(),
+        message,
+    })?);
+    // Acceptance already happened. Queue rejection is counted, but must not
+    // become a SocialError claiming the message failed. The sender retains an
+    // unconfirmed attempt and can reconcile its receipt after reconnecting.
+    let _ = try_send_essential(metrics, sender, json);
+    Ok(())
 }
 fn page_offset(offset: Option<u32>) -> Result<usize> {
     let offset = offset.unwrap_or(0) as usize;
@@ -1076,6 +1512,47 @@ fn can_private_message(sender: &Participant, recipient: &Participant) -> bool {
         && !sender.social.ignored.contains(&recipient.id)
 }
 impl RoomSocial {
+    fn prune_receipts(&mut self, now: std::time::Instant) {
+        while self
+            .receipts
+            .front()
+            .is_some_and(|entry| now.duration_since(entry.accepted_at) >= CHAT_RECEIPT_TTL)
+        {
+            if let Some(entry) = self.receipts.pop_front() {
+                self.receipt_bytes = self.receipt_bytes.saturating_sub(entry.bytes);
+            }
+        }
+    }
+
+    fn make_receipt_room(&mut self, sender_session: Uuid, bytes: usize) {
+        // Accepted newer messages must not stall on a confirmation cache. The
+        // membership watermark still prevents evicted sequenced attempts from
+        // being delivered twice; their status simply becomes unconfirmed.
+        while self
+            .receipts
+            .iter()
+            .filter(|entry| entry.sender_session == sender_session)
+            .count()
+            >= CHAT_RECEIPTS_PER_MEMBER
+        {
+            let index = self
+                .receipts
+                .iter()
+                .position(|entry| entry.sender_session == sender_session)
+                .expect("member receipt count checked");
+            let entry = self.receipts.remove(index).expect("receipt index checked");
+            self.receipt_bytes -= entry.bytes;
+        }
+        while self.receipts.len() >= CHAT_RECEIPTS
+            || bytes > CHAT_RECEIPT_BYTES.saturating_sub(self.receipt_bytes)
+        {
+            let Some(entry) = self.receipts.pop_front() else {
+                break;
+            };
+            self.receipt_bytes -= entry.bytes;
+        }
+    }
+
     /// Whether this identity reported within the cooldown. Expired entries
     /// are dropped here, so the map never outgrows one cooldown of reporters.
     pub(crate) fn report_cooldown_active(&mut self, key: &str, now: std::time::Instant) -> bool {
@@ -1166,6 +1643,51 @@ impl RoomSocial {
 }
 
 impl RoomManager {
+    pub async fn handle_chat_command(
+        &self,
+        room_id: &str,
+        sender_id: &str,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
+        command: &ClientMessage,
+    ) -> Result<()> {
+        let attempt = match command {
+            ClientMessage::ChatMessage {
+                content,
+                client_message_id,
+                sequence,
+            } => ChatAttempt {
+                content: content.clone(),
+                client_message_id: client_message_id.clone(),
+                recipient_id: None,
+                sequence: *sequence,
+                retry_session: None,
+            },
+            ClientMessage::PrivateMessage {
+                content,
+                client_message_id,
+                target_participant_id,
+                sequence,
+            } => ChatAttempt {
+                content: content.clone(),
+                client_message_id: Some(client_message_id.clone()),
+                recipient_id: Some(target_participant_id.clone()),
+                sequence: *sequence,
+                retry_session: None,
+            },
+            ClientMessage::RetryChatMessage(message) => ChatAttempt {
+                content: message.content.clone(),
+                client_message_id: Some(message.client_message_id.clone()),
+                recipient_id: message.target_participant_id.clone(),
+                sequence: Some(message.sequence),
+                retry_session: Some(message.chat_session_id.clone()),
+            },
+            _ => return Err(rejected("Invalid chat command")),
+        };
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+        Self::process_chat_attempt(&mut room, sender_id, expected_sender, attempt)
+    }
+
     pub async fn send_social_chat(
         &self,
         room_id: &str,
@@ -1195,6 +1717,34 @@ impl RoomManager {
         client_message_id: Option<String>,
         recipient_id: Option<&str>,
     ) -> Result<()> {
+        Self::process_chat_attempt(
+            room,
+            sender_id,
+            expected_sender,
+            ChatAttempt {
+                content,
+                client_message_id,
+                recipient_id: recipient_id.map(String::from),
+                sequence: None,
+                retry_session: None,
+            },
+        )
+    }
+
+    fn process_chat_attempt(
+        room: &mut Room,
+        sender_id: &str,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
+        attempt: ChatAttempt,
+    ) -> Result<()> {
+        let ChatAttempt {
+            content,
+            client_message_id,
+            recipient_id,
+            sequence,
+            retry_session,
+        } = attempt;
+        let recipient_id = recipient_id.as_deref();
         if content.trim().is_empty()
             || content.len() > 4096
             || content
@@ -1207,15 +1757,70 @@ impl RoomManager {
         if !valid_correlation_id(&client_message_id) {
             return Err(rejected("Invalid message ID"));
         }
+        if sequence.is_some_and(|value| value == 0 || value > MAX_CHAT_SEQUENCE)
+            || recipient_id.is_some_and(|id| id.parse::<Uuid>().is_err())
+        {
+            return Err(rejected("Invalid chat attempt"));
+        }
         room.ensure_live()?;
+        let now = std::time::Instant::now();
+        room.social.prune_receipts(now);
         let sender = Self::participant_for_sender(room, sender_id, expected_sender)?;
+        let metrics = room.metrics.clone();
+        let unknown = |reason| {
+            send(
+                &metrics,
+                expected_sender,
+                &ServerMessage::MessageRetryResult {
+                    client_message_id: client_message_id.clone(),
+                    outcome: ChatRetryOutcome::Unknown,
+                    reason,
+                },
+            )
+        };
+        if retry_session.as_ref().is_some_and(|session| {
+            session.parse::<Uuid>().ok() != Some(sender.social.chat_session_id)
+        }) {
+            return unknown(ChatRetryReason::SessionChanged);
+        }
+        let sender_session = sender.media_session_id;
+        if let Some(existing) = room.social.receipts.iter().find(|entry| {
+            entry.sender_session == sender_session
+                && entry.message.client_message_id == client_message_id
+        }) {
+            if existing.message.content != content
+                || existing.message.recipient_id.as_deref() != recipient_id
+                || existing.sequence != sequence
+            {
+                if retry_session.is_none() {
+                    return Err(rejected("Message ID was already used"));
+                }
+                return unknown(ChatRetryReason::Conflict);
+            }
+            return acknowledge_chat(&room.metrics, expected_sender, existing.message.clone());
+        }
+        // This watermark survives receipt expiry and history eviction for the
+        // exact membership. Missing older attempts must never be broadcast again.
+        if let Some(sequence) = sequence
+            && sequence <= sender.social.chat_high_water
+        {
+            return unknown(if sequence == sender.social.chat_high_water {
+                ChatRetryReason::ReceiptExpired
+            } else {
+                ChatRetryReason::SequenceSuperseded
+            });
+        }
+        // Without a receipt the original recipient's membership is unknown.
+        // Never deliver retained private text into a replacement membership.
+        if retry_session.is_some() && recipient_id.is_some() {
+            return unknown(ChatRetryReason::RecipientUnconfirmed);
+        }
         let moderated = room.settings.as_ref().is_some_and(|s| s.moderated);
         if room.settings.as_ref().is_some_and(|s| !s.allow_chat)
             || !moderation::can_chat(&sender.punitive, sender.role, moderated)
         {
             return Err(rejected("You are not allowed to chat"));
         }
-        let sender_session = sender.media_session_id;
         let sender_name = sender.name.clone();
         if let Some(existing) = room.social.history.iter().find(|entry| {
             entry.sender_session == sender_session
@@ -1226,14 +1831,7 @@ impl RoomManager {
             {
                 return Err(rejected("Message ID was already used"));
             }
-            return send(
-                &room.metrics,
-                expected_sender,
-                &ServerMessage::MessageAck {
-                    client_message_id,
-                    message: existing.message.clone(),
-                },
-            );
+            return acknowledge_chat(&room.metrics, expected_sender, existing.message.clone());
         }
         let recipient = if let Some(id) = recipient_id {
             let recipient = room
@@ -1251,11 +1849,6 @@ impl RoomManager {
         } else {
             None
         };
-        // A private message reaches one bounded queue; only public fan-out
-        // draws on the room-wide window.
-        if recipient.is_none() && !room.reserve_chat_broadcast(std::time::Instant::now()) {
-            return Err(rejected("Room chat rate limit exceeded"));
-        }
         let message = ChatEntry {
             message_id: Uuid::new_v4().to_string(),
             client_message_id: client_message_id.clone(),
@@ -1266,6 +1859,19 @@ impl RoomManager {
             content,
             sent_at: chrono::Utc::now().to_rfc3339(),
         };
+        let receipt_bytes = serde_json::to_vec(&message)?.len();
+        if receipt_bytes > CHAT_RECEIPT_BYTES {
+            if retry_session.is_some() {
+                return unknown(ChatRetryReason::Capacity);
+            }
+            return Err(rejected("Chat confirmation exceeds its size limit"));
+        }
+        // A private message reaches one bounded queue; only public fan-out
+        // draws on the room-wide window. Rejecting a send must not evict an
+        // accepted message's confirmation receipt.
+        if recipient.is_none() && !room.reserve_chat_broadcast(now) {
+            return Err(rejected("Room chat rate limit exceeded"));
+        }
         if let Some((_, _, recipient_sender)) = &recipient {
             // Only acknowledged when the recipient's live connection accepted delivery.
             send(
@@ -1291,19 +1897,28 @@ impl RoomManager {
                 }
             }
         }
+        room.social.make_receipt_room(sender_session, receipt_bytes);
+        room.social.receipt_bytes += receipt_bytes;
+        room.social.receipts.push_back(ChatReceipt {
+            sender_session,
+            sequence,
+            accepted_at: now,
+            bytes: receipt_bytes,
+            message: message.clone(),
+        });
+        if let Some(sequence) = sequence {
+            room.participants
+                .get_mut(sender_id)
+                .expect("current sender checked")
+                .social
+                .chat_high_water = sequence;
+        }
         room.social.remember(
             sender_session,
             recipient.as_ref().map(|r| r.1),
             message.clone(),
         );
-        send(
-            &room.metrics,
-            expected_sender,
-            &ServerMessage::MessageAck {
-                client_message_id,
-                message,
-            },
-        )
+        acknowledge_chat(&room.metrics, expected_sender, message)
     }
 
     pub async fn handle_social_request(
@@ -1512,6 +2127,7 @@ impl RoomManager {
                         room.settings.as_ref().is_some_and(|s| s.moderated),
                     );
                 json!({"participants":participants,"messages":messages,"lobby":lobby,"yourRole":actor_role.name(),
+                    "chatSessionId":actor.social.chat_session_id,
                     "roomSettings":room.settings,"nickname":actor.name,"allowPrivateMessages":actor.social.allow_private_messages,"ignoredParticipantIds":actor.social.ignored,
                     "pausedProducerIds":paused_producer_ids,"textMuted":actor.punitive.text_muted,"camBanned":actor.punitive.cam_banned,"canChat":can_chat,
                     "localProducerIds":actor.producers.keys().collect::<Vec<_>>(),

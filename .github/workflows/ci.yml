@@ -355,6 +355,26 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Shared account state and room navigation in Chromium and Firefox
+        timeout-minutes: 4
+        env:
+          AUTH_CROSS_TAB_E2E: "1"
+        run: |
+          for browser in chromium firefox; do
+            E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/account-tabs-${browser}" \
+              build/with-test-server.sh node web/e2e/auth-cross-tab.cjs
+          done
+
+      - name: Confirm room controls and retain failed edits
+        timeout-minutes: 4
+        env:
+          ROOM_CONTROL_E2E: "1"
+        run: |
+          for browser in chromium firefox; do
+            E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/room-controls-${browser}" \
+              build/with-test-server.sh node web/e2e/room-control-confirmation.cjs
+          done
+
       - name: Real passkey registration and discoverable authentication
         timeout-minutes: 4
         env:
@@ -422,6 +442,36 @@ jobs:
         env:
           E2E_ARTIFACTS: ${{ runner.temp }}/community-e2e
         run: build/with-test-server.sh npm --prefix web/e2e test
+
+      - name: Media continuity and device controls in Chromium and Firefox
+        timeout-minutes: 4
+        env:
+          MEDIA_CONTINUITY_E2E: "1"
+        run: |
+          for browser in chromium firefox; do
+            E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/media-continuity-${browser}" \
+              build/with-test-server.sh node web/e2e/media-continuity.cjs
+          done
+
+      - name: Reconcile interrupted chat sends without duplicate delivery
+        timeout-minutes: 4
+        env:
+          CHAT_RETRY_E2E: "1"
+          E2E_ARTIFACTS: ${{ runner.temp }}/chat-retry
+        run: build/with-test-server.sh node web/e2e/chat-retry.cjs
+
+      - name: Preserve product continuity diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: product-continuity
+          path: |
+            ${{ runner.temp }}/account-tabs-*
+            ${{ runner.temp }}/room-controls-*
+            ${{ runner.temp }}/media-continuity-*
+            ${{ runner.temp }}/chat-retry
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Received call outcomes with real browser media
         timeout-minutes: 4

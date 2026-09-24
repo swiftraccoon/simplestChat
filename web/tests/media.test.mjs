@@ -73,6 +73,7 @@ async function fixture(t) {
     logs: [],
     warnings: [],
     capture: null,
+    displayCapture: null,
     beforeProduce: null,
     replace: null,
   };
@@ -99,7 +100,10 @@ async function fixture(t) {
               ? state.capture(constraints)
               : Promise.resolve(new Stream([newTrack(constraints.audio ? 'audio' : 'video')]));
           },
-          getDisplayMedia: async () => new Stream([newTrack('video'), newTrack('audio')]),
+          getDisplayMedia: async () =>
+            state.displayCapture
+              ? state.displayCapture()
+              : new Stream([newTrack('video'), newTrack('audio')]),
         },
       },
       console: {
@@ -424,6 +428,174 @@ test('offline viewer changes retain only the final pause and quality state', asy
     { type: 'resumeConsumer', consumerId: consumer.id },
     { type: 'setConsumerPreferredLayers', consumerId: consumer.id, spatialLayer: 0 },
   ]);
+});
+
+test('receive recovery awaits retirement without changing capture or mute intent', async (t) => {
+  const { media, state, newTrack } = await fixture(t);
+  media.recvTransport = { close() {}, closed: false };
+  await media.unmuteVideo();
+  await media.unmuteAudio();
+  media.muteAudio();
+  await settleControls();
+  const localVideo = media.getLocalStream().getVideoTracks()[0];
+  const captureCount = state.captureCalls.length;
+  const consumer = new Consumer({
+    id: 'consumer',
+    localId: '0',
+    producerId: 'remote',
+    track: newTrack('video'),
+    rtpParameters: {},
+  });
+  media.consumers.set(consumer.id, consumer);
+  media.producerToConsumer.set('remote', consumer.id);
+  const reply = deferred();
+  state.controlReply = () => reply.promise;
+  state.sent.length = 0;
+  let completed = false;
+  const retiring = media.retireConsumerByProducer('remote').then(() => {
+    completed = true;
+  });
+  await Promise.resolve();
+  assert.equal(consumer.closed, true);
+  assert.equal(media.getConsumerTrackByProducer('remote'), null);
+  assert.equal(completed, false, 'resubscription must wait for the server retirement');
+  assert.deepEqual(state.sent, [{ type: 'closeConsumer', consumerId: 'consumer' }]);
+  reply.resolve({ type: 'mediaControlApplied' });
+  await retiring;
+  assert.equal(state.captureCalls.length, captureCount);
+  assert.equal(media.audioEnabled, false);
+  assert.equal(media.videoEnabled, true);
+  assert.equal(media.getLocalStream().getVideoTracks()[0], localVideo);
+  assert.equal(localVideo.readyState, 'live');
+});
+
+for (const failure of ['rejected', 'replacement', 'closed']) {
+  test(`receive recovery rejects a ${failure} retirement and never closes a replacement`, async (t) => {
+    const { media, state, newTrack } = await fixture(t);
+    media.recvTransport = { close() {}, closed: false };
+    const consumer = new Consumer({
+      id: 'old',
+      localId: '0',
+      producerId: 'remote',
+      track: newTrack('video'),
+      rtpParameters: {},
+    });
+    media.consumers.set(consumer.id, consumer);
+    media.producerToConsumer.set('remote', consumer.id);
+    const reply = deferred();
+    state.controlReply = () => reply.promise;
+    const retiring = media.retireConsumerByProducer('remote');
+    const rejected = assert.rejects(retiring);
+    let replacement;
+    if (failure === 'closed') media.close();
+    else {
+      if (failure === 'replacement') media.recvTransport = { close() {}, closed: false };
+      replacement = new Consumer({
+        id: 'new',
+        localId: '1',
+        producerId: 'remote',
+        track: newTrack('video'),
+        rtpParameters: {},
+      });
+      media.consumers.set(replacement.id, replacement);
+      media.producerToConsumer.set('remote', replacement.id);
+    }
+    if (failure === 'rejected') reply.reject(new Error('retirement refused'));
+    else reply.resolve({ type: 'mediaControlApplied' });
+    await rejected;
+    if (replacement) {
+      assert.equal(replacement.closed, false);
+      assert.equal(media.getConsumerTrackByProducer('remote'), replacement.track);
+    }
+  });
+}
+
+test('receive recovery requires a live receive transport and restored signaling ownership', async (t) => {
+  const { media, signaling, state } = await fixture(t);
+  await assert.rejects(media.retireConsumerByProducer('missing'));
+  media.recvTransport = { close() {}, closed: false };
+  media.suspendSignaling();
+  await assert.rejects(media.retireConsumerByProducer('missing'));
+  signaling.connected = false;
+  await assert.rejects(media.retireConsumerByProducer('missing'));
+  assert.deepEqual(state.sent, []);
+});
+
+for (const failure of ['refused', 'timeout']) {
+  test(`a ${failure} receive retirement must be acknowledged before another server consumer is created`, async (t) => {
+    const { media, state, newTrack } = await fixture(t);
+    media.device = { recvRtpCapabilities: {} };
+    media.recvTransport = {
+      close() {},
+      closed: false,
+      async consume() {
+        throw new Error('A new native receiver is not part of this check');
+      },
+    };
+    const consumer = new Consumer({
+      id: 'old',
+      localId: '0',
+      producerId: 'remote',
+      track: newTrack('video'),
+      rtpParameters: {},
+    });
+    media.consumers.set(consumer.id, consumer);
+    media.producerToConsumer.set('remote', consumer.id);
+    const error = new Error('Retirement was not confirmed');
+    error.name = failure === 'timeout' ? 'TimeoutError' : 'Error';
+    state.controlReply = () => Promise.reject(error);
+    await assert.rejects(media.retireConsumerByProducer('remote'));
+    assert.equal(media.consumerRetirements.get('remote').id, 'old');
+    await assert.rejects(media.consume('remote'));
+    assert.deepEqual(
+      state.sent.map((message) => message.type),
+      ['closeConsumer', 'closeConsumer'],
+    );
+    const reply = deferred();
+    state.controlReply = (message) =>
+      message.type === 'closeConsumer'
+        ? reply.promise
+        : Promise.reject(new Error('New subscription reached only after retirement ACK'));
+    const first = media.retireConsumerByProducer('remote');
+    const second = media.consume('remote');
+    const consumeFailed = assert.rejects(second);
+    assert.equal(
+      state.sent.filter((message) => message.type === 'closeConsumer').length,
+      3,
+      'concurrent cleanup shares one native request',
+    );
+    assert.equal(
+      state.sent.some((message) => message.type === 'consume'),
+      false,
+    );
+    reply.resolve({ type: 'mediaControlApplied' });
+    await first;
+    await consumeFailed;
+    assert.equal(state.sent.at(-1).type, 'consume');
+    assert.equal(media.consumerRetirements.size, 0);
+  });
+}
+
+test('unconfirmed retirement identities are bounded without evicting or closing another consumer', async (t) => {
+  const { media, state, newTrack } = await fixture(t);
+  media.recvTransport = { close() {}, closed: false };
+  for (let index = 0; index < 256; index++)
+    media.consumerRetirements.set(`retired-${index}`, { id: `old-${index}` });
+  const consumer = new Consumer({
+    id: 'live',
+    localId: '0',
+    producerId: 'remote',
+    track: newTrack('video'),
+    rtpParameters: {},
+  });
+  media.consumers.set(consumer.id, consumer);
+  media.producerToConsumer.set('remote', consumer.id);
+  await assert.rejects(media.retireConsumerByProducer('remote'), /cleanup is still pending/);
+  assert.equal(media.consumerRetirements.size, 256);
+  assert.equal(consumer.closed, false);
+  assert.deepEqual(state.sent, []);
+  media.close();
+  assert.equal(media.consumerRetirements.size, 0);
 });
 
 for (const closure of ['local', 'server', 'session']) {
@@ -1512,14 +1684,14 @@ test('forced screen-video closure cannot resurrect a pending screen-audio produc
     true,
   );
   audio.resolve();
-  assert.equal(await sharing, null);
+  assert.deepEqual(await sharing, { status: 'not_started', reason: 'superseded' });
   assert.equal(
     state.producers.every((producer) => producer.closed),
     true,
   );
   assert.equal(media.isScreenSharing, false);
   state.beforeProduce = null;
-  assert.ok(await media.startScreenShare());
+  assert.equal((await media.startScreenShare()).status, 'started');
   assert.equal(media.isScreenSharing, true);
 });
 
@@ -1540,14 +1712,76 @@ test('ending screen capture during video publication cancels the whole pending s
   state.tracks[0].endExternally();
   assert.ok(state.tracks.every((track) => track.readyState === 'ended'));
   published.resolve();
-  assert.equal(await sharing, null);
+  assert.deepEqual(await sharing, { status: 'not_started', reason: 'superseded' });
   assert.equal(media.isScreenSharing, false);
   assert.equal(stopped, 1);
   assert.equal(state.producers.length, 1, 'cancelled sharing must not publish audio');
   assert.ok(state.producers.every((producer) => producer.closed));
   assert.equal(closeMessages(state, state.producers[0]).length, 1);
   state.beforeProduce = null;
-  assert.ok(await media.startScreenShare(), 'a new capture can start after cancellation');
+  assert.equal(
+    (await media.startScreenShare()).status,
+    'started',
+    'a new capture can start after cancellation',
+  );
+});
+
+for (const [name, reason] of [
+  ['NotAllowedError', 'cancelled_or_denied'],
+  ['NotReadableError', 'not_readable'],
+  ['NotFoundError', 'no_source'],
+  ['InvalidStateError', 'invalid_state'],
+  ['AbortError', 'failed'],
+]) {
+  test(`screen picker ${name} returns a safe explicit outcome and permits a new attempt`, async (t) => {
+    const { state, media } = await fixture(t);
+    state.displayCapture = () => {
+      throw new DOMException('private device detail', name);
+    };
+    assert.deepEqual(await media.startScreenShare(), { status: 'not_started', reason });
+    assert.equal(media.isScreenSharing, false);
+    assert.equal(media.screenShareAudio, 'off');
+    state.displayCapture = null;
+    assert.deepEqual(await media.startScreenShare(), { status: 'started', audio: 'sharing' });
+  });
+}
+
+test('optional screen audio failure keeps video sharing and clearly reports partial success', async (t) => {
+  const { state, media } = await fixture(t);
+  state.beforeProduce = (options) => {
+    if (options.appData.source === 'screen-audio') throw new Error('private native failure');
+  };
+  assert.deepEqual(await media.startScreenShare(), { status: 'started', audio: 'failed' });
+  assert.equal(media.isScreenSharing, true);
+  assert.equal(state.tracks.find((track) => track.kind === 'video').readyState, 'live');
+  assert.equal(state.tracks.find((track) => track.kind === 'audio').readyState, 'ended');
+  assert.equal(state.producers.length, 1);
+  media.stopScreenShare();
+  assert.equal(media.screenShareAudio, 'off');
+  assert.ok(state.tracks.every((track) => track.readyState === 'ended'));
+});
+
+test('screen audio ending independently updates state and retires only its producer', async (t) => {
+  const { state, media } = await fixture(t);
+  const changes = [];
+  media.onScreenShareAudioChanged = (value) => changes.push(value);
+  await media.startScreenShare();
+  const audio = state.tracks.find((track) => track.kind === 'audio');
+  audio.endExternally();
+  assert.equal(media.isScreenSharing, true);
+  assert.equal(media.screenShareAudio, 'ended');
+  assert.equal(state.producers.find((producer) => producer.kind === 'audio').closed, true);
+  assert.equal(state.producers.find((producer) => producer.kind === 'video').closed, false);
+  assert.deepEqual(changes, ['not_provided', 'sharing', 'ended']);
+  media.close();
+  assert.equal(media.screenShareAudio, 'off');
+});
+
+test('screen sharing without an audio track does not claim that sound is included', async (t) => {
+  const { state, media, newTrack } = await fixture(t);
+  state.displayCapture = () => new Stream([newTrack('video')]);
+  assert.deepEqual(await media.startScreenShare(), { status: 'started', audio: 'not_provided' });
+  assert.equal(media.isScreenSharing, true);
 });
 
 for (const stage of ['receiver', 'resume']) {

@@ -52,6 +52,7 @@ async function fixture(t) {
       './media-controls.css': {},
       './settings-dialog': {},
       './settings-dialog.css': {},
+      './audio-output': await loadTypeScript('src/audio-output.ts'),
     },
     globals: {
       document: dom.document,

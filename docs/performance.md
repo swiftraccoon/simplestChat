@@ -13,7 +13,7 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 480 KiB            | 100 KiB    |
+| JavaScript  | 512 KiB            | 112 KiB    |
 | CSS         | 64 KiB             | 12 KiB     |
 | HTML        | 48 KiB             | 10 KiB     |
 
@@ -39,6 +39,17 @@ to room lifecycle tracking and 1.2 kB to strict response decoders; existing
 mediasoup dependencies were unchanged. Subsequent lifecycle race fixes are
 included in the same ceiling. These figures explain the reviewed feature growth,
 not a runtime-performance guarantee.
+
+The subsequent seven product improvements raise the JavaScript ceiling to
+512 KiB raw and 112 KiB gzip: shared-account synchronization, confirmed room
+controls, duplicate-safe chat reconciliation, incoming-media repair, screen-share
+results, live audio-device controls, and explicit room navigation. The previous
+build measured 472,453 bytes raw / 101,607 gzip; the validated product build
+measured 505,471 / 110,157. These additions use browser APIs and the existing
+libraries; no runtime dependency was added. All emitted chunks remain counted,
+including optional code. The revised ceiling accommodates these workflows while
+keeping a bounded margin for final correctness fixes; it is not evidence of
+unchanged runtime performance.
 
 ## Controlled local comparison
 

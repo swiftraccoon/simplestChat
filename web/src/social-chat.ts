@@ -31,6 +31,9 @@ export class SocialChat {
   private readonly emojiPanel = el('div', undefined, 'emoji-panel');
   private readonly pendingStarted = new Map<string, number>();
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly retrying = new Set<string>();
+  private chatSessionId: string | null = null;
+  private chatSequence = 0;
   // Only the active conversation's visible, retained messages own DOM nodes.
   private readonly rows = new Map<string, MessageRow>();
   private preferences: Preferences = {
@@ -155,6 +158,7 @@ export class SocialChat {
       this.loadPreferences();
     }
     if (this.membershipVersion !== room.membershipVersion) {
+      this.retireDeliveryAttempts();
       this.activation++;
       this.preferenceOperation++;
       this.preferenceBusy = false;
@@ -216,6 +220,9 @@ export class SocialChat {
     for (const timer of this.pending.values()) clearTimeout(timer);
     for (const id of this.pendingStarted.keys()) this.finishSend(id, 'superseded');
     this.pending.clear();
+    this.retrying.clear();
+    this.chatSessionId = null;
+    this.chatSequence = 0;
     this.store.reset();
     for (const row of this.rows.values()) row.node.remove();
     this.rows.clear();
@@ -257,15 +264,60 @@ export class SocialChat {
     else if (message.type === 'privateMessageReceived') this.receive(message.message);
     else if (message.type === 'messageAck') this.receive(message.message);
     else if (message.type === 'socialError' && message.clientMessageId) {
-      this.finishSend(message.clientMessageId, 'denied');
+      // The reply has the original message ID, not a retry-attempt ID. Once
+      // unconfirmed, a delayed rejection cannot prove the original was unsent.
+      const unknown =
+        this.retrying.has(message.clientMessageId) ||
+        this.store.messages.some(
+          (item) =>
+            item.participantId === this.store.localId &&
+            item.clientMessageId === message.clientMessageId &&
+            item.status === 'unknown',
+        );
+      this.finishSend(message.clientMessageId, unknown ? 'unknown' : 'denied');
       this.clearPending(message.clientMessageId);
-      this.store.fail(message.clientMessageId, message.message);
+      this.store.fail(
+        message.clientMessageId,
+        unknown ? `Delivery not confirmed. ${message.message}` : message.message,
+        unknown,
+      );
       this.render();
     } else if (message.type === 'socialResponse' && message.action === 'getRoomSnapshot') {
       const snapshot = message.data;
+      if (snapshot.chatSessionId !== undefined) {
+        if (this.chatSessionId !== null && this.chatSessionId !== snapshot.chatSessionId)
+          this.retireDeliveryAttempts();
+        this.chatSessionId = snapshot.chatSessionId;
+      }
       // Ingest synchronously so replay retains the same ordering, privacy and
       // acknowledgement semantics, then reconcile the bounded view just once.
       for (const entry of snapshot.messages) this.ingest(entry, true);
+      this.render();
+    } else if (message.type === 'messageRetryResult') {
+      this.finishSend(message.clientMessageId, 'unknown');
+      this.clearPending(message.clientMessageId);
+      const explanations: Record<typeof message.reason, string> = {
+        session_changed: 'The room session changed.',
+        receipt_expired: 'The server no longer retains this confirmation.',
+        sequence_superseded:
+          'A later message was accepted and this earlier attempt cannot be verified.',
+        capacity: 'The room could not retain this confirmation. Try again within the retry window.',
+        conflict: 'The original message identity could not be verified.',
+        recipient_unconfirmed: 'The original private recipient session could not be verified.',
+      };
+      this.store.fail(
+        message.clientMessageId,
+        `Delivery not confirmed. ${explanations[message.reason]}`,
+        true,
+      );
+      if (message.reason !== 'capacity') {
+        const item = this.store.messages.find(
+          (entry) =>
+            entry.participantId === this.store.localId &&
+            entry.clientMessageId === message.clientMessageId,
+        );
+        if (item) delete item.retry;
+      }
       this.render();
     } else if (message.type === 'nicknameChanged') {
       if (this.store.names.has(message.participantId))
@@ -385,36 +437,37 @@ export class SocialChat {
       return;
     }
     const id = crypto.randomUUID();
+    if (this.chatSequence >= Number.MAX_SAFE_INTEGER) return;
+    const sequence = ++this.chatSequence;
     const recipientId = this.store.active === 'public' ? undefined : this.store.active;
     const recipientName = recipientId === undefined ? undefined : this.store.names.get(recipientId);
-    const retained = this.store.pending({
-      messageId: `pending:${id}`,
-      clientMessageId: id,
-      participantId: room.localParticipantId,
-      participantName: room.nickname,
-      ...(recipientId !== undefined && { recipientId }),
-      ...(recipientName !== undefined && { recipientName }),
-      content,
-      sentAt: new Date().toISOString(),
-    });
+    const retained = this.store.pending(
+      {
+        messageId: `pending:${id}`,
+        clientMessageId: id,
+        participantId: room.localParticipantId,
+        participantName: room.nickname,
+        ...(recipientId !== undefined && { recipientId }),
+        ...(recipientName !== undefined && { recipientName }),
+        content,
+        sentAt: new Date().toISOString(),
+      },
+      this.chatSessionId === null
+        ? undefined
+        : {
+            sequence,
+            chatSessionId: this.chatSessionId,
+            expiresAt: Date.now() + 300_000,
+          },
+    );
     if (!retained) {
       this.options.notify('This message could not be added to the conversation');
       return;
     }
-    this.pendingStarted.set(id, performance.now());
-    this.recordTelemetry({ name: 'chat_send', outcome: 'started' });
-    this.pending.set(
-      id,
-      setTimeout(() => {
-        this.finishSend(id, 'timeout');
-        this.pending.delete(id);
-        this.store.fail(id, 'Delivery not confirmed. Reconnect to check before sending again.');
-        this.render();
-      }, 12_000),
-    );
+    this.startPending(id);
     try {
-      if (recipientId) room.sendPrivate(recipientId, content, id);
-      else room.sendChat(content, id);
+      if (recipientId) room.sendPrivate(recipientId, content, id, sequence);
+      else room.sendChat(content, id, sequence);
       this.composition.sent(this.store.active, content);
       this.input.value = '';
     } catch (error) {
@@ -423,6 +476,109 @@ export class SocialChat {
       this.store.fail(id, error instanceof Error ? error.message : 'Send failed');
     }
     this.render(true);
+  }
+
+  private startPending(id: string): void {
+    this.pendingStarted.set(id, performance.now());
+    this.recordTelemetry({ name: 'chat_send', outcome: 'started' });
+    this.pending.set(
+      id,
+      setTimeout(() => {
+        this.finishSend(id, 'timeout');
+        this.pending.delete(id);
+        this.retrying.delete(id);
+        this.store.fail(
+          id,
+          this.store.messages.some((message) => message.clientMessageId === id && message.retry)
+            ? 'Delivery not confirmed. Retry checks whether this message was accepted; available for up to five minutes.'
+            : 'Delivery not confirmed. This send has no retry session; reconnecting may recover its acknowledgement.',
+          true,
+        );
+        this.render();
+      }, 12_000),
+    );
+  }
+
+  private retireDeliveryAttempts(): void {
+    for (const id of this.pending.keys()) this.clearPending(id);
+    this.store.retireAttempts();
+    this.chatSessionId = null;
+    this.chatSequence = 0;
+  }
+
+  private retry(message: ChatItem): void {
+    const room = this.options.getRoom();
+    if (message.status !== 'unknown' || !this.store.messages.includes(message)) return;
+    const attempt = message.retry;
+    if (
+      !attempt ||
+      Date.now() >= attempt.expiresAt ||
+      room !== this.activeRoom ||
+      room?.membershipVersion !== this.membershipVersion ||
+      this.viewerKey !== this.options.getViewerKey() ||
+      attempt.chatSessionId !== this.chatSessionId
+    ) {
+      delete message.retry;
+      this.store.fail(
+        message.clientMessageId,
+        'Delivery not confirmed. The retry window or room session ended.',
+        true,
+      );
+      this.render();
+      return;
+    }
+    if (!room.connected || this.pending.size >= 100) {
+      this.options.notify('Wait for the room connection before retrying');
+      return;
+    }
+    message.status = 'pending';
+    delete message.error;
+    this.startPending(message.clientMessageId);
+    this.retrying.add(message.clientMessageId);
+    try {
+      room.retryChat({
+        clientMessageId: message.clientMessageId,
+        sequence: attempt.sequence,
+        chatSessionId: attempt.chatSessionId,
+        content: message.content,
+        ...(message.recipientId !== undefined && { targetParticipantId: message.recipientId }),
+      });
+    } catch {
+      this.finishSend(message.clientMessageId, 'unknown');
+      this.clearPending(message.clientMessageId);
+      this.store.fail(
+        message.clientMessageId,
+        'Delivery not confirmed. Wait for the connection and retry.',
+        true,
+      );
+    }
+    this.render();
+  }
+
+  private restoreDraft(message: ChatItem): void {
+    const room = this.options.getRoom();
+    if (
+      room !== this.activeRoom ||
+      room?.membershipVersion !== this.membershipVersion ||
+      this.viewerKey !== this.options.getViewerKey() ||
+      !this.store.messages.includes(message)
+    )
+      return;
+    const conversation = this.store.conversation(message);
+    const draft =
+      conversation === this.store.active ? this.input.value : this.composition.draft(conversation);
+    if (draft.trim() && draft !== message.content) {
+      this.options.notify('Keep or clear the existing draft before copying this message');
+      return;
+    }
+    this.switchConversation(conversation, message.recipientName);
+    this.input.value = message.content;
+    this.composition.save(conversation, message.content);
+    this.input.focus();
+    if (message.status === 'unknown')
+      this.options.notify(
+        'Delivery was not confirmed. Sending a new message may duplicate the original.',
+      );
   }
 
   private recordTelemetry(event: Parameters<TelemetryHandler>[0]): void {
@@ -449,6 +605,7 @@ export class SocialChat {
     const timer = this.pending.get(id);
     if (timer !== undefined) clearTimeout(timer);
     this.pending.delete(id);
+    this.retrying.delete(id);
   }
 
   private render(forceScroll = false): void {
@@ -559,6 +716,7 @@ export class SocialChat {
       error,
       local,
       mentioned,
+      !!message.retry,
     ]);
     const key = this.rowKey(message);
     const previous = this.rows.get(key);
@@ -584,18 +742,16 @@ export class SocialChat {
     if (participantId) {
       const meta = el('div', undefined, 'msg-time');
       const date = new Date(sentAt);
-      meta.textContent = `${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${status === 'pending' ? ' · Sending…' : status === 'failed' ? ` · ${error}` : ''}`;
+      meta.textContent = `${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${status === 'pending' ? ' · Sending…' : status === 'failed' || status === 'unknown' ? ` · ${error}` : ''}`;
       meta.title = date.toLocaleString();
-      if (status === 'failed') {
+      if (status === 'failed' || status === 'unknown') {
         meta.classList.add('delivery-error');
+        if (status === 'unknown' && message.retry)
+          meta.append(button('Retry same message', () => this.retry(message), 'auth-link-btn'));
         meta.append(
           button(
-            'Edit & resend',
-            () => {
-              this.input.value = content;
-              this.composition.save(this.store.active, content);
-              this.input.focus();
-            },
+            status === 'unknown' ? 'Copy to draft' : 'Edit & resend',
+            () => this.restoreDraft(message),
             'auth-link-btn',
           ),
         );

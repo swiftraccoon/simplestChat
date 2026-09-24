@@ -48,12 +48,12 @@ For complete guest/account setup and LAN ICE addressing see
 | --- | --- |
 | `src/main.ts` | Application wiring, room shell and layout |
 | `src/ui.ts` | Text-safe controls, dialogs and named HTTP API methods |
-| `src/auth.ts`, `community-ui.ts` | Identity/session refresh, profiles, recovery, room management |
+| `src/auth.ts`, `account-session-sync.ts`, `community-ui.ts` | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management |
 | `src/signaling.ts`, `protocol.ts` | WebSocket lifecycle and typed server protocol |
 | `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts` | Shared decoder primitives and HTTP/WebSocket response validation |
-| `src/room.ts` | Membership, lobby, moderation and room events |
+| `src/room.ts`, `room-navigation.ts` | Membership, confirmed room controls, lobby status and explicit URL navigation |
 | `src/media.ts` | Transports, capture, producers and consumers |
-| `src/media-controls.ts` | Private device preview and viewer-local playback controls |
+| `src/media-controls.ts`, `audio-output.ts` | Private device preview, live hardware lists, speaker selection/test and viewer-local playback |
 | `src/layer-cap.ts` | Simulcast layer a remote tile can use at its rendered size, with hysteresis |
 | `src/settings-dialog.ts` | Shared settings tabs and native-dialog dismissal |
 | `src/social-chat.ts`, `chat-store.ts` | Room/PM conversations, composer, bounded replay and preferences |
@@ -80,6 +80,19 @@ device changes apply on Save, updating active capture without enabling inactive 
 Viewer mute/volume/hide must not change what anybody else receives. Async media
 and account work can outlive a dialog or session; stale completion must not attach
 tracks or account data to a replacement session.
+
+Room links and browser history select a room; joining remains explicit. Home,
+Leave and lobby Cancel clear the selected room URL. No URL change starts capture.
+Room settings retain failed edits and offer an explicit retry after checking
+current server state. A connected lobby moderator is availability information,
+not a promise of admission.
+
+Output selection is feature-detected and applies to owned playback elements.
+Device IDs remain tab-local; browsers without output routing use the system
+output. Speaker testing plays a short local tone and releases its URL/timer on
+completion or dialog departure. Device-list changes never request capture.
+Screen sharing distinguishes cancellation/permission failure from setup errors,
+and reports whether optional screen audio is included, unavailable or ended.
 
 ## Tests
 
