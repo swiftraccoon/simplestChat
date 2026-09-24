@@ -184,6 +184,37 @@ namespace RTC
 		GenerateFingerprints();
 	}
 
+	const char* DtlsTransport::CloseReasonToString(CloseReason reason)
+	{
+		switch (reason)
+		{
+			case CloseReason::NONE:
+				return "none";
+			case CloseReason::PEER_CLOSE_NOTIFY:
+				return "peer_close_notify";
+			case CloseReason::PEER_CLOSE_BEFORE_CONNECTED:
+				return "peer_close_before_connected";
+			case CloseReason::SSL_ERROR:
+				return "ssl_error";
+			case CloseReason::SYSCALL_ERROR:
+				return "syscall_error";
+			case CloseReason::REMOTE_SHUTDOWN:
+				return "remote_shutdown";
+			case CloseReason::HANDSHAKE_TIMEOUT:
+				return "handshake_timeout";
+			case CloseReason::FINGERPRINT_VALIDATION_FAILED:
+				return "fingerprint_validation_failed";
+			case CloseReason::SRTP_NEGOTIATION_FAILED:
+				return "srtp_negotiation_failed";
+			case CloseReason::TIMEOUT_HANDLER_FAILED:
+				return "timeout_handler_failed";
+			case CloseReason::LOCAL_ROLE_CHANGE:
+				return "local_role_change";
+		}
+
+		return "unknown";
+	}
+
 	void DtlsTransport::ClassDestroy()
 	{
 		MS_TRACE();
@@ -918,10 +949,11 @@ namespace RTC
 		  this->localRole.has_value() &&
 		  (this->localRole.value() == Role::CLIENT || this->localRole.value() == Role::SERVER))
 		{
-			MS_DEBUG_TAG(dtls, "resetting DTLS due to local role change");
-
-			Reset();
+			Reset(CloseReason::LOCAL_ROLE_CHANGE);
 		}
+
+		// A fresh handshake must not inherit the previous terminal reason.
+		this->closeReason = CloseReason::NONE;
 
 		// Update local role.
 		this->localRole = localRole;
@@ -1105,7 +1137,7 @@ namespace RTC
 		}
 	}
 
-	void DtlsTransport::Reset()
+	void DtlsTransport::Reset(CloseReason reason)
 	{
 		MS_TRACE();
 
@@ -1116,7 +1148,10 @@ namespace RTC
 			return;
 		}
 
-		MS_WARN_TAG(dtls, "resetting DTLS transport");
+		// SSL_clear() below erases shutdown/error state. Retain a fixed reason for
+		// the subsequent listener callback without changing the existing wire state.
+		this->closeReason = reason;
+		MS_DEBUG_TAG(dtls, "resetting DTLS transport [reason:%s]", CloseReasonToString(reason));
 
 		// Stop the DTLS timer.
 		this->timer->Stop();
@@ -1230,11 +1265,29 @@ namespace RTC
 		// Check if the peer sent close alert or a fatal error happened.
 		else if (((SSL_get_shutdown(this->ssl) & SSL_RECEIVED_SHUTDOWN) != 0) || err == SSL_ERROR_SSL || err == SSL_ERROR_SYSCALL)
 		{
+			// Fatal errors take precedence: SSL_RECEIVED_SHUTDOWN alone is not
+			// enough to prove an orderly close. Only OpenSSL's clean EOF after a
+			// verified connection receives the non-failure classification.
+			CloseReason reason{ CloseReason::REMOTE_SHUTDOWN };
+			if (err == SSL_ERROR_SSL)
+			{
+				reason = CloseReason::SSL_ERROR;
+			}
+			else if (err == SSL_ERROR_SYSCALL)
+			{
+				reason = CloseReason::SYSCALL_ERROR;
+			}
+			else if (err == SSL_ERROR_ZERO_RETURN)
+			{
+				reason = this->state == DtlsState::CONNECTED ? CloseReason::PEER_CLOSE_NOTIFY
+				                                             : CloseReason::PEER_CLOSE_BEFORE_CONNECTED;
+			}
+
 			if (this->state == DtlsState::CONNECTED)
 			{
 				MS_DEBUG_TAG(dtls, "disconnected");
 
-				Reset();
+				Reset(reason);
 
 				// Set state and notify the listener.
 				this->state = DtlsState::CLOSED;
@@ -1244,7 +1297,7 @@ namespace RTC
 			{
 				MS_WARN_TAG(dtls, "connection failed");
 
-				Reset();
+				Reset(reason);
 
 				// Set state and notify the listener.
 				this->state = DtlsState::FAILED;
@@ -1301,7 +1354,7 @@ namespace RTC
 		{
 			MS_WARN_TAG(dtls, "DTLS timeout too high (%" PRIu64 "ms), resetting DLTS", timeoutMs);
 
-			Reset();
+			Reset(CloseReason::HANDSHAKE_TIMEOUT);
 
 			// Set state and notify the listener.
 			this->state = DtlsState::FAILED;
@@ -1320,7 +1373,7 @@ namespace RTC
 		// Validate the remote fingerprint.
 		if (!CheckRemoteFingerprint())
 		{
-			Reset();
+			Reset(CloseReason::FINGERPRINT_VALIDATION_FAILED);
 
 			// Set state and notify the listener.
 			this->state = DtlsState::FAILED;
@@ -1344,7 +1397,7 @@ namespace RTC
 		// there is no audio/video.
 		MS_WARN_2TAGS(dtls, srtp, "SRTP crypto suite not negotiated");
 
-		Reset();
+		Reset(CloseReason::SRTP_NEGOTIATION_FAILED);
 
 		// Set state and notify the listener.
 		this->state = DtlsState::FAILED;
@@ -1676,7 +1729,14 @@ namespace RTC
 
 			if ((where & SSL_CB_READ) != 0)
 			{
-				MS_WARN_TAG(dtls, "received DTLS %s alert: %s", alertType, SSL_alert_desc_string_long(ret));
+				if (this->state == DtlsState::CONNECTED && (ret >> 8) == SSL3_AL_WARNING && (ret & 0xff) == SSL_AD_CLOSE_NOTIFY)
+				{
+					MS_DEBUG_TAG(dtls, "received DTLS close_notify on established connection");
+				}
+				else
+				{
+					MS_WARN_TAG(dtls, "received DTLS %s alert: %s", alertType, SSL_alert_desc_string_long(ret));
+				}
 			}
 			else if ((where & SSL_CB_WRITE) != 0)
 			{
@@ -1742,7 +1802,7 @@ namespace RTC
 		{
 			MS_WARN_TAG(dtls, "DTLSv1_handle_timeout() failed");
 
-			Reset();
+			Reset(CloseReason::TIMEOUT_HANDLER_FAILED);
 
 			// Set state and notify the listener.
 			this->state = DtlsState::FAILED;

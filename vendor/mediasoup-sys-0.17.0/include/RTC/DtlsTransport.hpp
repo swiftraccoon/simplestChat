@@ -17,6 +17,10 @@ namespace RTC
 {
 	class DtlsTransport : public TimerHandleInterface::Listener
 	{
+#ifdef MS_TEST
+		friend class DtlsTransportTestAccess;
+#endif
+
 	public:
 		enum class DtlsState : uint8_t
 		{
@@ -25,6 +29,24 @@ namespace RTC
 			CONNECTED,
 			FAILED,
 			CLOSED
+		};
+
+	public:
+		// Retained across Reset() so listeners can distinguish an orderly protocol
+		// close from a failure. This does not describe application/user intent.
+		enum class CloseReason : uint8_t
+		{
+			NONE,
+			PEER_CLOSE_NOTIFY,
+			PEER_CLOSE_BEFORE_CONNECTED,
+			SSL_ERROR,
+			SYSCALL_ERROR,
+			REMOTE_SHUTDOWN,
+			HANDSHAKE_TIMEOUT,
+			FINGERPRINT_VALIDATION_FAILED,
+			SRTP_NEGOTIATION_FAILED,
+			TIMEOUT_HANDLER_FAILED,
+			LOCAL_ROLE_CHANGE
 		};
 
 	public:
@@ -84,7 +106,8 @@ namespace RTC
 			// The DTLS connection has been closed as the result of an error (such as a
 			// DTLS alert or a failure to validate the remote fingerprint).
 			virtual void OnDtlsTransportFailed(const RTC::DtlsTransport* dtlsTransport) = 0;
-			// The DTLS connection has been closed due to receipt of a close_notify alert.
+			// An established DTLS connection closed. The wire-compatible CLOSED state
+			// also covers SSL/syscall failures; inspect GetCloseReason() to distinguish them.
 			virtual void OnDtlsTransportClosed(const RTC::DtlsTransport* dtlsTransport) = 0;
 			// Need to send DTLS data to the peer.
 			virtual void OnDtlsTransportSendData(
@@ -102,6 +125,7 @@ namespace RTC
 		static FBS::WebRtcTransport::DtlsState StateToFbs(DtlsState state);
 		static FingerprintAlgorithm AlgorithmFromFbs(FBS::WebRtcTransport::FingerprintAlgorithm algorithm);
 		static FBS::WebRtcTransport::FingerprintAlgorithm AlgorithmToFbs(FingerprintAlgorithm algorithm);
+		static const char* CloseReasonToString(CloseReason reason);
 		static bool IsDtls(const uint8_t* data, size_t len)
 		{
 			// clang-format off
@@ -148,6 +172,10 @@ namespace RTC
 		{
 			return this->state;
 		}
+		CloseReason GetCloseReason() const
+		{
+			return this->closeReason;
+		}
 		std::optional<Role> GetLocalRole() const
 		{
 			return this->localRole;
@@ -184,7 +212,7 @@ namespace RTC
 			return false;
 		}
 
-		void Reset();
+		void Reset(CloseReason reason);
 		bool CheckStatus(int returnCode);
 		bool SetTimeout();
 		bool ProcessHandshake();
@@ -211,6 +239,7 @@ namespace RTC
 		TimerHandleInterface* timer{ nullptr };
 		// Others.
 		DtlsState state{ DtlsState::NEW };
+		CloseReason closeReason{ CloseReason::NONE };
 		std::optional<Role> localRole;
 		std::optional<Fingerprint> remoteFingerprint;
 		bool handshakeDone{ false };

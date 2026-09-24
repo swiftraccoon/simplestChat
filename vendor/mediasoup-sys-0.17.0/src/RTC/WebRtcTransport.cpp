@@ -1395,11 +1395,14 @@ namespace RTC
 		}
 	}
 
-	inline void WebRtcTransport::OnDtlsTransportFailed(const RTC::DtlsTransport* /*dtlsTransport*/)
+	inline void WebRtcTransport::OnDtlsTransportFailed(const RTC::DtlsTransport* dtlsTransport)
 	{
 		MS_TRACE();
 
-		MS_WARN_TAG(dtls, "DTLS failed");
+		MS_WARN_TAG(
+		  dtls,
+		  "DTLS failed [reason:%s]",
+		  RTC::DtlsTransport::CloseReasonToString(dtlsTransport->GetCloseReason()));
 
 		// Notify the Node WebRtcTransport.
 		auto dtlsStateChangeOffset = FBS::WebRtcTransport::CreateDtlsStateChangeNotification(
@@ -1413,11 +1416,21 @@ namespace RTC
 		  dtlsStateChangeOffset);
 	}
 
-	inline void WebRtcTransport::OnDtlsTransportClosed(const RTC::DtlsTransport* /*dtlsTransport*/)
+	inline void WebRtcTransport::OnDtlsTransportClosed(const RTC::DtlsTransport* dtlsTransport)
 	{
 		MS_TRACE();
 
-		MS_WARN_TAG(dtls, "DTLS remotely closed");
+		if (dtlsTransport->GetCloseReason() == RTC::DtlsTransport::CloseReason::PEER_CLOSE_NOTIFY)
+		{
+			MS_DEBUG_TAG(dtls, "DTLS peer orderly close [reason:peer_close_notify]");
+		}
+		else
+		{
+			MS_WARN_TAG(
+			  dtls,
+			  "DTLS connection closed after failure [reason:%s]",
+			  RTC::DtlsTransport::CloseReasonToString(dtlsTransport->GetCloseReason()));
+		}
 
 		// Notify the Node WebRtcTransport.
 		auto dtlsStateChangeOffset = FBS::WebRtcTransport::CreateDtlsStateChangeNotification(

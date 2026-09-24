@@ -45,6 +45,8 @@ and `put` API surface; this removes RUSTSEC-2026-0253 from the active graph.
 `build.rs`, `tasks.py`, `scripts/get-dep.sh`, `meson.build`, `deps/libwebrtc/meson.build`,
 `src/RTC/TransportCongestionControlClient.cpp`, `src/RTC/RTP/RtpStreamRecv.cpp`,
 `include/RTC/Producer.hpp`, `src/RTC/Producer.cpp`, `src/RTC/Transport.cpp`,
+`include/RTC/DtlsTransport.hpp`, `src/RTC/DtlsTransport.cpp`,
+`src/RTC/WebRtcTransport.cpp`, `test/src/RTC/TestDtlsTransport.cpp`,
 `subprojects/abseil-cpp.wrap`, `subprojects/libuv.wrap`,
 `subprojects/unordered-dense.wrap`, `subprojects/catch2.wrap`, the two files under
 `subprojects/packagefiles/abseil-cpp/`, the four files under
@@ -103,6 +105,33 @@ RID and single-encoding lookup, padding boundaries, subsequent media/RTX and
 negative cases. The accepted-padding accounting regression fails against the
 unpatched producer. Drop this patch when upstream distinguishes startup RTX
 padding from an unknown media stream.
+
+`DtlsTransport` retains a fixed close reason before `SSL_clear` erases the
+OpenSSL state. Established, fingerprint-verified connections ending with
+`SSL_ERROR_ZERO_RETURN` are recorded as an orderly peer protocol close at debug
+level. This does not imply that the user intended to leave. SSL and syscall
+errors take precedence over a received-shutdown flag and remain warnings/errors,
+as do alerts before the connection is established, fingerprint and SRTP
+negotiation failures, and handshake/timer failures. `WebRtcTransport` includes
+the fixed reason in failure logs. Existing listener signatures, FlatBuffers
+notifications, CLOSED/FAILED states and receive-state cleanup are unchanged.
+
+The isolated native tests in `test/src/RTC/TestDtlsTransport.cpp` exchange real
+OpenSSL DTLS records between two in-process peers. They cover encrypted orderly
+close, reset and clearing the reason on a fresh run, failure precedence with a
+shutdown flag, pre-verification close, fingerprint rejection, incompatible SRTP
+profiles and handshake timeout. Run `build/check-native-dtls.sh` after installing
+the pinned OpenSSL build. It builds the fixed `[dtls]` test group in a private
+source/output directory and separately checks that orderly close emits no
+warning/error. Enabling `ms_build_tests` changes worker compile definitions and
+must not reuse Cargo's production worker build.
+
+A local two-Chromium comparison explicitly closed established peer connections
+while signaling remained open: the same two application DTLS Closed callbacks
+occurred before and after the patch, while six native warning lines became zero.
+Both runs decoded 300 frames over 15 seconds with zero media loss or freezes.
+Drop this patch when upstream preserves equivalent failure classification and
+logs orderly protocol shutdown without a warning.
 
 Cargo ignores a dependency's
 nested lockfile, so removing that generated package artifact does not change
