@@ -489,7 +489,7 @@ The Diagnostics checkbox opts the browser into reliability uploads and persists
 that preference as `reliabilityTelemetry`. Reports have fixed typed names and
 outcomes: no raw console output, exception text, room/account identifiers, chat
 contents, credentials, SDP or candidate addresses. The client bounds pending
-reports to 64, local history to 80 and batches to 16, flushes every ten seconds,
+reports to 64 and batches to 16, flushes every ten seconds,
 uses a five-second request deadline and does not retry failed uploads. Per-event
 burst limits and dropped-event counts make loss visible. The server validates and
 rate-limits this untrusted telemetry; it never affects admission or media control.
@@ -497,7 +497,14 @@ rate-limits this untrusted telemetry; it never affects admission or media contro
 Copying a diagnostic summary is a separate user action. The preview contains UTC
 generation time, build revision, coarse browser family, fixed events and relative
 timings. Its temporary local reference rotates after 30 minutes and is not a
-server lookup key. A user can review the summary before sharing it.
+server lookup key. A user can review the summary before sharing it. Refreshing
+the preview updates that snapshot; copying shares the exact visible preview.
+Lifecycle/error history and routine media samples have separate bounded storage,
+with 80 events and 32 grouped media samples, so ongoing media sampling cannot
+evict join or reconnect outcomes. Retained-window
+bounds and history-eviction counts distinguish a partial history from upload or
+event-rate losses. Zero dropped or undelivered events does not establish that
+the report covers the whole call.
 
 Visible opted-in calls sample at low frequency (15 seconds) with bounded native
 statistics requests. Unsupported/reset counters and silence remain unknown rather
@@ -505,6 +512,20 @@ than fabricated zeroes. First-video-frame timing begins at remote track attachme
 and ends at the browser's first presented frame; it is not room-join latency.
 Server transport quality and browser receipt/playback measurements describe
 different stages and must not be substituted for one another.
+
+Local media samples name their units and include the observed interval, media
+kind and a temporary report-local stream label. The labels distinguish received
+sources within one report; they do not identify another participant or correlate
+with server logs. These fields are excluded from the anonymous upload envelope.
+Local exports use version 2; anonymous uploads retain their version 1 contract.
+At most 64 stream labels are allocated per report window. Further observations
+have a null label and increase `unidentifiedStreamSamples`. History limits reset
+with the local reference; dropped and undelivered event counters cover the page's
+lifetime, as identified by `counterScope`.
+Decoded frames per second are computed from observed counter intervals, not an
+assumed timer cadence, and do not prove presentation or physical audibility.
+Missing, ambiguous or reset observations remain unknown. Multiple sources and
+browser scheduling can lengthen the interval between samples of one source.
 
 The separate `call_join`, `call_admission` and `call_reconnect` events follow an
 owned room attempt through received media. Each produces one terminal result,

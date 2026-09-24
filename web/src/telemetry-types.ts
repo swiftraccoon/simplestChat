@@ -64,6 +64,20 @@ export interface TelemetryEvent {
 
 export type TelemetryHandler = (event: TelemetryEvent) => void;
 
+/** Local-only interval observation. Native identity must never leave this callback. */
+export interface TelemetryMediaSample {
+  key: object;
+  kind: 'audio' | 'video';
+  windowMs: number | undefined;
+  frames: number | undefined;
+  freezeMs: number | undefined;
+  concealment: number | undefined;
+  packetLoss: number | undefined;
+  rttMs: number | undefined;
+}
+
+export type TelemetryMediaHandler = (sample: TelemetryMediaSample) => void;
+
 /** Keys remain local and are never included in telemetry or diagnostic exports. */
 export interface TelemetryMediaSource {
   key: object;

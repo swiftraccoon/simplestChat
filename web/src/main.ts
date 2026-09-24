@@ -854,6 +854,7 @@ const mediaTelemetry = new MediaTelemetry(
   () => (telemetry.sharingEnabled ? (room?.telemetrySources() ?? []) : []),
   telemetry.record,
   callTelemetry,
+  telemetry.recordMediaSample,
 );
 window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
@@ -2956,7 +2957,10 @@ const diagnosticsButton = button(
           preview.select();
         });
     });
-    view.body.append(preview, copy);
+    const refresh = button('Refresh preview', () => {
+      preview.value = telemetry.summary();
+    });
+    view.body.append(preview, refresh, copy);
   },
   'auth-link-btn',
 );

@@ -119,7 +119,7 @@ test('burst, queue, history and batch bounds retain explicit loss; opting out di
       f.telemetry.record({ name, outcome: 'ok', value: Infinity });
   }
   const summary = JSON.parse(f.telemetry.summary());
-  assert.equal(summary.events.length, 80);
+  assert.equal(summary.events.length, 64, 'routine quality does not occupy lifecycle history');
   assert.equal(summary.pendingEvents, 64);
   assert.equal(summary.droppedEvents, 1008);
   await f.telemetry.flush();
@@ -162,4 +162,153 @@ test('call outcomes use local correlation shared with measurements and omit it f
   assert.notEqual(events[1].attempt, events[2].attempt);
   await f.telemetry.flush();
   assert.ok(JSON.parse(f.requests[0].options.body).events.every((event) => !('attempt' in event)));
+});
+
+function media(key, values = {}) {
+  return {
+    key,
+    kind: 'video',
+    windowMs: 15000,
+    frames: 450,
+    freezeMs: 0,
+    concealment: undefined,
+    packetLoss: 37,
+    rttMs: 27,
+    ...values,
+  };
+}
+
+test('quality intervals have named units and local stream ordinals without changing anonymous scalar uploads', async (t) => {
+  const f = await fixture(t);
+  f.advance(15000);
+  f.telemetry.setSharing(true);
+  const source = { id: 'private-native-id', email: 'private@test.invalid' };
+  f.telemetry.recordMediaSample(media(source, { rawStats: 'secret' }));
+  f.telemetry.recordMediaSample(media(source, { windowMs: 20000 }));
+  f.telemetry.recordMediaSample(media({}, { kind: 'audio', windowMs: undefined }));
+  f.telemetry.record({ name: 'media_packet_loss', outcome: 'ok', value: 37 });
+  const summary = JSON.parse(f.telemetry.summary());
+  assert.equal(summary.version, 2);
+  assert.equal(summary.events.length, 0);
+  assert.deepEqual(summary.mediaSamples[0], {
+    atMs: 15000,
+    stream: 1,
+    kind: 'video',
+    windowMs: 15000,
+    decodedFrames: 450,
+    decodedFps: 30,
+    videoFreezeMs: 0,
+    packetLossPercent: 0.37,
+    rttMs: 27,
+  });
+  assert.equal(summary.mediaSamples[1].stream, 1);
+  assert.equal(summary.mediaSamples[1].windowMs, null, 'interval cannot precede report start');
+  assert.deepEqual(summary.mediaSamples[2], {
+    atMs: 15000,
+    stream: 2,
+    kind: 'audio',
+    windowMs: null,
+    audioConcealmentPercent: null,
+    packetLossPercent: null,
+    rttMs: 27,
+  });
+  assert.equal(/private|secret|rawStats/.test(f.telemetry.summary()), false);
+  await f.telemetry.flush();
+  assert.deepEqual(JSON.parse(f.requests[0].options.body), {
+    version: 1,
+    browser: 'firefox',
+    events: [{ name: 'media_packet_loss', outcome: 'ok', value: 37 }],
+  });
+});
+
+test('routine quality cannot evict milestones or errors and each history exposes its own truncation window', async (t) => {
+  const f = await fixture(t);
+  f.telemetry.record({ name: 'call_join', outcome: 'video_ready', attempt: 1 });
+  f.telemetry.record({ name: 'media_sample', outcome: 'timeout' });
+  f.telemetry.record({ name: 'media_rtt', outcome: 'error' });
+  const source = {};
+  for (let index = 1; index <= 40; index++) {
+    f.advance(15000);
+    f.telemetry.recordMediaSample(media(source));
+    f.telemetry.record({ name: 'media_sample', outcome: 'ok' });
+    f.telemetry.record({ name: 'media_video_progress', outcome: 'ok', value: 450 });
+    f.telemetry.record({ name: 'media_packet_loss', outcome: 'unknown' });
+  }
+  let summary = JSON.parse(f.telemetry.summary());
+  assert.equal(summary.events.length, 3);
+  assert.equal(summary.events[0].outcome, 'video_ready');
+  assert.deepEqual(summary.retention.events, {
+    capacity: 80,
+    evicted: 0,
+    oldestAtMs: 0,
+    newestAtMs: 0,
+  });
+  assert.equal(summary.mediaSamples.length, 32);
+  assert.deepEqual(summary.retention.mediaSamples, {
+    capacity: 32,
+    evicted: 8,
+    oldestAtMs: 135000,
+    newestAtMs: 600000,
+  });
+  // A distinct lifecycle overflow reports its own eviction rather than silently truncating.
+  for (let index = 0; index < 85; index++) {
+    for (const tick of f.intervals.values()) tick();
+    f.advance(1);
+    f.telemetry.record({ name: 'js_error', outcome: 'error' });
+  }
+  summary = JSON.parse(f.telemetry.summary());
+  assert.equal(summary.events.length, 80);
+  assert.equal(summary.retention.events.evicted, 8);
+  assert.equal(summary.retention.events.oldestAtMs, 600006);
+  assert.equal(summary.retention.mediaSamples.evicted, 8);
+});
+
+test('report rotation resets histories and stream ordinals even when only exporting an idle preview', async (t) => {
+  const f = await fixture(t);
+  f.advance(15000);
+  const first = {};
+  const second = {};
+  f.telemetry.recordMediaSample(media(first));
+  f.telemetry.recordMediaSample(media(second));
+  f.telemetry.record({ name: 'call_join', outcome: 'video_ready' });
+  const before = JSON.parse(f.telemetry.summary());
+  f.advance(30 * 60000);
+  const rotated = JSON.parse(f.telemetry.summary());
+  assert.notEqual(rotated.localReportReference, before.localReportReference);
+  assert.equal(rotated.snapshotAtMs, 0);
+  assert.deepEqual(rotated.events, []);
+  assert.deepEqual(rotated.mediaSamples, []);
+  assert.equal(rotated.retention.events.oldestAtMs, null);
+  assert.equal(rotated.retention.mediaSamples.evicted, 0);
+  f.telemetry.recordMediaSample(media(second));
+  let sample = JSON.parse(f.telemetry.summary()).mediaSamples[0];
+  assert.equal(sample.stream, 1);
+  assert.equal(sample.windowMs, null, 'a result spanning the previous report has no interval');
+  f.advance(15000);
+  f.telemetry.recordMediaSample(media(second));
+  sample = JSON.parse(f.telemetry.summary()).mediaSamples.at(-1);
+  assert.equal(sample.windowMs, 15000);
+  assert.equal(sample.decodedFps, 30);
+});
+
+test('stream identities stay bounded and local values reject nonfinite, reset and impossible measurements', async (t) => {
+  const f = await fixture(t);
+  f.advance(15000);
+  for (let index = 0; index < 66; index++) f.telemetry.recordMediaSample(media({}));
+  let summary = JSON.parse(f.telemetry.summary());
+  assert.equal(summary.retention.unidentifiedStreamSamples, 2);
+  assert.equal(summary.mediaSamples.at(-3).stream, 64);
+  assert.equal(summary.mediaSamples.at(-1).stream, null);
+  f.telemetry.recordMediaSample(
+    media({}, { frames: Infinity, freezeMs: 16000, packetLoss: -1, rttMs: NaN }),
+  );
+  summary = JSON.parse(f.telemetry.summary());
+  assert.equal(summary.mediaSamples.at(-1).decodedFrames, null);
+  assert.equal(summary.mediaSamples.at(-1).decodedFps, null);
+  assert.equal(summary.mediaSamples.at(-1).videoFreezeMs, null);
+  assert.equal(summary.mediaSamples.at(-1).packetLossPercent, null);
+  assert.equal(summary.mediaSamples.at(-1).rttMs, null);
+  f.telemetry.dispose();
+  f.telemetry.recordMediaSample(media({}));
+  assert.deepEqual(JSON.parse(f.telemetry.summary()).mediaSamples, []);
 });

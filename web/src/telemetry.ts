@@ -1,16 +1,59 @@
 import type {
   TelemetryEvent,
   TelemetryHandler,
+  TelemetryMediaHandler,
   TelemetryName,
   TelemetryOutcome,
 } from './telemetry-types';
 
 const MAX_PENDING = 64;
 const MAX_HISTORY = 80;
+const MAX_MEDIA_HISTORY = 32;
+const MAX_STREAMS = 64;
 const MAX_BATCH = 16;
 const FLUSH_MS = 10_000;
 const FETCH_TIMEOUT_MS = 5_000;
 const SESSION_MS = 30 * 60_000;
+
+interface LocalMediaSample {
+  atMs: number;
+  stream: number | null;
+  kind: 'audio' | 'video';
+  windowMs: number | null;
+  decodedFrames?: number | null;
+  decodedFps?: number | null;
+  videoFreezeMs?: number | null;
+  audioConcealmentPercent?: number | null;
+  packetLossPercent: number | null;
+  rttMs: number | null;
+}
+
+function bounded(value: number | undefined, maximum: number): number | null {
+  return value !== undefined && Number.isFinite(value) && value >= 0 && value <= maximum
+    ? Math.round(value * 1000) / 1000
+    : null;
+}
+
+function routineQuality(event: TelemetryEvent): boolean {
+  if (event.name === 'media_sample') return event.outcome === 'ok';
+  return (
+    (event.outcome === 'ok' || event.outcome === 'unknown') &&
+    (event.name === 'media_video_progress' ||
+      event.name === 'media_video_freeze' ||
+      event.name === 'media_audio_concealment' ||
+      event.name === 'media_packet_loss' ||
+      event.name === 'media_rtt')
+  );
+}
+
+function retention(history: { atMs: number }[], capacity: number, evicted: number) {
+  return {
+    capacity,
+    evicted,
+    oldestAtMs: history[0]?.atMs ?? null,
+    newestAtMs: history[history.length - 1]?.atMs ?? null,
+  };
+}
 
 function createLocalReportReference(): string {
   try {
@@ -45,6 +88,12 @@ export function failureOutcome(error: unknown): TelemetryOutcome {
 export class ClientTelemetry {
   private pending: TelemetryEvent[] = [];
   private history: (TelemetryEvent & { atMs: number })[] = [];
+  private mediaHistory: LocalMediaSample[] = [];
+  private evictedEvents = 0;
+  private evictedMedia = 0;
+  private streams = new WeakMap<object, number>();
+  private streamSequence = 0;
+  private unidentifiedStreams = 0;
   private dropped = 0;
   private deliveryFailures = 0;
   private sending = false;
@@ -69,6 +118,7 @@ export class ClientTelemetry {
     }
   }
   private epoch = performance.now();
+  private reportStartedAt = new Date().toISOString();
   private localReportReference = createLocalReportReference();
   private attemptSequence = 0;
   private recentCounts = new Map<string, number>();
@@ -97,14 +147,74 @@ export class ClientTelemetry {
     }
   };
 
-  private recordSafe(event: TelemetryEvent): void {
-    if (this.disposed) return;
+  private reportTime(): number {
     const now = performance.now();
     if (now - this.epoch >= SESSION_MS) {
       this.epoch = now;
+      this.reportStartedAt = new Date().toISOString();
       this.localReportReference = createLocalReportReference();
       this.history = [];
+      this.mediaHistory = [];
+      this.evictedEvents = this.evictedMedia = this.unidentifiedStreams = this.streamSequence = 0;
+      this.streams = new WeakMap();
     }
+    return Math.round(Math.max(0, now - this.epoch));
+  }
+
+  readonly recordMediaSample: TelemetryMediaHandler = (sample) => {
+    if (this.disposed) return;
+    try {
+      const atMs = this.reportTime();
+      let stream = this.streams.get(sample.key) ?? null;
+      if (stream === null && this.streamSequence < MAX_STREAMS) {
+        stream = ++this.streamSequence;
+        this.streams.set(sample.key, stream);
+      }
+      if (stream === null) this.unidentifiedStreams += 1;
+      const windowMs = bounded(sample.windowMs, SESSION_MS);
+      // A new report must not claim an interval from the preceding report.
+      const interval = windowMs !== null && windowMs > 0 && windowMs <= atMs;
+      const frames = interval ? bounded(sample.frames, 1_000_000) : null;
+      // Project only named numbers. Neither the key nor arbitrary stats are exported.
+      this.mediaHistory.push({
+        atMs,
+        stream,
+        kind: sample.kind,
+        windowMs: interval ? windowMs : null,
+        ...(sample.kind === 'video'
+          ? {
+              decodedFrames: frames,
+              decodedFps:
+                frames === null || windowMs === null
+                  ? null
+                  : bounded((frames * 1000) / windowMs, 1_000_000),
+              videoFreezeMs: interval ? bounded(sample.freezeMs, windowMs) : null,
+            }
+          : {
+              audioConcealmentPercent: interval
+                ? bounded(
+                    sample.concealment === undefined ? undefined : sample.concealment / 100,
+                    100,
+                  )
+                : null,
+            }),
+        packetLossPercent: interval
+          ? bounded(sample.packetLoss === undefined ? undefined : sample.packetLoss / 100, 100)
+          : null,
+        rttMs: bounded(sample.rttMs, 120_000),
+      });
+      if (this.mediaHistory.length > MAX_MEDIA_HISTORY) {
+        this.mediaHistory.shift();
+        this.evictedMedia += 1;
+      }
+    } catch {
+      this.dropped += 1;
+    }
+  };
+
+  private recordSafe(event: TelemetryEvent): void {
+    if (this.disposed) return;
+    const atMs = this.reportTime();
     const key = `${event.name}:${event.outcome}`;
     const count = this.recentCounts.get(key) ?? 0;
     if (count >= 8) {
@@ -118,14 +228,19 @@ export class ClientTelemetry {
       safe.durationMs = Math.round(Math.max(0, Math.min(120_000, event.durationMs)));
     if (event.value !== undefined && Number.isFinite(event.value))
       safe.value = Math.round(Math.max(0, Math.min(1_000_000, event.value)));
-    this.history.push({
-      ...safe,
-      ...(event.attempt !== undefined && Number.isSafeInteger(event.attempt) && event.attempt > 0
-        ? { attempt: event.attempt }
-        : {}),
-      atMs: Math.round((now - this.epoch) / 100) * 100,
-    });
-    if (this.history.length > MAX_HISTORY) this.history.shift();
+    if (!routineQuality(safe)) {
+      this.history.push({
+        ...safe,
+        ...(event.attempt !== undefined && Number.isSafeInteger(event.attempt) && event.attempt > 0
+          ? { attempt: event.attempt }
+          : {}),
+        atMs,
+      });
+      if (this.history.length > MAX_HISTORY) {
+        this.history.shift();
+        this.evictedEvents += 1;
+      }
+    }
     if (!this.enabled) return;
     if (this.pending.length === MAX_PENDING) {
       this.dropped += 1;
@@ -185,17 +300,29 @@ export class ClientTelemetry {
   }
 
   summary(): string {
+    const snapshotAtMs = this.reportTime();
     return JSON.stringify(
       {
-        version: 1,
+        version: 2,
         localReportReference: this.localReportReference,
+        reportStartedAt: this.reportStartedAt,
         generatedAt: new Date().toISOString(),
+        snapshotAtMs,
         release: this.release,
         browser: this.browser,
         droppedEvents: this.dropped,
         undeliveredEvents: this.deliveryFailures,
         pendingEvents: this.pending.length,
+        counterScope: 'page_lifetime',
+        retention: {
+          reportWindowMs: SESSION_MS,
+          events: retention(this.history, MAX_HISTORY, this.evictedEvents),
+          mediaSamples: retention(this.mediaHistory, MAX_MEDIA_HISTORY, this.evictedMedia),
+          streamLimit: MAX_STREAMS,
+          unidentifiedStreamSamples: this.unidentifiedStreams,
+        },
         events: this.history,
+        mediaSamples: this.mediaHistory,
       },
       null,
       2,
@@ -208,5 +335,7 @@ export class ClientTelemetry {
     clearInterval(this.timer);
     this.pending = [];
     this.history = [];
+    this.mediaHistory = [];
+    this.streams = new WeakMap();
   }
 }

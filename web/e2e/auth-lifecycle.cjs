@@ -210,10 +210,26 @@ async function run() {
       'diagnostics navigation fits narrow screens',
     );
     await page.locator('#diagnostics-btn').click();
-    const summary = await page.getByLabel('Diagnostic summary preview').inputValue();
+    const preview = page.getByLabel('Diagnostic summary preview');
+    const summary = await preview.inputValue();
+    const originalSummary = JSON.parse(summary);
+    assert.equal(originalSummary.version, 2);
+    assert.ok(Array.isArray(originalSummary.events));
+    assert.ok(Array.isArray(originalSummary.mediaSamples));
     assert.equal(summary.includes('fixture@example.test'), false);
     assert.equal(summary.includes('Masked-test-password'), false);
     assert.equal(summary.includes('signature'), false);
+    // A diagnostic arriving while the dialog is open must not silently change
+    // the reviewed copy. Refresh is an explicit gesture and requires no consent.
+    await page.evaluate(() => window.dispatchEvent(new Event('error')));
+    assert.equal(await preview.inputValue(), summary);
+    await page.getByRole('button', { name: 'Refresh preview', exact: true }).click();
+    const refreshedSummary = JSON.parse(await preview.inputValue());
+    assert.equal(refreshedSummary.localReportReference, originalSummary.localReportReference);
+    assert.equal(
+      refreshedSummary.events.filter((event) => event.name === 'js_error').length,
+      originalSummary.events.filter((event) => event.name === 'js_error').length + 1,
+    );
     assert.equal(uploads, 0, 'uploads remain disabled without consent');
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     await page.clock.install();

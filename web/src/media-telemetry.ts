@@ -2,6 +2,7 @@ import type {
   TelemetryCallSignal,
   TelemetryCallState,
   TelemetryHandler,
+  TelemetryMediaHandler,
   TelemetryMediaSource,
   TelemetryName,
   TelemetryOutcome,
@@ -10,6 +11,9 @@ import type {
 
 type NumericStats = Record<string, unknown>;
 export interface Sample {
+  /** Native identity and timestamp stay in memory, never in exported observations. */
+  identity?: string | undefined;
+  timestamp?: number | undefined;
   frames?: number | undefined;
   freezeSeconds?: number | undefined;
   concealed?: number | undefined;
@@ -32,14 +36,18 @@ function delta(current: number | undefined, previous: number | undefined): numbe
     : undefined;
 }
 
-/** Only inspect named numeric fields: never serialize an RTCStatsReport. */
+/** Read fixed counters and local continuity metadata; never serialize an RTCStatsReport. */
 export function readMediaSample(report: RTCStatsReport, kind: 'audio' | 'video'): Sample {
   let result: Sample = {};
+  let matches = 0;
   report.forEach((raw: unknown) => {
     if (typeof raw !== 'object' || raw === null) return;
     const stats = raw as NumericStats;
     if (stats['type'] !== 'inbound-rtp' || (stats['kind'] ?? stats['mediaType']) !== kind) return;
+    matches += 1;
     result = {
+      identity: typeof stats['id'] === 'string' ? stats['id'] : undefined,
+      timestamp: number(stats, 'timestamp'),
       frames: number(stats, 'framesDecoded'),
       freezeSeconds: number(stats, 'totalFreezesDuration'),
       concealed: number(stats, 'concealedSamples'),
@@ -48,24 +56,35 @@ export function readMediaSample(report: RTCStatsReport, kind: 'audio' | 'video')
       received: number(stats, 'packetsReceived'),
     };
   });
-  return result;
+  // A consumer report should have one inbound stream. Do not guess which one.
+  return matches === 1 ? result : {};
 }
 
 export function sampleChanges(
   current: Sample,
   previous: Sample | undefined,
 ): {
+  windowMs: number | undefined;
   frames: number | undefined;
   freezeMs: number | undefined;
   concealment: number | undefined;
   packetLoss: number | undefined;
 } {
+  const elapsed = delta(current.timestamp, previous?.timestamp);
+  const windowMs =
+    elapsed !== undefined && elapsed > 0 && elapsed <= 30 * 60_000 ? elapsed : undefined;
+  if (
+    current.identity !== previous?.identity ||
+    (current.timestamp !== undefined && windowMs === undefined)
+  )
+    previous = undefined;
   const concealed = delta(current.concealed, previous?.concealed);
   const samples = delta(current.samples, previous?.samples);
   const lost = delta(current.lost, previous?.lost);
   const received = delta(current.received, previous?.received);
   const freeze = delta(current.freezeSeconds, previous?.freezeSeconds);
   return {
+    windowMs: previous === undefined ? undefined : windowMs,
     frames: delta(current.frames, previous?.frames),
     freezeMs: freeze === undefined ? undefined : freeze * 1000,
     // Silence/DTX or unsupported counters are unknown, never a fabricated zero.
@@ -97,6 +116,7 @@ export class MediaTelemetry {
     private readonly sources: () => TelemetryMediaSource[],
     private readonly record: TelemetryHandler,
     private readonly calls?: CallOutcomeTelemetry,
+    private readonly recordMedia?: TelemetryMediaHandler,
   ) {
     this.record = (event) => {
       try {
@@ -209,6 +229,16 @@ export class MediaTelemetry {
         });
         emit('media_rtt', rtt === undefined ? undefined : rtt * 1000);
         state.previous = sample;
+        try {
+          this.recordMedia?.({
+            key: source.key,
+            kind: source.kind,
+            ...changes,
+            rttMs: rtt === undefined ? undefined : rtt * 1000,
+          });
+        } catch {
+          /* Local export is also optional and cannot invalidate a native sample. */
+        }
       })
       .catch(() => {
         if (quality && current()) this.record({ name: 'media_sample', outcome: 'error' });

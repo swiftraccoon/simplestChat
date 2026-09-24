@@ -205,3 +205,121 @@ test('pending calls share bounded sampling while quality events keep their norma
   assert.doesNotThrow(() => broken.sample());
   broken.dispose();
 });
+
+test('quality intervals follow native timestamps and reject reset, replaced or ambiguous inbound counters', async () => {
+  const { readMediaSample, sampleChanges } = await loadTypeScript('src/media-telemetry.ts');
+  const before = {
+    identity: 'private-inbound-a',
+    timestamp: 1000,
+    frames: 100,
+    freezeSeconds: 1,
+    lost: 1,
+    received: 99,
+  };
+  const after = {
+    ...before,
+    timestamp: 21000,
+    frames: 700,
+    freezeSeconds: 1.2,
+    lost: 2,
+    received: 198,
+  };
+  const changes = sampleChanges(after, before);
+  assert.equal(changes.windowMs, 20000);
+  assert.equal(changes.frames, 600);
+  assert.equal(changes.packetLoss, 100);
+  assert.ok(Math.abs(changes.freezeMs - 200) < 0.001);
+  assert.equal(sampleChanges({ ...after, frames: 1 }, before).frames, undefined);
+  for (const invalid of [
+    { ...after, timestamp: 1000 },
+    { ...after, timestamp: 999 },
+    { ...after, timestamp: 30 * 60000 + 1001 },
+    { ...after, identity: 'private-inbound-b' },
+  ]) {
+    assert.ok(Object.values(sampleChanges(invalid, before)).every((value) => value === undefined));
+  }
+  assert.equal(sampleChanges({ ...after, timestamp: undefined }, before).windowMs, undefined);
+  const ambiguous = report({ timestamp: 1000, packetsReceived: 500 });
+  ambiguous.set('second-private-id', { type: 'inbound-rtp', kind: 'audio', packetsReceived: 900 });
+  assert.deepEqual(readMediaSample(ambiguous, 'audio'), {});
+});
+
+test('grouped samples retain real cadence, survive callback failure and reset after visibility, pause and source replacement', async () => {
+  const listeners = new Map();
+  const document = {
+    visibilityState: 'visible',
+    addEventListener: (name, listener) => listeners.set(name, listener),
+    removeEventListener: (name) => listeners.delete(name),
+  };
+  const { MediaTelemetry } = await loadTypeScript('src/media-telemetry.ts', {
+    globals: { document, setInterval: () => 1, clearInterval() {} },
+  });
+  let timestamp = 1000;
+  let active = true;
+  let key = {};
+  let defer;
+  const samples = [];
+  const sampler = new MediaTelemetry(
+    () => [
+      {
+        key,
+        kind: 'video',
+        active: () => active,
+        getStats: () =>
+          defer ??
+          Promise.resolve(
+            report({
+              kind: 'video',
+              timestamp,
+              framesDecoded: (timestamp / 1000) * 30,
+            }),
+          ),
+      },
+    ],
+    () => {},
+    undefined,
+    (sample) => {
+      samples.push(sample);
+      if (samples.length === 1) throw new Error('retired local recorder');
+    },
+  );
+  sampler.sample();
+  await flush();
+  assert.equal(samples[0].windowMs, undefined);
+  timestamp = 17000;
+  sampler.sample();
+  await flush();
+  assert.equal(samples[1].windowMs, 16000);
+  assert.equal(samples[1].frames, 480);
+  document.visibilityState = 'hidden';
+  listeners.get('visibilitychange')();
+  document.visibilityState = 'visible';
+  listeners.get('visibilitychange')();
+  timestamp = 33000;
+  sampler.sample();
+  await flush();
+  assert.equal(samples.at(-1).windowMs, undefined);
+  active = false;
+  sampler.sample();
+  active = true;
+  timestamp = 49000;
+  sampler.sample();
+  await flush();
+  assert.equal(samples.at(-1).windowMs, undefined);
+  let complete;
+  defer = new Promise((resolve) => {
+    complete = resolve;
+  });
+  sampler.sample();
+  await flush();
+  key = {};
+  defer = undefined;
+  sampler.sample();
+  await flush();
+  const length = samples.length;
+  complete(report({ kind: 'video', timestamp: 65000, framesDecoded: 1950 }));
+  await flush();
+  assert.equal(samples.length, length, 'late result from retired source never reaches export');
+  assert.equal(samples.at(-1).windowMs, undefined);
+  sampler.dispose();
+});
