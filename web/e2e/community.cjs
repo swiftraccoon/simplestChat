@@ -1914,12 +1914,24 @@ async function setRole(owner, name, role) {
     let recoveryKey;
     await step('save-once recovery key and password change signs out current room', async () => {
       const account = await header(owner, 'Account');
-      await account.getByLabel('Current password', { exact: true }).fill(password);
+      await account.getByLabel('Current password for verification', { exact: true }).fill(password);
       await account.getByRole('button', { name: 'Generate recovery key', exact: true }).click();
-      const keyDialog = owner.getByRole('dialog', { name: 'Save your recovery key', exact: true });
-      recoveryKey = await keyDialog.getByLabel('Recovery key', { exact: true }).inputValue();
-      assert.match(recoveryKey, /^sc-recovery-/);
-      await close(keyDialog);
+      const keyField = account.getByLabel('Recovery key', { exact: true });
+      recoveryKey = await keyField.inputValue();
+      assert.ok(
+        /^sc-recovery-/.test(recoveryKey),
+        'the displayed recovery key has the expected format',
+      );
+      const savedField = await keyField.elementHandle();
+      assert.ok(savedField, 'the recovery key was displayed in the owned account dialog');
+      await account.getByRole('button', { name: 'I saved my recovery key', exact: true }).click();
+      await keyField.waitFor({ state: 'detached' });
+      assert.equal(
+        await savedField.evaluate((node) => node.value === ''),
+        true,
+        'acknowledgment clears the detached secret',
+      );
+      await savedField.dispose();
       await account.getByLabel('Current password', { exact: true }).fill(password);
       await account.getByLabel('New password', { exact: true }).fill(`${password}changed`);
       await account.getByLabel('Confirm new password', { exact: true }).fill(`${password}changed`);
