@@ -322,11 +322,48 @@ refusals, worker deaths, database/container/host pressure, disk space, public
 readiness, TURN health, certificate expiry, backup age and collector/recorder
 health. Thresholds are operational starting points, not measured capacity claims.
 Backup freshness currently measures nonempty release backups; this is not a
-scheduled backup policy or proof of recovery. `RestoreEvidenceMissing` remains
-active until an operator performs an actual isolated restore, verifies it, and
-records that exercise by updating the root-only
-`/var/lib/simplestchat-monitoring/restore-verified.timestamp`. Do not update that
-file merely because an archive listing succeeded.
+scheduled backup policy or proof of recovery. Run the installed restore verifier
+against an explicitly selected existing release attempt:
+
+```sh
+sudo /usr/bin/python3 -E -B /usr/local/libexec/simplestchat-public/restore_verify.py \
+  release.REPLACE_WITH_RECORDED_ATTEMPT
+```
+
+The argument names a directory beneath `/srv/simplestchat-public/results`,
+containing `database-before.dump` and `outcome.json`. Its recorded SHA-256 must
+match a private descriptor-based snapshot, and its release manifest must remain
+available. The helper takes the deployment workload lock, uses the running
+PostgreSQL image by immutable local ID without pulling, and creates a unique
+disposable container with no network, published ports, host data/socket mounts,
+or attached application. It has a read-only root filesystem, no capabilities,
+0.5 CPU, 512 MB memory without swap and a 256 MB temporary database filesystem.
+Archives are capped at 64 MB; larger restores require reviewed resource limits.
+
+The complete archive is restored in one transaction with ownership and ACLs
+preserved, then checked against the release migration checksums, required schema,
+validated constraints/indexes, incident sequence/uniqueness and application role
+privacy. Active and resolved incidents are retained. PostgreSQL
+[pg_amcheck](https://www.postgresql.org/docs/18/app-pgamcheck.html) additionally
+checks supported heap/TOAST structures and B-tree indexes; its structural checks
+do not cover GIN indexes. Restoring their definitions still rebuilds them from
+the restored data. The local role stubs have no login or production passwords;
+this does not verify recovery of host secrets or a complete production cutover.
+Each restore and structural check has a 120-second deadline. Existing backups
+from before the operational schema was installed fail the current schema check.
+
+Only successful restore, verification, container removal and snapshot removal
+allow the helper to update
+`/var/lib/simplestchat-monitoring/restore-verified.timestamp`, clearing
+`RestoreEvidenceMissing` on the next collection. Never update it by hand or after
+an archive listing. Private command/error evidence and aggregate row counts remain
+under `/var/lib/simplestchat-monitoring/restores/restore.*`; terminal output never
+includes database rows. These small operator-created records have no automatic
+deletion policy. A failed exercise leaves previous success evidence unchanged.
+If forced process termination interrupts cleanup, a subsequent exercise refuses
+to start while a labeled restore container remains. Inspect its recorded unique
+name in `restore.json` and the exact `clinic.research.simplestchat.restore` label
+before removing that container; never target the live PostgreSQL container.
 
 ### Logging and rollout order
 
@@ -389,7 +426,22 @@ different stages and must not be substituted for one another.
 Keep `Authorization`, `Cookie`, `Set-Cookie` and `Sec-WebSocket-Protocol` headers,
 query strings and URL fragments out of custom proxy/APM/access logs. The supplied
 proxy does not enable raw access logging. The WebSocket subprotocol carries an
-access token. Existing email-first passkey initiation reveals whether an account
-has a passkey; a discoverable-credential migration requires compatibility testing
-because existing credentials may be nonresident. Artificial negative challenges
-alone do not guarantee indistinguishable responses.
+access token.
+
+Passkey login starts with an empty JSON object and no account lookup or credential
+allowlist. The browser selects a discoverable credential; the server binds its
+user handle and credential ID to the same account, verifies the assertion with
+required user verification, then checks the locked current credential counter.
+The retired email selector is rejected regardless of account state. Account
+registration still reports duplicate email addresses; this change removes the
+passkey-enrollment lookup, not every account-existence signal.
+
+New passkeys request `residentKey: required` and `requireResidentKey: true`, without
+restricting authenticator attachment or password-manager choice. The pinned
+WebAuthn library's discoverable verifier is reused with an explicit modal browser
+policy; signature, challenge, origin, RP and user-verification checks stay intact.
+Unsigned browser residency hints are never authorization evidence. Existing
+discoverable credentials continue to work; nonresident credentials cannot sign in
+through this flow. Before upgrading an installation that must retain such accounts,
+validate an alternate sign-in method or a discoverable replacement. There is no
+public legacy lookup fallback.

@@ -55,6 +55,25 @@ jobs:
           build/with-test-postgres.sh python -m unittest discover \
             -s ops/ansible/tests -p test_monitoring_database.py -v
 
+      - name: Verify isolated backup restoration with pinned PostgreSQL
+        env:
+          RESTORE_CONTAINER_E2E: "1"
+        run: |
+          docker pull docker.io/library/postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+          postgres_bindir="$(pg_config --bindir)"
+          export PATH="${postgres_bindir}:$PATH"
+          build/with-test-postgres.sh python -m unittest discover \
+            -s ops/ansible/tests -p test_restore_database.py -v
+
+      - name: Preserve isolated restore failure diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: restore-container
+          path: ${{ runner.temp }}/simplestchat-restore-container.*/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Verify production alert rule behavior with pinned Prometheus
         run: |
           docker run --rm --network=none --read-only --cap-drop=ALL \
@@ -104,7 +123,6 @@ jobs:
           cargo audit --deny unsound \
             --ignore RUSTSEC-2021-0145 \
             --ignore RUSTSEC-2026-0097
-
 
   rust-test:
     name: Rust build, native and PostgreSQL tests
@@ -214,7 +232,6 @@ jobs:
             exit 1
           fi
 
-
       - name: Migrate disposable test database with the real server
         run: build/with-test-server.sh true
 
@@ -243,7 +260,6 @@ jobs:
           path: ${{ runner.temp }}/media-smoke
           if-no-files-found: ignore
           retention-days: 7
-
 
   browser:
     name: Browser integration
@@ -326,6 +342,22 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Real passkey registration and discoverable authentication
+        timeout-minutes: 4
+        env:
+          PASSKEY_E2E: "1"
+          E2E_ARTIFACTS: ${{ runner.temp }}/passkey
+        run: build/with-test-server.sh node web/e2e/passkey.cjs
+
+      - name: Preserve passkey verification diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: passkey
+          path: ${{ runner.temp }}/passkey
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Homepage containment and responsive layout
         timeout-minutes: 3
         env:
@@ -405,7 +437,6 @@ jobs:
           path: ${{ runner.temp }}/community-e2e
           if-no-files-found: ignore
           retention-days: 7
-
 
   web:
     name: Web lint + format + tests + typecheck + build
