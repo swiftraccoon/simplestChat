@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll public GitHub reliability checks with a bounded unauthenticated budget
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=600s
+AccuracySec=10s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

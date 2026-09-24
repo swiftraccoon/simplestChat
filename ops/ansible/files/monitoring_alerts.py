@@ -22,6 +22,11 @@ MAX_ALERTS = 100
 MAX_SNAPSHOTS = 1440
 RULES = frozenset(
     {
+        "ExternalImportUnavailable",
+        "ExternalCoverageIncomplete",
+        "ExternalChecksStale",
+        "ExternalCheckFailed",
+        "ExternalSpoolLoss",
         "TelemetrySeriesDropped",
         "TurnMetricsUnavailable",
         "TurnAllocationPressure",

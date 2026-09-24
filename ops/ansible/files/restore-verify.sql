@@ -45,6 +45,24 @@ DO $$ BEGIN
           COALESCE((SELECT max(id) FROM operations.alerts),0) THEN
         RAISE EXCEPTION 'Incident uniqueness or sequence differs';
     END IF;
+    -- Older version-1 archives legitimately predate external evidence. A partial
+    -- newer schema is never treated as an old archive and silently ignored.
+    IF (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='operations' AND c.relkind='r' AND c.relname IN
+        ('external_schema_version','external_runs','external_status')) NOT IN (0,3) THEN
+        RAISE EXCEPTION 'Incomplete external operations schema';
+    END IF;
+    IF to_regclass('operations.external_schema_version') IS NOT NULL THEN
+        IF (SELECT count(*) FROM operations.external_schema_version) != 1 OR
+           (SELECT version FROM operations.external_schema_version) != 1 THEN
+            RAISE EXCEPTION 'Unsupported external operations schema';
+        END IF;
+        PERFORM workflow,run_id,attempt,source_revision,deployed_revision_at_import,
+            started_at,completed_at,result,conclusion,checks,imported_at
+            FROM operations.external_runs LIMIT 0;
+        PERFORM workflow,observed_at,last_complete_at,window_start,api_ok,complete,pending,
+            truncated,failure_since,history_gap_since FROM operations.external_status LIMIT 0;
+    END IF;
 END $$;
 -- Aggregate-only private evidence: no emails, tokens, credential material or incident rows.
 SELECT json_build_object(

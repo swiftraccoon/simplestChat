@@ -33,3 +33,38 @@ tests:
         alertname: QualitySampleStale
         exp_alerts:
           - exp_labels: {severity: warning, job: app}
+  - name: Missing external import does not pretend monitoring is enabled
+    interval: 1m
+    alert_rule_test:
+      - eval_time: 21m
+        alertname: ExternalImportUnavailable
+        exp_alerts:
+          - exp_labels: {severity: warning}
+  - name: Completed setup-only jobs leave probe coverage incomplete
+    interval: 1m
+    input_series:
+      - series: 'simplestchat_ops_external_coverage_complete{component="canary"}'
+        values: '1x32'
+      - series: 'simplestchat_ops_external_probe_complete{component="canary"}'
+        values: '0x32'
+    alert_rule_test:
+      - eval_time: 31m
+        alertname: ExternalCoverageIncomplete
+        exp_alerts:
+          - exp_labels: {severity: warning, component: canary}
+  - name: Stale public readiness and a retained failure stay visible
+    interval: 1m
+    input_series:
+      - series: 'simplestchat_ops_external_probe_timestamp_seconds{component="availability"}'
+        values: '0x32'
+      - series: 'simplestchat_ops_external_check_failed{component="availability"}'
+        values: '1x32'
+    alert_rule_test:
+      - eval_time: 31m
+        alertname: ExternalChecksStale
+        exp_alerts:
+          - exp_labels: {severity: warning, component: availability}
+      - eval_time: 31m
+        alertname: ExternalCheckFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, component: availability}

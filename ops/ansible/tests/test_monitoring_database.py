@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,7 +15,7 @@ from test_support import ROOT
 # isort: split
 import monitoring_alerts as alerts
 from monitoring_alerts import incident
-from release_json import JsonObject
+from release_json import JsonObject, array_value, decode_json, object_value
 
 
 @unittest.skipUnless(os.environ.get("DISPOSABLE_TEST_DATABASE") == "1", "requires owned PostgreSQL")
@@ -101,6 +101,118 @@ class IncidentDatabaseTests(unittest.TestCase):
             "DatabaseUnavailable|1|1",
         )
         _ = self.sql("TRUNCATE operations.alerts, operations.alert_cursor;")
+
+    def test_external_history_partial_recovery_reruns_privacy_and_retention(self) -> None:
+        """Real SQL retains skipped-check gaps and cannot turn incomplete polling into recovery."""
+        _ = self.sql((ROOT / "ops/ansible/files/monitoring-schema.sql").read_text())
+        _ = self.sql("""DO $$ BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='postgres') THEN
+                CREATE ROLE postgres NOLOGIN;
+            END IF;
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='simplestchat_app') THEN
+                CREATE ROLE simplestchat_app NOLOGIN;
+                CREATE ROLE simplestchat_migrate NOLOGIN;
+            END IF;
+            END $$;
+            ALTER SCHEMA operations OWNER TO postgres;
+            ALTER TABLE operations.schema_version OWNER TO postgres;""")
+        _ = self.sql(
+            "SET ROLE postgres;\n"
+            + (ROOT / "ops/ansible/files/monitoring-external-schema.sql").read_text()
+        )
+        record = (ROOT / "ops/ansible/files/monitoring-external.sql").read_text()
+        now = datetime.now(UTC)
+
+        def attempt(identity: int, number: int, result: str, seconds: int) -> JsonObject:
+            return {
+                "runId": identity,
+                "attempt": number,
+                "sourceRevision": "a" * 40,
+                "startedAt": (now + timedelta(seconds=seconds - 30)).isoformat(),
+                "completedAt": (now + timedelta(seconds=seconds)).isoformat(),
+                "result": result,
+                "conclusion": "success" if result != "failure" else "failure",
+                "checks": {"readiness": "success" if result == "success" else "missing"},
+            }
+
+        def snapshot(seconds: int, entries: list[JsonObject], *, complete: bool) -> JsonObject:
+            return {
+                "observedAt": (now + timedelta(seconds=seconds)).isoformat(),
+                "windowStart": (now - timedelta(days=1)).isoformat(),
+                "revision": "b" * 40,
+                "workflows": [
+                    {
+                        "workflow": "availability",
+                        "apiOk": True,
+                        "complete": complete,
+                        "pending": 0 if complete else 1,
+                        "truncated": False,
+                        "runs": list(entries),
+                    }
+                ],
+            }
+
+        failure = attempt(1, 1, "failure", -180)
+        skipped = attempt(2, 1, "incomplete", -120)
+        first = snapshot(0, [failure, skipped], complete=True)
+        _ = self.sql(record, first)
+        _ = self.sql(record, first)
+        self.assertEqual(self.sql("SELECT count(*) FROM operations.external_runs;"), "2")
+        self.assertEqual(
+            self.sql("""SELECT failure_since IS NOT NULL
+            FROM operations.external_status WHERE workflow='availability';"""),
+            "t",
+        )
+        report = object_value(
+            decode_json(self.sql((ROOT / "ops/ansible/files/monitoring-report.sql").read_text()))
+        )
+        coverage = [object_value(item) for item in array_value(report["externalCoverage"])]
+        self.assertEqual(coverage[0]["coverage"], "incomplete")
+        self.assertEqual(coverage[1]["coverage"], "missing")
+        self.assertNotEqual(
+            coverage[0]["source_revision"], coverage[0]["deployed_revision_at_import"]
+        )
+        # A successful rerun is distinct evidence, but partial polling cannot clear an incident.
+        _ = self.sql(record, snapshot(60, [attempt(1, 2, "success", -60)], complete=False))
+        _ = self.sql(record, first)  # stale complete replay cannot override the partial cursor.
+        self.assertEqual(
+            self.sql("""SELECT failure_since IS NOT NULL, complete
+            FROM operations.external_status WHERE workflow='availability';"""),
+            "t|f",
+        )
+        self.assertEqual(self.sql("SELECT count(*) FROM operations.external_runs;"), "3")
+        _ = self.sql(record, snapshot(120, [], complete=True))
+        self.assertEqual(
+            self.sql("""SELECT failure_since IS NULL, complete
+            FROM operations.external_status WHERE workflow='availability';"""),
+            "t|t",
+        )
+        self.assertEqual(
+            self.sql("""SELECT bool_and(NOT has_schema_privilege(
+            r.rolname,'operations','USAGE,CREATE') AND NOT has_table_privilege(
+            r.rolname,'operations.external_runs','SELECT,INSERT,UPDATE,DELETE,TRUNCATE'))
+            FROM pg_roles r WHERE r.rolname IN ('simplestchat_app','simplestchat_migrate');"""),
+            "t",
+        )
+        _ = self.sql("""INSERT INTO operations.external_runs
+            SELECT 'availability',100+n,1,repeat('a',40),repeat('b',40),now(),now(),
+                'success','success','{}',now() FROM generate_series(1,10001) n;
+            UPDATE operations.external_runs SET started_at=now()-interval '41 days',
+                completed_at=now()-interval '40 days' WHERE run_id=1;""")
+        _ = self.sql(record, snapshot(180, [], complete=True))
+        self.assertEqual(self.sql("SELECT count(*) FROM operations.external_runs;"), "10000")
+        self.assertEqual(
+            self.sql("SELECT count(*) FROM operations.external_runs WHERE run_id=1;"), "0"
+        )
+        # A gap longer than the bounded backfill must remain visible after later healthy polling.
+        gap = snapshot(200, [], complete=True)
+        gap["windowStart"] = (now + timedelta(seconds=190)).isoformat()
+        _ = self.sql(record, gap)
+        self.assertEqual(
+            self.sql("""SELECT history_gap_since IS NOT NULL
+            FROM operations.external_status WHERE workflow='availability';"""),
+            "t",
+        )
 
     def test_lifecycle_replay_privileges_and_retention(self) -> None:
         """Committed retries are idempotent and resolved incidents retain their own history."""

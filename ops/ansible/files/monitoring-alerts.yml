@@ -1,6 +1,28 @@
 groups:
   - name: simplestchat
     rules:
+      - alert: ExternalImportUnavailable
+        expr: >-
+          time() - simplestchat_ops_external_import_timestamp_seconds > 1800
+          or absent(simplestchat_ops_external_import_timestamp_seconds)
+          or simplestchat_ops_external_database_ok == 0 or simplestchat_ops_external_api_ok == 0
+        for: 20m
+        labels: {severity: warning}
+      - alert: ExternalCoverageIncomplete
+        expr: simplestchat_ops_external_coverage_complete == 0 or simplestchat_ops_external_probe_complete == 0 or simplestchat_ops_external_spool_snapshots > 0
+        for: 30m
+        labels: {severity: warning}
+      - alert: ExternalChecksStale
+        expr: >-
+          time() - simplestchat_ops_external_probe_timestamp_seconds{component="availability"} > 1800
+          or time() - simplestchat_ops_external_probe_timestamp_seconds{component="canary"} > 7200
+        labels: {severity: warning}
+      - alert: ExternalCheckFailed
+        expr: simplestchat_ops_external_check_failed == 1
+        labels: {severity: warning}
+      - alert: ExternalSpoolLoss
+        expr: increase(simplestchat_ops_external_spool_dropped_total[1h]) > 0
+        labels: {severity: critical}
       - alert: MetricsUnavailable
         expr: up{job="app"} == 0
         for: 2m

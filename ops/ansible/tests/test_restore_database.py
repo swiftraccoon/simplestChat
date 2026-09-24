@@ -137,6 +137,25 @@ class RestoreDatabaseTests(unittest.TestCase):
                 + f"private evidence: {evidence}\n{diagnostic_tail(evidence)}"
             )
 
+    def verify_external_schema(self, target: str, verification: str) -> None:
+        """Require complete new operational evidence with private runtime grants."""
+        # A complete older archive is valid; any present external schema must be complete.
+        _ = self.sql(
+            target,
+            "SET ROLE postgres;\n"
+            + (ROOT / "ops/ansible/files/monitoring-external-schema.sql").read_text(),
+        )
+        _ = self.sql(target, verification)
+        _ = self.sql(target, "ALTER TABLE operations.external_status RENAME TO fixture_missing;")
+        with self.assertRaises(subprocess.CalledProcessError):
+            _ = self.sql(target, verification)
+        _ = self.sql(target, "ALTER TABLE operations.fixture_missing RENAME TO external_status;")
+        _ = self.sql(target, "GRANT SELECT ON operations.external_runs TO simplestchat_app;")
+        with self.assertRaises(subprocess.CalledProcessError):
+            _ = self.sql(target, verification)
+        _ = self.sql(target, "REVOKE SELECT ON operations.external_runs FROM simplestchat_app;")
+        _ = self.sql(target, verification)
+
     def test_restore_preserves_incidents_privacy_and_rejects_truncated_archives(self) -> None:
         """Full restoration retains active/resolved rows and rejects privacy/schema drift."""
         original = urlsplit(os.environ["TEST_DATABASE_URL"])
@@ -220,6 +239,7 @@ class RestoreDatabaseTests(unittest.TestCase):
                 self.assertEqual(counts["users"], 1)
                 self.assertEqual(counts["activeIncidents"], 1)
                 self.assertEqual(counts["resolvedIncidents"], 1)
+                self.verify_external_schema(target, verification)
                 _ = self.command(
                     "pg_amcheck",
                     "--install-missing",

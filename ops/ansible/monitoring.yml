@@ -40,6 +40,7 @@
         - {path: /var/lib/simplestchat-monitoring/prometheus, owner: '10003', mode: '0700'}
         - {path: /var/lib/simplestchat-monitoring/textfile, owner: root, mode: '0755'}
         - {path: /var/lib/simplestchat-monitoring/spool, owner: root, mode: '0700'}
+        - {path: /var/lib/simplestchat-monitoring/external-spool, owner: root, mode: '0700'}
         - {path: /etc/systemd/journald.conf.d, owner: root, mode: '0755'}
 
     - name: Read only the prepared metrics token into the collector credential file
@@ -78,6 +79,7 @@
         mode: '0600'
 
     - name: Render the private monitoring stack and scrape configuration
+      notify: Reload validated Prometheus configuration
       ansible.builtin.template:
         src: "{{ item.source }}"
         dest: "{{ item.destination }}"
@@ -89,6 +91,7 @@
         - {source: monitoring-prometheus.yml.j2, destination: /etc/simplestchat-monitoring/prometheus.yml}
 
     - name: Install fixed operational alert rules
+      notify: Reload validated Prometheus configuration
       ansible.builtin.copy:
         src: monitoring-alerts.yml
         dest: /etc/simplestchat-monitoring/alerts.yml
@@ -109,6 +112,11 @@
         - monitoring_prepare.py
         - monitoring-alerts.sql
         - monitoring-schema.sql
+        - monitoring_external.py
+        - monitoring_report.py
+        - monitoring-external-schema.sql
+        - monitoring-external.sql
+        - monitoring-report.sql
         - restore_verify.py
         - restore-verify.sql
         - turn_public.py
@@ -155,6 +163,16 @@
         group: root
         mode: '0644'
       notify: Reload persistent journal
+
+    - name: Install the separate bounded external check importer
+      ansible.builtin.template:
+        src: "monitoring-external.{{ item }}.j2"
+        dest: "/etc/systemd/system/simplestchat-monitoring-external.{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: [service, timer]
+      notify: Reload monitoring units
 
     - name: Pull only reviewed immutable monitoring images
       ansible.builtin.command:
@@ -227,7 +245,23 @@
         name: simplestchat-monitoring.service
         state: started
 
+    - name: Enable the conservative public GitHub polling timer
+      ansible.builtin.systemd_service:
+        name: simplestchat-monitoring-external.timer
+        enabled: true
+        state: started
+
   handlers:
+    - name: Reload validated Prometheus configuration
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/docker
+          - --host
+          - unix:///var/run/docker.sock
+          - kill
+          - --signal=SIGHUP
+          - simplestchat-monitoring-prometheus-1
+      changed_when: true
     - name: Reload monitoring units
       ansible.builtin.systemd_service:
         daemon_reload: true
