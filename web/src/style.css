@@ -1330,13 +1330,17 @@ header h1 {
   font-size: 0.85rem;
   line-height: 1.4;
   box-shadow: var(--shadow-panel);
-  /* The fade tracks the lifetime the script sets, so long notices do not vanish early. */
-  animation:
-    toastIn 200ms ease,
-    toastOut 300ms ease calc(var(--toast-life, 3000ms) - 300ms) forwards;
+  /* The script fades a toast out just before removing it, whatever its lifetime; a delayed
+     animation would count as running for the whole lifetime and disturb settled-UI checks. */
+  animation: toastIn 200ms ease;
+  transition: opacity 300ms ease;
   pointer-events: auto;
   cursor: pointer;
   max-width: 320px;
+}
+
+.toast.toast-leaving {
+  opacity: 0;
 }
 
 .toast-error {

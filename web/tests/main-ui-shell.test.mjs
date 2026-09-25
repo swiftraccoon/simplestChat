@@ -97,22 +97,27 @@ test('role badges explain their symbol to pointer and assistive users', async ()
   assert.equal(getRoleBadgeSpan('guest'), null);
 });
 
-test('toasts announce, mark errors, and dismiss on click', async () => {
+test('toasts announce, mark errors, fade just before removal and dismiss on click', async () => {
   const { document, Node } = createDOM();
-  Object.defineProperty(Node.prototype, 'style', {
+  Object.defineProperty(Node.prototype, 'classList', {
     get() {
-      return (this._style ??= {
-        setProperty(name, value) {
-          this[name] = value;
-        },
-      });
+      return (this._classList ??= classListStub(
+        (this.className ?? '').split(/\s+/).filter(Boolean),
+      ));
     },
   });
+  const timers = [];
   const toastContainer = document.createElement('div');
   document.body.append(toastContainer);
   const { showToast } = evaluateTypeScript(
     `${await functionSource('showToast')} export { showToast };`,
-    { globals: { document, toastContainer, setTimeout: () => 0 } },
+    {
+      globals: {
+        document,
+        toastContainer,
+        setTimeout: (callback, delay) => timers.push({ callback, delay }),
+      },
+    },
   );
   showToast('Room link copied');
   showToast('Could not enable microphone', 8000, 'error');
@@ -120,11 +125,17 @@ test('toasts announce, mark errors, and dismiss on click', async () => {
   assert.equal(info.className, 'toast');
   assert.equal(error.className, 'toast toast-error');
   assert.equal(error.getAttribute('role'), 'alert');
-  assert.equal(info.style['--toast-life'], '3000ms', 'the fade-out follows the lifetime');
-  assert.equal(error.style['--toast-life'], '8000ms');
-  info.click();
-  assert.equal(info.isConnected, false, 'a click dismisses the toast');
-  assert.equal(error.isConnected, true);
+  assert.deepEqual(
+    timers.map((timer) => timer.delay),
+    [2700, 3000, 7700, 8000],
+    'the fade starts 300 ms before removal, whatever the lifetime',
+  );
+  timers[0].callback();
+  assert.equal(info.classList.contains('toast-leaving'), true);
+  timers[1].callback();
+  assert.equal(info.isConnected, false);
+  error.click();
+  assert.equal(error.isConnected, false, 'a click dismisses the toast');
 });
 
 test('entering a room moves focus into it and states that media stays off', async () => {

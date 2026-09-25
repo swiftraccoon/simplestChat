@@ -274,9 +274,9 @@ function showToast(message: string, duration = 3000, kind: ToastKind = 'info'): 
   toast.className = kind === 'error' ? 'toast toast-error' : 'toast';
   if (kind === 'error') toast.setAttribute('role', 'alert');
   toast.textContent = message;
-  toast.style.setProperty('--toast-life', `${duration}ms`);
   toast.addEventListener('click', () => toast.remove());
   toastContainer.appendChild(toast);
+  setTimeout(() => toast.classList.add('toast-leaving'), Math.max(0, duration - 300));
   setTimeout(() => toast.remove(), duration);
 }
 
