@@ -179,6 +179,10 @@ handshake timeout; the orderly-close case also checks warning-level output.
 Fake-clock media cases verify inactivity/activity timing, bounded private
 identities, tuple-history expiry/reuse and warning coalescing, including timer
 cleanup and a finite burst's delayed summary. They do not send network probes.
+CI runs the helper in its own job and records a passing verification under a cache key
+made from the vendored sources, the helper, the pinned OpenSSL installer and the pip
+constraints; a push that leaves those unchanged skips the nine-minute rebuild, and any
+change to them verifies again.
 
 Exercise call outcomes with real browser decoding on owned loopback services:
 

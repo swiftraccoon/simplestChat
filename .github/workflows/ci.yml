@@ -232,19 +232,6 @@ jobs:
             exit 1
           fi
 
-      - name: Verify native DTLS closure and media diagnostic context
-        timeout-minutes: 12
-        run: build/check-native-dtls.sh
-
-      - name: Preserve native media failure diagnostics
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: native-dtls-failure
-          path: ${{ runner.temp }}/simplestchat-native-dtls.*/*.log
-          if-no-files-found: ignore
-          retention-days: 7
-
       - name: Migrate disposable test database with the real server
         run: build/with-test-server.sh true
 
@@ -274,10 +261,87 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  native-dtls:
+    name: Native worker DTLS closure and media diagnostics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The check compiles the vendored worker and its test binary from scratch,
+      # about nine minutes, and reads nothing but the vendored sources, the
+      # pinned OpenSSL installer, the pinned Python build tools and the script.
+      # A passing run records that exact input set; later pushes that leave it
+      # unchanged skip the rebuild, and any change to it verifies again.
+      - name: Look up a passing verification of these native inputs
+        id: verified
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/native-dtls-verified
+          key: native-dtls-${{ runner.os }}-${{ hashFiles('vendor/**', 'build/check-native-dtls.sh', 'build/install-openssl.sh', 'build/pip-constraints.txt') }}
+          lookup-only: true
+
+      - name: Install native build dependencies
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config
+          echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-3.5.8" >> "${GITHUB_ENV}"
+
+      - name: Restore checksum-pinned OpenSSL
+        if: steps.verified.outputs.cache-hit != 'true'
+        id: openssl
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/simplestchat-openssl-3.5.8
+          key: openssl-${{ runner.os }}-${{ hashFiles('build/install-openssl.sh') }}
+
+      - name: Build checksum-pinned OpenSSL
+        if: steps.verified.outputs.cache-hit != 'true' && steps.openssl.outputs.cache-hit != 'true'
+        run: build/install-openssl.sh "${OPENSSL_DIR}"
+
+      - name: Verify native DTLS closure and media diagnostic context
+        if: steps.verified.outputs.cache-hit != 'true'
+        timeout-minutes: 12
+        run: build/check-native-dtls.sh
+
+      - name: Preserve native media failure diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-dtls-failure
+          path: ${{ runner.temp }}/simplestchat-native-dtls.*/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Record the passing verification
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: printf '%s\n' "${GITHUB_SHA}" > "${RUNNER_TEMP}/native-dtls-verified"
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.verified.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/native-dtls-verified
+          key: ${{ steps.verified.outputs.cache-primary-key }}
+
   browser:
-    name: Browser integration
+    name: Browser integration (${{ matrix.group }})
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      # One job definition, three runners: every group repeats the same
+      # two-minute build and browser setup, then runs under two minutes of
+      # suites instead of five and a half minutes in one sequence.
+      #   accounts: sign-in, passkeys, room controls, chat retry, accessibility
+      #   media: community and real-media regressions, continuity, call outcomes
+      #   stress: homepage layout, restart recovery, the UI stress harness
+      matrix:
+        group: [accounts, media, stress]
     services:
       postgres:
         # Official image, pinned to the verified PostgreSQL 18.6 manifest.
@@ -337,6 +401,7 @@ jobs:
           npm --prefix web/e2e audit --audit-level=moderate
 
       - name: Authentication dialog and diagnostic privacy in Chromium and Firefox
+        if: matrix.group == 'accounts'
         timeout-minutes: 4
         env:
           AUTH_LIFECYCLE_E2E: "1"
@@ -347,7 +412,7 @@ jobs:
           done
 
       - name: Preserve authentication lifecycle diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.group == 'accounts' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: auth-lifecycle
@@ -356,6 +421,7 @@ jobs:
           retention-days: 7
 
       - name: Shared account state and room navigation in Chromium and Firefox
+        if: matrix.group == 'accounts'
         timeout-minutes: 4
         env:
           AUTH_CROSS_TAB_E2E: "1"
@@ -366,6 +432,7 @@ jobs:
           done
 
       - name: Confirm room controls and retain failed edits
+        if: matrix.group == 'accounts'
         timeout-minutes: 4
         env:
           ROOM_CONTROL_E2E: "1"
@@ -376,6 +443,7 @@ jobs:
           done
 
       - name: Real passkey registration and discoverable authentication
+        if: matrix.group == 'accounts'
         timeout-minutes: 4
         env:
           PASSKEY_E2E: "1"
@@ -383,7 +451,7 @@ jobs:
         run: build/with-test-server.sh node web/e2e/passkey.cjs
 
       - name: Preserve passkey verification diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.group == 'accounts' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: passkey
@@ -392,6 +460,7 @@ jobs:
           retention-days: 7
 
       - name: Passkey management and recovery with native credentials
+        if: matrix.group == 'accounts'
         timeout-minutes: 4
         env:
           PASSKEY_E2E: "1"
@@ -399,7 +468,7 @@ jobs:
         run: build/with-test-server.sh node web/e2e/passkey-management.cjs
 
       - name: Preserve passkey management diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.group == 'accounts' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: passkey-management
@@ -408,19 +477,21 @@ jobs:
           retention-days: 7
 
       - name: Homepage containment and responsive layout
+        if: matrix.group == 'stress'
         timeout-minutes: 3
         env:
           E2E_ARTIFACTS: ${{ runner.temp }}/homepage-layout
         run: npm --prefix web/e2e run test:layout
 
       - name: Automatic room recovery after an owned server restart
+        if: matrix.group == 'stress'
         timeout-minutes: 3
         run: |
           node build/restart-browser-smoke.mjs --binary "$PWD/target/debug/simplestChat" \
             --browser chromium --output "${RUNNER_TEMP}/restart-browser"
 
       - name: Preserve browser restart diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.group == 'stress' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: restart-browser
@@ -429,7 +500,7 @@ jobs:
           retention-days: 7
 
       - name: Preserve homepage layout diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.group == 'stress' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: homepage-layout
@@ -438,12 +509,14 @@ jobs:
           retention-days: 7
 
       - name: Community and real-media browser regressions
+        if: matrix.group == 'media'
         timeout-minutes: 8
         env:
           E2E_ARTIFACTS: ${{ runner.temp }}/community-e2e
         run: build/with-test-server.sh npm --prefix web/e2e test
 
       - name: Media continuity and device controls in Chromium and Firefox
+        if: matrix.group == 'media'
         timeout-minutes: 4
         env:
           MEDIA_CONTINUITY_E2E: "1"
@@ -457,6 +530,7 @@ jobs:
           done
 
       - name: Reconcile interrupted chat sends without duplicate delivery
+        if: matrix.group == 'accounts'
         timeout-minutes: 4
         env:
           CHAT_RETRY_E2E: "1"
@@ -464,19 +538,28 @@ jobs:
         run: build/with-test-server.sh node web/e2e/chat-retry.cjs
 
       - name: Preserve product continuity diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.group == 'accounts' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: product-continuity
           path: |
             ${{ runner.temp }}/account-tabs-*
             ${{ runner.temp }}/room-controls-*
-            ${{ runner.temp }}/media-continuity-*
             ${{ runner.temp }}/chat-retry
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Preserve media continuity diagnostics
+        if: ${{ !cancelled() && matrix.group == 'media' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: media-continuity
+          path: ${{ runner.temp }}/media-continuity-*
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Received call outcomes with real browser media
+        if: matrix.group == 'media'
         timeout-minutes: 4
         env:
           CALL_OUTCOME_E2E: "1"
@@ -486,7 +569,7 @@ jobs:
         run: build/with-test-server.sh node web/e2e/impaired-network.cjs
 
       - name: Preserve call outcome diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.group == 'media' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: call-outcomes
@@ -495,6 +578,7 @@ jobs:
           retention-days: 7
 
       - name: Chat delivery and UI stress harness smoke
+        if: matrix.group == 'stress'
         timeout-minutes: 4
         env:
           UI_STRESS_E2E: "1"
@@ -505,7 +589,7 @@ jobs:
         run: build/with-test-server.sh npm --prefix web/e2e run test:stress
 
       - name: Preserve UI stress diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.group == 'stress' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ui-stress
@@ -514,6 +598,7 @@ jobs:
           retention-days: 7
 
       - name: Accessibility rules and keyboard smoke
+        if: matrix.group == 'accounts'
         timeout-minutes: 5
         env:
           ACCESSIBILITY_E2E: "1"
@@ -521,7 +606,7 @@ jobs:
         run: build/with-test-server.sh node web/e2e/accessibility.cjs
 
       - name: Preserve accessibility diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.group == 'accounts' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: accessibility-e2e
@@ -530,7 +615,7 @@ jobs:
           retention-days: 7
 
       - name: Preserve browser diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.group == 'media' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: community-e2e
