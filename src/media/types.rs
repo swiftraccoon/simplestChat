@@ -150,6 +150,9 @@ pub struct ParticipantMedia {
     /// Ceilings of the consumers that have layers at all. Audio and
     /// single-stream consumers have no entry and never receive layer requests.
     pub consumer_layers: HashMap<String, ConsumerLayerState>,
+    /// Where the receive transport was placed when it is not on the room's
+    /// primary worker; shared so clones of this state keep one placement.
+    pub viewer_lease: Option<std::sync::Arc<crate::media::router_manager::ViewerLease>>,
 }
 
 impl ParticipantMedia {
@@ -165,6 +168,7 @@ impl ParticipantMedia {
             consumers: HashMap::new(),
             bandwidth_spatial_ceiling: None,
             consumer_layers: HashMap::new(),
+            viewer_lease: None,
         }
     }
 

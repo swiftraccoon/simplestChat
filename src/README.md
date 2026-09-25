@@ -37,11 +37,17 @@ HTTP / WebSocket
 
 Worker count is configurable (detected CPUs capped at 64 by default), not fixed
 at 16. Each worker has a dedicated WebRtcServer UDP port; each room has one
-router. New routers select an open worker with an open listener, preferring fewer
-consumers and then fewer pending or registered routers. Selection reserves the
-router count atomically; cancellation, failed creation, and room removal release
-it synchronously. This spreads rooms even before their users start media.
-Consumers are created paused and resume after the browser creates its consumer.
+primary router that holds every producer and the audio observers. New routers
+select an open worker with an open listener, preferring fewer consumers and then
+fewer pending or registered routers. Selection reserves the router count
+atomically; cancellation, failed creation, and room removal release it
+synchronously. This spreads rooms even before their users start media. Once a
+room's primary worker carries 64 consumers, new receive transports are placed by
+the same selection, and a room lazily gains one viewer router per other worker,
+fed by router-to-router pipes created once per producer and worker; pipes follow
+the producer's close, viewer routers close with the room, and a placement drops
+with the participant's media. Consumers are created paused and resume after the
+browser creates its consumer.
 See [configuration](../docs/configuration.md) for allocation limits.
 
 Authorization is server-side. Roles, bans, password access, lobby state and

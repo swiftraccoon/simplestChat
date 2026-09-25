@@ -1831,9 +1831,17 @@ impl RoomManager {
             .router_manager()
             .rooms_on_worker(dead_worker)
             .await;
+        // Viewers placed on the dead worker lost their transports and recover
+        // through the client's transport rebuild; their rooms stay open.
+        let viewer_routers = self
+            .media_server
+            .router_manager()
+            .drop_viewer_routers_on_worker(dead_worker)
+            .await;
         warn!(
             %dead_worker,
             affected_rooms = rooms.len(),
+            viewer_routers,
             "Media worker died; recreating it and asking its rooms to rejoin"
         );
         // Capacity first: when this was the only worker, rejoins need it back.
@@ -3028,14 +3036,21 @@ impl RoomManager {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
-        let router = self.get_router(room_id).await?;
-        let webrtc_server = self
-            .media_server
-            .get_webrtc_server_for_room(room_id)
-            .await?;
         let media_participant_id =
             Self::media_participant_id(room_id, participant_id, media_session_id);
         let media_config = self.media_server.config();
+        // A busy room spreads its viewers over the workers; the primary router
+        // keeps every producer and the observers that watch them.
+        let (router, worker_id, lease) = self
+            .media_server
+            .router_manager()
+            .place_viewer(room_id, &media_participant_id, &media_config.router_config)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+        let webrtc_server = self
+            .media_server
+            .get_webrtc_server_for_worker(worker_id)
+            .await?;
         let _ipc_reservation = self
             .reserve_media_control_ipc_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -3050,6 +3065,15 @@ impl RoomManager {
             )
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
+        if let Some(lease) = lease
+            && let Err(error) = self
+                .media_server
+                .transport_manager()
+                .attach_viewer_lease(&media_participant_id, lease)
+                .await
+        {
+            debug!(room_id, %error, "Receive transport left before its placement was recorded");
+        }
         if !self
             .is_current_media_session(room_id, participant_id, expected_sender, media_session_id)
             .await
@@ -3280,17 +3304,22 @@ impl RoomManager {
             .reserve_media_control_ipc_for_sender(room_id, participant_id, expected_sender)
             .await
             .map_err(|error| crate::media::types::MediaError::ConsumerError(error.to_string()))?;
-        // Look up the consumer counter for this room's worker (for load-aware tracking)
+        let media_participant_id =
+            Self::media_participant_id(room_id, participant_id, media_session_id);
+        // A viewer placed on another worker consumes the producer's pipe there.
+        self.media_server
+            .router_manager()
+            .ensure_piped(room_id, &media_participant_id, producer_id)
+            .await?;
+        // Look up the consumer counter for the participant's worker (for load-aware tracking)
         let consumer_counter = self
             .media_server
-            .get_consumer_counter_for_room(room_id)
+            .get_consumer_counter_for_participant(room_id, &media_participant_id)
             .await
             .ok()
             .flatten();
 
         // No room lock needed — purely transport_manager operation
-        let media_participant_id =
-            Self::media_participant_id(room_id, participant_id, media_session_id);
         let consumer = self
             .media_server
             .transport_manager()

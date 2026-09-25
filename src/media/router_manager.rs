@@ -7,13 +7,18 @@ use crate::media::types::{MediaError, MediaResult};
 use crate::media::worker_manager::{RouterLoadReservation, WorkerManager};
 use anyhow::Result;
 use mediasoup::prelude::*;
-use mediasoup::router::RouterDump;
+use mediasoup::router::{PipeToRouterOptions, RouterDump};
 use mediasoup::worker::WorkerId;
 use std::collections::{HashMap, hash_map::Entry};
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
+
+/// Below this many consumers on a room's primary worker its viewers stay
+/// there: every extra worker costs one pipe per producer, which small rooms
+/// do not repay, and rooms below it behave exactly as before.
+pub(crate) const VIEWER_SPREAD_MIN_CONSUMERS: usize = 64;
 
 /// Information about a router and its associated worker
 struct RouterInfo {
@@ -23,9 +28,62 @@ struct RouterInfo {
     _load_reservation: RouterLoadReservation,
 }
 
+/// Both ends of a pipe from the primary router; dropping them closes it.
+struct PipedProducerHandles {
+    _pipe_consumer: Consumer,
+    pipe_producer: Producer,
+}
+
+/// One room's viewer routers on other workers and the pipes that feed them.
+#[derive(Default)]
+struct ViewerRouters {
+    by_worker: HashMap<WorkerId, RouterInfo>,
+    /// Keyed by the original producer and the viewer worker it is piped to.
+    pipes: HashMap<(ProducerId, WorkerId), PipedProducerHandles>,
+}
+
+/// Media participant id to the worker of its receive transport, with the
+/// ticket of the lease that recorded it.
+type Placements = Arc<std::sync::Mutex<HashMap<String, (WorkerId, u64)>>>;
+
+/// Records where a viewer's receive transport lives. It drops with the
+/// participant's media, so every removal path forgets the placement, and it
+/// only removes the placement it recorded (a later lease for the same id wins).
+pub struct ViewerLease {
+    participant_id: String,
+    ticket: u64,
+    placements: Placements,
+}
+
+impl Drop for ViewerLease {
+    fn drop(&mut self) {
+        let mut placements = self.placements.lock().unwrap_or_else(|e| e.into_inner());
+        if placements
+            .get(&self.participant_id)
+            .is_some_and(|(_, ticket)| *ticket == self.ticket)
+        {
+            placements.remove(&self.participant_id);
+        }
+    }
+}
+
+impl std::fmt::Debug for ViewerLease {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ViewerLease")
+            .field("participant_id", &self.participant_id)
+            .field("ticket", &self.ticket)
+            .finish()
+    }
+}
+
 /// Manages routers for different rooms
 pub struct RouterManager {
     routers: Arc<RwLock<HashMap<String, RouterInfo>>>,
+    /// Viewer routers per room. Held across native creation and piping so a
+    /// room pipes each producer to a worker exactly once.
+    viewer_routers: tokio::sync::Mutex<HashMap<String, ViewerRouters>>,
+    placements: Placements,
+    next_lease_ticket: AtomicU64,
     worker_manager: Arc<WorkerManager>,
 }
 
@@ -34,8 +92,219 @@ impl RouterManager {
     pub fn new(worker_manager: Arc<WorkerManager>) -> Self {
         Self {
             routers: Arc::new(RwLock::new(HashMap::new())),
+            viewer_routers: tokio::sync::Mutex::new(HashMap::new()),
+            placements: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            next_lease_ticket: AtomicU64::new(1),
             worker_manager,
         }
+    }
+
+    /// Chooses the router for a participant's receive transport. The primary
+    /// router serves it while the primary worker carries fewer than
+    /// `VIEWER_SPREAD_MIN_CONSUMERS` consumers or is the least loaded worker;
+    /// otherwise the room's viewer router on the least loaded worker does,
+    /// created on first use. A lease comes back only for a new placement off
+    /// the primary router; a placed participant gets its router again.
+    ///
+    /// # Errors
+    /// Returns an error if the room has no router, no worker is eligible, or
+    /// native router creation fails.
+    pub async fn place_viewer(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+        config: &RouterConfig,
+    ) -> MediaResult<(Router, WorkerId, Option<ViewerLease>)> {
+        let (primary_router, primary_worker) = {
+            let routers = self.routers.read().await;
+            let info = routers.get(room_id).ok_or_else(|| {
+                MediaError::RouterError(format!("Router not found for room: {room_id}"))
+            })?;
+            (info.router.clone(), info.worker_id)
+        };
+
+        if let Some(worker_id) = self.worker_for_participant(participant_id) {
+            let viewers = self.viewer_routers.lock().await;
+            if let Some(info) = viewers
+                .get(room_id)
+                .and_then(|room| room.by_worker.get(&worker_id))
+                && !info.router.closed()
+            {
+                return Ok((info.router.clone(), worker_id, None));
+            }
+            drop(viewers);
+            // The placed router is gone (its worker died): place again below.
+            self.placements
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(participant_id);
+        }
+
+        let primary_consumers = self
+            .worker_manager
+            .get_consumer_counter(primary_worker)
+            .map_or(0, |counter| counter.load(Ordering::Relaxed));
+        if primary_consumers < VIEWER_SPREAD_MIN_CONSUMERS {
+            return Ok((primary_router, primary_worker, None));
+        }
+
+        let (worker, reservation) = self.worker_manager.reserve_worker().await?;
+        let worker_id = worker.id();
+        if worker_id == primary_worker {
+            drop(reservation);
+            return Ok((primary_router, primary_worker, None));
+        }
+
+        let mut viewers = self.viewer_routers.lock().await;
+        let room = viewers.entry(room_id.to_string()).or_default();
+        if let Some(info) = room.by_worker.get(&worker_id)
+            && !info.router.closed()
+        {
+            drop(reservation);
+            let router = info.router.clone();
+            let lease = self.record_placement(participant_id, worker_id);
+            return Ok((router, worker_id, Some(lease)));
+        }
+        let router = worker
+            .create_router(config.to_router_options())
+            .await
+            .map_err(|e| MediaError::RouterError(format!("Failed to create viewer router: {e}")))?;
+        self.setup_router_handlers(&router, room_id);
+        info!(
+            "Created viewer router {} for room {} on worker {}",
+            router.id(),
+            room_id,
+            worker_id
+        );
+        room.by_worker.insert(
+            worker_id,
+            RouterInfo {
+                router: router.clone(),
+                worker_id,
+                _load_reservation: reservation,
+            },
+        );
+        let lease = self.record_placement(participant_id, worker_id);
+        Ok((router, worker_id, Some(lease)))
+    }
+
+    fn record_placement(&self, participant_id: &str, worker_id: WorkerId) -> ViewerLease {
+        let ticket = self.next_lease_ticket.fetch_add(1, Ordering::Relaxed);
+        self.placements
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(participant_id.to_string(), (worker_id, ticket));
+        ViewerLease {
+            participant_id: participant_id.to_string(),
+            ticket,
+            placements: Arc::clone(&self.placements),
+        }
+    }
+
+    /// The worker of a participant's receive transport when it is not the
+    /// room's primary worker.
+    pub fn worker_for_participant(&self, participant_id: &str) -> Option<WorkerId> {
+        self.placements
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(participant_id)
+            .map(|(worker_id, _)| *worker_id)
+    }
+
+    /// Pipes a producer from the room's primary router to the viewer router of
+    /// a placed participant, once per producer and worker. Participants on the
+    /// primary router need nothing. The pipe follows the producer's close; a
+    /// closed pipe is forgotten and a request for a closed producer fails.
+    ///
+    /// # Errors
+    /// Returns an error if the room or the participant's viewer router is gone
+    /// or the native pipe cannot be created.
+    pub async fn ensure_piped(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+        producer_id: ProducerId,
+    ) -> MediaResult<()> {
+        let Some(worker_id) = self.worker_for_participant(participant_id) else {
+            return Ok(());
+        };
+        let primary_router = self.get_router(room_id).await?;
+        let mut viewers = self.viewer_routers.lock().await;
+        let room = viewers.get_mut(room_id).ok_or_else(|| {
+            MediaError::RouterError(format!("No viewer routers for room: {room_id}"))
+        })?;
+        let key = (producer_id, worker_id);
+        if let Some(handles) = room.pipes.get(&key) {
+            if !handles.pipe_producer.closed() {
+                return Ok(());
+            }
+            room.pipes.remove(&key);
+        }
+        let target = room
+            .by_worker
+            .get(&worker_id)
+            .filter(|info| !info.router.closed())
+            .map(|info| info.router.clone())
+            .ok_or_else(|| {
+                MediaError::RouterError(format!("Viewer router is gone for room: {room_id}"))
+            })?;
+        let pair = primary_router
+            .pipe_producer_to_router(producer_id, PipeToRouterOptions::new(target))
+            .await
+            .map_err(|e| {
+                MediaError::RouterError(format!("Failed to pipe producer {producer_id}: {e}"))
+            })?;
+        debug!(
+            "Piped producer {} of room {} to worker {}",
+            producer_id, room_id, worker_id
+        );
+        room.pipes.insert(
+            key,
+            PipedProducerHandles {
+                _pipe_consumer: pair.pipe_consumer,
+                pipe_producer: pair.pipe_producer.into_inner(),
+            },
+        );
+        Ok(())
+    }
+
+    /// Viewer routers a room currently has on other workers.
+    pub async fn viewer_router_count(&self, room_id: &str) -> usize {
+        self.viewer_routers
+            .lock()
+            .await
+            .get(room_id)
+            .map_or(0, |room| room.by_worker.len())
+    }
+
+    /// Live pipes feeding a room's viewer routers.
+    pub async fn pipe_count(&self, room_id: &str) -> usize {
+        self.viewer_routers
+            .lock()
+            .await
+            .get(room_id)
+            .map_or(0, |room| {
+                room.pipes
+                    .values()
+                    .filter(|handles| !handles.pipe_producer.closed())
+                    .count()
+            })
+    }
+
+    /// Forgets the viewer routers and pipes a dead worker hosted. Their
+    /// participants' transports died with the worker; primary routers are
+    /// handled by [`Self::rooms_on_worker`]. Returns the number dropped.
+    pub async fn drop_viewer_routers_on_worker(&self, worker_id: WorkerId) -> usize {
+        let mut viewers = self.viewer_routers.lock().await;
+        let mut dropped = 0;
+        for room in viewers.values_mut() {
+            if room.by_worker.remove(&worker_id).is_some() {
+                dropped += 1;
+            }
+            room.pipes
+                .retain(|(_, pipe_worker), _| *pipe_worker != worker_id);
+        }
+        dropped
     }
 
     /// Creates and registers one router for a room without holding the room map
@@ -141,18 +410,38 @@ impl RouterManager {
         }
     }
 
+    /// The consumer counter of the worker that hosts a participant's receive
+    /// transport: its viewer worker when placed there, else the room's worker.
+    pub async fn get_consumer_counter_for_participant(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+    ) -> MediaResult<Option<Arc<AtomicUsize>>> {
+        match self.worker_for_participant(participant_id) {
+            Some(worker_id) => Ok(self.worker_manager.get_consumer_counter(worker_id)),
+            None => self.get_consumer_counter_for_room(room_id).await,
+        }
+    }
+
     /// Removes a room's router entry and immediately releases its allocation load.
     /// Other callers may still hold native router handles; the count tracks
     /// registered and pending rooms, not the lifetime of every cloned handle.
+    /// The room's viewer routers and pipes go with it.
     pub async fn remove_router(&self, room_id: &str) -> MediaResult<()> {
-        let mut routers = self.routers.write().await;
+        let removed = {
+            let mut routers = self.routers.write().await;
+            routers.remove(room_id)
+        };
+        let viewer_routers = self.viewer_routers.lock().await.remove(room_id);
 
-        if let Some(router_info) = routers.remove(room_id) {
+        if let Some(router_info) = removed {
             // The router handle and its load reservation are released together.
 
             info!(
-                "Removed router for room {} from worker {}",
-                room_id, router_info.worker_id
+                "Removed router for room {} from worker {} with {} viewer routers",
+                room_id,
+                router_info.worker_id,
+                viewer_routers.map_or(0, |viewers| viewers.by_worker.len())
             );
             Ok(())
         } else {
@@ -230,6 +519,8 @@ impl RouterManager {
     pub async fn close_all(&self) -> Result<()> {
         info!("Closing all routers");
 
+        // Pipes and viewer routers close before the primary routers they hang off.
+        self.viewer_routers.lock().await.clear();
         let mut routers = self.routers.write().await;
 
         // Routers are automatically closed when dropped
@@ -240,6 +531,10 @@ impl RouterManager {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "placement_tests.rs"]
+mod placement_tests;
 
 #[cfg(test)]
 #[path = "allocation_tests.rs"]

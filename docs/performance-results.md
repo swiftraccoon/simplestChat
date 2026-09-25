@@ -1,5 +1,68 @@
 # Performance results
 
+## One-to-many rooms on one worker — 2026-09-25
+
+The webinar shape from the project goals (one presenter, many viewers) had never been
+measured. These runs put the production image (server source tree `8ebbda9fd24dc80c`,
+generator `f27c7c3a4ef3632f`, both built from `98dddf6`) under the production shape in the
+Podman Linux VM on this Mac (2-CPU quota, 2 GiB, two media workers, Apple silicon cores)
+and drove one room with one publisher (480p30 video plus Opus audio) and N viewers, each
+viewer joining from its own loopback address (`--scenarios webinar`,
+`--source-addresses 250`), with a 250-second ramp, 10 seconds of warmup and a 120-second
+measurement; 100 viewers ran once more with a 30-second ramp. One run per size.
+
+| Viewers | Consumers validated / failed | Receive-ready P99 | Received packets/s | Server, share of the 2-CPU quota | Room's worker (cores) | Other worker | Peak RSS |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 100 | 198 / 0 | 414 ms | 17,127 | 10.1% | 0.20 | 0.00 | 110 MiB |
+| 250 | 498 / 0 | 417 ms | 43,075 | 14.9% | 0.29 | 0.00 | 227 MiB |
+| 500 | 998 / 0 | 609 ms | 86,094 | 30.7% | 0.60 | 0.00 | 446 MiB |
+| 750 | 1,302 / 196 | 4,693 ms | failed | 42.9% | 0.84 | 0.00 | 1,565 MiB |
+
+**A room lives on one worker, so a one-to-many room scales with one core.** Every run
+put the whole room on worker 0 while worker 1 stayed idle and the quota kept more than a
+core free. At 500 viewers the worker thread used 0.60 cores and receive readiness already
+stretched (P99 609 ms against 414 at 100 and 250). At 750 the thread reached 0.84 cores
+and delivery broke: 196 of 1,498 consumers failed sustained delivery, 101 clients had no
+validated consumer, receive-ready P99 was 4.7 s with outliers to 28 s, and the server
+logged ICE consent expiring on viewer transports while no cgroup period was throttled.
+The generator used 1.8 of its 5.5 CPUs, so it was not the limit. Per viewer the marginal
+worker cost was about 0.6 millicores (0.20 cores at 100, 0.60 at 500), and memory grew by
+about 0.85 MiB per viewer up to 500 and then jumped (queued RTP for stalled viewers).
+
+**Ceiling on this shape:** between 500 and 750 viewers per room on one Apple-silicon
+core; with the 1.92 EPYC calibration from the 2026-09-20 section, roughly 250–350 viewers
+per room on the VPS, although its own cores remain unmeasured.
+
+### The same ladder with viewers spread across both workers (same day)
+
+The server now places a room's receive transports by worker load once the room's primary
+worker carries 64 consumers, creating one viewer router per other worker and piping each
+producer to it once (`RouterManager::place_viewer` / `ensure_piped`; producers and the audio
+observers stay on the primary router). Server source tree `bf5fd1a09f15ce84` (the placement change
+on top of `98dddf6`), generator `f27c7c3a4ef3632f`, same shape and workload:
+
+| Viewers | Consumers validated / failed | Receive-ready P99 (P50) | Received packets/s | Server, share of the 2-CPU quota | Worker 0 / worker 1 (cores) | Peak RSS |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 500 | 998 / 0 | 420 ms (408) | 86,327 | 30.3% | 0.30 / 0.30 | 422 MiB |
+| 750 | 1,498 / 0 | 439 ms (408) | 129,452 | 46.3% | 0.47 / 0.47 | 628 MiB |
+| 1,000 | 1,998 / 0 | 1,207 ms (409) | 172,178 | 66.2% | 0.64 / 0.64 | 881 MiB |
+
+**All three passed with the room split evenly across both workers.** 750 viewers, which
+failed on one worker, delivered every consumer with receive-ready P99 439 ms; 1,000
+viewers delivered every consumer at 66% of the quota with P99 1.2 s, the first sign of the
+next ceiling (the P50 stayed at 409 ms). The pipes cost nothing measurable: 500 viewers
+used 0.596 worker cores split over two threads against 0.602 on one. Memory per viewer
+stayed at about 0.85 MiB. The ceiling of a one-to-many room on this shape moved from one
+core to the whole quota, so the projected VPS figure is roughly 500–700 viewers per room
+instead of 250–350, pending a measurement on its cores.
+
+Evidence: `results/webinar-100v.20260925T070339Z`, `results/webinar-ladder.20260925T070800Z`
+(single worker; the 750 row from its `webinar-750-1/load_test_summary.json` and
+`resources.json`, and the run stopped there) and `results/webinar-spread.20260925T073333Z`
+(spread). Loopback carries no real network cost, the generator's fixed-rate synthetic RTP
+is lighter than browser traffic, and nothing here measures browser decode or visual
+quality.
+
 ## Outgoing bitrate floor: 100 kbit/s against mediasoup's own — 2026-09-21
 
 Three impaired-job runs each at commit `3f43600` on hosted Linux runners, the

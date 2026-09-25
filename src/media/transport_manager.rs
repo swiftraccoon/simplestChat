@@ -1100,6 +1100,19 @@ impl TransportManager {
     /// Evicts this session namespace, then closes its media under its own lock.
     /// A second removal returns `ParticipantNotFound`; an old generation's
     /// cleanup cannot erase a replacement generation's BWE callback.
+    /// Records where the participant's receive transport was placed. The lease
+    /// lives with the participant's media, so every removal path forgets it.
+    pub async fn attach_viewer_lease(
+        &self,
+        participant_id: &str,
+        lease: crate::media::router_manager::ViewerLease,
+    ) -> MediaResult<()> {
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let mut participant = participant_lock.lock().await;
+        participant.viewer_lease = Some(Arc::new(lease));
+        Ok(())
+    }
+
     pub async fn remove_participant(&self, participant_id: &str) -> MediaResult<()> {
         // Remove from outer map (brief write lock)
         let participant_lock = {

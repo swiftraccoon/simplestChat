@@ -103,6 +103,30 @@ impl MediaServer {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
+    /// The consumer counter of the worker that hosts a participant's receive
+    /// transport (its viewer worker when placed off the room's primary worker).
+    pub async fn get_consumer_counter_for_participant(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+    ) -> Result<Option<Arc<std::sync::atomic::AtomicUsize>>> {
+        self.router_manager
+            .get_consumer_counter_for_participant(room_id, participant_id)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    /// Gets the WebRtcServer of one worker
+    pub async fn get_webrtc_server_for_worker(
+        &self,
+        worker_id: mediasoup::worker::WorkerId,
+    ) -> Result<WebRtcServer> {
+        self.worker_manager
+            .get_webrtc_server(worker_id)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
     /// Gets the WebRtcServer for the worker that hosts a room's router
     pub async fn get_webrtc_server_for_room(&self, room_id: &str) -> Result<WebRtcServer> {
         let worker_id = self

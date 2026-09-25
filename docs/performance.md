@@ -267,8 +267,9 @@ seconds per client above 30). The `webinar` scenario is the one-to-many shape:
 one room, one publisher and every other client a viewer, each viewer joining
 from its own loopback address (`--source-addresses 250`, as distinct viewers
 would), so the per-address limits do not shape the ramp and a room of several
-hundred viewers fills in minutes; because a room lives on one worker, it also
-measures the single-worker ceiling of a large room. The quota is the
+hundred viewers fills in minutes. Viewers spread across workers once the room's
+primary worker carries 64 consumers, so the per-worker gauges in
+`metrics-finish.txt` show how far the room spread. The quota is the
 production shape; the cores are Apple silicon, so absolute figures do not
 transfer to the VPS, while the per-client cost, throttling and the
 worker/runtime split do inform limits.
