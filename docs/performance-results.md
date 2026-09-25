@@ -1,5 +1,80 @@
 # Performance results
 
+## A single all-publishing room under viewer spreading — 2026-09-25
+
+The spreading change moves receive transports, not producers, so a room where everyone
+publishes keeps every producer on its primary worker. These runs put one room of N
+all-publishing clients (camera and microphone each, the balanced `ring-v1` seed 17 graph,
+four audio and four video subscriptions per client, distinct loopback addresses) on the
+production shape in the Podman VM, two workers, 120-second measurement, and compare the
+deployed server (`86382b1`, image `bf5fd1a09f15ce84`) with the last image in the local
+store from before the change (built 2026-09-21).
+
+| Clients | Server | Runs | ICE/DTLS failures (clients) | Consumers validated / failed | Receive-ready P99 | Worker 0 / worker 1 (cores) |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 100 | spreading | 1 | 0 | 800 / 0 | 419 ms | 0.29 / 0.25 |
+| 200 | spreading | 3 | 1, 5, 2 | 1,584 / 8; 1,516 / 28; 1,560 / 20 | 423, 422, 425 ms | 0.53 / 0.47 (third run) |
+| 200 | 2026-09-21 image | 1 | 13 | 1,392 / 70 | 1,210 ms | 0.64 / 0.00 |
+
+**At 100 publishers the room splits almost evenly** (producers keep the primary worker
+0.04 cores busier) and every consumer delivers. **At 200 publishers the shape is beyond
+the reliable capacity of this quota with or without spreading:** on the older server 13 of
+200 clients never completed ICE/DTLS on either of their transports and delivery stretched
+to a 1.2 s P99 with the whole room on one worker; with spreading the same shape loses one
+to five clients per run, delivery for everyone else stays at a 420 ms P99, and the workers
+share the load. The failing clients' transports were on the primary worker in every
+spreading run, with no pipe or placement error logged, and the per-worker gauges showed
+neither worker saturated (0.53 and 0.47 cores), so the residual failures are the
+pre-existing ICE/DTLS handshake fragility of a busy worker with 400 producers, not a fault
+of the pipes; where exactly it originates (worker thread latency under many simultaneous
+handshakes, or the generator's own ICE agent) is not established here. A 60-second ramp
+and a 200-second ramp gave the same picture. On the VPS's slower cores the equivalent
+all-publishing room is smaller by the 2.5 factor measured above, so **rooms of about 80
+publishers are the comparable limit there**, and `max_participants` is the knob to hold a
+public room under it.
+
+Evidence: `results/conference-spread.20260925T094308Z` (100), `results/conference-spread-200.20260925T095058Z` (200, first two runs), `results/conference-spread-200b.20260925T095953Z` (200, third run, with
+the mid-window `metrics-during.txt` scrape that records the split) and `results/conference-baseline-200.20260925T100703Z` (baseline).
+Not measured: the conference shape on the VPS itself, and browser clients, whose ICE
+agents differ from the generator's.
+
+## One-to-many rooms on the VPS's own cores — 2026-09-25
+
+Every earlier figure for the production shape came from Apple silicon scaled by a
+calibration factor measured on a hosted CI runner. These two runs measured the deployed
+server on the VPS itself (research.clinic host: AMD EPYC 7R13, 4 vCPUs, 12 GiB): the exact
+deployed production image (`86382b1`, image `de5ed1ee…`) ran as an owned loopback-only
+container under the production quota (2 CPUs, 2 GiB, two media workers, `--network none`,
+`BIND_ADDR`/`ANNOUNCE_IP` 127.0.0.1, ad-hoc rooms allowed, connection limits raised) and the
+CI-built Linux load-test image (`809b022`, workflow `load-generator-image.yml`) shared its
+network namespace, exactly as the Podman runs do; the public app kept serving beside them
+and nothing touched it. One publisher (480p30 plus Opus), N viewers from distinct loopback
+addresses, 100–120 s ramps, 10 s warmup, a 120 s measurement, one run per size. A sampler
+read the server's cgroup `cpu.stat`, RSS and per-thread CPU every five seconds.
+
+| Viewers | Consumers validated / failed | Receive-ready P50 / P99 | Server, share of the 2-CPU quota | Worker 0 / worker 1 (cores) | Throttled periods | Peak RSS |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 250 | 498 / 0 | 414 / 454 ms | 37.8% | 0.38 / 0.38 | 0 | 219 MiB |
+| 350 | 698 / 0 | 414 / 470 ms | 53.1% | 0.52 / 0.52 | 0 | 296 MiB |
+
+**Per viewer the VPS costs 3.0 millicores of worker CPU, against 1.2 on the Apple-silicon
+VM (0.29 cores for 250 viewers there):** these cores are about 2.5 times slower per viewer
+than the Mac's, not the 1.92 the CI-runner calibration suggested, and the cost is linear
+between the two sizes. Receive readiness stayed within 60 ms of the Mac's. The room split
+evenly across both workers, as in the VM. Projected from these points, a one-to-many room
+on the VPS reaches about 600 viewers at 90% of the quota, so **roughly 500 viewers is the
+practical ceiling of one room on the deployed shape**, and `MAX_CONNECTIONS=200` keeps a
+wide margin for it; memory is not a factor at these sizes (0.85 MiB per viewer).
+
+Not measured: the public network path (TURN, real ICE candidates, packet loss), browser
+decode, and the conference shape on these cores. The runs shared the host with the live
+app, whose own load was under 3% of a core, so contention from the generator (up to 2.2
+cores) rather than the server could only have hurt the generator's own timings.
+
+Evidence: `results/vps-webinar.20260925T095312Z` (`r250/`, `r350/`: generator reports, `samples.txt` from the
+sampler, `metrics-finish.txt`, server and generator logs) and the script that ran them,
+`vps-webinar.sh`, in the same directory.
+
 ## One-to-many rooms on one worker — 2026-09-25
 
 The webinar shape from the project goals (one presenter, many viewers) had never been
@@ -55,6 +130,21 @@ used 0.596 worker cores split over two threads against 0.602 on one. Memory per 
 stayed at about 0.85 MiB. The ceiling of a one-to-many room on this shape moved from one
 core to the whole quota, so the projected VPS figure is roughly 500–700 viewers per room
 instead of 250–350, pending a measurement on its cores.
+
+**Where the spread room fails next (same day, `results/webinar-ceiling.20260925T093657Z`).**
+A 1,250-viewer attempt (300-second ramp, `--max-connections 1700`) never reached its
+measurement: the server was OOM-killed at the 2 GiB limit 243 s into the ramp, at about
+970 connections. RSS had grown at the steady 0.85 MiB per viewer to 695 MiB by 750
+viewers, then jumped to 970, 1,509 and 2,038 MiB in the next 45 s while the two worker
+threads together reached 1.7 cores (three throttled periods) and admissions kept
+arriving at four per second. Late joins are dearer than steady forwarding (transport and
+consumer creation on already busy workers), so the workers fell behind, outbound RTP
+queued in the process, and memory rather than the CPU quota ended the run. The practical
+ceiling of the shape is therefore about 1,000 viewers per room, and the failure mode
+matters more than the number: the process has CPU-saturation admission control but no
+memory-pressure guard, so an over-admitted room takes the whole server down instead of
+being refused. A memory-based refusal (or a bound on queued outbound media) is the next
+robustness item.
 
 Evidence: `results/webinar-100v.20260925T070339Z`, `results/webinar-ladder.20260925T070800Z`
 (single worker; the 750 row from its `webinar-750-1/load_test_summary.json` and

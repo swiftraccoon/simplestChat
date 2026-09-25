@@ -301,12 +301,22 @@ async function runOne(options, scenario, repetition, manifest) {
       catch { generatorSamples.push({ elapsedMs, generator: null }); }
     });
     const deadline = (options.rampUp + options.warmup + options.duration + 135) * 1000;
+    // The per-worker gauges cover the last ten seconds, so a scrape taken as
+    // the measurement window ends records the split under load; the finish
+    // scrape after teardown can already show idle workers.
+    const scrapeAt = (options.rampUp + options.warmup + options.duration - 5) * 1000;
+    let scrapedDuring = false;
     for (;;) {
       const [generatorState, serverState] = await Promise.all([containerState(gen), containerState(sfu)]);
       const elapsedMs = performance.now() - start;
       if (!generatorState || generatorState.status !== 'running') { generatorExit = generatorState; break; }
       if (!serverState || serverState.status !== 'running') throw new Error('Server container exited during load');
       if (elapsedMs > deadline) throw new Error('Outer generator deadline exceeded');
+      if (!scrapedDuring && elapsedMs >= scrapeAt) {
+        scrapedDuring = true;
+        const during = await metrics(origin, token);
+        await writeFile(join(directory, 'metrics-during.txt'), during.raw, { flag: 'wx' });
+      }
       await delay(1000);
     }
     generatorSampler.stop();
