@@ -66,7 +66,7 @@ jobs:
             -s ops/ansible/tests -p test_restore_database.py -v
 
       - name: Preserve isolated restore failure diagnostics
-        if: ${{ failure() }}
+        if: ${{ failure() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: restore-container
@@ -252,8 +252,10 @@ jobs:
             --output-dir "${E2E_ARTIFACTS}" --run-label ci-media-smoke \
             --server-revision "${GITHUB_SHA}" --generator-revision "${GITHUB_SHA}"
 
+      # !env.ACT: build/ci-local.sh runs jobs with act, whose artifact server does
+      # not speak the upload-artifact v7 protocol; diagnostics stay in the job's log.
       - name: Preserve media smoke diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: media-smoke
@@ -310,7 +312,7 @@ jobs:
         run: build/check-native-dtls.sh
 
       - name: Preserve native media failure diagnostics
-        if: ${{ failure() }}
+        if: ${{ failure() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-dtls-failure
@@ -412,7 +414,7 @@ jobs:
           done
 
       - name: Preserve authentication lifecycle diagnostics
-        if: ${{ !cancelled() && matrix.group == 'accounts' }}
+        if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: auth-lifecycle
@@ -451,7 +453,7 @@ jobs:
         run: build/with-test-server.sh node web/e2e/passkey.cjs
 
       - name: Preserve passkey verification diagnostics
-        if: ${{ !cancelled() && matrix.group == 'accounts' }}
+        if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: passkey
@@ -468,7 +470,7 @@ jobs:
         run: build/with-test-server.sh node web/e2e/passkey-management.cjs
 
       - name: Preserve passkey management diagnostics
-        if: ${{ !cancelled() && matrix.group == 'accounts' }}
+        if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: passkey-management
@@ -491,7 +493,7 @@ jobs:
             --browser chromium --output "${RUNNER_TEMP}/restart-browser"
 
       - name: Preserve browser restart diagnostics
-        if: ${{ !cancelled() && matrix.group == 'stress' }}
+        if: ${{ !cancelled() && matrix.group == 'stress' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: restart-browser
@@ -500,7 +502,7 @@ jobs:
           retention-days: 7
 
       - name: Preserve homepage layout diagnostics
-        if: ${{ !cancelled() && matrix.group == 'stress' }}
+        if: ${{ !cancelled() && matrix.group == 'stress' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: homepage-layout
@@ -538,7 +540,7 @@ jobs:
         run: build/with-test-server.sh node web/e2e/chat-retry.cjs
 
       - name: Preserve product continuity diagnostics
-        if: ${{ !cancelled() && matrix.group == 'accounts' }}
+        if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: product-continuity
@@ -550,7 +552,7 @@ jobs:
           retention-days: 7
 
       - name: Preserve media continuity diagnostics
-        if: ${{ !cancelled() && matrix.group == 'media' }}
+        if: ${{ !cancelled() && matrix.group == 'media' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: media-continuity
@@ -569,7 +571,7 @@ jobs:
         run: build/with-test-server.sh node web/e2e/impaired-network.cjs
 
       - name: Preserve call outcome diagnostics
-        if: ${{ !cancelled() && matrix.group == 'media' }}
+        if: ${{ !cancelled() && matrix.group == 'media' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: call-outcomes
@@ -589,7 +591,7 @@ jobs:
         run: build/with-test-server.sh npm --prefix web/e2e run test:stress
 
       - name: Preserve UI stress diagnostics
-        if: ${{ !cancelled() && matrix.group == 'stress' }}
+        if: ${{ !cancelled() && matrix.group == 'stress' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ui-stress
@@ -606,7 +608,7 @@ jobs:
         run: build/with-test-server.sh node web/e2e/accessibility.cjs
 
       - name: Preserve accessibility diagnostics
-        if: ${{ !cancelled() && matrix.group == 'accounts' }}
+        if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: accessibility-e2e
@@ -615,7 +617,7 @@ jobs:
           retention-days: 7
 
       - name: Preserve browser diagnostics
-        if: ${{ !cancelled() && matrix.group == 'media' }}
+        if: ${{ !cancelled() && matrix.group == 'media' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: community-e2e
