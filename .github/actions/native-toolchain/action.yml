@@ -40,6 +40,7 @@ runs:
         pkg-config pkg-config
         shellcheck shellcheck
         jq jq
+        iproute2 ip
         TOOLS
         if ((${#missing[@]})); then
           sudo apt-get update
