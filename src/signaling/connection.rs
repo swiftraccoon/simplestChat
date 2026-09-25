@@ -1079,7 +1079,13 @@ async fn handle_connection_with_timing(
             .idle_timeout
             .saturating_sub(last_frame_received.elapsed());
         if idle_remaining.is_zero() {
-            warn!("Idle timeout for participant {}", participant_id);
+            // A joined socket gets heartbeat pings, so its idle close means the
+            // peer stopped answering; an unjoined socket idling out is expected.
+            if current_room_id.is_some() {
+                warn!("Idle timeout for participant {}", participant_id);
+            } else {
+                info!("Idle timeout for unjoined socket {}", participant_id);
+            }
             break;
         }
         let receive_timeout = auth_exp
@@ -1210,8 +1216,10 @@ async fn handle_connection_with_timing(
                         "Accepted authentication lifetime or validation allowance expired; closing WebSocket"
                     );
                     credentials_invalidated = true;
-                } else {
+                } else if current_room_id.is_some() {
                     warn!("Idle timeout for participant {}", participant_id);
+                } else {
+                    info!("Idle timeout for unjoined socket {}", participant_id);
                 }
                 break;
             }

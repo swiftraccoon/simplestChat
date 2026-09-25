@@ -1079,6 +1079,15 @@ const community = new CommunityUI({
   },
 });
 
+// A hidden tab outside a room lets the server's idle close stand instead of
+// reconnecting every five minutes; the page reconnects when it is shown again.
+signaling.setReconnectGate(
+  () => Boolean(room?.currentRoomId) || document.visibilityState !== 'hidden',
+);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') signaling.resumeDeferredReconnect();
+});
+
 signaling.setOnStatusChange((status) => {
   const awaitingRoom = status === 'connected' && roomRecovering;
   connectionStatus.textContent = awaitingRoom

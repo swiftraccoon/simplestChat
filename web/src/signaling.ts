@@ -45,6 +45,8 @@ export class SignalingClient {
   private onReconnectFailed: (() => void) | null = null;
   private onConnectionLost: (() => void) | null = null;
   private onReconnected: (() => void) | null = null;
+  private reconnectGate: (() => boolean) | null = null;
+  private reconnectDeferred = false;
   private wasConnected = false;
   private currentToken: string | undefined;
   private socketToken: string | undefined;
@@ -116,10 +118,28 @@ export class SignalingClient {
     if (this.shouldReconnect && this.wasConnected && !this.connected) this.startReconnectDeadline();
   }
 
+  /**
+   * Decides whether a lost connection reconnects now. A closed gate defers the
+   * reconnect until resumeDeferredReconnect(): outside a room in a hidden tab
+   * the server's idle close would otherwise start a five-minute reconnect loop.
+   */
+  setReconnectGate(gate: () => boolean): void {
+    this.reconnectGate = gate;
+  }
+
+  /** Reconnects a connection the gate deferred, for example once the page is visible again. */
+  resumeDeferredReconnect(): void {
+    if (!this.reconnectDeferred) return;
+    this.reconnectDeferred = false;
+    this.startReconnectDeadline();
+    this.connect(this.currentToken);
+  }
+
   connect(token?: string): void {
     if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING)
       return;
 
+    this.reconnectDeferred = false;
     this.shouldReconnect = true;
     this.currentToken = token ?? this.currentToken;
     this.recoveryFailed = false;
@@ -287,6 +307,11 @@ export class SignalingClient {
       this.rejectAllPending('WebSocket closed');
       this.onConnectionLost?.();
       if (this.shouldReconnect) {
+        if (this.reconnectGate && !this.reconnectGate()) {
+          this.reconnectDeferred = true;
+          console.log('[ws] reconnect deferred until the page is visible');
+          return;
+        }
         this.startReconnectDeadline();
         this.scheduleReconnect();
       }
@@ -300,6 +325,7 @@ export class SignalingClient {
 
   disconnect(): void {
     this.shouldReconnect = false;
+    this.reconnectDeferred = false;
     this.wasConnected = false;
     this.reconnectAttempt = 0;
     this.currentToken = undefined;

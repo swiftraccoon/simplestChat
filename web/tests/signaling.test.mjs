@@ -1010,3 +1010,39 @@ for (const random of [0, 0.5, 0.999999]) {
     }
   });
 }
+
+test('a close outside a room while the page is hidden waits for visibility before reconnecting', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5);
+  let visible = false;
+  client.setReconnectGate(() => visible);
+
+  socket.close();
+
+  assert.equal(client.connected, false);
+  assert.equal(FakeWebSocket.instances.length, 1, 'no reconnect while the gate is closed');
+  timers.tick(60_000);
+  assert.equal(FakeWebSocket.instances.length, 1, 'no timer-driven reconnect either');
+  assert.deepEqual(timers.callbacks, [], 'no reconnect deadline runs while deferred');
+
+  visible = true;
+  client.resumeDeferredReconnect();
+  assert.equal(FakeWebSocket.instances.length, 2, 'visibility resumes the connection at once');
+  FakeWebSocket.instances.at(-1).open();
+  assert.equal(client.connected, true);
+  client.resumeDeferredReconnect();
+  assert.equal(FakeWebSocket.instances.length, 2, 'resume is a no-op when nothing is deferred');
+});
+
+test('a close reconnects on the usual schedule while the gate is open', async (t) => {
+  const { client, socket, timers, FakeWebSocket } = await connectedClient(t, 0.5);
+  client.setReconnectGate(() => true);
+
+  socket.close();
+
+  assert.equal(FakeWebSocket.instances.length, 1);
+  timers.tick(2_000);
+  assert.equal(FakeWebSocket.instances.length, 2, 'the backoff timer reconnects as before');
+  assert.equal(client.connected, false);
+  FakeWebSocket.instances.at(-1).open();
+  assert.equal(client.connected, true);
+});
