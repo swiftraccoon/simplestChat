@@ -51,9 +51,13 @@ export class CommunityUI {
   private identity = '';
 
   constructor(private readonly options: Options) {
-    document
-      .getElementById('community-actions')!
-      .append(this.accountButton, this.roomsButton, this.nicknameButton, this.manageButton);
+    const accountActions = document.getElementById('community-actions')!;
+    accountActions.append(this.accountButton, this.roomsButton);
+    // Room-scoped actions belong with the room tools; the header keeps account actions.
+    (document.getElementById('room-actions') ?? accountActions).append(
+      this.nicknameButton,
+      this.manageButton,
+    );
     const recovery = button('Recover with a saved key', () => this.openRecovery(), 'auth-link-btn');
     document.querySelector('#login-modal .auth-alt-actions')!.append(recovery);
     this.refresh();

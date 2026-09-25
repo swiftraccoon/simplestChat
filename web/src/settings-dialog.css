@@ -52,7 +52,7 @@
   min-height: 44px;
   min-width: 44px;
   padding: 0.6rem 0.9rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   color: var(--text);
   background: var(--surface-2);
@@ -108,6 +108,15 @@
 .settings-dialog-footer > :last-child {
   margin-left: auto;
 }
+.settings-dialog-footer > .settings-footer-note {
+  margin-left: 0;
+  margin-right: auto;
+}
+.settings-field-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
 .settings-dialog-footer-actions {
   display: flex;
   flex-wrap: wrap;
@@ -148,7 +157,7 @@
   padding: 0.65rem 0.75rem;
   color: var(--text);
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   font: inherit;
 }

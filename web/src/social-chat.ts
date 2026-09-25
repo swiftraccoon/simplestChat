@@ -636,9 +636,11 @@ export class SocialChat {
     this.select.value = this.store.active;
     const privateChat = this.store.active !== 'public';
     this.closeButton.hidden = !privateChat;
+    // Public chat needs no permanent banner; its mention hint lives in the composer.
+    this.conversationStatus.hidden = !privateChat;
     this.conversationStatus.textContent = privateChat
       ? 'Private · available while both people are in this room · not saved after leaving'
-      : 'Public room chat · @name to mention · Tab completes names';
+      : '';
     const disabled =
       !room?.localParticipantId ||
       !room.connected ||
@@ -653,7 +655,7 @@ export class SocialChat {
         : 'Chat is currently restricted'
       : privateChat
         ? 'Write a private message…'
-        : 'Type a message…';
+        : 'Type a message · @name to mention';
     this.messages.classList.toggle('large-chat-text', this.preferences.largeText);
     const visible = this.store.messages.filter(
       (message) =>
@@ -742,21 +744,30 @@ export class SocialChat {
     if (participantId) {
       const meta = el('div', undefined, 'msg-time');
       const date = new Date(sentAt);
-      meta.textContent = `${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${status === 'pending' ? ' · Sending…' : status === 'failed' || status === 'unknown' ? ` · ${error}` : ''}`;
+      meta.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       meta.title = date.toLocaleString();
-      if (status === 'failed' || status === 'unknown') {
-        meta.classList.add('delivery-error');
-        if (status === 'unknown' && message.retry)
-          meta.append(button('Retry same message', () => this.retry(message), 'auth-link-btn'));
-        meta.append(
-          button(
-            status === 'unknown' ? 'Copy to draft' : 'Edit & resend',
-            () => this.restoreDraft(message),
-            'auth-link-btn',
-          ),
-        );
-      }
       node.append(meta);
+      // The timestamp is revealed on hover; delivery state must stay visible on its own.
+      if (status === 'pending' || status === 'failed' || status === 'unknown') {
+        const state = el(
+          'div',
+          status === 'pending' ? 'Sending…' : (error ?? 'Delivery failed'),
+          'msg-status',
+        );
+        if (status !== 'pending') {
+          state.classList.add('delivery-error');
+          if (status === 'unknown' && message.retry)
+            state.append(button('Retry same message', () => this.retry(message), 'auth-link-btn'));
+          state.append(
+            button(
+              status === 'unknown' ? 'Copy to draft' : 'Edit & resend',
+              () => this.restoreDraft(message),
+              'auth-link-btn',
+            ),
+          );
+        }
+        node.append(state);
+      }
     }
     this.rows.set(key, { node, fingerprint });
     return node;

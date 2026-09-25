@@ -11,19 +11,21 @@
   display: flex;
   align-items: center;
   gap: 0.45rem;
+  white-space: nowrap;
 }
 .media-controls-toolbar input {
   width: 6rem;
 }
+/* Media controls share the app's tokens; they are not a second colour system. */
 .media-controls-toolbar button,
 .personal-media-controls button,
 .personal-media-hidden-notice button,
 .personal-playback-blocked button,
 .media-setup-dialog button {
-  background: #263447;
-  color: #edf3fa;
-  border: 1px solid #536275;
-  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
   padding: 0.45rem 0.65rem;
   cursor: pointer;
   font: inherit;
@@ -33,14 +35,14 @@
 .personal-media-hidden-notice button:hover,
 .personal-playback-blocked button:hover,
 .media-setup-dialog button:hover {
-  background: #354964;
+  background: var(--surface-3);
 }
 .media-setup-dialog :focus-visible,
 .personal-media-controls :focus-visible,
 .media-controls-toolbar :focus-visible,
 .personal-playback-blocked :focus-visible,
 .personal-media-hidden-notice :focus-visible {
-  outline: 2px solid #80c4ff;
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 .media-setup-dialog {
@@ -97,7 +99,7 @@
   margin: 0;
   font-size: 0.85rem;
   line-height: 1.5;
-  color: #bdc4cd;
+  color: var(--text-dim);
 }
 .media-preview-options label,
 .media-audio-options label {
@@ -130,7 +132,7 @@
 }
 .media-setup-fields select {
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   color: var(--text);
   padding: 0.7rem;
@@ -139,10 +141,10 @@
   font: inherit;
 }
 .personal-media-controls select {
-  background: #101925;
-  border: 1px solid #536275;
-  border-radius: 5px;
-  color: #edf3fa;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
   padding: 0.5rem;
   max-width: 100%;
 }
@@ -172,7 +174,7 @@
   padding: 0 0.25rem;
 }
 .media-setup-hint {
-  color: #b4c2d3;
+  color: var(--text-dim);
   font-size: 0.8rem;
   margin: 0;
 }
@@ -200,24 +202,39 @@
   z-index: 5;
   top: 0.4rem;
   right: 0.4rem;
-  color: #edf3fa;
+  color: var(--text);
   font-size: 0.75rem;
   text-align: left;
 }
+/* With a pointer the disclosure appears on hover or focus; touch screens keep it visible. */
+@media (hover: hover) and (pointer: fine) {
+  .video-tile .personal-media-controls:not([open]) {
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+  }
+  .video-tile:hover .personal-media-controls,
+  .video-tile:focus-within .personal-media-controls {
+    opacity: 1;
+  }
+}
 .personal-media-controls summary {
+  list-style: none;
   padding: 0.35rem 0.55rem;
-  background: #101925e8;
-  border: 1px solid #536275;
-  border-radius: 6px;
+  background: rgba(26, 26, 26, 0.9);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
   cursor: pointer;
+}
+.personal-media-controls summary::-webkit-details-marker {
+  display: none;
 }
 .personal-media-panel {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  background: #17212ef7;
-  border: 1px solid #536275;
-  border-radius: 6px;
+  background: rgba(37, 37, 37, 0.97);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
   padding: 0.6rem;
   width: 10.5rem;
   max-height: min(21rem, 65vh);
@@ -252,8 +269,8 @@
   align-items: center;
   justify-content: center;
   gap: 0.65rem;
-  background: #15202c;
-  color: #dbe8f7;
+  background: var(--surface-3);
+  color: var(--text);
   padding: 2.4rem 0.6rem 1.7rem;
   font-size: 0.8rem;
   text-align: center;
@@ -270,9 +287,9 @@
   justify-content: center;
   gap: 0.5rem;
   padding: 0.6rem;
-  border-radius: 6px;
-  background: #17212ef7;
-  color: #edf3fa;
+  border-radius: var(--radius-md);
+  background: rgba(37, 37, 37, 0.97);
+  color: var(--text);
   font-size: 0.8rem;
   text-align: center;
 }

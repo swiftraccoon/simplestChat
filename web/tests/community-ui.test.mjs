@@ -646,3 +646,41 @@ for (const phase of ['pending', 'uncertain', 'recovery']) {
     );
   });
 }
+
+test('room-scoped actions mount in the room tools while account actions stay in the header', async () => {
+  const dom = await uiFixture();
+  const roomActions = dom.document.createElement('div');
+  roomActions.id = 'room-actions';
+  dom.document.body.append(roomActions);
+  const security = await loadTypeScript('src/account-security.ts', {
+    modules: { './ui': dom.ui, './auth': await loadTypeScript('src/auth.ts') },
+    globals: { document: dom.document, navigator: { clipboard: { writeText: async () => {} } } },
+  });
+  const api = await loadTypeScript('src/community-ui.ts', {
+    modules: { './ui': dom.ui, './account-security': security },
+    globals: {
+      document: dom.document,
+      TextEncoder,
+      URL,
+      window: { location: { href: 'http://localhost:3000/' } },
+      navigator: { clipboard: { writeText: async () => {} } },
+    },
+  });
+  new api.CommunityUI({
+    auth: { isLoggedIn: true, userId: 'account-a', jwt: 'token-a' },
+    getRoom: () => null,
+    notify() {},
+    onProfileChanged() {},
+    onRoomsChanged() {},
+    async onRoomDeleted() {},
+    async onSignedOut() {},
+  });
+  assert.deepEqual(
+    dom.header.children.map((node) => node.textContent),
+    ['Account', 'My rooms'],
+  );
+  assert.deepEqual(
+    roomActions.children.map((node) => node.textContent),
+    ['Nickname', 'Manage room'],
+  );
+});

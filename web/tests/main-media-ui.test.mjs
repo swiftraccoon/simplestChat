@@ -489,7 +489,7 @@ test('stopped open microphone refreshes controls and requests explicit restart w
     camera: [true],
     screen: [true],
     tiles: 1,
-    toasts: ['Microphone stopped. Click Unmute (M) to restart.'],
+    toasts: ['Microphone stopped. Press M or the mic button to turn it back on.'],
   });
   assert.deepEqual(api.state(), { pttHeld: false, pttActivation: 1 });
   assert.equal(activeRoom.videoEnabled, true);
@@ -607,7 +607,7 @@ test('stopped camera preserves held microphone intent and reports explicit camer
     camera: [false],
     screen: [true],
     tiles: 1,
-    toasts: ['Camera stopped. Click Cam On (V) to restart.'],
+    toasts: ['Camera stopped. Press V or the camera button to turn it back on.'],
   });
   assert.deepEqual(api.state(), { pttHeld: true, pttActivation: 0 });
   assert.equal(activeRoom.audioEnabled, true);

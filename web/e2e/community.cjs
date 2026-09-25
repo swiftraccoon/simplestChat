@@ -687,7 +687,11 @@ async function action(page, name, label) {
   await page.locator('#mod-menu').getByRole('button', { name: label, exact: true }).click();
 }
 async function header(page, name) {
-  await page.locator('#community-actions').getByRole('button', { name, exact: true }).click();
+  // Account actions stay in the header; room-scoped actions live in the room tools.
+  await page
+    .locator('#community-actions, #room-actions')
+    .getByRole('button', { name, exact: true })
+    .click();
   return page.getByRole('dialog', { name, exact: true });
 }
 async function close(dialog) {
@@ -1032,9 +1036,9 @@ async function setRole(owner, name, role) {
           await dialogFitsViewport(
             owner,
             roomSettings,
-            roomSettings.getByRole('button', { name: 'Done', exact: true }),
+            roomSettings.locator('#room-settings-close'),
           );
-          await roomSettings.getByRole('button', { name: 'Done', exact: true }).click();
+          await roomSettings.locator('#room-settings-close').click();
           await roomSettings.waitFor({ state: 'hidden' });
         }
       } finally {
@@ -1158,7 +1162,7 @@ async function setRole(owner, name, role) {
     await step('membership roles, live moderation gates and allow-chat toggle', async () => {
       await action(owner, 'E2E Member', 'Moderator');
       await member
-        .locator('#community-actions')
+        .locator('#room-actions')
         .getByRole('button', { name: 'Manage room', exact: true })
         .waitFor({ state: 'visible' });
       await setRole(owner, 'E2E Member', 2);
@@ -1197,7 +1201,7 @@ async function setRole(owner, name, role) {
         await chatEnabled(owner, true);
         await join(member, 'E2E Member');
         await member
-          .locator('#community-actions')
+          .locator('#room-actions')
           .getByRole('button', { name: 'Manage room', exact: true })
           .waitFor({ state: 'visible' });
       },
@@ -1210,6 +1214,15 @@ async function setRole(owner, name, role) {
         .fill('Disposable browser test ban');
       await ban.getByRole('button', { name: 'Ban from room', exact: true }).click();
       await member.locator('#join-screen').waitFor({ state: 'visible' });
+      // Removal is explained in an owned dialog rather than a native alert.
+      const removed = member.getByRole('dialog', { name: 'Removed from the room', exact: true });
+      await removed
+        .getByText('You were banned from this room. Reason: Disposable browser test ban', {
+          exact: true,
+        })
+        .waitFor();
+      await removed.getByRole('button', { name: 'Back to home', exact: true }).click();
+      await removed.waitFor({ state: 'hidden' });
       const manage = await header(owner, 'Manage room');
       await manage.getByRole('button', { name: 'Bans', exact: true }).click();
       await visible(owner, 'Disposable browser test ban');
@@ -1821,8 +1834,8 @@ async function setRole(owner, name, role) {
           await visible(
             guest,
             kind === 'audio'
-              ? 'Microphone stopped. Click Unmute (M) to restart.'
-              : 'Camera stopped. Click Cam On (V) to restart.',
+              ? 'Microphone stopped. Press M or the mic button to turn it back on.'
+              : 'Camera stopped. Press V or the camera button to turn it back on.',
           );
           assert.equal(
             await guest.locator(`${otherButton}.muted`).count(),

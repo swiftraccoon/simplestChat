@@ -17,6 +17,8 @@
   --surface-2: #252525;
   --surface-3: #2a2a2a;
   --border: #333;
+  /* Boundaries that identify a control (inputs, buttons, toggles) need 3:1 against the surface. */
+  --border-strong: #707070;
   --text: #e8e8e8;
   --text-dim: #a3a3a3;
   /* Link text and white-text button fills need different contrast pairs. */
@@ -73,6 +75,13 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+#app-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* ========== Header ========== */
@@ -201,10 +210,11 @@ header h1 {
 }
 
 .status {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
   font-weight: 500;
+  border: 1px solid transparent;
 }
 
 .status.disconnected {
@@ -212,9 +222,11 @@ header h1 {
   color: var(--status-ink);
 }
 
+/* The normal state stays quiet; only trouble earns a saturated fill. */
 .status.connected {
-  background: var(--success);
-  color: var(--status-ink);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border-color: var(--border-strong);
 }
 
 .status.connecting {
@@ -280,7 +292,7 @@ header h1 {
   padding: 0.65rem 0.9rem;
   min-height: 44px;
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   color: var(--text);
   font-size: 1rem;
@@ -320,8 +332,23 @@ header h1 {
 }
 
 .join-form button:disabled {
-  opacity: 0.4;
+  opacity: 0.55;
   cursor: not-allowed;
+}
+
+.home-tools {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.home-tools .auth-link-btn {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.home-tools .auth-link-btn:hover {
+  color: var(--text);
 }
 
 /* ========== Room Screen — Modern Layout (default) ========== */
@@ -333,6 +360,11 @@ header h1 {
   gap: 0;
   overflow: hidden;
   transition: grid-template-columns var(--transition-normal);
+}
+
+/* Focus lands here on entry so keyboard users start inside the room, without a full-screen ring. */
+#room-screen:focus-visible {
+  outline: none;
 }
 
 #room-screen.layout-modern {
@@ -491,13 +523,33 @@ header h1 {
   flex-shrink: 0;
 }
 
+.sidebar-collapse {
+  display: none;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-left: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.sidebar-collapse svg {
+  transition: transform var(--transition-fast);
+}
+
+#room-screen.mobile-panel-collapsed .sidebar-collapse svg {
+  transform: rotate(180deg);
+}
+
 #sidebar-tabs .tab {
   flex: 1;
   padding: 0.6rem 0.5rem;
   background: none;
   border: none;
   color: var(--text-dim);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -564,13 +616,13 @@ header h1 {
 
 .chat-msg .sender {
   font-weight: 600;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   display: block;
   margin-bottom: 0.1rem;
 }
 
 .chat-msg .msg-text {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   line-height: 1.4;
   color: var(--text);
 }
@@ -585,15 +637,27 @@ header h1 {
 }
 
 .chat-msg .msg-time {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--text-dim);
   margin-top: 0.15rem;
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
 
-.chat-msg:hover .msg-time {
+.chat-msg:hover .msg-time,
+.chat-msg:focus-within .msg-time {
   opacity: 1;
+}
+
+/* Delivery state never hides behind hover: it is the only thing telling someone a send failed. */
+.chat-msg .msg-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.5rem;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
 }
 
 /* System messages (join/leave) */
@@ -661,12 +725,13 @@ header h1 {
 
 #chat-input {
   flex: 1;
+  min-width: 0;
   padding: 0.5rem 0.7rem;
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   outline: none;
   transition:
     border-color var(--transition-fast),
@@ -772,12 +837,18 @@ header h1 {
   color: var(--text-dim);
 }
 
+.participant-media-icons .media-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
 .participant-media-icons .media-icon.active {
   color: var(--success);
 }
 
+/* Off is a normal state, not a warning; red is kept for sanctions and failures. */
 .participant-media-icons .media-icon.muted {
-  color: var(--danger);
+  color: var(--text-dim);
 }
 
 /* Speaking glow on participant bar */
@@ -804,7 +875,7 @@ header h1 {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  border: 2px solid var(--border);
+  border: 2px solid var(--border-strong);
   background: var(--surface-2);
   color: var(--text);
   cursor: pointer;
@@ -840,7 +911,8 @@ header h1 {
   box-shadow: var(--shadow-panel);
 }
 
-#controls button:hover .btn-tooltip {
+#controls button:hover .btn-tooltip,
+#controls button:focus-visible .btn-tooltip {
   opacity: 1;
 }
 
@@ -860,7 +932,7 @@ header h1 {
 
 /* Settings button */
 #settings-btn {
-  border-color: var(--border) !important;
+  border-color: var(--border-strong) !important;
   background: var(--surface-2) !important;
   color: var(--text-dim) !important;
 }
@@ -918,8 +990,7 @@ header h1 {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: #000a;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -931,7 +1002,7 @@ header h1 {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-panel), var(--shadow-glow);
+  box-shadow: 0 24px 80px #0009;
   width: 400px;
   max-width: calc(100vw - 2rem);
   max-height: calc(100vh - 4rem);
@@ -952,19 +1023,22 @@ header h1 {
   font-weight: 600;
 }
 
+/* Every dialog closes with the same labelled button. */
 .modal-close {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  font-size: 1.4rem;
+  min-height: 40px;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
   cursor: pointer;
-  padding: 0;
-  line-height: 1;
-  transition: color var(--transition-fast);
+  transition: background var(--transition-fast);
 }
 
 .modal-close:hover {
-  color: var(--text);
+  background: var(--surface-3);
 }
 
 .modal-body {
@@ -981,11 +1055,9 @@ header h1 {
 }
 
 .setting-group label {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  color: var(--text);
 }
 
 .setting-group
@@ -1002,11 +1074,11 @@ header h1 {
   min-height: 44px;
   padding: 0.5rem 0.7rem;
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   color: var(--text);
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   transition: border-color var(--transition-fast);
 }
 
@@ -1221,7 +1293,7 @@ header h1 {
   margin-top: 1.25rem;
   padding: 0.55rem 1.5rem;
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   color: var(--text-dim);
   font-size: 0.85rem;
@@ -1251,17 +1323,25 @@ header h1 {
 
 .toast {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   padding: 0.6rem 1rem;
   color: var(--text);
-  font-size: 0.82rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
   box-shadow: var(--shadow-panel);
+  /* The fade tracks the lifetime the script sets, so long notices do not vanish early. */
   animation:
     toastIn 200ms ease,
-    toastOut 300ms ease 2.7s forwards;
+    toastOut 300ms ease calc(var(--toast-life, 3000ms) - 300ms) forwards;
   pointer-events: auto;
+  cursor: pointer;
   max-width: 320px;
+}
+
+.toast-error {
+  border-color: var(--danger);
+  border-left-width: 4px;
 }
 
 @keyframes toastIn {
@@ -1322,7 +1402,7 @@ header h1 {
   appearance: none;
   -webkit-appearance: none;
   background: var(--surface-3);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 11px;
   position: relative;
   cursor: pointer;
@@ -1357,9 +1437,11 @@ header h1 {
 }
 
 .setting-toggle label {
-  text-transform: none !important;
-  font-size: 0.85rem !important;
-  color: var(--text) !important;
+  font-size: 0.9rem;
+  color: var(--text);
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 1rem;
 }
 
 /* Hand / raise hand button */
@@ -1374,7 +1456,7 @@ header h1 {
 
 /* Room settings button */
 #room-settings-btn {
-  border-color: var(--border) !important;
+  border-color: var(--border-strong) !important;
   background: var(--surface-2) !important;
   color: var(--text-dim) !important;
 }
@@ -1415,9 +1497,10 @@ header h1 {
     grid-row: 3;
   }
 
+  /* Touch targets stay at 44px; the row shrinks through its gaps instead. */
   #controls button {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
   }
 
   .video-tile {
@@ -1434,14 +1517,17 @@ header h1 {
     padding: 1.5rem 1rem;
   }
 
-  #controls button {
-    width: 38px;
-    height: 38px;
+  #controls {
+    gap: 0.45rem;
+    padding: 0.5rem 0.4rem;
   }
 
-  #controls {
-    gap: 0.5rem;
-    padding: 0.5rem;
+  .room-label {
+    display: none;
+  }
+
+  #room-tools .media-controls-toolbar {
+    display: none;
   }
 }
 
@@ -1504,12 +1590,21 @@ header h1 {
   margin-bottom: 0.75rem;
 }
 
+/* Stacked so each alternative reads as one line instead of wrapping mid-phrase. */
 .auth-alt-actions {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--border, #333);
+}
+
+.auth-alt-actions .auth-link-btn {
+  padding: 0.4rem 0;
+  min-height: 36px;
+  text-align: left;
 }
 
 .auth-passkey-help {
@@ -1544,11 +1639,11 @@ header h1 {
 }
 
 .btn-secondary {
-  background: var(--bg-secondary, #2a2a2a);
-  color: var(--text-secondary, #b0b0b0);
-  border: 1px solid var(--border, #333);
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
   padding: 0.5rem 1rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 0.85rem;
 }
@@ -1859,29 +1954,40 @@ header h1 {
   border-bottom: 1px solid var(--border);
 }
 .room-navigation,
+.room-tools-right,
 #community-actions {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   flex-wrap: wrap;
 }
+.room-tools-right {
+  margin-left: auto;
+}
+#room-actions {
+  display: contents;
+}
 .room-navigation button,
+.room-tools-right button,
 .participant-actions-button {
   font: inherit;
   font-size: 0.8rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   color: var(--text);
   background: var(--surface-2);
   border-radius: var(--radius-sm);
   padding: 0.4rem 0.6rem;
   cursor: pointer;
+  text-decoration: none;
 }
 .room-navigation button:hover,
+.room-tools-right button:hover,
 .participant-actions-button:hover {
   background: var(--surface-3);
   border-color: var(--text-dim);
 }
 .room-navigation button:focus-visible,
+.room-tools-right button:focus-visible,
 .participant-actions-button:focus-visible,
 .panel-resize-handle:focus-visible,
 .room-card:focus-visible {
@@ -1979,8 +2085,16 @@ header h1 {
 @media (max-width: 768px) {
   header {
     flex-wrap: wrap;
-    gap: 0.45rem;
+    gap: 0.35rem;
     flex-shrink: 0;
+    padding: 0.4rem 0.75rem;
+  }
+  header h1 {
+    font-size: 1rem;
+  }
+  #home-link,
+  .help-link {
+    min-height: 40px;
   }
   .header-left {
     min-width: 0;
@@ -1991,15 +2105,37 @@ header h1 {
     max-width: 100%;
     flex-wrap: wrap;
   }
+  /* One scrollable strip instead of three wrapped rows; the fade hints at more. */
   #room-tools {
-    justify-content: center;
-    padding: 0.4rem;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   }
-  .room-navigation {
-    justify-content: center;
+  #room-tools::-webkit-scrollbar {
+    display: none;
   }
-  .room-navigation button {
-    min-height: 36px;
+  .room-navigation,
+  .room-tools-right {
+    flex-wrap: nowrap;
+  }
+  .room-tools-right {
+    margin-left: 0;
+    padding-right: 1.5rem;
+  }
+  .room-navigation button,
+  .room-tools-right button {
+    min-height: 40px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  /* Desktop show/hide toggles do nothing in the stacked layout. */
+  .room-tools-right #toggle-roster,
+  .room-tools-right #toggle-chat {
+    display: none;
   }
   #room-screen.layout-classic #main-area {
     grid-column: 1;
@@ -2012,11 +2148,92 @@ header h1 {
     max-height: none;
     min-height: 180px;
   }
+  .sidebar-collapse {
+    display: flex;
+  }
+  #sidebar-tabs .tab {
+    min-height: 44px;
+  }
+  #chat-input,
+  .emoji-toggle {
+    min-height: 44px;
+  }
+  #chat-send-btn {
+    width: 44px;
+    height: 44px;
+  }
+  /* Collapsed: only the tab bar stays, so the video gets the height back. */
+  #room-screen.mobile-panel-collapsed,
+  #room-screen.mobile-panel-collapsed.layout-classic {
+    grid-template-rows: minmax(100px, 1fr) auto auto;
+  }
+  #room-screen.mobile-panel-collapsed #sidebar {
+    min-height: 0;
+  }
+  #room-screen.mobile-panel-collapsed #sidebar-content {
+    display: none;
+  }
+  /* Tiles keep a readable minimum width instead of splitting the screen three ways. */
+  #video-grid,
+  #video-grid[data-count] {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+    align-content: start;
+  }
+  #video-grid[data-count='1'] {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+  }
+  .video-tile.screen-share {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
   .panel-resize-handle {
     display: none;
   }
   .participant-actions-button {
     width: 40px;
     height: 40px;
+  }
+}
+
+/* Landscape phones: chat beside the video, otherwise the video row collapses to a strip. */
+@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+  #room-screen,
+  #room-screen.layout-classic,
+  #room-screen.mobile-panel-collapsed {
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 42%) !important;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  #main-area {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  #sidebar {
+    grid-column: 2 !important;
+    grid-row: 1;
+    min-height: 0;
+    border-top: none;
+    border-left: 1px solid var(--border);
+  }
+  #room-screen.mobile-panel-collapsed #sidebar-content {
+    display: flex;
+  }
+  .sidebar-collapse {
+    display: none;
+  }
+  #controls {
+    grid-column: 1 / -1 !important;
+    grid-row: 2;
+    padding: 0.35rem;
+  }
+  #controls button {
+    width: 40px;
+    height: 40px;
+  }
+  header {
+    padding: 0.25rem 0.75rem;
+  }
+  #room-tools {
+    padding: 0.2rem 0.5rem;
   }
 }

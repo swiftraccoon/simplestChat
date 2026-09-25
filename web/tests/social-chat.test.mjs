@@ -963,3 +963,40 @@ test('preferences dialog unlocks audio before awaiting, and leave prevents late 
   assert.equal(f.chat.preferences.sounds, false);
   assert.equal(f.state.storage.size, 0);
 });
+
+test('delivery state renders outside the hover-revealed timestamp so failures stay visible', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.input.value = 'status test';
+  f.chat.send();
+  const pending = f.chat.store.messages[0];
+  const row = rows(f)[0];
+  const sending = row.querySelector('.msg-status');
+  assert.ok(sending, 'a pending message owns a status element');
+  assert.match(sending.textContent, /Sending/);
+  assert.doesNotMatch(row.querySelector('.msg-time').textContent, /Sending/);
+  f.chat.handleEvent({
+    type: 'socialError',
+    clientMessageId: pending.clientMessageId,
+    message: 'Delivery rejected',
+  });
+  const failed = row.querySelector('.msg-status');
+  assert.equal(failed.classList.contains('delivery-error'), true);
+  assert.match(failed.textContent, /Delivery rejected/);
+  assert.doesNotMatch(row.querySelector('.msg-time').textContent, /Delivery rejected/);
+  assert.ok(failed.querySelectorAll('button').find((node) => node.textContent === 'Edit & resend'));
+  f.chat.handleEvent({ type: 'messageAck', message: { ...pending, messageId: 'confirmed' } });
+  assert.equal(row.querySelector('.msg-status'), null, 'confirmed messages carry no status');
+  assert.match(row.querySelector('.msg-time').textContent, /\d/);
+});
+
+test('public chat keeps its mention hint in the composer instead of a permanent status line', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  assert.equal(f.chat.conversationStatus.hidden, true);
+  assert.match(f.chat.input.placeholder, /@name/);
+  f.chat.openPrivate('alice', 'Alice');
+  assert.equal(f.chat.conversationStatus.hidden, false);
+  assert.match(f.chat.conversationStatus.textContent, /Private/);
+  assert.doesNotMatch(f.chat.input.placeholder, /@name/);
+});

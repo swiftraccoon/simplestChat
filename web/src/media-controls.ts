@@ -277,10 +277,17 @@ export class MediaControls {
     const dialog = document.createElement('dialog');
     dialog.className = 'settings-dialog media-setup-dialog';
     dialog.setAttribute('aria-labelledby', 'media-setup-title');
+    // Static copy chosen by the opening control; no user content enters this markup.
+    const intro =
+      mode === 'camera'
+        ? 'You chose to turn on your camera. Pick a camera, try it privately, then save to start it.'
+        : mode === 'microphone'
+          ? 'Pick a microphone and try it privately. Saving never turns it on by itself.'
+          : 'Just for you, on this browser.';
     dialog.innerHTML = `
       <form method="dialog" class="settings-dialog-form">
         <div class="settings-dialog-header"><div><h2 id="media-setup-title">Your settings</h2>
-          <p class="settings-description">Just for you, on this browser.</p></div>
+          <p class="settings-description">${intro}</p></div>
           <button type="button" data-dialog-close aria-label="Close your settings">Close</button></div>
         <div class="settings-dialog-nav" role="tablist" aria-label="Your settings sections">
           <button type="button" role="tab" id="media-devices-tab" data-settings-tab aria-controls="media-devices-panel">Audio &amp; video</button>

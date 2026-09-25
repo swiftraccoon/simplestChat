@@ -192,10 +192,12 @@ test('room settings retain every existing control with semantic panels and no su
   assert.ok(dialog);
   assert.match(dialog, /aria-labelledby="room-settings-title"/);
   assert.match(dialog, /id="room-settings-close"[^>]*data-dialog-close[^>]*aria-label=/);
-  assert.match(dialog, /Changes are saved after confirmation/);
+  assert.match(dialog, /Each change is saved as soon as the room confirms it/);
   const expected = [
     'topic',
     'password',
+    'password-hint',
+    'password-remove',
     'guests',
     'guests-broadcast',
     'require-reg',
