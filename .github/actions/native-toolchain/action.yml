@@ -17,11 +17,36 @@ runs:
   steps:
     # mediasoup-sys builds the C++ worker: needs python3 + pip (meson/ninja
     # are fetched by its build script) and a full C++ toolchain.
+    # The ubuntu-24.04 image already provides every tool below, and the
+    # unconditional apt-get update alone cost twelve seconds in each job.
+    # Install a package only when one of its tools is missing from PATH.
     - name: Install system dependencies
       shell: bash
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config shellcheck jq
+        missing=()
+        while read -r package tools; do
+          for tool in ${tools}; do
+            if ! command -v "${tool}" >/dev/null; then
+              missing+=("${package}")
+              break
+            fi
+          done
+        done <<'TOOLS'
+        build-essential gcc g++ make
+        python3-pip pip3
+        cmake cmake
+        curl curl
+        perl perl
+        pkg-config pkg-config
+        shellcheck shellcheck
+        jq jq
+        TOOLS
+        if ((${#missing[@]})); then
+          sudo apt-get update
+          sudo apt-get install -y "${missing[@]}"
+        else
+          echo 'Every native build tool is already installed.'
+        fi
 
     - name: Install pinned Rust toolchain
       uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-09)
