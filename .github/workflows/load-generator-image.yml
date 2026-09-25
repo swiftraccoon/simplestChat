@@ -1,0 +1,64 @@
+name: Load generator image
+
+# Builds the Linux/amd64 load-test image for owned measurements on Linux
+# hosts (the production shape runs on Apple silicon otherwise). It reuses
+# the production image's layer cache, so only the generator compiles, and
+# retains the image as a run artifact; nothing is published or deployed.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: Linux/amd64 load-test image for owned measurements
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Restore the production image layer cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/buildx-cache
+          key: buildx-${{ runner.os }}-${{ hashFiles('Dockerfile', 'Cargo.toml', 'Cargo.lock', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'vendor/**') }}
+          restore-keys: buildx-${{ runner.os }}-
+
+      - name: Build the load-test image
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          docker buildx rm --force simplestchat-loadtest 2>/dev/null || true
+          docker buildx create --name simplestchat-loadtest --driver docker-container --use
+          cache_dir="${RUNNER_TEMP}/buildx-cache"
+          cache_from=()
+          if [[ -f "${cache_dir}/index.json" ]]; then
+            cache_from=(--cache-from "type=local,src=${cache_dir}")
+          fi
+          timeout --signal=TERM --kill-after=2m 40m \
+            docker buildx build --pull --load --target loadtest --platform linux/amd64 \
+              --provenance=false --sbom=false \
+              "${cache_from[@]}" \
+              --build-arg "SOURCE_REVISION=${GITHUB_SHA}" \
+              --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+              --tag simplestchat-loadtest:ci .
+          docker buildx rm --force simplestchat-loadtest
+          mkdir -p "${RUNNER_TEMP}/loadtest-image"
+          docker save simplestchat-loadtest:ci \
+            | zstd -T0 -3 -o "${RUNNER_TEMP}/loadtest-image/simplestchat-loadtest-${GITHUB_SHA}.tar.zst"
+          docker image inspect --format '{{.Id}}' simplestchat-loadtest:ci \
+            > "${RUNNER_TEMP}/loadtest-image/image-id.txt"
+          ls -la "${RUNNER_TEMP}/loadtest-image"
+
+      - name: Retain the image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: simplestchat-loadtest-${{ github.sha }}
+          path: ${{ runner.temp }}/loadtest-image
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

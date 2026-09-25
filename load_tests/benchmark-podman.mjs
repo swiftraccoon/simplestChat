@@ -111,7 +111,7 @@ export function netemScript(params, scope, udpPort, workers) {
 
 export function parseOptions(args) {
   const raw = {};
-  const keys = new Set(['server-image', 'generator-image', 'netem-image', 'output', 'clients', 'duration', 'warmup', 'ramp-up', 'repetitions', 'workers', 'cpus', 'memory', 'generator-cpus', 'port', 'udp-port', 'scenarios', 'subscription-plan', 'subscription-seed', 'netem', 'netem-scope', 'max-connections', 'label', 'source-revision']);
+  const keys = new Set(['server-image', 'generator-image', 'netem-image', 'output', 'clients', 'duration', 'warmup', 'ramp-up', 'repetitions', 'workers', 'cpus', 'memory', 'generator-cpus', 'port', 'udp-port', 'scenarios', 'subscription-plan', 'subscription-seed', 'netem', 'netem-scope', 'max-connections', 'label', 'source-revision', 'source-addresses']);
   for (let i = 0; i < args.length; i += 2) {
     const key = args[i]?.replace(/^--/, '');
     if (!args[i]?.startsWith('--') || !keys.has(key) || args[i + 1] === undefined || raw[key]) throw new Error(`Unknown, duplicate or incomplete option: ${args[i]}`);
@@ -130,7 +130,7 @@ export function parseOptions(args) {
     if (!/^(0|[1-9][0-9]*)$/.test(raw['subscription-seed'] ?? '') || Number(raw['subscription-seed']) > 0xffffffff) throw new Error('--subscription-seed is required for ring-v1 and hotspot-v1 and must be an unsigned 32-bit decimal integer');
     options.subscriptionSeed = Number(raw['subscription-seed']);
   } else if (raw['subscription-seed'] !== undefined) throw new Error('--subscription-seed requires --subscription-plan ring-v1 or hotspot-v1');
-  for (const [key, fallback, minimum, maximum] of [['duration', 60, 3, 600], ['warmup', 10, 2, 60], ['ramp-up', 5, 1, 1200], ['repetitions', 1, 1, 5], ['workers', 2, 1, 4], ['port', 3129, 1024, 65535], ['udp-port', 41100, 1024, 65531], ['max-connections', 1000, 2, 10000]]) {
+  for (const [key, fallback, minimum, maximum] of [['duration', 60, 3, 600], ['warmup', 10, 2, 60], ['ramp-up', 5, 1, 1200], ['repetitions', 1, 1, 5], ['workers', 2, 1, 4], ['port', 3129, 1024, 65535], ['udp-port', 41100, 1024, 65531], ['max-connections', 1000, 2, 10000], ['source-addresses', 1, 1, 60000]]) {
     const value = Number(raw[key] ?? fallback);
     if (!Number.isInteger(value) || value < minimum || value > maximum) throw new Error(`--${key} must be ${minimum}–${maximum}`);
     options[key.replace(/-([a-z])/g, (_, l) => l.toUpperCase())] = value;
@@ -143,18 +143,24 @@ export function parseOptions(args) {
   options.memory = raw.memory ?? '2g';
   if (!/^[1-9][0-9]*[mg]$/.test(options.memory)) throw new Error('--memory must be like 512m or 2g');
   options.clients = (raw.clients ?? '100').split(',').map(Number);
-  if (!options.clients.length || options.clients.some(v => !Number.isInteger(v) || v < 2 || v > 1000) || new Set(options.clients).size !== options.clients.length) throw new Error('--clients must be unique counts between 2 and 1000');
+  if (!options.clients.length || options.clients.some(v => !Number.isInteger(v) || v < 2 || v > 2000) || new Set(options.clients).size !== options.clients.length) throw new Error('--clients must be unique counts between 2 and 2000');
   const scenarios = (raw.scenarios ?? 'multi-room').split(',');
   if (scenarios.some(s => !['conference', 'multi-room', 'audio', 'webinar'].includes(s)) || new Set(scenarios).size !== scenarios.length) throw new Error('Unknown/duplicate scenario');
   // webinar: one room, exactly one publisher (ceil(clients / 1000)), every
   // other client a viewer, each viewer joining from its own loopback address
   // as distinct viewers would, so the per-address join limits do not shape
   // the ramp of a large one-to-many room.
+  // --source-addresses N spreads every other scenario's clients over N loopback
+  // addresses too (default 1: the shared address, as every earlier record).
   const WEBINAR_SOURCE_ADDRESSES = 250;
-  options.scenarios = options.clients.flatMap(clients => scenarios.map(name => ({ name: `${name}-${clients}`, clients,
-    rooms: name === 'multi-room' ? Math.min(4, Math.floor(clients / 2)) : 1, mode: name === 'webinar' ? 'webinar' : 'conference',
-    sourceAddresses: name === 'webinar' ? WEBINAR_SOURCE_ADDRESSES : 1,
-    extra: name === 'audio' ? ['--audio-only'] : name === 'webinar' ? ['--publish-ratio', '0.001', '--source-addresses', String(WEBINAR_SOURCE_ADDRESSES)] : [] })));
+  options.scenarios = options.clients.flatMap(clients => scenarios.map(name => {
+    const sourceAddresses = name === 'webinar' ? WEBINAR_SOURCE_ADDRESSES : options.sourceAddresses;
+    const spread = sourceAddresses > 1 ? ['--source-addresses', String(sourceAddresses)] : [];
+    return { name: `${name}-${clients}`, clients,
+      rooms: name === 'multi-room' ? Math.min(4, Math.floor(clients / 2)) : 1, mode: name === 'webinar' ? 'webinar' : 'conference',
+      sourceAddresses,
+      extra: name === 'audio' ? ['--audio-only', ...spread] : name === 'webinar' ? ['--publish-ratio', '0.001', ...spread] : spread };
+  }));
   for (const scenario of options.scenarios) {
     // The server's code-level join limits (30 per IP and 10 per room and IP
     // per minute) apply per loopback source address exactly as locally.

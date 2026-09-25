@@ -82,5 +82,9 @@ test('webinar scenarios keep one room, one publisher and per-address ramps', () 
   // Four viewers per loopback address stay under the 10-per-room-and-address
   // limit, so the join spacing no longer forces a ten-minute ramp per hundred.
   assert.throws(() => parseOptions([...base, '--scenarios', 'conference', '--clients', '300', '--ramp-up', '60']), /--ramp-up 1815/);
-  assert.throws(() => parseOptions([...base, '--clients', '1001']), /between 2 and 1000/);
+  assert.throws(() => parseOptions([...base, '--clients', '2001']), /between 2 and 2000/);
+  // Other shapes spread only on request and keep the shared address by default.
+  const spread = parseOptions([...base, '--scenarios', 'conference', '--clients', '200', '--ramp-up', '60', '--source-addresses', '250']);
+  assert.deepEqual(spread.scenarios.map((s) => [s.sourceAddresses, s.extra]), [[250, ['--source-addresses', '250']]]);
+  assert.deepEqual(options.scenarios.map((s) => s.extra).flat().filter((a) => a === '--source-addresses').length, 2);
 });
