@@ -263,9 +263,15 @@ node load_tests/benchmark-podman.mjs \
 ```
 
 The ramp must respect the server's join limits from one address (about two
-seconds per client above 30). The quota is the production shape; the cores are
-Apple silicon, so absolute figures do not transfer to the VPS, while the
-per-client cost, throttling and the worker/runtime split do inform limits.
+seconds per client above 30). The `webinar` scenario is the one-to-many shape:
+one room, one publisher and every other client a viewer, each viewer joining
+from its own loopback address (`--source-addresses 250`, as distinct viewers
+would), so the per-address limits do not shape the ramp and a room of several
+hundred viewers fills in minutes; because a room lives on one worker, it also
+measures the single-worker ceiling of a large room. The quota is the
+production shape; the cores are Apple silicon, so absolute figures do not
+transfer to the VPS, while the per-client cost, throttling and the
+worker/runtime split do inform limits.
 `--netem "loss 5% delay 50ms 10ms"` adds a NET_ADMIN sidecar built from
 [`load_tests/netem.Containerfile`](../load_tests/netem.Containerfile) that
 impairs UDP inside the server's namespace, when the VM kernel ships `sch_netem`

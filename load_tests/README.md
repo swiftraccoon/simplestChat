@@ -72,6 +72,7 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 | `--room ID`, `--rooms N` | Room prefix and round-robin room count; `load-test-room`, 1 |
 | `--mode MODE` | Publisher preset: `conference` (100%), `webinar` (1%), `panel` (10%), `classroom` (20%) |
 | `--publish-ratio RATIO` | Publisher fraction; 1.0, at least one publisher overall |
+| `--source-addresses N` | Bind each client's signaling socket to its own loopback address (127.0.1.2 onward, wrapping after N) so per-address join limits see distinct viewers; 0 (off). Needs a literal `ws://` IPv4 server; Linux binds 127/8 as is, macOS needs `lo0` aliases |
 | `--max-audio N`, `--max-video N` | Consumer caps per client; 4 each |
 | `--subscription-plan MODE` | Discovery-order `fifo` (default), balanced `ring-v1`, or concentrated `hotspot-v1` |
 | `--subscription-seed N` | Required for fixed graphs; unsigned 32-bit integer, held constant across comparisons |

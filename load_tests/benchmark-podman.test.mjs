@@ -68,3 +68,19 @@ test('a server sampler block yields process, cgroup and thread readings', async 
   assert.equal(parsed.serverDetail.cgroup.nr_throttled, 1);
   assert.deepEqual(parsed.serverDetail.threads, { simplestChat: 15, 'mediasoup-worke': 20 });
 });
+
+test('webinar scenarios keep one room, one publisher and per-address ramps', () => {
+  const base = ['--server-image', 's', '--generator-image', 'g', '--output', 'out'];
+  const options = parseOptions([...base, '--scenarios', 'webinar', '--clients', '300,1000', '--ramp-up', '60']);
+  assert.deepEqual(
+    options.scenarios.map((s) => [s.name, s.rooms, s.mode, s.sourceAddresses, s.extra]),
+    [
+      ['webinar-300', 1, 'webinar', 250, ['--publish-ratio', '0.001', '--source-addresses', '250']],
+      ['webinar-1000', 1, 'webinar', 250, ['--publish-ratio', '0.001', '--source-addresses', '250']],
+    ],
+  );
+  // Four viewers per loopback address stay under the 10-per-room-and-address
+  // limit, so the join spacing no longer forces a ten-minute ramp per hundred.
+  assert.throws(() => parseOptions([...base, '--scenarios', 'conference', '--clients', '300', '--ramp-up', '60']), /--ramp-up 1815/);
+  assert.throws(() => parseOptions([...base, '--clients', '1001']), /between 2 and 1000/);
+});

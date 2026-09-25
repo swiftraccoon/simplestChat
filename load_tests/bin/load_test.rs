@@ -139,6 +139,9 @@ struct ClientConfig {
     departure: Departure,
     /// Shared diagnostic-only budget across every client and churn attempt.
     receiver_stall_budget: Option<Arc<receiver_stall::ReceiverStallBudget>>,
+    /// Loopback address this client's signaling socket binds to, when the run
+    /// spreads clients over distinct addresses.
+    source_address: Option<std::net::Ipv4Addr>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -165,6 +168,8 @@ struct TestConfig {
     departure: Departure,
     subscription_plan: SubscriptionMode,
     subscription_seed: Option<u32>,
+    /// Size of the loopback source-address pool (0 keeps the default source).
+    source_addresses: usize,
 }
 
 impl TestConfig {
@@ -547,6 +552,7 @@ impl Default for TestConfig {
             departure: Departure::Abrupt,
             subscription_plan: SubscriptionMode::Fifo,
             subscription_seed: None,
+            source_addresses: 0,
         }
     }
 }
@@ -676,6 +682,14 @@ async fn main() -> Result<()> {
                             1.0
                         }
                     };
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            "--source-addresses" => {
+                if i + 1 < args.len() {
+                    config.source_addresses = args[i + 1].parse::<usize>().unwrap_or(0);
                     i += 2;
                 } else {
                     i += 1;
@@ -835,6 +849,15 @@ fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
             value
                 .parse::<u32>()
                 .context("--subscription-seed must be an unsigned 32-bit integer")?;
+        }
+        "--source-addresses" => {
+            let pool: usize = value
+                .parse()
+                .context("--source-addresses must be an unsigned integer")?;
+            anyhow::ensure!(
+                pool <= MAX_SOURCE_ADDRESSES,
+                "--source-addresses must be at most {MAX_SOURCE_ADDRESSES}"
+            );
         }
         "--server" | "-s" => {
             let url = url::Url::parse(value)?;
@@ -1031,6 +1054,7 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
             consume_existing_producers: true,
             departure: config.departure,
             receiver_stall_budget: receiver_stall_budget.clone(),
+            source_address: source_address_for(i, config.source_addresses),
         };
 
         let metrics = collector.clone();
@@ -1374,14 +1398,16 @@ async fn run_client_inner(
     });
 
     // Connect to WebSocket signaling server
-    let (ws_stream, _) =
-        tokio::time::timeout_at(config.deadline.into(), connect_async(&config.server_url))
-            .await
-            .map_err(|_| anyhow::anyhow!("No WebSocket connection before the session deadline"))?
-            .map_err(|e| {
-                tracing::error!("{}: Failed to connect: {}", client_id, e);
-                e
-            })?;
+    let (ws_stream, _) = tokio::time::timeout_at(
+        config.deadline.into(),
+        connect_signaling(&config.server_url, config.source_address),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("No WebSocket connection before the session deadline"))?
+    .map_err(|e| {
+        tracing::error!("{}: Failed to connect: {}", client_id, e);
+        e
+    })?;
 
     tracing::info!("{}: WebSocket connected", client_id);
 
@@ -3267,6 +3293,107 @@ where
 }
 
 /// Receive next response message, buffering async event notifications.
+/// Upper bound of the loopback source pool: 127.0.1.2 through 127.0.241.251.
+const MAX_SOURCE_ADDRESSES: usize = 60_000;
+
+/// Loopback source address for one client when the run spreads clients over
+/// 127.0.0.0/16, so per-address join limits see distinct viewers as they would
+/// in production. Linux binds any 127/8 address without configuration; macOS
+/// needs `ifconfig lo0 alias` for each one.
+fn source_address_for(index: usize, pool: usize) -> Option<std::net::Ipv4Addr> {
+    if pool == 0 {
+        return None;
+    }
+    let slot = index % pool.min(MAX_SOURCE_ADDRESSES);
+    let third = u8::try_from(1 + slot / 250).ok()?;
+    let fourth = u8::try_from(2 + slot % 250).ok()?;
+    Some(std::net::Ipv4Addr::new(127, 0, third, fourth))
+}
+
+/// A source-bound connection needs a literal IPv4 plain WebSocket endpoint:
+/// TLS and name resolution stay on the default path.
+fn plain_ws_endpoint(server_url: &str) -> Result<std::net::SocketAddr> {
+    let url = url::Url::parse(server_url)?;
+    anyhow::ensure!(
+        url.scheme() == "ws",
+        "--source-addresses needs a plain ws:// server URL"
+    );
+    let host = url.host_str().context("server URL has no host")?;
+    let ip: std::net::Ipv4Addr = host
+        .parse()
+        .context("--source-addresses needs a literal IPv4 server address")?;
+    Ok(std::net::SocketAddr::new(
+        ip.into(),
+        url.port().unwrap_or(80),
+    ))
+}
+
+type SignalingStream =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+/// Opens the signaling WebSocket, from a bound loopback source when one is set.
+async fn connect_signaling(
+    server_url: &str,
+    source_address: Option<std::net::Ipv4Addr>,
+) -> Result<(
+    SignalingStream,
+    tokio_tungstenite::tungstenite::handshake::client::Response,
+)> {
+    let Some(source) = source_address else {
+        return Ok(connect_async(server_url).await?);
+    };
+    let target = plain_ws_endpoint(server_url)?;
+    let socket = tokio::net::TcpSocket::new_v4()?;
+    socket.bind(std::net::SocketAddr::new(source.into(), 0))?;
+    let stream = socket.connect(target).await?;
+    Ok(tokio_tungstenite::client_async(
+        server_url,
+        tokio_tungstenite::MaybeTlsStream::Plain(stream),
+    )
+    .await?)
+}
+
+#[cfg(test)]
+mod source_address_tests {
+    use super::*;
+
+    #[test]
+    fn no_pool_keeps_the_default_source() {
+        assert_eq!(source_address_for(7, 0), None);
+    }
+
+    #[test]
+    fn a_pool_spreads_clients_over_loopback_and_wraps() {
+        let address = |text: &str| text.parse::<std::net::Ipv4Addr>().unwrap();
+        assert_eq!(source_address_for(0, 250), Some(address("127.0.1.2")));
+        assert_eq!(source_address_for(249, 250), Some(address("127.0.1.251")));
+        assert_eq!(source_address_for(250, 500), Some(address("127.0.2.2")));
+        assert_eq!(source_address_for(250, 250), Some(address("127.0.1.2")));
+        assert_eq!(
+            source_address_for(MAX_SOURCE_ADDRESSES - 1, MAX_SOURCE_ADDRESSES),
+            Some(address("127.0.240.251"))
+        );
+    }
+
+    #[test]
+    fn source_bound_connections_need_a_plain_ipv4_websocket_endpoint() {
+        assert_eq!(
+            plain_ws_endpoint("ws://127.0.0.1:3119/ws").unwrap(),
+            "127.0.0.1:3119".parse::<std::net::SocketAddr>().unwrap()
+        );
+        assert!(plain_ws_endpoint("wss://127.0.0.1:3119/ws").is_err());
+        assert!(plain_ws_endpoint("ws://localhost:3119/ws").is_err());
+    }
+
+    #[test]
+    fn source_pool_arguments_are_bounded() {
+        let args = |value: &str| vec!["--source-addresses".to_string(), value.to_string()];
+        assert!(validate_cli_value(&args("250"), 0).is_ok());
+        assert!(validate_cli_value(&args("60001"), 0).is_err());
+        assert!(validate_cli_value(&args("many"), 0).is_err());
+    }
+}
+
 async fn receive_response<S>(
     read: &mut futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<S>>,
     buffered_events: &mut Vec<ServerMessage>,

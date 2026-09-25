@@ -143,15 +143,23 @@ export function parseOptions(args) {
   options.memory = raw.memory ?? '2g';
   if (!/^[1-9][0-9]*[mg]$/.test(options.memory)) throw new Error('--memory must be like 512m or 2g');
   options.clients = (raw.clients ?? '100').split(',').map(Number);
-  if (!options.clients.length || options.clients.some(v => !Number.isInteger(v) || v < 2 || v > 400) || new Set(options.clients).size !== options.clients.length) throw new Error('--clients must be unique counts between 2 and 400');
+  if (!options.clients.length || options.clients.some(v => !Number.isInteger(v) || v < 2 || v > 1000) || new Set(options.clients).size !== options.clients.length) throw new Error('--clients must be unique counts between 2 and 1000');
   const scenarios = (raw.scenarios ?? 'multi-room').split(',');
-  if (scenarios.some(s => !['conference', 'multi-room', 'audio'].includes(s)) || new Set(scenarios).size !== scenarios.length) throw new Error('Unknown/duplicate scenario');
+  if (scenarios.some(s => !['conference', 'multi-room', 'audio', 'webinar'].includes(s)) || new Set(scenarios).size !== scenarios.length) throw new Error('Unknown/duplicate scenario');
+  // webinar: one room, exactly one publisher (ceil(clients / 1000)), every
+  // other client a viewer, each viewer joining from its own loopback address
+  // as distinct viewers would, so the per-address join limits do not shape
+  // the ramp of a large one-to-many room.
+  const WEBINAR_SOURCE_ADDRESSES = 250;
   options.scenarios = options.clients.flatMap(clients => scenarios.map(name => ({ name: `${name}-${clients}`, clients,
-    rooms: name === 'multi-room' ? Math.min(4, Math.floor(clients / 2)) : 1, mode: 'conference', extra: name === 'audio' ? ['--audio-only'] : [] })));
+    rooms: name === 'multi-room' ? Math.min(4, Math.floor(clients / 2)) : 1, mode: name === 'webinar' ? 'webinar' : 'conference',
+    sourceAddresses: name === 'webinar' ? WEBINAR_SOURCE_ADDRESSES : 1,
+    extra: name === 'audio' ? ['--audio-only'] : name === 'webinar' ? ['--publish-ratio', '0.001', '--source-addresses', String(WEBINAR_SOURCE_ADDRESSES)] : [] })));
   for (const scenario of options.scenarios) {
     // The server's code-level join limits (30 per IP and 10 per room and IP
-    // per minute) apply to the shared loopback address exactly as locally.
-    const spacing = Math.max(scenario.clients > 30 ? 60.5 / 30 : 0, Math.ceil(scenario.clients / scenario.rooms) > 10 ? 60.5 / (10 * scenario.rooms) : 0);
+    // per minute) apply per loopback source address exactly as locally.
+    const perAddress = Math.ceil(scenario.clients / scenario.sourceAddresses);
+    const spacing = Math.max(perAddress > 30 ? 60.5 / (30 * scenario.sourceAddresses) : 0, Math.ceil(perAddress / scenario.rooms) > 10 ? 60.5 / (10 * scenario.rooms * scenario.sourceAddresses) : 0);
     const minimumRamp = Math.ceil(spacing * scenario.clients);
     if (options.rampUp < minimumRamp) throw new Error(`${scenario.name} exceeds loopback join admission limits; use --ramp-up ${minimumRamp}`);
   }
