@@ -384,5 +384,6 @@ whole-browser resource measurements or production-capacity budgets.
 ## Other checks
 
 See [testing](../../docs/testing.md) for unit, database and container checks.
-`checklist.cjs` is an older, non-CI checklist with potentially stale selectors;
-`community.cjs` is the maintained browser gate.
+`community.cjs` is the maintained browser gate. The older non-CI `checklist.cjs` was
+removed in September 2026: it drove a deployed server through a tunnel and expected the
+native alerts and prompts the client no longer uses.
