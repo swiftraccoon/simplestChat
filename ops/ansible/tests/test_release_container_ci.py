@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
 COMPOSE_TOOL = "Install checksum-pinned production Compose"
 PREPARE = "Install isolated release-container checks"
+PREPARE_START = "Start the isolated release-container controller build"
 INTEGRATION = "App-only release and rollback on a disposable host"
 RETENTION = "Preserve sanitized release-container report"
 EXPORT = "Export the tested immutable production image"
@@ -203,20 +204,39 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self,
     ) -> None:
         """Verify dependencies use existing pinned controller requirements in an isolated venv."""
+        start = self.step(PREPARE_START)
+        command = string(start, "run")
+        for line in (
+            "set -euo pipefail\n",
+            "sudo apt-get update\n",
+            "sudo apt-get install -y python3-venv openssl curl ca-certificates util-linux\n",
+            'python3 -m venv "${RUNNER_TEMP}/release-container-controller"\n',
+            '"${RUNNER_TEMP}/release-container-controller/bin/pip" '
+            + "install -r ops/ansible/requirements.txt\n",
+            "set +e\n",
+            'echo "$?" > "${RUNNER_TEMP}/release-container-controller.status"\n',
+        ):
+            self.assertIn(line, command)
+        self.assertTrue(command.rstrip().endswith("< /dev/null > /dev/null 2>&1 &"))
+        # The controller build overlaps the image build instead of following it.
+        self.assertLess(
+            self.steps.index(start), self.steps.index(self.step("Build production container"))
+        )
         prepare = self.step(PREPARE)
         self.assertEqual(prepare["timeout-minutes"], "5")
         self.assertEqual(
             prepare["run"],
             (
-                "sudo apt-get update\n"
-                + "sudo apt-get install -y python3-venv openssl curl ca-certificates util-linux\n"
-                + 'python3 -m venv "${RUNNER_TEMP}/release-container-controller"\n'
-                + '"${RUNNER_TEMP}/release-container-controller/bin/pip" '
-                + "install -r ops/ansible/requirements.txt\n"
+                'until [[ -f "${RUNNER_TEMP}/release-container-controller.status" ]]; '
+                + "do sleep 1; done\n"
+                + 'cat "${RUNNER_TEMP}/release-container-controller.log"\n'
+                + 'test "$(<"${RUNNER_TEMP}/release-container-controller.status")" = 0\n'
+                + 'test -x "${RUNNER_TEMP}/release-container-controller/bin/python"\n'
             ),
         )
-        self.assertNotIn("continue-on-error", prepare)
-        self.assertNotIn("if", prepare)
+        for step in (start, prepare):
+            self.assertNotIn("continue-on-error", step)
+            self.assertNotIn("if", step)
 
     def test_root_disposable_opt_in_is_explicit_bounded_and_preserves_failure(self) -> None:
         """Verify root disposable opt in is explicit bounded and preserves failure."""
