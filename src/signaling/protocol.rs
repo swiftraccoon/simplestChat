@@ -531,7 +531,8 @@ pub enum ServerMessage {
     /// Active/dominant speaker changed
     #[serde(rename_all = "camelCase")]
     ActiveSpeaker { participant_id: String },
-    /// Audio levels for all speaking participants
+    /// Audio levels for all speaking participants; an empty list means nobody
+    /// exceeded the threshold during the last interval
     #[serde(rename_all = "camelCase")]
     AudioLevels { levels: Vec<AudioLevelEntry> },
 

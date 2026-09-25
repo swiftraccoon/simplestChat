@@ -41,8 +41,14 @@ use tracing::{debug, error, info, warn};
 
 /// Events sent from observer callbacks (sync Fn) to async broadcast task
 enum ObserverEvent {
-    ActiveSpeaker { producer_id: ProducerId },
-    AudioLevels { volumes: Vec<(ProducerId, i8)> },
+    ActiveSpeaker {
+        producer_id: ProducerId,
+    },
+    AudioLevels {
+        volumes: Vec<(ProducerId, i8)>,
+    },
+    /// No producer exceeded the level threshold during the last interval.
+    Silence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2156,6 +2162,14 @@ impl RoomManager {
                 let _ = tx.try_send(ObserverEvent::AudioLevels { volumes: entries });
             })
             .detach();
+            // The worker reports volumes only while someone exceeds the
+            // threshold and announces silence once when the last speaker
+            // stops; without it clients keep the final speaker highlighted.
+            let tx = observer_tx.clone();
+            obs.on_silence(move || {
+                let _ = tx.try_send(ObserverEvent::Silence);
+            })
+            .detach();
         }
         drop(observer_tx); // Only clones in callbacks remain
 
@@ -2249,6 +2263,9 @@ impl RoomManager {
                     if !levels.is_empty() {
                         room.broadcast_all(&ServerMessage::AudioLevels { levels });
                     }
+                }
+                ObserverEvent::Silence => {
+                    room.broadcast_all(&ServerMessage::AudioLevels { levels: Vec::new() });
                 }
             }
         }
@@ -6596,6 +6613,27 @@ mod security_tests {
         assert!(manager.drain_signal().is_draining());
         assert!(manager.get_or_create_room("new-room").await.is_err());
         media_cleanup.unwrap();
+    }
+
+    #[tokio::test]
+    async fn silence_observer_event_clears_audio_levels_for_every_participant() {
+        let mut room = Room::new("room".into(), "router".into(), None, false, None);
+        let (sender, mut receiver) = mpsc::channel(4);
+        let mut member = participant(
+            "member",
+            roles::Role::Member,
+            moderation::PunitiveState::default(),
+            None,
+        );
+        member.sender = sender;
+        room.participants.insert("member".into(), member);
+        let room = Arc::new(TokioRwLock::new(room));
+        let (events, event_receiver) = mpsc::channel(4);
+        events.try_send(ObserverEvent::Silence).unwrap();
+        drop(events);
+        RoomManager::observer_broadcast_task(event_receiver, Arc::downgrade(&room)).await;
+        let message = receiver.try_recv().unwrap();
+        assert_eq!(message.as_str(), r#"{"type":"audioLevels","levels":[]}"#);
     }
 
     #[test]

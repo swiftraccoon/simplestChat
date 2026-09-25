@@ -246,8 +246,27 @@ let departureInProgress: Promise<void> | null = null;
 
 // Active speaker / audio level tracking — avoids querySelectorAll on every event
 const AUDIO_LEVEL_THRESHOLD = -50; // dB; only highlight above this
+// The server reports levels every 800 ms while anyone speaks and sends an
+// empty list on silence; the timer covers a lost silence report.
+const SPEAKING_HIGHLIGHT_TIMEOUT_MS = 2000;
 let currentDominantTile: HTMLDivElement | null = null;
 const currentlySpeaking = new Set<HTMLElement>(); // tiles + list items with .speaking
+let speakingHighlightTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearSpeakingHighlights(): void {
+  if (speakingHighlightTimer !== null) {
+    clearTimeout(speakingHighlightTimer);
+    speakingHighlightTimer = null;
+  }
+  for (const el of currentlySpeaking) {
+    el.classList.remove('speaking');
+  }
+  currentlySpeaking.clear();
+  if (currentDominantTile) {
+    currentDominantTile.classList.remove('dominant-speaker');
+    currentDominantTile = null;
+  }
+}
 
 // Push-to-Talk state
 type MicMode = 'open' | 'ptt';
@@ -1864,6 +1883,15 @@ joinBtn.addEventListener(
           }
         },
         onAudioLevels: (levels) => {
+          if (levels.length === 0) {
+            clearSpeakingHighlights();
+            return;
+          }
+          if (speakingHighlightTimer !== null) clearTimeout(speakingHighlightTimer);
+          speakingHighlightTimer = setTimeout(
+            clearSpeakingHighlights,
+            SPEAKING_HIGHLIGHT_TIMEOUT_MS,
+          );
           // Clear only previously-speaking elements (O(n) on speakers, not DOM)
           for (const el of currentlySpeaking) {
             el.classList.remove('speaking');
@@ -2233,8 +2261,7 @@ async function leaveRoomAndShowHome(): Promise<void> {
   document.getElementById('classic-users-panel')?.remove();
 
   // Reset speaking/active-speaker tracking
-  currentDominantTile = null;
-  currentlySpeaking.clear();
+  clearSpeakingHighlights();
 
   // Reset PTT state
   pttHeld = false;

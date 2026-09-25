@@ -796,3 +796,87 @@ test('room limits distinguish blank, invalid and complete numeric values', async
     assert.equal(roomLimit(field), undefined);
   }
 });
+
+async function speakingHighlightFixture() {
+  class FakeElement {
+    constructor() {
+      this.classes = new Set();
+      this.classList = {
+        add: (name) => this.classes.add(name),
+        remove: (name) => this.classes.delete(name),
+        contains: (name) => this.classes.has(name),
+      };
+    }
+  }
+  const tiles = new Map([
+    ['alice', new FakeElement()],
+    ['bob', new FakeElement()],
+  ]);
+  const rows = new Map([
+    ['alice', new FakeElement()],
+    ['bob', new FakeElement()],
+  ]);
+  const timers = [];
+  const api = evaluateTypeScript(
+    `
+    const AUDIO_LEVEL_THRESHOLD = -50;
+    const SPEAKING_HIGHLIGHT_TIMEOUT_MS = 2000;
+    const currentlySpeaking = new Set<HTMLElement>();
+    let currentDominantTile: HTMLElement | null = null;
+    let speakingHighlightTimer: ReturnType<typeof setTimeout> | null = null;
+    ${await functionSource('clearSpeakingHighlights')}
+    export const events = { ${await roomEventSource(['onActiveSpeaker', 'onAudioLevels'])} };
+    `,
+    {
+      globals: {
+        remoteTiles: tiles,
+        participantList: {
+          querySelector: (selector) => rows.get(/"([^"]+)"/.exec(selector)[1]) ?? null,
+        },
+        document: { getElementById: () => null },
+        CSS: { escape: (value) => value },
+        setTimeout: (callback, delay) => {
+          timers.push({ callback, delay, cancelled: false });
+          return timers.length;
+        },
+        clearTimeout: (handle) => {
+          if (handle) timers[handle - 1].cancelled = true;
+        },
+      },
+    },
+  );
+  return { events: api.events, tiles, rows, timers };
+}
+
+test('speaking highlights clear when the server reports silence', async () => {
+  const { events, tiles, rows, timers } = await speakingHighlightFixture();
+  events.onActiveSpeaker('alice');
+  events.onAudioLevels([{ participantId: 'alice', volume: -20 }]);
+  assert.ok(tiles.get('alice').classes.has('speaking'));
+  assert.ok(tiles.get('alice').classes.has('dominant-speaker'));
+  assert.ok(rows.get('alice').classes.has('speaking'));
+
+  events.onAudioLevels([]);
+
+  assert.deepEqual([...tiles.get('alice').classes], []);
+  assert.deepEqual([...rows.get('alice').classes], []);
+  assert.ok(
+    timers.every((timer) => timer.cancelled),
+    'silence cancels the expiry timer',
+  );
+});
+
+test('speaking highlights expire when audio level reports stop arriving', async () => {
+  const { events, tiles, rows, timers } = await speakingHighlightFixture();
+  events.onActiveSpeaker('bob');
+  events.onAudioLevels([{ participantId: 'bob', volume: -30 }]);
+  events.onAudioLevels([{ participantId: 'bob', volume: -30 }]);
+  const pending = timers.filter((timer) => !timer.cancelled);
+  assert.equal(pending.length, 1, 'each report re-arms one expiry timer');
+  assert.equal(pending[0].delay, 2000);
+
+  pending[0].callback();
+
+  assert.deepEqual([...tiles.get('bob').classes], []);
+  assert.deepEqual([...rows.get('bob').classes], []);
+});
