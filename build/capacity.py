@@ -488,6 +488,8 @@ class StepResult:
     received_payload_bytes: int = 0
     measurement_seconds: float = 0.0
     receive_ready_p99_ms: float = 0.0
+    # Resume to first video packet: how long a joining viewer waits for a keyframe.
+    video_start_p99_ms: float = 0.0
     server_exit: str = ""
     error: str = ""
 
@@ -1117,6 +1119,8 @@ class Context:
     browser: Browser
     output: Path
     log: Callable[[str], None]
+    # Experiment settings for the server (`--server-env`), recorded in the report.
+    server_env: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1156,6 +1160,36 @@ def apply_marks(result: StepResult, start: Mark, end: Mark) -> None:
         result.host_busy = 1 - (end.host.idle - start.host.idle) / total
 
 
+# Settings the tool itself wires or owns; `--server-env` may not replace them.
+WIRED_SERVER_ENV: Final = frozenset(
+    {
+        "BIND_ADDR",
+        "PORT",
+        "ANNOUNCE_IP",
+        "MEDIA_WORKERS",
+        "ALLOW_AD_HOC_ROOMS",
+        "ALLOWED_ORIGINS",
+        "METRICS_TOKEN",
+        "CPU_SATURATION_WORKER_UTILIZATION",
+    }
+)
+
+
+def parse_server_env(values: Sequence[str]) -> tuple[tuple[str, str], ...]:
+    """Parse `KEY=VALUE` experiment settings, refusing the keys the tool wires."""
+    pairs: list[tuple[str, str]] = []
+    for value in values:
+        key, separator, setting = value.partition("=")
+        if not separator or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
+            message = f"--server-env takes KEY=VALUE with an upper-case KEY, not {value!r}"
+            raise CapacityError(message)
+        if key in WIRED_SERVER_ENV:
+            message = f"--server-env cannot replace {key}, which the tool sets itself"
+            raise CapacityError(message)
+        pairs.append((key, setting))
+    return tuple(pairs)
+
+
 def server_command(context: Context, name: str, port: int, token: str) -> list[str]:
     """`run` arguments for the owned server container."""
     environment = {
@@ -1169,6 +1203,7 @@ def server_command(context: Context, name: str, port: int, token: str) -> list[s
         "METRICS_TOKEN": token,
         "RUST_LOG": "simplestChat=warn,mediasoup=warn",
     }
+    environment.update(context.server_env)
     return [
         "run", "--detach", "--name", name,
         "--cpus", f"{context.shape.server_cpus:g}",
@@ -1484,6 +1519,11 @@ def read_summary(result: StepResult, summary: Mapping[str, object]) -> None:
         result.receive_ready_p99_ms = as_number(
             cast("dict[str, object]", ready).get("p99Ms", 0), "p99Ms"
         )
+    video_start = summary.get("videoStart")
+    if isinstance(video_start, dict):
+        result.video_start_p99_ms = as_number(
+            cast("dict[str, object]", video_start).get("p99Ms", 0), "p99Ms"
+        )
 
 
 # --- The calibration ------------------------------------------------------------
@@ -1553,9 +1593,14 @@ def search_workload(
         history.append((step, verdict))
         outcome = "pass" if verdict.passed else ("invalid" if not verdict.valid else "fail")
         detail = f": {'; '.join(verdict.reasons)}" if verdict.reasons else ""
+        video_start = (
+            f", video start P99 {step.video_start_p99_ms / 1000:.1f} s"
+            if step.video_start_p99_ms
+            else ""
+        )
         context.log(
             f"  {outcome}, busiest worker {step.busiest_worker:.2f}, drops {step.drop_share:.3%}, "
-            + f"generator {step.generator_cores:.2f} cores{detail}"
+            + f"generator {step.generator_cores:.2f} cores{video_start}{detail}"
         )
         if step.host_steal > limits.steal_share:
             context.log(
@@ -1582,6 +1627,9 @@ class Options(argparse.Namespace):
     app_memory_mib: int | None = None
     worker_threshold: float = DEFAULT_WORKER_THRESHOLD
     quick: bool = False
+    first_size: int | None = None
+    steps: int | None = None
+    server_env: list[str] = field(default_factory=list[str])
     capture: str = "720p"
     speakers: int = 1
     viewport_width: int = 1440
@@ -1616,14 +1664,16 @@ def host_warnings(host: Mapping[str, object]) -> list[str]:
     return warnings
 
 
-def search_for(workload: Workload, shape: Shape, meeting_size: int, steps: int) -> Search:
-    """Where a workload's search starts, how it steps, and its floor."""
+def search_for(
+    workload: Workload, shape: Shape, meeting_size: int, steps: int, first: int | None = None
+) -> Search:
+    """Where a workload's search starts (or the operator's size), how it steps, and its floor."""
     if workload == "meetings":
-        first = meeting_size * 2 * shape.workers
-        return Search(workload, meeting_size, first, meeting_size, steps, meeting_size)
+        start = round_down(first, meeting_size) if first else meeting_size * 2 * shape.workers
+        return Search(workload, meeting_size, start, meeting_size, steps, meeting_size)
     if workload == "large-meeting":
-        return Search(workload, meeting_size, 8, 1, steps, 2)
-    return Search(workload, meeting_size, 25 * shape.workers, 5, steps, 5)
+        return Search(workload, meeting_size, first or 8, 1, steps, 2)
+    return Search(workload, meeting_size, first or 25 * shape.workers, 5, steps, 5)
 
 
 def calibrate(options: Options) -> int:
@@ -1690,10 +1740,11 @@ def calibrate(options: Options) -> int:
         ),
         output=output,
         log=log,
+        server_env=parse_server_env(options.server_env),
     )
     limits = Limits(worker_load=deployment.worker_threshold)
     timing = (20, 30) if options.quick else (30, 60)
-    steps = 3 if options.quick else 6
+    steps = options.steps or (3 if options.quick else 6)
     log(
         f"host {cpus} CPUs, {host['cpuModel']}; server {context.server_memory}, "
         + f"generator {context.generator_memory}"
@@ -1708,7 +1759,7 @@ def calibrate(options: Options) -> int:
                 + f"generator {shape.generator_cpus:g} CPUs"
             )
             scoped = replace(context, shape=shape)
-            plan = search_for(workload, shape, options.meeting_size, steps)
+            plan = search_for(workload, shape, options.meeting_size, steps, options.first_size)
             results[workload] = search_workload(scoped, plan, limits, timing, index)
             index += len(results[workload])
     ceilings: dict[Workload, Ceiling] = {
@@ -1798,6 +1849,7 @@ def build_report(
             },
             "serverMemory": context.server_memory,
             "generatorMemory": context.generator_memory,
+            "serverEnv": dict(context.server_env),
             "browser": record(context.browser),
             "limits": record(measured.limits),
             "meetingSize": options.meeting_size,
@@ -1984,6 +2036,16 @@ def parser() -> argparse.ArgumentParser:
         help="the worker guard to run with, measured and recommended (0.7)",
     )
     _ = run.add_argument("--quick", action="store_true", help="shorter windows, fewer steps")
+    _ = run.add_argument(
+        "--first-size", type=int, help="start every selected workload here (repeat one size)"
+    )
+    _ = run.add_argument("--steps", type=int, help="steps per workload (6, or 3 with --quick)")
+    _ = run.add_argument(
+        "--server-env",
+        action="append",
+        metavar="KEY=VALUE",
+        help="an experiment setting for the server; repeat for more",
+    )
     _ = run.add_argument("--capture", choices=("720p", "1080p"), help="browsers' camera (720p)")
     _ = run.add_argument("--speakers", type=int, help="people talking at once per room (1)")
     _ = run.add_argument("--viewport-width", type=int, help="browser width in CSS px (1440)")

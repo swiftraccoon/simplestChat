@@ -1,5 +1,73 @@
 # Performance results
 
+## Keyframe storms in a 545-viewer webinar — 2026-09-26
+
+Why the largest webinar lost a few viewers' video (the Mac calibration below
+stopped at 500): each viewer that starts watching asks the presenter for a
+keyframe, and the SFU sends every keyframe to every viewer. Single-size runs of
+[`build/capacity.py`](../build/capacity.py) on the Mac VM (`--workloads webinar
+--first-size 545 --steps 1`: two workers under 2 CPUs beside a 5.8-CPU
+generator, 4 joins a second, a 30-second warmup and a 60-second window) varied
+`MEDIA_KEYFRAME_REQUEST_DELAY_MS`, mediasoup's per-stream coalescing of those
+requests, with server `6db1610783f07c16` (`36400e5` plus the setting), three
+runs per value in rotated order.
+
+The generator first answered requests per layer, at most one a second, with a
+keyframe every five seconds regardless (`65cac185905a7ecc`). Against it, 5000 ms
+halved the keyframes (265–272 against 537–615) and the viewers whose estimate
+fell below 300 kbit/s (1, 3, 15 against 16, 28, 86); 1000 ms could not differ
+from 0, because the generator already coalesced to one a second. Chrome answers
+a request on any layer with a keyframe on all three, up to one every 300 ms, and
+sends nothing periodic (libwebrtc's `EncoderRtcpFeedback` and 3,000-frame
+`keyFrameInterval`; mediasoup does not negotiate per-layer requests), so the
+browser profile now does too (`2d4eff987a0f105e`):
+
+| Delay | Runs failed | Consumers lost | Estimates under 300 kbit/s | Keyframes | Video start P50 / P99 |
+|---|---|---|---|---|---|
+| 0 | 3 of 3 | 17, 18, 7 | 33, 41, 44 | 1,680–1,971 | 152 / 300 ms |
+| 1000 ms | 1 of 3 | 0, 3, 0 | 23, 21, 2 | 1,002–1,074 | 254–307 / 760–954 ms |
+| 5000 ms | 1 of 3 | 0, 1, 0 | 22, 7, 6 | 282–408 | 1.4–1.6 / 3.9–4.0 s |
+
+Video start is each consumer's resume request to its first packet, which for a
+new simulcast consumer is a keyframe; audio, which needs none, started within
+23–38 ms (P99). A lost viewer's estimate never ramps up from mediasoup's initial
+600 kbit/s: it decays over tens of seconds until the lowest layer and the audio
+no longer fit, and the server pauses its video. The busiest worker sat at
+0.32–0.42 cores in the window whatever the delay, so the storm costs viewers
+their estimates rather than the window's CPU. The generator's own stalls add to
+it (with the first generator at 0: ramp stalls of 7, 79 and 279 ms against 16,
+28 and 86 collapsed estimates), since its viewers share one process where
+browsers do not, but at 0 the second generator lost 18 consumers with no stall
+over 12 ms. The server now defaults to 1000 ms, which fails no more often than
+5000 ms at a quarter of the joiners' wait.
+
+## The VPS calibrated on its own cores — 2026-09-26
+
+[`build/capacity.py`](../build/capacity.py) on the production host (4 AMD EPYC
+7R13 vCPUs, 12 GiB, KVM) as a transient unit beside the live app, with owned
+loopback-only containers: the deployed image (`36400e5`, image
+`a760cba6b8b746b6`) and the CI-built load-test image of the same commit
+(generator `375cac798e031ef3`). The meetings and the webinar had a quarter of
+the host, one worker under a 1-CPU quota beside a 2.8-CPU generator; the one
+room had the deployment's two workers under 2 CPUs beside 1.8. Joins came at
+0.5, 1.5 and 4 a second. It took 49 minutes, and no step saw steal, generator
+throttling or an out-of-memory kill.
+
+| Workload | Ceiling | What stopped the next step | Busiest worker | Peak memory |
+|---|---|---|---|---|
+| Meetings of five | 85 per worker | 90 took a worker to 0.71 cores (guard 0.70) | 0.68 | 170 MiB |
+| One all-publishing room | 28 | 29 lost 29 consumers; 31 lost 92 with every viewer's estimate at the 3 Mbit/s per-viewer cap | 0.36 of two | 84 MiB |
+| Webinar | 270 viewers per worker | 290 took the worker to 0.71 cores | 0.67 | 224 MiB |
+
+A meeting participant costs 8.0 millicores of worker CPU here and a webinar
+viewer 2.5, about 1.8 times the Apple-silicon VM for meetings (4.5). The
+deployed app's two CPUs carry about 170 participants in meetings, 2.39 Mbit/s
+of egress each. The all-publishing room stops at the per-viewer cap, not CPU:
+its busiest worker sat at 0.36 cores. The report recommends
+`MAX_PARTICIPANTS_PER_ROOM=25` and `SIMPLESTCHAT_MEMORY_LIMIT=1024m`; a ceiling
+of 25 would also stop one-to-many rooms, which the cap does not limit, so the
+host keeps its ceiling of 80 for now.
+
 ## Browser-faithful calibration of the Mac VM — 2026-09-26
 
 The first full run of [`build/capacity.py`](../build/capacity.py) ([sizing a

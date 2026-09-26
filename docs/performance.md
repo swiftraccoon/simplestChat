@@ -321,6 +321,11 @@ the report directory; a step whose container ran out of memory says which.
 Steal time above 5 % is logged per step: a noisy neighbour lowers that run's
 figures, so repeat it before trusting it. `--quick` shortens the windows and
 allows three steps per workload, which more often ends in a lower bound.
+`--workloads webinar --first-size 545 --steps 1` repeats a single size (compare
+variants with three runs each, never one), and `--server-env KEY=VALUE`,
+repeatable, passes a server setting to every step, for example
+`MEDIA_KEYFRAME_REQUEST_DELAY_MS=1000`; the report records it, and the keys the
+script wires itself cannot be overridden.
 
 The generator's RTP matches the web client's layers, silence and subscriptions,
 but nothing decodes it: the figures are what the server forwards, not browser

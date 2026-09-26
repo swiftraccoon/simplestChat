@@ -9,7 +9,7 @@ import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import override
 
@@ -306,6 +306,7 @@ def generator_summary(*, passed: bool, failures: list[str]) -> dict[str, object]
         "totalDatagramsSent": 95_000,
         "measurement": {"durationMs": 60_000, "packetsReceived": 1000, "bytesReceived": 938_000},
         "receiveMediaReady": {"p99Ms": 812},
+        "videoStart": {"p99Ms": 1450},
     }
 
 
@@ -320,6 +321,7 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(result.validated_consumers, 160)
         self.assertEqual((result.received_packets, result.measurement_seconds), (1000, 60.0))
         self.assertEqual(result.receive_ready_p99_ms, 812.0)
+        self.assertEqual(result.video_start_p99_ms, 1450.0)
         self.assertEqual(result.sent_datagrams, 95_000)
         self.assertEqual(capacity.judge(result, LIMITS).reasons, ())
 
@@ -897,6 +899,22 @@ class ServerCommandTests(unittest.TestCase):
         command = capacity.server_command(context, "sfu", 4000, "token")
         self.assertIn("CPU_SATURATION_WORKER_UTILIZATION=0.85", command)
         self.assertIn("MEDIA_WORKERS=2", command)
+        # Experiment settings reach the server; the wiring stays the tool's.
+        extra = replace(context, server_env=(("MEDIA_KEYFRAME_REQUEST_DELAY_MS", "1000"),))
+        self.assertIn(
+            "MEDIA_KEYFRAME_REQUEST_DELAY_MS=1000",
+            capacity.server_command(extra, "sfu", 4000, "token"),
+        )
+
+    def test_server_settings_are_parsed_and_the_wiring_is_protected(self) -> None:
+        """KEY=VALUE pairs, upper-case names, and never a key the tool sets itself."""
+        self.assertEqual(
+            capacity.parse_server_env(["MEDIA_KEYFRAME_REQUEST_DELAY_MS=1000", "RUST_LOG=debug"]),
+            (("MEDIA_KEYFRAME_REQUEST_DELAY_MS", "1000"), ("RUST_LOG", "debug")),
+        )
+        for invalid in ("NOEQUALS", "=1", "lower=1", "MEDIA_WORKERS=4", "METRICS_TOKEN=x"):
+            with self.assertRaises(capacity.CapacityError, msg=invalid):
+                _ = capacity.parse_server_env([invalid])
 
 
 class ReportTests(unittest.TestCase):
@@ -986,6 +1004,32 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(
             (chosen.workloads, chosen.quick, chosen.monthly_price), (["webinar"], True, 6.8)
         )
+
+    def test_a_single_size_can_be_repeated(self) -> None:
+        """`--first-size` and `--steps` rerun one size with the same instrumentation."""
+        options = capacity.parser().parse_args(
+            [
+                "run",
+                "--server-image",
+                "s",
+                "--generator-image",
+                "g",
+                "--workloads",
+                "webinar",
+                "--first-size",
+                "545",
+                "--steps",
+                "1",
+            ],
+            namespace=capacity.Options(),
+        )
+        self.assertEqual((options.first_size, options.steps), (545, 1))
+        shape = capacity.Shape(2.0, 2, 5.8)
+        webinar = capacity.search_for("webinar", shape, 5, 1, first=545)
+        self.assertEqual((webinar.first, webinar.max_steps), (545, 1))
+        # Meetings run whole rooms, so the size rounds down to the meeting size.
+        self.assertEqual(capacity.search_for("meetings", shape, 5, 6, first=53).first, 50)
+        self.assertEqual(capacity.search_for("meetings", shape, 5, 6).first, 20)
 
     def test_compare_takes_report_paths(self) -> None:
         """`compare` collects its positional reports."""
