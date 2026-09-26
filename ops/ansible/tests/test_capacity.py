@@ -811,6 +811,22 @@ class CeilingAndCostTests(unittest.TestCase):
             ["SIMPLESTCHAT_CPUS=1", "MEDIA_WORKERS=1", "CPU_SATURATION_WORKER_UTILIZATION=0.85"],
         )
 
+    def test_a_run_without_meetings_sizes_nothing(self) -> None:
+        """Only meetings scale to a deployment; a webinar alone sets no memory limit."""
+        ceilings: dict[capacity.Workload, capacity.Ceiling] = {
+            "meetings": capacity.Ceiling("meetings", None, "not-run", 0.0, 0.0, 0),
+            "webinar": capacity.Ceiling(
+                "webinar", 175, "measured", 0.48, 200.0, 180 * capacity.MIB, workers=1
+            ),
+        }
+        deployment = capacity.Deployment(app_cpus=2.0, memory_mib=2048)
+        projection = capacity.project(ceilings, deployment)
+        self.assertEqual((projection.participants, projection.memory_limit_mib), (0, 0))
+        self.assertEqual(
+            capacity.recommendations(ceilings, projection, deployment, 2 * capacity.MIB),
+            ["SIMPLESTCHAT_CPUS=2", "MEDIA_WORKERS=2"],
+        )
+
     def test_memory_bounds_the_projection(self) -> None:
         """2,000 MiB for 240 on two workers: seven workers on 8 GiB cannot hold 840."""
         ceilings: dict[capacity.Workload, capacity.Ceiling] = {
@@ -828,7 +844,7 @@ class CeilingAndCostTests(unittest.TestCase):
 
 
 def report(
-    label: str, monthly: float | None, meetings: int, bound: capacity.Bound = "measured"
+    label: str, monthly: float | None, meetings: int | None, bound: capacity.Bound = "measured"
 ) -> dict[str, object]:
     """Return a report as `build_report` writes it for a synthetic calibration."""
     options = capacity.Options(label=label, monthly_price=monthly)
@@ -860,7 +876,7 @@ def report(
         deployment=capacity.Deployment(app_cpus=3.0, memory_mib=6144),
         shapes=dict.fromkeys(capacity.WORKLOADS, capacity.Shape(2.0, 2, 1.8)),
     )
-    passing = step(size=meetings, received_packets=0, measurement_seconds=0.0)
+    passing = step(size=meetings or 0, received_packets=0, measurement_seconds=0.0)
     ceilings: dict[capacity.Workload, capacity.Ceiling] = {
         workload: capacity.Ceiling(workload, None, "not-run", 0.0, 0.0, 0)
         for workload in capacity.WORKLOADS
@@ -869,12 +885,11 @@ def report(
     ceilings["large-meeting"] = capacity.Ceiling(
         "large-meeting", 40, "measured", 0.6, 0.0, 0, workers=2
     )
-    return capacity.build_report(
-        options,
-        measured,
-        {"meetings": [(passing, capacity.Verdict(passed=True, valid=True, reasons=()))]},
-        ceilings,
+    verdict = capacity.Verdict(passed=True, valid=True, reasons=())
+    steps: dict[capacity.Workload, list[tuple[capacity.StepResult, capacity.Verdict]]] = (
+        {"meetings": [(passing, verdict)]} if meetings is not None else {}
     )
+    return capacity.build_report(options, measured, steps, ceilings)
 
 
 class ServerCommandTests(unittest.TestCase):
@@ -950,6 +965,16 @@ class ReportTests(unittest.TestCase):
         self.assertIn("≥150", row)
         exact = capacity.as_object(report("exact", 10.0, 100)["projection"], "projection")
         self.assertTrue(exact["lowerBound"] is False)
+
+    def test_a_run_without_meetings_projects_nothing(self) -> None:
+        """A webinar-only run says it cannot size the deployment instead of projecting 0."""
+        built = report("webinar-only", 10.0, None, bound="not-run")
+        self.assertIsNone(built["cost"])
+        lines = "\n".join(capacity.summary_lines(built))
+        self.assertNotIn("Projected to", lines)
+        self.assertIn("No projection: meetings were not measured", lines)
+        _, row = capacity.comparison_row(built)
+        self.assertNotIn("≥0", row)
 
     def test_compare_ranks_cheapest_first(self) -> None:
         """The host with the lowest cost per 1,000 participant-hours comes first."""

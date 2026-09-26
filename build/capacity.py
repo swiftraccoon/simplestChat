@@ -854,13 +854,24 @@ class Projection:
 def project(ceilings: Mapping[Workload, Ceiling], deployment: Deployment) -> Projection:
     """Scale the per-worker meeting ceiling to the deployment, within its memory."""
     meetings = ceilings.get("meetings")
-    size = meetings.ceiling if meetings is not None and meetings.ceiling else 0
-    per_core = size / meetings.workers if meetings is not None and size else 0.0
+    if meetings is None or not meetings.ceiling:
+        # Meetings size a deployment; a room or a webinar alone says nothing of its memory.
+        return Projection(
+            per_core=0.0,
+            cpu_participants=0,
+            participants=0,
+            limited_by="cpu",
+            memory_limit_mib=0,
+            lower_bound=True,
+            mbps_per_participant=0.0,
+        )
+    size = meetings.ceiling
+    per_core = size / meetings.workers
     cpu_participants = math.floor(per_core * deployment.workers)
     participants = cpu_participants
     limited_by: Literal["cpu", "memory"] = "cpu"
     needed = 0.0
-    if meetings is not None and size and meetings.memory_peak_bytes:
+    if meetings.memory_peak_bytes:
         per_participant = meetings.memory_peak_bytes / size * MEMORY_HEADROOM
         memory_participants = math.floor(deployment.memory_mib * MIB / per_participant)
         if memory_participants < participants:
@@ -877,8 +888,8 @@ def project(ceilings: Mapping[Workload, Ceiling], deployment: Deployment) -> Pro
     if needed:
         rounded = math.ceil(needed / MIB / 256) * 256
         memory_limit = min(deployment.memory_mib, max(MINIMUM_APP_MEMORY_MIB, rounded))
-    mbps = meetings.egress_mbps / size if meetings is not None and size else 0.0
-    lower_bound = meetings is None or meetings.bound != "measured"
+    mbps = meetings.egress_mbps / size
+    lower_bound = meetings.bound != "measured"
     return Projection(
         per_core, cpu_participants, participants, limited_by, memory_limit, lower_bound, mbps
     )
@@ -1913,6 +1924,19 @@ def summary_lines(report: Mapping[str, object]) -> list[str]:
         limit = as_object(ceilings[workload], workload).get("limit")
         return [f"    bounded by: {limit}"] if isinstance(limit, str) and limit else []
 
+    projected = (
+        f"Projected to {projection['appCpus']} app CPUs: {estimate} "
+        + f"{projection['meetingParticipants']} participants in meetings "
+        + f"({projection['meetingParticipantsPerCore']} per core"
+        + (
+            f"; memory holds fewer than the {projection['cpuParticipants']} the CPUs carry)"
+            if projection.get("limitedBy") == "memory"
+            else ")"
+        )
+        + f", {projection['egressMbpsPerParticipant']} Mbit/s each"
+        if as_object(ceilings["meetings"], "meetings").get("ceiling") is not None
+        else "No projection: meetings were not measured, and only they scale to the deployment"
+    )
     lines = [
         "",
         f"Host {report['label']}: {host['logicalCpus']} CPUs, {host['cpuModel']}, "
@@ -1923,15 +1947,7 @@ def summary_lines(report: Mapping[str, object]) -> list[str]:
         *bounded("large-meeting"),
         f"  largest webinar: {ceiling('webinar', 'viewers')}",
         *bounded("webinar"),
-        f"Projected to {projection['appCpus']} app CPUs: {estimate} "
-        + f"{projection['meetingParticipants']} participants in meetings "
-        + f"({projection['meetingParticipantsPerCore']} per core"
-        + (
-            f"; memory holds fewer than the {projection['cpuParticipants']} the CPUs carry)"
-            if projection.get("limitedBy") == "memory"
-            else ")"
-        )
-        + f", {projection['egressMbpsPerParticipant']} Mbit/s each",
+        projected,
         "Settings:",
         *(f"  {line}" for line in as_list(report["recommendations"], "recommendations")),
     ]
@@ -1969,6 +1985,8 @@ def comparison_row(report: Mapping[str, object]) -> tuple[float, str]:
     room, webinar = (shown(as_object(ceilings[key], key)) for key in ("large-meeting", "webinar"))
     participants = projection["meetingParticipants"]
     meet = f"≥{participants}" if projection.get("lowerBound") is True else str(participants)
+    if as_object(ceilings["meetings"], "meetings").get("ceiling") is None:
+        meet = "-"
     cost = report.get("cost")
     per_1000, price = math.inf, "-"
     if isinstance(cost, dict):
