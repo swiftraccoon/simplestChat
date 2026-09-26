@@ -8,6 +8,21 @@ use std::num::NonZeroU8;
 
 pub const DEFAULT_WEBRTC_SERVER_PORT_BASE: u16 = 40_000;
 pub const MAX_MEDIA_WORKERS: usize = 64;
+/// Socket buffer each media worker asks the kernel for on its WebRTC
+/// listener, in bytes; 0 keeps the kernel default (208 KiB on Linux). That
+/// default holds about 14 ms of the inbound media of 200 publishers, and at
+/// it the kernel sheds millisecond bursts throughout a loaded room (1–4 % of
+/// the primary worker's inbound datagrams on the production shape), which is
+/// what cost handshakes their final flight; 1 MiB (about 70 ms) absorbs
+/// those bursts (no drop in three of four runs). It does not rescue a worker
+/// that falls behind for seconds: that regime drops a quarter of the inbound
+/// at any buffer size, and a much deeper buffer only adds queueing delay
+/// (`docs/performance-results.md`). The kernel clamps the request to
+/// `net.core.rmem_max`/`wmem_max`, so a host must raise those for the size
+/// to apply (`docs/deployment.md`).
+pub const DEFAULT_WEBRTC_SOCKET_BUFFER_BYTES: u32 = 1024 * 1024;
+const MIN_WEBRTC_SOCKET_BUFFER_BYTES: u32 = 64 * 1024;
+const MAX_WEBRTC_SOCKET_BUFFER_BYTES: u32 = 64 * 1024 * 1024;
 
 /// Main media server configuration
 #[derive(Debug, Clone)]
@@ -21,6 +36,12 @@ pub struct MediaConfig {
     /// deployment must publish the TCP range and open it at the firewall,
     /// otherwise clients would be offered candidates that cannot connect.
     pub webrtc_server_tcp: bool,
+    /// Receive buffer requested for each worker's listeners, in bytes; 0 keeps
+    /// the kernel default. `WEBRTC_RECV_BUFFER_BYTES`.
+    pub webrtc_recv_buffer_bytes: u32,
+    /// Send buffer requested for each worker's listeners, in bytes; 0 keeps
+    /// the kernel default. `WEBRTC_SEND_BUFFER_BYTES`.
+    pub webrtc_send_buffer_bytes: u32,
 }
 
 impl Default for MediaConfig {
@@ -31,6 +52,8 @@ impl Default for MediaConfig {
             webrtc_transport_config: WebRtcTransportConfig::default(),
             webrtc_server_port_base: DEFAULT_WEBRTC_SERVER_PORT_BASE,
             webrtc_server_tcp: false,
+            webrtc_recv_buffer_bytes: DEFAULT_WEBRTC_SOCKET_BUFFER_BYTES,
+            webrtc_send_buffer_bytes: DEFAULT_WEBRTC_SOCKET_BUFFER_BYTES,
         }
     }
 }
@@ -53,6 +76,12 @@ impl MediaConfig {
                 anyhow::bail!("MEDIA_WORKERS must be valid UTF-8");
             }
         }
+        if let Ok(value) = std::env::var("MEDIA_WORKER_LOG_LEVEL") {
+            config.worker_config.log_level = parse_worker_log_level(&value)?;
+        }
+        if let Ok(value) = std::env::var("MEDIA_WORKER_LOG_TAGS") {
+            config.worker_config.log_tags = parse_worker_log_tags(&value)?;
+        }
         if let Ok(value) = std::env::var("LIBWEBRTC_FIELD_TRIALS") {
             config.worker_config.libwebrtc_field_trials = Some(parse_field_trials(&value)?);
         }
@@ -66,6 +95,14 @@ impl MediaConfig {
         }
         if let Ok(value) = std::env::var("WEBRTC_SERVER_TCP") {
             config.set_tcp(parse_switch("WEBRTC_SERVER_TCP", &value)?);
+        }
+        if let Ok(value) = std::env::var("WEBRTC_RECV_BUFFER_BYTES") {
+            config.webrtc_recv_buffer_bytes =
+                parse_socket_buffer("WEBRTC_RECV_BUFFER_BYTES", &value)?;
+        }
+        if let Ok(value) = std::env::var("WEBRTC_SEND_BUFFER_BYTES") {
+            config.webrtc_send_buffer_bytes =
+                parse_socket_buffer("WEBRTC_SEND_BUFFER_BYTES", &value)?;
         }
         if let Ok(value) = std::env::var("WEBRTC_MIN_OUTGOING_BITRATE") {
             config.webrtc_transport_config.min_outgoing_bitrate =
@@ -114,6 +151,44 @@ impl MediaConfig {
 /// A libwebrtc field-trial string: `Name/Value/` pairs, letters, digits and
 /// a few punctuation characters, so a typo cannot smuggle anything else into
 /// the worker's configuration.
+/// `MEDIA_WORKER_LOG_LEVEL`: what the native worker logs (debug, warn, error or none).
+fn parse_worker_log_level(value: &str) -> anyhow::Result<WorkerLogLevel> {
+    match value.trim() {
+        "debug" => Ok(WorkerLogLevel::Debug),
+        "warn" => Ok(WorkerLogLevel::Warn),
+        "error" => Ok(WorkerLogLevel::Error),
+        "none" => Ok(WorkerLogLevel::None),
+        other => {
+            anyhow::bail!("MEDIA_WORKER_LOG_LEVEL must be debug, warn, error or none, not {other}")
+        }
+    }
+}
+
+/// `MEDIA_WORKER_LOG_TAGS`: the native worker's log tags, comma separated.
+fn parse_worker_log_tags(value: &str) -> anyhow::Result<Vec<WorkerLogTag>> {
+    let mut tags = Vec::new();
+    for name in value.split(',') {
+        let tag = match name.trim() {
+            "info" => WorkerLogTag::Info,
+            "ice" => WorkerLogTag::Ice,
+            "dtls" => WorkerLogTag::Dtls,
+            "rtp" => WorkerLogTag::Rtp,
+            "srtp" => WorkerLogTag::Srtp,
+            "rtcp" => WorkerLogTag::Rtcp,
+            "rtx" => WorkerLogTag::Rtx,
+            "bwe" => WorkerLogTag::Bwe,
+            "score" => WorkerLogTag::Score,
+            "simulcast" => WorkerLogTag::Simulcast,
+            "svc" => WorkerLogTag::Svc,
+            "sctp" => WorkerLogTag::Sctp,
+            "message" => WorkerLogTag::Message,
+            other => anyhow::bail!("Unknown MEDIA_WORKER_LOG_TAGS entry: {other:?}"),
+        };
+        tags.push(tag);
+    }
+    Ok(tags)
+}
+
 fn parse_field_trials(value: &str) -> anyhow::Result<String> {
     let value = value.trim();
     if value.is_empty() || value.len() > 2048 {
@@ -147,6 +222,41 @@ fn parse_bitrate(name: &str, value: &str) -> anyhow::Result<u32> {
         .ok()
         .filter(|bitrate| *bitrate <= 50_000_000)
         .ok_or_else(|| anyhow::anyhow!("{name} must be an integer from 0 through 50000000 bit/s"))
+}
+
+/// A socket buffer size in bytes: 0 for the kernel default, otherwise 64 KiB
+/// through 64 MiB.
+fn parse_socket_buffer(name: &str, value: &str) -> anyhow::Result<u32> {
+    value
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .filter(|bytes| {
+            *bytes == 0
+                || (MIN_WEBRTC_SOCKET_BUFFER_BYTES..=MAX_WEBRTC_SOCKET_BUFFER_BYTES).contains(bytes)
+        })
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "{name} must be 0 or an integer from {MIN_WEBRTC_SOCKET_BUFFER_BYTES} through {MAX_WEBRTC_SOCKET_BUFFER_BYTES} bytes"
+            )
+        })
+}
+
+/// The kernel silently clamps a socket buffer request to `net.core.rmem_max`
+/// or `wmem_max`, so a worker that asks for the configured size gets the
+/// host's ceiling instead. Returns that ceiling when it is below the request.
+pub fn clamped_socket_buffer(requested: u32, kernel_max: Option<u64>) -> Option<u64> {
+    kernel_max.filter(|max| u64::from(requested) > *max)
+}
+
+/// `net.core.rmem_max` or `wmem_max` as the kernel reports it; `None` where
+/// `/proc/sys` is absent (not Linux) or unreadable.
+pub fn kernel_socket_buffer_max(sysctl: &str) -> Option<u64> {
+    std::fs::read_to_string(format!("/proc/sys/net/core/{sysctl}"))
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
 }
 
 fn parse_webrtc_port_base(value: &str) -> anyhow::Result<u16> {
@@ -434,6 +544,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn worker_log_level_and_tags_parse_the_documented_names_only() {
+        assert!(matches!(
+            parse_worker_log_level(" debug ").unwrap(),
+            WorkerLogLevel::Debug
+        ));
+        assert!(matches!(
+            parse_worker_log_level("warn").unwrap(),
+            WorkerLogLevel::Warn
+        ));
+        assert!(matches!(
+            parse_worker_log_level("error").unwrap(),
+            WorkerLogLevel::Error
+        ));
+        assert!(matches!(
+            parse_worker_log_level("none").unwrap(),
+            WorkerLogLevel::None
+        ));
+        assert!(parse_worker_log_level("verbose").is_err());
+        assert_eq!(
+            parse_worker_log_tags("ice, dtls").unwrap(),
+            vec![WorkerLogTag::Ice, WorkerLogTag::Dtls]
+        );
+        assert_eq!(
+            parse_worker_log_tags("info,rtp,rtcp,srtp,rtx,bwe,score,simulcast,svc,sctp,message")
+                .unwrap()
+                .len(),
+            11
+        );
+        assert!(parse_worker_log_tags("").is_err());
+        assert!(parse_worker_log_tags("ice,packets").is_err());
+    }
+
+    #[test]
     fn default_bitrate_policy_preserves_existing_limits() {
         let config = WebRtcTransportConfig::default();
         assert_eq!(config.min_outgoing_bitrate, 100_000);
@@ -537,6 +680,36 @@ mod tests {
         assert!(parse_webrtc_port_base("0").is_err());
         assert!(parse_webrtc_port_base("65536").is_err());
         assert!(parse_webrtc_port_base("ports").is_err());
+    }
+
+    #[test]
+    fn socket_buffers_default_to_one_mebibyte_and_parse_within_bounds() {
+        let config = MediaConfig::default();
+        assert_eq!(config.webrtc_recv_buffer_bytes, 1024 * 1024);
+        assert_eq!(config.webrtc_send_buffer_bytes, 1024 * 1024);
+        assert_eq!(
+            parse_socket_buffer("WEBRTC_RECV_BUFFER_BYTES", " 8388608 ").unwrap(),
+            8_388_608
+        );
+        assert_eq!(
+            parse_socket_buffer("WEBRTC_RECV_BUFFER_BYTES", "0").unwrap(),
+            0
+        );
+        assert!(parse_socket_buffer("WEBRTC_RECV_BUFFER_BYTES", "1024").is_err());
+        assert!(parse_socket_buffer("WEBRTC_RECV_BUFFER_BYTES", "67108865").is_err());
+        assert!(parse_socket_buffer("WEBRTC_RECV_BUFFER_BYTES", "4M").is_err());
+    }
+
+    #[test]
+    fn a_kernel_ceiling_below_the_request_is_reported_and_zero_never_is() {
+        assert_eq!(
+            clamped_socket_buffer(1024 * 1024, Some(212_992)),
+            Some(212_992)
+        );
+        assert_eq!(clamped_socket_buffer(1024 * 1024, Some(2_097_152)), None);
+        assert_eq!(clamped_socket_buffer(1024 * 1024, None), None);
+        assert_eq!(clamped_socket_buffer(0, Some(1)), None);
+        assert_eq!(kernel_socket_buffer_max("no_such_sysctl"), None);
     }
 
     #[test]

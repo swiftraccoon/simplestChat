@@ -2,7 +2,7 @@
 
 // Worker pool management for mediasoup
 
-use crate::media::config::MediaConfig;
+use crate::media::config::{MediaConfig, clamped_socket_buffer, kernel_socket_buffer_max};
 use crate::media::types::{MediaError, MediaResult};
 use crate::saturation::{WorkerThreadInfo, WorkerThreads};
 use anyhow::Result;
@@ -90,12 +90,16 @@ pub struct WorkerManager {
 /// The listeners of one worker's WebRtcServer: UDP on its dedicated port and,
 /// when enabled, ICE-TCP on the same port number. mediasoup derives every
 /// transport's ICE candidates from these, filtered by the transport's
-/// `enable_udp`/`enable_tcp`.
+/// `enable_udp`/`enable_tcp`. The socket buffers come from the configuration
+/// (0 keeps the kernel default); the worker applies them with `SO_RCVBUF` and
+/// `SO_SNDBUF`, which the kernel clamps to its `net.core` ceilings.
 fn webrtc_server_listen_infos(
     port: u16,
     announced_address: Option<String>,
     tcp: bool,
+    config: &MediaConfig,
 ) -> WebRtcServerListenInfos {
+    let buffer = |bytes: u32| (bytes > 0).then_some(bytes);
     let info = |protocol| ListenInfo {
         protocol,
         ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -103,8 +107,8 @@ fn webrtc_server_listen_infos(
         port: Some(port),
         port_range: None,
         flags: None,
-        send_buffer_size: None,
-        recv_buffer_size: None,
+        send_buffer_size: buffer(config.webrtc_send_buffer_bytes),
+        recv_buffer_size: buffer(config.webrtc_recv_buffer_bytes),
         expose_internal_ip: false,
     };
     let infos = WebRtcServerListenInfos::new(info(Protocol::Udp));
@@ -112,6 +116,34 @@ fn webrtc_server_listen_infos(
         infos.insert(info(Protocol::Tcp))
     } else {
         infos
+    }
+}
+
+/// The kernel grants at most `net.core.rmem_max`/`wmem_max` per socket and
+/// says nothing when it clamps a larger request, so a deployment that has not
+/// raised those sysctls silently keeps the default buffers. Say so once at
+/// startup; the worker's own `info` debug tag prints the granted sizes (the
+/// kernel reports twice the request, its bookkeeping allowance included).
+fn warn_if_kernel_clamps_socket_buffers(config: &MediaConfig) {
+    for (name, requested, sysctl) in [
+        (
+            "WEBRTC_RECV_BUFFER_BYTES",
+            config.webrtc_recv_buffer_bytes,
+            "rmem_max",
+        ),
+        (
+            "WEBRTC_SEND_BUFFER_BYTES",
+            config.webrtc_send_buffer_bytes,
+            "wmem_max",
+        ),
+    ] {
+        if let Some(ceiling) = clamped_socket_buffer(requested, kernel_socket_buffer_max(sysctl)) {
+            warn!(
+                "{name}={requested} exceeds net.core.{sysctl}={ceiling}: the kernel clamps each media \
+                 worker's socket buffer to {ceiling} bytes, which dropped inbound media under load; \
+                 raise the sysctl on the host to apply the configured size"
+            );
+        }
     }
 }
 
@@ -158,6 +190,7 @@ impl WorkerManager {
             .and_then(|li| li.announced_address.clone());
 
         let mut worker_threads = HashMap::new();
+        warn_if_kernel_clamps_socket_buffers(&config);
 
         // Create all workers
         for i in 0..num_workers {
@@ -188,6 +221,7 @@ impl WorkerManager {
                 port,
                 announced_address.clone(),
                 config.webrtc_server_tcp,
+                &config,
             ));
             let webrtc_server = worker
                 .create_webrtc_server(server_options)
@@ -557,6 +591,7 @@ impl WorkerManager {
             port,
             announced_address,
             self.config.webrtc_server_tcp,
+            &self.config,
         ));
         let webrtc_server = new_worker
             .create_webrtc_server(server_options)

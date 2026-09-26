@@ -44,7 +44,11 @@ services:
       MAX_PERSISTED_ROOMS: "${MAX_PERSISTED_ROOMS:-10000}"
       MAX_PASSWORD_WORKERS: "${MAX_PASSWORD_WORKERS:-2}"
       MAX_PRODUCERS_PER_PARTICIPANT: "${MAX_PRODUCERS_PER_PARTICIPANT:-8}"
-      MAX_CONSUMERS_PER_PARTICIPANT: "${MAX_CONSUMERS_PER_PARTICIPANT:-16}"
+      # The server's default: 32 camera/microphone peers. These entries outrank
+      # an env_file, so a lower default here would override the deployment's.
+      MAX_CONSUMERS_PER_PARTICIPANT: "${MAX_CONSUMERS_PER_PARTICIPANT:-64}"
+      # Empty means no ceiling; size it with build/capacity.py.
+      MAX_PARTICIPANTS_PER_ROOM: "${MAX_PARTICIPANTS_PER_ROOM:-}"
       # Secrets and deployment-specific origins should be injected through the
       # host environment or a Compose secrets overlay, not committed here.
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:?set ALLOWED_ORIGINS to the external HTTPS origin}"

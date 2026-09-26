@@ -50,6 +50,7 @@ and `put` API surface; this removes RUSTSEC-2026-0253 from the active graph.
 `include/RTC/RTP/RtpStreamRecv.hpp`, `include/RTC/MediaDiagnosticId.hpp`,
 `include/RTC/MediaDiagnostics.hpp`, `include/RTC/WebRtcServer.hpp`,
 `src/RTC/WebRtcServer.cpp`, `test/src/RTC/TestMediaDiagnostics.cpp`,
+`deps/libwebrtc/libwebrtc/modules/congestion_controller/rtp/transport_feedback_adapter.cc`,
 `subprojects/abseil-cpp.wrap`, `subprojects/libuv.wrap`,
 `subprojects/unordered-dense.wrap`, `subprojects/catch2.wrap`, the two files under
 `subprojects/packagefiles/abseil-cpp/`, the four files under
@@ -67,6 +68,17 @@ error each time; with the application's 100 kbit/s floor that line repeated
 on every bitrate update of a transport whose estimate had decayed to the
 floor (941 lines in one 100-client run). Behaviour is unchanged apart from the
 log line. Drop the change when upstream bounds the start bitrate itself.
+
+libwebrtc's `TransportFeedbackAdapter` keeps one entry (about 150 bytes) per
+sent packet until the receiver's transport-cc feedback covers it or the entry
+ages out of `kSendTimeHistoryWindowMs`, upstream 60 s. An SFU keeps one adapter
+per receive transport, so while inbound feedback is lost (an overloaded worker
+dropping datagrams at its socket) the histories of a 240-publisher room grew the
+process by about a gibibyte in one minute and held it (see the 2026-09-25
+sections of `docs/performance-results.md`). The maintained copy uses 10 s:
+feedback older than that is useless to the estimator, and the worst case
+becomes a sixth of upstream's. Drop the change if upstream bounds the history
+by bytes or shortens the window.
 
 `RtpStreamRecv::ReceiveRtxPacket` updates the primary sequence state only when
 RTX carries a newer original packet, using the worker's wrap-aware comparison.

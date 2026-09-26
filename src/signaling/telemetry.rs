@@ -620,6 +620,9 @@ mod tests {
             saturated: false,
             throttled_fraction: 0.0,
             pressure_avg10: 0.0,
+            memory_available: false,
+            memory_saturated: false,
+            memory_fraction: 0.0,
         });
         metrics.set_worker_cpu(
             (0..MAX_MEDIA_WORKERS)

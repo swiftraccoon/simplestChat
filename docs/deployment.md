@@ -57,7 +57,9 @@ services:
 
 Complete [database migrations](#database-migrations-and-tls), then start the
 service. Both `--env-file` interpolation and the service's `env_file` injection
-are needed:
+are needed: the base file's `environment` entries outrank `env_file`, so each
+variable it lists takes its value from the `--env-file` file, or the base
+file's default when that file does not set it:
 
 ```sh
 docker compose \
@@ -81,10 +83,35 @@ Compose requires `ALLOWED_ORIGINS` and `TRUSTED_PROXY_SECRET` because the backen
 sees the proxy through a Docker bridge.
 
 Set `MEDIA_WORKERS`, `SIMPLESTCHAT_CPUS` and `SIMPLESTCHAT_MEMORY_LIMIT` for your
-workload. Keep `RTC_PORT_END`, the published UDP range and firewall rules aligned:
+workload; `build/capacity.py run` measures a host with the release images and
+prints them, with `MAX_PARTICIPANTS_PER_ROOM` and the socket-buffer sysctls
+([sizing a host](performance.md#sizing-a-host)). Keep `RTC_PORT_END`, the
+published UDP range and firewall rules aligned:
 each worker needs one port starting at 40000. Resource limits are not capacity
 guarantees. Compose sets the file-descriptor limit to 65536; configure an
 appropriate limit separately for native deployments.
+
+Raise the kernel's socket buffer ceilings on the host: each media worker asks
+for 1 MiB receive and send buffers on its listener (`WEBRTC_RECV_BUFFER_BYTES`,
+`WEBRTC_SEND_BUFFER_BYTES`), and the kernel silently clamps the request to
+`net.core.rmem_max` and `net.core.wmem_max`, which default to 208 KiB. At that
+default the kernel sheds millisecond bursts of the primary worker's inbound
+media throughout a loaded room (1–4 % of its datagrams on the two-worker
+production shape at 200 publishers), and a handshake whose final flight was
+among them cost the client its call; 1 MiB absorbs those bursts. It does not
+rescue a worker that falls behind for seconds, so size rooms with
+`MAX_PARTICIPANTS_PER_ROOM` (see [performance results](performance-results.md),
+which also show why a much deeper buffer only adds delay). These sysctls are
+not namespaced, so a container
+cannot set them; the server logs a warning at startup while a ceiling is below
+its request. The managed host applies them through `ops/ansible/tasks/host.yml`;
+elsewhere, set the ceilings to at least the configured sizes:
+
+```sh
+printf 'net.core.rmem_max = 2097152\nnet.core.wmem_max = 2097152\n' \
+  | sudo tee /etc/sysctl.d/90-simplestchat-media.conf
+sudo sysctl -p /etc/sysctl.d/90-simplestchat-media.conf
+```
 
 Media is reachable over UDP only by default, and a deployment without TURN
 turns away every client whose network blocks outbound UDP. To offer ICE-TCP as
@@ -166,7 +193,7 @@ If recreation fails the gauge stays low until the server is restarted.
 
 Alert on the rejection counters as well: `simplestchat_api_requests_rejected_total` (HTTP 429/503 from rate limits, concurrency caps, the password lane or a busy service) and `simplestchat_upgrades_rejected_total` (WebSocket upgrades refused by handshake, connection or per-IP limits), and on `simplestchat_media_worker_deaths_total`, because each death interrupts that worker's calls even though the worker is recreated. `simplestchat_connection_permits_in_use` is the quantity `MAX_CONNECTIONS` is enforced against, including handshake authentication work, and can exceed `simplestchat_connections_active`.
 
-**Saturation.** `simplestchat_cpu_saturated` is 1 while the process's cgroup is throttled for more than half of its enforcement periods or its CPU pressure exceeds the configured level; `/ready` returns 503 and fresh joins are refused (counted by `simplestchat_joins_refused_saturated_total`) until the signals fall below half the thresholds. `simplestchat_cpu_throttled_fraction` and `simplestchat_cpu_pressure_some_avg10` are the raw readings, and the two `_available` gauges say whether the cgroup files were readable. `simplestchat_media_worker_cpu{worker="N"}` is each media worker thread's share of one core over the same window and `simplestchat_media_worker_saturated{worker="N"}` is 1 while it exceeds `CPU_SATURATION_WORKER_UTILIZATION`: a room's producers live on one worker and its viewers spread to other workers once that worker carries 64 consumers, so a room with many publishers can still pin its primary core while the quota shows headroom; rooms on that worker refuse fresh joins (same counter), new rooms and new viewers are placed on another worker, and `/ready` fails only when every worker is saturated. Alert on the saturated gauges and on the refusal counter: all mean users were turned away and the host, the quota, the worker count or the connection limit needs revisiting. See [capacity](performance-results.md) for how the limit was chosen.
+**Saturation.** `simplestchat_cpu_saturated` is 1 while the process's cgroup is throttled for more than half of its enforcement periods or its CPU pressure exceeds the configured level; `/ready` returns 503 and fresh joins are refused (counted by `simplestchat_joins_refused_saturated_total`) until the signals fall below half the thresholds. `simplestchat_cpu_throttled_fraction` and `simplestchat_cpu_pressure_some_avg10` are the raw readings, and the two `_available` gauges say whether the cgroup files were readable. `simplestchat_memory_saturated` is 1 while `simplestchat_memory_usage_fraction` (memory in use over the cgroup limit, readable when `simplestchat_memory_limit_available` is 1) has reached `MEMORY_SATURATION_FRACTION`; it refuses joins and fails readiness the same way and clears below 90 % of the threshold. `simplestchat_media_worker_cpu{worker="N"}` is each media worker thread's share of one core over the same window and `simplestchat_media_worker_saturated{worker="N"}` is 1 while it exceeds `CPU_SATURATION_WORKER_UTILIZATION`: a room's producers live on one worker and its viewers spread to other workers once that worker carries 64 consumers, so a room with many publishers can still pin its primary core while the quota shows headroom; rooms on that worker refuse fresh joins (same counter), new rooms and new viewers are placed on another worker, and `/ready` fails only when every worker is saturated. Alert on the saturated gauges and on the refusal counter: all mean users were turned away and the host, the quota, the worker count or the connection limit needs revisiting. `MAX_PARTICIPANTS_PER_ROOM` (80 in the public template) keeps any single room under the size where all-publishing rooms lose clients on this shape, and `simplestchat_client_events_duration_seconds{name="media_first_video_frame",outcome="ok"}` records real browsers' time from attaching a remote track to its first frame (Firefox reports the first decoded frame), the latency figure to watch rather than the synthetic generator's connection setup time. See [capacity](performance-results.md) for how the limit was chosen.
 
 **Media quality, server side.** The bounded sampler reports SFU transmission scores,
 spatial layers, receive-transport loss and outgoing bitrate estimates. Current

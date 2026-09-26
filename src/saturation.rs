@@ -21,7 +21,16 @@ pub const DEFAULT_PRESSURE_AVG10: f64 = 50.0;
 /// Share of one core a worker thread may use over the window before it is
 /// saturated. mediasoup's loop is single-threaded, so beyond this every
 /// packet of every room on the worker queues.
-pub const DEFAULT_WORKER_UTILIZATION: f64 = 0.85;
+/// At 0.85 a saturated ramp on the two-worker production shape killed the
+/// process before either guard fired; at 0.7 both workers refused joins at
+/// about 730 viewers with the room intact and memory at a third of its limit.
+pub const DEFAULT_WORKER_UTILIZATION: f64 = 0.7;
+/// Share of the cgroup memory limit in use at which the process counts as
+/// saturated. An over-admitted room queues outbound media in the process
+/// until the limit kills it, so joins stop well before that.
+pub const DEFAULT_MEMORY_FRACTION: f64 = 0.85;
+/// Memory saturation clears once usage falls below this share of the threshold.
+const MEMORY_CLEAR_FACTOR: f64 = 0.9;
 /// A saturated worker clears once its utilization falls below this share of
 /// the threshold.
 const WORKER_CLEAR_FACTOR: f64 = 0.8;
@@ -39,10 +48,15 @@ pub struct SaturationConfig {
     /// Share of one core over the window at which a media worker thread
     /// counts as saturated.
     pub worker_utilization: f64,
+    /// Share of the cgroup memory limit in use at which the process counts
+    /// as saturated.
+    pub memory_fraction: f64,
     pub window: Duration,
     pub interval: Duration,
     pub cpu_stat: PathBuf,
     pub cpu_pressure: PathBuf,
+    pub memory_current: PathBuf,
+    pub memory_max: PathBuf,
     /// `/proc/self/task`, where each worker thread's `schedstat` lives.
     pub task_dir: PathBuf,
 }
@@ -53,10 +67,13 @@ impl Default for SaturationConfig {
             throttled_fraction: DEFAULT_THROTTLED_FRACTION,
             pressure_avg10: DEFAULT_PRESSURE_AVG10,
             worker_utilization: DEFAULT_WORKER_UTILIZATION,
+            memory_fraction: DEFAULT_MEMORY_FRACTION,
             window: WINDOW,
             interval: INTERVAL,
             cpu_stat: PathBuf::from("/sys/fs/cgroup/cpu.stat"),
             cpu_pressure: PathBuf::from("/sys/fs/cgroup/cpu.pressure"),
+            memory_current: PathBuf::from("/sys/fs/cgroup/memory.current"),
+            memory_max: PathBuf::from("/sys/fs/cgroup/memory.max"),
             task_dir: PathBuf::from("/proc/self/task"),
         }
     }
@@ -76,6 +93,7 @@ impl SaturationConfig {
             std::env::var("CPU_SATURATION_WORKER_UTILIZATION")
                 .ok()
                 .as_deref(),
+            std::env::var("MEMORY_SATURATION_FRACTION").ok().as_deref(),
         )
     }
 
@@ -84,6 +102,7 @@ impl SaturationConfig {
         throttled_fraction: Option<&str>,
         pressure_avg10: Option<&str>,
         worker_utilization: Option<&str>,
+        memory_fraction: Option<&str>,
     ) -> anyhow::Result<Option<Self>> {
         match disabled.map(str::trim) {
             Some("true") | Some("1") => return Ok(None),
@@ -123,7 +142,49 @@ impl SaturationConfig {
                     anyhow::anyhow!("CPU_SATURATION_WORKER_UTILIZATION must be between 0.2 and 1")
                 })?;
         }
+        if let Some(value) = memory_fraction {
+            config.memory_fraction = value
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .filter(|v| (0.5..=1.0).contains(v))
+                .ok_or_else(|| {
+                    anyhow::anyhow!("MEMORY_SATURATION_FRACTION must be between 0.5 and 1")
+                })?;
+        }
         Ok(Some(config))
+    }
+}
+
+/// Bytes from a cgroup v2 memory file; `max` (no limit) and unreadable
+/// values are `None`.
+pub fn parse_memory_bytes(text: &str) -> Option<u64> {
+    let text = text.trim();
+    if text == "max" {
+        return None;
+    }
+    text.parse::<u64>().ok()
+}
+
+/// Memory in use as a share of the limit; `None` without a finite limit.
+pub fn memory_fraction(current: Option<u64>, max: Option<u64>) -> Option<f64> {
+    match (current, max) {
+        (Some(current), Some(max)) if max > 0 => Some(current as f64 / max as f64),
+        _ => None,
+    }
+}
+
+/// Memory saturation with hysteresis: entered at the threshold, left once
+/// usage falls below ninety percent of it. A lost reading clears the guard
+/// rather than holding admission closed on stale data.
+pub fn evaluate_memory(previously_saturated: bool, fraction: Option<f64>, threshold: f64) -> bool {
+    let Some(fraction) = fraction else {
+        return false;
+    };
+    if previously_saturated {
+        fraction >= threshold * MEMORY_CLEAR_FACTOR
+    } else {
+        fraction >= threshold
     }
 }
 
@@ -246,6 +307,8 @@ pub trait WorkerThreads: Send + Sync {
 struct Inner {
     /// The cgroup is throttled or under pressure.
     cgroup_saturated: AtomicBool,
+    /// Memory in use has reached the configured share of the cgroup limit.
+    memory_saturated: AtomicBool,
     /// Every worker thread with a reading is saturated: no room can be placed
     /// anywhere useful.
     workers_saturated: AtomicBool,
@@ -264,6 +327,7 @@ impl SaturationMonitor {
         Self {
             inner: Arc::new(Inner {
                 cgroup_saturated: AtomicBool::new(false),
+                memory_saturated: AtomicBool::new(false),
                 workers_saturated: AtomicBool::new(false),
                 enabled: false,
             }),
@@ -276,6 +340,20 @@ impl SaturationMonitor {
         Self {
             inner: Arc::new(Inner {
                 cgroup_saturated: AtomicBool::new(saturated),
+                memory_saturated: AtomicBool::new(false),
+                workers_saturated: AtomicBool::new(false),
+                enabled: true,
+            }),
+        }
+    }
+
+    /// A monitor pinned to one memory state, for tests.
+    #[cfg(test)]
+    pub fn forced_memory(saturated: bool) -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                cgroup_saturated: AtomicBool::new(false),
+                memory_saturated: AtomicBool::new(saturated),
                 workers_saturated: AtomicBool::new(false),
                 enabled: true,
             }),
@@ -286,11 +364,12 @@ impl SaturationMonitor {
         self.inner.enabled
     }
 
-    /// The process as a whole has no capacity: the cgroup is saturated, or
-    /// every media worker is. A single saturated worker is reported per room
-    /// through the worker pool instead.
+    /// The process as a whole has no capacity: the cgroup is CPU saturated,
+    /// memory has reached its guard, or every media worker is saturated. A
+    /// single saturated worker is reported per room through the worker pool.
     pub fn saturated(&self) -> bool {
         self.inner.cgroup_saturated.load(Ordering::Relaxed)
+            || self.inner.memory_saturated.load(Ordering::Relaxed)
             || self.inner.workers_saturated.load(Ordering::Relaxed)
     }
 
@@ -305,6 +384,7 @@ impl SaturationMonitor {
         let monitor = Self {
             inner: Arc::new(Inner {
                 cgroup_saturated: AtomicBool::new(false),
+                memory_saturated: AtomicBool::new(false),
                 workers_saturated: AtomicBool::new(false),
                 enabled: true,
             }),
@@ -316,7 +396,8 @@ impl SaturationMonitor {
             throttled_fraction = config.throttled_fraction,
             pressure_avg10 = config.pressure_avg10,
             worker_utilization = config.worker_utilization,
-            "CPU saturation monitor enabled"
+            memory_fraction = config.memory_fraction,
+            "CPU and memory saturation monitor enabled"
         );
         tokio::spawn(async move {
             let started = Instant::now();
@@ -327,6 +408,7 @@ impl SaturationMonitor {
             ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             let mut warned = false;
             let mut warned_workers = false;
+            let mut noted_memory = false;
             loop {
                 ticker.tick().await;
                 let Some(inner) = weak.upgrade() else {
@@ -370,12 +452,49 @@ impl SaturationMonitor {
                         info!("CPU saturation cleared; admitting joins again");
                     }
                 }
+                let memory_current = tokio::fs::read_to_string(&config.memory_current)
+                    .await
+                    .ok()
+                    .and_then(|text| parse_memory_bytes(&text));
+                let memory_max = tokio::fs::read_to_string(&config.memory_max)
+                    .await
+                    .ok()
+                    .and_then(|text| parse_memory_bytes(&text));
+                let memory_used = memory_fraction(memory_current, memory_max);
+                if memory_used.is_none() && !noted_memory {
+                    noted_memory = true;
+                    info!(
+                        "No finite cgroup memory limit is readable; the memory saturation guard is inactive"
+                    );
+                }
+                let memory_saturated = evaluate_memory(
+                    inner.memory_saturated.load(Ordering::Relaxed),
+                    memory_used,
+                    config.memory_fraction,
+                );
+                if memory_saturated
+                    != inner
+                        .memory_saturated
+                        .swap(memory_saturated, Ordering::Relaxed)
+                {
+                    if memory_saturated {
+                        warn!(
+                            fraction = memory_used.unwrap_or(0.0),
+                            "Memory saturated: refusing new joins and reporting not ready"
+                        );
+                    } else {
+                        info!("Memory saturation cleared; admitting joins again");
+                    }
+                }
                 metrics.set_saturation(SaturationSnapshot {
                     throttling_available: stat.is_some(),
                     pressure_available: pressure.is_some(),
                     saturated,
                     throttled_fraction: throttled.unwrap_or(0.0),
                     pressure_avg10: pressure.unwrap_or(0.0),
+                    memory_available: memory_used.is_some(),
+                    memory_saturated,
+                    memory_fraction: memory_used.unwrap_or(0.0),
                 });
 
                 let Some(workers) = &workers else {
@@ -532,18 +651,69 @@ mod tests {
     #[test]
     fn configuration_bounds_and_disable_switch() {
         assert!(
-            SaturationConfig::from_values(Some("true"), None, None, None)
+            SaturationConfig::from_values(Some("true"), None, None, None, None)
                 .unwrap()
                 .is_none()
         );
-        let config = SaturationConfig::from_values(None, Some("0.8"), Some("70"), None)
+        let config = SaturationConfig::from_values(None, Some("0.8"), Some("70"), None, None)
             .unwrap()
             .unwrap();
         assert_eq!(config.throttled_fraction, 0.8);
         assert_eq!(config.pressure_avg10, 70.0);
-        assert!(SaturationConfig::from_values(None, Some("1.5"), None, None).is_err());
-        assert!(SaturationConfig::from_values(None, None, Some("1"), None).is_err());
-        assert!(SaturationConfig::from_values(Some("maybe"), None, None, None).is_err());
+        assert_eq!(config.memory_fraction, DEFAULT_MEMORY_FRACTION);
+        assert!(SaturationConfig::from_values(None, Some("1.5"), None, None, None).is_err());
+        assert!(SaturationConfig::from_values(None, None, Some("1"), None, None).is_err());
+        assert!(SaturationConfig::from_values(Some("maybe"), None, None, None, None).is_err());
+    }
+
+    #[test]
+    fn memory_files_parse_bytes_and_treat_max_as_unlimited() {
+        assert_eq!(parse_memory_bytes("2147483648\n"), Some(2_147_483_648));
+        assert_eq!(parse_memory_bytes(" 1024 "), Some(1024));
+        assert_eq!(parse_memory_bytes("max\n"), None);
+        assert_eq!(parse_memory_bytes(""), None);
+        assert_eq!(parse_memory_bytes("-1"), None);
+        assert_eq!(
+            memory_fraction(Some(1_610_612_736), Some(2_147_483_648)),
+            Some(0.75)
+        );
+        assert_eq!(memory_fraction(Some(1), None), None, "no limit, no guard");
+        assert_eq!(memory_fraction(None, Some(2)), None);
+        assert_eq!(memory_fraction(Some(1), Some(0)), None);
+    }
+
+    #[test]
+    fn memory_saturation_enters_at_the_threshold_and_leaves_at_ninety_percent_of_it() {
+        assert!(!evaluate_memory(false, Some(0.84), 0.85));
+        assert!(evaluate_memory(false, Some(0.85), 0.85));
+        assert!(
+            evaluate_memory(true, Some(0.80), 0.85),
+            "stays saturated above 90 %"
+        );
+        assert!(!evaluate_memory(true, Some(0.76), 0.85));
+        assert!(
+            !evaluate_memory(true, None, 0.85),
+            "a lost reading clears the guard"
+        );
+    }
+
+    #[test]
+    fn memory_fraction_threshold_is_bounded() {
+        let config = SaturationConfig::from_values(None, None, None, None, Some("0.9"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(config.memory_fraction, 0.9);
+        assert!(SaturationConfig::from_values(None, None, None, None, Some("0.3")).is_err());
+        assert!(SaturationConfig::from_values(None, None, None, None, Some("1.2")).is_err());
+        assert!(SaturationConfig::from_values(None, None, None, None, Some("lots")).is_err());
+    }
+
+    #[test]
+    fn a_memory_saturated_monitor_refuses_like_a_cpu_saturated_one() {
+        let monitor = SaturationMonitor::forced_memory(true);
+        assert!(monitor.saturated());
+        assert!(monitor.enabled());
+        assert!(!SaturationMonitor::forced_memory(false).saturated());
     }
 
     #[test]
@@ -597,7 +767,7 @@ mod tests {
 
     #[test]
     fn worker_utilization_threshold_is_bounded() {
-        let config = SaturationConfig::from_values(None, None, None, Some(" 0.9 "))
+        let config = SaturationConfig::from_values(None, None, None, Some(" 0.9 "), None)
             .unwrap()
             .unwrap();
         assert!((config.worker_utilization - 0.9).abs() < 1e-9);
@@ -605,8 +775,8 @@ mod tests {
             SaturationConfig::default().worker_utilization,
             DEFAULT_WORKER_UTILIZATION
         );
-        assert!(SaturationConfig::from_values(None, None, None, Some("0.1")).is_err());
-        assert!(SaturationConfig::from_values(None, None, None, Some("1.5")).is_err());
-        assert!(SaturationConfig::from_values(None, None, None, Some("hot")).is_err());
+        assert!(SaturationConfig::from_values(None, None, None, Some("0.1"), None).is_err());
+        assert!(SaturationConfig::from_values(None, None, None, Some("1.5"), None).is_err());
+        assert!(SaturationConfig::from_values(None, None, None, Some("hot"), None).is_err());
     }
 }

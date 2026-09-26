@@ -543,17 +543,17 @@ export class CallOutcomeTelemetry {
 const frameObservers = new WeakMap<HTMLVideoElement, () => void>();
 
 /** Time from attaching a remote track to its first presented video frame.
- * Browsers without frame callbacks and hidden/retired elements are unknown.
+ * Browsers without frame callbacks (Firefox) fall back to the first decoded
+ * frame (`loadeddata`), a slightly earlier point; hidden and retired elements
+ * are unknown.
  */
 export function observeFirstVideoFrame(video: HTMLVideoElement, record: TelemetryHandler): void {
   frameObservers.get(video)?.();
-  if (
-    document.visibilityState !== 'visible' ||
-    typeof video.requestVideoFrameCallback !== 'function'
-  ) {
+  if (document.visibilityState !== 'visible') {
     record({ name: 'media_first_video_frame', outcome: 'unknown' });
     return;
   }
+  const presented = typeof video.requestVideoFrameCallback === 'function';
   const start = performance.now();
   let finished = false;
   let frame = 0;
@@ -561,7 +561,8 @@ export function observeFirstVideoFrame(video: HTMLVideoElement, record: Telemetr
     if (finished) return;
     finished = true;
     frameObservers.delete(video);
-    video.cancelVideoFrameCallback(frame);
+    if (presented) video.cancelVideoFrameCallback(frame);
+    else video.removeEventListener('loadeddata', decoded);
     clearTimeout(timer);
     document.removeEventListener('visibilitychange', hidden);
     video.removeEventListener('emptied', retired);
@@ -582,9 +583,10 @@ export function observeFirstVideoFrame(video: HTMLVideoElement, record: Telemetr
     () => finish(video.isConnected && video.srcObject ? 'timeout' : 'unknown'),
     10_000,
   );
+  const decoded = (): void =>
+    finish(video.isConnected && document.visibilityState === 'visible' ? 'ok' : 'unknown');
   document.addEventListener('visibilitychange', hidden);
   video.addEventListener('emptied', retired);
-  frame = video.requestVideoFrameCallback(() =>
-    finish(video.isConnected && document.visibilityState === 'visible' ? 'ok' : 'unknown'),
-  );
+  if (presented) frame = video.requestVideoFrameCallback(decoded);
+  else video.addEventListener('loadeddata', decoded);
 }

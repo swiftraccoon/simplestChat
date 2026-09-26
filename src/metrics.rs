@@ -591,6 +591,24 @@ impl ServerMetrics {
                 "cgroup CPU pressure, percent of time some task waited for CPU over ten seconds",
                 saturation.pressure_avg10,
             );
+            render_gauge(
+                &mut out,
+                "simplestchat_memory_saturated",
+                "Whether memory in use has reached the configured share of the cgroup limit; readiness fails and fresh joins are refused while set",
+                u64::from(saturation.memory_saturated),
+            );
+            render_gauge(
+                &mut out,
+                "simplestchat_memory_limit_available",
+                "Whether a finite cgroup v2 memory limit was readable for the last sample",
+                u64::from(saturation.memory_available),
+            );
+            render_gauge_f64(
+                &mut out,
+                "simplestchat_memory_usage_fraction",
+                "Memory in use as a share of the cgroup limit",
+                saturation.memory_fraction,
+            );
         }
         render_worker_cpu(
             &mut out,
@@ -619,6 +637,11 @@ pub struct SaturationSnapshot {
     pub saturated: bool,
     pub throttled_fraction: f64,
     pub pressure_avg10: f64,
+    /// A finite cgroup memory limit was readable for the last sample.
+    pub memory_available: bool,
+    pub memory_saturated: bool,
+    /// Memory in use as a share of the cgroup limit (0 when unavailable).
+    pub memory_fraction: f64,
 }
 
 /// One media worker thread's CPU share over the saturation window, labelled
@@ -921,6 +944,9 @@ mod tests {
             saturated: true,
             throttled_fraction: 0.75,
             pressure_avg10: 0.0,
+            memory_available: true,
+            memory_saturated: false,
+            memory_fraction: 0.42,
         });
         let mut sample = crate::media::quality::QualitySample::default();
         sample.record_consumer(10, Some(2), true, false);
@@ -937,6 +963,9 @@ mod tests {
         );
         assert_eq!(value(&body, "simplestchat_cpu_pressure_available"), Some(0));
         assert!(body.contains("simplestchat_cpu_throttled_fraction 0.75\n"));
+        assert_eq!(value(&body, "simplestchat_memory_saturated"), Some(0));
+        assert_eq!(value(&body, "simplestchat_memory_limit_available"), Some(1));
+        assert!(body.contains("simplestchat_memory_usage_fraction 0.42\n"));
         assert_eq!(
             value(&body, "simplestchat_joins_refused_saturated_total"),
             Some(1)

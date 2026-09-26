@@ -327,6 +327,30 @@ fn parse_environment_flag_value(name: &str, value: Option<&str>, default: bool) 
     }
 }
 
+/// The deployment's participant ceiling. Unset or empty (Compose forwards an
+/// unset variable as an empty string) means none; anything else must be a
+/// whole number from 2 to 10000, because an ignored typo would leave every
+/// room unlimited while the operator believes it is capped.
+fn parse_participant_ceiling(value: Option<&str>) -> Result<Option<usize>> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    match value.parse::<usize>() {
+        Ok(ceiling) if (2..=10_000).contains(&ceiling) => Ok(Some(ceiling)),
+        _ => anyhow::bail!("MAX_PARTICIPANTS_PER_ROOM must be a whole number from 2 to 10000"),
+    }
+}
+
+fn participant_ceiling() -> Result<Option<usize>> {
+    match std::env::var("MAX_PARTICIPANTS_PER_ROOM") {
+        Ok(value) => parse_participant_ceiling(Some(&value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            anyhow::bail!("MAX_PARTICIPANTS_PER_ROOM must be valid UTF-8")
+        }
+    }
+}
+
 fn room_delete_timeout(operation: &str) -> sqlx::Error {
     sqlx::Error::Protocol(format!("room deletion timed out while {operation}"))
 }
@@ -1147,6 +1171,9 @@ pub struct RoomManager {
     max_rooms: usize,
     max_persisted_rooms: i64,
     allow_ad_hoc_rooms: bool,
+    /// Server-wide participant ceiling per room, applied under any room's own
+    /// limit; sized from the measured capacity of the deployment.
+    max_participants_per_room: Option<usize>,
     /// CPU saturation monitor; fresh joins are refused while it reports saturation.
     saturation: std::sync::OnceLock<crate::saturation::SaturationMonitor>,
     /// Verification must remain available even if an administrator repeatedly
@@ -1317,6 +1344,7 @@ impl RoomManager {
         // proxy, so ephemeral room creation is always an explicit opt-in.
         let allow_ad_hoc_rooms =
             environment_flag("ALLOW_AD_HOC_ROOMS", ALLOW_AD_HOC_ROOMS_BY_DEFAULT)?;
+        let max_participants_per_room = participant_ceiling()?;
         let media_server = Arc::new(MediaServer::new(media_config).await?);
 
         let password_verify_workers = std::env::var("MAX_PASSWORD_WORKERS")
@@ -1345,6 +1373,7 @@ impl RoomManager {
                 .filter(|value| (1..=1_000_000).contains(value))
                 .unwrap_or(10_000),
             allow_ad_hoc_rooms,
+            max_participants_per_room,
             saturation: std::sync::OnceLock::new(),
             password_verify_work: Arc::new(tokio::sync::Semaphore::new(password_verify_workers)),
             // One bounded hashing lane prevents room settings from consuming
@@ -2550,15 +2579,8 @@ impl RoomManager {
                 if !settings.guests_allowed && !authenticated {
                     anyhow::bail!("Guests are not allowed in this room");
                 }
-                if let Some(max) = settings.max_participants {
-                    let Ok(max) = usize::try_from(max) else {
-                        anyhow::bail!("Room capacity is unavailable");
-                    };
-                    if max == 0 || room.participants.len() >= max {
-                        anyhow::bail!("Room is full");
-                    }
-                }
             }
+            self.ensure_room_has_space(&room)?;
 
             if room.lobby.len() >= 1_000 {
                 anyhow::bail!("Room lobby is full");
@@ -5202,6 +5224,33 @@ impl RoomManager {
     /// Moves the target from `room.lobby` to `room.participants`, sends
     /// `LobbyAdmitted` + `RoomJoined` to the admitted participant via their
     /// stored sender, and broadcasts `ParticipantJoined` to existing participants.
+    /// Refuses one more participant once the room's own limit or the
+    /// deployment's ceiling is reached. Joins and lobby admissions share it,
+    /// so a participant queued while the room had space cannot be admitted
+    /// past either limit later.
+    fn ensure_room_has_space(&self, room: &Room) -> Result<()> {
+        if let Some(maximum) = room
+            .settings
+            .as_ref()
+            .and_then(|settings| settings.max_participants)
+        {
+            let Ok(maximum) = usize::try_from(maximum) else {
+                anyhow::bail!("Room capacity is unavailable");
+            };
+            if maximum == 0 || room.participants.len() >= maximum {
+                anyhow::bail!("Room is full");
+            }
+        }
+        // The deployment's ceiling applies to every room, ad hoc or saved,
+        // beneath whatever the room itself allows.
+        if let Some(ceiling) = self.max_participants_per_room
+            && room.participants.len() >= ceiling
+        {
+            anyhow::bail!("Room is full");
+        }
+        Ok(())
+    }
+
     pub async fn admit_from_lobby(
         &self,
         room_id: &str,
@@ -5222,18 +5271,7 @@ impl RoomManager {
         if !room.lobby.contains_key(target_id) {
             anyhow::bail!("Participant not found in lobby");
         }
-
-        if let Some(maximum) = room
-            .settings
-            .as_ref()
-            .and_then(|settings| settings.max_participants)
-        {
-            let maximum = usize::try_from(maximum)
-                .map_err(|_| anyhow::anyhow!("Room capacity is unavailable"))?;
-            if maximum == 0 || room.participants.len() >= maximum {
-                anyhow::bail!("Room is full");
-            }
-        }
+        self.ensure_room_has_space(&room)?;
 
         room.prune_expired_bans(std::time::Instant::now());
         if room
@@ -6065,6 +6103,74 @@ mod security_tests {
         (tx, rx)
     }
 
+    #[tokio::test]
+    async fn server_wide_participant_ceiling_refuses_the_next_join() {
+        let mut manager = drain_test_manager().await;
+        manager.max_participants_per_room = Some(2);
+        let (_alice_tx, _alice_rx) = join_guest(&manager, "capped", "alice").await;
+        let (_bob_tx, _bob_rx) = join_guest(&manager, "capped", "bob").await;
+        let (carol_tx, _carol_rx) = mpsc::channel(32);
+        let refused = manager
+            .add_participant(
+                "capped",
+                "carol".into(),
+                "carol".into(),
+                carol_tx,
+                false,
+                Arc::new(AtomicBool::new(false)),
+                None,
+                "carol-token",
+                None,
+            )
+            .await;
+        let refused = refused.err().expect("the third join is refused");
+        assert_eq!(refused.to_string(), "Room is full");
+        manager.media_server().shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn server_wide_participant_ceiling_refuses_lobby_admission() {
+        let mut manager = drain_test_manager().await;
+        manager.max_participants_per_room = Some(2);
+        let (owner_tx, _owner_rx) = join_guest(&manager, "capped-lobby", "owner").await;
+        let room = manager.get_room("capped-lobby").unwrap();
+        let mut settings = RoomManager::default_room_settings("capped-lobby");
+        settings.lobby_enabled = true;
+        room.write().await.settings = Some(settings);
+        // Both wait while the room still has space; the first admission fills it.
+        let mut receivers = Vec::new();
+        for waiting in ["first", "second"] {
+            let (waiting_tx, waiting_rx) = mpsc::channel(16);
+            receivers.push(waiting_rx);
+            let lobbied = manager
+                .add_participant(
+                    "capped-lobby",
+                    waiting.into(),
+                    waiting.into(),
+                    waiting_tx,
+                    false,
+                    Arc::new(AtomicBool::new(false)),
+                    None,
+                    &format!("{waiting}-token"),
+                    None,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(lobbied, JoinResult::Lobbied));
+        }
+        manager
+            .admit_from_lobby("capped-lobby", "owner", &owner_tx, "first")
+            .await
+            .unwrap();
+        let refused = manager
+            .admit_from_lobby("capped-lobby", "owner", &owner_tx, "second")
+            .await
+            .expect_err("admission past the ceiling is refused");
+        assert_eq!(refused.to_string(), "Room is full");
+        assert!(room.read().await.lobby.contains_key("second"));
+        manager.media_server().shutdown().await.unwrap();
+    }
+
     fn drain_messages(rx: &mut mpsc::Receiver<crate::OutboundJson>) -> Vec<String> {
         let mut messages = Vec::new();
         while let Ok(message) = rx.try_recv() {
@@ -6804,6 +6910,27 @@ mod security_tests {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn participant_ceiling_is_absent_or_valid_never_silently_dropped() {
+        assert_eq!(parse_participant_ceiling(None).unwrap(), None);
+        // Compose forwards an unset variable as an empty string.
+        assert_eq!(parse_participant_ceiling(Some("")).unwrap(), None);
+        assert_eq!(parse_participant_ceiling(Some("  ")).unwrap(), None);
+        assert_eq!(parse_participant_ceiling(Some(" 80 ")).unwrap(), Some(80));
+        assert_eq!(parse_participant_ceiling(Some("2")).unwrap(), Some(2));
+        assert_eq!(
+            parse_participant_ceiling(Some("10000")).unwrap(),
+            Some(10_000)
+        );
+        for invalid in ["1", "0", "10001", "eighty", "-5", "8.5"] {
+            let error = parse_participant_ceiling(Some(invalid)).unwrap_err();
+            assert!(
+                error.to_string().contains("MAX_PARTICIPANTS_PER_ROOM"),
+                "{invalid}: {error}"
+            );
+        }
     }
 
     #[test]

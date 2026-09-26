@@ -46,7 +46,14 @@ PacketResult NetworkPacketFeedbackFromRtpPacketFeedback(
 }
 }  // namespace
 const int64_t kNoTimestamp = -1;
-const int64_t kSendTimeHistoryWindowMs = 60000;
+// simplestChat: 10 s instead of upstream's 60 s. The history holds one entry
+// (about 150 bytes) per sent packet until the receiver's transport-cc feedback
+// covers it or the entry ages out, and an SFU keeps one adapter per receive
+// transport, so while inbound feedback is lost (an overloaded worker dropping
+// datagrams at its socket) a 60 s window let the process grow by about a
+// gibibyte at 240 publishers (docs/performance-results.md). Feedback older
+// than ten seconds is useless to the estimator anyway.
+const int64_t kSendTimeHistoryWindowMs = 10000;
 
 TransportFeedbackAdapter::TransportFeedbackAdapter()
     : allow_duplicates_(field_trial::IsEnabled(

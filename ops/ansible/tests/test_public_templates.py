@@ -102,6 +102,19 @@ class PublicTemplateTests(unittest.TestCase):
         self.assertEqual(maintenance["restart"], "no")
         self.assertEqual(maintenance["image"], VALUES["scpub_server_image"])
 
+    def test_the_base_compose_file_carries_the_servers_limits(self) -> None:
+        """Compose's `environment` outranks `app.env`, so its defaults must be the server's."""
+        compose = yaml_value((ROOT.parent.parent / "docker-compose.yml").read_text())
+        base = obj(compose, "services", "simplestchat", "environment")
+        # The server's own default; 16 blanked a browser's tiles beyond eight peers.
+        self.assertEqual(
+            base["MAX_CONSUMERS_PER_PARTICIPANT"], "${MAX_CONSUMERS_PER_PARTICIPANT:-64}"
+        )
+        # Forwarded, and empty when unset, which the server reads as no ceiling.
+        self.assertEqual(base["MAX_PARTICIPANTS_PER_ROOM"], "${MAX_PARTICIPANTS_PER_ROOM:-}")
+        # The managed host interpolates the base from app.env, which sets the ceiling.
+        self.assertEqual(environment("public-app.env.j2")["MAX_PARTICIPANTS_PER_ROOM"], "80")
+
     def test_app_extends_existing_compose_and_proxy_is_nonroot(self) -> None:
         """Verify app extends existing compose and proxy is nonroot."""
         services = obj(yaml_value(render("public-compose.yml.j2")), "services")

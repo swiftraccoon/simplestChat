@@ -323,3 +323,35 @@ test('grouped samples retain real cadence, survive callback failure and reset af
   assert.equal(samples.at(-1).windowMs, undefined);
   sampler.dispose();
 });
+
+test('first-frame latency falls back to the loadeddata event without presentation callbacks', async () => {
+  const events = [];
+  const videoListeners = new Map();
+  let now = 50;
+  const document = {
+    visibilityState: 'visible',
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const { observeFirstVideoFrame } = await loadTypeScript('src/media-telemetry.ts', {
+    globals: {
+      document,
+      performance: { now: () => now },
+      setTimeout: () => 1,
+      clearTimeout() {},
+    },
+  });
+  const video = {
+    isConnected: true,
+    srcObject: {},
+    addEventListener: (name, fn) => videoListeners.set(name, fn),
+    removeEventListener: (name) => videoListeners.delete(name),
+  };
+  observeFirstVideoFrame(video, (event) => events.push(event));
+  assert.equal(events.length, 0, 'no immediate unknown without presentation callbacks');
+  assert.equal(typeof videoListeners.get('loadeddata'), 'function');
+  now = 260;
+  videoListeners.get('loadeddata')();
+  assert.deepEqual(events, [{ name: 'media_first_video_frame', outcome: 'ok', durationMs: 210 }]);
+  assert.equal(videoListeners.has('loadeddata'), false, 'listeners are removed after finishing');
+});
