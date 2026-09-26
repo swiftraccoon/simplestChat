@@ -143,6 +143,8 @@ pub struct TransportManager {
     /// generation prevents cleanup of an old participant ID from touching a
     /// newly-created media state that happens to reuse that public ID.
     bwe_trace_handlers: Arc<StdRwLock<HashMap<Uuid, Box<dyn Any + Send + Sync>>>>,
+    /// `MediaConfig::key_frame_request_delay_ms`, applied to video producers.
+    key_frame_request_delay: u32,
 }
 
 impl Default for TransportManager {
@@ -167,7 +169,16 @@ impl TransportManager {
             participants: Arc::new(StdRwLock::new(HashMap::new())),
             paused_producers: Arc::new(StdRwLock::new(HashMap::new())),
             bwe_trace_handlers: Arc::new(StdRwLock::new(HashMap::new())),
+            key_frame_request_delay: 0,
         }
+    }
+
+    /// Coalesce keyframe requests to each video producer's sender to one per
+    /// `milliseconds` (0 forwards every request).
+    #[must_use]
+    pub fn with_key_frame_request_delay(mut self, milliseconds: u32) -> Self {
+        self.key_frame_request_delay = milliseconds;
+        self
     }
 
     fn replace_bwe_trace_handler(&self, generation: Uuid, handler: Box<dyn Any + Send + Sync>) {
@@ -524,6 +535,9 @@ impl TransportManager {
 
         let mut producer_options = ProducerOptions::new(kind, rtp_parameters);
         producer_options.app_data = app_data;
+        if kind == MediaKind::Video {
+            producer_options.key_frame_request_delay = self.key_frame_request_delay;
+        }
 
         let producer = measure_result(Stage::MediaProduce, transport.produce(producer_options))
             .await

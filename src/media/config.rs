@@ -22,6 +22,8 @@ pub const MAX_MEDIA_WORKERS: usize = 64;
 /// to apply (`docs/deployment.md`).
 pub const DEFAULT_WEBRTC_SOCKET_BUFFER_BYTES: u32 = 1024 * 1024;
 const MIN_WEBRTC_SOCKET_BUFFER_BYTES: u32 = 64 * 1024;
+/// One keyframe request per second per video stream, in milliseconds.
+const DEFAULT_KEYFRAME_REQUEST_DELAY_MS: u32 = 1_000;
 const MAX_WEBRTC_SOCKET_BUFFER_BYTES: u32 = 64 * 1024 * 1024;
 
 /// Main media server configuration
@@ -42,6 +44,13 @@ pub struct MediaConfig {
     /// Send buffer requested for each worker's listeners, in bytes; 0 keeps
     /// the kernel default. `WEBRTC_SEND_BUFFER_BYTES`.
     pub webrtc_send_buffer_bytes: u32,
+    /// Video producers pass keyframe requests to their sender at most once per
+    /// this many milliseconds; 0 forwards every one. Each viewer that starts
+    /// consuming asks for a keyframe, and the keyframe goes to every viewer of
+    /// the stream: forwarding all of them collapsed viewers' bandwidth
+    /// estimates in a 545-viewer webinar, where 1 s kept them while joiners
+    /// waited under a second for video. `MEDIA_KEYFRAME_REQUEST_DELAY_MS`.
+    pub key_frame_request_delay_ms: u32,
 }
 
 impl Default for MediaConfig {
@@ -54,6 +63,7 @@ impl Default for MediaConfig {
             webrtc_server_tcp: false,
             webrtc_recv_buffer_bytes: DEFAULT_WEBRTC_SOCKET_BUFFER_BYTES,
             webrtc_send_buffer_bytes: DEFAULT_WEBRTC_SOCKET_BUFFER_BYTES,
+            key_frame_request_delay_ms: DEFAULT_KEYFRAME_REQUEST_DELAY_MS,
         }
     }
 }
@@ -103,6 +113,9 @@ impl MediaConfig {
         if let Ok(value) = std::env::var("WEBRTC_SEND_BUFFER_BYTES") {
             config.webrtc_send_buffer_bytes =
                 parse_socket_buffer("WEBRTC_SEND_BUFFER_BYTES", &value)?;
+        }
+        if let Ok(value) = std::env::var("MEDIA_KEYFRAME_REQUEST_DELAY_MS") {
+            config.key_frame_request_delay_ms = parse_keyframe_request_delay(&value)?;
         }
         if let Ok(value) = std::env::var("WEBRTC_MIN_OUTGOING_BITRATE") {
             config.webrtc_transport_config.min_outgoing_bitrate =
@@ -222,6 +235,20 @@ fn parse_bitrate(name: &str, value: &str) -> anyhow::Result<u32> {
         .ok()
         .filter(|bitrate| *bitrate <= 50_000_000)
         .ok_or_else(|| anyhow::anyhow!("{name} must be an integer from 0 through 50000000 bit/s"))
+}
+
+/// The keyframe request coalescing window: 0 through 10 s.
+fn parse_keyframe_request_delay(value: &str) -> anyhow::Result<u32> {
+    value
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .filter(|ms| *ms <= 10_000)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "MEDIA_KEYFRAME_REQUEST_DELAY_MS must be an integer from 0 through 10000 ms"
+            )
+        })
 }
 
 /// A socket buffer size in bytes: 0 for the kernel default, otherwise 64 KiB
@@ -698,6 +725,17 @@ mod tests {
         assert!(parse_socket_buffer("WEBRTC_RECV_BUFFER_BYTES", "1024").is_err());
         assert!(parse_socket_buffer("WEBRTC_RECV_BUFFER_BYTES", "67108865").is_err());
         assert!(parse_socket_buffer("WEBRTC_RECV_BUFFER_BYTES", "4M").is_err());
+    }
+
+    #[test]
+    fn keyframe_request_delay_parses_within_bounds() {
+        assert_eq!(MediaConfig::default().key_frame_request_delay_ms, 1_000);
+        assert_eq!(parse_keyframe_request_delay(" 1000 ").unwrap(), 1000);
+        assert_eq!(parse_keyframe_request_delay("0").unwrap(), 0);
+        assert_eq!(parse_keyframe_request_delay("10000").unwrap(), 10_000);
+        assert!(parse_keyframe_request_delay("10001").is_err());
+        assert!(parse_keyframe_request_delay("-1").is_err());
+        assert!(parse_keyframe_request_delay("1s").is_err());
     }
 
     #[test]
