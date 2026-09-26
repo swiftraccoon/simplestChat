@@ -44,6 +44,13 @@ mod receiver_stall {
     include!("../clients/receiver_stall.rs");
 }
 
+mod datagram_counter {
+    include!("../clients/datagram_counter.rs");
+}
+mod browser_profile {
+    include!("../clients/browser_profile.rs");
+}
+
 #[cfg(test)]
 mod keyframe_tests {
     include!("../clients/keyframe_tests.rs");
@@ -114,6 +121,27 @@ impl SubscriptionMode {
     }
 }
 
+/// The workload each synthetic client emulates. `synthetic` is the historical
+/// fixed-stream client every earlier result used; `browser` behaves like the
+/// web client (three simulcast layers, Opus DTX with rotating speakers, every
+/// remote producer up to the server's cap, tile-sized layer requests), so its
+/// capacity figures are the ones real rooms get.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+#[serde(tag = "name", rename_all = "camelCase")]
+enum Profile {
+    Synthetic,
+    Browser(browser_profile::BrowserProfile),
+}
+
+impl Profile {
+    fn browser(&self) -> Option<&browser_profile::BrowserProfile> {
+        match self {
+            Self::Browser(profile) => Some(profile),
+            Self::Synthetic => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct ClientConfig {
     server_url: String,
@@ -142,6 +170,9 @@ struct ClientConfig {
     /// Loopback address this client's signaling socket binds to, when the run
     /// spreads clients over distinct addresses.
     source_address: Option<std::net::Ipv4Addr>,
+    profile: Profile,
+    /// When this publisher talks (browser profile only).
+    speaking: Option<browser_profile::Speaking>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -170,6 +201,7 @@ struct TestConfig {
     subscription_seed: Option<u32>,
     /// Size of the loopback source-address pool (0 keeps the default source).
     source_addresses: usize,
+    profile: Profile,
 }
 
 impl TestConfig {
@@ -553,6 +585,7 @@ impl Default for TestConfig {
             subscription_plan: SubscriptionMode::Fifo,
             subscription_seed: None,
             source_addresses: 0,
+            profile: Profile::Synthetic,
         }
     }
 }
@@ -572,6 +605,9 @@ async fn main() -> Result<()> {
     let mut config = TestConfig::default();
     let mut quality_override: Option<String> = None;
     let mut fps_override: Option<u8> = None;
+    let mut browser = BrowserOptions::default();
+    let mut max_audio_given = false;
+    let mut max_video_given = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -591,6 +627,11 @@ async fn main() -> Result<()> {
             }
             "--subscription-seed" => {
                 config.subscription_seed = Some(args[i + 1].parse()?);
+                i += 2;
+            }
+            "--profile" | "--capture" | "--speakers" | "--viewport-width" | "--pixel-ratio"
+            | "--layout" => {
+                browser.set(&args[i], &args[i + 1])?;
                 i += 2;
             }
             "--warmup"
@@ -707,6 +748,7 @@ async fn main() -> Result<()> {
                 if i + 1 < args.len() {
                     config.max_audio_consumers =
                         args[i + 1].parse().unwrap_or(DEFAULT_MAX_AUDIO_CONSUMERS);
+                    max_audio_given = true;
                     i += 2;
                 } else {
                     i += 1;
@@ -716,6 +758,7 @@ async fn main() -> Result<()> {
                 if i + 1 < args.len() {
                     config.max_video_consumers =
                         args[i + 1].parse().unwrap_or(DEFAULT_MAX_VIDEO_CONSUMERS);
+                    max_video_given = true;
                     i += 2;
                 } else {
                     i += 1;
@@ -788,7 +831,105 @@ async fn main() -> Result<()> {
 
     config.media_config.audio_enabled = audio_enabled;
     config.media_config.video_enabled = video_enabled;
+    config.profile = browser.profile(quality_override.is_some() || fps_override.is_some())?;
+    if config.profile.browser().is_some() {
+        // Browsers consume every remote producer until the server's cap.
+        let (audio, video) = browser_profile::consumer_caps(audio_enabled, video_enabled);
+        if !max_audio_given {
+            config.max_audio_consumers = audio;
+        }
+        if !max_video_given {
+            config.max_video_consumers = video;
+        }
+    }
     run_load_test(config).await
+}
+
+/// Browser-profile options as given; `profile` validates the combination.
+#[derive(Debug, Default)]
+struct BrowserOptions {
+    profile: Option<String>,
+    capture: Option<browser_profile::Capture>,
+    speakers: Option<usize>,
+    viewport_width: Option<u32>,
+    pixel_ratio: Option<f64>,
+    layout: Option<browser_profile::Layout>,
+}
+
+impl BrowserOptions {
+    fn set(&mut self, option: &str, value: &str) -> Result<()> {
+        match option {
+            "--profile" => {
+                anyhow::ensure!(
+                    matches!(value, "synthetic" | "browser"),
+                    "--profile must be synthetic or browser, not {value}"
+                );
+                self.profile = Some(value.to_owned());
+            }
+            "--capture" => self.capture = Some(browser_profile::Capture::parse(value)?),
+            "--speakers" => {
+                let speakers: usize = value
+                    .parse()
+                    .context("--speakers must be an unsigned integer")?;
+                anyhow::ensure!(speakers <= 1_000, "--speakers must be at most 1000");
+                self.speakers = Some(speakers);
+            }
+            "--viewport-width" => {
+                let width: u32 = value
+                    .parse()
+                    .context("--viewport-width must be an integer number of CSS pixels")?;
+                anyhow::ensure!(
+                    (browser_profile::MIN_DESKTOP_VIEWPORT..=7_680).contains(&width),
+                    "--viewport-width must be {} to 7680 CSS pixels (narrower screens use the stacked mobile layout this profile does not model)",
+                    browser_profile::MIN_DESKTOP_VIEWPORT
+                );
+                self.viewport_width = Some(width);
+            }
+            "--pixel-ratio" => {
+                let ratio: f64 = value.parse().context("--pixel-ratio must be a number")?;
+                anyhow::ensure!(
+                    ratio.is_finite() && (1.0..=4.0).contains(&ratio),
+                    "--pixel-ratio must be between 1 and 4"
+                );
+                self.pixel_ratio = Some(ratio);
+            }
+            "--layout" => self.layout = Some(browser_profile::Layout::parse(value)?),
+            other => anyhow::bail!("Unknown browser option: {other}"),
+        }
+        Ok(())
+    }
+
+    fn profile(&self, synthetic_media_given: bool) -> Result<Profile> {
+        let browser_settings = self.capture.is_some()
+            || self.speakers.is_some()
+            || self.viewport_width.is_some()
+            || self.pixel_ratio.is_some()
+            || self.layout.is_some();
+        match self.profile.as_deref() {
+            Some("browser") => {
+                anyhow::ensure!(
+                    !synthetic_media_given,
+                    "--quality and --fps shape the synthetic stream; the browser profile publishes the web client's simulcast layers (use --capture)"
+                );
+                Ok(Profile::Browser(browser_profile::BrowserProfile::new(
+                    self.capture.unwrap_or(browser_profile::Capture::Hd),
+                    self.speakers.unwrap_or(1),
+                    browser_profile::Viewer {
+                        viewport_width: self.viewport_width.unwrap_or(1_440),
+                        pixel_ratio: self.pixel_ratio.unwrap_or(2.0),
+                        layout: self.layout.unwrap_or(browser_profile::Layout::Classic),
+                    },
+                )))
+            }
+            _ => {
+                anyhow::ensure!(
+                    !browser_settings,
+                    "--capture, --speakers, --viewport-width, --pixel-ratio and --layout require --profile browser"
+                );
+                Ok(Profile::Synthetic)
+            }
+        }
+    }
 }
 
 fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
@@ -849,6 +990,10 @@ fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
             value
                 .parse::<u32>()
                 .context("--subscription-seed must be an unsigned 32-bit integer")?;
+        }
+        "--profile" | "--capture" | "--speakers" | "--viewport-width" | "--pixel-ratio"
+        | "--layout" => {
+            BrowserOptions::default().set(option, value)?;
         }
         "--source-addresses" => {
             let pool: usize = value
@@ -976,6 +1121,19 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         "Max consumers: audio={}, video={}",
         config.max_audio_consumers, config.max_video_consumers
     );
+    if let Some(profile) = config.profile.browser() {
+        println!(
+            "Profile: browser ({} capture, {} speaker(s)/room, {} px viewport at {}x, {:?} layout)",
+            match profile.capture {
+                browser_profile::Capture::Hd => "720p",
+                browser_profile::Capture::FullHd => "1080p",
+            },
+            profile.speakers_per_room,
+            profile.viewer.viewport_width,
+            profile.viewer.pixel_ratio,
+            profile.viewer.layout
+        );
+    }
     println!("========================\n");
 
     let session_duration = window.end.duration_since(run_start);
@@ -1021,6 +1179,19 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         };
         let is_publisher = i < num_publishers;
         let is_churner = i >= churner_start_idx;
+        let seat = RoomSeat::of(i, num_publishers, config.num_rooms);
+        let planned_targets = subscription_plan.as_ref().map(|plan| plan.targets(i));
+        let speaking = config
+            .profile
+            .browser()
+            .filter(|_| is_publisher)
+            .map(|profile| browser_profile::Speaking {
+                index: seat.publisher_index,
+                publishers: seat.room_publishers,
+                speakers: profile.speakers_per_room,
+                epoch: measurement_start,
+                slot: browser_profile::SPEAKER_SLOT,
+            });
 
         let client_config = ClientConfig {
             server_url: config.server_url.clone(),
@@ -1037,15 +1208,13 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
                     .get(&(i % config.num_rooms.max(1)))
                     .unwrap_or(&no_stable_publishers),
             ),
-            planned_subscriptions: subscription_plan.as_ref().map(|plan| {
-                PlannedClientSubscriptions {
-                    targets: plan.targets(i),
-                    owners: Arc::clone(
-                        owned_participants
-                            .as_ref()
-                            .expect("A plan owns its participant registry"),
-                    ),
-                }
+            planned_subscriptions: planned_targets.map(|targets| PlannedClientSubscriptions {
+                targets,
+                owners: Arc::clone(
+                    owned_participants
+                        .as_ref()
+                        .expect("A plan owns its participant registry"),
+                ),
             }),
             churn_session_min_secs: 5,
             churn_session_max_secs: 30,
@@ -1055,6 +1224,8 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
             departure: config.departure,
             receiver_stall_budget: receiver_stall_budget.clone(),
             source_address: source_address_for(i, config.source_addresses),
+            profile: config.profile,
+            speaking,
         };
 
         let metrics = collector.clone();
@@ -1174,9 +1345,11 @@ fn write_results_sync(
         .max(1)
         .min(config.num_clients);
     let churner_start = config.num_clients.saturating_sub(config.churner_count()?);
-    let nominal_rate =
-        MediaGenerator::new(config.media_config.clone()).nominal_packets_per_second();
     for (i, metrics) in all_metrics.iter().enumerate() {
+        let nominal_rate = nominal_publisher_packets_per_second(
+            config,
+            publisher_speaking_share(config, i, publishers),
+        );
         let expected = expected_stable_consumers(
             i,
             publishers,
@@ -1525,7 +1698,11 @@ async fn run_client_inner(
     .expect("Failed to deserialize as RtpCapabilities");
 
     // Create WebRTC session (metrics are passed to recv transport's on_track handler)
-    let webrtc_session = WebRtcSession::new(client_id.clone(), metrics.clone());
+    let mut webrtc_session = WebRtcSession::new(client_id.clone(), metrics.clone());
+    if let Some(profile) = config.profile.browser() {
+        webrtc_session.set_video_layers(profile.layers.len());
+        webrtc_session.set_probator(true);
+    }
     let webrtc_session = Arc::new(Mutex::new(webrtc_session));
 
     // Publishers create send transport; viewers skip it
@@ -1698,12 +1875,18 @@ async fn run_client_inner(
         // Produce audio if enabled (timed)
         if config.media_config.audio_enabled {
             let t = Instant::now();
-            let audio_params = extract_rtp_parameters(
+            let mut audio_params = extract_rtp_parameters(
                 MediaKind::Audio,
                 audio_ssrc,
                 config.media_config.video_bitrate_kbps,
                 extension_ids,
             );
+            if config.profile.browser().is_some() {
+                // mediasoup-client marks an Opus DTX encoding (`opusDtx`).
+                for encoding in &mut audio_params.encodings {
+                    encoding.dtx = Some(true);
+                }
+            }
             let produce_msg = ClientMessage::Produce {
                 transport_id: st_id.clone(),
                 kind: MediaKind::Audio,
@@ -1729,12 +1912,16 @@ async fn run_client_inner(
         // Produce video if enabled (timed)
         if config.media_config.video_enabled {
             let t = Instant::now();
-            let video_params = extract_rtp_parameters(
+            let mut video_params = extract_rtp_parameters(
                 MediaKind::Video,
                 video_ssrc,
                 config.media_config.video_bitrate_kbps,
                 extension_ids,
             );
+            if let Some(profile) = config.profile.browser() {
+                let layers = webrtc_session.lock().await.video_layers();
+                video_params.encodings = simulcast_encodings(&profile.layers, &layers)?;
+            }
             let produce_msg = ClientMessage::Produce {
                 transport_id: st_id.clone(),
                 kind: MediaKind::Video,
@@ -1786,7 +1973,27 @@ async fn run_client_inner(
     );
 
     // Start media sending task (publishers only)
-    let media_task = if config.is_publisher {
+    let media_task = if config.is_publisher
+        && let (Some(profile), Some(speaking)) =
+            (config.profile.browser().copied(), config.speaking)
+    {
+        let metrics_send = metrics.clone();
+        let media_config = config.media_config.clone();
+        let client_id_send = client_id.clone();
+        let webrtc_session_send = Arc::clone(&webrtc_session);
+        Some(tokio::spawn(async move {
+            send_browser_media_loop(
+                webrtc_session_send,
+                profile,
+                speaking,
+                media_config,
+                metrics_send,
+                client_id_send,
+                attempt,
+            )
+            .await;
+        }))
+    } else if config.is_publisher {
         let media_gen = MediaGenerator::new(config.media_config.clone());
         let metrics_send = metrics.clone();
         let media_config = config.media_config.clone();
@@ -1820,6 +2027,10 @@ async fn run_client_inner(
     let max_audio = config.max_audio_consumers;
     let max_video = config.max_video_consumers;
     let planned_subscriptions = config.planned_subscriptions.clone();
+    let grid = config
+        .profile
+        .browser()
+        .map(|profile| browser_profile::BrowserGrid::new(profile.viewer, config.is_publisher));
     let (departure_request, departure_receiver) = if config.departure == Departure::ExplicitLeave {
         let (request, receiver) = tokio::sync::oneshot::channel();
         (Some(request), Some(receiver))
@@ -1840,6 +2051,7 @@ async fn run_client_inner(
             existing_producer_events,
             departure_receiver,
             planned_subscriptions,
+            grid,
         )
         .await;
     });
@@ -2270,6 +2482,236 @@ async fn send_real_media_loop(
             }
         }
     }
+}
+
+/// The browser profile's publisher: the microphone as Opus with DTX (speech
+/// only while this participant is one of its room's current speakers, a
+/// comfort-noise frame every 400 ms otherwise) and the camera as the web
+/// client's three simulcast layers, each answering keyframe requests for its
+/// own SSRC.
+async fn send_browser_media_loop(
+    webrtc_session: Arc<Mutex<WebRtcSession>>,
+    profile: browser_profile::BrowserProfile,
+    speaking: browser_profile::Speaking,
+    config: MediaConfig,
+    metrics: Arc<MetricsCollector>,
+    client_id: String,
+    attempt: usize,
+) {
+    let (audio_track, video_tracks, layers, ssrcs) = {
+        let session = webrtc_session.lock().await;
+        (
+            session.audio_track(),
+            session.video_layer_tracks(),
+            session.video_layers(),
+            session.send_ssrcs().await,
+        )
+    };
+    let audio_ssrc = match ssrcs {
+        Ok((audio_ssrc, _)) => audio_ssrc,
+        Err(error) => {
+            metrics.record_error(format!("Cannot send without negotiated SSRCs: {error}"));
+            return;
+        }
+    };
+    if config.video_enabled
+        && (layers.len() != profile.layers.len() || video_tracks.len() != profile.layers.len())
+    {
+        metrics.record_error_for_attempt(
+            attempt,
+            format!(
+                "Expected {} simulcast layers, the send transport has {} SSRCs and {} tracks",
+                profile.layers.len(),
+                layers.len(),
+                video_tracks.len()
+            ),
+        );
+        return;
+    }
+    let mut audio = MediaGenerator::new(MediaConfig::default());
+    let mut dtx = browser_profile::DtxAudio::default();
+    let mut cameras: Vec<_> = layers
+        .into_iter()
+        .zip(video_tracks)
+        .zip(profile.layers.iter())
+        .map(|(((ssrc, requests), track), layer)| {
+            (
+                ssrc,
+                requests,
+                track,
+                MediaGenerator::new(MediaConfig::simulcast_layer(
+                    layer.width,
+                    layer.height,
+                    layer.max_bitrate_bps,
+                    30,
+                )),
+            )
+        })
+        .collect();
+    let mut audio_interval = tokio::time::interval(Duration::from_millis(20));
+    let mut video_interval = tokio::time::interval(Duration::from_secs_f64(1.0 / 30.0));
+    audio_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    video_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut first_packet = true;
+
+    loop {
+        tokio::select! {
+            _ = audio_interval.tick(), if config.audio_enabled => {
+                let Some(track) = &audio_track else { continue };
+                let Some(payload) = dtx.next_frame(speaking.is_speaking(Instant::now())) else {
+                    audio.skip_audio_frame();
+                    continue;
+                };
+                let packet_bytes = audio.generate_audio_packet_with_payload(payload);
+                let result = match negotiated_rtp_packet(&packet_bytes, audio_ssrc) {
+                    Ok(packet) => track.write_rtp(packet).await,
+                    Err(error) => Err(error),
+                };
+                if let Err(e) = result {
+                    metrics.record_error(format!("RTP write failed: {e}"));
+                    tracing::error!("{}: Failed to send RTP: {}", client_id, e);
+                    break;
+                }
+                metrics.record_packet_sent_for_attempt(attempt, packet_bytes.len());
+                if first_packet {
+                    metrics.mark_first_media_sent();
+                    first_packet = false;
+                }
+            }
+            _ = video_interval.tick(), if config.video_enabled => {
+                let mut send_error = false;
+                'layers: for (ssrc, requests, track, generator) in &mut cameras {
+                    let frame = generator.generate_video_frame(requests);
+                    if frame.is_keyframe {
+                        metrics.record_keyframe(frame.requested);
+                    }
+                    for packet_bytes in frame.packets {
+                        let result = match negotiated_rtp_packet(&packet_bytes, *ssrc) {
+                            Ok(packet) => track.write_rtp(packet).await,
+                            Err(error) => Err(error),
+                        };
+                        if let Err(e) = result {
+                            metrics.record_error(format!("RTP write failed: {e}"));
+                            tracing::error!("{}: Failed to send RTP: {}", client_id, e);
+                            send_error = true;
+                            break 'layers;
+                        }
+                        metrics.record_packet_sent_for_attempt(attempt, packet_bytes.len());
+                        if first_packet {
+                            metrics.mark_first_media_sent();
+                            first_packet = false;
+                        }
+                    }
+                }
+                if send_error {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+/// The camera producer's encodings: one per simulcast SSRC, lowest layer
+/// first, each capped at the web client's bitrate for that layer. The
+/// synthetic VP8 stream carries no temporal layer ids, so each encoding is
+/// L1T1 (the default) rather than the browser's L1T3.
+fn simulcast_encodings(
+    layers: &[browser_profile::SimulcastLayer],
+    ssrcs: &[(u32, Arc<media_generator::KeyframeRequests>)],
+) -> Result<Vec<RtpEncodingParameters>> {
+    anyhow::ensure!(
+        layers.len() == ssrcs.len(),
+        "The camera has {} simulcast SSRCs for {} layers",
+        ssrcs.len(),
+        layers.len()
+    );
+    Ok(layers
+        .iter()
+        .zip(ssrcs)
+        .map(|(layer, (ssrc, _))| RtpEncodingParameters {
+            ssrc: Some(*ssrc),
+            max_bitrate: Some(layer.max_bitrate_bps),
+            ..Default::default()
+        })
+        .collect())
+}
+
+/// Where a client sits: clients go to rooms round-robin (`i % rooms`) and the
+/// first `publishers` clients publish, so a room's publishers are its lowest
+/// client indices.
+#[derive(Debug, PartialEq, Eq)]
+struct RoomSeat {
+    /// This client's position among its room's publishers.
+    publisher_index: usize,
+    /// Publishers in this client's room.
+    room_publishers: usize,
+}
+
+impl RoomSeat {
+    fn of(client: usize, publishers: usize, rooms: usize) -> Self {
+        let rooms = rooms.max(1);
+        let room = client % rooms;
+        Self {
+            publisher_index: client / rooms,
+            room_publishers: publishers.saturating_sub(room).div_ceil(rooms),
+        }
+    }
+}
+
+/// Minimum packets a second a healthy publisher queues. The browser profile
+/// counts its microphone as silent (one DTX frame per 400 ms), because
+/// speaking only adds packets.
+/// A publisher's nominal packet rate; a browser's microphone sends every frame
+/// while it talks (`speaking_share` of the window) and one in 20 otherwise.
+fn nominal_publisher_packets_per_second(config: &TestConfig, speaking_share: f64) -> f64 {
+    let Some(profile) = config.profile.browser() else {
+        return MediaGenerator::new(config.media_config.clone()).nominal_packets_per_second();
+    };
+    let audio = if config.media_config.audio_enabled {
+        let talking = f64::from(browser_profile::AUDIO_FRAMES_PER_SECOND);
+        let silent = talking / f64::from(browser_profile::DTX_FRAME_INTERVAL);
+        silent + (talking - silent) * speaking_share.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let video = if config.media_config.video_enabled {
+        profile
+            .layers
+            .iter()
+            .map(|layer| {
+                MediaGenerator::new(MediaConfig::simulcast_layer(
+                    layer.width,
+                    layer.height,
+                    layer.max_bitrate_bps,
+                    30,
+                ))
+                .nominal_packets_per_second()
+            })
+            .sum()
+    } else {
+        0.0
+    };
+    audio + video
+}
+
+/// The share of the measurement window in which publisher `client` talks, by
+/// the rotation its microphone follows (the window starts the rotation).
+fn publisher_speaking_share(config: &TestConfig, client: usize, publishers: usize) -> f64 {
+    let Some(profile) = config.profile.browser() else {
+        return 0.0;
+    };
+    let window = usize::try_from(config.duration_secs).unwrap_or(usize::MAX);
+    if window == 0 {
+        return 0.0;
+    }
+    let seat = RoomSeat::of(client, publishers, config.num_rooms);
+    let speaking = browser_profile::speaking_seconds(
+        seat.publisher_index,
+        seat.room_publishers,
+        profile.speakers_per_room,
+        window,
+    );
+    speaking as f64 / window as f64
 }
 
 /// The 0.20 track API requires packets to carry the negotiated SSRC. Unlike
@@ -2815,6 +3257,7 @@ async fn receive_messages_loop(
     existing_producer_events: Vec<ServerMessage>,
     mut departure_receiver: Option<tokio::sync::oneshot::Receiver<DepartureRequest>>,
     planned_subscriptions: Option<PlannedClientSubscriptions>,
+    mut grid: Option<browser_profile::BrowserGrid>,
 ) {
     let deadline = tokio::time::Instant::now() + timeout;
     let mut needs_renegotiation = false;
@@ -2842,6 +3285,7 @@ async fn receive_messages_loop(
             &mut needs_renegotiation,
             &mut pending_resumes,
             &mut subscriptions,
+            grid.as_mut(),
         )
         .await;
     }
@@ -2883,6 +3327,7 @@ async fn receive_messages_loop(
                                     &mut needs_renegotiation,
                                     &mut pending_resumes,
                                     &mut subscriptions,
+                                    grid.as_mut(),
                                 ).await;
                             }
                             Err(e) => {
@@ -3043,6 +3488,7 @@ async fn receive_messages_loop(
                                         &mut needs_renegotiation,
                                         &mut pending_resumes,
                                         &mut subscriptions,
+                                        grid.as_mut(),
                                         ).await;
                                 }
                             }
@@ -3076,6 +3522,7 @@ async fn receive_messages_loop(
                 subscriptions.stop();
             }
             let mut resume_count = 0;
+            let mut laid_out = Vec::new();
             for consumer in to_resume
                 .into_iter()
                 .filter(|consumer| subscriptions.can_resume(&consumer.consumer_id))
@@ -3103,7 +3550,28 @@ async fn receive_messages_loop(
                         e
                     );
                 }
+                laid_out.push((
+                    consumer_id,
+                    consumer.producer_id,
+                    consumer.kind == MediaKind::Video,
+                ));
                 resume_count += 1;
+            }
+            // The web client caps each video tile at the layer it can show once
+            // the batch's tracks are laid out, and re-evaluates the tiles the
+            // new layout resized, with hysteresis.
+            if let Some(grid) = grid.as_mut() {
+                for (consumer_id, spatial_layer) in grid.consume(&laid_out) {
+                    let request = ClientMessage::SetConsumerPreferredLayers {
+                        consumer_id,
+                        spatial_layer,
+                        temporal_layer: None,
+                    };
+                    let json = serde_json::to_string(&request).unwrap();
+                    if let Err(e) = write.feed(Message::Text(json.into())).await {
+                        metrics.record_error(format!("Layer request write failed: {e}"));
+                    }
+                }
             }
             if resume_count > 0 {
                 if let Err(e) = write.flush().await {
@@ -3142,6 +3610,7 @@ async fn handle_server_message(
     needs_renegotiation: &mut bool,
     pending_resumes: &mut Vec<PendingConsumer>,
     subscriptions: &mut Subscriptions,
+    grid: Option<&mut browser_profile::BrowserGrid>,
 ) {
     match msg {
         ServerMessage::NewProducer {
@@ -3150,6 +3619,9 @@ async fn handle_server_message(
             kind,
             ..
         } => {
+            if let Some(grid) = grid {
+                grid.announce(&producer_id, &participant_id);
+            }
             let retired = metrics.producer_retired(&producer_id);
             if let Err(error) =
                 subscriptions.discover_from(&participant_id, producer_id, kind, retired)
@@ -3558,6 +4030,17 @@ fn print_usage() {
     println!(
         "  --churn-rate <N>           Clients churning (disconnect/reconnect) per second (default: 0)"
     );
+    println!("  --profile <NAME>           synthetic (default: one fixed stream, the historical");
+    println!("                             baseline) or browser (what the web client costs:");
+    println!("                             three simulcast layers, Opus DTX, every remote");
+    println!("                             producer up to 32+32, tile-sized layer requests)");
+    println!(
+        "  --capture <720p|1080p>     Browser camera (default 720p: 100/300/900 kbit/s layers)"
+    );
+    println!("  --speakers <N>             Browser talkers per room at a time (default 1)");
+    println!("  --viewport-width <PX>      Browser window width in CSS px (default 1440)");
+    println!("  --pixel-ratio <F>          Browser device pixel ratio (default 2)");
+    println!("  --layout <classic|modern>  Browser room layout (default classic)");
     println!("  --audio-only               Send only audio (no video)");
     println!("  --video-only               Send only video (no audio)");
     println!("  -q, --quality <PRESET>     Video quality: 480p (default), 720p, 1080p");
@@ -3762,6 +4245,7 @@ mod departure_tests {
                 Vec::new(),
                 Some(receiver),
                 None,
+                None,
             ));
             request_explicit_leave(request, Duration::from_secs(1)).await?;
             // No server response is sent: the completion must be a write
@@ -3957,6 +4441,7 @@ mod incremental_receive_tests {
                     kind: MediaKind::Audio,
                     source: None,
                 }],
+                None,
                 None,
                 None,
             )))));
@@ -4161,6 +4646,7 @@ mod subscription_loop_tests {
                 max_video,
                 events,
                 Some(receiver),
+                None,
                 None,
             ));
             Ok(Self {
@@ -4646,5 +5132,156 @@ mod native_connect_order_tests {
     #[tokio::test]
     async fn successful_native_connect_is_idempotent_while_dtls_is_new() {
         exercise_connect_order(true, false, false).await;
+    }
+}
+
+#[cfg(test)]
+mod browser_profile_integration_tests {
+    use super::*;
+
+    #[test]
+    fn speaking_publishers_are_held_to_their_speech_rate() {
+        let mut config = TestConfig {
+            profile: Profile::Browser(browser_profile::BrowserProfile::new(
+                browser_profile::Capture::Hd,
+                2,
+                browser_profile::Viewer {
+                    viewport_width: 1_440,
+                    pixel_ratio: 2.0,
+                    layout: browser_profile::Layout::Classic,
+                },
+            )),
+            ..TestConfig::default()
+        };
+        config.media_config.video_enabled = false;
+        // Two audio-only publishers who both talk: 50 frames a second each.
+        assert_eq!(nominal_publisher_packets_per_second(&config, 1.0), 50.0);
+        assert_eq!(nominal_publisher_packets_per_second(&config, 0.0), 2.5);
+        assert_eq!(nominal_publisher_packets_per_second(&config, 0.5), 26.25);
+        // Five packets a second no longer passes for a talker.
+        assert!(offered_load_deficit(150, 30, 50.0).is_some());
+        assert_eq!(
+            publisher_speaking_share(&config, 0, 2),
+            1.0,
+            "both publishers talk in every slot"
+        );
+    }
+
+    #[test]
+    fn room_seats_follow_round_robin_rooms_and_leading_publishers() {
+        // Nine clients in two rooms, five publishers: room 0 holds clients
+        // 0, 2, 4, 6, 8 (publishers 0, 2, 4), room 1 holds 1, 3, 5, 7 (1, 3).
+        assert_eq!(
+            RoomSeat::of(4, 5, 2),
+            RoomSeat {
+                publisher_index: 2,
+                room_publishers: 3
+            }
+        );
+        assert_eq!(
+            RoomSeat::of(3, 5, 2),
+            RoomSeat {
+                publisher_index: 1,
+                room_publishers: 2
+            }
+        );
+        // One room: everyone shares it.
+        assert_eq!(RoomSeat::of(7, 10, 1).publisher_index, 7);
+        assert_eq!(RoomSeat::of(7, 10, 1).room_publishers, 10);
+        // A room with no publishers.
+        assert_eq!(RoomSeat::of(2, 1, 3).room_publishers, 0);
+    }
+
+    #[test]
+    fn browser_options_default_to_a_classic_laptop_and_reject_mixed_workloads() {
+        let mut options = BrowserOptions::default();
+        options.set("--profile", "browser").unwrap();
+        let Profile::Browser(profile) = options.profile(false).unwrap() else {
+            panic!("expected the browser profile");
+        };
+        assert_eq!(profile.capture, browser_profile::Capture::Hd);
+        assert_eq!(profile.speakers_per_room, 1);
+        assert_eq!(profile.viewer.viewport_width, 1_440);
+        assert_eq!(profile.viewer.pixel_ratio, 2.0);
+        assert_eq!(profile.viewer.layout, browser_profile::Layout::Classic);
+        assert!(options.profile(true).is_err(), "--quality/--fps conflict");
+
+        let mut synthetic = BrowserOptions::default();
+        synthetic.set("--speakers", "2").unwrap();
+        assert!(
+            synthetic.profile(false).is_err(),
+            "browser flags need the profile"
+        );
+        assert_eq!(
+            BrowserOptions::default().profile(false).unwrap(),
+            Profile::Synthetic
+        );
+
+        let mut bad = BrowserOptions::default();
+        assert!(bad.set("--profile", "chrome").is_err());
+        assert!(bad.set("--viewport-width", "700").is_err());
+        assert!(bad.set("--pixel-ratio", "0.5").is_err());
+        assert!(bad.set("--layout", "grid").is_err());
+        assert!(bad.set("--capture", "4k").is_err());
+    }
+
+    #[test]
+    fn the_profile_is_recorded_in_the_run_configuration() {
+        let mut options = BrowserOptions::default();
+        options.set("--profile", "browser").unwrap();
+        options.set("--capture", "1080p").unwrap();
+        let config = TestConfig {
+            profile: options.profile(false).unwrap(),
+            ..Default::default()
+        };
+        let value = serde_json::to_value(&config).unwrap();
+        assert_eq!(value["profile"]["name"], "browser");
+        assert_eq!(value["profile"]["capture"], "1080p");
+        assert_eq!(value["profile"]["viewer"]["layout"], "classic");
+        assert_eq!(value["profile"]["layers"][2]["maxBitrateBps"], 2_500_000);
+        let synthetic = serde_json::to_value(TestConfig::default()).unwrap();
+        assert_eq!(synthetic["profile"]["name"], "synthetic");
+    }
+
+    #[test]
+    fn simulcast_encodings_are_ordered_lowest_first_with_web_client_caps() {
+        let layers = browser_profile::camera_layers(browser_profile::Capture::Hd);
+        let latch = || Arc::new(media_generator::KeyframeRequests::default());
+        let ssrcs = vec![(11, latch()), (22, latch()), (33, latch())];
+        let encodings = simulcast_encodings(&layers, &ssrcs).unwrap();
+        assert_eq!(
+            encodings
+                .iter()
+                .map(|encoding| (encoding.ssrc, encoding.max_bitrate))
+                .collect::<Vec<_>>(),
+            vec![
+                (Some(11), Some(100_000)),
+                (Some(22), Some(300_000)),
+                (Some(33), Some(900_000))
+            ]
+        );
+        assert!(simulcast_encodings(&layers, &ssrcs[..2]).is_err());
+    }
+
+    #[test]
+    fn browser_publishers_have_a_dtx_floor_and_three_layers_of_video() {
+        let mut options = BrowserOptions::default();
+        options.set("--profile", "browser").unwrap();
+        let config = TestConfig {
+            profile: options.profile(false).unwrap(),
+            ..Default::default()
+        };
+        // 2.5 DTX frames plus 30.2 + 60.8 + 122.6 video packets a second.
+        let rate = nominal_publisher_packets_per_second(&config, 0.0);
+        assert!((rate - 216.1).abs() < 0.01, "{rate}");
+        let audio_only = TestConfig {
+            media_config: MediaConfig::audio_only(),
+            ..config.clone()
+        };
+        assert_eq!(nominal_publisher_packets_per_second(&audio_only, 0.0), 2.5);
+        assert_eq!(
+            nominal_publisher_packets_per_second(&TestConfig::default(), 0.0),
+            173.0
+        );
     }
 }

@@ -73,6 +73,20 @@ impl MediaConfig {
         }
     }
 
+    /// One simulcast layer of a browser-profile camera: video only, at the
+    /// layer's size and bitrate cap.
+    pub fn simulcast_layer(width: u32, height: u32, bitrate_bps: u32, fps: u8) -> Self {
+        Self {
+            audio_enabled: false,
+            video_enabled: true,
+            video_width: width,
+            video_height: height,
+            video_fps: fps,
+            video_bitrate_kbps: bitrate_bps / 1000,
+            ..Default::default()
+        }
+    }
+
     pub fn quality_label(&self) -> String {
         let preset = match (self.video_width, self.video_height) {
             (1920, 1080) => "1080p",
@@ -161,7 +175,17 @@ impl MediaGenerator {
         // Opus typically uses 20ms packets at 48kHz = 960 samples
         // Payload size varies (compressed), typically 20-100 bytes for speech
         let payload_size = (self.config.audio_bitrate_kbps * 1000 / 8 / 50) as usize;
+        self.generate_audio_packet_with_payload(payload_size)
+    }
 
+    /// A 20 ms Opus frame that DTX did not send: the RTP clock advances, the
+    /// sequence number does not, exactly as a browser's sender behaves.
+    pub fn skip_audio_frame(&mut self) {
+        self.audio_timestamp = self.audio_timestamp.wrapping_add(960);
+    }
+
+    /// An audio packet with an explicit payload size (speech or a DTX frame).
+    pub fn generate_audio_packet_with_payload(&mut self, payload_size: usize) -> Vec<u8> {
         let mut packet = Vec::with_capacity(12 + 8 + payload_size);
 
         // RTP Header (12 bytes)
@@ -384,11 +408,20 @@ mod keyframe_tests {
         let packets: usize = (0..150)
             .map(|_| generator.generate_video_frame(&requests).packets.len())
             .sum();
-        assert_eq!(packets, 615, "19 keyframe packets plus 149 inter frames of 4");
+        assert_eq!(
+            packets, 615,
+            "19 keyframe packets plus 149 inter frames of 4"
+        );
         assert_eq!(generator.nominal_packets_per_second(), 173.0);
         assert_eq!(generator.audio_packet_interval(), Duration::from_millis(20));
-        assert_eq!(generator.video_packet_interval(), Duration::from_secs_f64(1.0 / 30.0));
-        assert_eq!(generator.generate_audio_packet().len(), generator.generate_audio_packet().len());
+        assert_eq!(
+            generator.video_packet_interval(),
+            Duration::from_secs_f64(1.0 / 30.0)
+        );
+        assert_eq!(
+            generator.generate_audio_packet().len(),
+            generator.generate_audio_packet().len()
+        );
     }
 
     #[test]
@@ -469,6 +502,32 @@ mod keyframe_tests {
         assert_eq!(periodic.frame_index, 150);
         assert!(periodic.is_keyframe && periodic.requested);
         assert!(!requests.is_pending());
+    }
+
+    #[test]
+    fn skipped_dtx_frames_advance_the_clock_but_not_the_sequence() {
+        let mut generator = MediaGenerator::new(MediaConfig::default());
+        let first = generator.generate_audio_packet_with_payload(80);
+        generator.skip_audio_frame();
+        generator.skip_audio_frame();
+        let second = generator.generate_audio_packet_with_payload(1);
+        let seq = |packet: &[u8]| u16::from_be_bytes([packet[2], packet[3]]);
+        let timestamp = |packet: &[u8]| u32::from_be_bytes(packet[4..8].try_into().unwrap());
+        assert_eq!(seq(&second), seq(&first).wrapping_add(1));
+        assert_eq!(timestamp(&second), timestamp(&first).wrapping_add(3 * 960));
+        assert_eq!(first.len(), 12 + 8 + 80);
+        assert_eq!(second.len(), 12 + 8 + 1);
+    }
+
+    #[test]
+    fn simulcast_layer_configs_are_video_only_at_the_layer_rate() {
+        let layer = MediaConfig::simulcast_layer(640, 360, 300_000, 30);
+        assert!(!layer.audio_enabled && layer.video_enabled);
+        assert_eq!((layer.video_width, layer.video_height), (640, 360));
+        assert_eq!(layer.video_bitrate_kbps, 300);
+        // 1,250 bytes a frame is two packets; keyframes every five seconds.
+        let generator = MediaGenerator::new(layer);
+        assert!((60.0..70.0).contains(&generator.nominal_packets_per_second()));
     }
 }
 

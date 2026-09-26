@@ -78,7 +78,11 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 | `--subscription-seed N` | Required for fixed graphs; unsigned 32-bit integer, held constant across comparisons |
 | `--churn-rate N` | Select `min(clients, floor(N × duration))` clients to repeatedly join; 0 |
 | `--audio-only`, `--video-only` | Generate only the selected media kind |
-| `--quality PRESET`, `--fps FPS` | `480p`/`720p`/`1080p`, 15/30/60 fps; defaults 480p/30 |
+| `--quality PRESET`, `--fps FPS` | `480p`/`720p`/`1080p`, 15/30/60 fps; defaults 480p/30 (synthetic profile only) |
+| `--profile NAME` | `synthetic` (default: the fixed stream every historical result used) or `browser` (what the web client costs; see below) |
+| `--capture 720p\|1080p` | Browser camera; 720p (100/300/900 kbit/s layers), 1080p raises the top layer to 2.5 Mbit/s |
+| `--speakers N` | Browser talkers per room at a time, rotating every 10 s; 1 |
+| `--viewport-width PX`, `--pixel-ratio F`, `--layout classic\|modern` | The screen each browser viewer has, which decides the simulcast layer it asks for; 1440, 2, classic |
 | `--output-dir PATH` | JSON report directory; current directory |
 | `--diagnostics` | Bounded RTC snapshots and lifecycle events; off |
 | `--run-label LABEL` | Run identifier |
@@ -102,6 +106,43 @@ a consumer; already requested slots stay occupied until the server's
 `ProducerClosed` notification frees capacity. Discovery deduplication retains at
 most 20,000 identities and fails the run on overflow. This scheduling does not
 change consumer caps, coverage thresholds, keyframe cadence, or session lengths.
+
+### The browser profile
+
+`--profile browser` makes each client cost the server what the web client
+costs, so capacity figures measured with it hold for real rooms:
+
+- **Camera**: three simulcast layers as `web/src/media.ts` publishes them
+  (a quarter, half and full capture size at 100, 300 and 900 kbit/s), each on
+  its own SSRC and answering keyframe requests for that layer. webrtc-rs sends
+  only the first encoding of a track unless all have RIDs, so each layer rides
+  its own video transceiver; the server still sees one producer with three
+  encodings, as it does for a browser.
+- **Microphone**: Opus at 32 kbit/s while speaking and DTX otherwise (one
+  frame per 400 ms, the web client's `opusDtx`), with `--speakers` talkers per
+  room rotating every 10 s.
+- **Subscriptions**: every remote producer, existing ones included, up to the
+  server's default cap of 64 consumers: 32 audio and 32 video when rooms
+  publish both (`--audio-only` or `--video-only` rooms get all 64 for their
+  kind). `--max-audio` and `--max-video` still override them.
+- **Layers**: each time a batch of consumers is resumed, the client lays out
+  its grid as the web client does (`#video-grid` in `web/src/style.css`: its
+  own tile when it publishes and one per remote participant whose media it
+  consumes) and asks for the layer the tile-size cap would
+  (`web/src/layer-cap.ts`), re-evaluating earlier tiles with the same
+  hysteresis. A webinar viewer sees one large presenter tile and asks for the
+  top layer. A 1440 px laptop at 2x in the classic layout gives a fresh tile the
+  top layer with up to four tiles and the middle layer beyond, but a tile that
+  appeared while the grid was smaller keeps the top layer in a room of five (it
+  steps down only below 85 % of the lower layer), so early arrivals cost the
+  server more than a late joiner does. `web/tests/layer-cap-cases.json` holds
+  the generator's port of the cap and the web client's to the same answers.
+- **Bandwidth probes**: the receiver counts mediasoup's probe packets (SSRC
+  1234) in transport-wide feedback, as Chrome does, so the server's estimate
+  can climb to its cap and layer allocation behaves as it does for browsers.
+
+Not modelled: the audio-level header extension (speaking highlights), VP8
+temporal layers (encodings are L1T1), screen sharing, and mobile layouts.
 
 ### Fixed subscription graphs
 
@@ -246,6 +287,21 @@ and SSRCs; missing samples or unmatched streams are unknown, not zero. Native
 forwarding counters do not establish client receipt. See
 [server forwarding snapshots](../docs/diagnostics.md#server-forwarding-snapshots)
 for limits, coverage gates and counter definitions.
+
+### A handshake that fails after one lost datagram
+
+The client DTLS implementation (`rtc-dtls` 0.20) cancels its retransmission
+timer whenever a handshake packet arrives and only re-arms it after it sends a
+flight. mediasoup retransmits its server flight 100 ms after the client's reply
+went unanswered, so when the client's final flight is lost the server's
+retransmissions keep the client's timer cancelled and the client never resends:
+the server gives up after about 37 s and the client reports
+`Timed out waiting for media ICE/DTLS`. Browsers retransmit and recover from
+the same loss in about a second, so a small number of such failures under a
+load that drops inbound datagrams overstates what browsers would see. The
+benchmark's `--capture-handshakes true` shows the pattern (one client flight,
+the server's flight repeated at doubling intervals) and records the kernel's
+receive-queue drops that cause it.
 
 ### Capture a stalled receiver
 

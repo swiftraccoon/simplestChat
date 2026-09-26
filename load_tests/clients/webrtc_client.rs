@@ -4,7 +4,9 @@
 use anyhow::{Context, Result};
 use mediasoup::prelude::*;
 use mediasoup_types::data_structures::{DtlsFingerprint, DtlsRole, IceCandidateType};
-use rtc::interceptor::{Interceptor, Packet, StreamInfo, TaggedPacket, interceptor};
+use rtc::interceptor::{
+    Interceptor, Packet, RTPHeaderExtension, StreamInfo, TaggedPacket, interceptor,
+};
 use rtc::peer_connection::configuration::interceptor_registry::{
     configure_nack, configure_rtcp_reports, configure_simulcast_extension_headers, configure_twcc,
 };
@@ -100,20 +102,86 @@ struct VideoFeedbackObserver<P> {
     // One SFU owns this transport. Retain only its latest FIR identity rather
     // than allocating a map proportional to arbitrary RTCP sender identities.
     last_fir: Option<(u32, u8)>,
+    /// The upper simulcast layers of a browser-profile camera, each with its
+    /// own latch: the SFU asks for a keyframe on the layer it switches to.
+    extra_layers: Vec<SimulcastFeedback>,
+}
+
+/// Counts mediasoup's bandwidth probes in transport-wide feedback, as a
+/// browser does. Chrome records every packet carrying the transport-wide
+/// sequence extension, whatever its SSRC; webrtc-rs records only packets of a
+/// bound receive stream, and no receive section owns the probe SSRC. Unbound,
+/// every probe looks lost, and the SFU's estimate stays near 1.5 times what
+/// it already sends, so simulcast consumers never leave their lowest layer.
+/// Bound on the first probe, the inner chain's recorder counts the rest; the
+/// endpoint still drops the probe payload, which nothing consumes.
+#[derive(Interceptor)]
+struct ProbeFeedbackBinder<P> {
+    #[next]
+    next: P,
+    bound: bool,
+}
+
+#[interceptor]
+impl<P: Interceptor> ProbeFeedbackBinder<P> {
+    #[overrides]
+    fn handle_read(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
+        if !self.bound
+            && let Packet::Rtp(packet) = &msg.message
+            && packet.header.ssrc == PROBATOR_SSRC
+        {
+            self.bound = true;
+            self.next.bind_remote_stream(&StreamInfo {
+                ssrc: PROBATOR_SSRC,
+                payload_type: PROBATOR_PAYLOAD_TYPE,
+                mime_type: "video/VP8".into(),
+                clock_rate: 90_000,
+                rtp_header_extensions: vec![RTPHeaderExtension {
+                    uri: TRANSPORT_CC_URI.into(),
+                    id: u16::from(PROBATOR_TRANSPORT_CC_ID),
+                }],
+                ..Default::default()
+            });
+        }
+        self.next.handle_read(msg)
+    }
+}
+
+/// Keyframe feedback state of one upper simulcast layer.
+struct SimulcastFeedback {
+    ssrc: u32,
+    requests: Arc<super::media_generator::KeyframeRequests>,
+    last_fir: Option<(u32, u8)>,
+}
+
+fn note_keyframe_request(
+    requests: &super::media_generator::KeyframeRequests,
+    metrics: &Option<Arc<super::metrics::MetricsCollector>>,
+    diagnostic_attempt: usize,
+    ssrc: u32,
+    feedback: &str,
+) {
+    if requests.request()
+        && let Some(metrics) = metrics
+        && metrics.diagnostics_enabled()
+    {
+        metrics.diagnostic_event_for_attempt(
+            diagnostic_attempt,
+            "keyframe-requested",
+            serde_json::json!({"ssrc": ssrc, "feedback": feedback}),
+        );
+    }
 }
 
 impl<P> VideoFeedbackObserver<P> {
     fn request(&self, ssrc: u32, feedback: &str) {
-        if self.requests.request()
-            && let Some(metrics) = &self.metrics
-            && metrics.diagnostics_enabled()
-        {
-            metrics.diagnostic_event_for_attempt(
-                self.diagnostic_attempt,
-                "keyframe-requested",
-                serde_json::json!({"ssrc": ssrc, "feedback": feedback}),
-            );
-        }
+        note_keyframe_request(
+            &self.requests,
+            &self.metrics,
+            self.diagnostic_attempt,
+            ssrc,
+            feedback,
+        );
     }
 
     fn observe(&mut self, packets: &[Box<dyn rtc::rtcp::Packet>]) {
@@ -127,13 +195,41 @@ impl<P> VideoFeedbackObserver<P> {
             if let Some(pli) = packet.as_any().downcast_ref::<PictureLossIndication>() {
                 if pli.media_ssrc == ssrc {
                     self.request(ssrc, "pli");
+                } else if let Some(layer) = self
+                    .extra_layers
+                    .iter()
+                    .find(|layer| layer.ssrc == pli.media_ssrc)
+                {
+                    note_keyframe_request(
+                        &layer.requests,
+                        &self.metrics,
+                        self.diagnostic_attempt,
+                        layer.ssrc,
+                        "pli",
+                    );
                 }
             } else if let Some(fir) = packet.as_any().downcast_ref::<FullIntraRequest>() {
                 for entry in &fir.fir {
                     let identity = (fir.sender_ssrc, entry.sequence_number);
-                    if entry.ssrc == ssrc && self.last_fir != Some(identity) {
-                        self.last_fir = Some(identity);
-                        self.request(ssrc, "fir");
+                    if entry.ssrc == ssrc {
+                        if self.last_fir != Some(identity) {
+                            self.last_fir = Some(identity);
+                            self.request(ssrc, "fir");
+                        }
+                    } else if let Some(layer) = self
+                        .extra_layers
+                        .iter_mut()
+                        .find(|layer| layer.ssrc == entry.ssrc)
+                        && layer.last_fir != Some(identity)
+                    {
+                        layer.last_fir = Some(identity);
+                        note_keyframe_request(
+                            &layer.requests,
+                            &self.metrics,
+                            self.diagnostic_attempt,
+                            layer.ssrc,
+                            "fir",
+                        );
                     }
                 }
             }
@@ -358,7 +454,13 @@ pub struct WebRtcTransport {
     connection_state: tokio::sync::watch::Receiver<RTCPeerConnectionState>,
     send_audio_track: Option<Arc<TrackLocalStaticRTP>>,
     send_video_track: Option<Arc<TrackLocalStaticRTP>>,
+    /// One track per simulcast layer, lowest first (the base track alone
+    /// without simulcast).
+    send_video_tracks: Vec<Arc<TrackLocalStaticRTP>>,
     video_keyframe_requests: Arc<super::media_generator::KeyframeRequests>,
+    /// Every simulcast layer's SSRC and keyframe latch, lowest layer first;
+    /// one entry without simulcast. Empty on a receive transport.
+    video_layers: Vec<(u32, Arc<super::media_generator::KeyframeRequests>)>,
     /// Extension ids from this peer's own offer; the synthesized answer for a
     /// send transport and the producer parameters sent to the SFU must match.
     local_extension_ids: HeaderExtensionIds,
@@ -387,6 +489,24 @@ struct ConsumerInfo {
     twcc_ext_id: Option<u16>,
     mid: usize,
     server_mid: Option<u32>,
+}
+
+/// mediasoup probes a receive transport's spare bandwidth with padding-only
+/// packets on this SSRC and payload type, carrying the transport-wide
+/// sequence extension under its fixed id (`RTC::RTP::ProbationGenerator`,
+/// `RtpHeaderExtensionUri::Type::TRANSPORT_WIDE_CC_01`).
+const PROBATOR_SSRC: u32 = 1234;
+const PROBATOR_PAYLOAD_TYPE: u8 = 127;
+const PROBATOR_TRANSPORT_CC_ID: u8 = 5;
+
+/// What a transport's media sections need beyond the defaults.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TransportMedia {
+    /// Simulcast SSRCs the send-side camera publishes (1 to 3).
+    pub video_layers: usize,
+    /// Count mediasoup's bandwidth probes in transport-wide feedback, as a
+    /// browser does, on a receive transport.
+    pub probator: bool,
 }
 
 fn audio_codec() -> RTCRtpCodec {
@@ -424,16 +544,25 @@ fn video_codec() -> RTCRtpCodec {
     }
 }
 
+/// A track with one SSRC. A simulcast camera attaches one track per layer:
+/// webrtc-rs keeps only the first encoding of a track unless every encoding
+/// has a RID, so each layer gets its own transceiver and SSRC, and mediasoup
+/// maps each SSRC to the producer encoding that declares it, exactly as it
+/// maps a browser's RID-tagged layers once it has learned their SSRCs.
 async fn attach_local_track(
     peer: &Arc<dyn PeerConnection>,
     client_id: &str,
     kind: RtpCodecKind,
     codec: RTCRtpCodec,
     ssrc: u32,
+    layer: Option<usize>,
 ) -> Result<Arc<TrackLocalStaticRTP>> {
+    let suffix = layer
+        .map(|layer| format!("-layer{layer}"))
+        .unwrap_or_default();
     let track = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
         format!("stream-{client_id}"),
-        format!("{kind}-{client_id}"),
+        format!("{kind}-{client_id}{suffix}"),
         format!("{kind} load test"),
         kind,
         vec![RTCRtpEncodingParameters {
@@ -476,6 +605,9 @@ fn local_udp_addresses(candidates: &[IceCandidate]) -> Vec<&'static str> {
 }
 
 impl WebRtcTransport {
+    /// A transport with the default media sections (tests only; sessions
+    /// choose their sections explicitly).
+    #[cfg(test)]
     pub async fn new(
         client_id: String,
         transport_id: String,
@@ -485,6 +617,38 @@ impl WebRtcTransport {
         is_send: bool,
         metrics: Option<Arc<super::metrics::MetricsCollector>>,
     ) -> Result<(Self, DtlsParameters)> {
+        Self::new_with_media(
+            client_id,
+            transport_id,
+            ice_parameters,
+            ice_candidates,
+            dtls_parameters,
+            is_send,
+            metrics,
+            TransportMedia::default(),
+        )
+        .await
+    }
+
+    /// A transport whose send-side camera publishes `media.video_layers`
+    /// simulcast SSRCs, or whose receive side declares mediasoup's probation
+    /// stream; each setting applies only to its direction.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "The transport owns its signaling parameters and its media sections explicitly."
+    )]
+    pub async fn new_with_media(
+        client_id: String,
+        transport_id: String,
+        ice_parameters: IceParameters,
+        ice_candidates: Vec<IceCandidate>,
+        dtls_parameters: DtlsParameters,
+        is_send: bool,
+        metrics: Option<Arc<super::metrics::MetricsCollector>>,
+        media: TransportMedia,
+    ) -> Result<(Self, DtlsParameters)> {
+        let video_layers = media.video_layers;
+        let probator = media.probator && !is_send;
         let mut media_engine = MediaEngine::default();
         media_engine.register_codec(
             RTCRtpCodecParameters {
@@ -517,8 +681,25 @@ impl WebRtcTransport {
         }
         let registry = interceptor_registry(&mut media_engine)?;
         let (cancellation, cancellation_rx) = tokio::sync::watch::channel(false);
-        let video_ssrc = rand::random::<u32>();
-        let video_keyframe_requests = Arc::new(super::media_generator::KeyframeRequests::default());
+        let mut video_ssrcs: Vec<u32> = Vec::with_capacity(video_layers.clamp(1, 3));
+        while video_ssrcs.len() < video_layers.clamp(1, 3) {
+            let candidate = rand::random::<u32>();
+            if !video_ssrcs.contains(&candidate) {
+                video_ssrcs.push(candidate);
+            }
+        }
+        let video_ssrc = video_ssrcs[0];
+        let video_layer_requests: Vec<(u32, Arc<super::media_generator::KeyframeRequests>)> =
+            video_ssrcs
+                .iter()
+                .map(|ssrc| {
+                    (
+                        *ssrc,
+                        Arc::new(super::media_generator::KeyframeRequests::default()),
+                    )
+                })
+                .collect();
+        let video_keyframe_requests = video_layer_requests[0].1.clone();
         let diagnostic_attempt = metrics
             .as_ref()
             .map(|m| m.diagnostic_attempt())
@@ -531,9 +712,32 @@ impl WebRtcTransport {
             metrics: metrics.clone(),
             diagnostic_attempt,
             last_fir: None,
+            extra_layers: if is_send {
+                video_layer_requests
+                    .iter()
+                    .skip(1)
+                    .map(|(ssrc, requests)| SimulcastFeedback {
+                        ssrc: *ssrc,
+                        requests: requests.clone(),
+                        last_fir: None,
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            },
+        });
+        let registry = registry.with(move |next| ProbeFeedbackBinder {
+            next,
+            // Leave the synthetic profile's receive chain exactly as before.
+            bound: !probator,
         });
         let (connection_state_tx, connection_state) =
             tokio::sync::watch::channel(RTCPeerConnectionState::New);
+        // Counted sockets make the clients' sends the denominator of the
+        // workers' socket drops; tests without a collector keep the default.
+        let datagram_counter = metrics
+            .as_ref()
+            .map(|metrics| metrics.datagram_counter());
         let handler = Arc::new(TransportEvents {
             client_id: client_id.clone(),
             transport_id: transport_id.clone(),
@@ -543,13 +747,20 @@ impl WebRtcTransport {
             connection_state: connection_state_tx,
             is_send,
         });
+        let mut builder = PeerConnectionBuilder::new()
+            .with_configuration(RTCConfigurationBuilder::default().build())
+            .with_media_engine(media_engine)
+            .with_interceptor_registry(registry)
+            .with_handler(handler)
+            .with_udp_addrs(local_udp_addresses(&ice_candidates));
+        if let Some(counter) = datagram_counter {
+            let inner = webrtc::runtime::default_runtime().context("No async runtime for WebRTC")?;
+            builder = builder.with_runtime(Arc::new(
+                super::datagram_counter::CountingRuntime::new(inner, counter),
+            ));
+        }
         let peer_connection: Arc<dyn PeerConnection> = Arc::new(
-            PeerConnectionBuilder::new()
-                .with_configuration(RTCConfigurationBuilder::default().build())
-                .with_media_engine(media_engine)
-                .with_interceptor_registry(registry)
-                .with_handler(handler)
-                .with_udp_addrs(local_udp_addresses(&ice_candidates))
+            builder
                 .build()
                 .await
                 .context("Failed to create peer connection")?,
@@ -590,29 +801,31 @@ impl WebRtcTransport {
             .collect();
 
         let setup = async {
-            let (send_audio_track, send_video_track) = if is_send {
-                (
-                    Some(
-                        attach_local_track(
-                            &peer_connection,
-                            &client_id,
-                            RtpCodecKind::Audio,
-                            audio_codec(),
-                            rand::random::<u32>(),
-                        )
-                        .await?,
-                    ),
-                    Some(
+            let (send_audio_track, send_video_tracks) = if is_send {
+                let audio = attach_local_track(
+                    &peer_connection,
+                    &client_id,
+                    RtpCodecKind::Audio,
+                    audio_codec(),
+                    rand::random::<u32>(),
+                    None,
+                )
+                .await?;
+                let mut video = Vec::with_capacity(video_ssrcs.len());
+                for (layer, ssrc) in video_ssrcs.iter().enumerate() {
+                    video.push(
                         attach_local_track(
                             &peer_connection,
                             &client_id,
                             RtpCodecKind::Video,
                             video_codec(),
-                            video_ssrc,
+                            *ssrc,
+                            (video_ssrcs.len() > 1).then_some(layer),
                         )
                         .await?,
-                    ),
-                )
+                    );
+                }
+                (Some(audio), video)
             } else {
                 for kind in [RtpCodecKind::Audio, RtpCodecKind::Video] {
                     peer_connection
@@ -626,7 +839,7 @@ impl WebRtcTransport {
                         .await
                         .context("Failed to add receive transceiver")?;
                 }
-                (None, None)
+                (None, Vec::new())
             };
             let mut transport = Self {
                 peer_connection: peer_connection.clone(),
@@ -641,8 +854,14 @@ impl WebRtcTransport {
                 cancellation: cancellation.clone(),
                 connection_state,
                 send_audio_track,
-                send_video_track,
+                send_video_track: send_video_tracks.first().cloned(),
+                send_video_tracks,
                 video_keyframe_requests,
+                video_layers: if is_send {
+                    video_layer_requests
+                } else {
+                    Vec::new()
+                },
                 local_extension_ids: HeaderExtensionIds::default(),
             };
             let local_dtls = transport.generate_dtls_parameters().await?;
@@ -703,6 +922,7 @@ impl WebRtcTransport {
             self.is_send,
             &self.consumers,
             self.local_extension_ids,
+            self.send_video_tracks.len(),
         )?;
 
         let remote_desc = RTCSessionDescription::answer(remote_sdp)?;
@@ -853,6 +1073,7 @@ impl WebRtcTransport {
             self.is_send,
             &self.consumers,
             self.local_extension_ids,
+            self.send_video_tracks.len(),
         )?;
 
         debug!(
@@ -1007,6 +1228,10 @@ pub struct WebRtcSession {
     video_track: Option<Arc<TrackLocalStaticRTP>>,
     /// Metrics collector passed to recv transport's on_track handler
     metrics: Option<Arc<super::metrics::MetricsCollector>>,
+    /// Simulcast layers the send transport's camera publishes (1 without).
+    video_layers: usize,
+    /// Declare mediasoup's probation stream on the receive transport.
+    probator: bool,
 }
 
 impl WebRtcSession {
@@ -1018,7 +1243,22 @@ impl WebRtcSession {
             audio_track: None,
             video_track: None,
             metrics: Some(metrics),
+            video_layers: 1,
+            probator: false,
         }
+    }
+
+    /// Receive like mediasoup-client: declare the SFU's bandwidth probes so
+    /// they reach transport-wide feedback. Call before the receive transport
+    /// exists.
+    pub fn set_probator(&mut self, probator: bool) {
+        self.probator = probator;
+    }
+
+    /// Publish the camera as `layers` simulcast SSRCs; call before the send
+    /// transport exists.
+    pub fn set_video_layers(&mut self, layers: usize) {
+        self.video_layers = layers.clamp(1, 3);
     }
 
     /// Header extension ids negotiated on the send transport.
@@ -1038,7 +1278,7 @@ impl WebRtcSession {
         ice_candidates: Vec<IceCandidate>,
         dtls_parameters: DtlsParameters,
     ) -> Result<DtlsParameters> {
-        let (mut transport, local_dtls) = WebRtcTransport::new(
+        let (mut transport, local_dtls) = WebRtcTransport::new_with_media(
             self.client_id.clone(),
             transport_id,
             ice_parameters.clone(),
@@ -1046,6 +1286,10 @@ impl WebRtcSession {
             dtls_parameters.clone(),
             true,
             self.metrics.clone(),
+            TransportMedia {
+                video_layers: self.video_layers,
+                probator: false,
+            },
         )
         .await?;
 
@@ -1073,7 +1317,7 @@ impl WebRtcSession {
         ice_candidates: Vec<IceCandidate>,
         dtls_parameters: DtlsParameters,
     ) -> Result<DtlsParameters> {
-        let (mut transport, local_dtls) = WebRtcTransport::new(
+        let (mut transport, local_dtls) = WebRtcTransport::new_with_media(
             self.client_id.clone(),
             transport_id,
             ice_parameters.clone(),
@@ -1081,6 +1325,10 @@ impl WebRtcSession {
             dtls_parameters.clone(),
             false,
             self.metrics.clone(), // on_track handler increments metrics directly
+            TransportMedia {
+                video_layers: 1,
+                probator: self.probator,
+            },
         )
         .await?;
 
@@ -1145,6 +1393,22 @@ impl WebRtcSession {
 
     pub fn video_track(&self) -> Option<Arc<TrackLocalStaticRTP>> {
         self.video_track.clone()
+    }
+
+    /// The camera's per-layer tracks, lowest layer first.
+    pub fn video_layer_tracks(&self) -> Vec<Arc<TrackLocalStaticRTP>> {
+        self.send_transport
+            .as_ref()
+            .map(|transport| transport.send_video_tracks.clone())
+            .unwrap_or_default()
+    }
+
+    /// Every simulcast layer's SSRC and keyframe latch, lowest layer first.
+    pub fn video_layers(&self) -> Vec<(u32, Arc<super::media_generator::KeyframeRequests>)> {
+        self.send_transport
+            .as_ref()
+            .map(|transport| transport.video_layers.clone())
+            .unwrap_or_default()
     }
 
     /// Return this send transport's bounded request latch, never a prior session's.
@@ -1389,6 +1653,7 @@ fn generate_remote_sdp(
     is_send: bool,
     consumers: &[ConsumerInfo],
     local_extension_ids: HeaderExtensionIds,
+    send_video_sections: usize,
 ) -> Result<String> {
     // webrtc-rs only supports SHA-256 fingerprints. mediasoup returns all
     // algorithms (SHA-1, SHA-224, SHA-256, SHA-384, SHA-512) in non-deterministic
@@ -1417,6 +1682,10 @@ fn generate_remote_sdp(
     // Each received producer owns an m-line; putting several independent
     // SSRCs in one section loses tracks in the 0.20 Sans-I/O receiver model.
     let mut sections = vec![(0, MediaKind::Audio), (1, MediaKind::Video)];
+    if is_send {
+        // A simulcast camera offers one video section per layer after mid 1.
+        sections.extend((2..=send_video_sections).map(|mid| (mid, MediaKind::Video)));
+    }
     sections.extend(
         consumers
             .iter()
@@ -1450,7 +1719,9 @@ fn generate_remote_sdp(
             (local_extension_ids.mid, local_extension_ids.transport_cc)
         } else {
             (
-                consumer.and_then(|consumer| consumer.mid_ext_id).unwrap_or(1),
+                consumer
+                    .and_then(|consumer| consumer.mid_ext_id)
+                    .unwrap_or(1),
                 consumer.and_then(|consumer| consumer.twcc_ext_id),
             )
         };
@@ -1545,6 +1816,7 @@ mod migration_tests {
                     metrics: Some(metrics),
                     diagnostic_attempt: 1,
                     last_fir: None,
+                    extra_layers: Vec::new(),
                 },
                 cancellation,
             }
@@ -1578,6 +1850,31 @@ mod migration_tests {
                 sequence_number,
             }],
         })
+    }
+
+    #[test]
+    fn simulcast_feedback_reaches_only_the_requested_layer() {
+        let mut fixture = FeedbackFixture::new();
+        let layer = |ssrc| SimulcastFeedback {
+            ssrc,
+            requests: Arc::new(super::super::media_generator::KeyframeRequests::default()),
+            last_fir: None,
+        };
+        fixture.observer.extra_layers = vec![layer(8), layer(9)];
+        fixture.receive(vec![pli(9)]);
+        assert!(!fixture.observer.requests.take());
+        assert!(!fixture.observer.extra_layers[0].requests.take());
+        assert!(fixture.observer.extra_layers[1].requests.take());
+        // FIR identities are tracked per layer: the same sequence number on
+        // another layer is a new request, a repeat on the same layer is not.
+        fixture.receive(vec![fir(99, 8, 1), fir(99, 9, 1)]);
+        assert!(fixture.observer.extra_layers[0].requests.take());
+        assert!(fixture.observer.extra_layers[1].requests.take());
+        fixture.receive(vec![fir(99, 8, 1)]);
+        assert!(!fixture.observer.extra_layers[0].requests.take());
+        // Unknown SSRCs still request nothing.
+        fixture.receive(vec![pli(10)]);
+        assert!(!fixture.observer.requests.take());
     }
 
     #[test]
@@ -1728,7 +2025,7 @@ mod migration_tests {
             role: DtlsRole::Server,
             fingerprints: vec![DtlsFingerprint::Sha256 { value: [7; 32] }],
         };
-        let answer = generate_remote_sdp(&ice, &dtls, true, &[], ids).unwrap();
+        let answer = generate_remote_sdp(&ice, &dtls, true, &[], ids, 1).unwrap();
         assert!(answer.contains("a=extmap:3 urn:ietf:params:rtp-hdrext:sdes:mid\r\n"));
         assert!(answer.contains(
             "a=extmap:5 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\na=rtcp-fb:96 transport-cc\r\n"
@@ -1744,7 +2041,7 @@ mod migration_tests {
             mid: 1,
             server_mid: Some(1),
         };
-        let receive = generate_remote_sdp(&ice, &dtls, false, &[consumer], ids).unwrap();
+        let receive = generate_remote_sdp(&ice, &dtls, false, &[consumer], ids, 0).unwrap();
         assert!(receive.contains("a=mid:1\r\na=sendonly\r\na=rtpmap:96 VP8/90000\r\na=extmap:2 urn:ietf:params:rtp-hdrext:sdes:mid\r\n"));
         assert!(receive.contains("a=extmap:4 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\na=rtcp-fb:96 transport-cc\r\n"));
     }
@@ -1764,6 +2061,7 @@ mod migration_tests {
                 metrics: None,
                 diagnostic_attempt: 0,
                 last_fir: None,
+                extra_layers: Vec::new(),
             })
             .build();
         observer
@@ -2020,6 +2318,7 @@ mod migration_tests {
                     true,
                     &[],
                     peer_ids,
+                    1,
                 )?)?)
                 .await?;
                 recv.set_remote_description(&source_ice, &source_dtls)
@@ -2104,6 +2403,7 @@ mod migration_tests {
                                 true,
                                 &recv.consumers,
                                 peer_ids,
+                                1,
                             )?,
                         )?)
                         .await?;
@@ -2416,6 +2716,81 @@ mod migration_tests {
         .expect("send-only snapshot fixture and cleanup must finish");
     }
 
+    fn probe(sequence: u16) -> rtc::rtp::Packet {
+        use rtc::shared::marshal::Marshal;
+        let mut packet = rtc::rtp::Packet {
+            header: rtc::rtp::Header {
+                version: 2,
+                payload_type: PROBATOR_PAYLOAD_TYPE,
+                sequence_number: sequence,
+                ssrc: PROBATOR_SSRC,
+                ..Default::default()
+            },
+            payload: bytes::Bytes::from_static(&[0; 200]),
+        };
+        let extension = rtc::rtp::extension::transport_cc_extension::TransportCcExtension {
+            transport_sequence: sequence,
+        }
+        .marshal()
+        .unwrap();
+        packet
+            .header
+            .set_extension(PROBATOR_TRANSPORT_CC_ID, extension.freeze())
+            .unwrap();
+        packet
+    }
+
+    /// Feeds three probes through the default receive chain and reports
+    /// whether it emitted transport-wide feedback.
+    fn feedback_after_probes(count_probes: bool) -> bool {
+        let mut media_engine = MediaEngine::default();
+        let registry = interceptor_registry(&mut media_engine).unwrap();
+        let mut chain = registry
+            .with(move |next| ProbeFeedbackBinder {
+                next,
+                bound: !count_probes,
+            })
+            .build();
+        let start = std::time::Instant::now();
+        for sequence in 1..=3u16 {
+            chain
+                .handle_read(TaggedPacket {
+                    now: start + std::time::Duration::from_millis(u64::from(sequence)),
+                    transport: Default::default(),
+                    message: Packet::Rtp(probe(sequence)),
+                })
+                .unwrap();
+            while chain.poll_read().is_some() {}
+        }
+        chain
+            .handle_timeout(start + std::time::Duration::from_secs(1))
+            .unwrap();
+        let mut feedback = false;
+        while let Some(packet) = chain.poll_write() {
+            if let Packet::Rtcp(packets) = &packet.message {
+                feedback |= packets.iter().any(|packet| {
+                    packet
+                        .as_any()
+                        .downcast_ref::<rtc::rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc>()
+                        .is_some()
+                });
+            }
+        }
+        feedback
+    }
+
+    #[test]
+    fn probes_reach_transport_wide_feedback_only_when_counted() {
+        assert!(
+            feedback_after_probes(true),
+            "counted probes must be acknowledged"
+        );
+        assert!(
+            !feedback_after_probes(false),
+            "without the binder webrtc-rs ignores the unbound probe SSRC"
+        );
+    }
+
     #[tokio::test]
     async fn receive_transport_accepts_batched_audio_video_consumers_and_renegotiation() {
         tokio::time::timeout(Duration::from_secs(10), async {
@@ -2479,6 +2854,7 @@ mod migration_tests {
                 false,
                 &transport.consumers,
                 transport.local_extension_ids(),
+                0,
             )
             .unwrap();
             assert_eq!(answer.matches("m=audio ").count(), 2);

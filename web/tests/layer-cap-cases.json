@@ -1,0 +1,23 @@
+{
+  "description": "spatialLayerForRenderedWidth cases shared with the load generator's browser profile (load_tests/clients/browser_profile.rs), so a change to the web client's layer choice fails both until the generator follows it.",
+  "layerWidths": [320, 640, 1280],
+  "cases": [
+    { "renderedWidth": 200, "pixelRatio": 1, "current": null, "layer": 0 },
+    { "renderedWidth": 200, "pixelRatio": 2, "current": null, "layer": 1 },
+    { "renderedWidth": 640, "pixelRatio": 1, "current": null, "layer": 1 },
+    { "renderedWidth": 641, "pixelRatio": 1, "current": null, "layer": 2 },
+    { "renderedWidth": 4000, "pixelRatio": 1, "current": null, "layer": 2 },
+    { "renderedWidth": 0, "pixelRatio": 0, "current": null, "layer": 0 },
+    { "renderedWidth": 700, "pixelRatio": 1, "current": 1, "layer": 1 },
+    { "renderedWidth": 737, "pixelRatio": 1, "current": 1, "layer": 2 },
+    { "renderedWidth": 300, "pixelRatio": 1, "current": 1, "layer": 1 },
+    { "renderedWidth": 271, "pixelRatio": 1, "current": 1, "layer": 0 },
+    { "renderedWidth": 1400, "pixelRatio": 1, "current": 0, "layer": 2 },
+    { "renderedWidth": 438, "pixelRatio": 2, "current": null, "layer": 2 },
+    { "renderedWidth": 289.33, "pixelRatio": 2, "current": null, "layer": 1 },
+    { "renderedWidth": 289.33, "pixelRatio": 2, "current": 2, "layer": 2 },
+    { "renderedWidth": 200, "pixelRatio": 2, "current": 2, "layer": 1 },
+    { "renderedWidth": 438, "pixelRatio": 2, "current": 1, "layer": 2 },
+    { "renderedWidth": 350, "pixelRatio": 2, "current": 1, "layer": 1 }
+  ]
+}

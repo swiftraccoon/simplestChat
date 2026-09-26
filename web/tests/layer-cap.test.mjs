@@ -26,3 +26,20 @@ test('hysteresis keeps a tile near a boundary on its current layer', () => {
   assert.equal(spatialLayerForRenderedWidth(100, 1, 2), 0);
   assert.equal(spatialLayerForRenderedWidth(500, 1, 7), 1, 'an unknown current layer resets');
 });
+
+test('the cases shared with the load generator hold', async () => {
+  // The generator's browser profile runs the same table against its port of this
+  // function, so neither can change without the other following.
+  const { readFile } = await import('node:fs/promises');
+  const shared = JSON.parse(
+    await readFile(new URL('./layer-cap-cases.json', import.meta.url), 'utf8'),
+  );
+  assert.deepEqual(shared.layerWidths, [...LAYER_WIDTHS]);
+  for (const { renderedWidth, pixelRatio, current, layer } of shared.cases) {
+    assert.equal(
+      spatialLayerForRenderedWidth(renderedWidth, pixelRatio, current),
+      layer,
+      `${renderedWidth} px at ${pixelRatio}x from ${current}`,
+    );
+  }
+});

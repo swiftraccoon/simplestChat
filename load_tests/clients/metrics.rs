@@ -31,6 +31,10 @@ pub struct ClientMetrics {
     pub bandwidth_estimates: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_available_bitrate: Option<u32>,
+    /// Every UDP datagram the client's transports sent (RTP, RTCP, STUN and
+    /// DTLS): what the server's media workers received from it.
+    #[serde(default)]
+    pub datagrams_sent: u64,
     pub errors: Vec<String>,
     pub session_duration_ms: u64,
     pub producers_created: u32,
@@ -110,6 +114,7 @@ pub struct MetricsCollector {
     bandwidth_estimates: AtomicU64,
     last_available_bitrate: AtomicU64,
     packets_received: AtomicU64,
+    datagrams_sent: std::sync::Arc<AtomicU64>,
     bytes_sent: AtomicU64,
     bytes_received: AtomicU64,
     producers_created: AtomicU64,
@@ -151,6 +156,7 @@ impl MetricsCollector {
             bandwidth_estimates: AtomicU64::new(0),
             last_available_bitrate: AtomicU64::new(0),
             packets_received: AtomicU64::new(0),
+            datagrams_sent: std::sync::Arc::new(AtomicU64::new(0)),
             bytes_sent: AtomicU64::new(0),
             bytes_received: AtomicU64::new(0),
             producers_created: AtomicU64::new(0),
@@ -374,6 +380,11 @@ impl MetricsCollector {
         self.record_packet_sent_for_attempt(self.diagnostic_attempt(), size);
     }
 
+    /// The counter a transport's sockets add each sent datagram to.
+    pub fn datagram_counter(&self) -> std::sync::Arc<AtomicU64> {
+        std::sync::Arc::clone(&self.datagrams_sent)
+    }
+
     pub fn record_packet_received(&self, size: usize) {
         self.packets_received.fetch_add(1, Ordering::Relaxed);
         self.bytes_received
@@ -474,6 +485,7 @@ impl MetricsCollector {
                 0 => None,
                 stored => u32::try_from(stored - 1).ok(),
             },
+            datagrams_sent: self.datagrams_sent.load(Ordering::Relaxed),
             errors,
             session_duration_ms: session_duration,
             producers_created: self.producers_created.load(Ordering::Relaxed) as u32,
@@ -549,6 +561,9 @@ pub struct TestSummary {
     pub total_packets_received: u64,
     pub total_bytes_sent: u64,
     pub total_bytes_received: u64,
+    /// Every datagram the clients sent the server's workers; see `ClientMetrics`.
+    #[serde(default)]
+    pub total_datagrams_sent: u64,
     /// Lifetime keyframe counts across clients; see `ClientMetrics`.
     #[serde(default)]
     pub keyframes_generated: u64,
@@ -613,6 +628,7 @@ impl TestSummary {
         let total_packets_received: u64 = metrics.iter().map(|m| m.total_packets_received).sum();
         let total_bytes_sent: u64 = metrics.iter().map(|m| m.total_bytes_sent).sum();
         let total_bytes_received: u64 = metrics.iter().map(|m| m.total_bytes_received).sum();
+        let total_datagrams_sent: u64 = metrics.iter().map(|m| m.datagrams_sent).sum();
         let keyframes_generated: u64 = metrics.iter().map(|m| m.keyframes_generated).sum();
         let keyframes_requested: u64 = metrics.iter().map(|m| m.keyframes_requested).sum();
         let bandwidth_estimates: u64 = metrics.iter().map(|m| m.bandwidth_estimates).sum();
@@ -645,6 +661,7 @@ impl TestSummary {
             total_packets_received,
             total_bytes_sent,
             total_bytes_received,
+            total_datagrams_sent,
             keyframes_generated,
             keyframes_requested,
             bandwidth_estimates,
