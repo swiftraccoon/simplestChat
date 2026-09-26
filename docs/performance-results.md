@@ -68,6 +68,16 @@ its busiest worker sat at 0.36 cores. The report recommends
 of 25 would also stop one-to-many rooms, which the cap does not limit, so the
 host keeps its ceiling of 80 for now.
 
+The webinar again once the Chrome-timed publisher and the 1000 ms keyframe delay
+were deployed (`dfb73d4`, image `19efe19dbf56807a`, generator
+`6da7879dfdcdf8a7`): it stopped at 175 viewers per worker, not 270. At 190 one
+viewer's video paused with the worker at 0.52 cores and no generator stall over
+6 ms. Of the twelve viewers whose estimate fell below 300 kbit/s, most dropped
+from mediasoup's initial 600 kbit/s together, 43–53 seconds into the 48-second
+ramp as the join wave peaked, and then settled near the lowest layer's rate; two
+climbed back to about 1.5 Mbit/s. With browser-timed keyframes the join wave,
+not the worker's CPU, bounds a webinar on this host.
+
 ## Browser-faithful calibration of the Mac VM — 2026-09-26
 
 The first full run of [`build/capacity.py`](../build/capacity.py) ([sizing a
