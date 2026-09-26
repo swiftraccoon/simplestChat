@@ -237,6 +237,95 @@ estimates) and the step passes when the run completes and the server exits
 cleanly. Neither job measures production capacity or real device media
 quality.
 
+## Sizing a host
+
+[`build/capacity.py`](../build/capacity.py) answers how many people a given
+server carries and what each costs, on any Linux host with Docker or Podman and
+Python 3.10 or later (Podman's VM on a Mac works for trials). `run` starts the
+production image as an owned, loopback-only container under a CPU quota and the
+load-test image in its network namespace with the [browser
+profile](../load_tests/README.md#the-browser-profile), so every synthetic
+participant sends and receives what the web client does. It grows three
+workloads until the server's own signals say stop, then prints the settings to
+use and writes `calibration.json`:
+
+- **meetings**: rooms of five all-publishing participants (`--meeting-size`),
+  the everyday case. Its figure per media worker is projected to the app's CPUs
+  (`--app-cpus`, all but one by default) within the app's memory
+  (`--app-memory-mib`, the host's less a quarter and at least 1 GiB, left to the
+  database, the proxy and the system), and priced.
+- **large-meeting**: one all-publishing room on two workers (or one, when the
+  app will run one), as a room spreads its viewers once its primary worker
+  carries 64 consumers. `MAX_PARTICIPANTS_PER_ROOM` is 90 % of it.
+- **webinar**: one presenter and a growing audience.
+
+A step passes when every participant was served: no join failed or was refused
+by the worker guard, no consumer lost media, the workers' sockets dropped under
+0.1 % of the datagrams the clients sent them (media, feedback, STUN and DTLS, as
+the generator counts them), no worker exceeded the guard (0.7,
+`--worker-threshold`, which the measured server runs with too), the server's
+CPU quota ran out in under 10 % of its periods and it never reported itself
+saturated, and memory stayed under 85 % of its limit. A generator throttled in
+more than 5 % of its CPU periods while clients joined or during the window, a
+step without CPU readings for its window or without two readings of every
+worker's load, or one that could not run is invalid instead: it measured the
+generator or the tooling, not the server. Each search projects from a passing
+step's load toward the guard, bisects between a pass and a failure, and stops
+when they are within 10 %; a ceiling is *measured* only with a failure above
+it, otherwise the report says "at least" and why (the generator ran out of CPU,
+the steps ran out, or a step could not run). The generator emulates browsers
+with full DTLS and SRTP and costs about 1.5 times the server's CPU per
+participant, so the per-core workloads give the server a quarter of the host
+(at least one CPU) and the generator the rest.
+
+Joins cost handshakes on the worker that takes them, so a ceiling holds for the
+rate people arrive at: half a join a second per worker into meetings, 1.5 a
+second into the one large room and 4 a second into a webinar (the report keeps
+them under `measurement.joinsPerSecond`). At 1.5 joins a second per worker a
+step of 157 participants per worker collapsed at the ramp's end (the guard
+refused joins and the kernel dropped a fifth of the media) where 150 per worker
+held at 0.375, so many rooms starting on the same minute need headroom beneath
+the ceiling, which the guard enforces by refusing joins that clients retry.
+
+```sh
+podman build --target production -t localhost/simplestchat-production:dev .
+podman build --target loadtest -t localhost/simplestchat-loadtest:dev .
+python3 build/capacity.py run --server-image localhost/simplestchat-production:dev \
+  --generator-image localhost/simplestchat-loadtest:dev \
+  --label cx32 --monthly-price 6.80 [--egress-price-per-gb 0.01 --included-egress-tb 20]
+python3 build/capacity.py compare results/capacity.*/calibration.json
+```
+
+Under each measured ceiling the summary says what the failure above it ran
+into. In an all-publishing room that is usually not CPU: a browser shows up to
+32 video tiles, and even at the lowest layer (100 kbit/s) they need 3.2 Mbit/s,
+more than the server's 3 Mbit/s per-viewer cap, so beyond about 30 publishers
+the server's allocation starves some tiles while the workers idle ("video
+consumers lost media while ... viewers' estimates sat at the ... per-viewer
+cap"). A larger host does not raise that ceiling.
+
+The settings cover `SIMPLESTCHAT_CPUS`, `MEDIA_WORKERS`,
+`MAX_PARTICIPANTS_PER_ROOM`, `SIMPLESTCHAT_MEMORY_LIMIT` (twice the measured
+memory per participant at the projected load, within the app's memory),
+`CPU_SATURATION_WORKER_UTILIZATION` when it is not the default and, when the
+kernel would clamp the workers' socket buffers, the sysctls (a warning says so
+before any step runs, because clamped buffers lower every ceiling). The
+projection takes the smaller of what the CPUs and the memory carry and says
+which bound it. The cost model assumes the host full around the clock: dollars
+per 1,000 participant-hours and participants per monthly dollar,
+network-bound instead when `--port-mbps` times 0.8 carries fewer participants
+than the projection, plus egress beyond the allowance. `compare` ranks reports by that cost, so the same command on several
+VPS types finds the cheapest per participant. Each step keeps its generator
+results, both containers' logs, the server's final metrics and `step.json` in
+the report directory; a step whose container ran out of memory says which.
+Steal time above 5 % is logged per step: a noisy neighbour lowers that run's
+figures, so repeat it before trusting it. `--quick` shortens the windows and
+allows three steps per workload, which more often ends in a lower bound.
+
+The generator's RTP matches the web client's layers, silence and subscriptions,
+but nothing decodes it: the figures are what the server forwards, not browser
+decode or visual quality.
+
 ## Production shape and impaired networks
 
 Production runs two media workers under a 2-CPU, 2 GiB container. The Mac
@@ -277,6 +366,29 @@ worker/runtime split do inform limits.
 [`load_tests/netem.Containerfile`](../load_tests/netem.Containerfile) that
 impairs UDP inside the server's namespace, when the VM kernel ships `sch_netem`
 (the pinned Podman 5.5 machine image does not; the CI runner does).
+
+`--server-env "KEY=VALUE;KEY=VALUE"` passes experiment settings to the server
+container (the wiring keys the script owns cannot be overridden), for example
+`MEDIA_WORKER_LOG_LEVEL=debug;MEDIA_WORKER_LOG_TAGS=dtls` to record every
+handshake. `--capture-handshakes true` adds a sidecar built from
+[`load_tests/tcpdump.Containerfile`](../load_tests/tcpdump.Containerfile)
+(`podman build -f load_tests/tcpdump.Containerfile -t localhost/simplestchat-tcpdump:dev .`)
+that records STUN and DTLS handshake packets on the namespace's loopback to
+`handshakes.pcap` (200-byte snaplen, no media payload) and, once the generator
+has finished, the namespace's kernel UDP counters to `netns-udp.txt`: the
+`serverUdp` field of the row carries the workers' receive-queue drops, which
+are datagrams the kernel discarded before the worker could read them and which
+neither the capture nor any log shows. Every run also samples the server's
+memory every five seconds into `resources.json` (`memory`: `smaps_rollup`
+totals, every mapping of 2 MiB or more, and the cgroup's anonymous, file,
+kernel and socket charges), which is how a growth was traced to one heap and
+one cause rather than to "the worker". The VM's `net.core.rmem_max` and
+`wmem_max` are the Linux default of 208 KiB and cap the workers' socket
+buffers at that size whatever the server requests; a measurement of the
+configured buffers (1 MiB by default) needs
+`podman machine ssh -- sudo sysctl -w net.core.rmem_max=2097152 net.core.wmem_max=2097152`
+first, or larger for a buffer experiment (the setting lasts until the machine
+restarts).
 
 [`build/impair.sh`](../build/impair.sh) applies the same profiles to an owned
 native server on Linux (netem on loopback, sudo), and

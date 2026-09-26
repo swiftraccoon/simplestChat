@@ -1,5 +1,237 @@
 # Performance results
 
+## Browser-faithful calibration of the Mac VM — 2026-09-26
+
+The first full run of [`build/capacity.py`](../build/capacity.py) ([sizing a
+host](performance.md#sizing-a-host)): the 8-CPU, 16 GiB Podman VM on Apple
+silicon, both images built at `ff74dbb` (server `e5f3e35d280946ba`, generator
+`ffd019dfcb980e1d`), every workload on two media workers under a 2-CPU quota
+beside a 5.8-CPU generator emulating browsers (three simulcast layers, DTX
+microphones, stateful tile layers), joins at 1, 1.5 and 4 a second for meetings,
+the one room and the webinar, a 30-second warmup and a 60-second window, and 1 MiB
+worker socket buffers with the VM's `net.core.rmem_max` raised. It took an hour.
+
+| Workload | Size | Verdict | Busiest worker | Worker socket drops | Generator (cores) | Egress | Receive-ready P99 |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| meetings of 5 | 125 | pass | 0.33 | 0 | 1.14 | 301 Mbit/s | 419 ms |
+| meetings of 5 | 175 | pass | 0.39 | 0.030 % | 1.50 | 420 Mbit/s | 496 ms |
+| meetings of 5 | 185 | fail | 0.45 | 1.103 % | 1.70 | 442 Mbit/s | 786 ms |
+| meetings of 5 | 200 | fail | 0.44 | 0.168 % | 1.81 | 478 Mbit/s | 625 ms |
+| meetings of 5 | 230 | fail | 0.53 | 0.341 % | 1.96 | 541 Mbit/s | 479 ms |
+| one room | 22 | pass | 0.18 | 0 | 0.55 | 70 Mbit/s | 426 ms |
+| one room | 26 | pass | 0.17 | 0 | 0.65 | 83 Mbit/s | 424 ms |
+| one room | 30 | fail | 0.27 | 0 | 0.77 | 98 Mbit/s | 450 ms |
+| one room | 38 | fail | 0.53 | 4.350 % | 1.40 | 115 Mbit/s | 635 ms |
+| webinar | 460 | pass | 0.40 | 0 | 1.38 | 460 Mbit/s | 492 ms |
+| webinar | 500 | pass | 0.41 | 0 | 1.49 | 491 Mbit/s | 502 ms |
+| webinar | 545 | fail | 0.45 | 0 | 1.72 | 514 Mbit/s | 437 ms |
+| webinar | 715 | fail | 0.64 | 0.774 % | 1.86 | 489 Mbit/s | 1,870 ms |
+
+**Meetings bind on socket drops, not CPU: 175 participants on two workers.** No
+generator was throttled and the server's quota never ran out, yet from 185 up the
+workers' sockets dropped 0.17–1.1 % of what the clients sent while the busiest
+worker was at 0.44–0.53 cores, below the 0.7 guard: millisecond bursts overflow the
+1 MiB buffers before a 10-second load average shows them. The spread between 185
+and 200 is the burst regime's run-to-run variance, so this ceiling wants repeats.
+Each participant costs 2.4 Mbit/s of egress, 1.7 times what a final-grid layer
+model gave, because tiles that appeared while a room filled keep the top layer.
+
+**One all-publishing room stops at the per-viewer cap: 26 participants.** At 30
+every browser lost two of its 29 video tiles while the workers idled at 0.27
+cores: 29 tiles need 2.9 Mbit/s even at the lowest layer (100 kbit/s), and the
+server sends each viewer at most 3 Mbit/s with audio beside it. No host raises
+this; a higher per-viewer cap, a cheaper lowest layer or fewer live tiles per
+viewer would. The public template's 80 was sized with a synthetic client that
+consumes four videos, not the 32 a browser shows.
+
+**Webinars carry 500 viewers on two workers; the next failure is unexplained.** At
+545 five viewers scattered through the room had their send-side estimate fall to
+the 100 kbit/s floor and their video stop, three of them within the same few
+seconds, with no drop, no throttling and the workers at 0.45 cores. Whether the
+generator's transport-wide feedback ran late under 546 clients or the server's
+egress stalled is open. At 715 the guard refused 86 joins at the ramp's end.
+
+Projected to seven app CPUs this host would carry about 612 meeting participants
+(`SIMPLESTCHAT_CPUS=7`, `MEDIA_WORKERS=7`, `MAX_PARTICIPANTS_PER_ROOM=23`,
+`SIMPLESTCHAT_MEMORY_LIMIT=3072m`). The cores are Apple silicon and the VPS spends
+2.4–2.7 times the worker CPU per consumer, so the VPS needs its own run.
+
+## An all-publishing room on the VPS's own cores — 2026-09-26
+
+`MAX_PARTICIPANTS_PER_ROOM` is 80 in the public template, sized from the Mac VM's
+200-publisher result scaled by the 2.5 factor measured for viewers. These runs measure it
+on the VPS itself: the deployed server image (`aebd7f7`, image `d0c99e8fbbc11079`) as an
+owned loopback-only container under the production quota (2 CPUs, 2 GiB, two workers),
+the CI-built generator (`809b022`) in its network namespace with 1.9 CPUs, one room of N
+publishers (camera and microphone each, `ring-v1` seed 17, four audio and four video
+subscriptions per client, 250 loopback source addresses), a ramp of about one client a
+second and a 120-second window. The public app was untouched. The deployed server has no
+socket buffer setting and the host's `net.core.rmem_max` is the Linux default, so these
+are the 208 KiB default buffers.
+
+| Publishers | Runs | Drops at worker 0's socket / inbound | Clients lost | Consumers validated / failed | Worker 0 / 1 (cores) | Receive-ready P99 | Generator (cores; throttled) |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 60 | 1 | 143 / 9,550,457 (0.0015 %) | 0 | 480 / 0 | 0.51 / 0.34 | 446 ms | 0.77; never |
+| 80 | 2 | 2,871 / 13,270,378 (0.022 %); 3,447 / 13,311,116 (0.026 %) | 0; 0 | 640 / 0; 640 / 0 | 0.60 / 0.47; 0.65 / 0.51 | 471, 452 ms | 0.96, 0.92; never |
+| 100 | 1 | 23,322 / 16,418,709 (0.14 %) | 0 | 800 / 0 | 0.69 / 0.53 | 488 ms | 1.00; never |
+
+**The 80-participant limit holds on the VPS with some margin.** Both 80-publisher runs
+delivered every consumer and lost no handshake, with the primary worker at 0.60–0.65
+cores, under the 0.7 worker guard. The drops at the primary worker's socket grow about
+sixfold per 20 publishers. At 100 every consumer was still delivered, but the primary
+worker reached 0.69 cores, where the 0.7 guard starts refusing joins, and its socket
+dropped a steady trickle: the drop timeline puts 575 of the 23,322 drops in the ramp and
+21,118 in the measurement window, some in every five-second interval, rather than the
+Mac VM's collapse at the end of the ramp. Browsers publish three simulcast layers where
+the generator publishes one, so a browser room costs the primary worker more per
+publisher; that is the reason to keep 80 rather than the synthetic 100.
+
+**The 2.5 factor holds for all-publishing rooms, and it is the worker's alone.** The
+workers spent 1.6–1.8 millicores per consumer (0.86 cores for 480 consumers, 1.10 for
+640, 1.25 for 800), 2.4–2.7 times the Mac VM's 0.66. The generator spent 0.77–1.00
+cores for 60–100 publishers, about 0.0125 cores per client, the same as on the Mac, and
+was never throttled, so on this host it fits beside the server; at that rate its 1.9-core
+share would bind near 150 publishers. The next release's 1 MiB socket buffer applies here
+only once the host's ceilings are raised, and at 80 there is little for it to absorb.
+
+Evidence: `results/vps-conference.20260926T000429Z` (runs `c60`, `c80a`, `c80b` and
+`c100`, whose `drop-samples.txt` holds the five-second drop timeline, plus the scripts).
+Not measured: browsers, and rooms beyond 100 publishers on the VPS.
+
+## Where the 200-publisher handshake failures come from — 2026-09-25
+
+The all-publishing room of 200 below lost one to five clients per run to ICE/DTLS
+timeouts. A packet capture of the handshakes (`benchmark-podman.mjs --capture-handshakes
+true`: STUN and DTLS handshake records on the namespace's loopback, worker DTLS debug
+logging on) and the kernel's per-namespace UDP counters (`netns-udp.txt`, read from the
+capture sidecar while the sockets still exist) locate the loss on both sides of the wire.
+
+**The server side: the kernel discards inbound datagrams at the worker's socket.** Every
+run is the same shape (200 publishers, `ring-v1` seed 17, two workers, 2 CPUs, 2 GiB,
+200-second ramp, 120-second window, generator `f27c7c3a4ef3632f`). The drop column is the
+kernel's `RcvbufErrors` on the primary worker's UDP socket over the whole run against the
+namespace's inbound datagrams; the STUN columns are the share of the clients' mid-call
+binding requests that got no answer and the worker's answer latency to the rest (request to
+response in the capture, so queueing plus processing); clients lost counts handshake
+timeouts and joins the worker CPU guard refused.
+
+| Run | Worker socket buffer | Drops at worker 0's socket / inbound | STUN unanswered | STUN answer p50 / p99 / max | Clients lost | Consumers validated / failed | Worker 0 / 1 (cores) | Peak RSS |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| A (`36ff777fd54be5e8`) | kernel default, 208 KiB | not counted | 0.5 % | 0.3 / 2.2 / 6 ms | 2 (DTLS) | 1,568 / 14 | 0.59 / 0.50 | 473 MiB |
+| B (`36ff777fd54be5e8`, worker `info,dtls` debug tags, host busy) | kernel default | 1,516,841 / 35,747,176 (4.2 %) | 3.3 % | 0.4 / 3.6 / 140 ms | 11 (DTLS) | 956 / 536 | 0.78 / 0.60 | 550 MiB |
+| C (`73ee79b411fdfa36`) | 4 MiB requested, 8 MiB granted | 6,893,911 / 36,768,823 (18.7 %) | 14.6 % | 0.4 / 259 / 1,214 ms | 4 (refused) | 772 / 716 | 0.86 / 0.70 | 1,350 MiB |
+| D (`73ee79b411fdfa36`, control) | kernel default | 1,045,152 / 35,071,059 (3.0 %) | 2.3 % | 0.3 / 3.0 / 73 ms | 11 (2 DTLS, 9 refused) | 1,328 / 16 | 0.52 / 0.43 | 518 MiB |
+| E (`73ee79b411fdfa36`) | 1 MiB requested, 2 MiB granted | 0 / 39,359,628 | 0 | 0.3 / 2.0 / 27 ms | 0 | 1,600 / 0 | 0.57 / 0.49 | 466 MiB |
+| F (`73ee79b411fdfa36`) | 512 KiB requested, 1 MiB granted | 265 / 39,366,363 (0.0007 %) | 0 | 0.3 / 2.5 / 8 ms | 0 | 1,600 / 0 | 0.56 / 0.49 | 471 MiB |
+
+The Linux default receive buffer (`net.core.rmem_default`, 208 KiB) holds about 14 ms of
+the inbound media of 200 publishers at the plateau (about 120,000 datagrams a second into
+the namespace, most of them for the primary worker, which owns all 400 producers). Those
+single runs suggested that 1 MiB removes the loss, so the comparison was repeated three
+times each, alternating the committed 1 MiB default and the kernel default on one image
+(`9288838f3d086ce5`, ceilings raised to 2 MiB in the VM):
+
+| Run | Buffer | Drops at worker 0's socket / inbound | Loss episodes | STUN unanswered | STUN answer p99 / max | Clients lost | Consumers validated / failed | Worker 0 / 1 (cores) | Peak RSS |
+| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 1 MiB | 492,247 / 39,541,028 (1.2 %) | two, of 3 s and 5 s, after the ramp | 1.2 % | 20 / 231 ms | 0 | 1,593 / 7 | 0.63 / 0.53 | 580 MiB |
+| 2 | 1 MiB | 6,841,156 / 24,885,617 (27 %) | sustained | 16.1 % | 132 / 496 ms | 17 (refused) | 657 / 461 | 0.72 / 0.53 | 794 MiB |
+| 3 | 1 MiB | 0 / 39,399,615 | none | 0 | 2.8 / 8 ms | 0 | 1,600 / 0 | 0.65 / 0.55 | 467 MiB |
+| 1 | kernel default | 482,223 / 38,229,117 (1.3 %) | 103, mostly one request, from 104 s on | 2.0 % | 2.7 / 60 ms | 5 (DTLS) | 1,522 / 22 | 0.68 / 0.56 | 548 MiB |
+| 2 | kernel default | 7,433,127 / 22,204,221 (33 %) | sustained | 16.9 % | 21 / 501 ms | 34 (refused) | 628 / 162 | 0.42 / 0.32 | 716 MiB |
+| 3 | kernel default | 8,835,175 / 35,882,670 (25 %) | sustained | 14.1 % | 15 / 175 ms | 2 (DTLS) | 634 / 942 | 0.81 / 0.63 | 1,192 MiB |
+
+Medians and ranges: with 1 MiB, drops 1.2 % (0–27 %), clients lost 0 (0–17), failed
+consumers 7 (0–461); with the kernel default, drops 25 % (1.3–33 %), clients lost 5 (2–34),
+failed consumers 162 (22–942).
+
+**This shape has two regimes, and the buffer matters in one of them.** In the normal
+regime the worker keeps up on average and the kernel default sheds millisecond bursts
+throughout the loaded phase: 103 loss episodes in kernel-default run 1, most of them a
+single request, from 104 s into the ramp onward, and the worker's answers otherwise
+arrive within 3 ms. Handshakes happen during the ramp, so those bursts are what cost
+handshakes their final flight (5 in that run, 2 in run A, 2 in run D). **A 1 MiB buffer
+absorbs them:** runs E and 3 dropped nothing at all, and run 1 lost only two episodes of
+three and five seconds after the ramp, when every handshake was already done, so no
+client was lost in any normal-regime 1 MiB run against clients lost in every
+kernel-default run. In the overload regime, which this shape entered in one 1 MiB run and
+two kernel-default runs (and in the 4 MiB run), worker 0 falls behind for tens of seconds
+at the end of the ramp, when the last clients join and every publisher's bandwidth
+estimate ramps: a quarter to a third of its inbound is dropped whatever the buffer, the
+worker guard refuses joins, consumers fail, and the process grows to 0.7–1.2 GiB (traced
+below to libwebrtc's transport feedback history). **The buffer is not a lever there;
+room size is** (80 in the public template). A queue only adds delay to that regime: 1 MiB
+run 2 answered at a 132 ms P99 where the kernel-default collapses answered within 21 ms,
+and the 4 MiB run C queued for a quarter of a second at the P99 and up to 1.2 s, so the
+buffer must stay far below what a sustained overload would fill. The default is now 1 MiB
+(`WEBRTC_RECV_BUFFER_BYTES`, `WEBRTC_SEND_BUFFER_BYTES`). The kernel silently clamps a
+request to `net.core.rmem_max`/`wmem_max` (208 KiB by default, not namespaced) and grants
+twice the request, so the deployment raises the ceilings on the host
+(`ops/ansible/tasks/host.yml`, [deployment](deployment.md)); the VM ran C–F with 8 MiB
+ceilings and the six runs with 2 MiB. Run B carries a caveat: a native build ran on the
+Mac during its ramp, and its worker also formatted every `info`-tagged debug message, so
+it shows the mechanism and not a clean number. The loss episodes show no 15-second
+period, so the quality sampler's statistics requests are not what stalls the worker.
+
+**The client side: the generator never resends a lost final flight.** The two failed
+handshakes of run A show the same pattern: the client's flight 5 (Certificate,
+ClientKeyExchange, CertificateVerify, ChangeCipherSpec and Finished in one 659-byte
+datagram) left the client once, the worker never logged `read client certificate`, and it
+retransmitted its own flight thirteen times at 0.1, 0.2, 0.4 … 6.4 s and then every 4 s
+until OpenSSL's retransmission budget ran out 37 s later (`DTLSv1_handle_timeout() failed`).
+The client kept its ICE keepalives going for ten seconds and never resent its flight. That is
+the generator's DTLS implementation (`rtc-dtls` 0.20.5, `handshaker.rs`): receiving any
+handshake packet clears its retransmission timer, and the timer is re-armed only when it
+sends a flight, so mediasoup's first retransmission 100 ms later cancels the client's 1 s
+timer for good. A browser (BoringSSL, NSS) retransmits and would have recovered about a
+second later, so the generator's ICE/DTLS timeouts under datagram loss overstate what
+browsers see; the loss itself is what browsers would notice, as late or missing media. Five
+other handshakes in run A had their first ClientHello unanswered and succeeded on the
+client's repeat 0.8 s later, the same loss one flight earlier.
+
+Evidence: `results/conference-capture-200.20260925T200440Z` (A, `handshakes.pcap`),
+`results/conference-drops-200.20260925T202813Z` (B), `results/conference-buffers-200.20260925T203608Z` (C),
+`results/conference-control-200.20260925T204148Z` (D), `results/conference-buffer1048576-200.20260925T204731Z` (E),
+`results/conference-buffer524288-200.20260925T205335Z` (F), and the six repeated runs
+`results/conference-default-200-1.20260925T213323Z`, `results/conference-default-200-2.20260925T214436Z`, `results/conference-default-200-3.20260925T215558Z` (1 MiB) and
+`results/conference-control-200-1.20260925T213900Z`, `results/conference-control-200-2.20260925T215019Z`, `results/conference-control-200-3.20260925T220203Z` (kernel default);
+each holds `netns-udp.txt` except A. Not measured: the VPS itself (its ceilings are the
+Linux default until the host task runs) and browsers.
+
+### Where the memory goes under overload (same day)
+
+The overload runs above grew the process from about 470 MiB to 0.7–1.6 GiB and never
+gave it back. A memory sampler in the benchmark (every five seconds: `smaps_rollup`, every
+mapping of 2 MiB or more, and the cgroup's `memory.stat`) on a forced overload, 240
+publishers on the same shape, shows what it is. The cgroup charges all of it as anonymous
+memory (socket buffers stayed at 2 MiB, kernel memory at 6 MiB); it sits in about 25
+glibc arena heaps filled to their 62 MiB cap; it grew by 1,067 MiB in the 65 s after the
+ramp ended (17 MB/s, while the server sent about 155,000 datagrams a second) and then
+stopped growing exactly, although the overload continued for another minute (28 % of the
+primary worker's inbound dropped over the run).
+
+That signature is libwebrtc's transport feedback history. Each receive transport's
+`TransportFeedbackAdapter` keeps one entry of about 150 bytes per sent packet until the
+viewer's transport-cc feedback covers it or the entry is 60 s old
+(`kSendTimeHistoryWindowMs`). Feedback is inbound RTCP, so an overloaded worker that
+drops inbound datagrams at its socket also drops the feedback, and every viewer transport
+then holds a minute of sent packets: 155,000 datagrams a second times 150 bytes is about
+23 MB/s, the order of the 17 MB/s observed, and the plateau arrives one window after the
+loss started.
+The memory is not leaked (the entries age out) but the process never shrinks, because
+glibc keeps the arenas. The maintained worker now uses a 10 s window
+(`vendor/README.md`): feedback older than that is useless to the estimator, and the
+worst case per transport falls from a minute to ten seconds of its sending rate.
+
+With the 10 s window the same overload (240 publishers, 23 % of the primary worker's
+inbound dropped, worker 0 at 0.80 cores) grew the process from 551 MiB at the end of the
+ramp to a 716 MiB peak: 165 MiB against 1,067 MiB, in line with ten seconds of the sending
+rate at 150 bytes a packet. Delivery under that overload was as poor as before (288 of
+1,920 consumers validated); the window changes what an overload costs in memory, not
+whether it happens. The two runs are `results/conference-overload-240.20260925T231737Z`
+(60 s window, server `9288838f3d086ce5`, generator `f27c7c3a4ef3632f`) and
+`results/conference-overload-240-window10.20260925T234601Z` (10 s window, server `73928f3865382231`, generator `3fd66d9c7dd822ed`, rebuilt
+from the same source after an image prune).
+
 ## A single all-publishing room under viewer spreading — 2026-09-25
 
 The spreading change moves receive transports, not producers, so a room where everyone
@@ -26,8 +258,8 @@ share the load. The failing clients' transports were on the primary worker in ev
 spreading run, with no pipe or placement error logged, and the per-worker gauges showed
 neither worker saturated (0.53 and 0.47 cores), so the residual failures are the
 pre-existing ICE/DTLS handshake fragility of a busy worker with 400 producers, not a fault
-of the pipes; where exactly it originates (worker thread latency under many simultaneous
-handshakes, or the generator's own ICE agent) is not established here. A 60-second ramp
+of the pipes; the section above locates it: the kernel drops inbound datagrams at the
+worker's default socket buffer, and the generator never resends a lost final flight. A 60-second ramp
 and a 200-second ramp gave the same picture. On the VPS's slower cores the equivalent
 all-publishing room is smaller by the 2.5 factor measured above, so **rooms of about 80
 publishers are the comparable limit there**, and `max_participants` is the knob to hold a
@@ -143,8 +375,29 @@ queued in the process, and memory rather than the CPU quota ended the run. The p
 ceiling of the shape is therefore about 1,000 viewers per room, and the failure mode
 matters more than the number: the process has CPU-saturation admission control but no
 memory-pressure guard, so an over-admitted room takes the whole server down instead of
-being refused. A memory-based refusal (or a bound on queued outbound media) is the next
-robustness item.
+being refused.
+
+**A memory-pressure guard alone does not save it (same day, `results/webinar-memory-guard.20260925T191900Z`).**
+The same ramp against a server with `MEMORY_SATURATION_FRACTION=0.85` (refuse joins and fail
+readiness at 85 % of the cgroup limit) died the same way. The guard was active (the limit was
+readable, usage 1 % at start), joins arrived at 4.1 per second, RSS was 73 % of the limit at
+211 s, and the last log line is from 210 s: the process stopped logging, sampling and
+answering as cgroup memory (which also charges socket buffers) hit the limit, and it was
+killed at about 228 s without ever recording the transition. The growth from 73 % to the
+limit took under ten seconds, faster than a two-second sampler with hysteresis can act, and
+the per-worker CPU guard (0.85 of a core over ten seconds) had not fired either. The guard
+stays for slow growth; the protection for this shape is admission on the leading signal
+(worker CPU) and the room and connection limits.
+
+**The worker CPU guard at 0.7 does save it (same day, `results/webinar-worker-guard.20260925T192500Z`).**
+The same ramp with `CPU_SATURATION_WORKER_UTILIZATION=0.7` ended with the server alive:
+both workers crossed the threshold at about 180 s and 728 viewers, the process logged
+"every media worker is saturated: refusing new joins and reporting not ready", 522 later
+joins were refused with the retry message, memory plateaued at 669 MiB (33 % of the limit),
+the workers settled at 0.75 and 0.73 cores, and the admitted viewers kept receiving: four
+consumers failed out of the room's 1,456 and receive-ready P99 stayed at 459 ms through the
+measurement window. 0.7 is now the default; the earlier 0.85 left no time between the
+threshold and the stall.
 
 Evidence: `results/webinar-100v.20260925T070339Z`, `results/webinar-ladder.20260925T070800Z`
 (single worker; the 750 row from its `webinar-750-1/load_test_summary.json` and

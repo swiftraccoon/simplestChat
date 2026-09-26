@@ -48,6 +48,7 @@ For frontend hot reload, see [the web guide](web/README.md).
 | Production setup and security | [Deployment](docs/deployment.md) |
 | Unit and integration tests | [Testing](docs/testing.md) |
 | Benchmarks and measurements | [Performance](docs/performance.md) · [Results](docs/performance-results.md) |
+| Sizing a server and comparing hosts' cost | [Sizing a host](docs/performance.md#sizing-a-host) |
 | Native dependency updates | [Vendor notes](vendor/README.md) |
 
 ## Checks
