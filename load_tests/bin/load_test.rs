@@ -1024,6 +1024,36 @@ fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
     Ok(())
 }
 
+const RUNTIME_LAG_PERIOD: Duration = Duration::from_millis(50);
+const MAX_RUNTIME_LAG_SECONDS: usize = 7_200;
+
+/// Keep each second's worst timer wake-up lateness.
+fn record_runtime_lag(lag: &mut Vec<u32>, second: usize, late_ms: u32) {
+    if lag.len() <= second {
+        lag.resize(second + 1, 0);
+    }
+    lag[second] = lag[second].max(late_ms);
+}
+
+/// Wake every 50 ms until `until` and record how late each wake-up ran, by
+/// second since `start`.
+async fn probe_runtime_lag(start: Instant, until: Instant, lag: Arc<std::sync::Mutex<Vec<u32>>>) {
+    let mut next = Instant::now() + RUNTIME_LAG_PERIOD;
+    while next < until {
+        tokio::time::sleep_until(next.into()).await;
+        let now = Instant::now();
+        let late_ms =
+            u32::try_from(now.saturating_duration_since(next).as_millis()).unwrap_or(u32::MAX);
+        let second = now.saturating_duration_since(start).as_secs() as usize;
+        if second < MAX_RUNTIME_LAG_SECONDS
+            && let Ok(mut lag) = lag.lock()
+        {
+            record_runtime_lag(&mut lag, second, late_ms);
+        }
+        next = now + RUNTIME_LAG_PERIOD;
+    }
+}
+
 async fn run_load_test(config: TestConfig) -> Result<()> {
     config.validate_departure()?;
     let subscription_plan = config.planned_subscriptions()?;
@@ -1063,6 +1093,15 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
     let window = Arc::new(MeasurementWindow::new(
         measurement_start,
         Duration::from_secs(config.duration_secs),
+    ));
+    // The generator's own scheduling delay, second by second: a client handles
+    // its packets late by as much, and its transport-wide feedback then reports
+    // network delay that was the runtime's.
+    let runtime_lag = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let lag_probe = tokio::spawn(probe_runtime_lag(
+        run_start,
+        measurement_start + Duration::from_secs(config.duration_secs),
+        Arc::clone(&runtime_lag),
     ));
 
     // Arm before workload logging, allocation, or ramp-up: even a blocked output
@@ -1263,6 +1302,11 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
     if late {
         failures.push("Hard deadline expired before results were written".into());
     }
+    lag_probe.abort();
+    let runtime_lag = runtime_lag
+        .lock()
+        .map(|lag| lag.clone())
+        .unwrap_or_default();
     let passed = write_results_sync(
         &metrics_collectors,
         &config,
@@ -1270,6 +1314,7 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         &provenance,
         !late,
         failures,
+        &runtime_lag,
     )?;
     if !watchdog.finish() {
         // Write the immutable marker here as well: exiting must not race the
@@ -1321,6 +1366,7 @@ fn write_results_sync(
     provenance: &serde_json::Value,
     completed: bool,
     mut failures: Vec<String>,
+    runtime_lag: &[u32],
 ) -> Result<bool> {
     let mut all_metrics = Vec::new();
     for collector in collectors {
@@ -1410,6 +1456,10 @@ fn write_results_sync(
     let passed = completed && failures.is_empty();
     let mut report = serde_json::to_value(&summary)?;
     report["schemaVersion"] = serde_json::json!(2);
+    report["runtimeLag"] = serde_json::json!({
+        "periodMs": RUNTIME_LAG_PERIOD.as_millis() as u64,
+        "maxMsBySecond": runtime_lag,
+    });
     report["attemptCoverage"] = serde_json::to_value(attempt_coverage)?;
     report["subscriptionPlan"] = serde_json::to_value(config.planned_subscriptions()?)?;
     report["run"] = serde_json::json!({
@@ -2487,8 +2537,8 @@ async fn send_real_media_loop(
 /// The browser profile's publisher: the microphone as Opus with DTX (speech
 /// only while this participant is one of its room's current speakers, a
 /// comfort-noise frame every 400 ms otherwise) and the camera as the web
-/// client's three simulcast layers, each answering keyframe requests for its
-/// own SSRC.
+/// client's three simulcast layers, which answer a keyframe request on any
+/// layer with a keyframe on all three, as Chrome does.
 async fn send_browser_media_loop(
     webrtc_session: Arc<Mutex<WebRtcSession>>,
     profile: browser_profile::BrowserProfile,
@@ -2579,6 +2629,9 @@ async fn send_browser_media_loop(
                 }
             }
             _ = video_interval.tick(), if config.video_enabled => {
+                media_generator::KeyframeRequests::spread(
+                    cameras.iter().map(|(_, requests, _, _)| requests.as_ref()),
+                );
                 let mut send_error = false;
                 'layers: for (ssrc, requests, track, generator) in &mut cameras {
                     let frame = generator.generate_video_frame(requests);
@@ -3541,6 +3594,7 @@ async fn receive_messages_loop(
                     consumer_id: consumer_id.clone(),
                 };
                 let json = serde_json::to_string(&resume_msg).unwrap();
+                metrics.record_resume_requested(&consumer_id);
                 if let Err(e) = write.feed(Message::Text(json.into())).await {
                     metrics.record_error(format!("Consumer resume write failed: {e}"));
                     tracing::error!(
@@ -5140,6 +5194,15 @@ mod browser_profile_integration_tests {
     use super::*;
 
     #[test]
+    fn runtime_lag_keeps_each_seconds_worst_wakeup() {
+        let mut lag = Vec::new();
+        record_runtime_lag(&mut lag, 0, 3);
+        record_runtime_lag(&mut lag, 0, 1);
+        record_runtime_lag(&mut lag, 2, 40);
+        assert_eq!(lag, vec![3, 0, 40]);
+    }
+
+    #[test]
     fn speaking_publishers_are_held_to_their_speech_rate() {
         let mut config = TestConfig {
             profile: Profile::Browser(browser_profile::BrowserProfile::new(
@@ -5271,9 +5334,10 @@ mod browser_profile_integration_tests {
             profile: options.profile(false).unwrap(),
             ..Default::default()
         };
-        // 2.5 DTX frames plus 30.2 + 60.8 + 122.6 video packets a second.
+        // 2.5 DTX frames plus 30.01 + 60.04 + 120.14 video packets a second:
+        // libwebrtc's VP8 forces a keyframe only every 100 s.
         let rate = nominal_publisher_packets_per_second(&config, 0.0);
-        assert!((rate - 216.1).abs() < 0.01, "{rate}");
+        assert!((rate - 212.69).abs() < 0.01, "{rate}");
         let audio_only = TestConfig {
             media_config: MediaConfig::audio_only(),
             ..config.clone()

@@ -16,6 +16,10 @@ pub struct MediaConfig {
     pub video_height: u32,       // 480, 720, etc.
     pub video_fps: u8,           // 30
     pub video_bitrate_kbps: u32, // 500, 1000, etc.
+    /// A keyframe at least this often, requested or not.
+    pub keyframe_interval_ms: u32,
+    /// The shortest wait after a keyframe before a requested one.
+    pub keyframe_cooldown_ms: u32,
 }
 
 impl Default for MediaConfig {
@@ -32,6 +36,8 @@ impl Default for MediaConfig {
             video_height: 480,
             video_fps: 30,
             video_bitrate_kbps: 1000,
+            keyframe_interval_ms: 5_000,
+            keyframe_cooldown_ms: 1_000,
         }
     }
 }
@@ -74,7 +80,9 @@ impl MediaConfig {
     }
 
     /// One simulcast layer of a browser-profile camera: video only, at the
-    /// layer's size and bitrate cap.
+    /// layer's size and bitrate cap, with libwebrtc's VP8 keyframe timing: a
+    /// forced keyframe every 3,000 frames (`keyFrameInterval`) and requests
+    /// answered at most every 300 ms (`EncoderRtcpFeedback`).
     pub fn simulcast_layer(width: u32, height: u32, bitrate_bps: u32, fps: u8) -> Self {
         Self {
             audio_enabled: false,
@@ -83,6 +91,8 @@ impl MediaConfig {
             video_height: height,
             video_fps: fps,
             video_bitrate_kbps: bitrate_bps / 1000,
+            keyframe_interval_ms: 3_000 * 1_000 / u32::from(fps.max(1)),
+            keyframe_cooldown_ms: 300,
             ..Default::default()
         }
     }
@@ -122,6 +132,17 @@ impl KeyframeRequests {
     /// A concurrent request after this operation remains pending for a later frame.
     pub fn take(&self) -> bool {
         self.pending.swap(false, Ordering::Relaxed)
+    }
+
+    /// libwebrtc answers a request on any simulcast layer with a keyframe on
+    /// every layer: per-layer requests need the `x-google-per-layer-pli`
+    /// format parameter, which mediasoup does not negotiate.
+    pub fn spread<'a>(layers: impl Iterator<Item = &'a Self> + Clone) {
+        if layers.clone().any(Self::is_pending) {
+            for requests in layers {
+                requests.request();
+            }
+        }
     }
 }
 
@@ -218,11 +239,24 @@ impl MediaGenerator {
         packet
     }
 
+    fn keyframe_interval_frames(&self) -> u64 {
+        let frames = u64::from(self.config.keyframe_interval_ms) * u64::from(self.config.video_fps);
+        frames.div_ceil(1_000).max(1)
+    }
+
+    fn keyframe_cooldown_frames(&self) -> u64 {
+        (u64::from(self.config.keyframe_cooldown_ms) * u64::from(self.config.video_fps))
+            .div_ceil(1_000)
+    }
+
+    /// A keyframe is five inter frames; the periodic interval spends the bitrate.
     fn compute_frame_size(&self, is_keyframe: bool) -> usize {
         let bytes_per_sec = (self.config.video_bitrate_kbps as usize) * 1000 / 8;
-        let keyframe_interval = self.config.video_fps as usize * 5;
+        let keyframe_interval = self.keyframe_interval_frames() as usize;
         let inter_frames = keyframe_interval - 1;
-        let inter_size = (bytes_per_sec * 5) / (inter_frames + 5);
+        let bytes_per_interval =
+            bytes_per_sec * keyframe_interval / usize::from(self.config.video_fps.max(1));
+        let inter_size = bytes_per_interval / (inter_frames + 5);
         let key_size = inter_size * 5;
         if is_keyframe { key_size } else { inter_size }
     }
@@ -234,16 +268,18 @@ impl MediaGenerator {
     /// picture ID so mediasoup can properly rewrite descriptors during forwarding.
     ///
     /// Feedback is satisfied on a scheduled frame, never by an extra timer tick.
-    /// Request-driven keyframes are separated by at least `video_fps` frames from
-    /// the preceding keyframe. Pending requests survive that cooldown. Periodic
-    /// keyframes retain their original five-second frame phase and also satisfy
-    /// requests; an extra keyframe never postpones the periodic schedule.
+    /// Request-driven keyframes are separated by at least the cooldown from the
+    /// preceding keyframe. Pending requests survive that cooldown. Periodic
+    /// keyframes retain their original frame phase and also satisfy requests;
+    /// an extra keyframe never postpones the periodic schedule.
     pub fn generate_video_frame(&mut self, requests: &KeyframeRequests) -> GeneratedVideoFrame {
-        let keyframe_interval = self.config.video_fps as u64 * 5;
-        let periodic = self.frame_count.is_multiple_of(keyframe_interval);
+        let periodic = self
+            .frame_count
+            .is_multiple_of(self.keyframe_interval_frames());
+        let cooldown = self.keyframe_cooldown_frames();
         let can_request = self
             .last_keyframe
-            .is_none_or(|last| self.frame_count - last >= self.config.video_fps as u64);
+            .is_none_or(|last| self.frame_count - last >= cooldown);
         let requested = (periodic || can_request) && requests.is_pending() && requests.take();
         let is_keyframe = periodic || requested;
         if is_keyframe {
@@ -347,7 +383,7 @@ impl MediaGenerator {
             0.0
         };
         let video = if self.config.video_enabled {
-            let interval = self.config.video_fps as usize * 5;
+            let interval = self.keyframe_interval_frames() as usize;
             let key = self
                 .compute_frame_size(true)
                 .div_ceil(FRAME_DATA_PER_PACKET)
@@ -356,7 +392,8 @@ impl MediaGenerator {
                 .compute_frame_size(false)
                 .div_ceil(FRAME_DATA_PER_PACKET)
                 .max(1);
-            (key + inter * (interval - 1)) as f64 / 5.0
+            (key + inter * (interval - 1)) as f64 * f64::from(self.config.video_fps)
+                / interval as f64
         } else {
             0.0
         };
@@ -525,9 +562,37 @@ mod keyframe_tests {
         assert!(!layer.audio_enabled && layer.video_enabled);
         assert_eq!((layer.video_width, layer.video_height), (640, 360));
         assert_eq!(layer.video_bitrate_kbps, 300);
-        // 1,250 bytes a frame is two packets; keyframes every five seconds.
+        // 1,248 bytes a frame is two packets; a six-packet keyframe every 100 s.
         let generator = MediaGenerator::new(layer);
-        assert!((60.0..70.0).contains(&generator.nominal_packets_per_second()));
+        assert_eq!(generator.nominal_packets_per_second(), 60.04);
+    }
+
+    #[test]
+    fn simulcast_layers_time_keyframes_like_libwebrtc_vp8() {
+        let requests = KeyframeRequests::default();
+        let mut generator =
+            MediaGenerator::new(MediaConfig::simulcast_layer(1280, 720, 1_500_000, 30));
+        assert!(generator.generate_video_frame(&requests).is_keyframe);
+        requests.request();
+        let keys: Vec<u64> = (1..3_000)
+            .filter(|_| generator.generate_video_frame(&requests).is_keyframe)
+            .collect();
+        assert_eq!(keys, [9], "a request waits 300 ms; nothing periodic");
+        let forced = generator.generate_video_frame(&requests);
+        assert!(
+            forced.is_keyframe && !forced.requested,
+            "kf_max_dist is 3,000 frames"
+        );
+    }
+
+    #[test]
+    fn a_request_on_one_simulcast_layer_keyframes_every_layer() {
+        let layers: [KeyframeRequests; 3] = Default::default();
+        KeyframeRequests::spread(layers.iter());
+        assert!(!layers.iter().any(KeyframeRequests::is_pending));
+        layers[1].request();
+        KeyframeRequests::spread(layers.iter());
+        assert!(layers.iter().all(KeyframeRequests::is_pending));
     }
 }
 

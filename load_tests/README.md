@@ -114,10 +114,15 @@ costs, so capacity figures measured with it hold for real rooms:
 
 - **Camera**: three simulcast layers as `web/src/media.ts` publishes them
   (a quarter, half and full capture size at 100, 300 and 900 kbit/s), each on
-  its own SSRC and answering keyframe requests for that layer. webrtc-rs sends
-  only the first encoding of a track unless all have RIDs, so each layer rides
-  its own video transceiver; the server still sees one producer with three
-  encodings, as it does for a browser.
+  its own SSRC. webrtc-rs sends only the first encoding of a track unless all
+  have RIDs, so each layer rides its own video transceiver; the server still
+  sees one producer with three encodings, as it does for a browser.
+- **Keyframes**: timed as Chrome's VP8 encoder times them. A request for any
+  layer brings a keyframe on all three (per-layer requests need the
+  `x-google-per-layer-pli` format parameter, which mediasoup does not
+  negotiate), at most one every 300 ms (`EncoderRtcpFeedback`), and nothing
+  periodic before libwebrtc's 3,000-frame `keyFrameInterval`. A joining viewer
+  therefore waits for a requested keyframe, as it would behind a browser.
 - **Microphone**: Opus at 32 kbit/s while speaking and DTX otherwise (one
   frame per 400 ms, the web client's `opusDtx`), with `--speakers` talkers per
   room rotating every 10 s.
@@ -254,7 +259,12 @@ packet buckets. `load_test_summary.json` aggregates them (`schemaVersion: 2`):
 - `keyframesGenerated` / `keyframesRequested`: lifetime counts per client and in
   the summary. A requested keyframe is 19 packets in place of 4, so a build
   that requests more repair raises the offered packet rate; compare these
-  alongside `measurement.packetsReceived`.
+  alongside `measurement.packetsReceived`. A browser-profile camera counts one
+  keyframe per layer.
+- `consumerDelivery[].firstPacketMs` and the summary's `videoStart`: from the
+  client's resume request to the consumer's first packet, ramp included. A new
+  video consumer forwards nothing before a keyframe, so for video this is the
+  keyframe wait; audio consumers give the signaling round trip beside it.
 - The per-client validated-consumer floor counts stable (non-churning)
   publishers in the client's room only, matching the coverage contract above.
 - `run`: completion, failures, timestamps, workload configuration, revision

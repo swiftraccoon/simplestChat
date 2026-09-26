@@ -133,6 +133,10 @@ pub struct ConsumerDelivery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_audio: Option<bool>,
     pub packets_by_second: Vec<u64>,
+    /// From the resume request to the first packet: for video, the wait for a
+    /// keyframe, since a new simulcast consumer forwards nothing before one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_packet_ms: Option<u64>,
     pub eligible_seconds: usize,
     pub seconds_with_packets: usize,
     pub longest_gap_seconds: usize,
@@ -163,6 +167,8 @@ struct ConsumerState {
     // Frozen at registration; packet accounting needs no new lookup or lock.
     full_window: bool,
     created: Instant,
+    resumed: Option<Instant>,
+    first_packet: Option<Instant>,
     closed: Option<Instant>,
     packets_by_second: Vec<u64>,
 }
@@ -415,6 +421,8 @@ impl Measurements {
             planned_end,
             full_window,
             created: Instant::now(),
+            resumed: None,
+            first_packet: None,
             closed: None,
             packets_by_second: vec![
                 0;
@@ -422,6 +430,20 @@ impl Measurements {
                     as usize
             ],
         });
+    }
+
+    pub fn record_resume_requested(&self, consumer_id: &str) {
+        let now = Instant::now();
+        if let Some(consumer) = self
+            .consumers
+            .lock()
+            .unwrap()
+            .iter_mut()
+            .rev()
+            .find(|c| c.consumer_id == consumer_id && c.closed.is_none())
+        {
+            consumer.resumed.get_or_insert(now);
+        }
     }
 
     pub fn end_session(&self) {
@@ -470,17 +492,22 @@ impl Measurements {
         }
     }
 
+    /// Joins happen during the ramp, so first packets count outside the window.
     fn record_ssrc(&self, attempt: usize, ssrc: u32) {
-        if let Some(bucket) = self.window.bucket(Instant::now())
-            && let Some(consumer) = self
-                .consumers
-                .lock()
-                .unwrap()
-                .iter_mut()
-                .rev()
-                .find(|c| c.attempt == attempt && c.ssrc == ssrc && c.closed.is_none())
+        let now = Instant::now();
+        let bucket = self.window.bucket(now);
+        if let Some(consumer) = self
+            .consumers
+            .lock()
+            .unwrap()
+            .iter_mut()
+            .rev()
+            .find(|c| c.attempt == attempt && c.ssrc == ssrc && c.closed.is_none())
         {
-            consumer.packets_by_second[bucket] += 1;
+            consumer.first_packet.get_or_insert(now);
+            if let Some(bucket) = bucket {
+                consumer.packets_by_second[bucket] += 1;
+            }
         }
     }
 
@@ -520,6 +547,11 @@ impl Measurements {
                     attempt: (consumer.attempt > 0).then_some(consumer.attempt),
                     is_audio: consumer.is_audio,
                     packets_by_second: consumer.packets_by_second.clone(),
+                    first_packet_ms: consumer.resumed.zip(consumer.first_packet).map(
+                        |(resumed, first)| {
+                            first.saturating_duration_since(resumed).as_millis() as u64
+                        },
+                    ),
                     eligible_seconds: eligible.len(),
                     seconds_with_packets,
                     longest_gap_seconds,

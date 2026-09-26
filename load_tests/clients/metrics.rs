@@ -31,6 +31,10 @@ pub struct ClientMetrics {
     pub bandwidth_estimates: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_available_bitrate: Option<u32>,
+    /// Each estimate the SFU pushed, as [ms since the client started, bit/s],
+    /// so a collapse can be dated against the run's other timelines.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bandwidth_timeline: Vec<[u64; 2]>,
     /// Every UDP datagram the client's transports sent (RTP, RTCP, STUN and
     /// DTLS): what the server's media workers received from it.
     #[serde(default)]
@@ -99,6 +103,9 @@ pub struct LatencyStats {
 }
 
 /// Real-time metrics collector (thread-safe)
+/// The SFU pushes an estimate every 10 s at most, so this covers hours.
+const MAX_BANDWIDTH_SAMPLES: usize = 1_024;
+
 pub struct MetricsCollector {
     client_id: String,
     room_id: std::sync::Mutex<String>,
@@ -112,6 +119,7 @@ pub struct MetricsCollector {
     keyframes_generated: AtomicU64,
     keyframes_requested: AtomicU64,
     bandwidth_estimates: AtomicU64,
+    bandwidth_timeline: std::sync::Mutex<Vec<[u64; 2]>>,
     last_available_bitrate: AtomicU64,
     packets_received: AtomicU64,
     datagrams_sent: std::sync::Arc<AtomicU64>,
@@ -154,6 +162,7 @@ impl MetricsCollector {
             keyframes_generated: AtomicU64::new(0),
             keyframes_requested: AtomicU64::new(0),
             bandwidth_estimates: AtomicU64::new(0),
+            bandwidth_timeline: std::sync::Mutex::new(Vec::new()),
             last_available_bitrate: AtomicU64::new(0),
             packets_received: AtomicU64::new(0),
             datagrams_sent: std::sync::Arc::new(AtomicU64::new(0)),
@@ -366,6 +375,14 @@ impl MetricsCollector {
             self.bandwidth_estimates.fetch_add(1, Ordering::Relaxed);
             self.last_available_bitrate
                 .store(u64::from(bitrate) + 1, Ordering::Relaxed);
+            if let Ok(mut timeline) = self.bandwidth_timeline.lock()
+                && timeline.len() < MAX_BANDWIDTH_SAMPLES
+            {
+                timeline.push([
+                    self.start_time.elapsed().as_millis() as u64,
+                    u64::from(bitrate),
+                ]);
+            }
         }
     }
 
@@ -481,6 +498,11 @@ impl MetricsCollector {
             keyframes_generated: self.keyframes_generated.load(Ordering::Relaxed),
             keyframes_requested: self.keyframes_requested.load(Ordering::Relaxed),
             bandwidth_estimates: self.bandwidth_estimates.load(Ordering::Relaxed),
+            bandwidth_timeline: self
+                .bandwidth_timeline
+                .lock()
+                .map(|timeline| timeline.clone())
+                .unwrap_or_default(),
             last_available_bitrate: match self.last_available_bitrate.load(Ordering::Relaxed) {
                 0 => None,
                 stored => u32::try_from(stored - 1).ok(),
@@ -587,6 +609,9 @@ pub struct TestSummary {
     pub failed_connection_attempts: usize,
     pub send_media_ready: LatencyStats,
     pub receive_media_ready: LatencyStats,
+    /// Video consumers' resume-to-first-packet times: the keyframe wait.
+    #[serde(default)]
+    pub video_start: LatencyStats,
     pub measurement: MeasurementMetrics,
     pub validated_consumers: usize,
     pub failed_consumers: usize,
@@ -691,6 +716,13 @@ impl TestSummary {
                     .iter()
                     .flat_map(|m| &m.connection_attempts)
                     .filter_map(|a| a.receive_media_ready_ms),
+            ),
+            video_start: samples_stats(
+                metrics
+                    .iter()
+                    .flat_map(|m| &m.consumer_delivery)
+                    .filter(|c| c.is_audio == Some(false))
+                    .filter_map(|c| c.first_packet_ms),
             ),
             measurement: MeasurementMetrics {
                 duration_ms: metrics[0].measurement.duration_ms,
@@ -948,6 +980,10 @@ mod measurement_tests {
         let report = metrics.generate_report();
         assert_eq!(report.bandwidth_estimates, 2);
         assert_eq!(report.last_available_bitrate, Some(750_000));
+        // Each estimate is kept with its time, so a collapse can be dated.
+        assert_eq!(report.bandwidth_timeline.len(), 2);
+        assert_eq!(report.bandwidth_timeline[1][1], 750_000);
+        assert!(report.bandwidth_timeline[0][0] <= report.bandwidth_timeline[1][0]);
     }
 
     #[test]
@@ -1159,6 +1195,52 @@ mod measurement_tests {
         let after = metrics.generate_report();
         assert!(after.consumer_delivery[0].passed);
         assert_eq!(after.consumer_delivery[0].eligible_seconds, 4);
+    }
+
+    #[test]
+    fn first_packet_is_timed_from_the_resume_even_before_the_window() {
+        let window = Arc::new(MeasurementWindow::new(
+            Instant::now() + Duration::from_secs(10),
+            Duration::from_secs(5),
+        ));
+        let metrics = MetricsCollector::with_window("viewer".into(), window);
+        metrics.subscribe("camera", false);
+        metrics.subscribe("microphone", true);
+        metrics.record_consumer("video", "camera", 7);
+        metrics.record_consumer("audio", "microphone", 8);
+        metrics.record_consumer("unresumed", "camera", 9);
+        metrics.record_resume_requested("video");
+        metrics.record_resume_requested("audio");
+        {
+            let mut consumers = metrics.consumers.lock().unwrap();
+            let resumed = consumers[0].resumed.unwrap();
+            consumers[0].resumed = Some(resumed - Duration::from_millis(250));
+        }
+        metrics.record_rtp_received(7, 1_000);
+        metrics.record_rtp_received(8, 100);
+        metrics.record_rtp_received(9, 100);
+        {
+            let mut consumers = metrics.consumers.lock().unwrap();
+            let first = consumers[0].first_packet.unwrap();
+            consumers[0].first_packet = Some(first + Duration::from_millis(1));
+        }
+        metrics.record_rtp_received(7, 1_000);
+
+        let report = metrics.generate_report();
+        let video = report.consumer_delivery[0].first_packet_ms.unwrap();
+        assert!((251..1_000).contains(&video), "{video}");
+        assert!(report.consumer_delivery[1].first_packet_ms.unwrap() < 250);
+        assert!(report.consumer_delivery[2].first_packet_ms.is_none());
+        assert!(
+            report
+                .consumer_delivery
+                .iter()
+                .all(|consumer| consumer.packets_by_second.iter().all(|&count| count == 0)),
+            "packets before the window count toward no delivery second"
+        );
+        let summary = TestSummary::from_metrics(&[report]);
+        assert_eq!(summary.video_start.count, 1);
+        assert_eq!(summary.video_start.max_ms, video);
     }
 
     #[test]
