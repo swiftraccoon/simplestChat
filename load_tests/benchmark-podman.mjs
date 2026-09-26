@@ -109,9 +109,36 @@ export function netemScript(params, scope, udpPort, workers) {
   ].join('\n');
 }
 
+/**
+ * The kernel's UDP counters of the server's network namespace: the namespace
+ * totals from `/proc/net/snmp` and, from `/proc/net/udp`, the receive-queue
+ * drops of the sockets bound to the given ports (the media workers). A drop
+ * there is a datagram that reached the namespace but not the worker, which
+ * no capture on the interface and no worker log can show.
+ */
+export function parseNetnsUdp(text, ports) {
+  const wanted = new Set(ports);
+  const lines = text.split('\n');
+  const udpLines = lines.filter(line => line.startsWith('Udp:'));
+  if (udpLines.length < 2) throw new Error('Missing Udp lines in /proc/net/snmp');
+  const names = udpLines[0].split(/\s+/).slice(1), values = udpLines[1].split(/\s+/).slice(1);
+  const totals = Object.fromEntries(names.map((name, i) => [name, Number(values[i])]));
+  for (const name of ['InDatagrams', 'InErrors', 'RcvbufErrors']) if (!Number.isFinite(totals[name])) throw new Error(`Missing Udp ${name} counter`);
+  const sockets = [];
+  for (const line of lines) {
+    const columns = line.trim().split(/\s+/);
+    if (!/^\d+:$/.test(columns[0]) || columns.length < 13) continue;
+    const port = Number.parseInt(columns[1].split(':')[1], 16);
+    if (!wanted.has(port)) continue;
+    sockets.push({ port, rxQueueBytes: Number.parseInt(columns[4].split(':')[1], 16), drops: Number(columns[columns.length - 1]) });
+  }
+  return { inDatagrams: totals.InDatagrams, inErrors: totals.InErrors, rcvbufErrors: totals.RcvbufErrors,
+    sockets, serverSocketDrops: sockets.reduce((sum, socket) => sum + socket.drops, 0) };
+}
+
 export function parseOptions(args) {
   const raw = {};
-  const keys = new Set(['server-image', 'generator-image', 'netem-image', 'output', 'clients', 'duration', 'warmup', 'ramp-up', 'repetitions', 'workers', 'cpus', 'memory', 'generator-cpus', 'port', 'udp-port', 'scenarios', 'subscription-plan', 'subscription-seed', 'netem', 'netem-scope', 'max-connections', 'label', 'source-revision', 'source-addresses']);
+  const keys = new Set(['server-image', 'generator-image', 'netem-image', 'output', 'clients', 'duration', 'warmup', 'ramp-up', 'repetitions', 'workers', 'cpus', 'memory', 'generator-cpus', 'port', 'udp-port', 'scenarios', 'subscription-plan', 'subscription-seed', 'netem', 'netem-scope', 'max-connections', 'label', 'source-revision', 'source-addresses', 'server-env', 'capture-handshakes', 'capture-image']);
   for (let i = 0; i < args.length; i += 2) {
     const key = args[i]?.replace(/^--/, '');
     if (!args[i]?.startsWith('--') || !keys.has(key) || args[i + 1] === undefined || raw[key]) throw new Error(`Unknown, duplicate or incomplete option: ${args[i]}`);
@@ -123,6 +150,11 @@ export function parseOptions(args) {
     options[key.replace(/-([a-z])/g, (_, l) => l.toUpperCase())] = key === 'output' ? resolve(raw[key]) : raw[key];
   }
   options.netemImage = raw['netem-image'] ?? 'localhost/simplestchat-netem:dev';
+  // A tcpdump sidecar in the server's namespace keeps STUN and DTLS handshake
+  // packets (first payload byte 0x00, 0x01 or 0x16) for handshake diagnosis.
+  if (raw['capture-handshakes'] !== undefined && !['true', 'false'].includes(raw['capture-handshakes'])) throw new Error('--capture-handshakes must be true or false');
+  options.captureHandshakes = raw['capture-handshakes'] === 'true';
+  options.captureImage = raw['capture-image'] ?? 'localhost/simplestchat-tcpdump:dev';
   options.subscriptionPlan = raw['subscription-plan'] ?? 'fifo';
   if (options.subscriptionPlan !== 'fifo' && !plannedSubscriptionModes.has(options.subscriptionPlan)) throw new Error('--subscription-plan must be fifo, ring-v1 or hotspot-v1');
   options.subscriptionSeed = null;
@@ -171,6 +203,15 @@ export function parseOptions(args) {
   }
   options.netem = raw.netem ?? null;
   options.netemScope = raw['netem-scope'] ?? 'udp-both';
+  // Extra server environment for experiments (KEY=VALUE pairs separated by
+  // semicolons, so values such as RUST_LOG filters may contain commas); the
+  // script's own keys win, and every value lands in invocation.json.
+  options.serverEnv = {};
+  for (const entry of (raw['server-env'] ?? '').split(';').filter(Boolean)) {
+    const match = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(entry);
+    if (!match) throw new Error('--server-env takes KEY=VALUE pairs separated by semicolons');
+    options.serverEnv[match[1]] = match[2];
+  }
   if (options.netem) netemScript(options.netem, options.netemScope, options.udpPort, options.workers);
   else if (raw['netem-scope']) throw new Error('--netem-scope requires --netem');
   options.label = raw.label ?? null;
@@ -204,6 +245,11 @@ async function execIn(name, script) {
 
 const SERVER_SAMPLER = 'while :; do cat /proc/1/stat; echo @@S; cat /sys/fs/cgroup/cpu.stat; echo @@Y; cat /proc/1/task/*/stat; echo @@E; sleep 0.5; done';
 const GENERATOR_SAMPLER = 'while :; do cat /proc/1/stat; echo @@E; sleep 0.5; done';
+// Every five seconds: the process's memory totals, every mapping holding two
+// mebibytes or more (glibc keeps one 64 MiB-aligned arena per busy thread, so
+// a growing anonymous mapping points at one thread's heap), and the cgroup's
+// split of charged memory (anonymous, file, kernel, socket buffers).
+const MEMORY_SAMPLER = "while :; do cat /proc/1/smaps_rollup; echo @@M; awk '/^[0-9a-f]+-[0-9a-f]+ /{range=$1; name=$6} /^Rss:/{if ($2 >= 2048) print range, $2, name}' /proc/1/smaps; echo @@C; cat /sys/fs/cgroup/memory.stat; echo @@E; sleep 5; done";
 
 /**
  * One long-lived exec session per container streams samples every 500 ms;
@@ -226,6 +272,33 @@ function startSampler(container, script, onBlock) {
   return { stop: () => { try { child.kill('SIGTERM'); } catch {} } };
 }
 
+/**
+ * Parse one memory sampler block: smaps_rollup totals, the large mappings
+ * and the cgroup memory.stat counters, all in KiB except the cgroup bytes.
+ */
+export function parseMemoryBlock(block) {
+  const [rollupText, mappingText, cgroupText] = block.split(/@@[MC]\n/);
+  const rollup = {};
+  for (const line of rollupText.split('\n')) {
+    const match = /^([A-Za-z_]+):\s+(\d+) kB$/.exec(line.trim());
+    if (match) rollup[match[1]] = Number(match[2]);
+  }
+  if (!Number.isFinite(rollup.Rss) || !Number.isFinite(rollup.Anonymous)) throw new Error('Invalid smaps_rollup');
+  const mappings = [];
+  for (const line of mappingText.split('\n')) {
+    const columns = line.trim().split(/\s+/);
+    if (columns.length < 2 || !/^[0-9a-f]+-[0-9a-f]+$/.test(columns[0])) continue;
+    mappings.push({ range: columns[0], rssKiB: Number(columns[1]), name: columns.slice(2).join(' ') });
+  }
+  const cgroup = {};
+  for (const line of cgroupText.split('\n')) {
+    const match = /^([a-z_]+) (\d+)$/.exec(line.trim());
+    if (match) cgroup[match[1]] = Number(match[2]);
+  }
+  if (!Number.isFinite(cgroup.anon)) throw new Error('Invalid memory.stat');
+  return { rssKiB: rollup.Rss, anonymousKiB: rollup.Anonymous, mappings, cgroup: { anon: cgroup.anon, file: cgroup.file ?? 0, kernel: cgroup.kernel ?? 0, sock: cgroup.sock ?? 0, slab: cgroup.slab ?? 0 } };
+}
+
 /** Parse one server sampler block into process, cgroup and thread readings. */
 export function parseServerBlock(block, clockTicks, pageSize) {
   const [stat, cpuStat, tasks] = block.split(/@@[SY]\n/);
@@ -244,11 +317,14 @@ async function removeContainer(name) {
   containers.delete(name);
 }
 
+const SERVER_WIRING_KEYS = new Set(['BIND_ADDR', 'PORT', 'ANNOUNCE_IP', 'MEDIA_WORKERS', 'WEBRTC_SERVER_PORT_BASE', 'ALLOWED_ORIGINS', 'METRICS_TOKEN', 'MAX_CONNECTIONS', 'MAX_CONNECTIONS_PER_IP']);
+
 async function runOne(options, scenario, repetition, manifest) {
   const name = `${scenario.name}-${repetition}${options.netem ? '-netem' : ''}`;
   const directory = join(options.output, name); await mkdir(directory, { mode: 0o700 });
   const id = randomBytes(4).toString('hex');
-  const sfu = `bench-sfu-${id}`, gen = `bench-gen-${id}`;
+  // Declared before `try`: the finalizers remove every container this run may own.
+  const sfu = `bench-sfu-${id}`, gen = `bench-gen-${id}`, cap = `bench-cap-${id}`;
   const origin = `http://127.0.0.1:${options.port}`;
   const token = randomBytes(32).toString('hex');
   const env = { BIND_ADDR: '0.0.0.0', PORT: String(options.port), ANNOUNCE_IP: '127.0.0.1',
@@ -256,9 +332,23 @@ async function runOne(options, scenario, repetition, manifest) {
     ALLOW_AD_HOC_ROOMS: 'true', ALLOWED_ORIGINS: origin, REGISTRATION_ENABLED: 'false',
     MAX_CONNECTIONS: String(options.maxConnections), MAX_CONNECTIONS_PER_IP: String(Math.min(options.maxConnections, scenario.clients + 16)),
     WS_HANDSHAKES_PER_MINUTE: '600', METRICS_TOKEN: token, RUST_LOG: 'simplestChat=info,mediasoup=warn' };
-  const serverSamples = [], generatorSamples = [];
+  // Experiment overrides win over the script's defaults, never over its wiring.
+  for (const key of Object.keys(options.serverEnv)) {
+    if (SERVER_WIRING_KEYS.has(key)) throw new Error(`--server-env cannot override ${key}`);
+    env[key] = options.serverEnv[key];
+  }
+  const serverSamples = [], generatorSamples = [], memorySamples = [];
   const startedAt = new Date().toISOString();
-  let generatorStarted, generatorExit, serverExit, row, primaryError, clockTicks = 100, serverSampler, generatorSampler;
+  let generatorStarted, generatorExit, serverExit, row, primaryError, clockTicks = 100, serverSampler, generatorSampler, memorySampler;
+  // The handshake capture is evidence of exactly the failures that end a run
+  // early, so the finalizers keep it too when the normal path never got there.
+  let captureKept = false;
+  const keepCapture = async () => {
+    if (captureKept || !containers.has(cap)) return;
+    captureKept = true;
+    try { await podman(['stop', '-t', '5', cap]); } catch {}
+    await podman(['cp', `${cap}:/handshakes.pcap`, join(directory, 'handshakes.pcap')]);
+  };
   try {
     await podman(['run', '-d', '--name', sfu, '--cpus', String(options.cpus), '--memory', options.memory, '--pids-limit', '512',
       '-p', `127.0.0.1:${options.port}:${options.port}/tcp`, ...Object.entries(env).flatMap(([k, v]) => ['-e', `${k}=${v}`]), options.serverImage]);
@@ -283,7 +373,13 @@ async function runOne(options, scenario, repetition, manifest) {
       '--mode', scenario.mode, '--quality', '480p', '--fps', '30', '--max-audio', '4', '--max-video', '4',
       '--output-dir', '/results', '--run-label', name, '--server-revision', manifest.server.id.slice(0, 16),
       '--generator-revision', manifest.generator.id.slice(0, 16), ...scenario.extra, ...subscriptionArguments(options)];
+    if (options.captureHandshakes) {
+      await podman(['run', '-d', '--name', cap, '--network', `container:${sfu}`, '--cap-add', 'NET_RAW', '--cap-add', 'NET_ADMIN', options.captureImage,
+        '-i', 'lo', '-s', '200', '-U', '-w', '/handshakes.pcap', 'udp and (udp[8] = 0x16 or udp[8] = 0x00 or udp[8] = 0x01)']);
+      containers.add(cap);
+    }
     await json(join(directory, 'invocation.json'), { startedAt, scenario, repetition, args, netem: options.netem, netemScope: options.netem ? options.netemScope : null,
+      captureHandshakes: options.captureHandshakes,
       serverConfiguration: Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'METRICS_TOKEN')),
       limits: { cpus: options.cpus, memory: options.memory, generatorCpus: options.generatorCpus } });
     const start = performance.now();
@@ -291,6 +387,11 @@ async function runOne(options, scenario, repetition, manifest) {
       const elapsedMs = performance.now() - start;
       try { serverSamples.push({ elapsedMs, ...parseServerBlock(block, clockTicks, pageSize) }); }
       catch { serverSamples.push({ elapsedMs, server: null, serverDetail: null }); }
+    });
+    memorySampler = startSampler(sfu, MEMORY_SAMPLER, block => {
+      const elapsedMs = performance.now() - start;
+      try { memorySamples.push({ elapsedMs, ...parseMemoryBlock(block) }); }
+      catch { memorySamples.push({ elapsedMs, rssKiB: null }); }
     });
     await podman(['run', '-d', '--name', gen, '--network', `container:${sfu}`, '--cpus', String(options.generatorCpus), '-e', 'RUST_LOG=warn', options.generatorImage, ...args]);
     containers.add(gen);
@@ -321,6 +422,18 @@ async function runOne(options, scenario, repetition, manifest) {
     }
     generatorSampler.stop();
     await podman(['cp', `${gen}:/results/.`, directory]);
+    let serverUdp = null;
+    if (options.captureHandshakes) {
+      await keepCapture();
+      // The kernel's per-namespace UDP counters, read through the capture image
+      // while the server's sockets still exist: receive-queue drops on the
+      // workers' ports are datagrams the kernel discarded before the worker
+      // could read them, which neither the capture nor the worker log shows.
+      const counters = await podman(['run', '--rm', '--network', `container:${sfu}`, '--entrypoint', 'sh', options.captureImage,
+        '-c', 'cat /proc/net/snmp; echo @@UDP; cat /proc/net/udp']);
+      await writeFile(join(directory, 'netns-udp.txt'), counters, { flag: 'wx' });
+      serverUdp = parseNetnsUdp(counters, Array.from({ length: options.workers }, (_, i) => options.udpPort + i));
+    }
     if (generatorExit?.code !== 0) throw new Error(`Generator failed: ${JSON.stringify(generatorExit)}`);
     const summary = JSON.parse(await readFile(join(directory, 'load_test_summary.json'), 'utf8'));
     if (summary.schemaVersion !== 2 || !summary.run?.completed || !summary.run?.passed || summary.totalErrors || summary.failedConnections || summary.failedConsumers) throw new Error('Incomplete or failing generator report');
@@ -353,6 +466,7 @@ async function runOne(options, scenario, repetition, manifest) {
       generatorCpuPercent: generatorResources.cpuPercentOfOneCore, generatorPeakRssMiB: generatorResources.peakRssMiB,
       cleanupMs: performance.now() - cleanupStart, serverResources, generatorResources, serverAttribution: attribution,
       media: { validatedConsumers: summary.validatedConsumers, failedConsumers: summary.failedConsumers, skippedShortLivedConsumers: summary.skippedShortLivedConsumers },
+      serverUdp,
       serverMetricsAtFinish: Object.fromEntries(Object.entries(finish.values).filter(([k]) => /rejected|deaths|queue_full|queue_closed|errors_total|consumers_created/.test(k))) };
     return row;
   } catch (error) {
@@ -360,7 +474,7 @@ async function runOne(options, scenario, repetition, manifest) {
     await runFinalizers(primaryError, [() => json(join(directory, 'failure.json'), { startedAt, error: error.stack, generatorExit, generatorStarted })]);
     throw error;
   } finally {
-    await runFinalizers(primaryError, [() => { serverSampler?.stop(); generatorSampler?.stop(); }, async () => {
+    await runFinalizers(primaryError, [() => { serverSampler?.stop(); generatorSampler?.stop(); memorySampler?.stop(); }, async () => {
       if (generatorStarted && !generatorExit) {
         await stopContainer(gen, 5);
         try { await podman(['cp', `${gen}:/results/.`, directory]); } catch {}
@@ -374,14 +488,14 @@ async function runOne(options, scenario, repetition, manifest) {
       try { await writeFile(join(directory, 'server.log'), await podman(['logs', sfu]), { flag: 'wx' }); } catch {}
     }, () => json(join(directory, 'server-exit.json'), serverExit ?? null),
     () => json(join(directory, 'generator-exit.json'), generatorExit ?? null),
-    () => json(join(directory, 'resources.json'), { server: serverSamples, generator: generatorSamples }),
+    () => json(join(directory, 'resources.json'), { server: serverSamples, generator: generatorSamples, memory: memorySamples }),
     async () => {
       if (row) {
         Object.assign(row, performanceRunStatus([row]), { completedAt: new Date().toISOString() });
         await json(join(directory, 'result.json'), row);
         console.log(`${row.passed ? 'PASS' : 'FAIL'} ${name}: recvP99=${row.receiveReadyP99Ms}ms serverCPU=${row.serverCpuPercent.toFixed(1)}% (${row.serverCpuPercentOfQuota.toFixed(1)}% of quota, throttled ${(100 * (row.serverThrottledPeriodFraction ?? 0)).toFixed(1)}% of periods) RSS=${row.serverPeakRssMiB.toFixed(1)}MiB; server shutdown ${row.serverShutdownPassed ? 'clean' : 'FAILED'}`);
       }
-    }, () => removeContainer(gen), () => removeContainer(sfu)]);
+    }, keepCapture, () => removeContainer(gen), () => removeContainer(cap), () => removeContainer(sfu)]);
   }
 }
 

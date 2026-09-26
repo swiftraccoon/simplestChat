@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { threadTicks, cgroupCpuStat, threadGroup, serverAttribution, netemScript, parseOptions } from './benchmark-podman.mjs';
+import { threadTicks, cgroupCpuStat, threadGroup, serverAttribution, netemScript, parseOptions, parseNetnsUdp, parseMemoryBlock } from './benchmark-podman.mjs';
 
 const stat = (tid, name, utime, stime) => `${tid} (${name}) S 0 1 1 0 -1 4194560 100 0 0 0 ${utime} ${stime} 0 0 20 0 3 0 5 1000 200 18446744073709551615 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n`;
 
@@ -87,4 +87,61 @@ test('webinar scenarios keep one room, one publisher and per-address ramps', () 
   const spread = parseOptions([...base, '--scenarios', 'conference', '--clients', '200', '--ramp-up', '60', '--source-addresses', '250']);
   assert.deepEqual(spread.scenarios.map((s) => [s.sourceAddresses, s.extra]), [[250, ['--source-addresses', '250']]]);
   assert.deepEqual(options.scenarios.map((s) => s.extra).flat().filter((a) => a === '--source-addresses').length, 2);
+});
+
+test('server environment overrides are parsed as pairs and recorded', () => {
+  const base = ['--server-image', 's', '--generator-image', 'g', '--output', 'out', '--clients', '10'];
+  const options = parseOptions([...base, '--server-env', 'CPU_SATURATION_WORKER_UTILIZATION=0.7;RUST_LOG=simplestChat=info,mediasoup=debug']);
+  assert.deepEqual(options.serverEnv, { CPU_SATURATION_WORKER_UTILIZATION: '0.7', RUST_LOG: 'simplestChat=info,mediasoup=debug' });
+  assert.deepEqual(parseOptions(base).serverEnv, {});
+  assert.throws(() => parseOptions([...base, '--server-env', 'lower=1']), /KEY=VALUE/);
+});
+
+test('handshake capture is an explicit boolean with a default sidecar image', () => {
+  const base = ['--server-image', 's', '--generator-image', 'g', '--output', 'out', '--clients', '10'];
+  assert.equal(parseOptions(base).captureHandshakes, false);
+  const options = parseOptions([...base, '--capture-handshakes', 'true']);
+  assert.equal(options.captureHandshakes, true);
+  assert.equal(options.captureImage, 'localhost/simplestchat-tcpdump:dev');
+  assert.throws(() => parseOptions([...base, '--capture-handshakes', 'yes']), /true or false/);
+});
+
+test('namespace UDP counters report the workers\' receive-queue drops and the namespace totals', () => {
+  const text = [
+    'Ip: Forwarding DefaultTTL InReceives', 'Ip: 1 64 5',
+    'Udp: InDatagrams NoPorts InErrors OutDatagrams RcvbufErrors SndbufErrors InCsumErrors IgnoredMulti MemErrors',
+    'Udp: 7909035 0 231 23682466 231 0 0 0 0',
+    '@@UDP',
+    '   sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops',
+    '  158: 00000000:A08C 00000000:0000 07 00000000:0001A000 00:00000000 00000000 10001        0 12345 2 0000000000000000 200',
+    '  159: 00000000:A08D 00000000:0000 07 00000000:00000000 00:00000000 00000000 10001        0 12346 2 0000000000000000 31',
+    '  160: 0100007F:C1A7 00000000:0000 07 00000000:00000000 00:00000000 00000000 10001        0 12347 2 0000000000000000 9',
+  ].join('\n');
+  const udp = parseNetnsUdp(text, [41100, 41101]);
+  assert.deepEqual(udp, { inDatagrams: 7909035, inErrors: 231, rcvbufErrors: 231, serverSocketDrops: 231,
+    sockets: [{ port: 41100, rxQueueBytes: 0x1A000, drops: 200 }, { port: 41101, rxQueueBytes: 0, drops: 31 }] });
+  assert.throws(() => parseNetnsUdp('Udp: InDatagrams\n', [41100]), /Udp lines/);
+});
+
+test('memory sampler blocks yield totals, large mappings and the cgroup split', () => {
+  const block = [
+    '55d0c0000000-55d0c0021000 ---p 00000000 00:00 0                          [rollup]',
+    'Rss:              480000 kB', 'Pss:              470000 kB', 'Anonymous:        450000 kB', 'Swap:                  0 kB',
+    '@@M',
+    '55d0c1a00000-55d0e5c00000 8192 [heap]',
+    '7f3a40000000-7f3a44000000 262144',
+    '7f3a80000000-7f3a80100000 4096 /usr/lib64/libc.so.6',
+    '@@C',
+    'anon 460000000', 'file 12000000', 'kernel 30000000', 'sock 26000000', 'slab 3000000', 'anon_thp 0',
+  ].join('\n');
+  const sample = parseMemoryBlock(block);
+  assert.equal(sample.rssKiB, 480000);
+  assert.equal(sample.anonymousKiB, 450000);
+  assert.deepEqual(sample.mappings, [
+    { range: '55d0c1a00000-55d0e5c00000', rssKiB: 8192, name: '[heap]' },
+    { range: '7f3a40000000-7f3a44000000', rssKiB: 262144, name: '' },
+    { range: '7f3a80000000-7f3a80100000', rssKiB: 4096, name: '/usr/lib64/libc.so.6' },
+  ]);
+  assert.deepEqual(sample.cgroup, { anon: 460000000, file: 12000000, kernel: 30000000, sock: 26000000, slab: 3000000 });
+  assert.throws(() => parseMemoryBlock('Rss: 1 kB\n@@M\n@@C\n'), /smaps_rollup|memory.stat/);
 });
