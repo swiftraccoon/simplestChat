@@ -569,7 +569,7 @@ test('a chat style from a newer peer degrades instead of dropping the message', 
 
 test('rejects missing or mistyped required top-level fields for every variant', () => {
   const optionals = {
-    roomJoined: ['roomSettings', 'yourChatStyle'],
+    roomJoined: ['roomSettings', 'yourChatStyle', 'yourName'],
     participantJoined: ['chatStyle'],
     transportCreated: ['iceServers'],
     newProducer: ['source'],

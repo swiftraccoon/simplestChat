@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod account;
+pub mod common_passwords;
 pub mod jwt;
 pub mod passkeys;
 pub mod password;

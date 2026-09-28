@@ -2577,6 +2577,9 @@ impl RoomManager {
                         "Nickname must be 1–64 bytes of plain text; \"You\" is taken",
                     ));
                 }
+                if room.name_in_use(nickname, Some(participant_id)) {
+                    return Err(rejected("That name is already in use in this room"));
+                }
                 room.participants.get_mut(participant_id).unwrap().name = nickname.to_string();
                 room.broadcast_all(&ServerMessage::NicknameChanged {
                     participant_id: participant_id.to_string(),

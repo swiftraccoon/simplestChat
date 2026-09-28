@@ -280,6 +280,9 @@ pub async fn register(
     if !password_length_ok(&req.password) {
         return Err(AuthError::InvalidCredentials);
     }
+    if super::common_passwords::is_common(&req.password) {
+        return Err(AuthError::InvalidInput("Choose a less common password"));
+    }
     let _request_permit = acquire_auth_request(&server)?;
 
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")

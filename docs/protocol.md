@@ -325,6 +325,14 @@ join, and treats an unknown style as `accent`. The browser shows a color token i
 does not know as the automatic color and an unknown style as `accent`; neither
 drops the message.
 
+`roomJoined.yourName` is the name the room knows the joiner by. A guest whose
+name is already in use in the room (ignoring case and surrounding spaces)
+receives it with a number, `Maya (2)`, so a newcomer cannot pass for someone
+present; accounts keep their profile name. `changeNickname` refuses a name
+another participant or lobby entry holds. Names, nicknames and room labels also
+refuse bidirectional controls, the zero-width space and the byte-order mark, and
+`You` is reserved for the reader.
+
 A send may name the retained message it answers with `replyTo` (a `messageId`).
 The server quotes that message itself as `ChatEntry.replyTo` (`ChatReplyRef`: its
 `messageId`, sender and a one-line excerpt of at most 140 characters), so the

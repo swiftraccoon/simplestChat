@@ -113,6 +113,7 @@ export type ServerMessage =
       reconnectToken: string;
       yourRole: string;
       yourChatStyle?: ChatStyle;
+      yourName?: string;
       roomSettings?: RoomSettings;
     }
   | { type: 'error'; requestId?: string; message: string }

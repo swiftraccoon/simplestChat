@@ -131,7 +131,9 @@ pub fn validate_text(value: &str, maximum: usize, multiline: bool) -> bool {
 }
 
 fn validate_password(password: &str) -> Result<(), AuthError> {
-    if routes::password_length_ok(password) && !password.chars().any(char::is_control) {
+    if super::common_passwords::is_common(password) {
+        Err(AuthError::InvalidInput("Choose a less common password"))
+    } else if routes::password_length_ok(password) && !password.chars().any(char::is_control) {
         Ok(())
     } else {
         Err(AuthError::InvalidInput(
@@ -285,16 +287,15 @@ pub async fn update_profile(
     validate_image_data_url(request.avatar_url.as_deref())?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
-    let updated = sqlx::query("UPDATE users SET display_name = $2, avatar_url = $3, bio = $4, updated_at = now() WHERE id = $1 AND auth_version = $5")
-        .bind(id).bind(request.display_name.trim()).bind(request.avatar_url).bind(request.bio).bind(claims.auth_version)
-        .execute(pool).await.map_err(routes::database_error)?;
-    if updated.rows_affected() == 0 {
-        return Err(AuthError::InvalidToken);
-    }
-    Ok((
-        routes::no_store_headers(),
-        Json(load_profile(pool, id).await?),
-    ))
+    let profile: AccountProfile = sqlx::query_as(
+        "UPDATE users SET display_name = $2, avatar_url = $3, bio = $4, updated_at = now()
+         WHERE id = $1 AND auth_version = $5
+         RETURNING id, email, display_name, avatar_url, bio, recovery_key_hash IS NOT NULL AS recovery_enabled",
+    )
+    .bind(id).bind(request.display_name.trim()).bind(request.avatar_url).bind(request.bio).bind(claims.auth_version)
+    .fetch_optional(pool).await.map_err(routes::database_error)?
+    .ok_or(AuthError::InvalidToken)?;
+    Ok((routes::no_store_headers(), Json(profile)))
 }
 
 pub async fn public_profile(

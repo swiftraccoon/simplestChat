@@ -111,7 +111,52 @@ pub async fn connect() -> anyhow::Result<Option<PgPool>> {
         info!("Database migrations applied");
     }
 
+    verify_schema(&pool).await?;
     Ok(Some(pool))
+}
+
+/// One column from each table the newest migrations shaped. A deployment that ran
+/// the binary against an unmigrated database fails here, at startup, with a message
+/// naming the gap, instead of on the first request that touches it.
+const EXPECTED_COLUMNS: [(&str, &str); 6] = [
+    ("users", "chat_style"),
+    ("sessions", "refresh_token_family_hash"),
+    ("rooms", "updated_at"),
+    ("room_states", "ip_address"),
+    ("room_reports", "resolved_by"),
+    ("webauthn_credentials", "credential_json"),
+];
+
+async fn verify_schema(pool: &PgPool) -> anyhow::Result<()> {
+    // Fixed identifiers only; no runtime value enters the SQL text.
+    let expected = EXPECTED_COLUMNS
+        .iter()
+        .map(|(table, column)| format!("('{table}', '{column}')"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT c.table_name::text, c.column_name::text
+         FROM information_schema.columns c
+         JOIN (VALUES {expected}) AS e(table_name, column_name)
+           ON c.table_name = e.table_name AND c.column_name = e.column_name
+         WHERE c.table_schema = 'public'"
+    );
+    let present: Vec<(String, String)> = sqlx::query_as(sqlx::AssertSqlSafe(sql))
+        .fetch_all(pool)
+        .await
+        .context("could not inspect the database schema")?;
+    let missing: Vec<String> = EXPECTED_COLUMNS
+        .iter()
+        .filter(|(table, column)| !present.iter().any(|(t, c)| t == table && c == column))
+        .map(|(table, column)| format!("{table}.{column}"))
+        .collect();
+    if !missing.is_empty() {
+        bail!(
+            "database schema is behind this build (missing {}); run the migrations first",
+            missing.join(", ")
+        );
+    }
+    Ok(())
 }
 
 fn require_verified_remote_database(options: &PgConnectOptions) -> anyhow::Result<()> {

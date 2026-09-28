@@ -2246,7 +2246,7 @@ fn make_ice_servers(turn_config: &Option<Arc<TurnConfig>>) -> Vec<crate::turn::I
     }
 }
 
-const MAX_PARTICIPANT_NAME_LEN: usize = 64;
+pub(crate) const MAX_PARTICIPANT_NAME_LEN: usize = 64;
 const MAX_TARGET_ID_LEN: usize = 128;
 
 fn validate_target_id(id: &str) -> anyhow::Result<()> {
@@ -2378,6 +2378,7 @@ async fn handle_client_message(
                     role,
                     room_settings,
                     chat_style,
+                    name,
                 } => {
                     *current_room_id = Some(room_id.clone());
                     in_lobby.store(false, Ordering::Release);
@@ -2388,6 +2389,7 @@ async fn handle_client_message(
                         participants,
                         reconnect_token: session_reconnect_token,
                         your_role: role,
+                        your_name: name,
                         your_chat_style: chat_style,
                         room_settings,
                     })?;

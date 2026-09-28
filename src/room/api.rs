@@ -180,20 +180,26 @@ pub async fn list_rooms(
 
     let rooms = if let Some(pattern) = search_pattern {
         // The materialized search stage prevents ORDER BY/LIMIT from making
-        // PostgreSQL walk the created_at index and test every row on a miss.
+        // PostgreSQL walk the created_at index and test every row on a miss. It
+        // carries only ids and sort keys: descriptions and images are fetched
+        // for the selected page alone, so a broad term never spills wide rows.
         sqlx::query_as::<_, RoomListRow>(
             r#"WITH matching_rooms AS MATERIALIZED (
-                 SELECT id, display_name, topic,
-                        password_hash IS NOT NULL AS password_protected,
-                        moderated, description, image_url, secret, created_at
+                 SELECT id, created_at
                  FROM rooms
                  WHERE secret = false
                    AND (display_name || E'\n' || COALESCE(topic, ''))
                        ILIKE $1 ESCAPE E'\\'
+             ),
+             page AS (
+                 SELECT id, created_at FROM matching_rooms
+                 ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3
              )
-             SELECT id, display_name, topic, password_protected, moderated, description, image_url, secret
-             FROM matching_rooms
-             ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3"#,
+             SELECT rooms.id, rooms.display_name, rooms.topic,
+                    rooms.password_hash IS NOT NULL AS password_protected,
+                    rooms.moderated, rooms.description, rooms.image_url, rooms.secret
+             FROM page JOIN rooms ON rooms.id = page.id
+             ORDER BY page.created_at DESC, page.id DESC"#,
         )
         .bind(pattern)
         .bind(limit)

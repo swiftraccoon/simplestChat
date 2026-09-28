@@ -396,6 +396,7 @@ const messages = {
     reconnectToken: text,
     yourRole: text,
     yourChatStyle: optional(chatStyle),
+    yourName: optional(text),
     roomSettings: optional(settings),
   }),
   error: message('error', { requestId: optionalRequestId, message: text }),

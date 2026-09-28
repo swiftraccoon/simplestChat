@@ -383,6 +383,8 @@ pub enum ServerMessage {
         participants: Vec<ParticipantInfo>,
         reconnect_token: String,
         your_role: String,
+        /// The name the room knows this participant by; a guest's may carry a number.
+        your_name: String,
         /// This participant's look: an account's saved one, or the guest's.
         #[serde(default)]
         your_chat_style: ChatStyle,

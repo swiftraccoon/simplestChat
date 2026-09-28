@@ -512,6 +512,8 @@ export class RoomClient {
     this.localRole = response.yourRole ?? 'user';
     this._roomSettings = response.roomSettings ?? null;
     if (response.yourChatStyle) this.localChatStyle = response.yourChatStyle;
+    // A guest's name may have gained a number to stay distinct in this room.
+    if (response.yourName) this.participantName = response.yourName;
     this.recovering = false;
 
     // Store existing participants
@@ -1220,6 +1222,7 @@ export class RoomClient {
     this.localRole = msg.yourRole ?? 'user';
     this._roomSettings = msg.roomSettings ?? null;
     if (msg.yourChatStyle) this.localChatStyle = msg.yourChatStyle;
+    if (msg.yourName) this.participantName = msg.yourName;
     this.recovering = false;
 
     for (const p of msg.participants) {

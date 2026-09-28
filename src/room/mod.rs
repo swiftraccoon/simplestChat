@@ -135,6 +135,8 @@ pub enum JoinResult {
         room_settings: Option<serde_json::Value>,
         /// The joiner's look: the account's saved one, or the guest's.
         chat_style: ChatStyle,
+        /// The name the room knows the joiner by: a guest's may carry a number.
+        name: String,
     },
     /// Placed in the lobby awaiting moderator approval
     Lobbied,
@@ -591,6 +593,35 @@ struct MediaControlIpcReservation {
 }
 
 impl Room {
+    /// Whether a participant or lobby entry other than `except` already uses
+    /// `name`, ignoring case and surrounding spaces.
+    pub(crate) fn name_in_use(&self, name: &str, except: Option<&str>) -> bool {
+        let wanted = name.trim().to_lowercase();
+        self.participants
+            .values()
+            .filter(|participant| Some(participant.id.as_str()) != except)
+            .map(|participant| participant.name.as_str())
+            .chain(self.lobby.values().map(|entry| entry.name.as_str()))
+            .any(|taken| taken.trim().to_lowercase() == wanted)
+    }
+
+    /// The requested guest name, or "name (n)" with the smallest free n from 2,
+    /// kept within the participant name limit.
+    pub(crate) fn unique_guest_name(&self, name: String) -> String {
+        if !self.name_in_use(&name, None) {
+            return name;
+        }
+        let base: String = name
+            .trim()
+            .chars()
+            .take(crate::signaling::connection::MAX_PARTICIPANT_NAME_LEN - 6)
+            .collect();
+        (2..)
+            .map(|n| format!("{} ({n})", base.trim_end()))
+            .find(|candidate| !self.name_in_use(candidate, None))
+            .expect("some suffix is free")
+    }
+
     fn lobby_counts(&self) -> (u32, u32) {
         let connected = self
             .participants
@@ -2620,6 +2651,14 @@ impl RoomManager {
                 anyhow::bail!("Room lobby is full");
             }
 
+            // A guest whose name is already in use here gets a numbered one, so a
+            // newcomer cannot pass for someone present. Accounts keep their names.
+            let participant_name = if authenticated {
+                participant_name
+            } else {
+                room.unique_guest_name(participant_name)
+            };
+
             // Re-check is_first under write lock (another join could have raced)
             let is_first = room.participants.is_empty() && room.lobby.is_empty();
 
@@ -2731,7 +2770,7 @@ impl RoomManager {
                 &participant_id,
                 &ServerMessage::ParticipantJoined {
                     participant_id: participant_id.clone(),
-                    participant_name,
+                    participant_name: participant_name.clone(),
                     role: role.name().to_string(),
                     authenticated,
                     chat_style: chat_style.clone(),
@@ -2777,6 +2816,7 @@ impl RoomManager {
                 role: role.name().to_string(),
                 room_settings,
                 chat_style,
+                name: participant_name,
             })
         })
         .await
@@ -5410,6 +5450,7 @@ impl RoomManager {
             participants,
             reconnect_token,
             your_role: admitted_role.name().to_string(),
+            your_name: entry.name.clone(),
             your_chat_style: entry.chat_style.clone(),
             room_settings,
         }) {
@@ -6146,6 +6187,75 @@ mod security_tests {
             .unwrap();
         assert!(matches!(joined, JoinResult::Joined { .. }));
         (tx, rx)
+    }
+
+    #[tokio::test]
+    async fn guests_sharing_a_name_get_numbered_and_nobody_may_take_a_name_in_use() {
+        use crate::signaling::protocol::ClientMessage;
+        let manager = drain_test_manager().await;
+        let join = |id: String, name: &str, authenticated: bool| {
+            let manager = &manager;
+            let name = name.to_string();
+            async move {
+                let (tx, rx) = mpsc::channel(32);
+                let joined = manager
+                    .add_participant(
+                        "names",
+                        id.clone(),
+                        name,
+                        tx.clone(),
+                        authenticated,
+                        Arc::new(AtomicBool::new(false)),
+                        None,
+                        &format!("{id}-token"),
+                        None,
+                        None,
+                    )
+                    .await
+                    .unwrap();
+                let JoinResult::Joined { name, .. } = joined else {
+                    panic!("a fresh join is admitted")
+                };
+                (name, tx, rx)
+            }
+        };
+        let (first, _tx1, _rx1) = join("g1".into(), "Maya", false).await;
+        let (second, tx2, _rx2) = join("g2".into(), " maya ", false).await;
+        let (third, _tx3, _rx3) = join("g3".into(), "MAYA", false).await;
+        assert_eq!(
+            (first.as_str(), second.as_str(), third.as_str()),
+            ("Maya", "maya (2)", "MAYA (3)"),
+            "a taken name gains the smallest free number, ignoring case and spaces"
+        );
+        let (account, _tx4, _rx4) = join(uuid::Uuid::new_v4().to_string(), "Maya", true).await;
+        assert_eq!(account, "Maya", "an account keeps its profile name");
+        let long = "x".repeat(crate::signaling::connection::MAX_PARTICIPANT_NAME_LEN);
+        let (_l1, _tx5, _rx5) = join("g5".into(), &long, false).await;
+        let (l2, _tx6, _rx6) = join("g6".into(), &long, false).await;
+        assert!(l2.ends_with(" (2)") && l2.chars().count() <= 64, "{l2}");
+
+        let rename = |nickname: &str| {
+            let command = ClientMessage::ChangeNickname {
+                request_id: uuid::Uuid::new_v4().to_string(),
+                nickname: nickname.to_string(),
+            };
+            let (manager, tx2) = (&manager, &tx2);
+            async move {
+                manager
+                    .handle_social_request("names", "g2", tx2, &command)
+                    .await
+            }
+        };
+        assert!(rename("maya").await.is_err(), "another guest's name");
+        assert!(
+            rename("MAYA (3)").await.is_err(),
+            "another guest's numbered name"
+        );
+        assert!(
+            rename("maya (2)").await.is_ok(),
+            "one's own name, differently cased"
+        );
+        assert!(rename("Dave").await.is_ok());
     }
 
     #[tokio::test]
