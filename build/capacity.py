@@ -798,6 +798,8 @@ class Prices:
 PORT_HEADROOM: Final = 0.8
 # The server's default per-worker guard (CPU_SATURATION_WORKER_UTILIZATION).
 DEFAULT_WORKER_THRESHOLD: Final = 0.7
+# The most media workers the server accepts (`MAX_MEDIA_WORKERS`).
+MAX_MEDIA_WORKERS: Final = 64
 # A limit allows twice the memory a measured peak needed.
 MEMORY_HEADROOM: Final = 2.0
 # The host keeps a quarter of its memory, at least 1 GiB, for the database,
@@ -817,8 +819,8 @@ class Deployment:
 
     @property
     def workers(self) -> int:
-        """One media worker per whole CPU of the app's quota."""
-        return max(1, math.floor(self.app_cpus))
+        """One media worker per whole CPU of the app's quota, up to the server's limit."""
+        return max(1, min(MAX_MEDIA_WORKERS, math.floor(self.app_cpus)))
 
 
 def deployment_for(
@@ -988,7 +990,9 @@ def shape_for(
     if generator_cpus is None:
         spare = round(host_cpus - server_cpus - ENGINE_RESERVE_CPUS, 1)
         generator_cpus = max(MINIMUM_GENERATOR_CPUS, spare)
-    return Shape(server_cpus, max(1, math.floor(server_cpus)), generator_cpus)
+    return Shape(
+        server_cpus, max(1, min(MAX_MEDIA_WORKERS, math.floor(server_cpus))), generator_cpus
+    )
 
 
 # --- Engine -------------------------------------------------------------------

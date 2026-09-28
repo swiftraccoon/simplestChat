@@ -763,6 +763,23 @@ class CeilingAndCostTests(unittest.TestCase):
             (chosen.workers, chosen.memory_mib, chosen.worker_threshold), (2, 3000, 0.85)
         )
 
+    def test_workers_stop_at_the_servers_limit(self) -> None:
+        """The server accepts at most 64 workers: settings, projection and steps keep to it."""
+        deployment = capacity.deployment_for(96, 196_608, app_cpus=None, app_memory_mib=None)
+        self.assertEqual((deployment.app_cpus, deployment.workers), (95.0, 64))
+        ceilings: dict[capacity.Workload, capacity.Ceiling] = {
+            "meetings": capacity.Ceiling("meetings", 100, "measured", 0.6, 80.0, 0, workers=2),
+        }
+        projection = capacity.project(ceilings, deployment)
+        self.assertEqual(projection.cpu_participants, 50 * 64)
+        self.assertIn(
+            "MEDIA_WORKERS=64",
+            capacity.recommendations(ceilings, projection, deployment, 2 * capacity.MIB),
+        )
+        self.assertEqual(capacity.shape_for("meetings", 512, deployment_workers=64).workers, 64)
+        server = (ROOT / "src" / "media" / "config.rs").read_text(encoding="utf-8")
+        self.assertIn(f"MAX_MEDIA_WORKERS: usize = {capacity.MAX_MEDIA_WORKERS};", server)
+
     def test_cost_is_cpu_or_network_bound(self) -> None:
         """Monthly price over participant-hours at full use, plus egress beyond the allowance."""
         cpu = capacity.cost_of(projected(200, 1.0), capacity.Prices(monthly=14.6))
