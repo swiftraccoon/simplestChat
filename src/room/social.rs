@@ -2,14 +2,18 @@
 //! Private text is retained only in bounded memory, never in reports or logs.
 use super::*;
 use crate::signaling::protocol::{
-    ChatEntry, ChatRetryOutcome, ChatRetryReason, ChatStyle, ChatStyleKind, ClientMessage,
-    valid_correlation_id,
+    ChatEntry, ChatReaction, ChatReplyRef, ChatRetryOutcome, ChatRetryReason, ChatStyle,
+    ChatStyleKind, ClientMessage, REACTIONS, valid_correlation_id,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
 const HISTORY_MESSAGES: usize = 300;
+/// Reaction records one message keeps, so a popular message stays within budget.
+const MESSAGE_REACTIONS: usize = 64;
+/// Characters a reply quotes from the message it answers.
+const REPLY_EXCERPT_CHARS: usize = 140;
 const HISTORY_BYTES: usize = 256 * 1024;
 const MAX_IGNORED: usize = 100;
 const MAX_REPORTS: usize = 500;
@@ -327,6 +331,7 @@ mod tests {
                 recipient_id: target.map(String::from),
                 sequence: Some(sequence),
                 retry_session: retry,
+                reply_to: None,
             },
         )
     }
@@ -711,6 +716,8 @@ mod tests {
                 content: "x".repeat(4096),
                 sent_at: chrono::Utc::now().to_rfc3339(),
                 chat_style: Default::default(),
+                reply_to: None,
+                reactions: Vec::new(),
             };
             room.social.remember(alice.media_session_id, None, message);
         }
@@ -890,6 +897,225 @@ mod tests {
         assert!(valid_correlation_id("request_123"));
         assert!(!valid_correlation_id(&"x".repeat(65)));
         assert!(!valid_correlation_id("unsafe\n"));
+    }
+
+    fn reply(
+        room: &mut Room,
+        sender: &Participant,
+        id: &str,
+        target: Option<&str>,
+        content: &str,
+        reply_to: Option<&str>,
+    ) -> Result<()> {
+        RoomManager::process_chat_attempt(
+            room,
+            &sender.id,
+            &sender.sender,
+            ChatAttempt {
+                content: content.into(),
+                client_message_id: Some(id.into()),
+                recipient_id: target.map(String::from),
+                sequence: None,
+                retry_session: None,
+                reply_to: reply_to.map(String::from),
+            },
+        )
+    }
+
+    fn drain(receivers: &mut [mpsc::Receiver<crate::OutboundJson>]) {
+        for receiver in receivers {
+            while receiver.try_recv().is_ok() {}
+        }
+    }
+
+    #[test]
+    fn replies_quote_what_they_answer_only_within_its_conversation() {
+        let (mut room, alice, bob, carol, mut receivers) = fixture();
+        let long = format!("line one\n{}", "word ".repeat(40));
+        reply(&mut room, &alice, "public-1", None, &long, None).unwrap();
+        let original = room
+            .social
+            .history
+            .back()
+            .unwrap()
+            .message
+            .message_id
+            .clone();
+        drain(&mut receivers);
+        reply(&mut room, &bob, "reply-1", None, "agreed", Some(&original)).unwrap();
+        let quoted = room
+            .social
+            .history
+            .back()
+            .unwrap()
+            .message
+            .reply_to
+            .clone()
+            .unwrap();
+        assert_eq!(quoted.message_id, original);
+        assert_eq!(quoted.participant_id, alice.id);
+        assert_eq!(quoted.participant_name, "Alice");
+        assert!(quoted.excerpt.starts_with("line one word word"), "one line");
+        assert!(quoted.excerpt.ends_with('…'));
+        assert_eq!(quoted.excerpt.chars().count(), REPLY_EXCERPT_CHARS + 1);
+        let public: Value = serde_json::from_str(&receivers[2].try_recv().unwrap()).unwrap();
+        assert_eq!(public["type"], "chatReceived");
+        assert_eq!(public["replyTo"]["messageId"], original.as_str());
+        // A private reply cannot quote public text, nor anything it cannot see.
+        assert!(
+            reply(
+                &mut room,
+                &bob,
+                "reply-2",
+                Some(&carol.id),
+                "psst",
+                Some(&original)
+            )
+            .is_err()
+        );
+        assert!(
+            reply(
+                &mut room,
+                &bob,
+                "reply-3",
+                None,
+                "?",
+                Some(&Uuid::new_v4().to_string())
+            )
+            .is_err()
+        );
+        reply(
+            &mut room,
+            &alice,
+            "private-1",
+            Some(&bob.id),
+            "just us",
+            None,
+        )
+        .unwrap();
+        let private = room
+            .social
+            .history
+            .back()
+            .unwrap()
+            .message
+            .message_id
+            .clone();
+        assert!(reply(&mut room, &carol, "reply-4", None, "me too", Some(&private)).is_err());
+        reply(
+            &mut room,
+            &bob,
+            "reply-5",
+            Some(&alice.id),
+            "ok",
+            Some(&private),
+        )
+        .unwrap();
+        assert!(
+            room.social
+                .history
+                .back()
+                .unwrap()
+                .message
+                .reply_to
+                .is_some()
+        );
+        // The same message ID cannot later claim a different reply.
+        assert!(reply(&mut room, &bob, "reply-1", None, "agreed", None).is_err());
+    }
+
+    #[test]
+    fn reactions_toggle_reach_only_viewers_and_stay_within_budget() {
+        let (mut room, alice, bob, carol, mut receivers) = fixture();
+        reply(&mut room, &alice, "public-1", None, "party?", None).unwrap();
+        let message = room
+            .social
+            .history
+            .back()
+            .unwrap()
+            .message
+            .message_id
+            .clone();
+        drain(&mut receivers);
+        let emojis = |reactions: &[ChatReaction]| -> Vec<(String, Vec<String>)> {
+            reactions
+                .iter()
+                .map(|r| (r.emoji.clone(), r.participant_ids.clone()))
+                .collect()
+        };
+        let added = react_to_message(&mut room, &bob.id, &message, "🎉").unwrap();
+        assert_eq!(
+            emojis(&added),
+            vec![("🎉".to_string(), vec![bob.id.clone()])]
+        );
+        for receiver in &mut receivers {
+            let event: Value = serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
+            assert_eq!(event["type"], "messageReactions");
+            assert_eq!(event["messageId"], message.as_str());
+        }
+        react_to_message(&mut room, &carol.id, &message, "🎉").unwrap();
+        let taken_back = react_to_message(&mut room, &bob.id, &message, "🎉").unwrap();
+        assert_eq!(
+            emojis(&taken_back),
+            vec![("🎉".to_string(), vec![carol.id.clone()])]
+        );
+        assert!(react_to_message(&mut room, &bob.id, &message, "🍕").is_err());
+        assert!(react_to_message(&mut room, &bob.id, "missing", "🎉").is_err());
+        // Private text takes reactions only from its two participants.
+        reply(
+            &mut room,
+            &alice,
+            "private-1",
+            Some(&bob.id),
+            "just us",
+            None,
+        )
+        .unwrap();
+        let private = room
+            .social
+            .history
+            .back()
+            .unwrap()
+            .message
+            .message_id
+            .clone();
+        drain(&mut receivers);
+        assert!(react_to_message(&mut room, &carol.id, &private, "👍").is_err());
+        react_to_message(&mut room, &bob.id, &private, "👍").unwrap();
+        assert!(receivers[0].try_recv().is_ok());
+        assert!(receivers[1].try_recv().is_ok());
+        assert!(
+            receivers[2].try_recv().is_err(),
+            "the third member never hears of it"
+        );
+        // History bytes follow the reactions exactly.
+        let counted: usize = room.social.history.iter().map(|entry| entry.bytes).sum();
+        assert_eq!(room.social.history_bytes, counted);
+        for entry in &room.social.history {
+            assert_eq!(
+                entry.bytes,
+                serde_json::to_vec(&entry.message).unwrap().len()
+            );
+        }
+        // One message holds at most MESSAGE_REACTIONS reaction records.
+        let mut extra = Vec::new();
+        for index in 0..MESSAGE_REACTIONS / REACTIONS.len() {
+            let (member, receiver) = participant(&format!("Member {index}"));
+            room.participants.insert(member.id.clone(), member.clone());
+            extra.push((member, receiver));
+        }
+        // Carol takes hers back, leaving the message bare before it fills up.
+        assert!(
+            react_to_message(&mut room, &carol.id, &message, "🎉")
+                .unwrap()
+                .is_empty()
+        );
+        for (member, _) in &extra {
+            for emoji in REACTIONS {
+                react_to_message(&mut room, &member.id, &message, emoji).unwrap();
+            }
+        }
+        assert!(react_to_message(&mut room, &alice.id, &message, "👍").is_err());
     }
 
     #[tokio::test]
@@ -1381,6 +1607,8 @@ struct HistoryEntry {
     sender_session: Uuid,
     recipient_session: Option<Uuid>,
     message: ChatEntry,
+    /// Serialized size counted against `HISTORY_BYTES`; reactions change it.
+    bytes: usize,
 }
 
 struct ChatReceipt {
@@ -1397,6 +1625,7 @@ struct ChatAttempt {
     recipient_id: Option<String>,
     sequence: Option<u64>,
     retry_session: Option<String>,
+    reply_to: Option<String>,
 }
 
 const REPORT_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(30);
@@ -1540,7 +1769,9 @@ impl ClientMessage {
             | Self::ListRoomMembers { .. }
             | Self::ListRoomReports { .. }
             | Self::SetChatPreferences { .. } => SocialBudget::None,
-            Self::ChangeNickname { .. } | Self::SetChatStyle { .. } => SocialBudget::ChatBroadcast,
+            Self::ChangeNickname { .. }
+            | Self::SetChatStyle { .. }
+            | Self::ReactToMessage { .. } => SocialBudget::ChatBroadcast,
             _ => SocialBudget::AdminMutation,
         }
     }
@@ -1550,6 +1781,7 @@ impl ClientMessage {
             Self::SetChatPreferences { request_id, .. } => Some((request_id, "setChatPreferences")),
             Self::ChangeNickname { request_id, .. } => Some((request_id, "changeNickname")),
             Self::SetChatStyle { request_id, .. } => Some((request_id, "setChatStyle")),
+            Self::ReactToMessage { request_id, .. } => Some((request_id, "reactToMessage")),
             Self::GetRoomSnapshot { request_id } => Some((request_id, "getRoomSnapshot")),
             Self::ListRoomBans { request_id, .. } => Some((request_id, "listRoomBans")),
             Self::RemoveRoomBan { request_id, .. } => Some((request_id, "removeRoomBan")),
@@ -1639,6 +1871,118 @@ fn visible(entry: &HistoryEntry, viewer: &Participant) -> bool {
             .contains(&entry.message.participant_id)
     }
 }
+fn replied_to(message: &ChatEntry) -> Option<&str> {
+    message
+        .reply_to
+        .as_ref()
+        .map(|reply| reply.message_id.as_str())
+}
+/// Quotes the retained message a reply answers. The replier must be able to see it,
+/// and it must belong to the same conversation: public with public, or the same pair.
+fn quote_reply(
+    history: &VecDeque<HistoryEntry>,
+    sender: &Participant,
+    recipient_id: Option<&str>,
+    message_id: &str,
+) -> Result<ChatReplyRef> {
+    let original = history
+        .iter()
+        .rev()
+        .find(|entry| entry.message.message_id == message_id && visible(entry, sender))
+        .ok_or_else(|| rejected("That message is no longer available to reply to"))?;
+    let message = &original.message;
+    let same_conversation = match (recipient_id, message.recipient_id.as_deref()) {
+        (None, None) => true,
+        (Some(to), Some(other)) => {
+            let pair = [message.participant_id.as_str(), other];
+            pair.contains(&to) && pair.contains(&sender.id.as_str())
+        }
+        _ => false,
+    };
+    if !same_conversation {
+        return Err(rejected(
+            "Reply within the conversation the message belongs to",
+        ));
+    }
+    let flat = message
+        .content
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut chars = flat.chars();
+    let head: String = chars.by_ref().take(REPLY_EXCERPT_CHARS).collect();
+    let excerpt = if chars.next().is_some() {
+        format!("{}…", head.trim_end())
+    } else {
+        head
+    };
+    Ok(ChatReplyRef {
+        message_id: message.message_id.clone(),
+        participant_id: message.participant_id.clone(),
+        participant_name: message.participant_name.clone(),
+        excerpt,
+    })
+}
+/// Adds `participant_id`'s reaction to a retained message it can see, or takes it
+/// back, and tells everyone who can see the message, the reactor included.
+fn react_to_message(
+    room: &mut Room,
+    participant_id: &str,
+    message_id: &str,
+    emoji: &str,
+) -> Result<Vec<ChatReaction>> {
+    if !REACTIONS.contains(&emoji) {
+        return Err(rejected("Choose one of the offered reactions"));
+    }
+    let actor = room
+        .participants
+        .get(participant_id)
+        .ok_or_else(|| rejected("Participant not found"))?;
+    let index = room
+        .social
+        .history
+        .iter()
+        .position(|entry| entry.message.message_id == message_id && visible(entry, actor))
+        .ok_or_else(|| rejected("That message is no longer available"))?;
+    let reactor = participant_id.to_string();
+    let reactions = &mut room.social.history[index].message.reactions;
+    match reactions
+        .iter()
+        .position(|reaction| reaction.emoji == emoji)
+    {
+        Some(at) if reactions[at].participant_ids.contains(&reactor) => {
+            reactions[at].participant_ids.retain(|id| *id != reactor);
+            if reactions[at].participant_ids.is_empty() {
+                reactions.remove(at);
+            }
+        }
+        found => {
+            let total: usize = reactions.iter().map(|r| r.participant_ids.len()).sum();
+            if total >= MESSAGE_REACTIONS {
+                return Err(rejected("This message has all the reactions it can hold"));
+            }
+            match found {
+                Some(at) => reactions[at].participant_ids.push(reactor),
+                None => reactions.push(ChatReaction {
+                    emoji: emoji.to_string(),
+                    participant_ids: vec![reactor],
+                }),
+            }
+        }
+    }
+    let reactions = reactions.clone();
+    let event =
+        crate::OutboundJson::from(serde_json::to_string(&ServerMessage::MessageReactions {
+            message_id: message_id.to_string(),
+            reactions: reactions.clone(),
+        })?);
+    let entry = &room.social.history[index];
+    for viewer in room.participants.values().filter(|p| visible(entry, p)) {
+        let _ = try_send_essential(&room.metrics, &viewer.sender, event.clone());
+    }
+    room.social.recount(index);
+    Ok(reactions)
+}
 fn can_private_message(sender: &Participant, recipient: &Participant) -> bool {
     sender.id != recipient.id
         && recipient.social.allow_private_messages
@@ -1713,22 +2057,32 @@ impl RoomSocial {
         message: ChatEntry,
     ) {
         // Names and identifiers also count, keeping retention bounded even with short text.
-        let size = serde_json::to_vec(&message).map_or(HISTORY_BYTES, |v| v.len());
-        self.history_bytes += size;
+        let bytes = serde_json::to_vec(&message).map_or(HISTORY_BYTES, |v| v.len());
+        self.history_bytes += bytes;
         self.history.push_back(HistoryEntry {
             sequence: self.next_sequence,
             sender_session,
             recipient_session,
             message,
+            bytes,
         });
         self.next_sequence = self.next_sequence.saturating_add(1);
+        self.trim_history();
+    }
+    /// Re-counts an entry whose reactions changed, then trims to the budget.
+    fn recount(&mut self, index: usize) {
+        if let Some(entry) = self.history.get_mut(index) {
+            let bytes = serde_json::to_vec(&entry.message).map_or(HISTORY_BYTES, |v| v.len());
+            self.history_bytes = self.history_bytes.saturating_sub(entry.bytes) + bytes;
+            entry.bytes = bytes;
+        }
+        self.trim_history();
+    }
+    fn trim_history(&mut self) {
         while self.history.len() > HISTORY_MESSAGES || self.history_bytes > HISTORY_BYTES {
-            if let Some(old) = self.history.pop_front() {
-                self.history_bytes = self.history_bytes.saturating_sub(
-                    serde_json::to_vec(&old.message).map_or(HISTORY_BYTES, |v| v.len()),
-                );
-            } else {
-                break;
+            match self.history.pop_front() {
+                Some(old) => self.history_bytes = self.history_bytes.saturating_sub(old.bytes),
+                None => break,
             }
         }
     }
@@ -1789,24 +2143,28 @@ impl RoomManager {
                 content,
                 client_message_id,
                 sequence,
+                reply_to,
             } => ChatAttempt {
                 content: content.clone(),
                 client_message_id: client_message_id.clone(),
                 recipient_id: None,
                 sequence: *sequence,
                 retry_session: None,
+                reply_to: reply_to.clone(),
             },
             ClientMessage::PrivateMessage {
                 content,
                 client_message_id,
                 target_participant_id,
                 sequence,
+                reply_to,
             } => ChatAttempt {
                 content: content.clone(),
                 client_message_id: Some(client_message_id.clone()),
                 recipient_id: Some(target_participant_id.clone()),
                 sequence: *sequence,
                 retry_session: None,
+                reply_to: reply_to.clone(),
             },
             ClientMessage::RetryChatMessage(message) => ChatAttempt {
                 content: message.content.clone(),
@@ -1814,6 +2172,7 @@ impl RoomManager {
                 recipient_id: message.target_participant_id.clone(),
                 sequence: Some(message.sequence),
                 retry_session: Some(message.chat_session_id.clone()),
+                reply_to: message.reply_to.clone(),
             },
             _ => return Err(rejected("Invalid chat command")),
         };
@@ -1861,6 +2220,7 @@ impl RoomManager {
                 recipient_id: recipient_id.map(String::from),
                 sequence: None,
                 retry_session: None,
+                reply_to: None,
             },
         )
     }
@@ -1877,7 +2237,9 @@ impl RoomManager {
             recipient_id,
             sequence,
             retry_session,
+            reply_to,
         } = attempt;
+        let reply_to = reply_to.as_deref();
         let recipient_id = recipient_id.as_deref();
         if content.trim().is_empty()
             || content.len() > 4096
@@ -1893,6 +2255,7 @@ impl RoomManager {
         }
         if sequence.is_some_and(|value| value == 0 || value > MAX_CHAT_SEQUENCE)
             || recipient_id.is_some_and(|id| id.parse::<Uuid>().is_err())
+            || reply_to.is_some_and(|id| !valid_correlation_id(id))
         {
             return Err(rejected("Invalid chat attempt"));
         }
@@ -1924,6 +2287,7 @@ impl RoomManager {
         }) {
             if existing.message.content != content
                 || existing.message.recipient_id.as_deref() != recipient_id
+                || replied_to(&existing.message) != reply_to
                 || existing.sequence != sequence
             {
                 if retry_session.is_none() {
@@ -1963,6 +2327,7 @@ impl RoomManager {
         }) {
             if existing.message.content != content
                 || existing.message.recipient_id.as_deref() != recipient_id
+                || replied_to(&existing.message) != reply_to
             {
                 return Err(rejected("Message ID was already used"));
             }
@@ -1984,6 +2349,10 @@ impl RoomManager {
         } else {
             None
         };
+        let reply_to = match reply_to {
+            Some(id) => Some(quote_reply(&room.social.history, sender, recipient_id, id)?),
+            None => None,
+        };
         let message = ChatEntry {
             message_id: Uuid::new_v4().to_string(),
             client_message_id: client_message_id.clone(),
@@ -1994,6 +2363,8 @@ impl RoomManager {
             content,
             sent_at: chrono::Utc::now().to_rfc3339(),
             chat_style: sender_style,
+            reply_to,
+            reactions: Vec::new(),
         };
         let receipt_bytes = serde_json::to_vec(&message)?.len();
         if receipt_bytes > CHAT_RECEIPT_BYTES {
@@ -2026,6 +2397,7 @@ impl RoomManager {
                 client_message_id: message.client_message_id.clone(),
                 sent_at: message.sent_at.clone(),
                 chat_style: message.chat_style.clone(),
+                reply_to: message.reply_to.clone(),
             };
             let json = crate::OutboundJson::from(serde_json::to_string(&event)?);
             for participant in room.participants.values() {
@@ -2241,6 +2613,12 @@ impl RoomManager {
                     chat_style: chat_style.clone(),
                 });
                 json!({"chatStyle": chat_style})
+            }
+            ClientMessage::ReactToMessage {
+                message_id, emoji, ..
+            } => {
+                let reactions = react_to_message(&mut room, participant_id, message_id, emoji)?;
+                json!({"messageId": message_id, "reactions": reactions})
             }
             ClientMessage::GetRoomSnapshot { .. } => {
                 let actor = room.participants.get(participant_id).unwrap();

@@ -671,6 +671,7 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         ClientMessage::SetChatPreferences { .. }
         | ClientMessage::ChangeNickname { .. }
         | ClientMessage::SetChatStyle { .. }
+        | ClientMessage::ReactToMessage { .. }
         | ClientMessage::GetRoomSnapshot { .. }
         | ClientMessage::ListRoomBans { .. }
         | ClientMessage::RemoveRoomBan { .. }
@@ -2747,6 +2748,7 @@ async fn handle_client_message(
         ClientMessage::SetChatPreferences { .. }
         | ClientMessage::ChangeNickname { .. }
         | ClientMessage::SetChatStyle { .. }
+        | ClientMessage::ReactToMessage { .. }
         | ClientMessage::GetRoomSnapshot { .. }
         | ClientMessage::ListRoomBans { .. }
         | ClientMessage::RemoveRoomBan { .. }
@@ -3374,6 +3376,7 @@ mod security_tests {
             content: "hello".to_string(),
             client_message_id: None,
             sequence: None,
+            reply_to: None,
         }));
     }
 
@@ -3574,6 +3577,7 @@ mod security_tests {
             content: "hello".to_string(),
             client_message_id: None,
             sequence: None,
+            reply_to: None,
         }));
     }
 

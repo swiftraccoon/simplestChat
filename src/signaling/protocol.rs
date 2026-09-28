@@ -181,6 +181,9 @@ pub enum ClientMessage {
         client_message_id: Option<String>,
         #[serde(default)]
         sequence: Option<u64>,
+        /// The retained message this one answers, in the same conversation.
+        #[serde(default)]
+        reply_to: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
     PrivateMessage {
@@ -189,6 +192,8 @@ pub enum ClientMessage {
         client_message_id: String,
         #[serde(default)]
         sequence: Option<u64>,
+        #[serde(default)]
+        reply_to: Option<String>,
     },
     RetryChatMessage(RetryChatMessage),
     #[serde(rename_all = "camelCase")]
@@ -202,6 +207,13 @@ pub enum ClientMessage {
     SetChatStyle {
         request_id: String,
         chat_style: ChatStyle,
+    },
+    /// Add this participant's reaction to a retained message, or take it back.
+    #[serde(rename_all = "camelCase")]
+    ReactToMessage {
+        request_id: String,
+        message_id: String,
+        emoji: String,
     },
     #[serde(rename_all = "camelCase")]
     ChangeNickname {
@@ -511,6 +523,8 @@ pub enum ServerMessage {
         sent_at: String,
         #[serde(default)]
         chat_style: ChatStyle,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reply_to: Option<ChatReplyRef>,
     },
     #[serde(rename_all = "camelCase")]
     MessageAck {
@@ -548,6 +562,12 @@ pub enum ServerMessage {
     ChatStyleChanged {
         participant_id: String,
         chat_style: ChatStyle,
+    },
+    /// A message's reactions changed; sent to everyone who can see it.
+    #[serde(rename_all = "camelCase")]
+    MessageReactions {
+        message_id: String,
+        reactions: Vec<ChatReaction>,
     },
     /// Active/dominant speaker changed
     #[serde(rename_all = "camelCase")]
@@ -739,6 +759,32 @@ pub struct ChatEntry {
     /// The sender's look when they sent it, so history keeps it after they leave.
     #[serde(default)]
     pub chat_style: ChatStyle,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<ChatReplyRef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reactions: Vec<ChatReaction>,
+}
+
+/// The reactions people may add to a message.
+pub const REACTIONS: [&str; 8] = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "👏"];
+
+/// The message a reply answers, quoted by the server when the reply was sent, so
+/// the quote survives the original leaving history and cannot be forged.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatReplyRef {
+    pub message_id: String,
+    pub participant_id: String,
+    pub participant_name: String,
+    pub excerpt: String,
+}
+
+/// One reaction on a message and who added it, oldest first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatReaction {
+    pub emoji: String,
+    pub participant_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -766,6 +812,8 @@ pub struct RetryChatMessage {
     pub chat_session_id: String,
     pub content: String,
     pub target_participant_id: Option<String>,
+    #[serde(default)]
+    pub reply_to: Option<String>,
 }
 
 /// Producer metadata
@@ -781,9 +829,57 @@ pub struct ProducerMetadata {
 #[cfg(test)]
 mod tests {
     use super::{
-        CHAT_COLORS, ChatStyle, ChatStyleKind, ClientMessage, RequestHeader, ServerMessage,
+        CHAT_COLORS, ChatEntry, ChatReaction, ChatReplyRef, ChatStyle, ChatStyleKind,
+        ClientMessage, REACTIONS, RequestHeader, ServerMessage,
     };
     use serde_json::{Value, json};
+
+    #[test]
+    fn replies_and_reactions_keep_their_wire_names() {
+        let react: ClientMessage = serde_json::from_value(json!({
+            "type": "reactToMessage", "requestId": "r1", "messageId": "m1", "emoji": "🎉"
+        }))
+        .unwrap();
+        assert_eq!(react.social_request(), Some(("r1", "reactToMessage")));
+        let chat: ClientMessage = serde_json::from_value(json!({
+            "type": "chatMessage", "content": "hi", "clientMessageId": "c1", "replyTo": "m1"
+        }))
+        .unwrap();
+        assert!(
+            matches!(chat, ClientMessage::ChatMessage { reply_to: Some(ref id), .. } if id == "m1")
+        );
+        let event = serde_json::to_value(ServerMessage::MessageReactions {
+            message_id: "m1".into(),
+            reactions: vec![ChatReaction {
+                emoji: "🎉".into(),
+                participant_ids: vec!["p".into()],
+            }],
+        })
+        .unwrap();
+        assert_eq!(
+            event,
+            json!({"type": "messageReactions", "messageId": "m1",
+                   "reactions": [{"emoji": "🎉", "participantIds": ["p"]}]})
+        );
+        let mut entry: ChatEntry = serde_json::from_value(json!({
+            "messageId": "m2", "clientMessageId": "c2", "participantId": "p",
+            "participantName": "P", "content": "hi", "sentAt": "2026-09-28T00:00:00Z"
+        }))
+        .unwrap();
+        let bare = serde_json::to_value(&entry).unwrap();
+        assert!(bare.get("replyTo").is_none() && bare.get("reactions").is_none());
+        entry.reply_to = Some(ChatReplyRef {
+            message_id: "m1".into(),
+            participant_id: "q".into(),
+            participant_name: "Q".into(),
+            excerpt: "hello".into(),
+        });
+        assert_eq!(
+            serde_json::to_value(&entry).unwrap()["replyTo"],
+            json!({"messageId": "m1", "participantId": "q", "participantName": "Q", "excerpt": "hello"})
+        );
+        assert_eq!(REACTIONS.len(), 8);
+    }
 
     #[test]
     fn chat_styles_keep_to_the_palette_and_tolerate_newer_treatments() {

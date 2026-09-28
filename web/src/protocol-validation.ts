@@ -5,6 +5,8 @@ import type {
   SocialResponse,
   ParticipantInfo,
   ChatStyle,
+  ChatReaction,
+  ChatReplyRef,
   ProducerMetadata,
   ChatEntry,
   RoomSettings,
@@ -90,6 +92,13 @@ const chatStyle: Decoder<ChatStyle> = (value) => {
     style: style === 'text' || style === 'bubble' ? style : 'accent',
   };
 };
+const replyRef = object<ChatReplyRef>({
+  messageId: text,
+  participantId: text,
+  participantName: text,
+  excerpt: text,
+});
+const reaction = object<ChatReaction>({ emoji: text, participantIds: list(text) });
 const participant = object<ParticipantInfo>({
   id: text,
   name: text,
@@ -108,6 +117,8 @@ const chat = object<ChatEntry>({
   content: text,
   sentAt: text,
   chatStyle: optional(chatStyle),
+  replyTo: optional(replyRef),
+  reactions: optional(list(reaction)),
 });
 export const decodeRoomSettings = object<RoomSettings>({
   id: text,
@@ -306,6 +317,10 @@ const socialDecoders: { [A in SocialAction]: Decoder<SocialResponses[A]> } = {
   }),
   changeNickname: object<{ nickname: string }>({ nickname: text }),
   setChatStyle: object<{ chatStyle: ChatStyle }>({ chatStyle }),
+  reactToMessage: object<{ messageId: string; reactions: ChatReaction[] }>({
+    messageId: text,
+    reactions: list(reaction),
+  }),
   getRoomSnapshot: snapshot,
   listRoomBans: object<{ bans: BanEntry[]; hasMore: boolean }>({
     bans: list(ban),
@@ -352,6 +367,7 @@ const socialAction = choice(
   'setChatPreferences',
   'changeNickname',
   'setChatStyle',
+  'reactToMessage',
   'getRoomSnapshot',
   'listRoomBans',
   'removeRoomBan',
@@ -462,8 +478,11 @@ const messages = {
     content: text,
     sentAt: text,
     chatStyle: optional(chatStyle),
+    replyTo: optional(replyRef),
+    reactions: optional(list(reaction)),
   }),
   privateMessageReceived: message('privateMessageReceived', { message: chat }),
+  messageReactions: message('messageReactions', { messageId: text, reactions: list(reaction) }),
   messageAck: message('messageAck', { clientMessageId: text, message: chat }),
   messageRetryResult: message('messageRetryResult', {
     clientMessageId: requestId,

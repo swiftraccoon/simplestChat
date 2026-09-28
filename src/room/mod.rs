@@ -6256,6 +6256,7 @@ mod security_tests {
                     content: "hello".into(),
                     client_message_id: Some(uuid::Uuid::new_v4().to_string()),
                     sequence: None,
+                    reply_to: None,
                 },
             )
             .await

@@ -659,7 +659,12 @@ export class RoomClient {
     }
   }
 
-  sendChat(content: string, clientMessageId = crypto.randomUUID(), sequence?: number): void {
+  sendChat(
+    content: string,
+    clientMessageId = crypto.randomUUID(),
+    sequence?: number,
+    replyTo?: string,
+  ): void {
     if (!this.connected) throw new Error('Reconnecting — wait before sending');
     if (!this.canChat) throw new Error('You are not allowed to chat');
     this.signaling.send({
@@ -667,6 +672,7 @@ export class RoomClient {
       content,
       clientMessageId,
       ...(sequence !== undefined && { sequence }),
+      ...(replyTo !== undefined && { replyTo }),
     });
   }
 
@@ -675,6 +681,7 @@ export class RoomClient {
     content: string,
     clientMessageId: string,
     sequence?: number,
+    replyTo?: string,
   ): void {
     if (!this.connected) throw new Error('Reconnecting — wait before sending');
     if (!this.canChat) throw new Error('You are not allowed to chat');
@@ -684,6 +691,7 @@ export class RoomClient {
       content,
       clientMessageId,
       ...(sequence !== undefined && { sequence }),
+      ...(replyTo !== undefined && { replyTo }),
     });
   }
 
@@ -1381,6 +1389,7 @@ export class RoomClient {
       }
       case 'messageAck':
       case 'messageRetryResult':
+      case 'messageReactions':
       case 'privateMessageReceived': {
         this.events.onSocialEvent?.(msg);
         break;

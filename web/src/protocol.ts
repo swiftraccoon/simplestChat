@@ -52,13 +52,20 @@ export type ClientMessage =
       spatialLayer: number;
       temporalLayer?: number;
     }
-  | { type: 'chatMessage'; content: string; clientMessageId?: string; sequence?: number }
+  | {
+      type: 'chatMessage';
+      content: string;
+      clientMessageId?: string;
+      sequence?: number;
+      replyTo?: string;
+    }
   | {
       type: 'privateMessage';
       targetParticipantId: string;
       content: string;
       clientMessageId: string;
       sequence?: number;
+      replyTo?: string;
     }
   | {
       type: 'retryChatMessage';
@@ -67,6 +74,7 @@ export type ClientMessage =
       chatSessionId: string;
       content: string;
       targetParticipantId?: string;
+      replyTo?: string;
     }
   | SocialRequest
   // Moderation
@@ -194,6 +202,7 @@ export type ServerMessage =
   | { type: 'socialError'; requestId?: string; clientMessageId?: string; message: string }
   | { type: 'nicknameChanged'; participantId: string; nickname: string }
   | { type: 'chatStyleChanged'; participantId: string; chatStyle: ChatStyle }
+  | { type: 'messageReactions'; messageId: string; reactions: ChatReaction[] }
   | { type: 'activeSpeaker'; participantId: string }
   | { type: 'audioLevels'; levels: { participantId: string; volume: number }[] }
   // Moderation broadcasts
@@ -291,6 +300,7 @@ export type SocialAction =
   | 'setChatPreferences'
   | 'changeNickname'
   | 'setChatStyle'
+  | 'reactToMessage'
   | 'getRoomSnapshot'
   | 'listRoomBans'
   | 'removeRoomBan'
@@ -305,6 +315,7 @@ export interface SocialRequests {
   setChatPreferences: { allowPrivateMessages: boolean; ignoredParticipantIds: string[] };
   changeNickname: { nickname: string };
   setChatStyle: { chatStyle: ChatStyle };
+  reactToMessage: { messageId: string; emoji: string };
   getRoomSnapshot: undefined;
   listRoomBans: { offset?: number };
   removeRoomBan: { banId: string };
@@ -319,6 +330,7 @@ export interface SocialResponses {
   setChatPreferences: { allowPrivateMessages: boolean; ignoredParticipantIds: string[] };
   changeNickname: { nickname: string };
   setChatStyle: { chatStyle: ChatStyle };
+  reactToMessage: { messageId: string; reactions: ChatReaction[] };
   getRoomSnapshot: RoomSnapshot;
   listRoomBans: RoomBansPage;
   removeRoomBan: { removed: boolean };
@@ -359,6 +371,22 @@ export interface ChatEntry {
   sentAt: string;
   /** The sender's look when they sent it. */
   chatStyle?: ChatStyle;
+  /** The message this one answers, as the server quoted it. */
+  replyTo?: ChatReplyRef;
+  reactions?: ChatReaction[];
+}
+
+export interface ChatReplyRef {
+  messageId: string;
+  participantId: string;
+  participantName: string;
+  excerpt: string;
+}
+
+/** One reaction on a message and who added it, oldest first. */
+export interface ChatReaction {
+  emoji: string;
+  participantIds: string[];
 }
 
 export interface RoomSnapshot {

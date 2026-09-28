@@ -325,6 +325,23 @@ join, and treats an unknown style as `accent`. The browser shows a color token i
 does not know as the automatic color and an unknown style as `accent`; neither
 drops the message.
 
+A send may name the retained message it answers with `replyTo` (a `messageId`).
+The server quotes that message itself as `ChatEntry.replyTo` (`ChatReplyRef`: its
+`messageId`, sender and a one-line excerpt of at most 140 characters), so the
+quote outlives the original's eviction and cannot be forged. The original must
+still be retained, visible to the sender and in the same conversation (public
+with public, or the same private pair), else the send is rejected. A retry must
+repeat the same `replyTo`; a differing one is a conflict like differing text.
+
+`reactToMessage` (`messageId`, `emoji`) toggles the sender's reaction on a
+retained message it can see; `emoji` must be one of `REACTIONS` in
+`src/signaling/protocol.rs` (mirrored by `CHAT_REACTIONS` in
+`web/src/social-chat.ts`). The response and a `messageReactions` broadcast to
+everyone who can see the message carry the message's full reaction list, oldest
+first, as `{ emoji, participantIds }`. A message holds at most 64 reaction
+records, and reactions count toward the history byte budget. Reactions are not
+part of delivery receipts; a message evicted from history loses them.
+
 Modern chat sends include a strictly increasing safe-integer `sequence` alongside
 `clientMessageId`. The room snapshot supplies a separate `chatSessionId` for this
 membership; it survives grace reconnection and changes on a fresh join. A
