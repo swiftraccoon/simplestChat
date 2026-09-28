@@ -600,3 +600,29 @@ test('one pinned tile fills the stage, and a tile that is gone cannot stay pinne
   assert.equal(pinned(), null);
   assert.equal(videoGrid.classList.contains('has-pinned'), false);
 });
+
+test('forgetting this device clears every key the app wrote and nothing else', async () => {
+  const stored = new Map([
+    ['displayName', 'Maya'],
+    ['micMode', 'ptt'],
+    ['layout', 'classic'],
+    ['panelPreferences', '{}'],
+    ['reliabilityTelemetry', '1'],
+    ['simplestchat.chat.v1.account-a', '{}'],
+    ['simplestchat.capturePreferences', '{}'],
+    ['someone-elses-key', 'kept'],
+  ]);
+  const localStorage = {
+    get length() {
+      return stored.size;
+    },
+    key: (index) => [...stored.keys()][index] ?? null,
+    removeItem: (key) => stored.delete(key),
+  };
+  const { forgetThisDevice } = evaluateTypeScript(
+    `${await functionSource('forgetThisDevice')} export { forgetThisDevice };`,
+    { globals: { localStorage } },
+  );
+  forgetThisDevice();
+  assert.deepEqual([...stored.keys()], ['someone-elses-key']);
+});

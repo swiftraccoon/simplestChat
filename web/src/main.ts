@@ -1185,6 +1185,7 @@ const community = new CommunityUI({
     if (room) renderParticipants(room.getParticipants());
   },
   onRoomsChanged: () => observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory'),
+  onForgetDevice: () => observeUiTask(signOutAndForget(), 'Could not sign out'),
   onRoomDeleted: async (id) => {
     if (room?.currentRoomId === id) await leaveCurrentRoom();
   },
@@ -1544,6 +1545,28 @@ function dismissAuth(): boolean {
 signInBtn.addEventListener('click', () => {
   if (dismissAuth()) loginModal.hidden = false;
 });
+/** Clears everything this app kept in the browser: names, devices, layout, chat preferences. */
+function forgetThisDevice(): void {
+  const keys: string[] = [];
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index);
+    if (key !== null) keys.push(key);
+  }
+  for (const key of keys)
+    if (
+      key.startsWith('simplestchat.') ||
+      ['displayName', 'micMode', 'layout', 'panelPreferences', 'reliabilityTelemetry'].includes(key)
+    )
+      localStorage.removeItem(key);
+}
+
+/** For a shared computer: sign out, clear this browser's memory of the app, start fresh. */
+async function signOutAndForget(): Promise<void> {
+  await auth.logout();
+  forgetThisDevice();
+  location.reload();
+}
+
 logoutBtn.addEventListener('click', () => {
   auth.logout().catch((error) => {
     showToast(error instanceof Error ? error.message : 'Sign out failed');

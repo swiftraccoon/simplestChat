@@ -23,6 +23,8 @@ interface Options {
   onRoomsChanged: () => void;
   onRoomDeleted: (id: string) => Promise<void>;
   onSignedOut: () => Promise<void>;
+  /** Sign out and clear what this browser remembers; main.ts owns the storage. */
+  onForgetDevice: () => void;
 }
 
 const ROLES = ['guest', 'user', 'member', 'moderator', 'admin', 'owner'];
@@ -342,6 +344,18 @@ export class CommunityUI {
         { once: true },
       );
       view.body.append(change);
+      view.body.append(
+        el('h3', 'This device'),
+        el(
+          'p',
+          'Signing out this way also removes the name, devices, layout and chat preferences this browser remembers.',
+          'setting-hint',
+        ),
+        button('Sign out and forget this device', () => {
+          view.close();
+          this.options.onForgetDevice();
+        }),
+      );
     } catch (error) {
       if (stillCurrent()) this.showError(view.error, error);
     }
