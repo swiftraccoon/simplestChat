@@ -408,9 +408,17 @@ pub async fn delete_user_sessions(pool: &PgPool, user_id: &Uuid) -> Result<(), A
     Ok(())
 }
 
+/// Rows one sweep removes; a backlog drains over successive refreshes instead of
+/// one table-wide DELETE that could exceed its time budget and roll back.
+const EXPIRED_CLEANUP_BATCH: i64 = 1000;
+
 pub async fn cleanup_expired(pool: &PgPool) -> Result<u64, AuthError> {
-    let result = sqlx::query("DELETE FROM sessions WHERE expires_at < now()")
-        .execute(pool)
+    let result = sqlx::query(
+        "DELETE FROM sessions
+         WHERE id IN (SELECT id FROM sessions WHERE expires_at < now() LIMIT $1)",
+    )
+    .bind(EXPIRED_CLEANUP_BATCH)
+    .execute(pool)
     .await
     .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
     Ok(result.rows_affected())

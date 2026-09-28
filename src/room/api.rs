@@ -193,7 +193,7 @@ pub async fn list_rooms(
              )
              SELECT id, display_name, topic, password_protected, moderated, description, image_url, secret
              FROM matching_rooms
-             ORDER BY created_at DESC LIMIT $2 OFFSET $3"#,
+             ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3"#,
         )
         .bind(pattern)
         .bind(limit)
@@ -204,7 +204,7 @@ pub async fn list_rooms(
         sqlx::query_as::<_, RoomListRow>(
             "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret
              FROM rooms WHERE secret = false
-             ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+             ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2",
         )
         .bind(limit)
         .bind(offset)

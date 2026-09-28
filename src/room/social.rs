@@ -2570,10 +2570,11 @@ impl RoomManager {
                 let nickname = nickname.trim();
                 if nickname.is_empty()
                     || nickname.len() > 64
-                    || nickname.chars().any(char::is_control)
+                    || !crate::labels::is_plain(nickname)
+                    || crate::labels::is_reserved_name(nickname)
                 {
                     return Err(rejected(
-                        "Nickname must be 1–64 bytes without control characters",
+                        "Nickname must be 1–64 bytes of plain text; \"You\" is taken",
                     ));
                 }
                 room.participants.get_mut(participant_id).unwrap().name = nickname.to_string();

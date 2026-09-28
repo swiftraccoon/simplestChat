@@ -17,7 +17,16 @@ use webauthn_rs::prelude::*;
 const REFRESH_COOKIE_NAME: &str = "__Host-refresh_token";
 const MAX_EMAIL_LEN: usize = 255;
 const MAX_DISPLAY_NAME_LEN: usize = 64;
-const MAX_PASSWORD_LEN: usize = 128;
+const MAX_PASSWORD_CHARS: usize = 128;
+/// Bounds the hashing input; 128 characters of any script fit within it.
+pub(super) const MAX_PASSWORD_BYTES: usize = 512;
+
+/// 8–128 characters, counted as characters so scripts with multi-byte letters
+/// are neither admitted short nor refused long.
+pub(super) fn password_length_ok(password: &str) -> bool {
+    let characters = password.chars().count();
+    (8..=MAX_PASSWORD_CHARS).contains(&characters) && password.len() <= MAX_PASSWORD_BYTES
+}
 const GLOBAL_USER_REGISTRATION_LOCK: i64 = 7_349_872_340_911;
 // A valid Argon2id hash using the same default work factors as real account
 // hashes. Unknown and passwordless accounts verify against this value so the
@@ -140,7 +149,8 @@ pub(super) fn canonicalize_email(email: &str) -> Result<String, AuthError> {
 pub(super) fn validate_display_name(display_name: &str) -> Result<(), AuthError> {
     if !display_name.trim().is_empty()
         && display_name.len() <= MAX_DISPLAY_NAME_LEN
-        && !display_name.chars().any(char::is_control)
+        && crate::labels::is_plain(display_name)
+        && !crate::labels::is_reserved_name(display_name)
     {
         Ok(())
     } else {
@@ -267,7 +277,7 @@ pub async fn register(
 
     let email = canonicalize_email(&req.email)?;
     validate_display_name(&req.display_name)?;
-    if req.password.len() < 8 || req.password.len() > MAX_PASSWORD_LEN {
+    if !password_length_ok(&req.password) {
         return Err(AuthError::InvalidCredentials);
     }
     let _request_permit = acquire_auth_request(&server)?;
@@ -332,7 +342,7 @@ pub async fn login(
     if !server.allow_auth_principal(&email) {
         return Err(AuthError::RateLimited);
     }
-    if req.password.len() > MAX_PASSWORD_LEN {
+    if req.password.len() > MAX_PASSWORD_BYTES {
         return Err(AuthError::InvalidCredentials);
     }
     let _request_permit = acquire_auth_request(&server)?;

@@ -153,7 +153,7 @@ impl RoomManager {
                 sqlx::query("SET LOCAL lock_timeout = '5s'")
                     .execute(&mut *transaction)
                     .await?;
-                let updated = sqlx::query("UPDATE rooms SET display_name = $3, topic = $4, description = $5, image_url = $6 WHERE id = $1 AND owner_id = $2")
+                let updated = sqlx::query("UPDATE rooms SET display_name = $3, topic = $4, description = $5, image_url = $6, updated_at = now() WHERE id = $1 AND owner_id = $2")
                     .bind(&room_id).bind(owner_id).bind(identity.display_name.trim()).bind(&identity.topic)
                     .bind(&identity.description).bind(&identity.image_url).execute(&mut *transaction).await?;
                 if updated.rows_affected() == 0 {

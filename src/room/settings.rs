@@ -114,7 +114,7 @@ pub fn validate_create_request(request: &CreateRoomRequest) -> Result<(), &'stat
     }
     if request.display_name.trim().is_empty()
         || request.display_name.len() > MAX_DISPLAY_NAME_LEN
-        || request.display_name.chars().any(char::is_control)
+        || !crate::labels::is_plain(&request.display_name)
     {
         return Err("Display name must be 1-128 characters without control characters");
     }
@@ -438,7 +438,10 @@ pub async fn update_room_settings(
         return Ok(()); // Nothing to update
     }
 
-    let sql = format!("UPDATE rooms SET {} WHERE id = $1", set_parts.join(", "));
+    let sql = format!(
+        "UPDATE rooms SET {}, updated_at = now() WHERE id = $1",
+        set_parts.join(", ")
+    );
     // Only fixed column names and placeholder numbers enter this SQL string;
     // every caller-supplied value remains a separate bound parameter.
     let mut query = sqlx::query(sqlx::AssertSqlSafe(sql)).bind(room_id);

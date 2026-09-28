@@ -4271,11 +4271,12 @@ impl RoomManager {
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Room topic is temporarily unavailable"))?;
             self.persist_room(room_id, &room_lock, async {
-                let result = sqlx::query("UPDATE rooms SET topic = $1 WHERE id = $2")
-                    .bind(&topic)
-                    .bind(room_id)
-                    .execute(pool)
-                    .await?;
+                let result =
+                    sqlx::query("UPDATE rooms SET topic = $1, updated_at = now() WHERE id = $2")
+                        .bind(&topic)
+                        .bind(room_id)
+                        .execute(pool)
+                        .await?;
                 if result.rows_affected() != 1 {
                     return Err(sqlx::Error::RowNotFound);
                 }

@@ -131,11 +131,11 @@ pub fn validate_text(value: &str, maximum: usize, multiline: bool) -> bool {
 }
 
 fn validate_password(password: &str) -> Result<(), AuthError> {
-    if (8..=128).contains(&password.len()) && !password.chars().any(char::is_control) {
+    if routes::password_length_ok(password) && !password.chars().any(char::is_control) {
         Ok(())
     } else {
         Err(AuthError::InvalidInput(
-            "Password must be 8–128 bytes without control characters",
+            "Password must be 8–128 characters without control characters",
         ))
     }
 }

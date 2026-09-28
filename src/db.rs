@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use anyhow::{Context, bail};
+use sqlx::Connection as _;
 use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions, PgSslMode};
 use std::net::IpAddr;
 use std::path::Path;
@@ -96,10 +97,17 @@ pub async fn connect() -> anyhow::Result<Option<PgPool>> {
     info!("Connected to PostgreSQL");
 
     if run_migrations {
+        // Maintenance budgets, not the runtime's 10 s statement deadline: a large
+        // index build or backfill must not fail at a limit meant for requests.
+        let maintenance = PgConnectOptions::from_str(&url)
+            .context("invalid DATABASE_URL")?
+            .options([("statement_timeout", "10min"), ("lock_timeout", "1min")]);
+        let mut connection = sqlx::postgres::PgConnection::connect_with(&maintenance).await?;
         sqlx::migrate::Migrator::new(Path::new("./migrations"))
             .await?
-            .run(&pool)
+            .run(&mut connection)
             .await?;
+        sqlx::Connection::close(connection).await?;
         info!("Database migrations applied");
     }
 

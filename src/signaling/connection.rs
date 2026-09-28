@@ -921,7 +921,7 @@ async fn handle_connection_with_timing(
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
     let is_authenticated = authenticated_user.is_some();
-    let authenticated_display_name = authenticated_user.as_ref().map(|c| c.name.clone());
+    let mut authenticated_display_name = authenticated_user.as_ref().map(|c| c.name.clone());
     let mut auth_exp = authenticated_user.as_ref().map(|claims| claims.exp as u64);
     let mut auth_deadline = auth_exp.map(credential_expiry_deadline);
 
@@ -1387,6 +1387,8 @@ async fn handle_connection_with_timing(
                                     let expires_at = claims.exp as u64;
                                     auth_exp = Some(expires_at);
                                     auth_deadline = Some(credential_expiry_deadline(expires_at));
+                                    // Later joins on this socket use the renewed profile name.
+                                    authenticated_display_name = Some(claims.name.clone());
                                     authenticated_user = Some(claims);
                                     next_auth_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
                                     ServerMessage::AuthenticationRenewed {
@@ -2329,7 +2331,8 @@ async fn handle_client_message(
             let participant_name = authenticated_display_name.unwrap_or(participant_name);
             if participant_name.trim().is_empty()
                 || participant_name.len() > MAX_PARTICIPANT_NAME_LEN
-                || participant_name.chars().any(char::is_control)
+                || !crate::labels::is_plain(participant_name)
+                || crate::labels::is_reserved_name(participant_name)
             {
                 anyhow::bail!(
                     "Invalid participant_name: must be 1-{MAX_PARTICIPANT_NAME_LEN} characters without control characters"
