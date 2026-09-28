@@ -165,7 +165,9 @@ def evidence(lines: list[str]) -> None:
     # A dump file exists before pg_dump starts and survives its failure; only the
     # receipt the release writes after the dump listed counts, and only while the
     # dump it names still has the recorded size.
-    receipts = list((ROOT / "results").glob("release.*/database-before.receipt.json"))
+    receipts = list((ROOT / "results").glob("release.*/database-before.receipt.json")) + list(
+        (ROOT / "backups" / "nightly").glob("*.receipt.json")
+    )
     require(len(receipts) <= MAX_BACKUPS, "Too many release backup entries")
     latest = 0.0
     for receipt in receipts:

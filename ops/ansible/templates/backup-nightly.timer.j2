@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up the public simplestChat database nightly
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 UTC
+RandomizedDelaySec=600
+AccuracySec=60s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

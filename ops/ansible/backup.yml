@@ -1,0 +1,55 @@
+---
+- name: Install a nightly local database backup without replacing public services
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  serial: 1
+  pre_tasks:
+    - name: Require the prepared public host and an explicit opt-in
+      ansible.builtin.assert:
+        that:
+          - scpub_enabled | bool
+          - scpub_backup_enabled | bool
+        fail_msg: Set scpub_enabled and scpub_backup_enabled on a prepared public host.
+
+    - name: Require the public database container
+      ansible.builtin.command:
+        argv: [/usr/bin/docker, --host, "unix:///var/run/docker.sock", ps, --quiet, --filter, "name=^simplestchat-public-postgres-1$"]
+      register: scpub_backup_database
+      changed_when: false
+      failed_when: scpub_backup_database.stdout | trim == ''
+      check_mode: false
+
+  tasks:
+    - name: Create the private backup directory
+      ansible.builtin.file:
+        path: /srv/simplestchat-public/backups/nightly
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Install the backup script
+      ansible.builtin.template:
+        src: backup-nightly.sh.j2
+        dest: /usr/local/libexec/simplestchat-public/backup-nightly.sh
+        owner: root
+        group: root
+        mode: '0700'
+        validate: /usr/bin/bash -n %s
+
+    - name: Install the backup units
+      ansible.builtin.template:
+        src: "backup-nightly.{{ item }}.j2"
+        dest: "/etc/systemd/system/simplestchat-backup.{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: [service, timer]
+
+    - name: Enable the nightly timer
+      ansible.builtin.systemd_service:
+        name: simplestchat-backup.timer
+        daemon_reload: true
+        enabled: true
+        state: started

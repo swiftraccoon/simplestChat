@@ -179,6 +179,22 @@ off-site backups, and are not a pre-upgrade rollback point. Before updating an
 existing site, take an independent database backup and provider snapshot; copy
 backups off the VPS through a protected channel and test restoration.
 
+A nightly local dump is a separate opt-in. Set `scpub_backup_enabled: true` in
+the ignored inventory and apply [backup.yml](backup.yml): a systemd timer runs
+`pg_dump` at 04:00 UTC into `/srv/simplestchat-public/backups/nightly`, validates
+the archive with `pg_restore --list`, writes a receipt beside it (size, hash,
+time) that monitoring counts as backup evidence, and prunes dumps older than
+`scpub_backup_keep_days` (14) while keeping `scpub_backup_keep_at_least` (3).
+The dump stays on the VPS; copy it off through a protected channel, for example
+from the controller:
+
+```sh
+ansible -i ops/ansible/inventory.local.yml public_vps -b -m shell \
+  -a "ls -1t /srv/simplestchat-public/backups/nightly/*.dump | head -1"
+ansible -i ops/ansible/inventory.local.yml public_vps -b -m fetch \
+  -a "src=<that path> dest=results/backups/ flat=yes"
+```
+
 Application SQL migrations run only during explicit deployment. PostgreSQL
 major-version upgrades, database rollback, secret rotation, and backup scheduling
 are not automated; review and plan them separately.
