@@ -401,6 +401,14 @@ function installUiStressObservation() {
       };
       peer.addEventListener('connectionstatechange', closed);
       peer.addEventListener('signalingstatechange', closed);
+      // close() moves both states to closed without firing either event, and a
+      // closed peer the browser then collects before the next poll would read as
+      // an unobserved shutdown.
+      const nativeClose = peer.close;
+      peer.close = function close(...args) {
+        record.closed = true;
+        return nativeClose.apply(this, args);
+      };
       return peer;
     },
   });
