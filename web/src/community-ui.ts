@@ -216,7 +216,7 @@ export class CommunityUI {
   private async profile(id: string): Promise<PublicProfile | null> {
     let promise = this.profiles.get(id);
     if (!promise) {
-      promise = api.publicProfile(id, this.options.auth.jwt).catch(() => null);
+      promise = api.publicProfile(id).catch(() => null);
       if (this.profiles.size >= 100) this.profiles.delete(this.profiles.keys().next().value!);
       this.profiles.set(id, promise);
     }

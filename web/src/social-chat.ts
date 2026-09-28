@@ -1653,9 +1653,12 @@ export class SocialChat {
 /** Links stay whole; outside them, each occurrence of `mention` is marked, in any case. */
 export function appendLinkedText(parent: HTMLElement, text: string, mention?: string): void {
   const pattern = /https?:\/\/[^\s<>]+/g;
+  // Bidi controls, zero-width space and the BOM can make a link read as another.
+  const hidden = /[\u200B\u202A-\u202E\u2066-\u2069\u2028\u2029\uFEFF]/;
   let start = 0;
   for (const match of text.matchAll(pattern)) {
     const index = match.index;
+    if (hidden.test(match[0])) continue;
     appendMarkedText(parent, text.slice(start, index), mention);
     const link = el('a', match[0]);
     link.href = match[0];

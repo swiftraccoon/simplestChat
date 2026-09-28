@@ -151,10 +151,11 @@ async function apiResponse(
   method = 'GET',
   data?: unknown,
   signal?: AbortSignal,
+  credentials: RequestCredentials = 'same-origin',
 ): Promise<Response> {
   const response = await fetch(path, {
     method,
-    credentials: 'same-origin',
+    credentials,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(data === undefined ? {} : { 'Content-Type': 'application/json' }),
@@ -186,8 +187,9 @@ async function apiJson<T>(
   method = 'GET',
   data?: unknown,
   signal?: AbortSignal,
+  credentials: RequestCredentials = 'same-origin',
 ): Promise<T> {
-  const response = await apiResponse(path, token, method, data, signal);
+  const response = await apiResponse(path, token, method, data, signal, credentials);
   try {
     if (response.status === 204) throw new Error('Expected JSON response');
     const value: unknown = await response.json();
@@ -236,8 +238,17 @@ export const api = {
     },
     signal: AbortSignal,
   ) => apiJson(decodePasskeyAction, '/api/auth/passkeys/enroll', token, 'POST', data, signal),
-  publicProfile: (id: string, token: string | null) =>
-    apiJson(decodePublicProfile, `/api/auth/profiles/${encodeURIComponent(id)}`, token),
+  // Public reads carry no credential: nothing needs one, and fewer requests hold them.
+  publicProfile: (id: string) =>
+    apiJson(
+      decodePublicProfile,
+      `/api/auth/profiles/${encodeURIComponent(id)}`,
+      null,
+      'GET',
+      undefined,
+      undefined,
+      'omit',
+    ),
   accountProfile: (token: string | null) =>
     apiJson(decodeAccountProfile, '/api/auth/profile', token),
   updateProfile: (
@@ -254,8 +265,8 @@ export const api = {
     apiJson(decodeRecoveryKey, '/api/auth/recovery/key', token, 'POST', data),
   redeemRecovery: (data: { email: string; recovery_key: string; new_password: string }) =>
     apiNoContent('/api/auth/recovery/redeem', null, 'POST', data),
-  rooms: (token: string | null, query: URLSearchParams) =>
-    apiJson(decodeRoomDirectory, `/api/rooms?${query}`, token),
+  rooms: (query: URLSearchParams) =>
+    apiJson(decodeRoomDirectory, `/api/rooms?${query}`, null, 'GET', undefined, undefined, 'omit'),
   ownRooms: (token: string | null) => apiJson(decodeRoomDirectory, '/api/rooms/mine', token),
   createRoom: (token: string | null, data: CreateRoomRequest) =>
     apiJson(decodeRoomSettings, '/api/rooms', token, 'POST', data),

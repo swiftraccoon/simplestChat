@@ -39,7 +39,7 @@ const settings = {
 const endpoints = [
   [
     'public profile',
-    (api) => api.publicProfile('user /?', 'token'),
+    (api) => api.publicProfile('user /?'),
     '/api/auth/profiles/user%20%2F%3F',
     'GET',
     profile,
@@ -61,7 +61,7 @@ const endpoints = [
   ],
   [
     'public rooms',
-    (api) => api.rooms('token', new URLSearchParams({ page: '1', q: 'test room' })),
+    (api) => api.rooms(new URLSearchParams({ page: '1', q: 'test room' })),
     '/api/rooms?page=1&q=test+room',
     'GET',
     [room],
@@ -155,8 +155,13 @@ for (const [name, request, path, method, valid] of endpoints) {
     const value = await request(ui.api);
     assert.equal(state.requests[0][0], path);
     assert.equal(state.requests[0][1].method, method);
-    assert.equal(state.requests[0][1].credentials, 'same-origin');
-    assert.equal(state.requests[0][1].headers.Authorization, 'Bearer token');
+    // Public reads carry neither the cookie nor a bearer; everything else sends both.
+    const anonymous = name === 'public profile' || name === 'public rooms';
+    assert.equal(state.requests[0][1].credentials, anonymous ? 'omit' : 'same-origin');
+    assert.equal(
+      state.requests[0][1].headers.Authorization,
+      anonymous ? undefined : 'Bearer token',
+    );
     assert.deepEqual(wire, before, 'decoding must not mutate a response object');
     for (const item of Array.isArray(value) ? value : [value]) {
       assert.equal(Object.hasOwn(item, 'internal'), false);

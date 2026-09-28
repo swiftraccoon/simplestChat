@@ -1137,6 +1137,13 @@ test('a mention of you is highlighted where it appears, and links stay whole', a
   );
   assert.equal(text.querySelector('a').textContent, 'https://example.com/@Local');
   assert.equal(text.textContent, 'Hi @local, see https://example.com/@Local and @LOCAL');
+  // A link whose text can read as another address stays plain text.
+  f.chat.receive(entry('n', { content: 'see https://example.com/\u202Emoc.live\u202C now' }));
+  const disguised = rows(f)
+    .find((node) => node.querySelector('.msg-text').textContent.includes('moc.live'))
+    .querySelector('.msg-text');
+  assert.equal(disguised.querySelector('a'), null);
+  assert.equal(disguised.textContent, 'see https://example.com/\u202Emoc.live\u202C now');
 });
 
 test('the preferences dialog previews a look and saves it for the room and the next join', async () => {

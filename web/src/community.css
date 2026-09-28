@@ -366,6 +366,42 @@
 .chat-msg:has(+ .chat-msg.grouped) {
   border-bottom-left-radius: 3px;
 }
+/* Labels people choose cannot reorder the text around them. */
+.chat-msg .sender,
+.msg-reply,
+.reply-bar-label,
+.mention-list li,
+.participant-name,
+.classic-participant-name,
+.name-tag,
+.room-card-name,
+.mod-menu-target-name,
+.conversation-toolbar option {
+  unicode-bidi: isolate;
+}
+.mod-menu-target {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 6px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.mod-menu-target-name {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.room-card-id {
+  font:
+    0.7rem/1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
 /* A person's color (--sender-color, from the palette) names them in every look. */
 .chat-msg .sender {
   color: var(--sender-color, var(--accent));

@@ -413,6 +413,13 @@ function showModerationMenu(targetId: string, targetName: string, x: number, y: 
   const menu = document.createElement('div');
   menu.id = 'mod-menu';
   menu.className = 'mod-context-menu';
+  // Names can repeat or look alike; the account/guest marker and the id's start cannot.
+  const target = el('div', undefined, 'mod-menu-target');
+  target.append(
+    el('span', targetName, 'mod-menu-target-name'),
+    el('span', `${authenticated ? 'account' : 'guest'} · ${targetId.slice(0, 8)}`),
+  );
+  menu.append(target);
 
   let pending = false;
   const error = el('p', '', 'auth-error');
@@ -1317,7 +1324,7 @@ async function loadRoomBrowser(append = false): Promise<void> {
   try {
     const params = new URLSearchParams({ page: String(roomBrowserPage), limit: '20' });
     if (roomBrowserQuery) params.set('q', roomBrowserQuery);
-    const rooms = await api.rooms(auth.jwt, params).catch((error: unknown) => {
+    const rooms = await api.rooms(params).catch((error: unknown) => {
       if (!(error instanceof ApiError)) throw error;
       const explanation =
         error.status === 404 || error.status === 503
@@ -1387,6 +1394,10 @@ async function loadRoomBrowser(append = false): Promise<void> {
         nameRow.appendChild(lockSpan);
       }
       info.appendChild(nameRow);
+      const roomId = document.createElement('div');
+      roomId.className = 'room-card-id';
+      roomId.textContent = r.id;
+      info.appendChild(roomId);
 
       if (r.topic || r.description) {
         const topic = document.createElement('div');
