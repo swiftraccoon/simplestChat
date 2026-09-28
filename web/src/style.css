@@ -447,6 +447,17 @@ header h1 {
   pointer-events: none;
 }
 
+/* The person's chat color, beside their name. */
+.video-tile .name-tag::before {
+  content: '';
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.4rem;
+  border-radius: 50%;
+  background: var(--person-color, transparent);
+}
+
 /* Speaking indicator — glowing blue border */
 .video-tile.speaking {
   box-shadow:
@@ -805,6 +816,11 @@ header h1 {
 .participant-info {
   flex: 1;
   min-width: 0;
+}
+
+.participant-name,
+.classic-participant-name {
+  color: var(--person-color, inherit);
 }
 
 .participant-name {

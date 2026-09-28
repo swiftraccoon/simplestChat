@@ -310,6 +310,21 @@ membership, together with participants, producer state, settings and permissions
 Visibility respects join/session boundaries and private-message/ignore rules.
 It is not a durable mailbox or unrestricted room-history endpoint.
 
+Each participant has a chat look, `chatStyle`: `{ color, style }`. `color` is one
+of sixteen palette tokens (`CHAT_COLORS` in `src/signaling/protocol.rs`, mirrored
+by `CHAT_PALETTE` in `web/src/avatar-colors.ts`) or `null` for the automatic color
+derived from the name; `style` is `accent`, `text` or `bubble`. `joinRoom` may
+carry a guest's `chatStyle`; an account's saved look (`users.chat_color` and
+`users.chat_style`) takes its place, and `roomJoined.yourChatStyle` reports the
+look applied. The `setChatStyle` social action changes it, saving an account's look
+before anyone sees it, and the room broadcasts `chatStyleChanged` to everyone,
+the sender included. Looks travel on `ParticipantInfo`, `participantJoined`,
+`ChatEntry` and `chatReceived`, so a message keeps the look it was sent with.
+The server rejects a `setChatStyle` color outside the palette, ignores one on a
+join, and treats an unknown style as `accent`. The browser shows a color token it
+does not know as the automatic color and an unknown style as `accent`; neither
+drops the message.
+
 Modern chat sends include a strictly increasing safe-integer `sequence` alongside
 `clientMessageId`. The room snapshot supplies a separate `chatSessionId` for this
 membership; it survives grace reconnection and changes on a fresh join. A

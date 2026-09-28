@@ -4,7 +4,7 @@ import test from 'node:test';
 import ts from '@typescript/typescript6';
 import { evaluateTypeScript, loadTypeScript } from './source-loader.mjs';
 
-const { avatarColors } = await loadTypeScript('src/avatar-colors.ts');
+const { avatarColors, chatColor, CHAT_PALETTE } = await loadTypeScript('src/avatar-colors.ts');
 
 // Independently convert HSL using the channel-offset formula, then check the
 // emitted CSS pair. Source checks complement the rendered accessibility scans.
@@ -67,7 +67,7 @@ test('the reviewed low-contrast initial switches foreground without changing its
   });
 });
 
-test('all four initial renderers apply both colors from the shared helper', async () => {
+test('every initial renderer applies both colors, and a chosen color, from the shared helper', async () => {
   const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
   const assignments = [];
@@ -84,22 +84,100 @@ test('all four initial renderers apply both colors from the shared helper', asyn
     ts.forEachChild(node, visit);
   };
   visit(ast);
-  assert.equal(assignments.length, 4);
+  // Both people lists, and every tile through paintTile.
+  assert.equal(assignments.length, 3);
   assert.doesNotMatch(source, /\bnameColor\b/);
   for (const assignment of assignments) {
-    const initial = { style: {} };
-    const avatar = { style: {} };
-    evaluateTypeScript(assignment, {
-      globals: {
-        avatarColors,
-        initial,
-        avatar,
-        name: 'Accessibility Owner',
-        participantName: 'Accessibility Owner',
-        p: { name: 'Accessibility Owner' },
-      },
-    });
-    const applied = Object.keys(initial.style).length ? initial.style : avatar.style;
-    assert.deepEqual(applied, avatarColors('Accessibility Owner'));
+    for (const chosen of [null, 'violet']) {
+      const initial = { style: {} };
+      const avatar = { style: {} };
+      evaluateTypeScript(assignment, {
+        globals: {
+          avatarColors,
+          initial,
+          avatar,
+          name: 'Accessibility Owner',
+          color: chosen,
+          p: { name: 'Accessibility Owner', ...(chosen && { chatStyle: { color: chosen } }) },
+        },
+      });
+      const applied = Object.keys(initial.style).length ? initial.style : avatar.style;
+      assert.deepEqual(applied, avatarColors('Accessibility Owner', chosen), assignment);
+    }
   }
+  assert.equal(avatarColors('Accessibility Owner', 'violet').background, CHAT_PALETTE.violet);
+});
+
+/** Relative luminance of a #rrggbb color. */
+function hexLuminance(hex) {
+  const [red, green, blue] = [1, 3, 5].map((start) => {
+    const value = parseInt(hex.slice(start, start + 2), 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+const contrast = (first, second) => {
+  const [light, dark] = [hexLuminance(first), hexLuminance(second)].sort((a, b) => b - a);
+  return (light + 0.05) / (dark + 0.05);
+};
+function hexHue(hex) {
+  const [red, green, blue] = [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16));
+  const max = Math.max(red, green, blue);
+  const range = max - Math.min(red, green, blue);
+  const hue =
+    max === red
+      ? (green - blue) / range
+      : max === green
+        ? 2 + (blue - red) / range
+        : 4 + (red - green) / range;
+  return (hue * 60 + 360) % 360;
+}
+
+test('the palette is the server palette, in its order', async () => {
+  const rust = await readFile(new URL('../../src/signaling/protocol.rs', import.meta.url), 'utf8');
+  const list = /pub const CHAT_COLORS: \[&str; 16\] = \[([^\]]*)\]/.exec(rust)?.[1];
+  assert.ok(list, 'protocol.rs declares CHAT_COLORS');
+  assert.deepEqual(
+    Object.keys(CHAT_PALETTE),
+    [...list.matchAll(/"([a-z]+)"/g)].map((match) => match[1]),
+  );
+});
+
+test('every palette color stays readable as a name or message on the chat surfaces', () => {
+  for (const [token, hex] of Object.entries(CHAT_PALETTE)) {
+    // --surface-2 (message bubbles) and --surface (people list).
+    for (const surface of ['#252525', '#1a1a1a'])
+      assert.ok(contrast(hex, surface) >= 4.5, `${token} on ${surface}`);
+  }
+});
+
+test('a chosen color wins; otherwise the palette hue nearest the avatar identifies them', () => {
+  const tokens = Object.keys(CHAT_PALETTE);
+  for (let hue = 0; hue < 360; hue++) {
+    const name = String.fromCharCode(360 + hue);
+    let nearest = tokens[0];
+    let distance = Infinity;
+    for (const token of tokens) {
+      const gap = Math.abs(hexHue(CHAT_PALETTE[token]) - hue);
+      const circular = Math.min(gap, 360 - gap);
+      if (circular < distance) [nearest, distance] = [token, circular];
+    }
+    assert.equal(chatColor(name, null), CHAT_PALETTE[nearest], `hue ${hue}`);
+    assert.equal(chatColor(name), CHAT_PALETTE[nearest]);
+  }
+  assert.equal(chatColor('Alice', 'violet'), CHAT_PALETTE.violet);
+  // A color from a newer palette, or anything else, falls back to the automatic one.
+  assert.equal(chatColor('Alice', 'mauve'), chatColor('Alice', null));
+  assert.equal(chatColor('Alice', 'constructor'), chatColor('Alice', null));
+});
+
+test('a chosen color also fills the avatar, with a legible initial', () => {
+  for (const [token, hex] of Object.entries(CHAT_PALETTE)) {
+    const colors = avatarColors('Alice', token);
+    assert.equal(colors.background, hex);
+    const ink = colors.color === '#000' ? '#000000' : '#ffffff';
+    assert.ok(contrast(hex, ink) >= 4.5, `${token} initial`);
+  }
+  assert.deepEqual(avatarColors('Alice', null), avatarColors('Alice'));
+  assert.deepEqual(avatarColors('Alice', 'mauve'), avatarColors('Alice'));
 });

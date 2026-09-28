@@ -1144,6 +1144,48 @@ async function setRole(owner, name, role) {
       assert.equal(await owner.locator('#chat-input').inputValue(), '👋');
       await owner.locator('#chat-input').fill('');
     });
+    await step(
+      'a chat color reaches chat and the people list and stays with the account',
+      async () => {
+        await member.getByRole('button', { name: 'Chat options', exact: true }).click();
+        const dialog = member.getByRole('dialog', { name: 'Chat preferences', exact: true });
+        await dialog.getByRole('radio', { name: 'Violet', exact: true }).check();
+        await dialog.getByRole('radio', { name: 'Tinted bubble', exact: true }).check();
+        await dialog.getByRole('button', { name: 'Save preferences', exact: true }).click();
+        await dialog.waitFor({ state: 'hidden' });
+        const violet = '#a78bfa';
+        const look = (page, text) =>
+          page
+            .locator('.chat-msg.look-bubble')
+            .filter({ hasText: text })
+            .evaluate((node) => node.style.getPropertyValue('--sender-color'));
+        await publicChat(member);
+        await send(member, 'Violet hello');
+        assert.equal(await look(owner, 'Violet hello'), violet);
+        assert.equal(
+          await owner
+            .locator('li[data-participant-id]')
+            .filter({ hasText: 'E2E Member' })
+            .first()
+            .evaluate((node) => node.style.getPropertyValue('--person-color')),
+          violet,
+        );
+        // Forget this browser's copy: the next join must get the look from the account.
+        await leave(member);
+        await member.evaluate(() => {
+          for (const key of Object.keys(localStorage).filter((name) =>
+            name.startsWith('simplestchat.chat.v1.'),
+          )) {
+            const saved = JSON.parse(localStorage.getItem(key) ?? '{}');
+            delete saved.look;
+            localStorage.setItem(key, JSON.stringify(saved));
+          }
+        });
+        await join(member, 'E2E Member');
+        await send(member, 'Still violet');
+        assert.equal(await look(guest, 'Still violet'), violet);
+      },
+    );
     await step('report submission and moderator review/resolve', async () => {
       await action(guest, 'E2E Member', 'Report to moderators');
       const report = guest.getByRole('dialog', { name: 'Report E2E Member', exact: true });

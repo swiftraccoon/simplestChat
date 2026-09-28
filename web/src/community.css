@@ -47,7 +47,7 @@
   align-items: center;
   justify-content: space-between;
 }
-.community-dialog input:not([type='checkbox']),
+.community-dialog input:not([type='checkbox'], [type='radio']),
 .community-dialog textarea,
 .community-dialog select,
 .conversation-toolbar select,
@@ -172,12 +172,56 @@
 .chat-msg.grouped .sender {
   display: none;
 }
+/* A run from one sender reads as one block: close together, inner corners squared. */
 .chat-msg.grouped {
   padding-top: 0.2rem;
+  margin-top: -0.15rem;
+  border-top-left-radius: 3px;
 }
+.chat-msg:has(+ .chat-msg.grouped) {
+  border-bottom-left-radius: 3px;
+}
+/* A person's color (--sender-color, from the palette) names them in every look. */
+.chat-msg .sender {
+  color: var(--sender-color, var(--accent));
+}
+.chat-msg.look-accent {
+  background: color-mix(in oklab, var(--sender-color) 6%, var(--surface-2));
+  box-shadow: inset 3px 0 0 var(--sender-color);
+}
+.chat-msg.look-text .msg-text {
+  color: color-mix(in oklab, var(--sender-color) 82%, var(--text));
+}
+/* Lighter ink keeps 4.5:1 on the tinted fill for names, times and links. */
+.chat-msg.look-bubble {
+  background: color-mix(in oklab, var(--sender-color) 24%, var(--surface-2));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--sender-color) 45%, transparent);
+}
+.chat-msg.look-bubble .sender {
+  color: color-mix(in oklab, var(--sender-color) 45%, #fff);
+}
+.chat-msg.look-bubble .msg-time,
+.chat-msg.look-bubble .msg-status {
+  color: color-mix(in oklab, var(--sender-color) 30%, #d4d4d4);
+}
+.chat-msg.look-bubble .msg-text a {
+  color: color-mix(in oklab, var(--accent) 50%, #fff);
+}
+.chat-msg.look-bubble .delivery-error {
+  color: color-mix(in oklab, #fb7185 60%, #fff);
+}
+/* A mention is marked by shape, not hue, so no palette color can hide it. */
 .chat-msg.mentioned {
-  border-left: 3px solid var(--accent);
-  background: #3b82f612;
+  outline: 1px solid color-mix(in oklab, var(--text) 70%, transparent);
+  outline-offset: -1px;
+}
+.chat-msg mark.mention {
+  color: #fff;
+  /* --text at 18%, as plain rgb: contrast checkers cannot parse every color-mix. */
+  background: rgb(232 232 232 / 18%);
+  border-radius: 4px;
+  padding: 0 0.2em;
+  font-weight: 600;
 }
 .chat-msg .msg-text {
   overflow-wrap: anywhere;
@@ -189,6 +233,89 @@
 .chat-msg .delivery-error button {
   padding: 0.15rem 0;
   font-size: 0.75rem;
+}
+/* The chat color picker: palette swatches, the three styles, and a live preview row. */
+.chat-look-group {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.chat-look-group legend {
+  padding: 0;
+  margin-bottom: 0.45rem;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.chat-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+.chat-palette {
+  display: grid;
+  grid-template-columns: repeat(8, 28px);
+  gap: 0.5rem;
+}
+.chat-swatch {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+  /* A swatch is a color sample: keep it, and its checked ring, in forced-colors mode. */
+  forced-color-adjust: none;
+}
+.chat-swatch:checked {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--text);
+}
+.chat-swatch-automatic,
+.chat-look-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.chat-swatch-automatic {
+  padding: 0.2rem 0.75rem 0.2rem 0.2rem;
+}
+.chat-look-choice {
+  padding: 0.35rem 0.8rem;
+  margin: 0 0.4rem 0.4rem 0;
+}
+.chat-look-choice input {
+  accent-color: var(--accent);
+  margin: 0;
+}
+.chat-look-choice:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+}
+/* Hover-only times reserve no line: they appear over the bubble's top-right corner. */
+.chat-msg {
+  position: relative;
+}
+#chat-messages:not(.timestamps-always) .chat-msg .msg-time {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.5rem;
+  margin: 0;
+  padding: 0 0.3rem;
+  border-radius: 4px;
+  background: inherit;
+}
+/* A chosen format stays on every message, at the bubble's foot. */
+.timestamps-always .chat-msg .msg-time {
+  opacity: 1;
+  text-align: right;
 }
 .large-chat-text .msg-text {
   font-size: 1.08rem;

@@ -4,6 +4,8 @@ import { loadTypeScript } from './source-loader.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 
 const chatModule = await loadTypeScript('src/chat-store.ts');
+const colorModule = await loadTypeScript('src/avatar-colors.ts');
+const { CHAT_PALETTE, chatColor } = colorModule;
 const entry = (id, extra = {}) => ({
   messageId: `server-${id}`,
   clientMessageId: `client-${id}`,
@@ -25,6 +27,15 @@ async function fixture() {
     dataset: {
       get() {
         return (this._dataset ??= {});
+      },
+    },
+    style: {
+      get() {
+        const properties = (this._style ??= new Map());
+        return {
+          setProperty: (name, value) => properties.set(name, value),
+          getPropertyValue: (name) => properties.get(name) ?? '',
+        };
       },
     },
     classList: {
@@ -107,6 +118,12 @@ async function fixture() {
     connected: true,
     canChat: true,
     nickname: 'Local',
+    chatStyle: null,
+    async setChatStyle(chatStyle) {
+      const applied = (await this.requestSocial('setChatStyle', { chatStyle }))?.chatStyle;
+      this.chatStyle = applied ?? chatStyle;
+      return this.chatStyle;
+    },
     getParticipants: () => participants,
     requestSocial(action, data) {
       state.requests.push({ action, data });
@@ -144,7 +161,7 @@ async function fixture() {
   let messageId = 0;
   const timers = new Map();
   const { SocialChat } = await loadTypeScript('src/social-chat.ts', {
-    modules: { './chat-store': chatModule, './ui': f.ui },
+    modules: { './chat-store': chatModule, './ui': f.ui, './avatar-colors': colorModule },
     globals: {
       document: f.document,
       TextEncoder,
@@ -946,7 +963,7 @@ test('preferences dialog unlocks audio before awaiting, and leave prevents late 
   f.state.handle = () => pending.promise;
   f.chat.openPreferences();
   const view = f.chat.preferencesDialog;
-  const controls = view.dialog.querySelectorAll('input');
+  const controls = view.dialog.querySelectorAll('input').filter((node) => node.type === 'checkbox');
   controls[0].checked = false;
   controls[1].checked = true;
   view.dialog
@@ -962,6 +979,68 @@ test('preferences dialog unlocks audio before awaiting, and leave prevents late 
   assert.equal(f.chat.preferences.allowPrivateMessages, true);
   assert.equal(f.chat.preferences.sounds, false);
   assert.equal(f.state.storage.size, 0);
+});
+
+test('timestamps follow the chosen format and stay visible once chosen', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  // Local-time parts, so the expected text holds in every timezone.
+  const sentAt = new Date(2026, 8, 28, 14, 5, 9).toISOString();
+  f.chat.handleEvent(snapshot([entry('1', { sentAt })]));
+  const time = () => rows(f)[0].querySelector('.msg-time').textContent;
+  const always = () => f.chat.messages.classList.contains('timestamps-always');
+  assert.equal(always(), false, 'timestamps appear on hover until chosen');
+  for (const [format, expected] of [
+    ['time', '14:05'],
+    ['seconds', '14:05:09'],
+    ['datetime', '2026-09-28 14:05:09'],
+  ]) {
+    f.chat.setTimestampFormat(format);
+    assert.equal(time(), expected, format);
+    assert.equal(always(), true);
+  }
+  f.chat.setTimestampFormat('time12');
+  assert.match(time(), /^2:05\sPM$/);
+  f.chat.setTimestampFormat('hover');
+  assert.equal(always(), false);
+});
+
+test('the preferences dialog offers every timestamp format and saves the chosen one', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.openPreferences();
+  const view = f.chat.preferencesDialog;
+  const select = view.dialog
+    .querySelectorAll('select')
+    .find((node) => node.dataset.preference === 'timestamps');
+  assert.deepEqual(
+    select.options.map((option) => option.value),
+    ['hover', 'time', 'time12', 'seconds', 'datetime'],
+  );
+  assert.equal(select.value, 'hover');
+  select.value = 'seconds';
+  view.dialog
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Save preferences')
+    .click();
+  await flush();
+  assert.equal(f.chat.preferences.timestamps, 'seconds');
+});
+
+test('the timestamp format is remembered with the chat preferences, and nonsense is ignored', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.setTimestampFormat('datetime');
+  const key = 'simplestchat.chat.v1.account-a';
+  assert.equal(JSON.parse(f.state.storage.get(key)).timestamps, 'datetime');
+  f.state.storage.set(key, JSON.stringify({ timestamps: 'seconds' }));
+  f.chat.reset();
+  await f.chat.activate();
+  assert.equal(f.chat.preferences.timestamps, 'seconds');
+  f.state.storage.set(key, JSON.stringify({ timestamps: '<script>' }));
+  f.chat.reset();
+  await f.chat.activate();
+  assert.equal(f.chat.preferences.timestamps, 'hover');
 });
 
 test('delivery state renders outside the hover-revealed timestamp so failures stay visible', async () => {
@@ -999,4 +1078,115 @@ test('public chat keeps its mention hint in the composer instead of a permanent 
   assert.equal(f.chat.conversationStatus.hidden, false);
   assert.match(f.chat.conversationStatus.textContent, /Private/);
   assert.doesNotMatch(f.chat.input.placeholder, /@name/);
+});
+
+const look = (row) => ({
+  style: ['accent', 'text', 'bubble'].find((kind) => row.classList.contains(`look-${kind}`)),
+  color: row.style.getPropertyValue('--sender-color'),
+});
+
+test('messages wear the look they were sent with, else the sender’s current one, else automatic', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.participants.get('alice').chatStyle = { color: 'lime', style: 'text' };
+  f.chat.handleEvent(
+    snapshot([
+      entry('1', { chatStyle: { color: 'rose', style: 'bubble' } }),
+      entry('2'),
+      entry('3', { participantId: 'zed', participantName: 'Zed' }),
+    ]),
+  );
+  const [stamped, current, automatic] = rows(f);
+  assert.deepEqual(look(stamped), { style: 'bubble', color: CHAT_PALETTE.rose });
+  assert.deepEqual(look(current), { style: 'text', color: CHAT_PALETTE.lime });
+  assert.deepEqual(look(automatic), { style: 'accent', color: chatColor('Zed', null) });
+  // A pending message of your own wears the look you have now.
+  f.state.room.chatStyle = { color: 'violet', style: 'bubble' };
+  f.chat.input.value = 'mine';
+  f.chat.send();
+  assert.deepEqual(look(rows(f).at(-1)), { style: 'bubble', color: CHAT_PALETTE.violet });
+});
+
+test('a mention of you is highlighted where it appears, and links stay whole', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.receive(entry('m', { content: 'Hi @local, see https://example.com/@Local and @LOCAL' }));
+  const text = rows(f)[0].querySelector('.msg-text');
+  assert.equal(rows(f)[0].classList.contains('mentioned'), true);
+  assert.deepEqual(
+    text.querySelectorAll('mark').map((node) => node.textContent),
+    ['@local', '@LOCAL'],
+  );
+  assert.equal(text.querySelector('a').textContent, 'https://example.com/@Local');
+  assert.equal(text.textContent, 'Hi @local, see https://example.com/@Local and @LOCAL');
+});
+
+test('the preferences dialog previews a look and saves it for the room and the next join', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.state.room.chatStyle = { color: null, style: 'accent' };
+  f.chat.openPreferences();
+  const view = f.chat.preferencesDialog;
+  const radios = (name) =>
+    view.dialog.querySelectorAll('input').filter((node) => node.name === name);
+  // Like a browser's radio group: checking one unchecks the rest.
+  const choose = (name, value) => {
+    for (const node of radios(name)) node.checked = node.value === value;
+    radios(name)
+      .find((node) => node.value === value)
+      .emit('change');
+  };
+  assert.deepEqual(
+    radios('chat-color').map((node) => node.value),
+    ['', ...Object.keys(CHAT_PALETTE)],
+  );
+  assert.equal(radios('chat-color').find((node) => node.checked).value, '');
+  assert.deepEqual(
+    radios('chat-look').map((node) => node.value),
+    ['accent', 'text', 'bubble'],
+  );
+  const preview = view.dialog.querySelector('.chat-msg');
+  assert.deepEqual(look(preview), { style: 'accent', color: chatColor('Local', null) });
+  choose('chat-color', 'violet');
+  choose('chat-look', 'bubble');
+  assert.deepEqual(look(preview), { style: 'bubble', color: CHAT_PALETTE.violet });
+  view.dialog
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Save preferences')
+    .click();
+  await flush();
+  assert.deepEqual(f.state.requests.at(-1), {
+    action: 'setChatStyle',
+    data: { chatStyle: { color: 'violet', style: 'bubble' } },
+  });
+  assert.deepEqual(f.state.room.chatStyle, { color: 'violet', style: 'bubble' });
+  assert.deepEqual(f.chat.savedLook(), { color: 'violet', style: 'bubble' });
+  assert.equal(view.dialog.open, false);
+
+  // Saving other preferences leaves an unchanged look alone.
+  f.chat.openPreferences();
+  const requests = f.state.requests.length;
+  f.chat.preferencesDialog.dialog
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Save preferences')
+    .click();
+  await flush();
+  assert.deepEqual(
+    f.state.requests.slice(requests).map((request) => request.action),
+    ['setChatPreferences'],
+  );
+});
+
+test('a saved look is checked before a join offers it', async () => {
+  const f = await fixture();
+  const key = 'simplestchat.chat.v1.account-a';
+  assert.equal(f.chat.savedLook(), null);
+  f.state.storage.set(key, JSON.stringify({ look: { color: 'teal', style: 'text' } }));
+  assert.deepEqual(f.chat.savedLook(), { color: 'teal', style: 'text' });
+  f.state.storage.set(key, JSON.stringify({ look: { color: null, style: 'bubble' } }));
+  assert.deepEqual(f.chat.savedLook(), { color: null, style: 'bubble' });
+  f.state.storage.set(key, JSON.stringify({ look: { color: 'mauve', style: 'glow' } }));
+  assert.deepEqual(f.chat.savedLook(), { color: null, style: 'accent' });
+  f.state.storage.set(key, JSON.stringify({ look: 'violet' }));
+  assert.equal(f.chat.savedLook(), null);
 });

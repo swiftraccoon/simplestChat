@@ -19,7 +19,7 @@ import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
 import { api, ApiError, button, el, modal, safeRasterUrl } from './ui';
 import { configureSettingsDialog } from './settings-dialog';
-import { avatarColors } from './avatar-colors';
+import { avatarColors, chatColor } from './avatar-colors';
 import { spatialLayerForRenderedWidth } from './layer-cap';
 import './community.css';
 import type { CreateRoomRequest, RoomSettingsPatch } from './protocol';
@@ -1880,6 +1880,10 @@ joinBtn.addEventListener(
               if (tag)
                 tag.textContent = message.nickname + (key.endsWith(':screen') ? ' (Screen)' : '');
             }
+            // An automatic color follows the name.
+            repaintTiles(message.participantId);
+          } else if (message.type === 'chatStyleChanged') {
+            repaintTiles(message.participantId);
           } else if (message.type === 'socialResponse' && message.action === 'getRoomSnapshot') {
             const lobby = message.data['lobby'] as
               { participantId: string; displayName: string }[] | undefined;
@@ -2112,6 +2116,7 @@ joinBtn.addEventListener(
         },
       });
 
+      room.preferChatStyle(socialChat.savedLook());
       joiningRoom = room;
       const status = await joinRoomWithPassword(joiningRoom, roomId, name);
       if (room !== joiningRoom || status === null) return;
@@ -2425,6 +2430,7 @@ function updateLocalTile(): void {
     nameTag.className = 'name-tag';
     nameTag.textContent = `${localName} (You)`;
     newTile.appendChild(nameTag);
+    paintTile(newTile, localName, room.chatStyle?.color ?? null);
 
     videoGrid.prepend(newTile);
     updateVideoGridCount();
@@ -2481,10 +2487,43 @@ function addLocalAvatar(tile: HTMLElement, name: string): void {
   noVideoAvatar.className = 'no-video-avatar';
   const initial = document.createElement('div');
   initial.className = 'avatar-initial';
-  Object.assign(initial.style, avatarColors(name));
   initial.textContent = name.charAt(0).toUpperCase();
   noVideoAvatar.appendChild(initial);
   tile.insertBefore(noVideoAvatar, tile.firstChild);
+  paintTile(tile, name, room?.chatStyle?.color ?? null);
+}
+
+/** A person's chosen palette color, the local person included; null means automatic. */
+function participantColor(participantId: string): string | null {
+  if (!room) return null;
+  const look =
+    participantId === room.localParticipantId
+      ? room.chatStyle
+      : room.getParticipants().get(participantId)?.chatStyle;
+  return look?.color ?? null;
+}
+
+/** A person's color on a tile: the dot beside the name tag and the camera-off initial. */
+function paintTile(tile: HTMLElement, name: string, color: string | null): void {
+  tile.style.setProperty('--person-color', chatColor(name, color));
+  const initial = tile.querySelector<HTMLElement>('.avatar-initial');
+  if (initial) Object.assign(initial.style, avatarColors(name, color));
+}
+
+/** A changed look or name repaints that person's tiles; the people lists re-render themselves. */
+function repaintTiles(participantId: string): void {
+  if (!room) return;
+  if (participantId === room.localParticipantId) {
+    const tile = document.getElementById('local-tile');
+    if (tile)
+      paintTile(tile, room.nickname || nameInput.value.trim(), participantColor(participantId));
+    return;
+  }
+  const name = room.getParticipants().get(participantId)?.name;
+  if (name === undefined) return;
+  for (const tile of remoteTiles.values())
+    if (tile.dataset['participantId'] === participantId)
+      paintTile(tile, name, participantColor(participantId));
 }
 
 function handleLocalCaptureStopped(kind: 'audio' | 'video'): void {
@@ -3039,6 +3078,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
       id: room.localParticipantId,
       name: room.nickname || nameInput.value.trim(),
       role: room.role,
+      ...(room.chatStyle && { chatStyle: room.chatStyle }),
       producers: localProducers,
     });
   }
@@ -3050,6 +3090,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
   for (const p of allParticipants) {
     const li = document.createElement('li');
     li.dataset['participantId'] = p.id;
+    li.style.setProperty('--person-color', chatColor(p.name, p.chatStyle?.color));
 
     // Context menu for moderation (only on remote participants)
     if (p.id !== room?.localParticipantId) {
@@ -3062,7 +3103,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
     // Avatar
     const avatar = document.createElement('div');
     avatar.className = 'participant-avatar';
-    Object.assign(avatar.style, avatarColors(p.name));
+    Object.assign(avatar.style, avatarColors(p.name, p.chatStyle?.color));
     avatar.textContent = p.name.charAt(0).toUpperCase();
     community.decorateAvatar(
       avatar,
@@ -3165,6 +3206,7 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
       id: room.localParticipantId,
       name: room.nickname || nameInput.value.trim(),
       role: room.role,
+      ...(room.chatStyle && { chatStyle: room.chatStyle }),
       producers: localProducers,
     });
   }
@@ -3177,6 +3219,7 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
   for (const p of allParticipants) {
     const li = document.createElement('li');
     li.dataset['participantId'] = p.id;
+    li.style.setProperty('--person-color', chatColor(p.name, p.chatStyle?.color));
 
     // Context menu for moderation (only on remote participants)
     if (p.id !== room?.localParticipantId) {
@@ -3188,7 +3231,7 @@ function renderClassicUsersPanel(participants: Map<string, Participant>): void {
 
     const avatar = document.createElement('div');
     avatar.className = 'participant-avatar';
-    Object.assign(avatar.style, avatarColors(p.name));
+    Object.assign(avatar.style, avatarColors(p.name, p.chatStyle?.color));
     avatar.style.width = '24px';
     avatar.style.height = '24px';
     avatar.style.fontSize = '0.65rem';
@@ -3274,7 +3317,6 @@ function renderRemoteTrack(
       noVideoAvatar.className = 'no-video-avatar';
       const initial = document.createElement('div');
       initial.className = 'avatar-initial';
-      Object.assign(initial.style, avatarColors(participantName));
       initial.textContent = participantName.charAt(0).toUpperCase();
       noVideoAvatar.appendChild(initial);
       tile.appendChild(noVideoAvatar);
@@ -3284,6 +3326,7 @@ function renderRemoteTrack(
     nameTag.className = 'name-tag';
     nameTag.textContent = isScreen ? `${participantName} (Screen)` : participantName;
     tile.appendChild(nameTag);
+    paintTile(tile, participantName, participantColor(participantId));
 
     remoteTiles.set(tileKey, tile);
     videoGrid.appendChild(tile);

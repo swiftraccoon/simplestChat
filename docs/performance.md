@@ -13,7 +13,7 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 512 KiB            | 112 KiB    |
+| JavaScript  | 512 KiB            | 116 KiB    |
 | CSS         | 64 KiB             | 12 KiB     |
 | HTML        | 48 KiB             | 10 KiB     |
 
@@ -50,6 +50,13 @@ libraries; no runtime dependency was added. All emitted chunks remain counted,
 including optional code. The revised ceiling accommodates these workflows while
 keeping a bounded margin for final correctness fixes; it is not evidence of
 unchanged runtime performance.
+
+Chat timestamps and personal chat colors raise the gzip ceiling to 116 KiB and
+keep 512 KiB raw: timestamp formats chosen per viewer, a sixteen-color palette
+with three message styles and a live preview, the same colors on people lists and
+video tags, and the decoders that carry a look on the wire. The previous build
+(`3d5406a`) measured 512,719 bytes raw / 112,320 gzip; this build measures
+520,019 / 114,794. No runtime dependency was added.
 
 ## Controlled local comparison
 

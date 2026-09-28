@@ -1,15 +1,67 @@
 import type { TelemetryHandler, TelemetryOutcome } from './telemetry-types';
 import type { RoomClient } from './room';
-import type { ChatEntry, ServerMessage } from './protocol';
+import type { ChatEntry, ChatStyle, ChatStyleKind, ServerMessage } from './protocol';
 import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
 import { asyncButton, button, busy, el, field, modal } from './ui';
+import { CHAT_PALETTE, chatColor } from './avatar-colors';
 
+/** How a viewer sees message times: on hover, or always in one format. */
+type TimestampFormat = 'hover' | 'time' | 'time12' | 'seconds' | 'datetime';
+const TIMESTAMP_FORMATS: readonly TimestampFormat[] = [
+  'hover',
+  'time',
+  'time12',
+  'seconds',
+  'datetime',
+];
 type Preferences = {
   allowPrivateMessages: boolean;
   sounds: boolean;
   largeText: boolean;
+  timestamps: TimestampFormat;
+  /** The last look chosen here; a guest's next join asks for it. */
+  look: ChatStyle | null;
   ignored: { id: string; name: string }[];
 };
+
+const LOOKS: readonly { kind: ChatStyleKind; label: string }[] = [
+  { kind: 'accent', label: 'Stripe' },
+  { kind: 'text', label: 'Colored text' },
+  { kind: 'bubble', label: 'Tinted bubble' },
+];
+const AUTOMATIC_LOOK: ChatStyle = { color: null, style: 'accent' };
+
+/** A stored or typed look reduced to the palette and the known styles, like the server does. */
+function validLook(value: unknown): ChatStyle | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { color, style } = value as Record<string, unknown>;
+  return {
+    color:
+      typeof color === 'string' && Object.prototype.hasOwnProperty.call(CHAT_PALETTE, color)
+        ? color
+        : null,
+    style: LOOKS.some((look) => look.kind === style) ? (style as ChatStyleKind) : 'accent',
+  };
+}
+
+const pad = (value: number): string => String(value).padStart(2, '0');
+
+/** A message time in the viewer's format, always in their local time. */
+function formatChatTime(date: Date, format: TimestampFormat): string {
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  switch (format) {
+    case 'time':
+      return time;
+    case 'time12':
+      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    case 'seconds':
+      return `${time}:${pad(date.getSeconds())}`;
+    case 'datetime':
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${time}:${pad(date.getSeconds())}`;
+    case 'hover':
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+}
 type Options = {
   telemetry?: TelemetryHandler;
   getRoom: () => RoomClient | null;
@@ -39,6 +91,8 @@ export class SocialChat {
   private preferences: Preferences = {
     allowPrivateMessages: true,
     sounds: false,
+    timestamps: 'hover',
+    look: null,
     largeText: false,
     ignored: [],
   };
@@ -231,7 +285,14 @@ export class SocialChat {
     this.scope = '';
     this.activeRoom = null;
     this.viewerKey = '';
-    this.preferences = { allowPrivateMessages: true, sounds: false, largeText: false, ignored: [] };
+    this.preferences = {
+      allowPrivateMessages: true,
+      sounds: false,
+      largeText: false,
+      timestamps: 'hover',
+      look: null,
+      ignored: [],
+    };
     this.seenAtBottom = true;
     this.emojiPanel.hidden = true;
     this.input.value = '';
@@ -657,6 +718,7 @@ export class SocialChat {
         ? 'Write a private message…'
         : 'Type a message · @name to mention';
     this.messages.classList.toggle('large-chat-text', this.preferences.largeText);
+    this.messages.classList.toggle('timestamps-always', this.preferences.timestamps !== 'hover');
     const visible = this.store.messages.filter(
       (message) =>
         this.store.conversation(message) === this.store.active &&
@@ -706,6 +768,8 @@ export class SocialChat {
     const mentioned = Boolean(
       nickname && !local && content.toLowerCase().includes(`@${nickname.toLowerCase()}`),
     );
+    const look = participantId ? this.lookOf(message, local) : null;
+    const color = look ? chatColor(participantName, look.color) : '';
     // ChatStore updates objects in place. Compare immutable display/action values,
     // never object identity; grouping depends on adjacent visible rows instead.
     const fingerprint = JSON.stringify([
@@ -719,12 +783,16 @@ export class SocialChat {
       local,
       mentioned,
       !!message.retry,
+      this.preferences.timestamps,
+      look?.style,
+      color,
     ]);
     const key = this.rowKey(message);
     const previous = this.rows.get(key);
     if (previous?.fingerprint === fingerprint) return previous.node;
     const node = previous?.node ?? el('div');
-    node.className = `chat-msg${participantId ? '' : ' system'}${mentioned ? ' mentioned' : ''}`;
+    node.className = `chat-msg${look ? ` look-${look.style}` : ' system'}${mentioned ? ' mentioned' : ''}`;
+    if (look) node.style.setProperty('--sender-color', color);
     node.dataset['messageId'] = messageId;
     node.replaceChildren();
     if (participantId) {
@@ -739,12 +807,12 @@ export class SocialChat {
       node.append(sender);
     }
     const text = el('div', undefined, 'msg-text');
-    appendLinkedText(text, content);
+    appendLinkedText(text, content, mentioned ? `@${nickname}` : undefined);
     node.append(text);
     if (participantId) {
       const meta = el('div', undefined, 'msg-time');
       const date = new Date(sentAt);
-      meta.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      meta.textContent = formatChatTime(date, this.preferences.timestamps);
       meta.title = date.toLocaleString();
       node.append(meta);
       // The timestamp is revealed on hover; delivery state must stay visible on its own.
@@ -771,6 +839,15 @@ export class SocialChat {
     }
     this.rows.set(key, { node, fingerprint });
     return node;
+  }
+
+  /** The look a message was sent with; entries without one wear the sender's current look. */
+  private lookOf(message: ChatEntry, local: boolean): ChatStyle {
+    const room = this.options.getRoom();
+    const current = local
+      ? room?.chatStyle
+      : room?.getParticipants().get(message.participantId)?.chatStyle;
+    return message.chatStyle ?? current ?? AUTOMATIC_LOOK;
   }
 
   private updateBadges(): void {
@@ -888,7 +965,14 @@ export class SocialChat {
   }
 
   private loadPreferences(): void {
-    this.preferences = { allowPrivateMessages: true, sounds: false, largeText: false, ignored: [] };
+    this.preferences = {
+      allowPrivateMessages: true,
+      sounds: false,
+      largeText: false,
+      timestamps: 'hover',
+      look: null,
+      ignored: [],
+    };
     try {
       const value = JSON.parse(
         localStorage.getItem(this.preferenceKey()) ?? 'null',
@@ -897,6 +981,9 @@ export class SocialChat {
       this.preferences.allowPrivateMessages = value.allowPrivateMessages !== false;
       this.preferences.sounds = value.sounds === true;
       this.preferences.largeText = value.largeText === true;
+      if (TIMESTAMP_FORMATS.includes(value.timestamps as TimestampFormat))
+        this.preferences.timestamps = value.timestamps as TimestampFormat;
+      this.preferences.look = validLook(value.look);
       const ignored = new Map<string, { id: string; name: string }>();
       if (Array.isArray(value.ignored))
         for (const entry of value.ignored) {
@@ -913,6 +1000,26 @@ export class SocialChat {
       this.preferences.ignored = [...ignored.values()];
     } catch {
       /* Preferences are optional. */
+    }
+  }
+
+  /** Local to this viewer: applies at once and needs no server. */
+  setTimestampFormat(format: TimestampFormat): void {
+    if (!TIMESTAMP_FORMATS.includes(format)) return;
+    this.preferences = { ...this.preferences, timestamps: format };
+    this.savePreferences();
+    this.render();
+  }
+
+  /** The look saved for whoever joins next, before the room has confirmed anything. */
+  savedLook(): ChatStyle | null {
+    try {
+      const value = JSON.parse(
+        localStorage.getItem(this.preferenceKey(this.options.getViewerKey())) ?? 'null',
+      ) as Partial<Preferences> | null;
+      return validLook(value?.look);
+    } catch {
+      return null;
     }
   }
 
@@ -966,10 +1073,26 @@ export class SocialChat {
     const large = el('input');
     large.type = 'checkbox';
     large.checked = this.preferences.largeText;
+    // Each choice is shown as it looks, in the viewer's own time.
+    const timestamps = el('select');
+    timestamps.dataset['preference'] = 'timestamps';
+    const now = new Date();
+    for (const format of TIMESTAMP_FORMATS) {
+      const option = el(
+        'option',
+        format === 'hover' ? 'Only when hovering' : formatChatTime(now, format),
+      );
+      option.value = format;
+      timestamps.append(option);
+    }
+    timestamps.value = this.preferences.timestamps;
+    const look = this.lookPicker(room);
     view.body.append(
+      ...look.nodes,
       field('Allow incoming private messages', allow),
       field('Message and PM sounds', sounds),
       field('Larger chat text', large),
+      field('Timestamps', timestamps),
     );
     const save = asyncButton(
       'Save preferences',
@@ -977,11 +1100,17 @@ export class SocialChat {
         busy(save, view.error, async () => {
           if (!current()) return;
           const operation = this.beginPreferenceUpdate();
+          const chosen = look.chosen();
+          const before = room.chatStyle ?? AUTOMATIC_LOOK;
+          const lookChanged = chosen.color !== before.color || chosen.style !== before.style;
           const next = {
             ...this.preferences,
             allowPrivateMessages: allow.checked,
             sounds: sounds.checked,
             largeText: large.checked,
+            timestamps: TIMESTAMP_FORMATS.includes(timestamps.value as TimestampFormat)
+              ? (timestamps.value as TimestampFormat)
+              : this.preferences.timestamps,
           };
           // Audio must unlock during the click, before waiting for the server.
           this.resumeSoundFromGesture(sounds.checked);
@@ -996,6 +1125,13 @@ export class SocialChat {
             this.savePreferences(viewer);
             if (current() && next.sounds) this.playSound(550);
             this.render();
+            if (lookChanged) {
+              const applied = await room.setChatStyle(chosen);
+              if (!this.contextCurrent(activation, room, viewer)) return;
+              this.preferences = { ...this.preferences, look: applied };
+              this.savePreferences(viewer);
+              this.render();
+            }
             if (current()) view.close();
           } finally {
             if (operation === this.preferenceOperation) this.preferenceBusy = false;
@@ -1045,6 +1181,83 @@ export class SocialChat {
     );
   }
 
+  /** Swatches and styles for the local look, with a live preview row. */
+  private lookPicker(room: RoomClient): { nodes: HTMLElement[]; chosen: () => ChatStyle } {
+    const current = room.chatStyle ?? AUTOMATIC_LOOK;
+    const nickname = room.nickname;
+    const preview = el('div');
+    preview.append(
+      el('span', nickname, 'sender'),
+      el('div', 'This is how your messages look to everyone.', 'msg-text'),
+    );
+    const radio = (name: string, value: string, checked: boolean): HTMLInputElement => {
+      const node = el('input');
+      node.type = 'radio';
+      node.name = name;
+      node.value = value;
+      node.checked = checked;
+      node.addEventListener('change', () => show());
+      return node;
+    };
+    const swatch = (value: string, color: string): HTMLInputElement => {
+      const node = radio('chat-color', value, (current.color ?? '') === value);
+      node.className = 'chat-swatch';
+      node.style.setProperty('--swatch', color);
+      return node;
+    };
+    const automatic = swatch('', chatColor(nickname, null));
+    const automaticLabel = el('label', undefined, 'chat-swatch-automatic');
+    automaticLabel.append(automatic, el('span', 'Automatic'));
+    // Two rows of eight follow the hue wheel: warm colors first, then cool.
+    const palette = el('div', undefined, 'chat-palette');
+    const swatches = el('div', undefined, 'chat-swatches');
+    swatches.append(automaticLabel, palette);
+    const colors = [automatic];
+    for (const [token, hex] of Object.entries(CHAT_PALETTE)) {
+      const node = swatch(token, hex);
+      const name = token.charAt(0).toUpperCase() + token.slice(1);
+      node.title = name;
+      node.setAttribute('aria-label', name);
+      colors.push(node);
+      palette.append(node);
+    }
+    const colorGroup = el('fieldset', undefined, 'chat-look-group');
+    colorGroup.append(el('legend', 'Color'), swatches);
+    const styles = LOOKS.map(({ kind, label }) => {
+      const node = radio('chat-look', kind, current.style === kind);
+      const wrapper = el('label', undefined, 'chat-look-choice');
+      wrapper.append(node, el('span', label));
+      return { node, wrapper };
+    });
+    const styleGroup = el('fieldset', undefined, 'chat-look-group');
+    styleGroup.append(el('legend', 'Style'), ...styles.map((style) => style.wrapper));
+    const chosen = (): ChatStyle =>
+      validLook({
+        color: colors.find((node) => node.checked)?.value,
+        style: styles.find((style) => style.node.checked)?.node.value,
+      }) ?? AUTOMATIC_LOOK;
+    const show = (): void => {
+      const look = chosen();
+      preview.className = `chat-msg chat-look-preview look-${look.style}`;
+      preview.style.setProperty('--sender-color', chatColor(nickname, look.color));
+    };
+    show();
+    return {
+      nodes: [
+        el('h3', 'Your chat color'),
+        el(
+          'p',
+          'Everyone in the room sees your name, messages and video tag in this color.',
+          'setting-hint',
+        ),
+        colorGroup,
+        styleGroup,
+        preview,
+      ],
+      chosen,
+    };
+  }
+
   private resumeSoundFromGesture(enabled = this.preferences.sounds): void {
     if (!enabled) return;
     try {
@@ -1079,18 +1292,35 @@ export class SocialChat {
   }
 }
 
-export function appendLinkedText(parent: HTMLElement, text: string): void {
+/** Links stay whole; outside them, each occurrence of `mention` is marked, in any case. */
+export function appendLinkedText(parent: HTMLElement, text: string, mention?: string): void {
   const pattern = /https?:\/\/[^\s<>]+/g;
   let start = 0;
   for (const match of text.matchAll(pattern)) {
     const index = match.index;
-    parent.append(document.createTextNode(text.slice(start, index)));
+    appendMarkedText(parent, text.slice(start, index), mention);
     const link = el('a', match[0]);
     link.href = match[0];
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     parent.append(link);
     start = index + match[0].length;
+  }
+  appendMarkedText(parent, text.slice(start), mention);
+}
+
+function appendMarkedText(parent: HTMLElement, text: string, mention: string | undefined): void {
+  if (!mention) {
+    parent.append(document.createTextNode(text));
+    return;
+  }
+  // Match on the original text: lowercasing can change a string's length.
+  const pattern = new RegExp(mention.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu');
+  let start = 0;
+  for (const match of text.matchAll(pattern)) {
+    parent.append(document.createTextNode(text.slice(start, match.index)));
+    parent.append(el('mark', match[0], 'mention'));
+    start = match.index + match[0].length;
   }
   parent.append(document.createTextNode(text.slice(start)));
 }
