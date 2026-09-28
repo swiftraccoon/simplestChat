@@ -172,6 +172,191 @@
 .chat-msg.grouped .sender {
   display: none;
 }
+/* A reply quotes what it answers; the quote jumps to the original. */
+.chat-msg .msg-reply {
+  display: block;
+  max-width: 100%;
+  margin: 0.1rem 0 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border: none;
+  border-left: 2px solid color-mix(in oklab, var(--text) 35%, transparent);
+  border-radius: 0 4px 4px 0;
+  background: rgb(255 255 255 / 5%);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.78rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.chat-msg.flash {
+  animation: message-flash 1.2s ease;
+}
+@keyframes message-flash {
+  from {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  to {
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+  }
+}
+.msg-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+.reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.reaction-chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+}
+/* React and Reply float above the message's top-right edge, clear of its time. */
+#chat-messages {
+  padding-top: 1.5rem;
+}
+.msg-actions {
+  position: absolute;
+  top: -1.55rem;
+  right: 0.5rem;
+  z-index: 2;
+  display: flex;
+  gap: 0.1rem;
+  padding: 0.12rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  box-shadow: var(--shadow-panel);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+.chat-msg:hover .msg-actions,
+.chat-msg:focus-within .msg-actions,
+.chat-msg.show-actions .msg-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.msg-action {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.msg-action:hover {
+  background: var(--surface-3);
+}
+.reaction-picker {
+  display: flex;
+  gap: 0.1rem;
+  padding-left: 0.2rem;
+  border-left: 1px solid var(--border);
+}
+/* The message the next send answers, above the message box. */
+.reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0.5rem 0.35rem;
+  padding: 0.3rem 0.4rem 0.3rem 0.6rem;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--surface-2);
+  font-size: 0.8rem;
+}
+.reply-bar-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.reply-bar-excerpt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.reply-bar-cancel {
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.reply-bar-cancel:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+/* People offered while an @mention is typed, just above the message box. */
+.mention-list {
+  list-style: none;
+  margin: 0 0.5rem 0.35rem;
+  padding: 0.25rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+}
+.mention-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.mention-list li[aria-selected='true'] {
+  background: var(--surface-3);
+}
+.mention-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--person-color);
+}
+/* Where unseen messages begin: a labelled hairline in the accent colour. */
+.chat-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.3rem 0;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.chat-divider::before,
+.chat-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid color-mix(in oklab, var(--accent) 55%, transparent);
+}
 /* A run from one sender reads as one block: close together, inner corners squared. */
 .chat-msg.grouped {
   padding-top: 0.2rem;
@@ -201,7 +386,8 @@
   color: color-mix(in oklab, var(--sender-color) 45%, #fff);
 }
 .chat-msg.look-bubble .msg-time,
-.chat-msg.look-bubble .msg-status {
+.chat-msg.look-bubble .msg-status,
+.chat-msg.look-bubble .msg-reply {
   color: color-mix(in oklab, var(--sender-color) 30%, #d4d4d4);
 }
 .chat-msg.look-bubble .msg-text a {
@@ -233,6 +419,38 @@
 .chat-msg .delivery-error button {
   padding: 0.15rem 0;
   font-size: 0.75rem;
+}
+/* Keyboard shortcuts: keys on the left, what they do on the right. */
+.shortcut-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin: 0;
+}
+.shortcut-list dt {
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+.shortcut-list dd {
+  margin: 0;
+}
+kbd {
+  display: inline-block;
+  min-width: 1.7em;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text);
+  font:
+    600 0.8rem/1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  text-align: center;
 }
 /* The chat color picker: palette swatches, the three styles, and a live preview row. */
 .chat-look-group {
@@ -305,7 +523,7 @@
 }
 #chat-messages:not(.timestamps-always) .chat-msg .msg-time {
   position: absolute;
-  top: 0.35rem;
+  top: 0.45rem;
   right: 0.5rem;
   margin: 0;
   padding: 0 0.3rem;

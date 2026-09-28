@@ -146,6 +146,12 @@ const report = {
   ],
   failure: null,
 };
+/** Room tools needed now and then live in the room tools' "More" menu (absent in older builds). */
+async function openRoomMenu(page) {
+  const more = page.locator('#room-more-btn');
+  if ((await more.count()) && (await more.getAttribute('aria-expanded')) !== 'true')
+    await more.click();
+}
 function save() {
   if (correlation) report.privateCorrelation = correlation.summary();
   fs.writeFileSync(
@@ -488,6 +494,7 @@ async function main() {
   async function expectCall(page, name, outcome) {
     const deadline = performance.now() + 15000;
     while (performance.now() < deadline) {
+      await openRoomMenu(page);
       await page.locator('#diagnostics-btn').click();
       const dialog = page.getByRole('dialog', { name: 'Diagnostic summary', exact: true });
       const summary = JSON.parse(

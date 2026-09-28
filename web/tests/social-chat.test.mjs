@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { loadTypeScript } from './source-loader.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
@@ -109,7 +110,23 @@ async function fixture() {
     audioCreates: 0,
     audioResumes: 0,
     audioReject: false,
+    notices: [],
+    noticeAnswer: 'granted',
   };
+  class Notification {
+    static permission = 'default';
+    static requestPermission() {
+      Notification.permission = state.noticeAnswer;
+      return Promise.resolve(Notification.permission);
+    }
+    constructor(title, options) {
+      Object.assign(this, { title, ...options, closed: false });
+      state.notices.push(this);
+    }
+    close() {
+      this.closed = true;
+    }
+  }
   const participants = new Map([['alice', { id: 'alice', name: 'Alice' }]]);
   state.room = {
     localParticipantId: 'local',
@@ -167,6 +184,7 @@ async function fixture() {
       TextEncoder,
       structuredClone,
       AudioContext,
+      Notification,
       crypto: { randomUUID: () => `generated-${++messageId}` },
       localStorage: {
         getItem: (key) => state.storage.get(key) ?? null,
@@ -1189,4 +1207,269 @@ test('a saved look is checked before a join offers it', async () => {
   assert.deepEqual(f.chat.savedLook(), { color: null, style: 'accent' });
   f.state.storage.set(key, JSON.stringify({ look: 'violet' }));
   assert.equal(f.chat.savedLook(), null);
+});
+
+test('reading resumes below a New messages divider that marks where unseen messages began', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const divider = () =>
+    [...f.chat.messages.children].find((node) => node.className === 'chat-divider');
+  f.chat.receive(entry('1'));
+  f.chat.receive(entry('2'));
+  assert.equal(divider(), undefined, 'messages read as they arrive need no divider');
+  // Scroll up to read history; two more arrive unseen.
+  f.chat.messages.scrollHeight = 1000;
+  f.chat.messages.scrollTop = 0;
+  f.chat.messages.emit('scroll');
+  f.chat.receive(entry('3'));
+  f.chat.receive(entry('4'));
+  f.chat.render();
+  assert.equal(divider(), undefined, 'no divider until reading resumes');
+  f.chat.messages.scrollTop = 900;
+  f.chat.messages.emit('scroll');
+  const nodes = [...f.chat.messages.children];
+  const at = nodes.indexOf(divider());
+  assert.equal(divider().textContent, 'New messages');
+  assert.equal(nodes[at + 1].querySelector('.msg-text').textContent, 'Message 3');
+  assert.equal(nodes[at + 1].classList.contains('grouped'), false, 'the divider starts a block');
+  f.chat.render();
+  assert.equal([...f.chat.messages.children].indexOf(divider()), at, 'it stays while shown');
+  f.chat.input.value = 'caught up';
+  f.chat.send();
+  assert.equal(divider(), undefined, 'sending clears it');
+});
+
+test('typing @ offers matching people to mention, chosen by keyboard or pointer without sending', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.participants.set('alfie', { id: 'alfie', name: 'Alfie' });
+  f.participants.set('bob', { id: 'bob', name: 'Bob' });
+  f.participants.set('sal', { id: 'sal', name: 'Sal' });
+  const list = f.chat.mentionList;
+  const type = (value) => {
+    f.chat.input.value = value;
+    f.chat.input.selectionStart = f.chat.input.selectionEnd = value.length;
+    f.chat.input.emit('input');
+  };
+  const key = (name) =>
+    f.chat.input.emit('keydown', { key: name, preventDefault() {}, stopPropagation() {} });
+  type('hi @al');
+  assert.equal(list.hidden, false);
+  assert.deepEqual(
+    list.children.map((option) => option.textContent),
+    ['Alice', 'Alfie', 'Sal'],
+    'names that start with the text come before names that contain it',
+  );
+  assert.equal(f.chat.input.getAttribute('aria-expanded'), 'true');
+  assert.equal(f.chat.input.getAttribute('aria-activedescendant'), 'mention-option-0');
+  key('ArrowDown');
+  assert.equal(f.chat.input.getAttribute('aria-activedescendant'), 'mention-option-1');
+  key('Enter');
+  assert.equal(f.chat.input.value, 'hi @Alfie ');
+  assert.equal(list.hidden, true);
+  assert.deepEqual(f.state.sent, [], 'choosing a name does not send the message');
+  type('@b');
+  list.children[0].emit('click');
+  assert.equal(f.chat.input.value, '@Bob ');
+  type('@zz');
+  assert.equal(list.hidden, true, 'no match, no list');
+  type('@a');
+  key('Escape');
+  assert.equal(list.hidden, true);
+  assert.equal(f.chat.input.getAttribute('aria-expanded'), 'false');
+});
+
+test('opted-in desktop notices announce mentions and private messages only while out of sight', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const save = async (checked) => {
+    f.chat.openPreferences();
+    const view = f.chat.preferencesDialog;
+    view.dialog
+      .querySelectorAll('input')
+      .find((node) => node.dataset.preference === 'notifications').checked = checked;
+    view.dialog
+      .querySelectorAll('button')
+      .find((node) => node.textContent === 'Save preferences')
+      .click();
+    await flush();
+  };
+  await save(true);
+  assert.equal(f.chat.preferences.notifications, true);
+  f.document.hidden = true;
+  f.chat.receive(entry('plain'));
+  f.chat.receive(entry('mention', { content: 'hey @Local, look' }));
+  f.chat.handleEvent({
+    type: 'privateMessageReceived',
+    message: entry('pm', { recipientId: 'local', recipientName: 'Local', content: 'psst' }),
+  });
+  assert.deepEqual(
+    f.state.notices.map((notice) => [notice.title, notice.body]),
+    [
+      ['Alice mentioned you', 'hey @Local, look'],
+      ['Alice sent you a private message', 'psst'],
+    ],
+  );
+  f.state.notices[1].onclick();
+  assert.equal(f.chat.store.active, 'alice', 'a notice opens its conversation');
+  assert.equal(f.state.notices[1].closed, true);
+  f.document.hidden = false;
+  f.chat.receive(entry('seen', { content: '@Local while watching' }));
+  assert.equal(f.state.notices.length, 2, 'nothing while the tab is in view');
+});
+
+test('a browser that refuses notification permission leaves desktop notices off and says why', async () => {
+  const f = await fixture();
+  f.state.noticeAnswer = 'denied';
+  await f.chat.activate();
+  f.chat.openPreferences();
+  const view = f.chat.preferencesDialog;
+  view.dialog
+    .querySelectorAll('input')
+    .find((node) => node.dataset.preference === 'notifications').checked = true;
+  view.dialog
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Save preferences')
+    .click();
+  await flush();
+  assert.equal(f.chat.preferences.notifications, false);
+  assert.match(f.state.notifications.at(-1), /blocked for this site/);
+});
+
+test('the offered reactions are exactly the server\u2019s, in its order', async () => {
+  const rust = await readFile(new URL('../../src/signaling/protocol.rs', import.meta.url), 'utf8');
+  const web = await readFile(new URL('../src/social-chat.ts', import.meta.url), 'utf8');
+  const quoted = (source, pattern) =>
+    [...pattern.exec(source)[1].matchAll(/["']([^"']+)["']/g)].map((match) => match[1]);
+  assert.deepEqual(
+    quoted(web, /CHAT_REACTIONS = \[([^\]]*)\]/),
+    quoted(rust, /pub const REACTIONS: \[&str; 8\] = \[([^\]]*)\]/),
+  );
+});
+
+test('reaction chips toggle your own, count what arrives, and leave out ignored people', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.participants.set('bob', { id: 'bob', name: 'Bob' });
+  f.chat.receive(entry('1'));
+  f.state.handle = async (action, data) =>
+    action === 'reactToMessage'
+      ? { messageId: data.messageId, reactions: [{ emoji: data.emoji, participantIds: ['local'] }] }
+      : {};
+  const row = () => rows(f)[0];
+  const chips = () =>
+    row()
+      .querySelectorAll('.reaction-chip')
+      .map((chip) => [chip.textContent, chip.getAttribute('aria-pressed'), chip.title]);
+  row()
+    .querySelectorAll('button')
+    .find((node) => node.getAttribute('aria-label') === 'Add a reaction')
+    .click();
+  const picker = row().querySelector('.reaction-picker');
+  assert.equal(picker.hidden, false);
+  picker
+    .querySelectorAll('button')
+    .find((node) => node.textContent === '🎉')
+    .click();
+  await flush();
+  assert.deepEqual(f.state.requests.at(-1), {
+    action: 'reactToMessage',
+    data: { messageId: 'server-1', emoji: '🎉' },
+  });
+  assert.deepEqual(chips(), [['🎉 1', 'true', 'You']]);
+  f.chat.handleEvent({
+    type: 'messageReactions',
+    messageId: 'server-1',
+    reactions: [
+      { emoji: '🎉', participantIds: ['local', 'bob'] },
+      { emoji: '👍', participantIds: ['bob', 'gone'] },
+    ],
+  });
+  assert.deepEqual(chips(), [
+    ['🎉 2', 'true', 'You, Bob'],
+    ['👍 2', 'false', 'Bob, someone who left'],
+  ]);
+  row().querySelectorAll('.reaction-chip')[1].click();
+  await flush();
+  assert.deepEqual(f.state.requests.at(-1).data, { messageId: 'server-1', emoji: '👍' });
+  await f.chat.toggleIgnore('bob', 'Bob', false);
+  f.chat.handleEvent({
+    type: 'messageReactions',
+    messageId: 'server-1',
+    reactions: [{ emoji: '👍', participantIds: ['bob'] }],
+  });
+  assert.deepEqual(chips(), [], 'an ignored person\u2019s reaction is not shown');
+});
+
+test('a reply quotes what it answers, travels with the send, and a quote finds the original', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.receive(entry('1', { content: 'Where are the  slides?' }));
+  const replyButton = () =>
+    rows(f)[0]
+      .querySelectorAll('button')
+      .find((node) => node.getAttribute('aria-label') === 'Reply');
+  replyButton().click();
+  assert.equal(f.chat.replyBar.hidden, false);
+  assert.match(f.chat.replyBar.textContent, /^Replying to AliceWhere are the slides\?/);
+  f.chat.input.value = 'Linked above';
+  f.chat.send();
+  assert.equal(f.state.sent.at(-1)[0], 'public');
+  assert.equal(f.state.sent.at(-1).at(-1), 'server-1', 'the send names the message it answers');
+  assert.equal(
+    rows(f).at(-1).querySelector('.msg-reply').textContent,
+    'Alice: Where are the slides?',
+  );
+  assert.equal(f.chat.replyBar.hidden, true, 'sending clears the reply');
+  replyButton().click();
+  f.chat.input.emit('keydown', { key: 'Escape', preventDefault() {}, stopPropagation() {} });
+  assert.equal(f.chat.replyBar.hidden, true, 'Escape cancels it');
+  f.chat.input.value = 'no reply';
+  f.chat.send();
+  assert.equal(f.state.sent.at(-1).at(-1), undefined);
+  f.chat.receive(
+    entry('3', {
+      content: 'thanks',
+      replyTo: {
+        messageId: 'server-1',
+        participantId: 'alice',
+        participantName: 'Alice',
+        excerpt: 'Where are the slides?',
+      },
+    }),
+  );
+  rows(f)
+    .find((node) => node.querySelector('.msg-text').textContent === 'thanks')
+    .querySelector('.msg-reply')
+    .click();
+  assert.equal(rows(f)[0].classList.contains('flash'), true, 'the original is brought into view');
+  f.chat.receive(
+    entry('4', {
+      content: 'lost',
+      replyTo: { messageId: 'evicted', participantId: 'x', participantName: 'X', excerpt: 'old' },
+    }),
+  );
+  rows(f)
+    .find((node) => node.querySelector('.msg-text').textContent === 'lost')
+    .querySelector('.msg-reply')
+    .click();
+  assert.match(f.state.notifications.at(-1), /no longer in this chat/);
+  f.chat.receive(
+    entry('5', {
+      content: 'yes you',
+      replyTo: {
+        messageId: 'mine',
+        participantId: 'local',
+        participantName: 'Local',
+        excerpt: 'q',
+      },
+    }),
+  );
+  assert.equal(
+    rows(f)
+      .find((node) => node.querySelector('.msg-text').textContent === 'yes you')
+      .querySelector('.msg-reply').textContent,
+    'You: q',
+    'a quote of your own message says You, like the rest of the chat',
+  );
 });

@@ -1,4 +1,4 @@
-import type { ChatEntry } from './protocol';
+import type { ChatEntry, ChatReaction } from './protocol';
 
 export interface ChatItem extends ChatEntry {
   status: 'pending' | 'sent' | 'failed' | 'unknown';
@@ -200,6 +200,22 @@ export class ChatStore {
     }
   }
 
+  /** The oldest retained message in a conversation still counted unread. */
+  firstUnread(id: string): ChatItem | undefined {
+    return this.messages.find(
+      (item) => this.conversation(item) === id && this.unreadMessages.has(this.key(item)),
+    );
+  }
+
+  /** A retained message's reactions changed; they count toward the store's bound. */
+  setReactions(messageId: string, reactions: ChatReaction[]): boolean {
+    const item = this.messages.find((entry) => entry.messageId === messageId);
+    if (!item) return false;
+    item.reactions = reactions;
+    this.trim();
+    return true;
+  }
+
   markRead(id: string): void {
     for (const item of this.messages)
       if (this.conversation(item) === id) this.unreadMessages.delete(this.key(item));
@@ -259,7 +275,18 @@ export class ChatStore {
       (item.recipientId?.length ?? 0) +
       item.sentAt.length +
       (item.retry ? item.retry.chatSessionId.length + 24 : 0) +
-      (item.error?.length ?? 0)
+      (item.error?.length ?? 0) +
+      (item.replyTo
+        ? item.replyTo.excerpt.length +
+          item.replyTo.participantName.length +
+          item.replyTo.messageId.length +
+          item.replyTo.participantId.length
+        : 0) +
+      (item.reactions ?? []).reduce(
+        (total, reaction) =>
+          total + reaction.emoji.length + reaction.participantIds.join('').length,
+        0,
+      )
     );
   }
 

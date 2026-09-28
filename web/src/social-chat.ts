@@ -17,6 +17,8 @@ const TIMESTAMP_FORMATS: readonly TimestampFormat[] = [
 type Preferences = {
   allowPrivateMessages: boolean;
   sounds: boolean;
+  /** Desktop notices for mentions and private messages while the tab is out of sight. */
+  notifications: boolean;
   largeText: boolean;
   timestamps: TimestampFormat;
   /** The last look chosen here; a guest's next join asks for it. */
@@ -30,6 +32,14 @@ const LOOKS: readonly { kind: ChatStyleKind; label: string }[] = [
   { kind: 'bubble', label: 'Tinted bubble' },
 ];
 const AUTOMATIC_LOOK: ChatStyle = { color: null, style: 'accent' };
+/** The reactions the server accepts (`REACTIONS` in protocol.rs), in its order. */
+export const CHAT_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🔥', '👏'] as const;
+
+/** The start of a message on one line, as a reply quotes it. */
+function excerpt(text: string): string {
+  const flat = text.split(/\s+/).join(' ').trim();
+  return flat.length > 140 ? `${flat.slice(0, 140).trimEnd()}…` : flat;
+}
 
 /** A stored or typed look reduced to the palette and the known styles, like the server does. */
 function validLook(value: unknown): ChatStyle | null {
@@ -91,6 +101,7 @@ export class SocialChat {
   private preferences: Preferences = {
     allowPrivateMessages: true,
     sounds: false,
+    notifications: false,
     timestamps: 'hover',
     look: null,
     largeText: false,
@@ -109,6 +120,16 @@ export class SocialChat {
   private preferencesDialog: ReturnType<typeof modal> | null = null;
   private audio: AudioContext | null = null;
   private seenAtBottom = true;
+  // Where reading last resumed: the first message that had arrived unseen.
+  private dividerKey: string | null = null;
+  private readonly divider = el('div', undefined, 'chat-divider');
+  // People offered while an @mention is being typed, and the highlighted one.
+  private readonly mentionList = el('ul', undefined, 'mention-list');
+  private mentionOptions: { name: string; chatStyle?: ChatStyle }[] = [];
+  private mentionActive = 0;
+  // The message the next send answers, shown above the message box until sent or cancelled.
+  private replyingTo: ChatItem | null = null;
+  private readonly replyBar = el('div', undefined, 'reply-bar');
 
   constructor(private readonly options: Options) {
     const toolbar = el('div', undefined, 'conversation-toolbar');
@@ -150,6 +171,21 @@ export class SocialChat {
     document.getElementById('chat-input-row')!.prepend(emojiButton);
     document.getElementById('chat-input-row')!.before(this.emojiPanel);
     this.input.maxLength = 2000;
+    this.mentionList.id = 'mention-list';
+    this.mentionList.setAttribute('role', 'listbox');
+    this.mentionList.setAttribute('aria-label', 'People to mention');
+    this.mentionList.hidden = true;
+    // Choosing with the pointer must leave focus in the message box.
+    this.mentionList.addEventListener('mousedown', (event) => event.preventDefault());
+    this.input.setAttribute('role', 'combobox');
+    this.input.setAttribute('aria-autocomplete', 'list');
+    this.input.setAttribute('aria-controls', 'mention-list');
+    this.input.setAttribute('aria-expanded', 'false');
+    document.getElementById('chat-input-row')!.before(this.mentionList);
+    this.replyBar.hidden = true;
+    document.getElementById('chat-input-row')!.before(this.replyBar);
+    this.input.addEventListener('input', () => this.suggestMentions());
+    this.input.addEventListener('blur', () => this.closeMentions());
     this.input.addEventListener('keydown', (event) => this.onKey(event));
     this.input.addEventListener('input', () =>
       this.composition.save(this.store.active, this.input.value),
@@ -157,16 +193,19 @@ export class SocialChat {
     this.sendButton.addEventListener('click', () => this.send());
     this.messages.setAttribute('role', 'log');
     this.messages.setAttribute('aria-label', 'Conversation messages');
+    this.divider.setAttribute('role', 'separator');
+    this.divider.append(el('span', 'New messages'));
     this.messages.addEventListener('scroll', () => {
+      const wasAtBottom = this.seenAtBottom;
       this.seenAtBottom =
         this.messages.scrollHeight - this.messages.scrollTop - this.messages.clientHeight < 48;
-      if (this.seenAtBottom && this.isVisible()) this.store.markRead(this.store.active);
+      if (this.seenAtBottom && this.isVisible()) this.markActiveRead(!wasAtBottom);
       this.updateBadges();
     });
     document.getElementById('scroll-bottom-btn')!.addEventListener('click', () => {
       this.messages.scrollTop = this.messages.scrollHeight;
       this.seenAtBottom = true;
-      if (this.isVisible()) this.store.markRead(this.store.active);
+      if (this.isVisible()) this.markActiveRead(true);
       this.updateBadges();
     });
     document.addEventListener('visibilitychange', () => {
@@ -280,6 +319,9 @@ export class SocialChat {
     this.store.reset();
     for (const row of this.rows.values()) row.node.remove();
     this.rows.clear();
+    this.dividerKey = null;
+    this.divider.remove();
+    this.cancelReply();
     this.composition.reset();
     this.temporaryIgnored.clear();
     this.scope = '';
@@ -288,6 +330,7 @@ export class SocialChat {
     this.preferences = {
       allowPrivateMessages: true,
       sounds: false,
+      notifications: false,
       largeText: false,
       timestamps: 'hover',
       look: null,
@@ -380,6 +423,8 @@ export class SocialChat {
         if (item) delete item.retry;
       }
       this.render();
+    } else if (message.type === 'messageReactions') {
+      if (this.store.setReactions(message.messageId, message.reactions)) this.render();
     } else if (message.type === 'nicknameChanged') {
       if (this.store.names.has(message.participantId))
         this.store.names.set(message.participantId, message.nickname);
@@ -481,8 +526,50 @@ export class SocialChat {
       )
         this.store.markUnread(message);
       if (!replay && this.preferences.sounds) this.playSound(message.recipientId ? 700 : 440);
+      if (!replay) this.notifyDesktop(message);
     }
     return true;
+  }
+
+  /** An opted-in desktop notice for a mention or private message while the tab is out of sight. */
+  private notifyDesktop(message: ChatEntry): void {
+    if (!this.preferences.notifications || typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
+    if (!document.hidden && document.hasFocus?.() !== false) return;
+    const nickname = this.options.getRoom()?.nickname;
+    const direct = Boolean(message.recipientId);
+    const mentioned = Boolean(
+      nickname && message.content.toLowerCase().includes(`@${nickname.toLowerCase()}`),
+    );
+    if (!direct && !mentioned) return;
+    try {
+      const notice = new Notification(
+        direct
+          ? `${message.participantName} sent you a private message`
+          : `${message.participantName} mentioned you`,
+        { body: message.content.slice(0, 160), tag: message.messageId },
+      );
+      notice.onclick = () => {
+        globalThis.focus?.();
+        if (direct) this.switchConversation(message.participantId, message.participantName);
+        else if (this.store.active !== 'public') this.switchConversation('public');
+        document.querySelector<HTMLButtonElement>('[data-tab="chat"]')?.click();
+        notice.close();
+      };
+    } catch {
+      /* Some browsers (Android Chrome) only notify through a service worker. */
+    }
+  }
+
+  /** Asks during the click that enabled notices; resolves whether they may be shown. */
+  private notificationPermission(wanted: boolean): Promise<boolean> {
+    if (!wanted || typeof Notification === 'undefined') return Promise.resolve(false);
+    if (Notification.permission !== 'default')
+      return Promise.resolve(Notification.permission === 'granted');
+    return Notification.requestPermission().then(
+      (answer) => answer === 'granted',
+      () => false,
+    );
   }
 
   private send(): void {
@@ -502,9 +589,23 @@ export class SocialChat {
     const sequence = ++this.chatSequence;
     const recipientId = this.store.active === 'public' ? undefined : this.store.active;
     const recipientName = recipientId === undefined ? undefined : this.store.names.get(recipientId);
+    // Sending shows the conversation is caught up; the divider has served its purpose.
+    this.dividerKey = null;
+    const answering =
+      this.replyingTo && this.store.conversation(this.replyingTo) === this.store.active
+        ? this.replyingTo
+        : null;
     const retained = this.store.pending(
       {
         messageId: `pending:${id}`,
+        ...(answering && {
+          replyTo: {
+            messageId: answering.messageId,
+            participantId: answering.participantId,
+            participantName: answering.participantName,
+            excerpt: excerpt(answering.content),
+          },
+        }),
         clientMessageId: id,
         participantId: room.localParticipantId,
         participantName: room.nickname,
@@ -527,10 +628,11 @@ export class SocialChat {
     }
     this.startPending(id);
     try {
-      if (recipientId) room.sendPrivate(recipientId, content, id, sequence);
-      else room.sendChat(content, id, sequence);
+      if (recipientId) room.sendPrivate(recipientId, content, id, sequence, answering?.messageId);
+      else room.sendChat(content, id, sequence, answering?.messageId);
       this.composition.sent(this.store.active, content);
       this.input.value = '';
+      this.cancelReply();
     } catch (error) {
       this.finishSend(id, 'error');
       this.clearPending(id);
@@ -603,6 +705,7 @@ export class SocialChat {
         chatSessionId: attempt.chatSessionId,
         content: message.content,
         ...(message.recipientId !== undefined && { targetParticipantId: message.recipientId }),
+        ...(message.replyTo && { replyTo: message.replyTo.messageId }),
       });
     } catch {
       this.finishSend(message.clientMessageId, 'unknown');
@@ -737,7 +840,12 @@ export class SocialChat {
     for (const message of visible) {
       const node = this.messageRow(message, room?.nickname);
       const time = Date.parse(message.sentAt);
-      const grouped = previousSender === message.participantId && time - previousTime < 120_000;
+      if (position === this.divider) position = position.nextSibling;
+      // The divider starts a new block even within one sender's run.
+      const grouped =
+        previousSender === message.participantId &&
+        time - previousTime < 120_000 &&
+        this.rowKey(message) !== this.dividerKey;
       if (node.classList.contains('grouped') !== grouped) node.classList.toggle('grouped', grouped);
       // Keep unchanged rows in place. insertBefore also handles the uncommon
       // chronological move when an acknowledgement updates a pending timestamp.
@@ -746,10 +854,36 @@ export class SocialChat {
       previousSender = message.participantId;
       previousTime = time;
     }
+    this.placeDivider();
     this.messages.scrollTop = atBottom ? this.messages.scrollHeight : scrollTop;
     if (forceScroll) this.seenAtBottom = true;
-    if (this.seenAtBottom && this.isVisible()) this.store.markRead(this.store.active);
+    if (this.seenAtBottom && this.isVisible() && this.markActiveRead()) this.placeDivider();
     this.updateBadges();
+  }
+
+  /**
+   * Reading resumes: remember where the unseen messages began, then count them read.
+   * Returns whether that moved the divider.
+   */
+  private markActiveRead(placeNow = false): boolean {
+    const first = this.store.firstUnread(this.store.active);
+    const key = first ? this.rowKey(first) : this.dividerKey;
+    this.store.markRead(this.store.active);
+    if (key === this.dividerKey) return false;
+    this.dividerKey = key;
+    if (placeNow) this.placeDivider();
+    return true;
+  }
+
+  /** The divider sits above the first message that arrived unseen, while it is shown. */
+  private placeDivider(): void {
+    const row = this.dividerKey ? this.rows.get(this.dividerKey)?.node : undefined;
+    if (!row?.isConnected) {
+      this.divider.remove();
+      return;
+    }
+    if (this.divider.nextSibling !== row) this.messages.insertBefore(this.divider, row);
+    row.classList.toggle('grouped', false);
   }
 
   private rowKey(message: ChatEntry): string {
@@ -786,6 +920,8 @@ export class SocialChat {
       this.preferences.timestamps,
       look?.style,
       color,
+      message.replyTo,
+      message.reactions,
     ]);
     const key = this.rowKey(message);
     const previous = this.rows.get(key);
@@ -806,9 +942,23 @@ export class SocialChat {
       );
       node.append(sender);
     }
+    if (message.replyTo) {
+      const reply = message.replyTo;
+      const quote = button(
+        this.isIgnored(reply.participantId)
+          ? 'Reply to a message you have hidden'
+          : `${reply.participantId === this.store.localId ? 'You' : reply.participantName}: ${reply.excerpt}`,
+        () => this.showMessage(reply.messageId),
+        'msg-reply',
+      );
+      quote.title = 'Show the message this answers';
+      node.append(quote);
+    }
     const text = el('div', undefined, 'msg-text');
     appendLinkedText(text, content, mentioned ? `@${nickname}` : undefined);
     node.append(text);
+    this.appendReactions(node, message);
+    if (participantId && status === 'sent') this.appendActions(node, message);
     if (participantId) {
       const meta = el('div', undefined, 'msg-time');
       const date = new Date(sentAt);
@@ -839,6 +989,124 @@ export class SocialChat {
     }
     this.rows.set(key, { node, fingerprint });
     return node;
+  }
+
+  /** Reaction chips; each toggles the viewer's own. Ignored people are left out. */
+  private appendReactions(node: HTMLElement, message: ChatItem): void {
+    const reactions = (message.reactions ?? [])
+      .map((reaction) => ({
+        emoji: reaction.emoji,
+        people: reaction.participantIds.filter((id) => !this.isIgnored(id)),
+      }))
+      .filter((reaction) => reaction.people.length);
+    if (!reactions.length) return;
+    const bar = el('div', undefined, 'msg-reactions');
+    for (const reaction of reactions) {
+      const chip = button(
+        `${reaction.emoji} ${reaction.people.length}`,
+        () => this.react(message, reaction.emoji),
+        'reaction-chip',
+      );
+      chip.setAttribute('aria-pressed', String(reaction.people.includes(this.store.localId ?? '')));
+      chip.title = reaction.people.map((id) => this.personName(id)).join(', ');
+      bar.append(chip);
+    }
+    node.append(bar);
+  }
+
+  /** React and Reply, floating above a message on hover, focus or a tap. */
+  private appendActions(node: HTMLElement, message: ChatItem): void {
+    const actions = el('div', undefined, 'msg-actions');
+    const picker = el('div', undefined, 'reaction-picker');
+    picker.hidden = true;
+    for (const emoji of CHAT_REACTIONS)
+      picker.append(
+        button(
+          emoji,
+          () => {
+            picker.hidden = true;
+            this.react(message, emoji);
+          },
+          'msg-action',
+        ),
+      );
+    const react = button(
+      '☺',
+      () => {
+        picker.hidden = !picker.hidden;
+      },
+      'msg-action',
+    );
+    const reply = button('↩', () => this.startReply(message), 'msg-action');
+    for (const [control, label] of [
+      [react, 'Add a reaction'],
+      [reply, 'Reply'],
+    ] as const) {
+      control.setAttribute('aria-label', label);
+      control.title = label;
+    }
+    actions.append(react, reply, picker);
+    node.append(actions);
+    // Touch screens have no hover: a tap on the message shows its actions.
+    node.onclick = (event) => {
+      if (!(event.target as Element).closest('button, a')) node.classList.toggle('show-actions');
+    };
+  }
+
+  private react(message: ChatItem, emoji: string): void {
+    const room = this.options.getRoom();
+    if (!room) return;
+    room
+      .requestSocial('reactToMessage', { messageId: message.messageId, emoji })
+      .then((result) => {
+        if (this.store.setReactions(result.messageId, result.reactions)) this.render();
+      })
+      .catch((error: unknown) =>
+        this.options.notify(error instanceof Error ? error.message : 'Could not add the reaction'),
+      );
+  }
+
+  private personName(id: string): string {
+    if (id === this.store.localId) return 'You';
+    return this.options.getRoom()?.getParticipants().get(id)?.name ?? 'someone who left';
+  }
+
+  /** Answer a message: the next send quotes it. */
+  private startReply(message: ChatItem): void {
+    this.replyingTo = message;
+    const cancel = button('✕', () => this.cancelReply(), 'reply-bar-cancel');
+    cancel.setAttribute('aria-label', 'Cancel reply');
+    this.replyBar.replaceChildren(
+      el(
+        'span',
+        `Replying to ${message.participantId === this.store.localId ? 'yourself' : message.participantName}`,
+        'reply-bar-label',
+      ),
+      el('span', excerpt(message.content), 'reply-bar-excerpt'),
+      cancel,
+    );
+    this.replyBar.hidden = false;
+    this.input.focus();
+  }
+
+  private cancelReply(): void {
+    this.replyingTo = null;
+    this.replyBar.hidden = true;
+    this.replyBar.replaceChildren();
+  }
+
+  /** Brings the message a reply quotes into view, if it is still in this chat. */
+  private showMessage(messageId: string): void {
+    const row = [...this.rows.values()].find(
+      (entry) => entry.node.dataset['messageId'] === messageId,
+    );
+    if (!row) {
+      this.options.notify('That message is no longer in this chat');
+      return;
+    }
+    row.node.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    row.node.classList.toggle('flash', true);
+    setTimeout(() => row.node.classList.toggle('flash', false), 1200);
   }
 
   /** The look a message was sent with; entries without one wear the sender's current look. */
@@ -879,23 +1147,37 @@ export class SocialChat {
 
   private onKey(event: KeyboardEvent): void {
     if (event.isComposing) return;
+    // Tab completes a typed or pasted "@name" even before the list has opened.
+    if (event.key === 'Tab' && !this.mentionOptions.length) this.suggestMentions();
+    if (this.mentionOptions.length) {
+      const count = this.mentionOptions.length;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        this.mentionActive =
+          (this.mentionActive + (event.key === 'ArrowDown' ? 1 : count - 1)) % count;
+        this.renderMentions();
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        this.chooseMention(this.mentionActive);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        this.closeMentions();
+        return;
+      }
+    }
+    if (event.key === 'Escape' && this.replyingTo) {
+      event.preventDefault();
+      this.cancelReply();
+      return;
+    }
     if (event.key === 'Enter') {
       event.preventDefault();
       this.send();
-    }
-    if (event.key === 'Tab') {
-      const position = this.input.selectionStart ?? 0;
-      const prefix = this.input.value.slice(0, position);
-      const match = /(?:^|\s)@([^@\s]*)$/.exec(prefix);
-      if (match) {
-        const candidates = [...(this.options.getRoom()?.getParticipants().values() ?? [])].filter(
-          (person) => person.name.toLowerCase().startsWith(match[1]!.toLowerCase()),
-        );
-        if (candidates.length) {
-          event.preventDefault();
-          this.insertText(`@${candidates[0]!.name} `, position - match[1]!.length - 1, position);
-        }
-      }
     }
     if (
       event.key === 'ArrowUp' &&
@@ -909,6 +1191,63 @@ export class SocialChat {
     }
   }
 
+  /** The "@name" being typed just before the caret, if any. */
+  private mentionQuery(): { query: string; start: number; end: number } | null {
+    const end = this.input.selectionStart ?? this.input.value.length;
+    const match = /(?:^|\s)@([^@\s]*)$/.exec(this.input.value.slice(0, end));
+    return match ? { query: match[1]!, start: end - match[1]!.length - 1, end } : null;
+  }
+
+  /** Typing "@" and part of a name offers the people it could mean, best matches first. */
+  private suggestMentions(): void {
+    const typed = this.mentionQuery()?.query.toLowerCase();
+    const people =
+      typed === undefined ? [] : [...(this.options.getRoom()?.getParticipants().values() ?? [])];
+    const name = (person: { name: string }): string => person.name.toLowerCase();
+    const starts = people.filter((person) => name(person).startsWith(typed!));
+    const contains = people.filter(
+      (person) => !starts.includes(person) && name(person).includes(typed!),
+    );
+    this.mentionOptions = [...starts, ...contains].slice(0, 6);
+    this.mentionActive = 0;
+    this.renderMentions();
+  }
+
+  private renderMentions(): void {
+    const open = this.mentionOptions.length > 0;
+    this.mentionList.hidden = !open;
+    this.input.setAttribute('aria-expanded', String(open));
+    this.mentionList.replaceChildren(
+      ...this.mentionOptions.map((person, index) => {
+        const option = el('li');
+        option.id = `mention-option-${index}`;
+        option.setAttribute('role', 'option');
+        option.setAttribute('aria-selected', String(index === this.mentionActive));
+        const dot = el('span', undefined, 'mention-dot');
+        dot.style.setProperty('--person-color', chatColor(person.name, person.chatStyle?.color));
+        option.append(dot, el('span', person.name));
+        option.addEventListener('click', () => this.chooseMention(index));
+        return option;
+      }),
+    );
+    if (open)
+      this.input.setAttribute('aria-activedescendant', `mention-option-${this.mentionActive}`);
+    else this.input.removeAttribute('aria-activedescendant');
+  }
+
+  private chooseMention(index: number): void {
+    const person = this.mentionOptions[index];
+    const query = this.mentionQuery();
+    this.closeMentions();
+    if (person && query) this.insertText(`@${person.name} `, query.start, query.end);
+  }
+
+  private closeMentions(): void {
+    if (!this.mentionOptions.length) return;
+    this.mentionOptions = [];
+    this.renderMentions();
+  }
+
   private insertText(text: string, start: number, end: number): void {
     const next = this.input.value.slice(0, start) + text + this.input.value.slice(end);
     if (next.length > 2000 || new TextEncoder().encode(next).length > 4096) {
@@ -920,7 +1259,10 @@ export class SocialChat {
   }
 
   private switchConversation(id: string, name?: string): void {
+    this.cancelReply();
     this.composition.save(this.store.active, this.input.value);
+    const first = this.store.firstUnread(id);
+    this.dividerKey = first ? this.rowKey(first) : null;
     this.store.open(id, name);
     this.input.value = this.composition.draft(id);
     this.render(true);
@@ -968,6 +1310,7 @@ export class SocialChat {
     this.preferences = {
       allowPrivateMessages: true,
       sounds: false,
+      notifications: false,
       largeText: false,
       timestamps: 'hover',
       look: null,
@@ -980,6 +1323,7 @@ export class SocialChat {
       if (!value) return;
       this.preferences.allowPrivateMessages = value.allowPrivateMessages !== false;
       this.preferences.sounds = value.sounds === true;
+      this.preferences.notifications = value.notifications === true;
       this.preferences.largeText = value.largeText === true;
       if (TIMESTAMP_FORMATS.includes(value.timestamps as TimestampFormat))
         this.preferences.timestamps = value.timestamps as TimestampFormat;
@@ -1073,6 +1417,13 @@ export class SocialChat {
     const large = el('input');
     large.type = 'checkbox';
     large.checked = this.preferences.largeText;
+    // Only where the browser can show desktop notices at all.
+    const notices = typeof Notification === 'undefined' ? null : el('input');
+    if (notices) {
+      notices.type = 'checkbox';
+      notices.dataset['preference'] = 'notifications';
+      notices.checked = this.preferences.notifications && Notification.permission === 'granted';
+    }
     // Each choice is shown as it looks, in the viewer's own time.
     const timestamps = el('select');
     timestamps.dataset['preference'] = 'timestamps';
@@ -1091,6 +1442,7 @@ export class SocialChat {
       ...look.nodes,
       field('Allow incoming private messages', allow),
       field('Message and PM sounds', sounds),
+      ...(notices ? [field('Desktop notifications for mentions and PMs', notices)] : []),
       field('Larger chat text', large),
       field('Timestamps', timestamps),
     );
@@ -1112,9 +1464,15 @@ export class SocialChat {
               ? (timestamps.value as TimestampFormat)
               : this.preferences.timestamps,
           };
-          // Audio must unlock during the click, before waiting for the server.
+          // Audio and notification permission must start during the click, before any wait.
           this.resumeSoundFromGesture(sounds.checked);
+          const noticesAllowed = this.notificationPermission(notices?.checked === true);
           try {
+            next.notifications = await noticesAllowed;
+            if (notices?.checked && !next.notifications)
+              this.options.notify(
+                'Notifications are blocked for this site in your browser settings',
+              );
             await this.pushPreferences(room, next, new Map(this.temporaryIgnored));
             if (
               !this.contextCurrent(activation, room, viewer) ||

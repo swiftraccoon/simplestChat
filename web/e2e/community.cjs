@@ -649,13 +649,30 @@ async function login(page, email, value) {
   await page.locator('#auth-bar-user').waitFor({ state: 'visible' });
 }
 const lastJoin = new WeakMap();
+// The server admits at most 10 joins per address into one room per minute, and
+// every client here shares one address: joins pace themselves against that limit,
+// counting the room's creation and the rejoin an interrupted setup makes by itself.
+const JOIN_LIMIT = 10;
+const JOIN_WINDOW_MS = 61_000;
+const joinTimes = [];
+function recordJoin() {
+  joinTimes.push(Date.now());
+}
+async function paceJoins(page) {
+  while (joinTimes.length && Date.now() - joinTimes[0] >= JOIN_WINDOW_MS) joinTimes.shift();
+  if (joinTimes.length < JOIN_LIMIT) return;
+  await page.waitForTimeout(joinTimes[0] + JOIN_WINDOW_MS - Date.now());
+  joinTimes.shift();
+}
 async function join(page, name) {
   const remaining = 1100 - (Date.now() - (lastJoin.get(page) || 0));
   if (remaining > 0) await page.waitForTimeout(remaining);
+  await paceJoins(page);
   await page.locator('#name-input').fill(name);
   await page.locator('#room-input').fill(runId);
   await page.locator('#join-btn').click();
   lastJoin.set(page, Date.now());
+  recordJoin();
   await connected(page);
 }
 async function leave(page) {
@@ -686,13 +703,29 @@ async function action(page, name, label) {
     }
   await page.locator('#mod-menu').getByRole('button', { name: label, exact: true }).click();
 }
+/** Room tools needed now and then live in the room tools' "More" menu (absent in older builds). */
+async function openRoomMenu(page) {
+  const more = page.locator('#room-more-btn');
+  if ((await more.count()) && (await more.getAttribute('aria-expanded')) !== 'true')
+    await more.click();
+}
 async function header(page, name) {
-  // Account actions stay in the header; room-scoped actions live in the room tools.
-  await page
+  // Account actions stay in the header; room-scoped actions live in the room tools' menu.
+  const target = page
     .locator('#community-actions, #room-actions')
-    .getByRole('button', { name, exact: true })
-    .click();
+    .getByRole('button', { name, exact: true });
+  if (!(await target.isVisible())) await openRoomMenu(page);
+  await target.click();
   return page.getByRole('dialog', { name, exact: true });
+}
+/** Whether a room action is offered, read from the menu and leaving it closed. */
+async function roomMenuOffers(page, name) {
+  await openRoomMenu(page);
+  await page
+    .locator('#room-actions')
+    .getByRole('button', { name, exact: true })
+    .waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
 }
 async function close(dialog) {
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
@@ -879,6 +912,7 @@ async function setRole(owner, name, role) {
       await owner.locator('#cr-id').fill(runId);
       await owner.locator('#cr-name').fill('E2E Community Room');
       await owner.locator('#create-room-submit').click();
+      recordJoin();
       await connected(owner);
       await join(member, 'E2E Member');
       await join(guest, 'E2E Guest');
@@ -899,7 +933,11 @@ async function setRole(owner, name, role) {
         'no duplicate toolbar setup',
       );
       for (const selector of ['#settings-btn', '#mic-setup-btn']) {
+        // Mic setup waits in the More menu, and closing the dialog returns to More.
+        const inMenu = selector === '#mic-setup-btn';
+        if (inMenu) await openRoomMenu(guest);
         const opener = guest.locator(selector);
+        const returnsTo = inMenu ? guest.locator('#room-more-btn') : opener;
         await opener.focus();
         await opener.press('Enter');
         const dialog = guest.getByRole('dialog', { name: 'Your settings', exact: true });
@@ -917,7 +955,7 @@ async function setRole(owner, name, role) {
         await guest.keyboard.press('Escape');
         await dialog.waitFor({ state: 'hidden' });
         assert.equal(
-          await opener.evaluate((node) => node === document.activeElement),
+          await returnsTo.evaluate((node) => node === document.activeElement),
           true,
           'Escape restores the opening control',
         );
@@ -1203,10 +1241,7 @@ async function setRole(owner, name, role) {
     });
     await step('membership roles, live moderation gates and allow-chat toggle', async () => {
       await action(owner, 'E2E Member', 'Moderator');
-      await member
-        .locator('#room-actions')
-        .getByRole('button', { name: 'Manage room', exact: true })
-        .waitFor({ state: 'visible' });
+      await roomMenuOffers(member, 'Manage room');
       await setRole(owner, 'E2E Member', 2);
       await setRole(owner, 'E2E Member', 1);
       await roomSetting(owner, '#rs-moderated', true);
@@ -1242,10 +1277,7 @@ async function setRole(owner, name, role) {
         await owner.getByRole('button', { name: 'Close PM', exact: true }).click();
         await chatEnabled(owner, true);
         await join(member, 'E2E Member');
-        await member
-          .locator('#room-actions')
-          .getByRole('button', { name: 'Manage room', exact: true })
-          .waitFor({ state: 'visible' });
+        await roomMenuOffers(member, 'Manage room');
       },
     );
     await step('ban review/unban and rejoin', async () => {
@@ -1276,6 +1308,7 @@ async function setRole(owner, name, role) {
     await step(
       'local media preview, real camera/audio receive and personal hide/restore',
       async () => {
+        await openRoomMenu(guest);
         await guest.locator('#mic-setup-btn').click();
         let setup = guest.getByRole('dialog', { name: 'Your settings', exact: true });
         await setup.getByLabel('Camera preview', { exact: true }).check();
@@ -1547,6 +1580,8 @@ async function setRole(owner, name, role) {
           turnRelay && options.name === 'webkit',
         );
         await join(probe, 'Setup recovery');
+        // The interrupted setup rejoins by itself: a second join from this address.
+        recordJoin();
         await probe.waitForFunction(() => {
           const counts = window.__communitySignalingReconnect.snapshot().counters;
           return (

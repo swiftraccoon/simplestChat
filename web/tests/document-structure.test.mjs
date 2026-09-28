@@ -23,6 +23,17 @@ test('room chrome has homes for room actions, diagnostics and the phone panel to
   assert.match(html, /id="room-actions"/);
   assert.match(html, /id="home-tools"/);
   assert.match(html, /id="room-tools-right"/);
+  // The "More" menu holds the rarer room tools; repair tools land in its last group.
+  assert.match(html, /id="room-more-btn"[^>]*aria-controls="room-more-menu"/);
+  assert.match(html, /id="room-more-menu"[^>]*hidden/);
+  assert.match(html, /id="room-more-repair"/);
+  assert.match(html, /id="shortcuts-btn"/);
+  for (const [id, key] of [
+    ['mic-btn', 'M'],
+    ['cam-btn', 'V'],
+    ['screen-btn', 'S'],
+  ])
+    assert.match(html, new RegExp(`id="${id}"[^>]*aria-keyshortcuts="${key}"`));
   assert.match(html, /id="sidebar-collapse"/);
   assert.match(html, /data-tab="users"[^>]*>\s*People\s*</, 'one word for the roster everywhere');
 });

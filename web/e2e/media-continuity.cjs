@@ -118,6 +118,12 @@ function installDeviceFixtures() {
   };
 }
 
+/** Room tools needed now and then live in the room tools' "More" menu (absent in older builds). */
+async function openRoomMenu(page) {
+  const more = page.locator('#room-more-btn');
+  if ((await more.count()) && (await more.getAttribute('aria-expanded')) !== 'true')
+    await more.click();
+}
 async function join(browser, label) {
   const context = await browser.newContext({
     ...options.contextOptions,
@@ -357,6 +363,7 @@ async function main() {
       );
     });
     assert.equal(stopped, true);
+    await openRoomMenu(viewer);
     await viewer.locator('#refresh-incoming-media').click();
     await progressing(viewer, 'explicit-connected-receiver-recovery');
     assert.equal(

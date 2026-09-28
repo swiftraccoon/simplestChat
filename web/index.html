@@ -47,22 +47,54 @@
 
       <nav id="room-tools" aria-label="Room tools" hidden>
         <div class="room-navigation">
-          <button id="copy-room-link" type="button">Copy room link</button>
-          <button id="mic-setup-btn" type="button">Mic setup</button>
-          <div id="room-actions"></div>
+          <button
+            id="copy-room-link"
+            class="tool-button"
+            type="button"
+            title="Share a link to this room"
+          >
+            <span class="tool-label">Invite</span>
+          </button>
         </div>
         <div id="room-tools-right" class="room-tools-right">
           <button
             id="toggle-roster"
+            class="tool-button"
             type="button"
             aria-controls="classic-users-panel users-panel"
             aria-expanded="true"
           >
-            People
+            <span class="tool-label">People</span>
           </button>
-          <button id="toggle-chat" type="button" aria-controls="sidebar" aria-expanded="true">
-            Chat
+          <button
+            id="toggle-chat"
+            class="tool-button"
+            type="button"
+            aria-controls="sidebar"
+            aria-expanded="true"
+          >
+            <span class="tool-label">Chat</span>
           </button>
+          <div id="room-volume-slot" class="room-volume-slot"></div>
+          <div class="room-more">
+            <button
+              id="room-more-btn"
+              class="tool-button"
+              type="button"
+              aria-expanded="false"
+              aria-controls="room-more-menu"
+            >
+              <span class="tool-label">More</span>
+            </button>
+            <div id="room-more-menu" class="room-more-menu" hidden>
+              <div id="room-actions"></div>
+              <button id="mic-setup-btn" type="button">Mic setup</button>
+              <hr />
+              <button id="shortcuts-btn" type="button">Keyboard shortcuts</button>
+              <hr />
+              <div id="room-more-repair" class="room-more-group"></div>
+            </div>
+          </div>
         </div>
       </nav>
 
@@ -177,9 +209,9 @@
             </div>
           </aside>
           <nav id="controls" aria-label="Call controls">
-            <button id="mic-btn" title="Toggle microphone"></button>
-            <button id="cam-btn" title="Toggle camera"></button>
-            <button id="screen-btn" title="Share screen"></button>
+            <button id="mic-btn" aria-keyshortcuts="M" title="Toggle microphone"></button>
+            <button id="cam-btn" aria-keyshortcuts="V" title="Toggle camera"></button>
+            <button id="screen-btn" aria-keyshortcuts="S" title="Share screen"></button>
             <button id="hand-btn" title="Raise hand" hidden></button>
             <button id="room-settings-btn" title="Room settings" hidden></button>
             <button id="settings-btn" title="Settings"></button>

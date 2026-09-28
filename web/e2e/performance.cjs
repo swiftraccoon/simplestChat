@@ -111,6 +111,12 @@ const clients = [];
 const pendingBodies = [];
 let browser;
 
+/** Room tools needed now and then live in the room tools' "More" menu (absent in older builds). */
+async function openRoomMenu(page) {
+  const more = page.locator('#room-more-btn');
+  if ((await more.count()) && (await more.getAttribute('aria-expanded')) !== 'true')
+    await more.click();
+}
 async function makeClient(label) {
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
@@ -290,6 +296,7 @@ async function inboundStats(page) {
 
     // Mark setup complete without starting preview or including dialog interaction
     // in the camera-publish-to-first-decoded-frame measurement.
+    await openRoomMenu(owner);
     await owner.locator('#mic-setup-btn').click();
     // Support the baseline and current product labels with the same harness.
     // Playwright's strict locator still requires one matching native dialog.

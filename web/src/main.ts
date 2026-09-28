@@ -206,12 +206,13 @@ const mediaControls = new MediaControls({
   appearanceControls,
   microphoneControls,
 });
-mediaControls.mountToolbar(document.getElementById('room-tools-right')!);
+mediaControls.mountToolbar(document.getElementById('room-volume-slot')!);
 let localTextMuted = false;
 let roomRecovering = false;
 let cameraTogglePending = false;
 let microphoneTogglePending = false;
 const remoteTiles = new Map<string, HTMLDivElement>();
+let pinnedTileKey: string | null = null;
 /** Size observers per camera tile: the layer a tile can show caps what it requests. */
 const tileLayerCaps = new Map<string, { observer: ResizeObserver; layer: number | null }>();
 
@@ -834,8 +835,10 @@ function applyPanelPreferences(): void {
   );
   roomScreen.classList.toggle('roster-collapsed', rosterCollapsed);
   roomScreen.classList.toggle('chat-collapsed', chatCollapsed);
-  rosterToggleBtn.textContent = rosterCollapsed ? 'Show people' : 'People';
-  chatToggleBtn.textContent = chatCollapsed ? 'Show chat' : 'Chat';
+  rosterToggleBtn.querySelector('.tool-label')!.textContent = rosterCollapsed
+    ? 'Show people'
+    : 'People';
+  chatToggleBtn.querySelector('.tool-label')!.textContent = chatCollapsed ? 'Show chat' : 'Chat';
   rosterToggleBtn.setAttribute('aria-expanded', String(!rosterCollapsed));
   chatToggleBtn.setAttribute('aria-expanded', String(!chatCollapsed));
   const roster = document.getElementById('classic-users-panel');
@@ -942,6 +945,18 @@ document.getElementById('copy-room-link')!.addEventListener(
     const url = new URL(window.location.href);
     url.hash = activeRoom.currentRoomId;
     url.search = '';
+    // Phones offer their share sheet; desktops copy, as people expect there.
+    if (!isDesktopLayout() && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: activeRoom.roomSettings?.displayName ?? activeRoom.currentRoomId,
+          url: url.toString(),
+        });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+      }
+    }
     try {
       await navigator.clipboard.writeText(url.toString());
       if (room === activeRoom) showToast('Room link copied');
@@ -950,6 +965,89 @@ document.getElementById('copy-room-link')!.addEventListener(
     }
   }, 'Could not copy the room link'),
 );
+
+for (const [id, icon] of [
+  ['copy-room-link', icons.link()],
+  ['toggle-roster', icons.userIcon()],
+  ['toggle-chat', icons.chatIcon()],
+] as const)
+  document.getElementById(id)!.insertAdjacentHTML('afterbegin', icon);
+document.getElementById('room-more-btn')!.insertAdjacentHTML('beforeend', icons.chevronDown());
+document.getElementById('shortcuts-btn')!.addEventListener('click', showKeyboardShortcuts);
+setupRoomMenu();
+if (typeof ResizeObserver !== 'undefined') {
+  const bars = new ResizeObserver(placeToasts);
+  bars.observe(document.querySelector('header')!);
+  bars.observe(roomTools);
+}
+
+/** Toasts sit just below the top bars, whatever they wrap to, clear of the room tools. */
+function placeToasts(): void {
+  const bars = roomTools.hidden ? document.querySelector('header')! : roomTools;
+  const top = Math.round(bars.getBoundingClientRect().bottom) + 12;
+  toastContainer.style.setProperty('--toast-top', `${top}px`);
+}
+
+/** "More" holds the room tools needed now and then; any choice, Escape or a click away closes it. */
+function setupRoomMenu(): void {
+  const toggle = document.getElementById('room-more-btn') as HTMLButtonElement;
+  const menu = document.getElementById('room-more-menu')!;
+  const wrapper = toggle.parentElement!;
+  const setOpen = (open: boolean): void => {
+    menu.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    if (open) menu.querySelector<HTMLElement>('button:not([hidden]):not(:disabled)')?.focus();
+  };
+  toggle.addEventListener('click', () => setOpen(toggle.getAttribute('aria-expanded') !== 'true'));
+  // Focus returns to the toggle before a choice runs, so a dialog it opens restores
+  // focus there instead of to a menu item that is about to be hidden.
+  menu.addEventListener('click', () => toggle.focus(), true);
+  menu.addEventListener('click', (event) => {
+    if ((event.target as Element).closest('button')) setOpen(false);
+  });
+  wrapper.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || menu.hidden) return;
+    event.stopPropagation();
+    setOpen(false);
+    toggle.focus();
+  });
+  wrapper.addEventListener('focusout', (event) => {
+    if (!menu.hidden && !wrapper.contains(event.relatedTarget as Node | null)) setOpen(false);
+  });
+  document.addEventListener('click', (event) => {
+    if (!menu.hidden && !wrapper.contains(event.target as Node)) setOpen(false);
+  });
+}
+
+/** Every global shortcut in one place; the call buttons also name their own. */
+function showKeyboardShortcuts(): void {
+  const view = modal('Keyboard shortcuts');
+  const list = el('dl', undefined, 'shortcut-list');
+  const keys = (...names: string[]): HTMLElement => {
+    const term = el('dt');
+    names.forEach((name, index) => {
+      if (index) term.append(' or ');
+      term.append(el('kbd', name));
+    });
+    return term;
+  };
+  list.append(
+    keys('M'),
+    el('dd', 'Turn your microphone on or off'),
+    keys('V'),
+    el('dd', 'Turn your camera on or off'),
+    keys('S'),
+    el('dd', 'Start or stop sharing your screen'),
+    keys('Space', 'T'),
+    el('dd', 'Hold to talk, in push-to-talk mode'),
+    keys('Esc'),
+    el('dd', 'Close a menu or dialog'),
+  );
+  view.body.append(
+    el('p', 'Shortcuts work in a room whenever you are not typing in a text box.', 'setting-hint'),
+    list,
+  );
+}
 
 /** Clipboard access can be refused; offer the link in a selectable field instead. */
 function showCopyFallback(url: string): void {
@@ -972,9 +1070,9 @@ function showRoomExitNotice(title: string, message: string): void {
   view.body.append(button('Back to home', () => view.close(), 'btn-primary'));
 }
 
-/** Diagnostics sit on the home card outside a room and among the room tools inside one. */
+/** Diagnostics sit on the home card outside a room and in the room tools' "More" menu inside one. */
 function placeDiagnosticsButton(inRoom: boolean): void {
-  const target = document.getElementById(inRoom ? 'room-tools-right' : 'home-tools');
+  const target = document.getElementById(inRoom ? 'room-more-repair' : 'home-tools');
   if (target && diagnosticsButton.parentNode !== target) target.append(diagnosticsButton);
 }
 
@@ -2279,6 +2377,7 @@ async function leaveRoomAndShowHome(): Promise<void> {
   unreadBadge.hidden = true;
   scrollBottomBtn.hidden = true;
   remoteTiles.clear();
+  setPinnedTile(null);
   lobbyWaiters.clear();
   lobbyActions.clear();
 
@@ -2722,7 +2821,7 @@ const refreshMediaBtn = button(
   'btn-secondary',
 );
 refreshMediaBtn.id = 'refresh-incoming-media';
-roomTools.querySelector('.room-navigation')!.appendChild(refreshMediaBtn);
+document.getElementById('room-more-repair')!.prepend(refreshMediaBtn);
 
 const screenShareStatus = el('span', '', 'settings-description');
 screenShareStatus.id = 'screen-share-status';
@@ -3053,7 +3152,19 @@ micModeSelect.addEventListener('change', () => {
 });
 
 // --- Update video grid count for adaptive sizing ---
+/** One tile may be pinned: it fills the stage and the others line up below. This viewer only. */
+function setPinnedTile(key: string | null): void {
+  pinnedTileKey = key !== null && remoteTiles.has(key) ? key : null;
+  for (const [tileKey, tile] of remoteTiles) {
+    const pinned = tileKey === pinnedTileKey;
+    tile.classList.toggle('pinned', pinned);
+    tile.querySelector('.tile-pin')?.setAttribute('aria-pressed', String(pinned));
+  }
+  videoGrid.classList.toggle('has-pinned', pinnedTileKey !== null);
+}
+
 function updateVideoGridCount(): void {
+  if (pinnedTileKey !== null && !remoteTiles.has(pinnedTileKey)) setPinnedTile(null);
   const count = videoGrid.children.length;
   if (count <= 1) videoGrid.dataset['count'] = '1';
   else if (count === 2) videoGrid.dataset['count'] = '2';
@@ -3327,6 +3438,17 @@ function renderRemoteTrack(
     nameTag.textContent = isScreen ? `${participantName} (Screen)` : participantName;
     tile.appendChild(nameTag);
     paintTile(tile, participantName, participantColor(participantId));
+    const pin = document.createElement('button');
+    pin.type = 'button';
+    pin.className = 'tile-pin';
+    pin.textContent = 'Pin';
+    pin.setAttribute('aria-pressed', 'false');
+    pin.setAttribute(
+      'aria-label',
+      `Pin ${isScreen ? `${participantName}'s screen` : participantName}`,
+    );
+    pin.addEventListener('click', () => setPinnedTile(pinnedTileKey === tileKey ? null : tileKey));
+    tile.appendChild(pin);
 
     remoteTiles.set(tileKey, tile);
     videoGrid.appendChild(tile);

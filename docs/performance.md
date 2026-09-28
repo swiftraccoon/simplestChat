@@ -13,9 +13,9 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 512 KiB            | 116 KiB    |
+| JavaScript  | 544 KiB            | 120 KiB    |
 | CSS         | 64 KiB             | 12 KiB     |
-| HTML        | 48 KiB             | 10 KiB     |
+| HTML        | 48 KiB             | 11 KiB     |
 
 Limits are defined in [bundle-budget.json](../web/bundle-budget.json). Gzip uses
 level 6 independently for each file; the checker then sums each group. Run
@@ -57,6 +57,14 @@ with three message styles and a live preview, the same colors on people lists an
 video tags, and the decoders that carry a look on the wire. The previous build
 (`3d5406a`) measured 512,719 bytes raw / 112,320 gzip; this build measures
 520,019 / 114,794. No runtime dependency was added.
+
+The simplified room tools with their "More" menu, toasts below the top bars, the
+New messages divider, the mention picker, desktop notifications, replies,
+reactions and pinned video raise the JavaScript ceiling to 544 KiB raw and 120 KiB
+gzip, and their help text raises the HTML gzip ceiling from 10 to 11 KiB (the help
+page and the app page each compress to about 5 KiB). The previous build (`9ef9088`)
+measured 520,019 bytes raw / 114,794 gzip of JavaScript; this build measures
+532,165 / 118,310. No runtime dependency was added.
 
 ## Controlled local comparison
 

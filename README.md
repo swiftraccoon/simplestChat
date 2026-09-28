@@ -7,8 +7,8 @@ Run guest rooms on their own, or add PostgreSQL for accounts and persistent room
 
 - Camera, microphone, push-to-talk, screen sharing, and private device preview.
 - Public room directory, owned rooms, passwords, lobby admission, and moderation.
-- Room chat and private messages, unread counts, drafts, ignore controls, personal
-  chat colors and timestamp formats.
+- Room chat and private messages with replies, reactions, mention completion, unread
+  markers, drafts, ignore controls, personal chat colors and timestamp formats.
 - Password/passkey accounts, profiles, and saved recovery keys.
 - Responsive layout and per-participant volume, mute, and video controls.
 
