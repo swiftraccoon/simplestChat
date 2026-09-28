@@ -23,6 +23,7 @@ fn participant(id: &str, sender: mpsc::Sender<crate::OutboundJson>) -> Participa
         punitive: moderation::PunitiveState::default(),
         authenticated: false,
         ip: None,
+        chat_style: Default::default(),
     }
 }
 

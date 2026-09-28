@@ -4,6 +4,7 @@ import type {
   SocialResponses,
   SocialResponse,
   ParticipantInfo,
+  ChatStyle,
   ProducerMetadata,
   ChatEntry,
   RoomSettings,
@@ -77,12 +78,25 @@ const priority = choice('very-low', 'low', 'medium', 'high');
 const uint32 = integer(0xffffffff);
 const byte = integer(255);
 const producer = object<ProducerMetadata>({ id: text, kind: mediaKind, source: optional(text) });
+// Cosmetic, so it degrades rather than dropping the message: a treatment a
+// newer peer adds shows as the accent, and a color that is not a palette-shaped
+// token shows as the automatic one. The renderer maps unknown tokens the same way.
+const chatStyle: Decoder<ChatStyle> = (value) => {
+  const source = record(value);
+  const color = source['color'];
+  const style = source['style'];
+  return {
+    color: typeof color === 'string' && /^[a-z]{3,12}$/.test(color) ? color : null,
+    style: style === 'text' || style === 'bubble' ? style : 'accent',
+  };
+};
 const participant = object<ParticipantInfo>({
   id: text,
   name: text,
   producers: list(producer),
   role: text,
   authenticated: optional(boolean),
+  chatStyle: optional(chatStyle),
 });
 const chat = object<ChatEntry>({
   messageId: text,
@@ -93,6 +107,7 @@ const chat = object<ChatEntry>({
   recipientName: optional(text),
   content: text,
   sentAt: text,
+  chatStyle: optional(chatStyle),
 });
 export const decodeRoomSettings = object<RoomSettings>({
   id: text,
@@ -290,6 +305,7 @@ const socialDecoders: { [A in SocialAction]: Decoder<SocialResponses[A]> } = {
     ignoredParticipantIds: list(text),
   }),
   changeNickname: object<{ nickname: string }>({ nickname: text }),
+  setChatStyle: object<{ chatStyle: ChatStyle }>({ chatStyle }),
   getRoomSnapshot: snapshot,
   listRoomBans: object<{ bans: BanEntry[]; hasMore: boolean }>({
     bans: list(ban),
@@ -335,6 +351,7 @@ const socialResponse: Decoder<Variant<'socialResponse'>> = (value) => {
 const socialAction = choice(
   'setChatPreferences',
   'changeNickname',
+  'setChatStyle',
   'getRoomSnapshot',
   'listRoomBans',
   'removeRoomBan',
@@ -362,6 +379,7 @@ const messages = {
     participants: list(participant),
     reconnectToken: text,
     yourRole: text,
+    yourChatStyle: optional(chatStyle),
     roomSettings: optional(settings),
   }),
   error: message('error', { requestId: optionalRequestId, message: text }),
@@ -397,6 +415,7 @@ const messages = {
     participantName: text,
     role: text,
     authenticated: boolean,
+    chatStyle: optional(chatStyle),
   }),
   participantLeft: message('participantLeft', { participantId: text }),
   newProducer: message('newProducer', {
@@ -442,6 +461,7 @@ const messages = {
     recipientName: optional(text),
     content: text,
     sentAt: text,
+    chatStyle: optional(chatStyle),
   }),
   privateMessageReceived: message('privateMessageReceived', { message: chat }),
   messageAck: message('messageAck', { clientMessageId: text, message: chat }),
@@ -464,6 +484,7 @@ const messages = {
     message: text,
   }),
   nicknameChanged: message('nicknameChanged', { participantId: text, nickname: text }),
+  chatStyleChanged: message('chatStyleChanged', { participantId: text, chatStyle }),
   activeSpeaker: message('activeSpeaker', { participantId: text }),
   audioLevels: message('audioLevels', {
     levels: list(

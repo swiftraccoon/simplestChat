@@ -670,6 +670,7 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         }
         ClientMessage::SetChatPreferences { .. }
         | ClientMessage::ChangeNickname { .. }
+        | ClientMessage::SetChatStyle { .. }
         | ClientMessage::GetRoomSnapshot { .. }
         | ClientMessage::ListRoomBans { .. }
         | ClientMessage::RemoveRoomBan { .. }
@@ -2317,6 +2318,7 @@ async fn handle_client_message(
             room_id,
             participant_name,
             password,
+            chat_style,
         } => {
             if !settings::valid_room_id(room_id) {
                 anyhow::bail!(
@@ -2362,6 +2364,7 @@ async fn handle_client_message(
                     password.as_deref(),
                     &session_reconnect_token,
                     client_ip,
+                    chat_style.clone(),
                 )
                 .await?;
 
@@ -2370,6 +2373,7 @@ async fn handle_client_message(
                     participants,
                     role,
                     room_settings,
+                    chat_style,
                 } => {
                     *current_room_id = Some(room_id.clone());
                     in_lobby.store(false, Ordering::Release);
@@ -2380,6 +2384,7 @@ async fn handle_client_message(
                         participants,
                         reconnect_token: session_reconnect_token,
                         your_role: role,
+                        your_chat_style: chat_style,
                         room_settings,
                     })?;
                 }
@@ -2741,6 +2746,7 @@ async fn handle_client_message(
         }
         ClientMessage::SetChatPreferences { .. }
         | ClientMessage::ChangeNickname { .. }
+        | ClientMessage::SetChatStyle { .. }
         | ClientMessage::GetRoomSnapshot { .. }
         | ClientMessage::ListRoomBans { .. }
         | ClientMessage::RemoveRoomBan { .. }

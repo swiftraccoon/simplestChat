@@ -5,7 +5,13 @@
 
 export type ClientMessage =
   | { type: 'renewAuthentication'; requestId: string; token: string }
-  | { type: 'joinRoom'; roomId: string; participantName: string; password?: string }
+  | {
+      type: 'joinRoom';
+      roomId: string;
+      participantName: string;
+      password?: string;
+      chatStyle?: ChatStyle;
+    }
   | { type: 'leaveRoom' }
   | { type: 'getRouterRtpCapabilities'; requestId?: string }
   | { type: 'createSendTransport'; requestId?: string }
@@ -98,6 +104,7 @@ export type ServerMessage =
       participants: ParticipantInfo[];
       reconnectToken: string;
       yourRole: string;
+      yourChatStyle?: ChatStyle;
       roomSettings?: RoomSettings;
     }
   | { type: 'error'; requestId?: string; message: string }
@@ -130,6 +137,7 @@ export type ServerMessage =
       participantName: string;
       role: string;
       authenticated: boolean;
+      chatStyle?: ChatStyle;
     }
   | { type: 'participantLeft'; participantId: string }
   | {
@@ -185,6 +193,7 @@ export type ServerMessage =
   | SocialResponse
   | { type: 'socialError'; requestId?: string; clientMessageId?: string; message: string }
   | { type: 'nicknameChanged'; participantId: string; nickname: string }
+  | { type: 'chatStyleChanged'; participantId: string; chatStyle: ChatStyle }
   | { type: 'activeSpeaker'; participantId: string }
   | { type: 'audioLevels'; levels: { participantId: string; volume: number }[] }
   // Moderation broadcasts
@@ -266,11 +275,22 @@ export interface ParticipantInfo {
   producers: ProducerMetadata[];
   role: string;
   authenticated?: boolean;
+  chatStyle?: ChatStyle;
+}
+
+/** How a person's color shows: a stripe beside their messages, their text, or their bubble. */
+export type ChatStyleKind = 'accent' | 'text' | 'bubble';
+
+/** A person's chosen look; no color means the automatic one derived from their name. */
+export interface ChatStyle {
+  color: string | null;
+  style: ChatStyleKind;
 }
 
 export type SocialAction =
   | 'setChatPreferences'
   | 'changeNickname'
+  | 'setChatStyle'
   | 'getRoomSnapshot'
   | 'listRoomBans'
   | 'removeRoomBan'
@@ -284,6 +304,7 @@ export type SocialAction =
 export interface SocialRequests {
   setChatPreferences: { allowPrivateMessages: boolean; ignoredParticipantIds: string[] };
   changeNickname: { nickname: string };
+  setChatStyle: { chatStyle: ChatStyle };
   getRoomSnapshot: undefined;
   listRoomBans: { offset?: number };
   removeRoomBan: { banId: string };
@@ -297,6 +318,7 @@ export interface SocialRequests {
 export interface SocialResponses {
   setChatPreferences: { allowPrivateMessages: boolean; ignoredParticipantIds: string[] };
   changeNickname: { nickname: string };
+  setChatStyle: { chatStyle: ChatStyle };
   getRoomSnapshot: RoomSnapshot;
   listRoomBans: RoomBansPage;
   removeRoomBan: { removed: boolean };
@@ -335,6 +357,8 @@ export interface ChatEntry {
   recipientName?: string;
   content: string;
   sentAt: string;
+  /** The sender's look when they sent it. */
+  chatStyle?: ChatStyle;
 }
 
 export interface RoomSnapshot {

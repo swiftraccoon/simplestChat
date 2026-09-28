@@ -259,6 +259,7 @@ async fn quiet_lobby_socket_survives_without_gaining_room_admission() {
             None,
             "test-owner-token",
             None,
+            None,
         )
         .await
         .unwrap();

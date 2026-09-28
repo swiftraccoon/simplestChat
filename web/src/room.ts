@@ -5,6 +5,7 @@ import type {
   TelemetryMediaSource,
 } from './telemetry-types';
 import type {
+  ChatStyle,
   ClientMessage,
   RoomSettings,
   RoomSettingsPatch,
@@ -31,6 +32,7 @@ export interface Participant {
   name: string;
   role: string;
   authenticated?: boolean;
+  chatStyle?: ChatStyle;
   producers: Map<string, { kind: 'audio' | 'video'; source?: string }>;
 }
 
@@ -176,6 +178,8 @@ export class RoomClient {
   private localId: string | null = null;
   private roomId: string | null = null;
   private participantName: string | null = null;
+  // Outlives memberships: the next join asks for it, and the room's answer replaces it.
+  private localChatStyle: ChatStyle | null = null;
   private events: RoomEventHandler;
   private reconnectToken: string | null = null;
   private connectionQuality: ConnectionQuality = 'unknown';
@@ -291,6 +295,20 @@ export class RoomClient {
 
   get nickname(): string {
     return this.participantName ?? '';
+  }
+  /** The local look: the room's word once joined, else what the next join asks for. */
+  get chatStyle(): ChatStyle | null {
+    return this.localChatStyle;
+  }
+  /** The look the next join asks for; an account's saved look still wins. */
+  preferChatStyle(chatStyle: ChatStyle | null): void {
+    this.localChatStyle = chatStyle;
+  }
+  /** Changes the local look for everyone in the room; accounts also keep it. */
+  async setChatStyle(chatStyle: ChatStyle): Promise<ChatStyle> {
+    const applied = (await this.requestSocial('setChatStyle', { chatStyle })).chatStyle;
+    this.localChatStyle = applied;
+    return applied;
   }
   get membershipVersion(): number {
     return this.generation;
@@ -461,6 +479,7 @@ export class RoomClient {
           roomId,
           participantName,
           ...(password !== undefined && { password }),
+          ...(this.localChatStyle && { chatStyle: this.localChatStyle }),
         });
       } catch (error) {
         cleanup();
@@ -492,6 +511,7 @@ export class RoomClient {
     this.reconnectToken = response.reconnectToken;
     this.localRole = response.yourRole ?? 'user';
     this._roomSettings = response.roomSettings ?? null;
+    if (response.yourChatStyle) this.localChatStyle = response.yourChatStyle;
     this.recovering = false;
 
     // Store existing participants
@@ -501,6 +521,7 @@ export class RoomClient {
         name: p.name,
         role: p.role,
         ...(p.authenticated !== undefined && { authenticated: p.authenticated }),
+        ...(p.chatStyle && { chatStyle: p.chatStyle }),
         producers: new Map(
           p.producers.map((pr) => [
             pr.id,
@@ -1190,6 +1211,7 @@ export class RoomClient {
     this.reconnectToken = msg.reconnectToken;
     this.localRole = msg.yourRole ?? 'user';
     this._roomSettings = msg.roomSettings ?? null;
+    if (msg.yourChatStyle) this.localChatStyle = msg.yourChatStyle;
     this.recovering = false;
 
     for (const p of msg.participants) {
@@ -1198,6 +1220,7 @@ export class RoomClient {
         name: p.name,
         role: p.role,
         ...(p.authenticated !== undefined && { authenticated: p.authenticated }),
+        ...(p.chatStyle && { chatStyle: p.chatStyle }),
         producers: new Map(
           p.producers.map((pr) => [
             pr.id,
@@ -1370,12 +1393,21 @@ export class RoomClient {
         this.events.onSocialEvent?.(msg);
         break;
       }
+      case 'chatStyleChanged': {
+        if (msg.participantId === this.localId) this.localChatStyle = msg.chatStyle;
+        const participant = this.participants.get(msg.participantId);
+        if (participant) participant.chatStyle = msg.chatStyle;
+        this.events.onParticipantsChanged(this.participants);
+        this.events.onSocialEvent?.(msg);
+        break;
+      }
       case 'participantJoined': {
         this.participants.set(msg.participantId, {
           id: msg.participantId,
           name: msg.participantName,
           role: msg.role,
           authenticated: msg.authenticated,
+          ...(msg.chatStyle && { chatStyle: msg.chatStyle }),
           producers: new Map(),
         });
         this.events.onParticipantJoined(msg.participantId, msg.participantName);
@@ -1703,6 +1735,7 @@ export class RoomClient {
         name: info.name,
         role: info.role,
         ...(info.authenticated !== undefined && { authenticated: info.authenticated }),
+        ...(info.chatStyle && { chatStyle: info.chatStyle }),
         producers: new Map(
           info.producers.map((producer) => {
             const old = previous?.producers.get(producer.id);

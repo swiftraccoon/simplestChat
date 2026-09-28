@@ -91,6 +91,9 @@ pub enum ClientMessage {
         /// Required for password-protected rooms (Admin+ bypass)
         #[serde(default)]
         password: Option<String>,
+        /// A guest's chosen look; an account's saved one takes its place.
+        #[serde(default)]
+        chat_style: Option<ChatStyle>,
     },
     /// Leave the current room
     LeaveRoom,
@@ -193,6 +196,12 @@ pub enum ClientMessage {
         request_id: String,
         allow_private_messages: bool,
         ignored_participant_ids: Vec<String>,
+    },
+    /// Change how this participant's name and messages look to everyone.
+    #[serde(rename_all = "camelCase")]
+    SetChatStyle {
+        request_id: String,
+        chat_style: ChatStyle,
     },
     #[serde(rename_all = "camelCase")]
     ChangeNickname {
@@ -362,6 +371,9 @@ pub enum ServerMessage {
         participants: Vec<ParticipantInfo>,
         reconnect_token: String,
         your_role: String,
+        /// This participant's look: an account's saved one, or the guest's.
+        #[serde(default)]
+        your_chat_style: ChatStyle,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         room_settings: Option<serde_json::Value>,
     },
@@ -423,6 +435,8 @@ pub enum ServerMessage {
         participant_name: String,
         role: String,
         authenticated: bool,
+        #[serde(default)]
+        chat_style: ChatStyle,
     },
     /// Participant left the room
     #[serde(rename_all = "camelCase")]
@@ -495,6 +509,8 @@ pub enum ServerMessage {
         message_id: String,
         client_message_id: String,
         sent_at: String,
+        #[serde(default)]
+        chat_style: ChatStyle,
     },
     #[serde(rename_all = "camelCase")]
     MessageAck {
@@ -527,6 +543,11 @@ pub enum ServerMessage {
     NicknameChanged {
         participant_id: String,
         nickname: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    ChatStyleChanged {
+        participant_id: String,
+        chat_style: ChatStyle,
     },
     /// Active/dominant speaker changed
     #[serde(rename_all = "camelCase")]
@@ -632,6 +653,74 @@ pub struct ParticipantInfo {
     pub role: String,
     #[serde(default)]
     pub authenticated: bool,
+    #[serde(default)]
+    pub chat_style: ChatStyle,
+}
+
+/// The palette chat colors come from. Clients map each name to a color that
+/// stays readable on the dark chat; anything else is refused.
+pub const CHAT_COLORS: [&str; 16] = [
+    "rose", "red", "orange", "amber", "lime", "green", "emerald", "teal", "cyan", "sky", "blue",
+    "indigo", "violet", "purple", "fuchsia", "pink",
+];
+
+/// How a participant's color shows: a stripe beside their messages, their
+/// message text, or their whole bubble.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChatStyleKind {
+    #[default]
+    Accent,
+    Text,
+    Bubble,
+    /// A treatment a newer client knows and this server does not.
+    #[serde(other)]
+    Unknown,
+}
+
+impl ChatStyleKind {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Accent | Self::Unknown => "accent",
+            Self::Text => "text",
+            Self::Bubble => "bubble",
+        }
+    }
+}
+
+/// A participant's chosen look. No color means the automatic one every client
+/// derives from the participant's name.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatStyle {
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub style: ChatStyleKind,
+}
+
+impl ChatStyle {
+    /// The style with a known treatment (an unknown one shows as the accent),
+    /// or `None` when its color is outside the palette.
+    #[must_use]
+    pub fn validated(&self) -> Option<Self> {
+        if self
+            .color
+            .as_deref()
+            .is_some_and(|color| !CHAT_COLORS.contains(&color))
+        {
+            return None;
+        }
+        let style = match self.style {
+            ChatStyleKind::Unknown => ChatStyleKind::Accent,
+            known => known,
+        };
+        Some(Self {
+            color: self.color.clone(),
+            style,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -647,6 +736,9 @@ pub struct ChatEntry {
     pub recipient_name: Option<String>,
     pub content: String,
     pub sent_at: String,
+    /// The sender's look when they sent it, so history keeps it after they leave.
+    #[serde(default)]
+    pub chat_style: ChatStyle,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -688,8 +780,75 @@ pub struct ProducerMetadata {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClientMessage, RequestHeader, ServerMessage};
+    use super::{
+        CHAT_COLORS, ChatStyle, ChatStyleKind, ClientMessage, RequestHeader, ServerMessage,
+    };
     use serde_json::{Value, json};
+
+    #[test]
+    fn chat_styles_keep_to_the_palette_and_tolerate_newer_treatments() {
+        let style: ChatStyle =
+            serde_json::from_value(json!({"color":"rose","style":"bubble"})).unwrap();
+        assert_eq!(style.validated(), Some(style.clone()));
+        assert_eq!(
+            serde_json::to_value(&style).unwrap(),
+            json!({"color":"rose","style":"bubble"})
+        );
+        let automatic: ChatStyle = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(
+            (automatic.color.as_deref(), automatic.style),
+            (None, ChatStyleKind::Accent)
+        );
+        let newer: ChatStyle =
+            serde_json::from_value(json!({"color":"sky","style":"neon"})).unwrap();
+        assert_eq!(newer.validated().unwrap().style, ChatStyleKind::Accent);
+        for outside in ["#ff0000", "Rose", "red; background:url(x)", ""] {
+            let style = ChatStyle {
+                color: Some(outside.into()),
+                style: ChatStyleKind::Text,
+            };
+            assert_eq!(style.validated(), None, "{outside}");
+        }
+        assert_eq!(CHAT_COLORS.len(), 16);
+    }
+
+    #[test]
+    fn chat_styles_travel_with_joins_changes_and_broadcasts() {
+        let join: ClientMessage = serde_json::from_value(json!({
+            "type":"joinRoom","roomId":"r","participantName":"Alice",
+            "chatStyle":{"color":"teal","style":"text"}
+        }))
+        .unwrap();
+        assert!(
+            matches!(join, ClientMessage::JoinRoom { chat_style: Some(ref s), .. } if s.color.as_deref() == Some("teal"))
+        );
+        let legacy: ClientMessage =
+            serde_json::from_value(json!({"type":"joinRoom","roomId":"r","participantName":"Bob"}))
+                .unwrap();
+        assert!(matches!(
+            legacy,
+            ClientMessage::JoinRoom {
+                chat_style: None,
+                ..
+            }
+        ));
+        let change: ClientMessage = serde_json::from_value(json!({
+            "type":"setChatStyle","requestId":"r1","chatStyle":{"color":null,"style":"accent"}
+        }))
+        .unwrap();
+        assert_eq!(change.social_request(), Some(("r1", "setChatStyle")));
+        let changed = ServerMessage::ChatStyleChanged {
+            participant_id: "p".into(),
+            chat_style: ChatStyle {
+                color: Some("sky".into()),
+                style: ChatStyleKind::Accent,
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&changed).unwrap(),
+            json!({"type":"chatStyleChanged","participantId":"p","chatStyle":{"color":"sky","style":"accent"}})
+        );
+    }
 
     #[test]
     fn request_headers_preserve_ids_without_weakening_payload_validation() {

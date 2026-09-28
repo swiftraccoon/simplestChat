@@ -22,7 +22,7 @@ use crate::media::{MediaConfig, MediaServer};
 use crate::metrics::ServerMetrics;
 use crate::shutdown::DrainSignal;
 use crate::signaling::protocol::{
-    AudioLevelEntry, ParticipantInfo, ProducerMetadata, ServerMessage,
+    AudioLevelEntry, ChatStyle, ParticipantInfo, ProducerMetadata, ServerMessage,
 };
 use anyhow::Result;
 use mediasoup::active_speaker_observer::{ActiveSpeakerObserver, ActiveSpeakerObserverOptions};
@@ -77,6 +77,8 @@ pub struct Participant {
     pub authenticated: bool,
     /// Client IP (from ConnectInfo / X-Forwarded-For) — used for guest bans
     pub ip: Option<std::net::IpAddr>,
+    /// How this participant's name and messages look to everyone.
+    pub chat_style: ChatStyle,
 }
 
 /// Entry for a participant waiting in the lobby
@@ -84,6 +86,8 @@ pub struct LobbyEntry {
     pub participant_id: String,
     pub name: String,
     pub sender: mpsc::Sender<crate::OutboundJson>,
+    /// Carried into the room on admission.
+    pub chat_style: ChatStyle,
     /// Preserved when the lobby entry is admitted into the room.
     pub media_session_id: uuid::Uuid,
     pub authenticated: bool,
@@ -129,6 +133,8 @@ pub enum JoinResult {
         participants: Vec<ParticipantInfo>,
         role: String,
         room_settings: Option<serde_json::Value>,
+        /// The joiner's look: the account's saved one, or the guest's.
+        chat_style: ChatStyle,
     },
     /// Placed in the lobby awaiting moderator approval
     Lobbied,
@@ -2332,6 +2338,7 @@ impl RoomManager {
         password: Option<&str>,
         reconnect_token: &str,
         client_ip: Option<std::net::IpAddr>,
+        chat_style: Option<ChatStyle>,
     ) -> Result<JoinResult> {
         let client_ip = if authenticated {
             client_ip
@@ -2487,6 +2494,31 @@ impl RoomManager {
             )
         } else {
             None
+        };
+
+        // An account's saved look replaces what the client sent; a guest's is
+        // kept within the palette. A cosmetic lookup never fails a join.
+        let requested_style = chat_style
+            .and_then(|style| style.validated())
+            .unwrap_or_default();
+        let chat_style = match (user_uuid, &self.db_pool) {
+            (Some(user), Some(pool)) => match tokio::time::timeout(
+                control::PERSISTENCE_TIMEOUT,
+                measure_result(Stage::RoomPolicyLookup, social::load_chat_style(pool, user)),
+            )
+            .await
+            {
+                Ok(Ok(saved)) => saved.unwrap_or_default(),
+                Ok(Err(error)) => {
+                    warn!(room_id, %error, "Chat style lookup failed");
+                    requested_style
+                }
+                Err(_) => {
+                    warn!(room_id, "Chat style lookup timed out");
+                    requested_style
+                }
+            },
+            _ => requested_style,
         };
 
         // Persisted sanctions are part of join authorization. Treat a missing
@@ -2654,6 +2686,7 @@ impl RoomManager {
                         ip: client_ip,
                         role,
                         punitive,
+                        chat_style: chat_style.clone(),
                     },
                 );
                 pending_join.complete_locked(&mut room);
@@ -2677,6 +2710,7 @@ impl RoomManager {
                 punitive,
                 authenticated,
                 ip: client_ip,
+                chat_style: chat_style.clone(),
             };
 
             room.participants
@@ -2700,6 +2734,7 @@ impl RoomManager {
                     participant_name,
                     role: role.name().to_string(),
                     authenticated,
+                    chat_style: chat_style.clone(),
                 },
             );
 
@@ -2727,6 +2762,7 @@ impl RoomManager {
                         .collect(),
                     role: p.role.name().to_string(),
                     authenticated: p.authenticated,
+                    chat_style: p.chat_style.clone(),
                 })
                 .collect();
 
@@ -2740,6 +2776,7 @@ impl RoomManager {
                 participants,
                 role: role.name().to_string(),
                 room_settings,
+                chat_style,
             })
         })
         .await
@@ -5319,6 +5356,7 @@ impl RoomManager {
                     .collect(),
                 role: p.role.name().to_string(),
                 authenticated: p.authenticated,
+                chat_style: p.chat_style.clone(),
             })
             .collect();
 
@@ -5336,6 +5374,7 @@ impl RoomManager {
             punitive: admitted_punitive,
             authenticated: entry.authenticated,
             ip: entry.ip,
+            chat_style: entry.chat_style.clone(),
         };
         room.participants
             .insert(entry.participant_id.clone(), participant);
@@ -5370,6 +5409,7 @@ impl RoomManager {
             participants,
             reconnect_token,
             your_role: admitted_role.name().to_string(),
+            your_chat_style: entry.chat_style.clone(),
             room_settings,
         }) {
             let _ = try_send_essential(
@@ -5387,6 +5427,7 @@ impl RoomManager {
                 participant_name: entry.name.clone(),
                 role: admitted_role.name().to_string(),
                 authenticated: entry.authenticated,
+                chat_style: entry.chat_style.clone(),
             },
         );
 
@@ -6098,11 +6139,133 @@ mod security_tests {
                 None,
                 &format!("{name}-token"),
                 None,
+                None,
             )
             .await
             .unwrap();
         assert!(matches!(joined, JoinResult::Joined { .. }));
         (tx, rx)
+    }
+
+    #[tokio::test]
+    async fn a_guest_chat_style_reaches_everyone_and_rides_their_messages() {
+        use crate::signaling::protocol::{ChatStyleKind, ClientMessage};
+        let manager = drain_test_manager().await;
+        let teal = ChatStyle {
+            color: Some("teal".into()),
+            style: ChatStyleKind::Bubble,
+        };
+        let join = |name: &str, style: Option<ChatStyle>| {
+            let (tx, rx) = mpsc::channel(64);
+            let manager = &manager;
+            let name = name.to_string();
+            async move {
+                let joined = manager
+                    .add_participant(
+                        "styled",
+                        name.clone(),
+                        name.clone(),
+                        tx.clone(),
+                        false,
+                        Arc::new(AtomicBool::new(false)),
+                        None,
+                        &format!("{name}-token"),
+                        None,
+                        style,
+                    )
+                    .await
+                    .unwrap();
+                (joined, tx, rx)
+            }
+        };
+        let (joined, _alice, mut alice_rx) = join("alice", Some(teal.clone())).await;
+        assert!(matches!(joined, JoinResult::Joined { ref chat_style, .. } if *chat_style == teal));
+        // A color outside the palette is dropped at the join, not refused.
+        let outside = ChatStyle {
+            color: Some("#ff0000".into()),
+            style: ChatStyleKind::Text,
+        };
+        let (joined, bob, mut bob_rx) = join("bob", Some(outside)).await;
+        let JoinResult::Joined {
+            participants,
+            chat_style,
+            ..
+        } = joined
+        else {
+            panic!("bob joined");
+        };
+        assert_eq!(chat_style, ChatStyle::default());
+        assert_eq!(participants[0].chat_style, teal, "bob sees alice's look");
+        assert!(
+            drain_messages(&mut alice_rx)
+                .iter()
+                .any(|m| m.contains("participantJoined")
+                    && m.contains(r#""chatStyle":{"color":null"#))
+        );
+
+        let sky = ChatStyle {
+            color: Some("sky".into()),
+            style: ChatStyleKind::Text,
+        };
+        manager
+            .handle_social_request(
+                "styled",
+                "bob",
+                &bob,
+                &ClientMessage::SetChatStyle {
+                    request_id: "look".into(),
+                    chat_style: sky.clone(),
+                },
+            )
+            .await
+            .unwrap();
+        let changed = serde_json::to_string(&ServerMessage::ChatStyleChanged {
+            participant_id: "bob".into(),
+            chat_style: sky.clone(),
+        })
+        .unwrap();
+        assert!(drain_messages(&mut alice_rx).contains(&changed));
+        assert!(drain_messages(&mut bob_rx).contains(&changed));
+
+        let refused = manager
+            .handle_social_request(
+                "styled",
+                "bob",
+                &bob,
+                &ClientMessage::SetChatStyle {
+                    request_id: "outside".into(),
+                    chat_style: ChatStyle {
+                        color: Some("url(x)".into()),
+                        style: ChatStyleKind::Accent,
+                    },
+                },
+            )
+            .await;
+        assert!(refused.is_err());
+        assert!(
+            drain_messages(&mut alice_rx).is_empty(),
+            "nothing broadcast"
+        );
+
+        manager
+            .handle_chat_command(
+                "styled",
+                "bob",
+                &bob,
+                &ClientMessage::ChatMessage {
+                    content: "hello".into(),
+                    client_message_id: Some(uuid::Uuid::new_v4().to_string()),
+                    sequence: None,
+                },
+            )
+            .await
+            .unwrap();
+        let seen = drain_messages(&mut alice_rx);
+        assert!(
+            seen.iter().any(|m| m.contains("hello")
+                && m.contains(r#""chatStyle":{"color":"sky","style":"text"}"#)),
+            "{seen:?}"
+        );
     }
 
     #[tokio::test]
@@ -6122,6 +6285,7 @@ mod security_tests {
                 Arc::new(AtomicBool::new(false)),
                 None,
                 "carol-token",
+                None,
                 None,
             )
             .await;
@@ -6154,6 +6318,7 @@ mod security_tests {
                     Arc::new(AtomicBool::new(false)),
                     None,
                     &format!("{waiting}-token"),
+                    None,
                     None,
                 )
                 .await
@@ -6248,6 +6413,7 @@ mod security_tests {
                 None,
                 "alice-token",
                 None,
+                None,
             )
             .await
         {
@@ -6288,6 +6454,7 @@ mod security_tests {
                 Arc::new(AtomicBool::new(false)),
                 None,
                 "carol-token",
+                None,
                 None,
             )
             .await
@@ -6346,6 +6513,7 @@ mod security_tests {
                 None,
                 "token-1",
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -6365,6 +6533,7 @@ mod security_tests {
                 Arc::new(AtomicBool::new(false)),
                 None,
                 "token-2",
+                None,
                 None,
             )
             .await
@@ -6419,6 +6588,7 @@ mod security_tests {
                 None,
                 "owner-token",
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -6437,6 +6607,7 @@ mod security_tests {
                 Arc::new(AtomicBool::new(false)),
                 None,
                 "second-token",
+                None,
                 None,
             ),
         )
@@ -6497,6 +6668,7 @@ mod security_tests {
                     Arc::new(AtomicBool::new(false)),
                     None,
                     "test-token",
+                    None,
                     None,
                 )
                 .await
@@ -6634,6 +6806,7 @@ mod security_tests {
                 None,
                 "owner-token",
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -6653,6 +6826,7 @@ mod security_tests {
                 Arc::new(AtomicBool::new(false)),
                 None,
                 "waiting-token",
+                None,
                 None,
             )
             .await
@@ -7173,6 +7347,7 @@ mod security_tests {
             punitive,
             authenticated: role != roles::Role::Guest,
             ip,
+            chat_style: Default::default(),
         }
     }
 
@@ -7317,6 +7492,7 @@ mod security_tests {
                 ip: Some(ip),
                 role: roles::Role::Moderator,
                 punitive: moderation::PunitiveState::default(),
+                chat_style: Default::default(),
             },
         );
 
@@ -7425,6 +7601,7 @@ mod security_tests {
                     cam_banned: true,
                     text_muted: true,
                 },
+                chat_style: Default::default(),
             },
         );
         let cohort = vec!["first".to_string(), "second".to_string()];
@@ -7600,6 +7777,7 @@ mod security_tests {
                 cam_banned: false,
                 text_muted: true,
             },
+            chat_style: Default::default(),
         };
         let (role, punitive) = lobby_admission_state(&room, &entry);
         assert_eq!(role, roles::Role::Member);
@@ -7693,6 +7871,7 @@ mod security_tests {
             },
             authenticated: false,
             ip: None,
+            chat_style: Default::default(),
         };
         let room = Room::new("room".to_string(), "router".to_string(), None, false, None);
         assert!(!RoomManager::participant_can_produce(
@@ -7723,6 +7902,7 @@ mod security_tests {
             punitive: moderation::PunitiveState::default(),
             authenticated: false,
             ip: None,
+            chat_style: Default::default(),
         };
         let mut settings = RoomManager::default_room_settings("room");
         settings.guests_can_broadcast = false;

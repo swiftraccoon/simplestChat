@@ -1651,6 +1651,7 @@ async fn run_client_inner(
         room_id: config.room_id.clone(),
         participant_name: config.participant_name.clone(),
         password: None,
+        chat_style: None,
     };
     send_message(&mut write, join_msg).await?;
 

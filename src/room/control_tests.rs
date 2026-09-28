@@ -47,6 +47,7 @@ fn participant(role: roles::Role) -> (Participant, mpsc::Receiver<crate::Outboun
             punitive: moderation::PunitiveState::default(),
             authenticated: true,
             ip: None,
+            chat_style: Default::default(),
         },
         receiver,
     )

@@ -2,7 +2,8 @@
 //! Private text is retained only in bounded memory, never in reports or logs.
 use super::*;
 use crate::signaling::protocol::{
-    ChatEntry, ChatRetryOutcome, ChatRetryReason, ClientMessage, valid_correlation_id,
+    ChatEntry, ChatRetryOutcome, ChatRetryReason, ChatStyle, ChatStyleKind, ClientMessage,
+    valid_correlation_id,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -153,6 +154,7 @@ mod tests {
                 authenticated: true,
                 ip: None,
                 social: ParticipantSocial::new(0),
+                chat_style: Default::default(),
             },
             receiver,
         )
@@ -708,6 +710,7 @@ mod tests {
                 recipient_name: None,
                 content: "x".repeat(4096),
                 sent_at: chrono::Utc::now().to_rfc3339(),
+                chat_style: Default::default(),
             };
             room.social.remember(alice.media_session_id, None, message);
         }
@@ -887,6 +890,97 @@ mod tests {
         assert!(valid_correlation_id("request_123"));
         assert!(!valid_correlation_id(&"x".repeat(65)));
         assert!(!valid_correlation_id("unsafe\n"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires disposable TEST_DATABASE_URL and mediasoup worker"]
+    async fn database_an_account_keeps_its_chat_style_across_joins() {
+        let database_url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL");
+        let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+        let user = Uuid::new_v4();
+        sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
+            .bind(user)
+            .bind(format!("{user}@style.invalid"))
+            .bind("Styled")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            load_chat_style(&pool, user).await.unwrap(),
+            Some(ChatStyle::default())
+        );
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 1;
+        config.webrtc_server_port_base = 0;
+        let mut manager = RoomManager::new(config, ServerMetrics::new(), Some(pool.clone()))
+            .await
+            .unwrap();
+        manager.allow_ad_hoc_rooms = true;
+        let room_id = format!("style-{}", Uuid::new_v4());
+        let join = |sent: ChatStyle| {
+            let (tx, rx) = mpsc::channel(64);
+            let manager = &manager;
+            let room_id = room_id.clone();
+            async move {
+                let joined = manager
+                    .add_participant(
+                        &room_id,
+                        user.to_string(),
+                        "Styled".into(),
+                        tx.clone(),
+                        true,
+                        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                        None,
+                        "styled-token",
+                        None,
+                        Some(sent),
+                    )
+                    .await
+                    .unwrap();
+                let crate::room::JoinResult::Joined { chat_style, .. } = joined else {
+                    panic!("joined");
+                };
+                (chat_style, tx, rx)
+            }
+        };
+        // The account's saved look, not what the client sent.
+        let pink = ChatStyle {
+            color: Some("pink".into()),
+            style: ChatStyleKind::Bubble,
+        };
+        let (style, tx, _rx) = join(pink.clone()).await;
+        assert_eq!(style, ChatStyle::default());
+        let violet = ChatStyle {
+            color: Some("violet".into()),
+            style: ChatStyleKind::Text,
+        };
+        manager
+            .handle_social_request(
+                &room_id,
+                &user.to_string(),
+                &tx,
+                &ClientMessage::SetChatStyle {
+                    request_id: "look".into(),
+                    chat_style: violet.clone(),
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            load_chat_style(&pool, user).await.unwrap(),
+            Some(violet.clone())
+        );
+        manager
+            .remove_participant_for_sender(&room_id, &user.to_string(), &tx)
+            .await
+            .unwrap();
+        let (style, _tx, _rx) = join(pink).await;
+        assert_eq!(style, violet, "the next join brings the saved look");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user)
+            .execute(&pool)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -1383,6 +1477,45 @@ impl std::fmt::Display for SocialFailure {
     }
 }
 impl std::error::Error for SocialFailure {}
+/// An account's saved chat look, or `None` for an unknown account. A color the
+/// palette has since dropped falls back to the automatic one.
+pub(crate) async fn load_chat_style(
+    pool: &sqlx::PgPool,
+    user: Uuid,
+) -> Result<Option<ChatStyle>, sqlx::Error> {
+    let row: Option<(Option<String>, String)> =
+        sqlx::query_as("SELECT chat_color, chat_style FROM users WHERE id = $1")
+            .bind(user)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(color, style)| {
+        let style = match style.as_str() {
+            "text" => ChatStyleKind::Text,
+            "bubble" => ChatStyleKind::Bubble,
+            _ => ChatStyleKind::Accent,
+        };
+        ChatStyle { color, style }
+            .validated()
+            .unwrap_or(ChatStyle { color: None, style })
+    }))
+}
+
+async fn save_chat_style(
+    pool: &sqlx::PgPool,
+    user: Uuid,
+    style: &ChatStyle,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE users SET chat_color = $2, chat_style = $3, updated_at = now() WHERE id = $1",
+    )
+    .bind(user)
+    .bind(style.color.as_deref())
+    .bind(style.style.as_str())
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 fn rejected(message: &str) -> anyhow::Error {
     SocialFailure(message.to_string()).into()
 }
@@ -1407,7 +1540,7 @@ impl ClientMessage {
             | Self::ListRoomMembers { .. }
             | Self::ListRoomReports { .. }
             | Self::SetChatPreferences { .. } => SocialBudget::None,
-            Self::ChangeNickname { .. } => SocialBudget::ChatBroadcast,
+            Self::ChangeNickname { .. } | Self::SetChatStyle { .. } => SocialBudget::ChatBroadcast,
             _ => SocialBudget::AdminMutation,
         }
     }
@@ -1416,6 +1549,7 @@ impl ClientMessage {
         match self {
             Self::SetChatPreferences { request_id, .. } => Some((request_id, "setChatPreferences")),
             Self::ChangeNickname { request_id, .. } => Some((request_id, "changeNickname")),
+            Self::SetChatStyle { request_id, .. } => Some((request_id, "setChatStyle")),
             Self::GetRoomSnapshot { request_id } => Some((request_id, "getRoomSnapshot")),
             Self::ListRoomBans { request_id, .. } => Some((request_id, "listRoomBans")),
             Self::RemoveRoomBan { request_id, .. } => Some((request_id, "removeRoomBan")),
@@ -1822,6 +1956,7 @@ impl RoomManager {
             return Err(rejected("You are not allowed to chat"));
         }
         let sender_name = sender.name.clone();
+        let sender_style = sender.chat_style.clone();
         if let Some(existing) = room.social.history.iter().find(|entry| {
             entry.sender_session == sender_session
                 && entry.message.client_message_id == client_message_id
@@ -1858,6 +1993,7 @@ impl RoomManager {
             recipient_name: recipient.as_ref().map(|p| p.0.clone()),
             content,
             sent_at: chrono::Utc::now().to_rfc3339(),
+            chat_style: sender_style,
         };
         let receipt_bytes = serde_json::to_vec(&message)?.len();
         if receipt_bytes > CHAT_RECEIPT_BYTES {
@@ -1889,6 +2025,7 @@ impl RoomManager {
                 message_id: message.message_id.clone(),
                 client_message_id: message.client_message_id.clone(),
                 sent_at: message.sent_at.clone(),
+                chat_style: message.chat_style.clone(),
             };
             let json = crate::OutboundJson::from(serde_json::to_string(&event)?);
             for participant in room.participants.values() {
@@ -2074,6 +2211,37 @@ impl RoomManager {
                 });
                 json!({"nickname":nickname})
             }
+            ClientMessage::SetChatStyle { chat_style, .. } => {
+                let chat_style = chat_style
+                    .validated()
+                    .ok_or_else(|| rejected("Choose a chat color from the palette"))?;
+                if actor_authenticated && let Some(pool) = self.db_pool.clone() {
+                    let user: Uuid = participant_id
+                        .parse()
+                        .map_err(|_| rejected("Invalid account"))?;
+                    // The account keeps the look before anyone sees it.
+                    drop(room);
+                    tokio::time::timeout(
+                        control::PERSISTENCE_TIMEOUT,
+                        save_chat_style(&pool, user, &chat_style),
+                    )
+                    .await
+                    .map_err(|_| rejected("Your chat look could not be saved"))?
+                    .map_err(|_| rejected("Your chat look could not be saved"))?;
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
+                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
+                }
+                room.participants
+                    .get_mut(participant_id)
+                    .ok_or_else(|| rejected("Participant not found"))?
+                    .chat_style = chat_style.clone();
+                room.broadcast_all(&ServerMessage::ChatStyleChanged {
+                    participant_id: participant_id.to_string(),
+                    chat_style: chat_style.clone(),
+                });
+                json!({"chatStyle": chat_style})
+            }
             ClientMessage::GetRoomSnapshot { .. } => {
                 let actor = room.participants.get(participant_id).unwrap();
                 let participants: Vec<ParticipantInfo> = room
@@ -2085,6 +2253,7 @@ impl RoomManager {
                         name: p.name.clone(),
                         role: p.role.name().to_string(),
                         authenticated: p.authenticated,
+                        chat_style: p.chat_style.clone(),
                         producers: p
                             .producers
                             .iter()

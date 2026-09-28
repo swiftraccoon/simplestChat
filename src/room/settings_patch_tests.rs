@@ -118,6 +118,7 @@ async fn wire_settings_set_omit_and_clear_are_persisted() {
         punitive: moderation::PunitiveState::default(),
         authenticated: true,
         ip: None,
+        chat_style: Default::default(),
     };
 
     // Assertions and timeouts cannot skip cleanup of this test's own rows.

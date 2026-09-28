@@ -65,6 +65,7 @@ const participant = {
   role: 'user',
   authenticated: true,
   producers: [{ id: 'producer', kind: 'audio', source: null }],
+  chatStyle: { color: 'rose', style: 'accent' },
 };
 const chat = {
   messageId: 'message',
@@ -73,6 +74,7 @@ const chat = {
   participantName: 'Person',
   content: 'Hello',
   sentAt: '2026-09-11T00:00:00Z',
+  chatStyle: { color: null, style: 'bubble' },
 };
 const settings = {
   id: 'room',
@@ -138,6 +140,7 @@ const report = {
 const socialData = {
   setChatPreferences: { allowPrivateMessages: true, ignoredParticipantIds: [] },
   changeNickname: { nickname: 'Person' },
+  setChatStyle: { chatStyle: { color: 'violet', style: 'text' } },
   getRoomSnapshot: snapshot,
   listRoomBans: { bans: [ban], hasMore: false },
   removeRoomBan: { removed: true },
@@ -162,6 +165,7 @@ const fixtures = [
     participants: [participant],
     reconnectToken: 'fixture-token',
     yourRole: 'guest',
+    yourChatStyle: { color: 'sky', style: 'text' },
     roomSettings: settings,
   },
   { type: 'error', message: 'Test error' },
@@ -192,6 +196,7 @@ const fixtures = [
     participantName: 'Person',
     role: 'guest',
     authenticated: false,
+    chatStyle: { color: null, style: 'accent' },
   },
   { type: 'participantLeft', participantId: 'participant' },
   {
@@ -237,6 +242,11 @@ const fixtures = [
   { type: 'socialResponse', requestId: 'request', action: 'getRoomSnapshot', data: snapshot },
   { type: 'socialError', requestId: 'request', clientMessageId: 'draft', message: 'Test error' },
   { type: 'nicknameChanged', participantId: 'participant', nickname: 'New name' },
+  {
+    type: 'chatStyleChanged',
+    participantId: 'participant',
+    chatStyle: { color: 'teal', style: 'bubble' },
+  },
   { type: 'activeSpeaker', participantId: 'participant' },
   { type: 'audioLevels', levels: [{ participantId: 'participant', volume: -127 }] },
   { type: 'forceClosedProducer', producerId: 'producer', reason: 'Closed' },
@@ -521,13 +531,34 @@ test('video VP8/RTX parameters and an ad-hoc snapshot with null settings remain 
   assert.equal(restored.data.roomSettings, null);
 });
 
+test('a chat style from a newer peer degrades instead of dropping the message', () => {
+  const changed = decode({
+    type: 'chatStyleChanged',
+    participantId: 'participant',
+    chatStyle: { color: 'Neon Green', style: 'glow' },
+  });
+  assert.deepEqual(changed.chatStyle, { color: null, style: 'accent' });
+  assert.throws(
+    () => decode({ type: 'chatStyleChanged', participantId: 'participant', chatStyle: 'rose' }),
+    invalid,
+  );
+  const saved = decode({
+    type: 'socialResponse',
+    requestId: 'request',
+    action: 'setChatStyle',
+    data: { chatStyle: { color: 'violet', style: 'text' } },
+  });
+  assert.deepEqual(saved.data, { chatStyle: { color: 'violet', style: 'text' } });
+});
+
 test('rejects missing or mistyped required top-level fields for every variant', () => {
   const optionals = {
-    roomJoined: ['roomSettings'],
+    roomJoined: ['roomSettings', 'yourChatStyle'],
+    participantJoined: ['chatStyle'],
     transportCreated: ['iceServers'],
     newProducer: ['source'],
     reconnectResult: ['reconnectToken'],
-    chatReceived: ['recipientId', 'recipientName'],
+    chatReceived: ['recipientId', 'recipientName', 'chatStyle'],
     socialError: ['requestId', 'clientMessageId'],
     participantKicked: ['reason'],
     participantBanned: ['reason'],

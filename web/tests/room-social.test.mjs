@@ -1389,3 +1389,108 @@ test('join timeout restores the normal handler and allows a later independent jo
   assert.equal(h.signaling.onMessage, handler);
   assert.equal(h.timers.size, 0);
 });
+
+test('a join asks for the preferred look and keeps the looks the room reports', async () => {
+  const h = await harness({
+    joinReply: () => ({
+      type: 'roomJoined',
+      participantId: 'local',
+      participants: [
+        {
+          id: 'alice',
+          name: 'Alice',
+          role: 'user',
+          producers: [],
+          chatStyle: { color: 'rose', style: 'text' },
+        },
+      ],
+      yourRole: 'user',
+      reconnectToken: 'reconnect-token',
+      // An account's saved look outranks the one this browser asked for.
+      yourChatStyle: { color: 'teal', style: 'accent' },
+    }),
+  });
+  assert.equal(h.room.chatStyle, null);
+  h.room.preferChatStyle({ color: 'violet', style: 'bubble' });
+  await h.room.join('room', 'Local');
+  const join = h.sent.find((message) => message.type === 'joinRoom');
+  assert.deepEqual(join.chatStyle, { color: 'violet', style: 'bubble' });
+  assert.deepEqual(h.room.chatStyle, { color: 'teal', style: 'accent' });
+  assert.deepEqual(h.room.getParticipants().get('alice').chatStyle, {
+    color: 'rose',
+    style: 'text',
+  });
+
+  const plain = await harness();
+  await plain.room.join('room', 'Local');
+  assert.equal('chatStyle' in plain.sent.find((message) => message.type === 'joinRoom'), false);
+});
+
+test('look changes update the roster and the local look, and reach the social hook', async () => {
+  let changes = 0;
+  const h = await harness({ events: { onParticipantsChanged: () => changes++ } });
+  await h.room.join('room', 'Local');
+  h.reply({
+    type: 'participantJoined',
+    participantId: 'bob',
+    participantName: 'Bob',
+    role: 'user',
+    authenticated: false,
+    chatStyle: { color: 'lime', style: 'bubble' },
+  });
+  assert.deepEqual(h.room.getParticipants().get('bob').chatStyle, {
+    color: 'lime',
+    style: 'bubble',
+  });
+  const before = changes;
+  h.reply({
+    type: 'chatStyleChanged',
+    participantId: 'bob',
+    chatStyle: { color: null, style: 'text' },
+  });
+  assert.deepEqual(h.room.getParticipants().get('bob').chatStyle, { color: null, style: 'text' });
+  h.reply({
+    type: 'chatStyleChanged',
+    participantId: 'local',
+    chatStyle: { color: 'amber', style: 'accent' },
+  });
+  assert.deepEqual(h.room.chatStyle, { color: 'amber', style: 'accent' });
+  assert.equal(changes - before, 2);
+  assert.deepEqual(
+    h.social.map((message) => message.type),
+    ['chatStyleChanged', 'chatStyleChanged'],
+  );
+
+  const request = h.room.requestSocial('getRoomSnapshot');
+  h.respond(
+    h.sent.at(-1),
+    snapshot({
+      participants: [
+        {
+          id: 'carol',
+          name: 'Carol',
+          role: 'user',
+          producers: [],
+          chatStyle: { color: 'pink', style: 'accent' },
+        },
+      ],
+    }),
+  );
+  await request;
+  assert.deepEqual(h.room.getParticipants().get('carol').chatStyle, {
+    color: 'pink',
+    style: 'accent',
+  });
+});
+
+test('setting a look asks the room and adopts the look it applied', async () => {
+  const h = await harness();
+  await h.room.join('room', 'Local');
+  const change = h.room.setChatStyle({ color: 'sky', style: 'bubble' });
+  const request = h.sent.at(-1);
+  assert.equal(request.type, 'setChatStyle');
+  assert.deepEqual(request.chatStyle, { color: 'sky', style: 'bubble' });
+  h.respond(request, { chatStyle: { color: 'sky', style: 'bubble' } });
+  assert.deepEqual(await change, { color: 'sky', style: 'bubble' });
+  assert.deepEqual(h.room.chatStyle, { color: 'sky', style: 'bubble' });
+});
