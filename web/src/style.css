@@ -1529,10 +1529,6 @@ header h1 {
   .room-label {
     display: none;
   }
-
-  #room-tools .media-controls-toolbar {
-    display: none;
-  }
 }
 
 /* --- Auth Bar --- */
@@ -2208,9 +2204,14 @@ header h1 {
     grid-template-columns: minmax(0, 1fr) minmax(200px, 42%) !important;
     grid-template-rows: minmax(0, 1fr) auto;
   }
-  #main-area {
+  #main-area,
+  #room-screen.layout-classic #main-area {
     grid-column: 1;
     grid-row: 1;
+  }
+  /* No room for the classic roster column; the sidebar's People tab lists them. */
+  #classic-users-panel {
+    display: none !important;
   }
   #sidebar {
     grid-column: 2 !important;

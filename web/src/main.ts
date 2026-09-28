@@ -702,6 +702,16 @@ function removeRoomPassword(): Promise<void> {
 }
 
 // --- Layout Management ---
+/**
+ * Phones stack the room and landscape phones up to 900 px wide split it,
+ * without the desktop panels; the queries are style.css's own.
+ */
+function isDesktopLayout(): boolean {
+  return !window.matchMedia(
+    '(max-width: 768px), (max-width: 900px) and (max-height: 500px) and (orientation: landscape)',
+  ).matches;
+}
+
 function getLayout(): 'modern' | 'classic' {
   return localStorage.getItem('layout') === 'modern' ? 'modern' : 'classic';
 }
@@ -714,7 +724,7 @@ function setLayout(layout: 'modern' | 'classic'): void {
 
   // In classic mode, hide the Users tab from the sidebar (users are in the left panel)
   // and force the Chat tab active
-  if (usersTab) usersTab.hidden = layout === 'classic' && window.innerWidth > 768;
+  if (usersTab) usersTab.hidden = layout === 'classic' && isDesktopLayout();
   if (usersTab?.hidden && usersTab.classList.contains('active')) selectSidebarTab('chat');
   applyPanelPreferences();
 
@@ -728,7 +738,7 @@ layoutSelect.value = getLayout();
 // --- Sidebar Tabs ---
 /** On phones a tab press also reopens a panel that was collapsed to its tab bar. */
 function expandMobilePanel(): void {
-  if (panelPreferences.mobilePanelCollapsed && window.innerWidth <= 768) {
+  if (panelPreferences.mobilePanelCollapsed && !isDesktopLayout()) {
     panelPreferences.mobilePanelCollapsed = false;
     savePanelPreferences();
   }
@@ -811,7 +821,7 @@ function selectSidebarTab(tab: 'chat' | 'users' | 'lobby'): void {
 }
 
 function applyPanelPreferences(): void {
-  const desktop = window.innerWidth > 768;
+  const desktop = isDesktopLayout();
   const rosterCollapsed = desktop && panelPreferences.rosterCollapsed && getLayout() === 'classic';
   const chatCollapsed = desktop && panelPreferences.chatCollapsed;
   roomScreen.style.setProperty(
@@ -872,7 +882,7 @@ function attachPanelResize(panel: HTMLElement, side: 'roster' | 'chat'): void {
   handle.setAttribute('aria-valuemax', side === 'roster' ? '360' : '520');
   handle.setAttribute('aria-valuenow', String(panelPreferences[key]));
   handle.addEventListener('pointerdown', (event) => {
-    if (window.innerWidth <= 768 || event.button !== 0) return;
+    if (!isDesktopLayout() || event.button !== 0) return;
     event.preventDefault();
     const startX = event.clientX;
     const startWidth = panelPreferences[key];
@@ -905,7 +915,7 @@ function attachPanelResize(panel: HTMLElement, side: 'roster' | 'chat'): void {
 }
 
 rosterToggleBtn.addEventListener('click', () => {
-  if (getLayout() === 'classic' && window.innerWidth > 768) {
+  if (getLayout() === 'classic' && isDesktopLayout()) {
     panelPreferences.rosterCollapsed = !panelPreferences.rosterCollapsed;
   } else {
     panelPreferences.chatCollapsed = false;
@@ -914,7 +924,7 @@ rosterToggleBtn.addEventListener('click', () => {
   savePanelPreferences();
 });
 chatToggleBtn.addEventListener('click', () => {
-  if (window.innerWidth > 768) panelPreferences.chatCollapsed = !panelPreferences.chatCollapsed;
+  if (isDesktopLayout()) panelPreferences.chatCollapsed = !panelPreferences.chatCollapsed;
   selectSidebarTab('chat');
   savePanelPreferences();
 });

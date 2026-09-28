@@ -188,6 +188,7 @@ test('phone layouts collapse the chat panel to its tab bar without touching desk
         sidebarCollapseBtn,
         usersTab: null,
         getLayout: () => 'classic',
+        isDesktopLayout: () => window.innerWidth > 768,
         selectSidebarTab() {},
         document: { getElementById: (id) => (id === 'sidebar' ? sidebar : null) },
       },
@@ -201,6 +202,65 @@ test('phone layouts collapse the chat panel to its tab bar without touching desk
   applyPanelPreferences();
   assert.equal(roomScreen.classList.contains('mobile-panel-collapsed'), false);
   assert.equal(sidebarCollapseBtn.attributes['aria-expanded'], 'true');
+});
+
+test('the desktop layout ends where style.css starts stacking or splitting the room', async () => {
+  const css = await readFile(new URL('../src/style.css', import.meta.url), 'utf8');
+  const queries = [];
+  let matches = false;
+  const window = {
+    matchMedia(query) {
+      queries.push(query);
+      return { matches };
+    },
+  };
+  const { isDesktopLayout } = evaluateTypeScript(
+    `${await functionSource('isDesktopLayout')} export { isDesktopLayout };`,
+    { globals: { window } },
+  );
+  assert.equal(isDesktopLayout(), true);
+  matches = true;
+  assert.equal(isDesktopLayout(), false);
+  const parts = queries[0].split(',').map((part) => part.trim());
+  assert.ok(parts.some((part) => part.includes('orientation: landscape')));
+  for (const part of parts)
+    assert.ok(css.includes(`@media ${part} {`), `style.css has no @media ${part}`);
+});
+
+test('a landscape phone in the classic layout lists people in the sidebar tab', async () => {
+  const roomScreen = { classList: classListStub(), style: { setProperty() {} } };
+  const button = () => ({ setAttribute() {} });
+  const usersTab = { hidden: true, classList: { contains: () => false } };
+  let desktop = false;
+  const { applyPanelPreferences } = evaluateTypeScript(
+    `${await functionSource('applyPanelPreferences')} export { applyPanelPreferences };`,
+    {
+      globals: {
+        window: { innerWidth: 844 },
+        panelPreferences: {
+          rosterWidth: 220,
+          chatWidth: 320,
+          rosterCollapsed: false,
+          chatCollapsed: false,
+          mobilePanelCollapsed: false,
+        },
+        roomScreen,
+        rosterToggleBtn: button(),
+        chatToggleBtn: button(),
+        sidebarCollapseBtn: button(),
+        usersTab,
+        getLayout: () => 'classic',
+        isDesktopLayout: () => desktop,
+        selectSidebarTab() {},
+        document: { getElementById: (id) => (id === 'sidebar' ? {} : null) },
+      },
+    },
+  );
+  applyPanelPreferences();
+  assert.equal(usersTab.hidden, false, 'the roster column is hidden, so the tab lists people');
+  desktop = true;
+  applyPanelPreferences();
+  assert.equal(usersTab.hidden, true, 'the desktop roster column lists them instead');
 });
 
 test('the diagnostics entry lives on the home card outside a room and in the room tools inside one', async () => {
