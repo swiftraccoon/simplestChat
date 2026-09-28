@@ -263,6 +263,10 @@ impl TestConfig {
             self.departure == Departure::Abrupt || self.diagnostics,
             "--departure explicit-leave requires --diagnostics"
         );
+        anyhow::ensure!(
+            self.churn_rate <= 0.0 || self.profile.browser().is_none(),
+            "--profile browser models rooms that only fill; run it without --churn-rate"
+        );
         Ok(())
     }
 
@@ -3742,6 +3746,9 @@ async fn handle_server_message(
             tracing::debug!("{}: Participant left: {}", client_id, participant_id);
         }
         ServerMessage::ProducerClosed { producer_id } => {
+            if let Some(grid) = grid {
+                grid.depart(&producer_id);
+            }
             if let Err(error) = subscriptions.close(&producer_id) {
                 metrics.record_error(format!("Producer closure failed: {error}"));
             }
@@ -4259,6 +4266,23 @@ mod departure_tests {
         assert!(config.validate_departure().is_err());
         config.diagnostics = true;
         assert!(config.validate_departure().is_ok());
+        // The browser grid models rooms that only fill, never churn.
+        let mut browser = BrowserOptions::default();
+        browser.set("--profile", "browser").unwrap();
+        let churning = TestConfig {
+            profile: browser.profile(false).unwrap(),
+            churn_rate: 0.1,
+            ..TestConfig::default()
+        };
+        assert!(churning.validate_departure().is_err());
+        assert!(
+            TestConfig {
+                churn_rate: 0.1,
+                ..TestConfig::default()
+            }
+            .validate_departure()
+            .is_ok()
+        );
         assert_eq!(
             serde_json::to_value(&config).unwrap()["departure"],
             "explicit-leave"

@@ -76,7 +76,7 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 | `--max-audio N`, `--max-video N` | Consumer caps per client; 4 each |
 | `--subscription-plan MODE` | Discovery-order `fifo` (default), balanced `ring-v1`, or concentrated `hotspot-v1` |
 | `--subscription-seed N` | Required for fixed graphs; unsigned 32-bit integer, held constant across comparisons |
-| `--churn-rate N` | Select `min(clients, floor(N × duration))` clients to repeatedly join; 0 |
+| `--churn-rate N` | Select `min(clients, floor(N × duration))` clients to repeatedly join; 0. Refused with `--profile browser`, whose grid models rooms that only fill |
 | `--audio-only`, `--video-only` | Generate only the selected media kind |
 | `--quality PRESET`, `--fps FPS` | `480p`/`720p`/`1080p`, 15/30/60 fps; defaults 480p/30 (synthetic profile only) |
 | `--profile NAME` | `synthetic` (default: the fixed stream every historical result used) or `browser` (what the web client costs; see below) |

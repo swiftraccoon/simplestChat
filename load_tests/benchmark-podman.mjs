@@ -178,10 +178,11 @@ export function parseOptions(args) {
   if (!options.clients.length || options.clients.some(v => !Number.isInteger(v) || v < 2 || v > 2000) || new Set(options.clients).size !== options.clients.length) throw new Error('--clients must be unique counts between 2 and 2000');
   const scenarios = (raw.scenarios ?? 'multi-room').split(',');
   if (scenarios.some(s => !['conference', 'multi-room', 'audio', 'webinar'].includes(s)) || new Set(scenarios).size !== scenarios.length) throw new Error('Unknown/duplicate scenario');
-  // webinar: one room, exactly one publisher (ceil(clients / 1000)), every
-  // other client a viewer, each viewer joining from its own loopback address
-  // as distinct viewers would, so the per-address join limits do not shape
-  // the ramp of a large one-to-many room.
+  // webinar: one room, exactly one publisher (a ratio of 1 / clients, which the
+  // generator rounds up to one at every accepted size), every other client a
+  // viewer, each viewer joining from its own loopback address as distinct
+  // viewers would, so the per-address join limits do not shape the ramp of a
+  // large one-to-many room.
   // --source-addresses N spreads every other scenario's clients over N loopback
   // addresses too (default 1: the shared address, as every earlier record).
   const WEBINAR_SOURCE_ADDRESSES = 250;
@@ -191,13 +192,18 @@ export function parseOptions(args) {
     return { name: `${name}-${clients}`, clients,
       rooms: name === 'multi-room' ? Math.min(4, Math.floor(clients / 2)) : 1, mode: name === 'webinar' ? 'webinar' : 'conference',
       sourceAddresses,
-      extra: name === 'audio' ? ['--audio-only', ...spread] : name === 'webinar' ? ['--publish-ratio', '0.001', ...spread] : spread };
+      extra: name === 'audio' ? ['--audio-only', ...spread] : name === 'webinar' ? ['--publish-ratio', String(1 / clients), ...spread] : spread };
   }));
   for (const scenario of options.scenarios) {
     // The server's code-level join limits (30 per IP and 10 per room and IP
-    // per minute) apply per loopback source address exactly as locally.
+    // per minute) apply per loopback source address exactly as locally. Client
+    // i takes address i % addresses and room i % rooms, so one address and room
+    // pair recurs every lcm(addresses, rooms) clients, not every product.
+    const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+    const pairStride = scenario.sourceAddresses * scenario.rooms / gcd(scenario.sourceAddresses, scenario.rooms);
     const perAddress = Math.ceil(scenario.clients / scenario.sourceAddresses);
-    const spacing = Math.max(perAddress > 30 ? 60.5 / (30 * scenario.sourceAddresses) : 0, Math.ceil(perAddress / scenario.rooms) > 10 ? 60.5 / (10 * scenario.rooms * scenario.sourceAddresses) : 0);
+    const perPair = Math.ceil(scenario.clients / pairStride);
+    const spacing = Math.max(perAddress > 30 ? 60.5 / (30 * scenario.sourceAddresses) : 0, perPair > 10 ? 60.5 / (10 * pairStride) : 0);
     const minimumRamp = Math.ceil(spacing * scenario.clients);
     if (options.rampUp < minimumRamp) throw new Error(`${scenario.name} exceeds loopback join admission limits; use --ramp-up ${minimumRamp}`);
   }

@@ -71,14 +71,19 @@ test('a server sampler block yields process, cgroup and thread readings', async 
 
 test('webinar scenarios keep one room, one publisher and per-address ramps', () => {
   const base = ['--server-image', 's', '--generator-image', 'g', '--output', 'out'];
-  const options = parseOptions([...base, '--scenarios', 'webinar', '--clients', '300,1000', '--ramp-up', '60']);
+  const options = parseOptions([...base, '--scenarios', 'webinar', '--clients', '300,1000,1500', '--ramp-up', '90']);
   assert.deepEqual(
-    options.scenarios.map((s) => [s.name, s.rooms, s.mode, s.sourceAddresses, s.extra]),
+    options.scenarios.map((s) => [s.name, s.rooms, s.mode, s.sourceAddresses, s.extra[0], s.extra.slice(2)]),
     [
-      ['webinar-300', 1, 'webinar', 250, ['--publish-ratio', '0.001', '--source-addresses', '250']],
-      ['webinar-1000', 1, 'webinar', 250, ['--publish-ratio', '0.001', '--source-addresses', '250']],
+      ['webinar-300', 1, 'webinar', 250, '--publish-ratio', ['--source-addresses', '250']],
+      ['webinar-1000', 1, 'webinar', 250, '--publish-ratio', ['--source-addresses', '250']],
+      ['webinar-1500', 1, 'webinar', 250, '--publish-ratio', ['--source-addresses', '250']],
     ],
   );
+  // The generator publishes ceil(clients * ratio): one presenter at every size,
+  // where a fixed 0.001 gave 1,001 to 2,000 clients a second one.
+  for (const scenario of options.scenarios)
+    assert.equal(Math.ceil(scenario.clients * Number(scenario.extra[1])), 1, scenario.name);
   // Four viewers per loopback address stay under the 10-per-room-and-address
   // limit, so the join spacing no longer forces a ten-minute ramp per hundred.
   assert.throws(() => parseOptions([...base, '--scenarios', 'conference', '--clients', '300', '--ramp-up', '60']), /--ramp-up 1815/);
@@ -86,7 +91,20 @@ test('webinar scenarios keep one room, one publisher and per-address ramps', () 
   // Other shapes spread only on request and keep the shared address by default.
   const spread = parseOptions([...base, '--scenarios', 'conference', '--clients', '200', '--ramp-up', '60', '--source-addresses', '250']);
   assert.deepEqual(spread.scenarios.map((s) => [s.sourceAddresses, s.extra]), [[250, ['--source-addresses', '250']]]);
-  assert.deepEqual(options.scenarios.map((s) => s.extra).flat().filter((a) => a === '--source-addresses').length, 2);
+  assert.equal(options.scenarios.map((s) => s.extra).flat().filter((a) => a === '--source-addresses').length, options.scenarios.length);
+});
+
+test('the ramp preflight follows the address and room each client actually takes', () => {
+  const base = ['--server-image', 's', '--generator-image', 'g', '--output', 'out'];
+  // Client i takes address i % 4 and room i % 4: each address sends all 50 of
+  // its joins into one room, and 10 a minute for that pair needs 303 s.
+  assert.throws(
+    () => parseOptions([...base, '--clients', '200', '--ramp-up', '101', '--source-addresses', '4']),
+    /--ramp-up 303/,
+  );
+  assert.equal(parseOptions([...base, '--clients', '200', '--ramp-up', '303', '--source-addresses', '4']).scenarios[0].rooms, 4);
+  // Five addresses over four rooms spread every address across every room.
+  assert.equal(parseOptions([...base, '--clients', '200', '--ramp-up', '81', '--source-addresses', '5']).scenarios[0].rooms, 4);
 });
 
 test('server environment overrides are parsed as pairs and recorded', () => {

@@ -150,7 +150,10 @@ pub fn layer_for_width(rendered_width: f64, pixel_ratio: f64, current: Option<u8
 /// publishes; every layout re-evaluates each video tile's layer with the
 /// hysteresis above (`observeTileSize` in `web/src/main.ts`), so tiles that
 /// appeared while the grid was small keep a higher layer after it fills.
-/// Departures are not modelled: calibration rooms only fill.
+/// A closed producer takes its consumers along, and its participant's tile
+/// once none of their media is consumed; the remaining tiles keep their layers
+/// until the next layout. Churn is refused with this profile: calibration
+/// rooms only fill.
 #[derive(Debug)]
 pub struct BrowserGrid {
     viewer: Viewer,
@@ -158,6 +161,8 @@ pub struct BrowserGrid {
     owners: HashMap<String, String>,
     participants: HashSet<String>,
     layers: BTreeMap<String, u8>,
+    /// Every consumer laid out, audio included, to the producer it consumes.
+    consumed: HashMap<String, String>,
 }
 
 impl BrowserGrid {
@@ -168,7 +173,15 @@ impl BrowserGrid {
             owners: HashMap::new(),
             participants: HashSet::new(),
             layers: BTreeMap::new(),
+            consumed: HashMap::new(),
         }
+    }
+
+    fn owner_of(&self, producer_id: &str) -> String {
+        self.owners
+            .get(producer_id)
+            .cloned()
+            .unwrap_or_else(|| producer_id.to_string())
     }
 
     /// Remember whose producer this is, as `NewProducer` announces it.
@@ -181,13 +194,9 @@ impl BrowserGrid {
     /// and return the layer requests the web client would send: every new
     /// video tile's, and each existing one whose layer the new size changes.
     pub fn consume(&mut self, batch: &[(String, String, bool)]) -> Vec<(String, u8)> {
-        for (_, producer, _) in batch {
-            let owner = self
-                .owners
-                .get(producer)
-                .cloned()
-                .unwrap_or_else(|| producer.clone());
-            self.participants.insert(owner);
+        for (consumer, producer, _) in batch {
+            self.participants.insert(self.owner_of(producer));
+            self.consumed.insert(consumer.clone(), producer.clone());
         }
         let tiles = usize::from(self.own_tile) + self.participants.len();
         let width = self.viewer.tile_width(tiles);
@@ -207,6 +216,27 @@ impl BrowserGrid {
             }
         }
         requests
+    }
+
+    /// Forget a closed producer, as `ProducerClosed` announces it.
+    pub fn depart(&mut self, producer_id: &str) {
+        let owner = self.owner_of(producer_id);
+        let layers = &mut self.layers;
+        self.consumed.retain(|consumer, producer| {
+            let closed = producer == producer_id;
+            if closed {
+                layers.remove(consumer);
+            }
+            !closed
+        });
+        self.owners.remove(producer_id);
+        if !self
+            .consumed
+            .values()
+            .any(|producer| self.owner_of(producer) == owner)
+        {
+            self.participants.remove(&owner);
+        }
     }
 }
 /// `#video-grid` padding and gap, and the `minmax(280px, 1fr)` tile floor
@@ -458,6 +488,46 @@ mod tests {
             ("video-consumer".to_string(), "1-video".to_string(), true),
         ]);
         assert_eq!(requests, vec![("video-consumer".to_string(), 2)]);
+    }
+
+    #[test]
+    fn a_departed_participant_leaves_the_grid() {
+        // Four peers on a classic laptop share two columns (438 px, the top
+        // layer). One leaves and another arrives: four tiles again, so the
+        // newcomer gets the top layer too, where a stale tile would make five
+        // (289 px, the middle layer).
+        let mut grid = BrowserGrid::new(laptop(), false);
+        let mut batch = Vec::new();
+        for peer in ["a", "b", "c", "d"] {
+            grid.announce(&format!("{peer}-video"), peer);
+            batch.push((format!("{peer}-consumer"), format!("{peer}-video"), true));
+        }
+        grid.consume(&batch);
+        grid.depart("d-video");
+        assert!(!grid.participants.contains("d"));
+        assert!(!grid.layers.contains_key("d-consumer"));
+        grid.announce("f-video", "f");
+        let requests = grid.consume(&[("f-consumer".to_string(), "f-video".to_string(), true)]);
+        assert_eq!(requests, vec![("f-consumer".to_string(), 2)]);
+    }
+
+    #[test]
+    fn a_participant_stays_while_any_of_its_media_is_consumed() {
+        let mut grid = BrowserGrid::new(laptop(), false);
+        grid.announce("a-audio", "a");
+        grid.announce("a-video", "a");
+        grid.consume(&[
+            ("audio-consumer".to_string(), "a-audio".to_string(), false),
+            ("video-consumer".to_string(), "a-video".to_string(), true),
+        ]);
+        grid.depart("a-video");
+        assert!(
+            grid.participants.contains("a"),
+            "the microphone still has a tile"
+        );
+        assert!(!grid.layers.contains_key("video-consumer"));
+        grid.depart("a-audio");
+        assert!(grid.participants.is_empty());
     }
 
     #[test]
