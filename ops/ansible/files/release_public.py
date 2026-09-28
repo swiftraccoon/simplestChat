@@ -829,6 +829,19 @@ def candidate_selection(
     return selected_compose, preview_env.read_bytes()
 
 
+def write_backup_receipt(attempt: Path, backup: Path, sha256: str, revision: str) -> None:
+    """Record a dump that completed and listed; monitoring counts receipts, never bare dumps."""
+    receipt = {
+        "schemaVersion": 1,
+        "dump": backup.name,
+        "bytes": backup.stat().st_size,
+        "sha256": sha256,
+        "revision": revision,
+        "completedAt": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
+    atomic(attempt / "database-before.receipt.json", json.dumps(receipt, indent=2) + "\n")
+
+
 def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replacement and bounded rollback together.
     runner: RunnerProtocol,
     manifest: Manifest,
@@ -929,6 +942,9 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
         input_path=backup,
     )
     report["backupSha256"] = sha256_file(backup)
+    write_backup_receipt(
+        runner.attempt, backup, string_value(report["backupSha256"]), manifest["revision"]
+    )
     journal(runner, finalized=True, phase="backed_up")
     for filename in SELECTION:
         _ = shutil.copyfile(CONFIG / filename, runner.attempt / ("before-" + filename))

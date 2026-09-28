@@ -162,9 +162,20 @@ def readiness_and_tls(lines: list[str], domain: str) -> None:
 
 def evidence(lines: list[str]) -> None:
     """Report backup/restore evidence truthfully without counting a backup as a restore."""
-    backups = list((ROOT / "results").glob("release.*/database-before.dump"))
-    require(len(backups) <= MAX_BACKUPS, "Too many release backup entries")
-    latest = max((item.stat().st_mtime for item in backups if item.stat().st_size > 0), default=0)
+    # A dump file exists before pg_dump starts and survives its failure; only the
+    # receipt the release writes after the dump listed counts, and only while the
+    # dump it names still has the recorded size.
+    receipts = list((ROOT / "results").glob("release.*/database-before.receipt.json"))
+    require(len(receipts) <= MAX_BACKUPS, "Too many release backup entries")
+    latest = 0.0
+    for receipt in receipts:
+        try:
+            record = object_value(decode_json(receipt.read_bytes()))
+            dump = receipt.with_name(str(record["dump"]))
+            if record.get("bytes") == dump.stat().st_size > 0:
+                latest = max(latest, receipt.stat().st_mtime)
+        except (OSError, ValueError, KeyError, ReleaseError):
+            continue
     gauge(lines, "backup_last_success_seconds", latest)
     # Restore exercises are separate operator-owned evidence, never inferred from pg_restore --list.
     restore = STATE / "restore-verified.timestamp"

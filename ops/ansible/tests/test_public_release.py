@@ -1416,5 +1416,23 @@ class PublicRunnerTests(unittest.TestCase):
         self.assertEqual(child.waits, [10])
 
 
+class BackupReceiptTests(unittest.TestCase):
+    """The receipt a release writes after its dump validated."""
+
+    def test_receipt_records_the_validated_dump(self) -> None:
+        """The receipt names the dump, its size and hash, and the release it belongs to."""
+        with tempfile.TemporaryDirectory() as directory:
+            attempt = Path(directory)
+            dump = attempt / "database-before.dump"
+            _ = dump.write_bytes(b"pgdump")
+            public.write_backup_receipt(attempt, dump, "ab" * 32, "0" * 40)
+            receipt = obj(decode_json((attempt / "database-before.receipt.json").read_bytes()))
+            self.assertEqual(receipt["dump"], "database-before.dump")
+            self.assertEqual(receipt["bytes"], 6)
+            self.assertEqual(receipt["sha256"], "ab" * 32)
+            self.assertEqual(receipt["revision"], "0" * 40)
+            self.assertRegex(string(receipt["completedAt"]), r"^\d{4}-\d{2}-\d{2}T")
+
+
 if __name__ == "__main__":
     _ = unittest.main()

@@ -1,5 +1,6 @@
 """Offline public-service template checks; no Docker daemon or network access."""
 
+import re
 import unittest
 from pathlib import Path
 
@@ -226,11 +227,39 @@ class PublicTemplateTests(unittest.TestCase):
         self.assertIn("CREATE EXTENSION pg_trgm WITH SCHEMA public", bootstrap)
         grants = render("public-runtime-grants.sql.j2")
         self.assertNotIn("ALL TABLES", grants)
-        self.assertIn("ON public.users, public.webauthn_credentials", grants)
+        self.assertIn("GRANT SELECT, INSERT, UPDATE\n  ON public.users\n", grants)
         for table in ["sessions", "rooms", "room_roles", "room_states", "room_reports"]:
             self.assertIn(f"public.{table}", grants)
         statements = "\n".join(line for line in grants.splitlines() if not line.startswith("--"))
         self.assertNotIn("_sqlx_migrations", statements)
+
+    def test_runtime_grants_cover_every_statement_the_server_runs(self) -> None:
+        """Every table the server inserts into, updates or deletes from is granted that right."""
+        granted: dict[str, set[str]] = {}
+        grants = render("public-runtime-grants.sql.j2")
+        for grant in re.finditer(
+            r"GRANT ([A-Z, ]+)\n\s+ON ([^;]+?)\n\s+TO simplestchat_app;", grants
+        ):
+            rights = {right.strip() for right in str(grant.group(1)).split(",")}
+            for table in str(grant.group(2)).split(","):
+                granted[table.strip().removeprefix("public.")] = rights
+        tables = "users|webauthn_credentials|sessions|rooms|room_roles|room_states|room_reports"
+        statement = re.compile(r"\b(INSERT INTO|UPDATE|DELETE FROM)\s+(" + tables + r")\b")
+        needed: dict[str, set[str]] = {}
+        repository = ROOT.parents[1]
+        sources = list((repository / "src").rglob("*.rs"))
+        self.assertTrue(sources, f"no Rust sources under {repository}")
+        for path in sources:
+            if path.name.endswith("_tests.rs"):
+                continue
+            # Tests sit after the first cfg(test) in a file and run as the owner.
+            production = path.read_text().split("#[cfg(test)]", maxsplit=1)[0]
+            for found in statement.finditer(production):
+                needed.setdefault(str(found.group(2)), set()).add(str(found.group(1)).split()[0])
+        self.assertEqual(needed["webauthn_credentials"], {"INSERT", "UPDATE", "DELETE"})
+        self.assertNotIn("DELETE", needed.get("users", set()))
+        for table, rights in needed.items():
+            self.assertLessEqual(rights, granted.get(table, set()), table)
 
 
 if __name__ == "__main__":

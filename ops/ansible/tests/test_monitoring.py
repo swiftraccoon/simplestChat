@@ -15,12 +15,63 @@ from test_support import ROOT, array, obj, objects, string, yaml_value
 
 # isort: split
 import monitoring_alerts as alerts
+import monitoring_collect as collect
 import release_public as release
 from release_json import JsonObject, decode_json
 
 
 class MonitoringTests(unittest.TestCase):
     """Keep alert data finite and failures visible while PostgreSQL is unavailable."""
+
+    def test_backup_freshness_counts_only_receipted_dumps_of_the_recorded_size(self) -> None:
+        """A dump file exists before pg_dump runs; only a receipt after listing counts."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / "state"
+            state.mkdir()
+            partial = root / "results" / "release.partial"
+            partial.mkdir(parents=True)
+            _ = (partial / "database-before.dump").write_bytes(b"x" * 100)
+            good = root / "results" / "release.good"
+            good.mkdir()
+            _ = (good / "database-before.dump").write_bytes(b"y" * 40)
+            _ = (good / "database-before.receipt.json").write_text(
+                json.dumps({"schemaVersion": 1, "dump": "database-before.dump", "bytes": 40})
+            )
+            grown = root / "results" / "release.grown"
+            grown.mkdir()
+            _ = (grown / "database-before.dump").write_bytes(b"z" * 10)
+            _ = (grown / "database-before.receipt.json").write_text(
+                json.dumps({"schemaVersion": 1, "dump": "database-before.dump", "bytes": 4})
+            )
+            (root / "releases").mkdir()
+            with (
+                patch.object(collect, "ROOT", root),
+                patch.object(collect, "STATE", state),
+                patch.object(collect, "command", return_value="0\t/tmp"),
+            ):
+                lines: list[str] = []
+                collect.evidence(lines)
+            fresh = [
+                line
+                for line in lines
+                if line.startswith("simplestchat_ops_backup_last_success_seconds ")
+            ]
+            self.assertEqual(len(fresh), 1)
+            self.assertAlmostEqual(
+                float(fresh[0].split()[1]),
+                (good / "database-before.receipt.json").stat().st_mtime,
+                delta=1,
+            )
+            with (
+                patch.object(collect, "ROOT", root),
+                patch.object(collect, "STATE", state),
+                patch.object(collect, "command", return_value="0\t/tmp"),
+            ):
+                (good / "database-before.receipt.json").unlink()
+                lines = []
+                collect.evidence(lines)
+            self.assertIn("simplestchat_ops_backup_last_success_seconds 0", "\n".join(lines))
 
     def test_rules_and_exported_metrics_have_a_checked_contract(self) -> None:
         """No rule can silently disappear from the recorder or reference a misspelled metric."""

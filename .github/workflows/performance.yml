@@ -66,10 +66,12 @@ jobs:
       # artifacts; only its workspace crate and vendored path crates compile.
       - name: Build the baseline server
         shell: bash
+        env:
+          # Free-form input stays shell data; interpolating it into the script would run it.
+          BASELINE_REF: ${{ inputs.baseline || 'HEAD~1' }}
         run: |
           set -euo pipefail
-          baseline_ref='${{ inputs.baseline || 'HEAD~1' }}'
-          baseline="$(git rev-parse --verify "${baseline_ref}^{commit}")"
+          baseline="$(git rev-parse --verify "${BASELINE_REF}^{commit}")"
           echo "baseline commit ${baseline}"
           git worktree add --detach "${RUNNER_TEMP}/baseline" "${baseline}"
           find "${RUNNER_TEMP}/baseline/vendor" -exec touch -h -t 200001010000 {} +
@@ -89,10 +91,13 @@ jobs:
 
       - name: Run the controlled comparison
         shell: bash
+        env:
+          CLIENTS: ${{ inputs.clients || '10' }}
+          WORKERS: ${{ inputs.workers || '1' }}
         run: |
           set -euo pipefail
-          clients='${{ inputs.clients || '10' }}'
-          workers='${{ inputs.workers || '1' }}'
+          clients="${CLIENTS}"
+          workers="${WORKERS}"
           if [[ "${clients}" = "30" ]]; then
             scenario=multi-room; ramp=65
             extra=(--subscription-plan ring-v1 --subscription-seed 17)
