@@ -213,8 +213,9 @@ impl RouterManager {
 
     /// Pipes a producer from the room's primary router to the viewer router of
     /// a placed participant, once per producer and worker. Participants on the
-    /// primary router need nothing. The pipe follows the producer's close; a
-    /// closed pipe is forgotten and a request for a closed producer fails.
+    /// primary router need nothing. The pipe follows the producer's close;
+    /// closed pipes are forgotten as the next one is made, and a request for a
+    /// closed producer fails.
     ///
     /// # Errors
     /// Returns an error if the room or the participant's viewer router is gone
@@ -258,6 +259,10 @@ impl RouterManager {
             "Piped producer {} of room {} to worker {}",
             producer_id, room_id, worker_id
         );
+        // A pipe closes with its producer, and a replacement producer has a
+        // new id, so closed pairs would otherwise stay until the room closes.
+        room.pipes
+            .retain(|_, handles| !handles.pipe_producer.closed());
         room.pipes.insert(
             key,
             PipedProducerHandles {

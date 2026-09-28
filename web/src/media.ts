@@ -261,6 +261,19 @@ export class MediaManager {
           } else {
             this.inFlightControls.delete(key);
             this.pendingControls.delete(key);
+            if (message.type === 'restartIce') {
+              // The server no longer has this transport (its media worker died,
+              // for one), so only fresh transports can restore media.
+              const transportId = message.transportId;
+              if (
+                transportId === this.sendTransport?.id ||
+                transportId === this.recvTransport?.id
+              ) {
+                console.warn(`[media] ICE restart failed for transport ${transportId}`);
+                this.onTransportRebuildRequiredCb?.();
+              }
+              return;
+            }
           }
           console.warn(`[media] ${message.type} could not be confirmed`);
           this.onControlErrorCb?.();

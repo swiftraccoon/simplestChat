@@ -239,6 +239,67 @@ async fn a_producer_is_piped_once_per_viewer_router_and_consumed_by_its_kept_id(
 }
 
 #[tokio::test]
+async fn closed_pipes_are_forgotten_when_the_next_one_is_made() {
+    with_room(|workers, routers, config, primary| async move {
+        let primary_router = routers.get_router(ROOM).await.unwrap();
+        busy(&workers, primary);
+        let (_viewer_router, _worker, _lease) = routers
+            .place_viewer(ROOM, "viewer-1", &config.router_config)
+            .await
+            .unwrap();
+        // A camera turned off and on again is a new producer each time.
+        let mut producers = Vec::new();
+        for _ in 0..4 {
+            let publisher = primary_router
+                .create_direct_transport(DirectTransportOptions::default())
+                .await
+                .unwrap();
+            let producer = publisher
+                .produce(ProducerOptions::new(MediaKind::Video, video_parameters()))
+                .await
+                .unwrap();
+            routers
+                .ensure_piped(ROOM, "viewer-1", producer.id())
+                .await
+                .unwrap();
+            producers.push((publisher, producer));
+        }
+        let (_publisher, current) = producers.pop().unwrap();
+        drop(producers);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        while routers.pipe_count(ROOM).await > 1 {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "pipes did not follow their producers' close"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        let publisher = primary_router
+            .create_direct_transport(DirectTransportOptions::default())
+            .await
+            .unwrap();
+        let replacement = publisher
+            .produce(ProducerOptions::new(MediaKind::Video, video_parameters()))
+            .await
+            .unwrap();
+        routers
+            .ensure_piped(ROOM, "viewer-1", replacement.id())
+            .await
+            .unwrap();
+        let entries = routers
+            .viewer_routers
+            .lock()
+            .await
+            .get(ROOM)
+            .map_or(0, |room| room.pipes.len());
+        assert_eq!(entries, 2, "only the live pipes stay recorded");
+        drop(current);
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn removing_the_room_router_closes_its_viewer_routers_too() {
     with_room(|workers, routers, config, primary| async move {
         busy(&workers, primary);

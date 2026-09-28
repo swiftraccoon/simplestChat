@@ -1860,8 +1860,10 @@ impl RoomManager {
             .router_manager()
             .rooms_on_worker(dead_worker)
             .await;
-        // Viewers placed on the dead worker lost their transports and recover
-        // through the client's transport rebuild; their rooms stay open.
+        // Viewers placed on the dead worker lost their receive transports; the
+        // server refuses their ICE restarts, the client then rebuilds its
+        // transports, and `place_viewer` puts the new one on a live worker.
+        // Their rooms stay open.
         let viewer_routers = self
             .media_server
             .router_manager()

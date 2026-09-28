@@ -371,6 +371,57 @@ test('correlated ICE acknowledgement applies the returned credentials to its nat
   assert.equal(media.pendingControls.size, 0);
 });
 
+test('a refused ICE restart rebuilds the transports instead of only reporting an error', async (t) => {
+  const { media, state } = await fixture(t);
+  const calls = [];
+  media.onControlError = () => calls.push('error');
+  media.onTransportRebuildRequired = () => calls.push('rebuild');
+  const transport = {
+    id: 'transport',
+    closed: false,
+    close() {},
+    on(_event, changed) {
+      this.changed = changed;
+    },
+    async restartIce() {
+      assert.fail('A refused restart has no credentials to apply');
+    },
+  };
+  media.recvTransport = transport;
+  media.setupIceRecovery(transport);
+  // The server lost the transport with its media worker.
+  state.controlReply = () => Promise.reject(new Error('Failed to restart ICE: channel closed'));
+  transport.changed('failed');
+  await settleControls();
+  assert.deepEqual(calls, ['rebuild']);
+  assert.equal(media.pendingControls.size, 0);
+  assert.equal(state.sent.filter(({ type }) => type === 'restartIce').length, 1);
+});
+
+test('a refused ICE restart for a replaced transport rebuilds nothing', async (t) => {
+  const { media, state } = await fixture(t);
+  const calls = [];
+  media.onControlError = () => calls.push('error');
+  media.onTransportRebuildRequired = () => calls.push('rebuild');
+  const transport = {
+    id: 'old',
+    closed: false,
+    close() {},
+    on(_event, changed) {
+      this.changed = changed;
+    },
+  };
+  media.recvTransport = transport;
+  media.setupIceRecovery(transport);
+  const reply = deferred();
+  state.controlReply = () => reply.promise;
+  transport.changed('failed');
+  media.recvTransport = { id: 'replacement', closed: false, close() {} };
+  reply.reject(new Error('Transport not found: old'));
+  await settleControls();
+  assert.deepEqual(calls, []);
+});
+
 test('offline microphone changes coalesce until the room resumes on its new socket', async (t) => {
   const { media, signaling, state } = await fixture(t);
   await media.unmuteAudio();
