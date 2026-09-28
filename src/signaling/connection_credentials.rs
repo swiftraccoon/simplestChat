@@ -269,6 +269,7 @@ mod tests {
             aud: "simplestchat".into(),
             exp: usize::MAX,
             auth_version: 0,
+            sid: None,
         };
         assert_eq!(
             account_credentials_current(None, &claims, Instant::now() + Duration::from_secs(5))

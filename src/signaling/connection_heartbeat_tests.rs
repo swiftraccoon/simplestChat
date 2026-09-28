@@ -479,6 +479,7 @@ async fn expired_or_unverifiable_account_cannot_receive_heartbeats() {
             aud: "test".into(),
             exp,
             auth_version: 0,
+            sid: None,
         }))
         .await;
         let first = tokio::time::timeout(TEST_IDLE, fixture.peer.next()).await;

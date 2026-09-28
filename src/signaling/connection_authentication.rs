@@ -223,6 +223,7 @@ mod tests {
             aud: "simplestchat".into(),
             exp,
             auth_version: 0,
+            sid: None,
         }
     }
 

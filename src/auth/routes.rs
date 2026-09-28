@@ -300,8 +300,8 @@ pub async fn register(
     .map_err(user_insert_error)?;
 
     let user_id = row.0.to_string();
-    let token = jwt::create_token(&user_id, &row.2, secret)?;
-    session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
+    let session_id = session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
+    let token = jwt::create_session_token(&user_id, &row.2, secret, 0, session_id)?;
     transaction.commit().await.map_err(database_error)?;
 
     info!(user_id, "User registered");
@@ -381,8 +381,8 @@ pub async fn login(
     if current != Some((row.3.clone(), row.4)) {
         return Err(AuthError::InvalidCredentials);
     }
-    let token = jwt::create_token_with_version(&user_id, &row.2, secret, row.4)?;
-    session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
+    let session_id = session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
+    let token = jwt::create_session_token(&user_id, &row.2, secret, row.4, session_id)?;
     transaction.commit().await.map_err(database_error)?;
 
     info!(user_id, "User logged in");
@@ -413,12 +413,13 @@ pub async fn refresh(
     let _request_permit = acquire_auth_request(&server)?;
     let mut transaction = pool.begin().await.map_err(database_error)?;
 
-    let (user_id, refresh_token) =
+    let (user_id, session_id, refresh_token) =
         match session::rotate_refresh_token_with(&mut transaction, raw_token).await? {
             session::RefreshRotation::Rotated {
                 user_id,
+                session_id,
                 refresh_token,
-            } => (user_id, refresh_token),
+            } => (user_id, session_id, refresh_token),
             session::RefreshRotation::ConcurrentRequest => {
                 // The winning response will install the successor cookie. Do
                 // not authenticate this consumed bearer, but also do not let a
@@ -445,7 +446,7 @@ pub async fn refresh(
     .ok_or(AuthError::UserNotFound)?;
 
     let user_id_string = user_id.to_string();
-    let token = jwt::create_token_with_version(&user_id_string, &row.1, secret, row.2)?;
+    let token = jwt::create_session_token(&user_id_string, &row.1, secret, row.2, session_id)?;
     transaction.commit().await.map_err(database_error)?;
     session::spawn_expired_cleanup(pool, server.session_cleanup());
 
@@ -583,10 +584,13 @@ pub async fn passkey_register_finish(
     .execute(&mut *transaction)
     .await
     .map_err(credential_insert_error)?;
-    session::create_session_with(&mut transaction, &registration.user_id, &refresh_token).await?;
+    let session_id =
+        session::create_session_with(&mut transaction, &registration.user_id, &refresh_token)
+            .await?;
 
     let user_id = registration.user_id.to_string();
-    let token = jwt::create_token(&user_id, &registration.display_name, secret)?;
+    let token =
+        jwt::create_session_token(&user_id, &registration.display_name, secret, 0, session_id)?;
     transaction.commit().await.map_err(database_error)?;
     info!(user_id, "User registered via passkey");
 
@@ -723,10 +727,11 @@ pub async fn passkey_login_finish(
     )
     .await?;
     let refresh_token = session::generate_refresh_token()?;
-    session::create_session_with(&mut transaction, &account_id, &refresh_token).await?;
+    let session_id =
+        session::create_session_with(&mut transaction, &account_id, &refresh_token).await?;
 
     let user_id = account_id.to_string();
-    let token = jwt::create_token_with_version(&user_id, &user.1, secret, user.2)?;
+    let token = jwt::create_session_token(&user_id, &user.1, secret, user.2, session_id)?;
     transaction.commit().await.map_err(database_error)?;
     info!(user_id, "User logged in via passkey");
 

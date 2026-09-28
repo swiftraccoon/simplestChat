@@ -23,6 +23,7 @@ impl ValidationFixture {
                 aud: "simplestchat".to_string(),
                 exp: unix_seconds() as usize + 60,
                 auth_version: 2,
+                sid: None,
             },
             continuity: CredentialContinuity::default(),
             notices: Some(notices),

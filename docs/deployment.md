@@ -277,8 +277,10 @@ and [development](development.md) for native build requirements.
   delivery first.
 - Secret rooms are unlisted, not access-controlled. Use high-entropy IDs plus
   password/registration requirements for sensitive rooms, or add invitations/ACLs.
-- Ordinary logout revokes refresh sessions, but issued access tokens remain valid
-  until their 15-minute expiry. Refresh-token replay outside the multi-tab race
+- Access tokens are bound to the refresh session they were issued with, so
+  logging that session out retires them: HTTP requests fail on the next call and
+  authenticated sockets within their revalidation interval (about 5 s). A logout
+  affects only its own session; other devices stay signed in. Refresh-token replay outside the multi-tab race
   window revokes the token family. Password changes and saved-key recovery revoke
   existing tokens and active account connections; higher-risk deployments may
   need immediate session-backed revocation for ordinary logout too.

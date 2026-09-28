@@ -26,6 +26,7 @@ pub(crate) struct RefreshToken {
 pub(crate) enum RefreshRotation {
     Rotated {
         user_id: Uuid,
+        session_id: Uuid,
         refresh_token: RefreshToken,
     },
     /// The exact predecessor was presented within the short concurrency grace
@@ -146,7 +147,7 @@ pub(crate) async fn create_session_with(
     transaction: &mut Transaction<'_, Postgres>,
     user_id: &Uuid,
     refresh_token: &RefreshToken,
-) -> Result<(), AuthError> {
+) -> Result<Uuid, AuthError> {
     // Serialize login/session-cap maintenance per account. Refresh rotation
     // takes the same lock before mutating a session, so every path follows the
     // users->sessions lock order and the cap remains exact under concurrency.
@@ -181,7 +182,7 @@ pub(crate) async fn create_session_with(
     .execute(&mut **transaction)
     .await
     .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
-    Ok(())
+    Ok(new_session_id)
 }
 
 async fn insert_session_with<'e, E>(
@@ -290,6 +291,7 @@ pub(crate) async fn rotate_refresh_token_with(
 
         return Ok(RefreshRotation::Rotated {
             user_id: candidate_user_id,
+            session_id,
             refresh_token: successor,
         });
     }
@@ -409,8 +411,8 @@ pub async fn delete_user_sessions(pool: &PgPool, user_id: &Uuid) -> Result<(), A
 pub async fn cleanup_expired(pool: &PgPool) -> Result<u64, AuthError> {
     let result = sqlx::query("DELETE FROM sessions WHERE expires_at < now()")
         .execute(pool)
-        .await
-        .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+    .await
+    .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
     Ok(result.rows_affected())
 }
 
@@ -565,6 +567,92 @@ mod tests {
         for raw in malformed {
             assert!(family_secret(&raw).is_none(), "{raw}");
         }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+    async fn database_logout_retires_the_access_token_issued_with_its_session() {
+        use crate::auth::jwt::{
+            create_session_token, create_token, validate_current_claims, validate_token,
+        };
+        let database_url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL");
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(4)
+            .connect(&database_url)
+            .await
+            .unwrap();
+        let user_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO users (email, display_name)
+             VALUES ($1, 'logout test') RETURNING id",
+        )
+        .bind(format!("logout-{}@example.test", Uuid::new_v4()))
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let secret = "logout-revocation-test-secret-with-enough-bytes";
+        let mut sessions = Vec::new();
+        for _ in 0..2 {
+            let refresh = generate_refresh_token().unwrap();
+            let mut transaction = pool.begin().await.unwrap();
+            let session = create_session_with(&mut transaction, &user_id, &refresh)
+                .await
+                .unwrap();
+            transaction.commit().await.unwrap();
+            sessions.push((refresh, session));
+        }
+        let subject = user_id.to_string();
+        let token = |session: Uuid| {
+            let issued = create_session_token(&subject, "logout test", secret, 0, session).unwrap();
+            validate_token(&issued, secret).unwrap()
+        };
+        let (first, second) = (token(sessions[0].1), token(sessions[1].1));
+        assert_eq!(
+            first.sid.as_deref(),
+            Some(sessions[0].1.to_string().as_str())
+        );
+        assert!(validate_current_claims(&pool, &first).await.is_ok());
+
+        assert!(
+            delete_session_by_token(&pool, &sessions[0].0.raw)
+                .await
+                .unwrap()
+        );
+        assert!(
+            validate_current_claims(&pool, &first).await.is_err(),
+            "logging a session out retires the token issued with it"
+        );
+        assert!(
+            validate_current_claims(&pool, &second).await.is_ok(),
+            "another session's token is untouched"
+        );
+        let legacy = validate_token(
+            &create_token(&subject, "logout test", secret).unwrap(),
+            secret,
+        )
+        .unwrap();
+        assert!(
+            validate_current_claims(&pool, &legacy).await.is_ok(),
+            "a token without a session is bound only by the account version"
+        );
+
+        // A refresh rotates the token but keeps the session, so the next access
+        // token names the same session and stays valid.
+        let mut transaction = pool.begin().await.unwrap();
+        let rotated = rotate_refresh_token_with(&mut transaction, &sessions[1].0.raw)
+            .await
+            .unwrap();
+        transaction.commit().await.unwrap();
+        match rotated {
+            RefreshRotation::Rotated { session_id, .. } => assert_eq!(session_id, sessions[1].1),
+            _ => panic!("a fresh refresh token rotates"),
+        }
+        assert!(validate_current_claims(&pool, &second).await.is_ok());
+
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

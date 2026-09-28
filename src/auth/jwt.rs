@@ -23,6 +23,34 @@ pub fn create_token_with_version(
     secret: &str,
     auth_version: i64,
 ) -> Result<String, AuthError> {
+    issue(user_id, display_name, secret, auth_version, None)
+}
+
+/// The token a sign-in or refresh issues: bound to its refresh session, so
+/// signing that session out retires it before its 15-minute expiry.
+pub fn create_session_token(
+    user_id: &str,
+    display_name: &str,
+    secret: &str,
+    auth_version: i64,
+    session: uuid::Uuid,
+) -> Result<String, AuthError> {
+    issue(
+        user_id,
+        display_name,
+        secret,
+        auth_version,
+        Some(session.to_string()),
+    )
+}
+
+fn issue(
+    user_id: &str,
+    display_name: &str,
+    secret: &str,
+    auth_version: i64,
+    sid: Option<String>,
+) -> Result<String, AuthError> {
     if !secret_is_strong(secret) {
         return Err(AuthError::NotConfigured);
     }
@@ -38,6 +66,7 @@ pub fn create_token_with_version(
         aud: JWT_AUDIENCE.to_string(),
         exp: (now.as_secs() + TOKEN_LIFETIME_SECS) as usize,
         auth_version,
+        sid,
     };
 
     encode(
@@ -81,11 +110,31 @@ pub async fn validate_current_claims(
     claims: &Claims,
 ) -> Result<(), AuthError> {
     let user_id = uuid::Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
-    let version: Option<i64> = sqlx::query_scalar("SELECT auth_version FROM users WHERE id = $1")
-        .bind(user_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+    let version: Option<i64> = match &claims.sid {
+        // A token issued with a session lives only while that session does.
+        Some(sid) => {
+            let session = uuid::Uuid::parse_str(sid).map_err(|_| AuthError::InvalidToken)?;
+            sqlx::query_scalar(
+                "SELECT auth_version FROM users
+                 WHERE id = $1
+                   AND EXISTS (
+                       SELECT 1 FROM sessions
+                       WHERE id = $2 AND user_id = $1 AND expires_at > clock_timestamp()
+                   )",
+            )
+            .bind(user_id)
+            .bind(session)
+            .fetch_optional(pool)
+            .await
+        }
+        None => {
+            sqlx::query_scalar("SELECT auth_version FROM users WHERE id = $1")
+                .bind(user_id)
+                .fetch_optional(pool)
+                .await
+        }
+    }
+    .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
     if version == Some(claims.auth_version) {
         Ok(())
     } else {
@@ -216,6 +265,7 @@ mod tests {
             aud: JWT_AUDIENCE.to_string(),
             exp: now.saturating_sub(1),
             auth_version: 0,
+            sid: None,
         };
         let token = encode(
             &Header::new(Algorithm::HS256),
