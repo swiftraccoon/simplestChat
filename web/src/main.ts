@@ -1861,6 +1861,7 @@ joinBtn.addEventListener(
           updateLocalTile();
         },
         onLocalCaptureStopped: handleLocalCaptureStopped,
+        onLocalVideoStalled: handleLocalVideoStalled,
         onRemoteTrack: renderRemoteTrack,
         onRemoteTrackRemoved: removeRemoteTrack,
         onRemoteMediaUnavailable: (_participantId, participantName, kind, _source, reason) => {
@@ -2500,6 +2501,17 @@ function handleLocalCaptureStopped(kind: 'audio' | 'video'): void {
   } else {
     showToast('Camera stopped. Press V or the camera button to turn it back on.');
   }
+}
+
+/** The broadcast stays on, so viewers see it resume with the camera. */
+function handleLocalVideoStalled(stalled: boolean): void {
+  if (stalled)
+    showToast(
+      'Your camera is not sending video. Check that it is connected and not in use by another app; your broadcast resumes when it does.',
+      10_000,
+      'error',
+    );
+  else showToast('Your camera is sending video again.');
 }
 
 async function pttActivate(): Promise<void> {

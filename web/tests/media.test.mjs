@@ -422,6 +422,53 @@ test('a refused ICE restart for a replaced transport rebuilds nothing', async (t
   assert.deepEqual(calls, []);
 });
 
+function encoding(producer, frames) {
+  producer.getStats = async () =>
+    new Map([['layer', { type: 'outbound-rtp', kind: 'video', framesEncoded: frames() }]]);
+}
+
+test('a camera that stops delivering frames is reopened once, then reported until frames return', async (t) => {
+  const { media, state } = await fixture(t);
+  const stalls = [];
+  media.onLocalVideoStalled = (stalled) => stalls.push(stalled);
+  await media.unmuteVideo();
+  const producer = state.producers.at(-1);
+  let frames = 0;
+  encoding(producer, () => frames);
+  const captures = state.captureCalls.length;
+  await media.checkCameraFlow(0);
+  frames = 300;
+  await media.checkCameraFlow(5_000);
+  await media.checkCameraFlow(14_000);
+  assert.equal(state.captureCalls.length, captures, 'nine seconds without a frame is not a stall');
+  await media.checkCameraFlow(15_000);
+  assert.equal(state.captureCalls.length, captures + 1, 'the same camera is reopened once');
+  assert.equal(producer.track, media.getLocalStream().getVideoTracks()[0]);
+  await media.checkCameraFlow(24_000);
+  assert.deepEqual(stalls, [], 'the reopened camera gets a full period');
+  await media.checkCameraFlow(25_000);
+  await media.checkCameraFlow(40_000);
+  assert.deepEqual(stalls, [true], 'reported once, without ending the broadcast');
+  assert.equal(state.captureCalls.length, captures + 1, 'and reopened only once');
+  assert.equal(media.videoEnabled, true);
+  frames = 301;
+  await media.checkCameraFlow(42_000);
+  assert.deepEqual(stalls, [true, false]);
+});
+
+test('a camera the user paused is never reopened or reported', async (t) => {
+  const { media, state } = await fixture(t);
+  const stalls = [];
+  media.onLocalVideoStalled = (stalled) => stalls.push(stalled);
+  await media.unmuteVideo();
+  encoding(state.producers.at(-1), () => 0);
+  media.pauseVideo();
+  const captures = state.captureCalls.length;
+  for (const now of [0, 20_000, 40_000]) await media.checkCameraFlow(now);
+  assert.equal(state.captureCalls.length, captures);
+  assert.deepEqual(stalls, []);
+});
+
 test('offline microphone changes coalesce until the room resumes on its new socket', async (t) => {
   const { media, signaling, state } = await fixture(t);
   await media.unmuteAudio();

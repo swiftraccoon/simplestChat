@@ -293,6 +293,21 @@
   font-size: 0.8rem;
   text-align: center;
 }
+/* A remote camera whose frames stopped; its last frame stays behind this. */
+.video-stalled-notice {
+  position: absolute;
+  z-index: 3;
+  bottom: 1.9rem;
+  left: 0.6rem;
+  right: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-md);
+  background: rgba(37, 37, 37, 0.97);
+  color: var(--text);
+  font-size: 0.8rem;
+  text-align: center;
+}
+.video-stalled-notice[hidden],
 .personal-playback-blocked[hidden],
 .personal-media-hidden-notice[hidden],
 .media-preview-video[hidden],

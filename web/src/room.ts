@@ -50,6 +50,8 @@ export type RoomEventHandler = {
   onLocalStream: (stream: MediaStream) => void;
   onLocalMediaChanged: () => void;
   onLocalCaptureStopped?: (kind: 'audio' | 'video') => void;
+  /** The camera is live but sending nothing (true), or sending again (false). */
+  onLocalVideoStalled?: (stalled: boolean) => void;
   onRemoteTrack: (
     participantId: string,
     participantName: string,
@@ -558,6 +560,10 @@ export class RoomClient {
       });
       this.recoveryPromise = task;
       this.observeTask(task, 'Refreshing the media connection');
+    };
+    media.onLocalVideoStalled = (stalled) => {
+      if (generation !== this.generation || this.media !== media) return;
+      this.events.onLocalVideoStalled?.(stalled);
     };
     media.onLocalCaptureStopped = (kind) => {
       if (generation !== this.generation || this.media !== media) return;

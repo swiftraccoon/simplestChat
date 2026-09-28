@@ -101,6 +101,73 @@ async function fixture(t) {
   return { ...dom, controls, state, tile, audio, media, notice, control };
 }
 
+/** Firefox counts no MediaStream frames in getVideoPlaybackQuality(); frame callbacks work everywhere. */
+function playingVideo(f, tile = f.tile) {
+  const video = f.document.createElement('video');
+  video.srcObject = { getTracks: () => [{ kind: 'video', readyState: 'live' }] };
+  video.paused = false;
+  video.callbacks = [];
+  video.requestVideoFrameCallback = (callback) => video.callbacks.push(callback);
+  video.present = () => video.callbacks.splice(0).forEach((callback) => callback());
+  video.getVideoPlaybackQuality = () => ({ totalVideoFrames: 0 });
+  video.pause = () => {
+    video.paused = true;
+  };
+  video.play = async () => {
+    video.paused = false;
+  };
+  tile.append(video);
+  return video;
+}
+
+test('a remote camera that stops delivering frames says so on its tile until frames return', async (t) => {
+  const f = await fixture(t);
+  const video = playingVideo(f);
+  const notice = f.tile.querySelector('.video-stalled-notice');
+  assert.equal(notice.getAttribute('role'), 'status');
+  f.controls.checkVideoProgress(1_000);
+  video.present();
+  f.controls.checkVideoProgress(6_000);
+  assert.equal(video.callbacks.length, 1, 'one callback waits for the next frame');
+  f.controls.checkVideoProgress(8_000);
+  f.controls.checkVideoProgress(11_000);
+  assert.equal(video.callbacks.length, 1, 'and is not stacked while it waits');
+  assert.equal(notice.hidden, true, 'five seconds without a frame is not yet a stall');
+  f.controls.checkVideoProgress(12_000);
+  assert.equal(notice.hidden, false);
+  assert.match(notice.textContent, /^Alice's video stopped at /);
+  video.present();
+  f.controls.checkVideoProgress(14_000);
+  assert.equal(notice.hidden, true, 'the notice clears with the next frame');
+});
+
+test('a browser without frame callbacks is never told a camera stopped', async (t) => {
+  const f = await fixture(t);
+  const video = playingVideo(f);
+  delete video.requestVideoFrameCallback;
+  for (const now of [0, 10_000, 60_000]) f.controls.checkVideoProgress(now);
+  assert.equal(f.tile.querySelector('.video-stalled-notice').hidden, true);
+});
+
+test('screen shares, people hidden for me and paused elements never read as stalled', async (t) => {
+  const f = await fixture(t);
+  const video = playingVideo(f);
+  const notice = f.tile.querySelector('.video-stalled-notice');
+  f.tile.className = 'video-tile screen-share';
+  f.controls.checkVideoProgress(0);
+  f.controls.checkVideoProgress(60_000);
+  assert.equal(notice.hidden, true, 'a still screen sends no frames');
+  f.tile.className = 'video-tile';
+  video.paused = true;
+  f.controls.checkVideoProgress(120_000);
+  assert.equal(notice.hidden, true, 'blocked playback has its own notice');
+  video.paused = false;
+  f.control('hide').click();
+  f.controls.checkVideoProgress(130_000);
+  f.controls.checkVideoProgress(200_000);
+  assert.equal(notice.hidden, true, 'a hidden broadcast is not expected to play');
+});
+
 test('blocked remote playback exposes an accessible action and its click retries without changing preferences or publishers', async (t) => {
   const f = await fixture(t);
   const toolbar = f.document.createElement('div');

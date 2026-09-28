@@ -69,6 +69,23 @@ export const DEFAULT_CAPTURE_PREFERENCES: CapturePreferences = {
 };
 
 const CAPTURE_STORAGE_KEY = 'simplestchat.capturePreferences';
+/** A live camera that has encoded no frame for this long has stalled. */
+const CAMERA_STALL_MS = 10_000;
+const CAMERA_CHECK_MS = 5_000;
+
+/** Frames the sender encoded across its simulcast layers, or null when unknown. */
+async function encodedFrames(producer: mediasoupClient.types.Producer): Promise<number | null> {
+  try {
+    let frames: number | null = null;
+    (await producer.getStats()).forEach((stats: { type?: string; framesEncoded?: unknown }) => {
+      if (stats.type === 'outbound-rtp' && typeof stats.framesEncoded === 'number')
+        frames = (frames ?? 0) + stats.framesEncoded;
+    });
+    return frames;
+  } catch {
+    return null;
+  }
+}
 
 export function normalizeCapturePreferences(value: unknown): CapturePreferences {
   const preferences = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -191,9 +208,74 @@ export class MediaManager {
   private onLocalCaptureStoppedCb: ((kind: 'audio' | 'video') => void) | null = null;
   private onControlErrorCb: (() => void) | null = null;
   private onTransportRebuildRequiredCb: (() => void) | null = null;
+  private onLocalVideoStalledCb: ((stalled: boolean) => void) | null = null;
+  /** The camera producer's encoded frames when they last advanced, and when. */
+  private cameraFlow: {
+    producer: mediasoupClient.types.Producer;
+    frames: number;
+    progressAt: number;
+    reopened: boolean;
+  } | null = null;
+  private cameraStalled = false;
+  private cameraChecking = false;
+  private readonly cameraTimer: ReturnType<typeof setInterval>;
 
   constructor(signaling: SignalingClient) {
     this.signaling = signaling;
+    this.cameraTimer = setInterval(() => {
+      this.checkCameraFlow().catch(() => {
+        /* A failed check leaves the next one to decide. */
+      });
+    }, CAMERA_CHECK_MS);
+  }
+
+  /** The camera is live but sends nothing (true), or sends again (false). */
+  set onLocalVideoStalled(callback: ((stalled: boolean) => void) | null) {
+    this.onLocalVideoStalledCb = callback;
+  }
+
+  /**
+   * An OS can stop delivering camera frames without ending the track, and the
+   * producer then looks live while sending nothing. After CAMERA_STALL_MS
+   * without an encoded frame the same camera is reopened once; if that brings
+   * nothing back the user is told, and the broadcast stays on so it resumes
+   * with the frames.
+   */
+  async checkCameraFlow(now = Date.now()): Promise<void> {
+    if (this.cameraChecking) return;
+    this.cameraChecking = true;
+    try {
+      const producer = this.videoProducer;
+      if (!producer || producer.closed || producer.paused || this.closed) {
+        this.cameraFlow = null;
+        this.setCameraStalled(false);
+        return;
+      }
+      const frames = await encodedFrames(producer);
+      const flow = this.cameraFlow;
+      if (frames === null || producer !== this.videoProducer) return;
+      if (!flow || flow.producer !== producer || frames > flow.frames) {
+        this.cameraFlow = { producer, frames, progressAt: now, reopened: false };
+        this.setCameraStalled(false);
+      } else if (now - flow.progressAt >= CAMERA_STALL_MS) {
+        if (flow.reopened) {
+          this.setCameraStalled(true);
+        } else {
+          flow.reopened = true;
+          flow.progressAt = now;
+          console.warn('[media] the camera stopped delivering frames; reopening it');
+          await this.recaptureVideo().catch(() => false);
+        }
+      }
+    } finally {
+      this.cameraChecking = false;
+    }
+  }
+
+  private setCameraStalled(stalled: boolean): void {
+    if (this.cameraStalled === stalled) return;
+    this.cameraStalled = stalled;
+    this.onLocalVideoStalledCb?.(stalled);
   }
 
   /** Keep media running, but wait for room ownership on the replacement socket. */
@@ -1309,6 +1391,7 @@ export class MediaManager {
 
   close(): void {
     this.closed = true;
+    clearInterval(this.cameraTimer);
     this.pendingControls.clear();
     this.inFlightControls.clear();
     this.lifecycle++;

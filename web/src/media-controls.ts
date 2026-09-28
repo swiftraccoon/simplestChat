@@ -38,10 +38,24 @@ interface PersonalPlaybackPreferences {
 
 interface TilePlayback {
   participantId: string;
+  participantName: string;
   controls: HTMLDetailsElement;
   blockedNotice: HTMLElement;
+  stallNotice: HTMLElement;
   blocked: Map<HTMLMediaElement, HTMLMediaElement['srcObject']>;
   playbackVersion: number;
+  /** When a check last saw a new frame presented. */
+  video: { progressAt: number } | null;
+}
+
+/** A camera tile without a new frame for this long says its video stopped. */
+const VIDEO_STALL_MS = 6_000;
+const VIDEO_CHECK_MS = 2_000;
+
+/** One pending frame callback per video; set when a frame was presented. */
+interface FrameWatch {
+  pending: boolean;
+  presented: boolean;
 }
 
 const MASTER_VOLUME_KEY = 'simplestchat.masterVolume';
@@ -226,6 +240,8 @@ export class MediaControls {
   private speakerTest: SpeakerTest | null = null;
   private devices: ReturnType<typeof observeMediaDevices> | null = null;
   private outputWarning = false;
+  private stallTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly frameWatches = new WeakMap<HTMLVideoElement, FrameWatch>();
   private readonly output = new AudioOutput(() => [
     ...Array.from(this.tiles.keys()).flatMap((tile) =>
       Array.from(tile.querySelectorAll<HTMLMediaElement>('audio, video')),
@@ -729,14 +745,22 @@ export class MediaControls {
       retry.dataset['control'] = 'retry-playback';
       retry.setAttribute('aria-label', `Enable playback for ${participantName}`);
       blockedNotice.append(explanation, retry);
-      tile.append(details, hiddenNotice, blockedNotice);
+      const stallNotice = document.createElement('div');
+      stallNotice.className = 'video-stalled-notice';
+      stallNotice.hidden = true;
+      stallNotice.setAttribute('role', 'status');
+      tile.append(details, hiddenNotice, blockedNotice, stallNotice);
       this.tiles.set(tile, {
         participantId,
+        participantName,
         controls: details,
         blockedNotice,
+        stallNotice,
         blocked: new Map(),
         playbackVersion: 0,
+        video: null,
       });
+      this.stallTimer ??= setInterval(() => this.checkVideoProgress(), VIDEO_CHECK_MS);
     }
     this.applyParticipant(participantId);
     const state = this.playback.get(participantId)!;
@@ -750,11 +774,71 @@ export class MediaControls {
       if (info.participantId === participantId) {
         info.controls.remove();
         info.blockedNotice.remove();
+        info.stallNotice.remove();
         tile.querySelector('.personal-media-hidden-notice')?.remove();
         this.tiles.delete(tile);
       }
     }
     this.playback.delete(participantId);
+  }
+
+  /**
+   * A remote camera that stops delivering frames leaves its last frame on
+   * screen, which looks live when the scene is still; say so once it has been
+   * still for VIDEO_STALL_MS. Screen shares send frames only when the screen
+   * changes, background tabs do not render, and a paused camera's video is
+   * removed, so none of those count.
+   */
+  checkVideoProgress(now = Date.now()): void {
+    const visible = document.visibilityState !== 'hidden';
+    for (const [tile, info] of this.tiles) {
+      const video = tile.querySelector('video');
+      const presented =
+        visible &&
+        video &&
+        !video.paused &&
+        !tile.classList.contains('screen-share') &&
+        !this.playback.get(info.participantId)?.hidden
+          ? this.framePresented(video)
+          : null;
+      if (presented === null || !info.video || presented) {
+        info.video = presented === null ? null : { progressAt: now };
+        info.stallNotice.hidden = true;
+      } else if (now - info.video.progressAt >= VIDEO_STALL_MS && info.stallNotice.hidden) {
+        const stoppedAt = new Date(info.video.progressAt).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        info.stallNotice.textContent = `${info.participantName}'s video stopped at ${stoppedAt}.`;
+        info.stallNotice.hidden = false;
+      }
+    }
+  }
+
+  /**
+   * Whether the video presented a frame since the last call, or null when the
+   * browser cannot tell. Firefox counts no MediaStream frames in
+   * getVideoPlaybackQuality(), so this waits on one frame callback at a time:
+   * a stalled video never calls it, a live one within a frame.
+   */
+  private framePresented(video: HTMLVideoElement): boolean | null {
+    if (typeof video.requestVideoFrameCallback !== 'function') return null;
+    let watch = this.frameWatches.get(video);
+    if (!watch) {
+      watch = { pending: false, presented: true };
+      this.frameWatches.set(video, watch);
+    }
+    const presented = watch.presented;
+    watch.presented = false;
+    if (!watch.pending) {
+      const current = watch;
+      current.pending = true;
+      video.requestVideoFrameCallback(() => {
+        current.pending = false;
+        current.presented = true;
+      });
+    }
+    return presented;
   }
 
   reset(): void {
@@ -763,6 +847,8 @@ export class MediaControls {
   }
 
   destroy(): void {
+    if (this.stallTimer !== null) clearInterval(this.stallTimer);
+    this.stallTimer = null;
     this.reset();
     for (const toolbar of this.toolbars) toolbar.remove();
     this.toolbars.clear();
