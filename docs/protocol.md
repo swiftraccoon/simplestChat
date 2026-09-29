@@ -350,6 +350,21 @@ first, as `{ emoji, participantIds }`. A message holds at most 64 reaction
 records, and reactions count toward the history byte budget. Reactions are not
 part of delivery receipts; a message evicted from history loses them.
 
+Every sanction and report decision leaves an entry in the room's moderation
+history, written in the same transaction as the change it records: `kick`,
+`ban`, `unban`, `cam_ban`, `cam_unban`, `text_mute`, `text_unmute`,
+`report_resolved` and `report_dismissed`. `listModerationEvents` (Moderator+,
+`offset` pages of 100, newest first) returns `ModerationEventEntry` values: who
+acted, whom it concerned (`targetAuthenticated` says whether `targetId` is an
+account), the reason, a ban's `expiresAt`, and the `reportId` it answered.
+`targetIp`, the sanction's address cohort, reaches the owner only; moderators'
+listings never carry it. A persisted room keeps its newest 1000 entries in
+PostgreSQL; an ad-hoc room keeps 200 in memory. `kick` and `ban` may name the
+open report they answer with `reportId`: the server resolves that report with
+the sanction and links the entry to it, and a report from another room is
+refused. `ReportEntry.outcome` is the newest linked entry (`action`,
+`createdAt`), so a resolved report shows what it led to.
+
 Modern chat sends include a strictly increasing safe-integer `sequence` alongside
 `clientMessageId`. The room snapshot supplies a separate `chatSessionId` for this
 membership; it survives grace reconnection and changes on a fresh join. A

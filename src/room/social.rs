@@ -1,6 +1,9 @@
 //! Room-session chat and owner/moderator community tools.
 //! Private text is retained only in bounded memory, never in reports or logs.
 use super::*;
+use crate::room::moderation::{
+    Actor, MAX_MODERATION_EVENTS, ModerationAction, ModerationEvent, Target, record_event,
+};
 use crate::signaling::protocol::{
     ChatEntry, ChatReaction, ChatReplyRef, ChatRetryOutcome, ChatRetryReason, ChatStyle,
     ChatStyleKind, ClientMessage, REACTIONS, valid_correlation_id,
@@ -18,6 +21,8 @@ const HISTORY_BYTES: usize = 256 * 1024;
 const MAX_IGNORED: usize = 100;
 const MAX_REPORTS: usize = 500;
 const MAX_RUNTIME_BANS: usize = 2000;
+/// History entries an unpersisted room keeps in memory.
+const MAX_RUNTIME_MODERATION_EVENTS: usize = 200;
 const PAGE_SIZE: usize = 100;
 const CHAT_RECEIPT_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 const CHAT_RECEIPTS: usize = 512;
@@ -41,6 +46,8 @@ type ReportRow = (
     String,
     String,
     chrono::DateTime<chrono::Utc>,
+    Option<chrono::DateTime<chrono::Utc>>,
+    Option<String>,
     Option<chrono::DateTime<chrono::Utc>>,
 );
 
@@ -1653,6 +1660,7 @@ pub(crate) struct RoomSocial {
     receipt_bytes: usize,
     bans: HashMap<String, RuntimeBan>,
     reports: VecDeque<ReportEntry>,
+    moderation_events: VecDeque<ModerationEvent>,
 }
 
 #[derive(Clone, Serialize)]
@@ -1686,6 +1694,16 @@ struct ReportEntry {
     created_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     resolved_at: Option<String>,
+    /// The newest history entry that answered this report, if any did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    outcome: Option<ReportOutcome>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportOutcome {
+    action: String,
+    created_at: String,
 }
 
 #[derive(Serialize)]
@@ -1768,6 +1786,7 @@ impl ClientMessage {
             | Self::ListRoomBans { .. }
             | Self::ListRoomMembers { .. }
             | Self::ListRoomReports { .. }
+            | Self::ListModerationEvents { .. }
             | Self::SetChatPreferences { .. } => SocialBudget::None,
             Self::ChangeNickname { .. }
             | Self::SetChatStyle { .. }
@@ -1790,6 +1809,9 @@ impl ClientMessage {
             Self::ReportParticipant { request_id, .. } => Some((request_id, "reportParticipant")),
             Self::ListRoomReports { request_id, .. } => Some((request_id, "listRoomReports")),
             Self::ResolveRoomReport { request_id, .. } => Some((request_id, "resolveRoomReport")),
+            Self::ListModerationEvents { request_id, .. } => {
+                Some((request_id, "listModerationEvents"))
+            }
             _ => None,
         }
     }
@@ -2045,10 +2067,51 @@ impl RoomSocial {
         self.report_cooldowns.insert(key, now);
     }
 
-    pub(crate) fn forget_user_ban(&mut self, participant_id: &str) {
+    /// Drop an account's runtime ban and say what name it was recorded under.
+    pub(crate) fn forget_user_ban(&mut self, participant_id: &str) -> Option<String> {
+        let mut name = None;
         self.bans.retain(|_, ban| {
-            !ban.entry.authenticated || !ban.participant_ids.iter().any(|id| id == participant_id)
+            let matches = ban.entry.authenticated
+                && ban.participant_ids.iter().any(|id| id == participant_id);
+            if matches {
+                name = Some(ban.entry.display_name.clone());
+            }
+            !matches
         });
+        name
+    }
+
+    pub(crate) fn record_moderation_event(&mut self, event: ModerationEvent) {
+        if self.moderation_events.len() >= MAX_RUNTIME_MODERATION_EVENTS {
+            self.moderation_events.pop_front();
+        }
+        self.moderation_events.push_back(event);
+    }
+
+    /// Resolve the open runtime report a sanction answers; a report this room
+    /// never received is refused.
+    pub(crate) fn link_report(&mut self, report_id: &str) -> Result<()> {
+        let report = self
+            .reports
+            .iter_mut()
+            .find(|report| report.report_id == report_id)
+            .ok_or_else(|| rejected("Report not found"))?;
+        if report.status == "open" {
+            report.status = "resolved".to_string();
+            report.resolved_at = Some(chrono::Utc::now().to_rfc3339());
+        }
+        Ok(())
+    }
+
+    fn report_outcome(&self, report_id: &str) -> Option<ReportOutcome> {
+        self.moderation_events
+            .iter()
+            .rev()
+            .find(|event| event.report_id.as_deref() == Some(report_id))
+            .map(|event| ReportOutcome {
+                action: event.action.as_str().to_string(),
+                created_at: event.created_at.to_rfc3339(),
+            })
     }
     fn remember(
         &mut self,
@@ -2732,13 +2795,34 @@ impl RoomManager {
                         .as_ref()
                         .ok_or_else(|| rejected("Ban service unavailable"))?;
                     drop(room);
+                    let actor_id = participant_id.to_string();
+                    let actor_name = actor_name.clone();
                     let row: Option<(Option<Uuid>, Option<String>)> = self
-                        .persist_room(
-                            room_id,
-                            &room_lock,
-                            sqlx::query_as("DELETE FROM room_states WHERE room_id=$1 AND id=$2 AND state='banned' RETURNING user_id,host(ip_address)")
-                                .bind(room_id).bind(id).fetch_optional(pool),
-                        )
+                        .persist_room(room_id, &room_lock, async {
+                            let mut transaction = pool.begin().await?;
+                            let row: Option<(Option<Uuid>, Option<String>, Option<String>)> = sqlx::query_as("DELETE FROM room_states s WHERE s.room_id=$1 AND s.id=$2 AND s.state='banned' RETURNING s.user_id,host(s.ip_address),(SELECT u.display_name FROM users u WHERE u.id=s.user_id)")
+                                .bind(room_id).bind(id).fetch_optional(&mut *transaction).await?;
+                            let Some((uid, ip, name)) = row else {
+                                return Ok(None);
+                            };
+                            let target_id = uid.map_or_else(|| id.to_string(), |uid| uid.to_string());
+                            let event = ModerationEvent::new(
+                                ModerationAction::Unban,
+                                Actor { id: &actor_id, name: &actor_name },
+                                Target {
+                                    id: &target_id,
+                                    name: name.as_deref().unwrap_or(if uid.is_some() { "Removed account" } else { "Guest" }),
+                                    authenticated: uid.is_some(),
+                                    ip: ip.as_deref().and_then(|ip| ip.parse().ok()),
+                                },
+                                None,
+                                None,
+                                None,
+                            );
+                            record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS).await?;
+                            transaction.commit().await?;
+                            Ok(Some((uid, ip)))
+                        })
                         .await?;
                     room = room_lock.write().await;
                     room.ensure_live()?;
@@ -2758,14 +2842,28 @@ impl RoomManager {
                         .bans
                         .remove(ban_id)
                         .ok_or_else(|| rejected("Ban not found"))?;
-                    (
-                        ban.entry
-                            .authenticated
-                            .then(|| ban.participant_ids.first().cloned())
-                            .flatten(),
-                        ban.guest_ip,
-                        ban.participant_ids,
-                    )
+                    let target_id = ban
+                        .entry
+                        .authenticated
+                        .then(|| ban.participant_ids.first().cloned())
+                        .flatten();
+                    room.social.record_moderation_event(ModerationEvent::new(
+                        ModerationAction::Unban,
+                        Actor {
+                            id: participant_id,
+                            name: &actor_name,
+                        },
+                        Target {
+                            id: target_id.as_deref().unwrap_or(ban_id),
+                            name: &ban.entry.display_name,
+                            authenticated: ban.entry.authenticated,
+                            ip: ban.guest_ip,
+                        },
+                        None,
+                        None,
+                        None,
+                    ));
+                    (target_id, ban.guest_ip, ban.participant_ids)
                 };
                 if let Some(uid) = &user_id {
                     room.banned_participants.remove(uid);
@@ -2933,6 +3031,7 @@ impl RoomManager {
                     status: "open".to_string(),
                     created_at: chrono::Utc::now().to_rfc3339(),
                     resolved_at: None,
+                    outcome: None,
                 };
                 if room.persisted {
                     let pool = self
@@ -2999,14 +3098,26 @@ impl RoomManager {
                     drop(room);
                     let rows: Vec<ReportRow> = tokio::time::timeout(
                         control::PERSISTENCE_TIMEOUT,
-                        sqlx::query_as("SELECT id,reporter_id,reporter_name,target_participant_id,target_name,reason,status,created_at,resolved_at FROM room_reports WHERE room_id=$1 ORDER BY created_at DESC,id LIMIT 101 OFFSET $2")
+                        sqlx::query_as("SELECT r.id,r.reporter_id,r.reporter_name,r.target_participant_id,r.target_name,r.reason,r.status,r.created_at,r.resolved_at,o.action,o.created_at FROM room_reports r LEFT JOIN LATERAL (SELECT e.action,e.created_at FROM moderation_events e WHERE e.report_id=r.id ORDER BY e.created_at DESC,e.id LIMIT 1) o ON true WHERE r.room_id=$1 ORDER BY r.created_at DESC,r.id LIMIT 101 OFFSET $2")
                             .bind(room_id).bind(offset as i64).fetch_all(pool),
                     ).await.map_err(|_| rejected("Report service timed out"))??;
                     room = room_lock.write().await;
                     room.ensure_live()?;
                     rows.into_iter()
                         .map(
-                            |(id, rid, rname, tid, tname, reason, status, created, resolved)| {
+                            |(
+                                id,
+                                rid,
+                                rname,
+                                tid,
+                                tname,
+                                reason,
+                                status,
+                                created,
+                                resolved,
+                                outcome_action,
+                                outcome_at,
+                            )| {
                                 ReportEntry {
                                     report_id: id.to_string(),
                                     reporter_id: rid,
@@ -3017,6 +3128,12 @@ impl RoomManager {
                                     status,
                                     created_at: created.to_rfc3339(),
                                     resolved_at: resolved.map(|r| r.to_rfc3339()),
+                                    outcome: outcome_action.zip(outcome_at).map(|(action, at)| {
+                                        ReportOutcome {
+                                            action,
+                                            created_at: at.to_rfc3339(),
+                                        }
+                                    }),
                                 }
                             },
                         )
@@ -3028,7 +3145,10 @@ impl RoomManager {
                         .rev()
                         .skip(offset)
                         .take(PAGE_SIZE + 1)
-                        .cloned()
+                        .map(|report| ReportEntry {
+                            outcome: room.social.report_outcome(&report.report_id),
+                            ..report.clone()
+                        })
                         .collect()
                 };
                 let has_more = reports.len() > PAGE_SIZE;
@@ -3043,24 +3163,43 @@ impl RoomManager {
                     return Err(rejected("Choose resolved or dismissed"));
                 }
                 let id: Uuid = report_id.parse().map_err(|_| rejected("Invalid report"))?;
+                let action = if status == "resolved" {
+                    ModerationAction::ReportResolved
+                } else {
+                    ModerationAction::ReportDismissed
+                };
                 if room.persisted {
                     let pool = self
                         .db_pool
                         .as_ref()
                         .ok_or_else(|| rejected("Report service unavailable"))?;
                     drop(room);
-                    let affected = self
-                        .persist_room(
-                            room_id,
-                            &room_lock,
-                            sqlx::query("UPDATE room_reports SET status=$3,resolved_at=now(),resolved_by=$4 WHERE room_id=$1 AND id=$2 AND status='open'")
-                                .bind(room_id).bind(id).bind(status).bind(participant_id).execute(pool),
-                        )
-                        .await?
-                        .rows_affected();
+                    let actor_id = participant_id.to_string();
+                    let actor_name = actor_name.clone();
+                    let resolved = self
+                        .persist_room(room_id, &room_lock, async {
+                            let mut transaction = pool.begin().await?;
+                            let target: Option<(String, String, bool)> = sqlx::query_as("UPDATE room_reports r SET status=$3,resolved_at=now(),resolved_by=$4 WHERE r.room_id=$1 AND r.id=$2 AND r.status='open' RETURNING r.target_participant_id,r.target_name,EXISTS(SELECT 1 FROM users u WHERE u.id::text=r.target_participant_id)")
+                                .bind(room_id).bind(id).bind(status).bind(&actor_id).fetch_optional(&mut *transaction).await?;
+                            let Some((target_id, target_name, target_authenticated)) = target else {
+                                return Ok(false);
+                            };
+                            let event = ModerationEvent::new(
+                                action,
+                                Actor { id: &actor_id, name: &actor_name },
+                                Target { id: &target_id, name: &target_name, authenticated: target_authenticated, ip: None },
+                                None,
+                                None,
+                                Some(id),
+                            );
+                            record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS).await?;
+                            transaction.commit().await?;
+                            Ok(true)
+                        })
+                        .await?;
                     room = room_lock.write().await;
                     room.ensure_live()?;
-                    if affected == 0 {
+                    if !resolved {
                         return Err(rejected("Open report not found"));
                     }
                 } else {
@@ -3072,8 +3211,70 @@ impl RoomManager {
                         .ok_or_else(|| rejected("Open report not found"))?;
                     report.status = status.clone();
                     report.resolved_at = Some(chrono::Utc::now().to_rfc3339());
+                    let target_id = report.target_participant_id.clone();
+                    let target_name = report.target_name.clone();
+                    let target_authenticated = room
+                        .participants
+                        .get(&target_id)
+                        .is_some_and(|participant| participant.authenticated);
+                    room.social.record_moderation_event(ModerationEvent::new(
+                        action,
+                        Actor {
+                            id: participant_id,
+                            name: &actor_name,
+                        },
+                        Target {
+                            id: &target_id,
+                            name: &target_name,
+                            authenticated: target_authenticated,
+                            ip: None,
+                        },
+                        None,
+                        None,
+                        Some(id),
+                    ));
                 }
                 json!({"reportId":report_id,"status":status})
+            }
+            ClientMessage::ListModerationEvents { offset, .. } => {
+                require_role(actor_role, roles::Role::Moderator)?;
+                let offset = page_offset(*offset)?;
+                let owner = actor_role >= roles::Role::Owner;
+                let mut events: Vec<ModerationEvent> = if room.persisted {
+                    let pool = self
+                        .db_pool
+                        .as_ref()
+                        .ok_or_else(|| rejected("History service unavailable"))?;
+                    drop(room);
+                    let rows = tokio::time::timeout(
+                        control::PERSISTENCE_TIMEOUT,
+                        moderation::list_events(
+                            pool,
+                            room_id,
+                            offset as i64,
+                            (PAGE_SIZE + 1) as i64,
+                        ),
+                    )
+                    .await
+                    .map_err(|_| rejected("History service timed out"))??;
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
+                    rows
+                } else {
+                    room.social
+                        .moderation_events
+                        .iter()
+                        .rev()
+                        .skip(offset)
+                        .take(PAGE_SIZE + 1)
+                        .cloned()
+                        .collect()
+                };
+                let has_more = events.len() > PAGE_SIZE;
+                events.truncate(PAGE_SIZE);
+                // Only the owner reads a target's address; moderators never do.
+                let events: Vec<Value> = events.iter().map(|event| event.to_json(owner)).collect();
+                json!({"events":events,"hasMore":has_more})
             }
             _ => return Err(rejected("Unknown request")),
         };

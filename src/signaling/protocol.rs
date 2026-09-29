@@ -265,6 +265,14 @@ pub enum ClientMessage {
         report_id: String,
         status: String,
     },
+    /// The room's moderation history, newest first (Moderator+; the owner also
+    /// sees each target's address).
+    #[serde(rename_all = "camelCase")]
+    ListModerationEvents {
+        request_id: String,
+        #[serde(default)]
+        offset: Option<u32>,
+    },
 
     // === Moderation ===
     /// Force-close a participant's camera/screen producer
@@ -293,18 +301,23 @@ pub enum ClientMessage {
     TextUnmute {
         target_participant_id: String,
     },
-    /// Kick a participant from the room
+    /// Kick a participant from the room; `report_id` names the open report
+    /// this answers, which is resolved with it.
     #[serde(rename_all = "camelCase")]
     Kick {
         target_participant_id: String,
         reason: Option<String>,
+        #[serde(default)]
+        report_id: Option<String>,
     },
-    /// Ban a participant from the room
+    /// Ban a participant from the room; `report_id` as for `Kick`.
     #[serde(rename_all = "camelCase")]
     Ban {
         target_participant_id: String,
         reason: Option<String>,
         duration: Option<u64>,
+        #[serde(default)]
+        report_id: Option<String>,
     },
     /// Unban a user (stub — no persistent ban list yet)
     #[serde(rename_all = "camelCase")]

@@ -13,6 +13,7 @@ import type {
   RoomSnapshot,
   BanEntry,
   MemberEntry,
+  ModerationEventEntry,
   ReportEntry,
   IceParameters,
   IceCandidate,
@@ -187,6 +188,21 @@ const report = object<ReportEntry>({
   status: reportStatus,
   createdAt: text,
   resolvedAt: optional(text),
+  outcome: optional(object<{ action: string; createdAt: string }>({ action: text, createdAt: text })),
+});
+const moderationEvent = object<ModerationEventEntry>({
+  eventId: text,
+  action: text,
+  actorId: text,
+  actorName: text,
+  targetId: text,
+  targetName: text,
+  targetAuthenticated: boolean,
+  reason: optional(text),
+  expiresAt: optional(text),
+  reportId: optional(text),
+  createdAt: text,
+  targetIp: optional(text),
 });
 
 const ice = object<IceParameters>({
@@ -344,6 +360,10 @@ const socialDecoders: { [A in SocialAction]: Decoder<SocialResponses[A]> } = {
     reportId: text,
     status: choice('resolved', 'dismissed'),
   }),
+  listModerationEvents: object<{ events: ModerationEventEntry[]; hasMore: boolean }>({
+    events: list(moderationEvent),
+    hasMore: boolean,
+  }),
 };
 export function decodeSocialData<A extends SocialAction>(
   action: A,
@@ -376,6 +396,7 @@ const socialAction = choice(
   'reportParticipant',
   'listRoomReports',
   'resolveRoomReport',
+  'listModerationEvents',
 );
 
 // Adding a ServerMessage variant fails typechecking until its decoder exists.

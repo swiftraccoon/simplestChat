@@ -28,6 +28,19 @@ interface Options {
 }
 
 const ROLES = ['guest', 'user', 'member', 'moderator', 'admin', 'owner'];
+/** History actions as the server names them, read as what happened to the target. */
+const ACTION_LABELS: Record<string, string> = {
+  kick: 'kicked',
+  ban: 'banned',
+  unban: 'unbanned',
+  cam_ban: 'camera banned',
+  cam_unban: 'camera unbanned',
+  text_mute: 'text muted',
+  text_unmute: 'text unmuted',
+  report_resolved: 'report resolved',
+  report_dismissed: 'report dismissed',
+};
+const actionLabel = (action: string): string => ACTION_LABELS[action] ?? action.replace(/_/g, ' ');
 
 export class CommunityUI {
   private readonly accountButton = button('Account', () => {
@@ -162,7 +175,8 @@ export class CommunityUI {
     view.body.append(submit);
   }
 
-  ban(id: string, name: string): void {
+  /** `reportId` names the open report the ban answers; `onDone` runs after it is applied. */
+  ban(id: string, name: string, options: { reportId?: string; onDone?: () => void } = {}): void {
     const room = this.options.getRoom();
     if (!room) return;
     let pending = false;
@@ -195,13 +209,18 @@ export class CommunityUI {
           reason.disabled = true;
           duration.disabled = true;
           try {
+            // A plain ban sends exactly the three arguments it always did.
+            const linked: [] | [string] =
+              options.reportId === undefined ? [] : [options.reportId];
             await room.ban(
               id,
               reason.value.trim() || undefined,
               duration.value ? Number(duration.value) : undefined,
+              ...linked,
             );
             pending = false;
             view.close();
+            options.onDone?.();
           } finally {
             pending = false;
             reason.disabled = false;
@@ -557,7 +576,7 @@ export class CommunityUI {
     const view = modal('Manage room');
     const tabs = el('div', undefined, 'community-row');
     const content = el('div');
-    let current: 'members' | 'bans' | 'reports' = 'members';
+    let current: 'members' | 'bans' | 'reports' | 'history' = 'members';
     let offset = 0;
     let revision = 0;
     const render = async (): Promise<void> => {
@@ -576,10 +595,15 @@ export class CommunityUI {
                   kind: 'bans' as const,
                   data: await room.requestSocial('listRoomBans', { offset }),
                 }
-              : {
-                  kind: 'reports' as const,
-                  data: await room.requestSocial('listRoomReports', { offset }),
-                };
+              : current === 'reports'
+                ? {
+                    kind: 'reports' as const,
+                    data: await room.requestSocial('listRoomReports', { offset }),
+                  }
+                : {
+                    kind: 'history' as const,
+                    data: await room.requestSocial('listModerationEvents', { offset }),
+                  };
         if (revision !== requested || !view.dialog.open) return;
         content.replaceChildren();
         const list =
@@ -587,7 +611,9 @@ export class CommunityUI {
             ? page.data.members
             : page.kind === 'bans'
               ? page.data.bans
-              : page.data.reports;
+              : page.kind === 'reports'
+                ? page.data.reports
+                : page.data.events;
         if (!list.length) content.append(el('p', `No ${current} on this page.`));
         if (page.kind === 'members') {
           for (const person of page.data.members) {
@@ -654,7 +680,7 @@ export class CommunityUI {
             row.append(remove);
             content.append(row);
           }
-        } else {
+        } else if (page.kind === 'reports') {
           for (const report of page.data.reports) {
             const row = el('div', undefined, 'management-entry');
             row.append(
@@ -678,7 +704,52 @@ export class CommunityUI {
                 );
                 row.append(update);
               }
+              // Acting on the report resolves it and links the outcome to it.
+              const kick = asyncButton(
+                'Kick',
+                () =>
+                  busy(kick, view.error, async () => {
+                    await room.kick(report.targetParticipantId, undefined, report.reportId);
+                    await render();
+                  }),
+                (error) => this.showError(view.error, error),
+                'btn-secondary danger',
+              );
+              const ban = button(
+                'Ban…',
+                () =>
+                  this.ban(report.targetParticipantId, report.targetName, {
+                    reportId: report.reportId,
+                    onDone: refresh,
+                  }),
+                'btn-secondary danger',
+              );
+              row.append(kick, ban);
+            } else if (report.outcome) {
+              row.append(
+                el(
+                  'p',
+                  `Led to: ${actionLabel(report.outcome.action)} · ${new Date(report.outcome.createdAt).toLocaleString()}`,
+                ),
+              );
             }
+            content.append(row);
+          }
+        } else {
+          for (const event of page.data.events) {
+            const row = el('div', undefined, 'management-entry');
+            row.append(
+              el('strong', `${event.targetName} · ${actionLabel(event.action)}`),
+              el(
+                'p',
+                `${event.actorName} · ${new Date(event.createdAt).toLocaleString()}${event.reportId ? ' · from a report' : ''}`,
+              ),
+            );
+            if (event.reason) row.append(el('p', event.reason, 'profile-bio'));
+            if (event.expiresAt)
+              row.append(el('p', `Until ${new Date(event.expiresAt).toLocaleString()}`));
+            // Only the owner receives an address; it is theirs to read, never to show.
+            if (event.targetIp) row.append(el('p', `Address ${event.targetIp}`, 'setting-hint'));
             content.append(row);
           }
         }
@@ -712,11 +783,17 @@ export class CommunityUI {
           this.showError(view.error, error);
       });
     };
-    for (const section of ['members', 'bans', 'reports'] as const) {
+    for (const section of ['members', 'bans', 'reports', 'history'] as const) {
       if (section === 'bans' && ROLES.indexOf(room.role) < 4) continue;
       tabs.append(
         button(
-          section === 'members' ? 'Members & roles' : section === 'bans' ? 'Bans' : 'Reports',
+          section === 'members'
+            ? 'Members & roles'
+            : section === 'bans'
+              ? 'Bans'
+              : section === 'reports'
+                ? 'Reports'
+                : 'History',
           () => {
             current = section;
             offset = 0;

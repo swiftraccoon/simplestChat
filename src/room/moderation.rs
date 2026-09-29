@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
 use crate::room::roles::Role;
+use chrono::{DateTime, Utc};
 use mediasoup::prelude::MediaKind;
-use sqlx::PgPool;
+use serde::Serialize;
+use sqlx::{PgConnection, PgPool};
 use std::net::IpAddr;
 use uuid::Uuid;
 
@@ -53,6 +55,307 @@ impl PunitiveKind {
             Self::Muted => "muted",
         }
     }
+}
+
+/// Durable history entries kept per room; the oldest go when a new one arrives.
+pub(crate) const MAX_MODERATION_EVENTS: usize = 1000;
+
+/// What a moderator did, as the history stores and serializes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ModerationAction {
+    Kick,
+    Ban,
+    Unban,
+    CamBan,
+    CamUnban,
+    TextMute,
+    TextUnmute,
+    ReportResolved,
+    ReportDismissed,
+}
+
+impl ModerationAction {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Kick => "kick",
+            Self::Ban => "ban",
+            Self::Unban => "unban",
+            Self::CamBan => "cam_ban",
+            Self::CamUnban => "cam_unban",
+            Self::TextMute => "text_mute",
+            Self::TextUnmute => "text_unmute",
+            Self::ReportResolved => "report_resolved",
+            Self::ReportDismissed => "report_dismissed",
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> Option<Self> {
+        [
+            Self::Kick,
+            Self::Ban,
+            Self::Unban,
+            Self::CamBan,
+            Self::CamUnban,
+            Self::TextMute,
+            Self::TextUnmute,
+            Self::ReportResolved,
+            Self::ReportDismissed,
+        ]
+        .into_iter()
+        .find(|action| action.as_str() == value)
+    }
+
+    pub(crate) fn for_punitive(kind: PunitiveKind, enabled: bool) -> Self {
+        match (kind, enabled) {
+            (PunitiveKind::CamBanned, true) => Self::CamBan,
+            (PunitiveKind::CamBanned, false) => Self::CamUnban,
+            (PunitiveKind::Muted, true) => Self::TextMute,
+            (PunitiveKind::Muted, false) => Self::TextUnmute,
+        }
+    }
+}
+
+/// Who acted, as the history names them.
+#[derive(Clone, Copy)]
+pub(crate) struct Actor<'a> {
+    pub(crate) id: &'a str,
+    pub(crate) name: &'a str,
+}
+
+/// Whom it concerned; a guest's address is its sanction cohort.
+#[derive(Clone, Copy)]
+pub(crate) struct Target<'a> {
+    pub(crate) id: &'a str,
+    pub(crate) name: &'a str,
+    pub(crate) authenticated: bool,
+    pub(crate) ip: Option<IpAddr>,
+}
+
+/// One entry of a room's moderation history. The target's address is for the
+/// owner only: it is never serialized with the entry, and `to_json` adds it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ModerationEvent {
+    pub(crate) event_id: String,
+    pub(crate) action: ModerationAction,
+    pub(crate) actor_id: String,
+    pub(crate) actor_name: String,
+    pub(crate) target_id: String,
+    pub(crate) target_name: String,
+    pub(crate) target_authenticated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) expires_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) report_id: Option<String>,
+    pub(crate) created_at: DateTime<Utc>,
+    #[serde(skip)]
+    pub(crate) target_ip: Option<IpAddr>,
+}
+
+impl ModerationEvent {
+    pub(crate) fn new(
+        action: ModerationAction,
+        actor: Actor<'_>,
+        target: Target<'_>,
+        reason: Option<&str>,
+        expires_at: Option<DateTime<Utc>>,
+        report_id: Option<Uuid>,
+    ) -> Self {
+        Self {
+            event_id: Uuid::new_v4().to_string(),
+            action,
+            actor_id: actor.id.to_owned(),
+            actor_name: actor.name.to_owned(),
+            target_id: target.id.to_owned(),
+            target_name: target.name.to_owned(),
+            target_authenticated: target.authenticated,
+            reason: reason.map(str::to_owned),
+            expires_at,
+            report_id: report_id.map(|id| id.to_string()),
+            created_at: Utc::now(),
+            target_ip: if target.authenticated {
+                target.ip
+            } else {
+                target.ip.map(canonical_guest_ip)
+            },
+        }
+    }
+
+    /// The entry as a reader of the given standing sees it.
+    pub(crate) fn to_json(&self, owner: bool) -> serde_json::Value {
+        let mut value = serde_json::to_value(self).unwrap_or_default();
+        if owner
+            && let Some(ip) = self.target_ip
+            && let Some(object) = value.as_object_mut()
+        {
+            object.insert(
+                "targetIp".to_owned(),
+                serde_json::Value::String(ip.to_string()),
+            );
+        }
+        value
+    }
+}
+
+/// Append an event inside the caller's transaction. The room keeps its newest
+/// `cap` entries. An event that answers a report resolves that report if it is
+/// still open, and refuses a report from another room.
+pub(crate) async fn record_event(
+    transaction: &mut PgConnection,
+    room_id: &str,
+    event: &ModerationEvent,
+    cap: usize,
+) -> Result<(), sqlx::Error> {
+    let report_id = event
+        .report_id
+        .as_deref()
+        .map(Uuid::parse_str)
+        .transpose()
+        .map_err(|_| sqlx::Error::Protocol("invalid report id".to_string()))?;
+    if let Some(report_id) = report_id {
+        let status: Option<String> =
+            sqlx::query_scalar("SELECT status FROM room_reports WHERE room_id = $1 AND id = $2")
+                .bind(room_id)
+                .bind(report_id)
+                .fetch_optional(&mut *transaction)
+                .await?;
+        if status.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+        sqlx::query(
+            "UPDATE room_reports SET status = 'resolved', resolved_at = now(), resolved_by = $3
+             WHERE room_id = $1 AND id = $2 AND status = 'open'",
+        )
+        .bind(room_id)
+        .bind(report_id)
+        .bind(&event.actor_id)
+        .execute(&mut *transaction)
+        .await?;
+    }
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM moderation_events WHERE room_id = $1")
+            .bind(room_id)
+            .fetch_one(&mut *transaction)
+            .await?;
+    let excess = (count + 1).saturating_sub(cap as i64);
+    if excess > 0 {
+        sqlx::query(
+            "DELETE FROM moderation_events WHERE id IN (
+                SELECT id FROM moderation_events WHERE room_id = $1
+                ORDER BY created_at, id LIMIT $2)",
+        )
+        .bind(room_id)
+        .bind(excess)
+        .execute(&mut *transaction)
+        .await?;
+    }
+    let event_id = Uuid::parse_str(&event.event_id)
+        .map_err(|_| sqlx::Error::Protocol("invalid event id".to_string()))?;
+    sqlx::query(
+        "INSERT INTO moderation_events
+            (id, room_id, action, actor_id, actor_name, target_id, target_name,
+             target_authenticated, target_ip, reason, expires_at, report_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::inet, $10, $11, $12, $13)",
+    )
+    .bind(event_id)
+    .bind(room_id)
+    .bind(event.action.as_str())
+    .bind(&event.actor_id)
+    .bind(&event.actor_name)
+    .bind(&event.target_id)
+    .bind(&event.target_name)
+    .bind(event.target_authenticated)
+    .bind(event.target_ip.map(|ip| ip.to_string()))
+    .bind(&event.reason)
+    .bind(event.expires_at)
+    .bind(report_id)
+    .bind(event.created_at)
+    .execute(&mut *transaction)
+    .await?;
+    Ok(())
+}
+
+/// Write a history entry on its own, for a change that leaves no other row.
+pub(crate) async fn persist_event(
+    pool: &PgPool,
+    room_id: &str,
+    event: &ModerationEvent,
+) -> Result<(), sqlx::Error> {
+    let mut transaction = pool.begin().await?;
+    record_event(&mut transaction, room_id, event, MAX_MODERATION_EVENTS).await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+/// The newest `limit` entries after `offset`, newest first.
+pub(crate) async fn list_events(
+    pool: &PgPool,
+    room_id: &str,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<ModerationEvent>, sqlx::Error> {
+    type EventRow = (
+        Uuid,
+        String,
+        String,
+        String,
+        String,
+        String,
+        bool,
+        Option<String>,
+        Option<String>,
+        Option<DateTime<Utc>>,
+        Option<Uuid>,
+        DateTime<Utc>,
+    );
+    let rows: Vec<EventRow> = sqlx::query_as(
+        "SELECT id, action, actor_id, actor_name, target_id, target_name, target_authenticated,
+                host(target_ip), reason, expires_at, report_id, created_at
+         FROM moderation_events WHERE room_id = $1
+         ORDER BY created_at DESC, id LIMIT $2 OFFSET $3",
+    )
+    .bind(room_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(
+            |(
+                id,
+                action,
+                actor_id,
+                actor_name,
+                target_id,
+                target_name,
+                target_authenticated,
+                target_ip,
+                reason,
+                expires_at,
+                report_id,
+                created_at,
+            )| {
+                Some(ModerationEvent {
+                    event_id: id.to_string(),
+                    action: ModerationAction::parse(&action)?,
+                    actor_id,
+                    actor_name,
+                    target_id,
+                    target_name,
+                    target_authenticated,
+                    reason,
+                    expires_at,
+                    report_id: report_id.map(|id| id.to_string()),
+                    created_at,
+                    target_ip: target_ip.and_then(|ip| ip.parse().ok()),
+                })
+            },
+        )
+        .collect())
 }
 
 /// Load durable camera/chat sanctions for a joining identity. Registered users
@@ -109,7 +412,7 @@ pub async fn load_punitive_state(
     clippy::too_many_arguments,
     reason = "sanction persistence keeps actor, target identity, and mutation fields explicit"
 )]
-pub async fn set_punitive_state(
+pub(crate) async fn set_punitive_state(
     pool: &PgPool,
     room_id: &str,
     user_id: Option<Uuid>,
@@ -118,6 +421,7 @@ pub async fn set_punitive_state(
     enabled: bool,
     reason: Option<&str>,
     applied_by: Uuid,
+    event: &ModerationEvent,
 ) -> Result<(), sqlx::Error> {
     let state = kind.as_db_str();
     let ip = if user_id.is_some() {
@@ -199,13 +503,18 @@ pub async fn set_punitive_state(
         ));
     }
 
+    record_event(&mut transaction, room_id, event, MAX_MODERATION_EVENTS).await?;
     transaction.commit().await?;
     Ok(())
 }
 
 /// Persist a ban to room_states. Registered targets are keyed by user_id;
 /// guests are keyed by their canonical IP cohort.
-pub async fn persist_ban(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a durable ban keeps identity, sanction fields and its history entry explicit"
+)]
+pub(crate) async fn persist_ban(
     pool: &PgPool,
     room_id: &str,
     user_id: Option<Uuid>,
@@ -213,6 +522,7 @@ pub async fn persist_ban(
     reason: Option<&str>,
     expires_at: Option<chrono::DateTime<chrono::Utc>>,
     applied_by: Uuid,
+    event: &ModerationEvent,
 ) -> Result<(), sqlx::Error> {
     let ip = if user_id.is_some() {
         ip
@@ -264,6 +574,7 @@ pub async fn persist_ban(
             "ban has no durable identity".to_string(),
         ));
     }
+    record_event(&mut transaction, room_id, event, MAX_MODERATION_EVENTS).await?;
     transaction.commit().await?;
     Ok(())
 }
@@ -303,20 +614,46 @@ pub async fn is_banned(
 }
 
 /// Remove a registered user's persisted ban (guest/IP rows have no stable
-/// identity to unban through the UI). Returns true if a ban row was deleted.
-pub async fn remove_user_ban(
+/// identity to unban through the UI). Returns true if a ban row was deleted,
+/// in which case the history names the account as it is called now.
+pub(crate) async fn remove_user_ban(
     pool: &PgPool,
     room_id: &str,
     user_id: Uuid,
+    actor: Actor<'_>,
 ) -> Result<bool, sqlx::Error> {
+    let mut transaction = pool.begin().await?;
     let result = sqlx::query(
         "DELETE FROM room_states WHERE room_id = $1 AND state = 'banned' AND user_id = $2",
     )
     .bind(room_id)
     .bind(user_id)
-    .execute(pool)
+    .execute(&mut *transaction)
     .await?;
-    Ok(result.rows_affected() > 0)
+    if result.rows_affected() == 0 {
+        return Ok(false);
+    }
+    let name: Option<String> = sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(&mut *transaction)
+        .await?;
+    let target_id = user_id.to_string();
+    let event = ModerationEvent::new(
+        ModerationAction::Unban,
+        actor,
+        Target {
+            id: &target_id,
+            name: name.as_deref().unwrap_or("Removed account"),
+            authenticated: true,
+            ip: None,
+        },
+        None,
+        None,
+        None,
+    );
+    record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS).await?;
+    transaction.commit().await?;
+    Ok(true)
 }
 
 /// Check if a participant can produce (not cam-banned, has correct role for moderated rooms)
@@ -368,5 +705,192 @@ mod tests {
             canonical_guest_ip(mapped_first),
             canonical_guest_ip(mapped_other)
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+    async fn database_moderation_history_records_sanctions_and_answers_reports() {
+        let pool =
+            sqlx::PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+                .await
+                .unwrap();
+        let owner = Uuid::new_v4();
+        let member = Uuid::new_v4();
+        for (id, name) in [(owner, "Owner"), (member, "Maya")] {
+            sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
+                .bind(id)
+                .bind(format!("{id}@history.invalid"))
+                .bind(name)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        let room_id = format!("history-{}", Uuid::new_v4());
+        let other_room_id = format!("history-other-{}", Uuid::new_v4());
+        for id in [&room_id, &other_room_id] {
+            sqlx::query("INSERT INTO rooms(id,owner_id,display_name) VALUES($1,$2,$1)")
+                .bind(id)
+                .bind(owner)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        let report = Uuid::new_v4();
+        let foreign_report = Uuid::new_v4();
+        for (id, room) in [(report, &room_id), (foreign_report, &other_room_id)] {
+            sqlx::query("INSERT INTO room_reports(id,room_id,reporter_id,reporter_name,target_participant_id,target_name,reason) VALUES($1,$2,$3,'Reporter',$4,'Maya','spam')")
+                .bind(id).bind(room).bind(owner.to_string()).bind(member.to_string())
+                .execute(&pool).await.unwrap();
+        }
+        let owner_id = owner.to_string();
+        let member_id = member.to_string();
+        let actor = Actor {
+            id: &owner_id,
+            name: "Owner",
+        };
+        let target = Target {
+            id: &member_id,
+            name: "Maya",
+            authenticated: true,
+            ip: None,
+        };
+
+        // A ban that answers a report resolves it in the same transaction.
+        let ban = ModerationEvent::new(
+            ModerationAction::Ban,
+            actor,
+            target,
+            Some("spam"),
+            None,
+            Some(report),
+        );
+        persist_ban(
+            &pool,
+            &room_id,
+            Some(member),
+            None,
+            Some("spam"),
+            None,
+            owner,
+            &ban,
+        )
+        .await
+        .unwrap();
+        let (status, resolved_by): (String, Option<String>) =
+            sqlx::query_as("SELECT status, resolved_by FROM room_reports WHERE id=$1")
+                .bind(report)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            (status.as_str(), resolved_by.as_deref()),
+            ("resolved", Some(owner_id.as_str()))
+        );
+        assert!(
+            is_banned(&pool, &room_id, Some(member), None, true)
+                .await
+                .unwrap()
+        );
+
+        // A report from another room is refused and left as it was.
+        let foreign = ModerationEvent::new(
+            ModerationAction::Kick,
+            actor,
+            target,
+            None,
+            None,
+            Some(foreign_report),
+        );
+        assert!(matches!(
+            persist_event(&pool, &room_id, &foreign).await,
+            Err(sqlx::Error::RowNotFound)
+        ));
+        let (status,): (String,) = sqlx::query_as("SELECT status FROM room_reports WHERE id=$1")
+            .bind(foreign_report)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(status, "open");
+
+        // Lifting the ban names the account as it is called now, once.
+        assert!(
+            remove_user_ban(&pool, &room_id, member, actor)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !remove_user_ban(&pool, &room_id, member, actor)
+                .await
+                .unwrap()
+        );
+        let events = list_events(&pool, &room_id, 0, 10).await.unwrap();
+        assert_eq!(
+            events.iter().map(|event| event.action).collect::<Vec<_>>(),
+            vec![ModerationAction::Unban, ModerationAction::Ban]
+        );
+        assert_eq!(events[0].target_name, "Maya");
+        assert_eq!(
+            events[1].report_id.as_deref(),
+            Some(report.to_string().as_str())
+        );
+        assert_eq!(events[1].reason.as_deref(), Some("spam"));
+        assert!(
+            list_events(&pool, &other_room_id, 0, 10)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        // A guest's address is its cohort, and it reaches the owner's listing only.
+        let guest_id = Uuid::new_v4().to_string();
+        let guest = ModerationEvent::new(
+            ModerationAction::Kick,
+            actor,
+            Target {
+                id: &guest_id,
+                name: "Guest",
+                authenticated: false,
+                ip: Some("2001:db8:1:2::9".parse().unwrap()),
+            },
+            None,
+            None,
+            None,
+        );
+        persist_event(&pool, &room_id, &guest).await.unwrap();
+        let newest = list_events(&pool, &room_id, 0, 1).await.unwrap().remove(0);
+        assert_eq!(newest.target_ip, Some("2001:db8:1:2::".parse().unwrap()));
+        assert_eq!(newest.to_json(true)["targetIp"], "2001:db8:1:2::");
+        assert!(newest.to_json(false).get("targetIp").is_none());
+        assert!(!serde_json::to_string(&newest).unwrap().contains("2001:db8"));
+
+        // The room keeps only its newest entries.
+        let mut transaction = pool.begin().await.unwrap();
+        record_event(
+            &mut transaction,
+            &room_id,
+            &ModerationEvent::new(ModerationAction::TextMute, actor, target, None, None, None),
+            2,
+        )
+        .await
+        .unwrap();
+        transaction.commit().await.unwrap();
+        let events = list_events(&pool, &room_id, 0, 10).await.unwrap();
+        assert_eq!(
+            events.iter().map(|event| event.action).collect::<Vec<_>>(),
+            vec![ModerationAction::TextMute, ModerationAction::Kick]
+        );
+
+        for id in [&room_id, &other_room_id] {
+            sqlx::query("DELETE FROM rooms WHERE id=$1")
+                .bind(id)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        sqlx::query("DELETE FROM users WHERE id = ANY($1)")
+            .bind(vec![owner, member])
+            .execute(&pool)
+            .await
+            .unwrap();
     }
 }

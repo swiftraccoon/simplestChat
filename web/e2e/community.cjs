@@ -1237,6 +1237,8 @@ async function setRole(owner, name, role) {
       await visible(owner, 'Disposable browser test report');
       await manage.getByRole('button', { name: 'Mark resolved', exact: true }).click();
       await visible(owner, 'E2E Member · resolved');
+      await manage.getByRole('button', { name: 'History', exact: true }).click();
+      await visible(owner, 'E2E Member · report resolved');
       await close(manage);
     });
     await step('membership roles, live moderation gates and allow-chat toggle', async () => {
@@ -1302,6 +1304,10 @@ async function setRole(owner, name, role) {
       await visible(owner, 'Disposable browser test ban');
       await manage.getByRole('button', { name: 'Unban', exact: true }).click();
       await visible(owner, 'No bans on this page.');
+      await manage.getByRole('button', { name: 'History', exact: true }).click();
+      await visible(owner, 'E2E Member · unbanned');
+      await visible(owner, 'E2E Member · banned');
+      await visible(owner, 'Disposable browser test ban');
       await close(manage);
       await join(member, 'E2E Member');
     });

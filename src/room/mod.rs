@@ -987,6 +987,16 @@ fn lobby_admission_state(
 /// address must move together. Authorization is checked against the whole
 /// cohort to prevent selecting a low-role guest as a proxy for punishing a
 /// higher-role guest sharing that address.
+/// A kick's history write failed: a missing report is the caller's mistake,
+/// anything else is the database's.
+fn moderation_history_error(error: sqlx::Error) -> anyhow::Error {
+    if matches!(error, sqlx::Error::RowNotFound) {
+        return anyhow::anyhow!("Report not found");
+    }
+    warn!(%error, "Failed to record a moderation history entry");
+    anyhow::anyhow!("Moderation history could not be saved")
+}
+
 fn moderation_cohort(
     room: &Room,
     target_participant_id: &str,
@@ -4404,7 +4414,14 @@ impl RoomManager {
 
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
-        let (moderator_role, moderator_authenticated, target_authenticated, target_ip) = {
+        let (
+            moderator_role,
+            moderator_authenticated,
+            moderator_name,
+            target_authenticated,
+            target_ip,
+            target_name,
+        ) = {
             let moderator = Self::participant_for_sender(&room, moderator_id, expected_sender)?;
             let target = room
                 .participants
@@ -4413,8 +4430,10 @@ impl RoomManager {
             (
                 moderator.role,
                 moderator.authenticated,
+                moderator.name.clone(),
                 target.authenticated,
                 target.ip,
+                target.name.clone(),
             )
         };
         let target_participant_ids =
@@ -4436,6 +4455,22 @@ impl RoomManager {
         if !room.reserve_admin_mutation(std::time::Instant::now()) {
             anyhow::bail!("Room administration changes are rate limited");
         }
+        let event = moderation::ModerationEvent::new(
+            moderation::ModerationAction::for_punitive(kind, enabled),
+            moderation::Actor {
+                id: moderator_id,
+                name: &moderator_name,
+            },
+            moderation::Target {
+                id: target_participant_id,
+                name: &target_name,
+                authenticated: target_authenticated,
+                ip: target_ip,
+            },
+            reason,
+            None,
+            None,
+        );
 
         let persisted = room.persisted;
         drop(room);
@@ -4472,6 +4507,7 @@ impl RoomManager {
                     enabled,
                     reason,
                     applied_by,
+                    &event,
                 ),
             )
             .await
@@ -4483,6 +4519,9 @@ impl RoomManager {
 
         let mut room = room_lock.write().await;
         room.ensure_live()?;
+        if !persisted {
+            room.social.record_moderation_event(event);
+        }
         apply_punitive_to_cohort(
             &mut room,
             &target_participant_ids,
@@ -4756,6 +4795,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_participant_id: &str,
         reason: Option<&str>,
+        report_id: Option<uuid::Uuid>,
     ) -> Result<()> {
         // Check permissions and remove under room lock
         let target_media_session_id = {
@@ -4772,8 +4812,50 @@ impl RoomManager {
             if !moderator.role.can_moderate(target.role) {
                 anyhow::bail!("Insufficient permissions to kick this participant");
             }
+            let event = moderation::ModerationEvent::new(
+                moderation::ModerationAction::Kick,
+                moderation::Actor {
+                    id: moderator_id,
+                    name: &moderator.name,
+                },
+                moderation::Target {
+                    id: target_participant_id,
+                    name: &target.name,
+                    authenticated: target.authenticated,
+                    ip: target.ip,
+                },
+                reason,
+                None,
+                report_id,
+            );
             if !room.reserve_admin_mutation(std::time::Instant::now()) {
                 anyhow::bail!("Room administration changes are rate limited");
+            }
+            // A kick leaves no sanction row, so its history entry (and the
+            // report it answers) is written first; the target may leave in the
+            // meantime, in which case the entry stands and the kick is moot.
+            if room.persisted {
+                let pool = self.db_pool.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("Moderation service is temporarily unavailable")
+                })?;
+                drop(room);
+                self.persist_room(
+                    room_id,
+                    &room_lock,
+                    moderation::persist_event(pool, room_id, &event),
+                )
+                .await
+                .map_err(moderation_history_error)?;
+                room = room_lock.write().await;
+                room.ensure_live()?;
+                if !room.participants.contains_key(target_participant_id) {
+                    anyhow::bail!("Target participant not found");
+                }
+            } else {
+                if let Some(report_id) = report_id {
+                    room.social.link_report(&report_id.to_string())?;
+                }
+                room.social.record_moderation_event(event);
             }
 
             // Broadcast kick to everyone (including the target) before removing
@@ -4820,6 +4902,10 @@ impl RoomManager {
     }
 
     /// Ban a participant from the room (kick + durable state for persisted rooms)
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "a ban names its room, actor, socket, target, reason, duration and the report it answers"
+    )]
     pub async fn ban_participant(
         &self,
         room_id: &str,
@@ -4828,6 +4914,7 @@ impl RoomManager {
         target_participant_id: &str,
         reason: Option<&str>,
         duration: Option<u64>,
+        report_id: Option<uuid::Uuid>,
     ) -> Result<()> {
         let moderator_id = moderator_id.to_string();
         let expected_sender = expected_sender.clone();
@@ -4842,6 +4929,7 @@ impl RoomManager {
                     &target_participant_id,
                     reason.as_deref(),
                     duration,
+                    report_id,
                     control,
                 )
                 .await
@@ -4861,6 +4949,7 @@ impl RoomManager {
         target_participant_id: &str,
         reason: Option<&str>,
         duration: Option<u64>,
+        report_id: Option<uuid::Uuid>,
         control: tokio::sync::OwnedMutexGuard<()>,
     ) -> Result<()> {
         const MAX_BAN_DURATION_SECS: u64 = 10 * 365 * 24 * 60 * 60;
@@ -4890,6 +4979,7 @@ impl RoomManager {
             let target_participant_ids =
                 moderation_cohort(&room, target_participant_id, moderator.role)?;
             let moderator_authenticated = moderator.authenticated;
+            let moderator_name = moderator.name.clone();
             let target_authenticated = target.authenticated;
             let target_ip = target.ip;
             let target_name = target.name.clone();
@@ -4899,6 +4989,25 @@ impl RoomManager {
             if !room.reserve_admin_mutation(std::time::Instant::now()) {
                 anyhow::bail!("Room administration changes are rate limited");
             }
+            let expires_at = duration.and_then(|seconds| {
+                chrono::Utc::now().checked_add_signed(chrono::Duration::seconds(seconds as i64))
+            });
+            let event = moderation::ModerationEvent::new(
+                moderation::ModerationAction::Ban,
+                moderation::Actor {
+                    id: moderator_id,
+                    name: &moderator_name,
+                },
+                moderation::Target {
+                    id: target_participant_id,
+                    name: &target_name,
+                    authenticated: target_authenticated,
+                    ip: target_ip,
+                },
+                reason,
+                expires_at,
+                report_id,
+            );
 
             // Persist first so a successful response never represents only a
             // transient ban that disappears when the runtime room is removed.
@@ -4919,9 +5028,6 @@ impl RoomManager {
                 if target_user.is_none() && target_ip.is_none() {
                     anyhow::bail!("The target cannot be identified for a durable ban");
                 }
-                let expires_at = duration.and_then(|seconds| {
-                    chrono::Utc::now().checked_add_signed(chrono::Duration::seconds(seconds as i64))
-                });
                 self.persist_room(
                     room_id,
                     &room_lock,
@@ -4933,10 +5039,14 @@ impl RoomManager {
                         reason,
                         expires_at,
                         applied_by,
+                        &event,
                     ),
                 )
                 .await
                 .map_err(|error| {
+                    if matches!(error, sqlx::Error::RowNotFound) {
+                        return anyhow::anyhow!("Report not found");
+                    }
                     warn!(room_id, %error, "Failed to persist room ban");
                     anyhow::anyhow!("Ban could not be saved")
                 })?;
@@ -4944,6 +5054,12 @@ impl RoomManager {
 
             let mut room = room_lock.write().await;
             room.ensure_live()?;
+            if !persisted {
+                if let Some(report_id) = report_id {
+                    room.social.link_report(&report_id.to_string())?;
+                }
+                room.social.record_moderation_event(event);
+            }
             // Add to ban list — prevents rejoining
             let banned_ids: Vec<String> = target_participant_ids
                 .iter()
@@ -5071,6 +5187,7 @@ impl RoomManager {
         if moderator.role < roles::Role::Admin {
             anyhow::bail!("Insufficient permissions to unban (requires Admin+)");
         }
+        let moderator_name = moderator.name.clone();
 
         room.prune_expired_bans(std::time::Instant::now());
         if room
@@ -5109,7 +5226,15 @@ impl RoomManager {
                 .persist_room(
                     room_id,
                     &room_lock,
-                    moderation::remove_user_ban(pool, room_id, uid),
+                    moderation::remove_user_ban(
+                        pool,
+                        room_id,
+                        uid,
+                        moderation::Actor {
+                            id: moderator_id,
+                            name: &moderator_name,
+                        },
+                    ),
                 )
                 .await
                 .map_err(|error| {
@@ -5128,7 +5253,26 @@ impl RoomManager {
         if !in_memory && !persisted_removed {
             anyhow::bail!("Participant is not banned");
         }
-        room.social.forget_user_ban(target_participant_id);
+        let banned_name = room.social.forget_user_ban(target_participant_id);
+        if !room.persisted {
+            room.social
+                .record_moderation_event(moderation::ModerationEvent::new(
+                    moderation::ModerationAction::Unban,
+                    moderation::Actor {
+                        id: moderator_id,
+                        name: &moderator_name,
+                    },
+                    moderation::Target {
+                        id: target_participant_id,
+                        name: banned_name.as_deref().unwrap_or("Removed account"),
+                        authenticated: true,
+                        ip: None,
+                    },
+                    None,
+                    None,
+                    None,
+                ));
+        }
         drop(room);
         drop(control);
 
@@ -6852,7 +6996,7 @@ mod security_tests {
             status(&mut channels[index].1, 2, 2);
         }
         manager
-            .kick_participant("lobby-status", "owner", &rebound, "member", None)
+            .kick_participant("lobby-status", "owner", &rebound, "member", None, None)
             .await
             .unwrap();
         for index in [2, 3] {
@@ -6864,7 +7008,15 @@ mod security_tests {
             .unwrap();
         status(&mut channels[3].1, 2, 1);
         manager
-            .ban_participant("lobby-status", "owner", &rebound, "waiting", None, None)
+            .ban_participant(
+                "lobby-status",
+                "owner",
+                &rebound,
+                "waiting",
+                None,
+                None,
+                None,
+            )
             .await
             .unwrap();
         status(&mut channels[3].1, 1, 1);

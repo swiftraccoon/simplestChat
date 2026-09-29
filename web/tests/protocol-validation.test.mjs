@@ -144,6 +144,20 @@ const report = {
   createdAt: '2026-09-11T00:00:00Z',
   resolvedAt: null,
 };
+const event = {
+  eventId: 'event',
+  action: 'ban',
+  actorId: 'owner',
+  actorName: 'Owner',
+  targetId: 'target',
+  targetName: 'Target',
+  targetAuthenticated: true,
+  reason: 'Test ban',
+  expiresAt: '2026-09-12T00:00:00Z',
+  reportId: 'report',
+  createdAt: '2026-09-11T00:00:00Z',
+  targetIp: '203.0.113.7',
+};
 const socialData = {
   setChatPreferences: { allowPrivateMessages: true, ignoredParticipantIds: [] },
   changeNickname: { nickname: 'Person' },
@@ -160,6 +174,7 @@ const socialData = {
   reportParticipant: { reportId: 'report', status: 'open' },
   listRoomReports: { reports: [report], hasMore: false },
   resolveRoomReport: { reportId: 'report', status: 'resolved' },
+  listModerationEvents: { events: [event], hasMore: false },
 };
 const fixtures = [
   { type: 'authenticationRenewed', requestId: 'renewal-1', expiresAt: 1800000000 },
@@ -448,6 +463,32 @@ test('social actions validate their own result contract, including report lifecy
       status,
     );
   }
+  // A report answered by a sanction carries the newest history entry; an owner's
+  // history carries addresses and a moderator's does not.
+  const outcome = { action: 'ban', createdAt: '2026-09-11T01:00:00Z' };
+  const answered = decode(
+    response('listRoomReports', {
+      reports: [{ ...report, status: 'resolved', outcome }],
+      hasMore: false,
+    }),
+  );
+  assert.deepEqual(answered.data.reports[0].outcome, outcome);
+  assert.throws(
+    () =>
+      decode(
+        response('listRoomReports', {
+          reports: [{ ...report, outcome: { action: 'ban' } }],
+          hasMore: false,
+        }),
+      ),
+    invalid,
+  );
+  const { targetIp: _address, ...moderatorsView } = event;
+  const history = decode(
+    response('listModerationEvents', { events: [moderatorsView], hasMore: true }),
+  );
+  assert.equal(Object.hasOwn(history.data.events[0], 'targetIp'), false);
+  assert.equal(history.data.hasMore, true);
 });
 
 for (const [action, data] of Object.entries(socialData)) {
@@ -635,6 +676,8 @@ test('rejects malformed nested participants, settings, messages, media and socia
     ['listRoomBans', { bans: [{ ...ban, authenticated: 1 }], hasMore: false }],
     ['listRoomMembers', { members: [{ ...member, online: 'false' }], hasMore: false }],
     ['listRoomReports', { reports: [{ ...report, status: 'pending' }], hasMore: false }],
+    ['listModerationEvents', { events: [{ ...event, targetAuthenticated: 'yes' }], hasMore: false }],
+    ['listModerationEvents', { events: [{ ...event, createdAt: null }], hasMore: false }],
     ['setChatPreferences', { allowPrivateMessages: true, ignoredParticipantIds: [1] }],
   ])
     assert.throws(

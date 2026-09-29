@@ -243,7 +243,10 @@ class PublicTemplateTests(unittest.TestCase):
             rights = {right.strip() for right in str(grant.group(1)).split(",")}
             for table in str(grant.group(2)).split(","):
                 granted[table.strip().removeprefix("public.")] = rights
-        tables = "users|webauthn_credentials|sessions|rooms|room_roles|room_states|room_reports"
+        tables = (
+            "users|webauthn_credentials|sessions|rooms|room_roles|room_states|room_reports"
+            + "|moderation_events"
+        )
         statement = re.compile(r"\b(INSERT INTO|UPDATE|DELETE FROM)\s+(" + tables + r")\b")
         needed: dict[str, set[str]] = {}
         repository = ROOT.parents[1]

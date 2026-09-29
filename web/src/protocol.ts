@@ -83,8 +83,14 @@ export type ClientMessage =
   | { type: 'camUnban'; targetParticipantId: string }
   | { type: 'textMute'; targetParticipantId: string }
   | { type: 'textUnmute'; targetParticipantId: string }
-  | { type: 'kick'; targetParticipantId: string; reason?: string }
-  | { type: 'ban'; targetParticipantId: string; reason?: string; duration?: number }
+  | { type: 'kick'; targetParticipantId: string; reason?: string; reportId?: string }
+  | {
+      type: 'ban';
+      targetParticipantId: string;
+      reason?: string;
+      duration?: number;
+      reportId?: string;
+    }
   | { type: 'unban'; targetUserId: string }
   | { type: 'setRole'; targetParticipantId: string; role: number }
   | { type: 'requestVoice' }
@@ -309,7 +315,8 @@ export type SocialAction =
   | 'setMemberRole'
   | 'reportParticipant'
   | 'listRoomReports'
-  | 'resolveRoomReport';
+  | 'resolveRoomReport'
+  | 'listModerationEvents';
 
 /** The action selects both the outgoing payload and the validated response. */
 export interface SocialRequests {
@@ -325,6 +332,7 @@ export interface SocialRequests {
   reportParticipant: { targetParticipantId: string; reason: string };
   listRoomReports: { offset?: number };
   resolveRoomReport: { reportId: string; status: 'resolved' | 'dismissed' };
+  listModerationEvents: { offset?: number };
 }
 
 export interface SocialResponses {
@@ -340,6 +348,7 @@ export interface SocialResponses {
   reportParticipant: { reportId: string; status: 'open' };
   listRoomReports: RoomReportsPage;
   resolveRoomReport: { reportId: string; status: 'resolved' | 'dismissed' };
+  listModerationEvents: ModerationEventsPage;
 }
 
 export type SocialRequest = {
@@ -420,6 +429,10 @@ export interface RoomReportsPage {
   reports: ReportEntry[];
   hasMore: boolean;
 }
+export interface ModerationEventsPage {
+  events: ModerationEventEntry[];
+  hasMore: boolean;
+}
 
 export interface BanEntry {
   banId: string;
@@ -447,6 +460,29 @@ export interface ReportEntry {
   status: 'open' | 'resolved' | 'dismissed';
   createdAt: string;
   resolvedAt?: string;
+  /** The newest history entry that answered this report. */
+  outcome?: ReportOutcome;
+}
+
+export interface ReportOutcome {
+  action: string;
+  createdAt: string;
+}
+
+/** One entry of a room's moderation history; `targetIp` reaches the owner only. */
+export interface ModerationEventEntry {
+  eventId: string;
+  action: string;
+  actorId: string;
+  actorName: string;
+  targetId: string;
+  targetName: string;
+  targetAuthenticated: boolean;
+  reason?: string;
+  expiresAt?: string;
+  reportId?: string;
+  createdAt: string;
+  targetIp?: string;
 }
 
 /** Omitted fields stay unchanged; null clears a password or capacity limit. */

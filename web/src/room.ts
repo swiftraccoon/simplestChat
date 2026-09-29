@@ -964,20 +964,23 @@ export class RoomClient {
     return this.requestControl({ type: 'textUnmute', targetParticipantId: targetId });
   }
 
-  kick(targetId: string, reason?: string): Promise<void> {
+  /** `reportId` names the open report this answers; the server resolves it with the kick. */
+  kick(targetId: string, reason?: string, reportId?: string): Promise<void> {
     return this.requestControl({
       type: 'kick',
       targetParticipantId: targetId,
       ...(reason !== undefined && { reason }),
+      ...(reportId !== undefined && { reportId }),
     });
   }
 
-  ban(targetId: string, reason?: string, duration?: number): Promise<void> {
+  ban(targetId: string, reason?: string, duration?: number, reportId?: string): Promise<void> {
     return this.requestControl({
       type: 'ban',
       targetParticipantId: targetId,
       ...(reason !== undefined && { reason }),
       ...(duration !== undefined && { duration }),
+      ...(reportId !== undefined && { reportId }),
     });
   }
 

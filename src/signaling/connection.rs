@@ -680,6 +680,7 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         | ClientMessage::ReportParticipant { .. }
         | ClientMessage::ListRoomReports { .. }
         | ClientMessage::ResolveRoomReport { .. }
+        | ClientMessage::ListModerationEvents { .. }
         | ClientMessage::CloseCam { .. }
         | ClientMessage::CamBan { .. }
         | ClientMessage::CamUnban { .. }
@@ -2249,6 +2250,16 @@ fn make_ice_servers(turn_config: &Option<Arc<TurnConfig>>) -> Vec<crate::turn::I
 pub(crate) const MAX_PARTICIPANT_NAME_LEN: usize = 64;
 const MAX_TARGET_ID_LEN: usize = 128;
 
+/// The report a sanction answers must at least look like one of ours.
+fn parse_report_id(report_id: Option<&str>) -> anyhow::Result<Option<Uuid>> {
+    report_id
+        .map(|id| {
+            id.parse::<Uuid>()
+                .map_err(|_| anyhow::anyhow!("Invalid report"))
+        })
+        .transpose()
+}
+
 fn validate_target_id(id: &str) -> anyhow::Result<()> {
     if id.is_empty() || id.len() > MAX_TARGET_ID_LEN || id.parse::<Uuid>().is_err() {
         anyhow::bail!("Invalid target participant ID");
@@ -2761,7 +2772,8 @@ async fn handle_client_message(
         | ClientMessage::SetMemberRole { .. }
         | ClientMessage::ReportParticipant { .. }
         | ClientMessage::ListRoomReports { .. }
-        | ClientMessage::ResolveRoomReport { .. } => {
+        | ClientMessage::ResolveRoomReport { .. }
+        | ClientMessage::ListModerationEvents { .. } => {
             let room_id = current_room_id
                 .as_deref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
@@ -2842,12 +2854,14 @@ async fn handle_client_message(
         ClientMessage::Kick {
             target_participant_id,
             reason,
+            report_id,
         } => {
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
             validate_target_id(target_participant_id)?;
             validate_reason(reason.as_deref())?;
+            let report_id = parse_report_id(report_id.as_deref())?;
             room_manager
                 .kick_participant(
                     room_id,
@@ -2855,6 +2869,7 @@ async fn handle_client_message(
                     sender,
                     target_participant_id,
                     reason.as_deref(),
+                    report_id,
                 )
                 .await?;
         }
@@ -2863,12 +2878,14 @@ async fn handle_client_message(
             target_participant_id,
             reason,
             duration,
+            report_id,
         } => {
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
             validate_target_id(target_participant_id)?;
             validate_durable_reason(reason.as_deref())?;
+            let report_id = parse_report_id(report_id.as_deref())?;
             room_manager
                 .ban_participant(
                     room_id,
@@ -2877,6 +2894,7 @@ async fn handle_client_message(
                     target_participant_id,
                     reason.as_deref(),
                     *duration,
+                    report_id,
                 )
                 .await?;
         }
