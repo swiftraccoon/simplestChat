@@ -46,7 +46,7 @@ pub struct RoomListItem {
     pub secret: bool,
 }
 
-type RoomListRow = (
+pub(crate) type RoomListRow = (
     String,
     String,
     Option<String>,
@@ -57,7 +57,7 @@ type RoomListRow = (
     bool,
 );
 
-fn room_list_item(server: &SignalingServer, row: RoomListRow) -> RoomListItem {
+pub(crate) fn room_list_item(server: &SignalingServer, row: RoomListRow) -> RoomListItem {
     RoomListItem {
         participant_count: server.room_manager().participant_count_for_room(&row.0),
         broadcaster_count: server.room_manager().broadcaster_count_for_room(&row.0),
@@ -85,7 +85,7 @@ const MAX_ROOM_LIST_RESULTS: u32 = 100;
 const MIN_ROOM_SEARCH_TRIGRAM_LEN: usize = 3;
 const MAX_ROOM_SEARCH_CHARACTERS: usize = 128;
 
-fn acquire_room_api_request(
+pub(crate) fn acquire_room_api_request(
     server: &SignalingServer,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, RoomApiError> {
     server.try_acquire_room_api_request().ok_or_else(|| {
@@ -154,7 +154,7 @@ fn list_window(params: &ListParams) -> Result<(i64, i64), &'static str> {
     Ok((limit, offset))
 }
 
-fn room_database_error(error: sqlx::Error) -> Response {
+pub(crate) fn room_database_error(error: sqlx::Error) -> Response {
     crate::db::record_error(&error);
     AuthError::DatabaseError(error.to_string()).into_response()
 }

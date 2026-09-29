@@ -247,7 +247,7 @@ class PublicTemplateTests(unittest.TestCase):
                 granted[table.strip().removeprefix("public.")] = rights
         tables = (
             "users|webauthn_credentials|sessions|rooms|room_roles|room_states|room_reports"
-            + "|moderation_events"
+            + "|moderation_events|invites"
         )
         statement = re.compile(r"\b(INSERT INTO|UPDATE|DELETE FROM)\s+(" + tables + r")\b")
         needed: dict[str, set[str]] = {}

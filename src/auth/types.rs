@@ -20,6 +20,9 @@ pub enum AuthError {
     RateLimited,
     /// Failed sign-ins have earned this client a wait, in whole seconds.
     TooManyFailures(u64),
+    /// Registration is closed to strangers; a live invite code opens it.
+    InviteRequired,
+    InviteNotFound,
     ServiceBusy,
     RegistrationDisabled,
     DatabaseError(String),
@@ -57,6 +60,11 @@ impl IntoResponse for AuthError {
             AuthError::RateLimited => (StatusCode::TOO_MANY_REQUESTS, "Too many attempts"),
             AuthError::ServiceBusy => (StatusCode::SERVICE_UNAVAILABLE, "Service busy"),
             AuthError::RegistrationDisabled => (StatusCode::FORBIDDEN, "Registration is disabled"),
+            AuthError::InviteRequired => (
+                StatusCode::FORBIDDEN,
+                "Registration is by invitation; enter an invite code",
+            ),
+            AuthError::InviteNotFound => (StatusCode::NOT_FOUND, "Invite not found"),
             AuthError::DatabaseError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Database error"),
             AuthError::WebAuthnError(_) => (StatusCode::BAD_REQUEST, "WebAuthn error"),
             AuthError::NotConfigured => (
@@ -80,6 +88,9 @@ pub struct RegisterRequest {
     pub email: String,
     pub password: String,
     pub display_name: String,
+    /// A registration invitation; required while registration is closed.
+    #[serde(default)]
+    pub invite_code: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

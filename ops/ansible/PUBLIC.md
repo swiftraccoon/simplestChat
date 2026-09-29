@@ -39,7 +39,9 @@ missing pinned dependency images, and installs commands. It does not start the
 public service. The public project must be stopped when applying configuration.
 Do not print resolved Compose configuration: it contains secrets.
 
-Registration is off by default; guests can still join the lobby. Opting into
+Registration is off by default; guests can still join the lobby, and any
+account can hand out registration invite codes (Account → Invite someone to
+register). Opting into
 registration permits at most 100 total accounts, including the owner. Email
 addresses are not verified. Treat this as a public test site, not an invitation
 to store sensitive information.

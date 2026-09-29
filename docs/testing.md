@@ -125,6 +125,13 @@ it does not use a browser, capture media or upload anything. See
 
 ## Disposable PostgreSQL and browser tests
 
+`build/with-test-server.sh` runs `target/debug/simplestChat` as it finds it, so
+build first: a stale binary answers a new message type with "Invalid message
+format". The disposable server also opens registration and raises two
+per-address budgets for the five browsers a suite drives from one address
+(`REGISTRATIONS_PER_IP_PER_HOUR=100`, `AUTH_REQUESTS_PER_MINUTE=300`); a
+deployment keeps the defaults in [configuration](configuration.md).
+
 With PostgreSQL tools on `PATH`, use the owned bootstrap:
 
 ```sh

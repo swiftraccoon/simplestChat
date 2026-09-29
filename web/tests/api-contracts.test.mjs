@@ -36,6 +36,14 @@ const settings = {
   guestsCanBroadcast: true,
   topic: null,
 };
+const invite = {
+  code: 'abcdefghjkmnpqrstuvw',
+  uses_left: 1,
+  expires_at: '2026-10-05T00:00:00Z',
+  created_at: '2026-09-28T00:00:00Z',
+};
+const roomInvite = { ...invite, role: 'member' };
+const redemption = { room_id: 'room', display_name: 'Room', role: 'member' };
 const preferences = {
   allowPrivateMessages: false,
   sounds: true,
@@ -101,6 +109,48 @@ const endpoints = [
     '/api/auth/preferences',
     'PUT',
     preferences,
+  ],
+  [
+    'registration invites',
+    (api) => api.registrationInvites('token'),
+    '/api/auth/invites',
+    'GET',
+    [invite],
+  ],
+  [
+    'registration invite creation',
+    (api) => api.createRegistrationInvite('token'),
+    '/api/auth/invites',
+    'POST',
+    invite,
+  ],
+  [
+    'memberships',
+    (api) => api.memberships('token'),
+    '/api/rooms/memberships',
+    'GET',
+    [{ ...room, role: 'member' }],
+  ],
+  [
+    'room invites',
+    (api) => api.roomInvites('token', 'room /?'),
+    '/api/rooms/room%20%2F%3F/invites',
+    'GET',
+    [roomInvite],
+  ],
+  [
+    'room invite creation',
+    (api) => api.createRoomInvite('token', 'room', { role: 2, uses: 1, days: 7 }),
+    '/api/rooms/room/invites',
+    'POST',
+    roomInvite,
+  ],
+  [
+    'invite redemption',
+    (api) => api.redeemInvite('token', 'abcdefghjkmnpqrstuvw'),
+    '/api/rooms/invites/abcdefghjkmnpqrstuvw',
+    'POST',
+    redemption,
   ],
 ];
 

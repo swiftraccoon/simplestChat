@@ -13,7 +13,7 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 544 KiB            | 120 KiB    |
+| JavaScript  | 560 KiB            | 128 KiB    |
 | CSS         | 64 KiB             | 12 KiB     |
 | HTML        | 48 KiB             | 11 KiB     |
 
@@ -50,6 +50,13 @@ libraries; no runtime dependency was added. All emitted chunks remain counted,
 including optional code. The revised ceiling accommodates these workflows while
 keeping a bounded margin for final correctness fixes; it is not evidence of
 unchanged runtime performance.
+
+Moderation history, account preferences, invitations and the typing indicator
+raise the JavaScript ceiling to 560 KiB raw and 128 KiB gzip: a History tab and
+report outcomes in the management dialog, preference sync, room and registration
+invitation dialogs with their decoders, the invitation link flow, and the
+composing notices. The build before them (`0c2d268`) measured 536,629 bytes raw
+/ 119,593 gzip against 544/120 KiB; this build measures 543,523 / 121,472.
 
 Chat timestamps and personal chat colors raise the gzip ceiling to 116 KiB and
 keep 512 KiB raw: timestamp formats chosen per viewer, a sixteen-color palette

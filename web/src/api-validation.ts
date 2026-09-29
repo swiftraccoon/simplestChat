@@ -102,7 +102,7 @@ export const decodeChatPreferences = object<ChatPreferences>({
 });
 
 /** These fields are all serialized by src/room/api.rs, including nullable fields. */
-export const decodeRoomListItem = object<RoomListItem>({
+const roomListItemFields = {
   id: text,
   display_name: text,
   topic: nullable(text),
@@ -113,5 +113,38 @@ export const decodeRoomListItem = object<RoomListItem>({
   description: text,
   image_url: nullable(text),
   secret: boolean,
-});
+};
+export const decodeRoomListItem = object<RoomListItem>(roomListItemFields);
 export const decodeRoomDirectory = list(decodeRoomListItem);
+
+/** Invitations (src/auth/invites.rs, src/room/invites.rs) and the rooms an account belongs to. */
+export interface RegistrationInvite {
+  code: string;
+  uses_left: number;
+  expires_at: string;
+  created_at: string;
+}
+export interface RoomInvite extends RegistrationInvite {
+  role: string;
+}
+export interface InviteRedemption {
+  room_id: string;
+  display_name: string;
+  role: string;
+}
+export interface MembershipItem extends RoomListItem {
+  role: string;
+}
+const inviteFields = { code: text, uses_left: integer(), expires_at: text, created_at: text };
+export const decodeRegistrationInvite = object<RegistrationInvite>(inviteFields);
+export const decodeRegistrationInvites = list(decodeRegistrationInvite);
+export const decodeRoomInvite = object<RoomInvite>({ ...inviteFields, role: text });
+export const decodeRoomInvites = list(decodeRoomInvite);
+export const decodeInviteRedemption = object<InviteRedemption>({
+  room_id: text,
+  display_name: text,
+  role: text,
+});
+export const decodeMemberships = list(
+  object<MembershipItem>({ ...roomListItemFields, role: text }),
+);

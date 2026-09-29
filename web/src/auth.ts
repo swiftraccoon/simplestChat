@@ -215,10 +215,21 @@ export class AuthManager {
     }
   }
 
-  async register(email: string, displayName: string, password: string): Promise<void> {
+  /** `inviteCode` opens registration while it is closed to strangers. */
+  async register(
+    email: string,
+    displayName: string,
+    password: string,
+    inviteCode?: string,
+  ): Promise<void> {
     await this.establishSession(
       '/api/auth/register',
-      { email, password, display_name: displayName },
+      {
+        email,
+        password,
+        display_name: displayName,
+        ...(inviteCode ? { invite_code: inviteCode } : {}),
+      },
       'Registration failed',
     );
   }

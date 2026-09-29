@@ -669,6 +669,11 @@ impl SignalingServer {
                     .layer(DefaultBodyLimit::max(256 * 1024)),
             )
             .route(
+                "/invites",
+                get(crate::auth::invites::list).post(crate::auth::invites::create),
+            )
+            .route("/invites/{code}", delete(crate::auth::invites::revoke))
+            .route(
                 "/preferences",
                 get(crate::auth::account::get_preferences)
                     .put(crate::auth::account::put_preferences)
@@ -721,6 +726,13 @@ impl SignalingServer {
             .route("/", get(crate::room::api::list_rooms))
             .route("/", post(crate::room::api::create_room))
             .route("/mine", get(crate::room::api::owned_rooms))
+            .route("/memberships", get(crate::room::invites::list_memberships))
+            .route("/invites/{code}", post(crate::room::invites::redeem))
+            .route(
+                "/{id}/invites",
+                get(crate::room::invites::list).post(crate::room::invites::create),
+            )
+            .route("/{id}/invites/{code}", delete(crate::room::invites::revoke))
             .route(
                 "/{id}/identity",
                 patch(crate::room::api::update_room_identity)

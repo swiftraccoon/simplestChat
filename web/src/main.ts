@@ -102,6 +102,7 @@ const registerEmail = document.getElementById('register-email') as HTMLInputElem
 const registerName = document.getElementById('register-name') as HTMLInputElement;
 const registerPassword = document.getElementById('register-password') as HTMLInputElement;
 const registerConfirm = document.getElementById('register-confirm') as HTMLInputElement;
+const registerInvite = document.getElementById('register-invite') as HTMLInputElement;
 const registerSubmit = document.getElementById('register-submit') as HTMLButtonElement;
 const registerError = document.getElementById('register-error')!;
 const registerPasskeyBtn = document.getElementById('register-passkey-btn') as HTMLButtonElement;
@@ -182,8 +183,61 @@ function updateAuthUI(): void {
   community.refresh();
 }
 
+// An invitation link (?invite=CODE) waits for a signed-in viewer and prefills
+// the account form meanwhile; a registration that spends the code takes it
+// with it, so only a room code is ever redeemed after sign-in.
+let pendingInvite: string | null = null;
+function readInviteLink(): void {
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get('invite');
+  if (code === null) return;
+  url.searchParams.delete('invite');
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  const normalized = code.trim().toLowerCase();
+  if (!/^[a-z0-9]{20}$/.test(normalized)) {
+    showToast('This invitation link is not valid', 4000, 'error');
+    return;
+  }
+  pendingInvite = normalized;
+  registerInvite.value = normalized;
+}
+async function acceptPendingInvite(): Promise<void> {
+  const code = pendingInvite;
+  if (!code || !auth.isLoggedIn) return;
+  pendingInvite = null;
+  try {
+    const accepted = await api.redeemInvite(auth.jwt, code);
+    showToast(
+      `You are now ${accepted.role === 'admin' ? 'an' : 'a'} ${accepted.role} of ${accepted.display_name}`,
+    );
+    openRoomFromDialog(accepted.room_id);
+  } catch (error) {
+    showToast(
+      error instanceof Error ? error.message : 'The invitation could not be accepted',
+      4000,
+      'error',
+    );
+  }
+}
+/** Leaves any current room and joins `id` as the account, the way Create Room does. */
+function openRoomFromDialog(id: string): void {
+  observeUiTask(
+    (async () => {
+      if (room?.currentRoomId === id) return;
+      if (room) await leaveCurrentRoom();
+      roomInput.value = id;
+      if (auth.displayName && !nameInput.value.trim()) nameInput.value = auth.displayName;
+      updateJoinBtn();
+      if (!joinBtn.disabled) joinBtn.click();
+    })(),
+    'Could not open the room',
+  );
+}
+readInviteLink();
+
 auth.setOnChange((loggedIn, tokenRefresh) => {
   updateAuthUI();
+  if (loggedIn && !tokenRefresh) observeUiTask(acceptPendingInvite(), 'Invitation not accepted');
   if (loggedIn && tokenRefresh) {
     // Renew the existing socket as well as the next handshake, preserving room
     // membership and media across the original token's expiry.
@@ -1187,6 +1241,7 @@ const community = new CommunityUI({
   },
   onRoomsChanged: () => observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory'),
   onForgetDevice: () => observeUiTask(signOutAndForget(), 'Could not sign out'),
+  onJoinRoom: openRoomFromDialog,
   onRoomDeleted: async (id) => {
     if (room?.currentRoomId === id) await leaveCurrentRoom();
   },
@@ -1258,6 +1313,9 @@ observeUiTask(
   auth.tryRestore().then(() => {
     updateAuthUI();
     signaling.connect(auth.jwt ?? undefined);
+    if (!pendingInvite) return;
+    if (auth.isLoggedIn) observeUiTask(acceptPendingInvite(), 'Invitation not accepted');
+    else if (dismissAuth()) registerModal.hidden = false;
   }),
   'Could not restore sign-in. Reload the page to retry.',
 );
@@ -1650,18 +1708,23 @@ registerSubmit.addEventListener(
     registerSubmit.disabled = true;
     registerPasskeyBtn.disabled = true;
     registerSubmit.textContent = 'Creating account...';
+    // The registration spends this code; it is not a room invitation to redeem.
+    if (pendingInvite && registerInvite.value.trim().toLowerCase() === pendingInvite)
+      pendingInvite = null;
     try {
       await telemetry.measure('password_register', () =>
         auth.register(
           registerEmail.value.trim(),
           registerName.value.trim(),
           registerPassword.value,
+          registerInvite.value.trim() || undefined,
         ),
       );
       if (authFlow.finish(attempt)) {
         dismissAuth();
         registerEmail.value = '';
         registerName.value = '';
+        registerInvite.value = '';
       }
     } catch (error) {
       showAuthFailure(

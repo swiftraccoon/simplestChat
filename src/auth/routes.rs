@@ -267,8 +267,17 @@ pub(crate) async fn register(
     Extension(ClientIp(source_ip)): Extension<ClientIp>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
-    if !server.registration_enabled() {
-        return Err(AuthError::RegistrationDisabled);
+    // A live invite code opens closed registration; an offered code is always
+    // spent, so an inviter's allowance is not a free pass past an open door.
+    let invite_code = match req.invite_code.as_deref().map(str::trim) {
+        Some(code) if !code.is_empty() => Some(
+            crate::invite_codes::normalize(code)
+                .ok_or(AuthError::InvalidInput("Invalid invite code"))?,
+        ),
+        _ => None,
+    };
+    if !server.registration_enabled() && invite_code.is_none() {
+        return Err(AuthError::InviteRequired);
     }
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
@@ -307,13 +316,25 @@ pub(crate) async fn register(
     let refresh_token = session::generate_refresh_token()?;
     let mut transaction = pool.begin().await.map_err(database_error)?;
     enforce_user_capacity(&mut transaction, server.max_users()).await?;
+    let invited_by = match invite_code.as_deref() {
+        Some(code) => Some(
+            super::invites::consume_registration_invite(&mut transaction, code)
+                .await
+                .map_err(database_error)?
+                .ok_or(AuthError::InvalidInput(
+                    "This invite code is invalid, used up or expired",
+                ))?,
+        ),
+        None => None,
+    };
 
     let row = sqlx::query_as::<_, (Uuid, String, String)>(
-        "INSERT INTO users (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, display_name",
+        "INSERT INTO users (email, display_name, password_hash, invited_by) VALUES ($1, $2, $3, $4) RETURNING id, email, display_name",
     )
     .bind(&email)
     .bind(&req.display_name)
     .bind(&password_hash)
+    .bind(invited_by)
     .fetch_one(&mut *transaction)
     .await
     .map_err(user_insert_error)?;

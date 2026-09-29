@@ -21,6 +21,14 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `changePassword` | `POST /api/auth/password` | `204`, no body |
 | `accountPreferences` | `GET /api/auth/preferences` | `ChatPreferences` |
 | `updatePreferences` | `PUT /api/auth/preferences` | `ChatPreferences` |
+| `registrationInvites` | `GET /api/auth/invites` | `RegistrationInvite[]` |
+| `createRegistrationInvite` | `POST /api/auth/invites` | `RegistrationInvite` |
+| `revokeRegistrationInvite` | `DELETE /api/auth/invites/:code` | `204`, no body |
+| `memberships` | `GET /api/rooms/memberships` | `MembershipItem[]` |
+| `roomInvites` | `GET /api/rooms/:id/invites` | `RoomInvite[]` |
+| `createRoomInvite` | `POST /api/rooms/:id/invites` | `RoomInvite` |
+| `revokeRoomInvite` | `DELETE /api/rooms/:id/invites/:code` | `204`, no body |
+| `redeemInvite` | `POST /api/rooms/invites/:code` | `InviteRedemption` |
 | `recoveryKey` | `POST /api/auth/recovery/key` | `{ recovery_key: string }` |
 | `redeemRecovery` | `POST /api/auth/recovery/redeem` | `204`, no body |
 | `rooms` | `GET /api/rooms` with directory query parameters | `RoomListItem[]` |
@@ -43,14 +51,28 @@ own) and reads a stored object leniently, so a build that adds a field never
 locks a client out of its settings. Desktop notification consent stays on the
 device and the chat look on the profile. `PUT` replaces the whole object; the
 newest write wins. A guest, or a viewer without a token, keeps everything in
-the browser. Profile `avatar_url`, directory `topic`
+the browser.
+
+Invitations are 20-character codes (`src/invite_codes.rs`). A registration
+code (`RegistrationInvite`) is single use and a week long; any account holds at
+most five unused ones, and `register` accepts `invite_code`, which opens
+registration while `REGISTRATION_ENABLED` is false and is spent either way
+(`users.invited_by` remembers the inviter). A room code (`RoomInvite`) is
+minted by a room admin for a role below their own (`role` 2–4, `uses` 1–100,
+`days` 1–30; twenty unused per room) and redeemed by any signed-in account,
+which gains the role in `room_roles` without ever losing a higher one; the
+owner stays the owner. `redeemInvite` answers with the room and the role now
+held, and 404 for a code that is unknown, spent or expired, a registration
+code included. Memberships list the rooms an account holds a role in but does
+not own. The browser carries a code as `?invite=CODE`: it prefills the account
+form, and once the viewer is signed in it is redeemed and the room joined. Profile `avatar_url`, directory `topic`
 and directory `image_url` are required nullable fields; null is not a missing
 response. Directory counts, description and visibility flags are also required.
 Unknown response fields are stripped before use. See the
 [HTTP decoders](../web/src/api-validation.ts), [account handlers](../src/auth/account.rs)
 and [room handlers](../src/room/api.rs).
 
-JSON endpoints reject empty or malformed successes. Only the three no-content
+JSON endpoints reject empty or malformed successes. Only the five no-content
 methods above accept `204`, and they do not attempt JSON parsing. `ApiError`
 retains an unsuccessful HTTP status for UI decisions; invalid successful data
 produces a fixed error without including the response body. A network failure

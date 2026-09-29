@@ -3,8 +3,14 @@ import {
   type ChatPreferences,
   decodeAccountProfile,
   decodeChatPreferences,
+  decodeInviteRedemption,
+  decodeMemberships,
   decodePublicProfile,
   decodeRecoveryKey,
+  decodeRegistrationInvite,
+  decodeRegistrationInvites,
+  decodeRoomInvite,
+  decodeRoomInvites,
   decodeRoomDirectory,
   decodeRoomListItem,
   decodePasskeyAction,
@@ -265,6 +271,35 @@ export const api = {
   ) => apiNoContent('/api/auth/password', token, 'POST', data, signal),
   accountPreferences: (token: string | null) =>
     apiJson(decodeChatPreferences, '/api/auth/preferences', token),
+  registrationInvites: (token: string | null) =>
+    apiJson(decodeRegistrationInvites, '/api/auth/invites', token),
+  createRegistrationInvite: (token: string | null) =>
+    apiJson(decodeRegistrationInvite, '/api/auth/invites', token, 'POST'),
+  revokeRegistrationInvite: (token: string | null, code: string) =>
+    apiNoContent(`/api/auth/invites/${encodeURIComponent(code)}`, token, 'DELETE'),
+  memberships: (token: string | null) =>
+    apiJson(decodeMemberships, '/api/rooms/memberships', token),
+  roomInvites: (token: string | null, id: string) =>
+    apiJson(decodeRoomInvites, `/api/rooms/${encodeURIComponent(id)}/invites`, token),
+  createRoomInvite: (
+    token: string | null,
+    id: string,
+    data: { role: number; uses: number; days: number },
+  ) =>
+    apiJson(decodeRoomInvite, `/api/rooms/${encodeURIComponent(id)}/invites`, token, 'POST', data),
+  revokeRoomInvite: (token: string | null, id: string, code: string) =>
+    apiNoContent(
+      `/api/rooms/${encodeURIComponent(id)}/invites/${encodeURIComponent(code)}`,
+      token,
+      'DELETE',
+    ),
+  redeemInvite: (token: string | null, code: string) =>
+    apiJson(
+      decodeInviteRedemption,
+      `/api/rooms/invites/${encodeURIComponent(code)}`,
+      token,
+      'POST',
+    ),
   updatePreferences: (token: string | null, data: ChatPreferences) =>
     apiJson(decodeChatPreferences, '/api/auth/preferences', token, 'PUT', data),
   recoveryKey: (token: string | null, data: { current_password: string }) =>

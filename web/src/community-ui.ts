@@ -2,6 +2,7 @@ import type { AuthManager } from './auth';
 import { mountAccountSecurity, type AccountSecurityFlow } from './account-security';
 import type { RoomClient } from './room';
 import type { AccountProfile, PublicProfile, RoomListItem } from './protocol';
+import type { RegistrationInvite, RoomInvite } from './api-validation';
 import {
   api,
   asyncButton,
@@ -25,7 +26,16 @@ interface Options {
   onSignedOut: () => Promise<void>;
   /** Sign out and clear what this browser remembers; main.ts owns the storage. */
   onForgetDevice: () => void;
+  /** Leave any current room and join this one as the account. */
+  onJoinRoom: (id: string) => void;
 }
+
+/** Roles an invitation may grant, as the server numbers them. */
+const INVITE_ROLES: readonly { value: number; label: string }[] = [
+  { value: 2, label: 'Member' },
+  { value: 3, label: 'Moderator' },
+  { value: 4, label: 'Admin' },
+];
 
 const ROLES = ['guest', 'user', 'member', 'moderator', 'admin', 'owner'];
 /** History actions as the server names them, read as what happened to the target. */
@@ -363,6 +373,42 @@ export class CommunityUI {
         { once: true },
       );
       view.body.append(change);
+      // Registration invitations: the way in while registration is closed.
+      const invites = el('div');
+      const refreshInvites = async (): Promise<void> => {
+        const codes = await api.registrationInvites(token);
+        if (!stillCurrent()) return;
+        invites.replaceChildren();
+        if (!codes.length) invites.append(el('p', 'No unused invite codes.', 'setting-hint'));
+        for (const code of codes)
+          invites.append(
+            this.inviteRow(code, view, refreshInvites, () =>
+              api.revokeRegistrationInvite(token, code.code),
+            ),
+          );
+      };
+      const mint = asyncButton(
+        'New invite code',
+        () =>
+          busy(mint, view.error, async () => {
+            await api.createRegistrationInvite(token);
+            await refreshInvites();
+          }),
+        (error) => this.showError(view.error, error),
+      );
+      view.body.append(
+        el('h3', 'Invite someone to register'),
+        el(
+          'p',
+          'While registration is closed, a code lets one person create an account. You can hold five unused codes; each lasts a week.',
+          'setting-hint',
+        ),
+        mint,
+        invites,
+      );
+      refreshInvites().catch((error) => {
+        if (stillCurrent()) this.showError(view.error, error);
+      });
       view.body.append(
         el('h3', 'This device'),
         el(
@@ -451,6 +497,7 @@ export class CommunityUI {
       view.body.replaceChildren();
       if (!rooms.length)
         view.body.append(el('p', 'No owned rooms yet. Use Create Room on the join screen.'));
+      else view.body.append(el('h3', 'Rooms you own'));
       for (const room of rooms) {
         const row = el('div', undefined, 'owned-room');
         row.append(
@@ -477,6 +524,7 @@ export class CommunityUI {
             (error) => this.showError(view.error, error),
           ),
         );
+        row.append(button('Invites…', () => this.roomInvites(room)));
         row.append(
           button(
             'Delete room…',
@@ -489,12 +537,129 @@ export class CommunityUI {
         );
         view.body.append(row);
       }
+      // Rooms someone else owns where this account holds a role.
+      const memberships = await api.memberships(token);
+      if (!view.dialog.open) return;
+      view.body.append(el('h3', 'Rooms you belong to'));
+      if (!memberships.length)
+        view.body.append(
+          el('p', 'None yet. An invitation link from a room admin adds you here.', 'setting-hint'),
+        );
+      for (const membership of memberships) {
+        const row = el('div', undefined, 'owned-room');
+        row.append(
+          el('h3', membership.display_name),
+          el(
+            'p',
+            `${membership.id} · ${membership.role} · ${membership.participant_count ?? '?'} online`,
+          ),
+          button('Join', () => {
+            view.close();
+            this.options.onJoinRoom(membership.id);
+          }),
+        );
+        view.body.append(row);
+      }
     };
     try {
       await refresh();
     } catch (error) {
       this.showError(view.error, error);
     }
+  }
+
+  /** Codes that grant a role in one of the account's rooms, made and revoked here. */
+  private roomInvites(room: RoomListItem): void {
+    const view = modal(`Invitations for ${room.display_name}`);
+    const token = this.options.auth.jwt;
+    const role = el('select');
+    role.setAttribute('aria-label', 'Role granted');
+    for (const option of INVITE_ROLES) {
+      const node = el('option', option.label);
+      node.value = String(option.value);
+      role.append(node);
+    }
+    const uses = input('1', 'number', 3);
+    uses.min = '1';
+    uses.max = '100';
+    const days = input('7', 'number', 2);
+    days.min = '1';
+    days.max = '30';
+    const list = el('div');
+    const refresh = async (): Promise<void> => {
+      const invites = await api.roomInvites(token, room.id);
+      if (!view.dialog.open) return;
+      list.replaceChildren();
+      if (!invites.length) list.append(el('p', 'No unused invitations.', 'setting-hint'));
+      for (const invite of invites) list.append(this.inviteRow(invite, view, () => refresh(), () =>
+        api.revokeRoomInvite(token, room.id, invite.code)));
+    };
+    const create = asyncButton(
+      'Create invitation',
+      () =>
+        busy(create, view.error, async () => {
+          await api.createRoomInvite(token, room.id, {
+            role: Number(role.value),
+            uses: Number(uses.value) || 1,
+            days: Number(days.value) || 7,
+          });
+          await refresh();
+        }),
+      (error) => this.showError(view.error, error),
+      'btn-primary',
+    );
+    view.body.append(
+      el(
+        'p',
+        'Whoever opens an invitation link while signed in gets the role in this room; nobody is ever demoted by one. A room keeps at most 20 unused invitations.',
+        'setting-hint',
+      ),
+      field('Role granted', role),
+      field('Uses', uses),
+      field('Valid for (days)', days),
+      create,
+      el('h3', 'Unused invitations'),
+      list,
+    );
+    refresh().catch((error) => this.showError(view.error, error));
+  }
+
+  /** One invitation with its link and revocation; `revoke` runs against the right endpoint. */
+  private inviteRow(
+    invite: RegistrationInvite | RoomInvite,
+    view: ReturnType<typeof modal>,
+    refresh: () => Promise<void>,
+    revoke: () => Promise<void>,
+  ): HTMLElement {
+    const row = el('div', undefined, 'management-entry');
+    const summary = [
+      'role' in invite ? invite.role : null,
+      `${invite.uses_left} ${invite.uses_left === 1 ? 'use' : 'uses'} left`,
+      `until ${new Date(invite.expires_at).toLocaleDateString()}`,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    row.append(el('code', invite.code, 'invite-code'), el('p', summary));
+    const copy = asyncButton(
+      'Copy link',
+      () =>
+        navigator.clipboard.writeText(inviteLink(invite.code)).then(() => {
+          if (view.dialog.open) this.options.notify('Invitation link copied');
+        }),
+      (error) => this.showError(view.error, error),
+    );
+    const remove = asyncButton(
+      'Revoke',
+      () =>
+        busy(remove, view.error, async () => {
+          await revoke();
+          await refresh();
+        }),
+      (error) => this.showError(view.error, error),
+      'btn-secondary danger',
+    );
+    row.append(copy, remove);
+    return row;
   }
 
   private editRoom(room: RoomListItem, done: () => void): void {
@@ -890,5 +1055,13 @@ export function roomLink(id: string): string {
   const url = new URL(window.location.href);
   url.hash = id;
   url.search = '';
+  return url.href;
+}
+
+/** The page with `?invite=CODE`: accepted once the viewer is signed in. */
+export function inviteLink(code: string): string {
+  const url = new URL(window.location.href);
+  url.hash = '';
+  url.search = `?invite=${encodeURIComponent(code)}`;
   return url.href;
 }

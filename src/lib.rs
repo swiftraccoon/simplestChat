@@ -14,6 +14,7 @@
 pub mod auth;
 pub mod db;
 pub mod diagnostics;
+pub mod invite_codes;
 pub mod labels;
 pub mod media;
 pub mod metrics;

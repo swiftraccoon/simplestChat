@@ -40,9 +40,11 @@ TRUSTED_PROXY_SECRET=<independent-random-value-at-least-32-bytes>
 DATABASE_URL=postgres://app_user:password@db.example.com/chat?sslmode=verify-full
 ```
 
-Registration and ad-hoc rooms default off. Open registration only for controlled
-enrollment or after adding verification and abuse controls; email ownership is
-not verified. Authenticated users can create persisted rooms without enabling
+Registration and ad-hoc rooms default off. While registration is closed, an
+existing account can still let one person in with a registration invite code
+(five unused per account, a week each; see [the protocol](protocol.md)). Open
+registration only for controlled enrollment or after adding verification and
+abuse controls; email ownership is not verified. Authenticated users can create persisted rooms without enabling
 ad-hoc room creation. Add passkey and TURN settings from
 [configuration](configuration.md) if needed.
 

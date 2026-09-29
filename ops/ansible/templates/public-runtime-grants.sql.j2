@@ -10,6 +10,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE
   TO simplestchat_app;
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON public.sessions, public.rooms, public.room_roles,
-     public.room_states, public.room_reports, public.moderation_events
+     public.room_states, public.room_reports, public.moderation_events,
+     public.invites
   TO simplestchat_app;
 COMMIT;
