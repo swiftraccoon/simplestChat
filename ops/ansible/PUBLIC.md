@@ -56,6 +56,24 @@ and `max-bps` (4 Mbit/s) keeps a relayed viewer at the app's per-viewer cap.
 `scpub_max_users` and `scpub_max_persisted_rooms` (100 each) are policy, not
 capacity.
 
+The addresses follow the host's default routes: `scpub_announce_ip` is the
+IPv4 default (the IPv6 one on an IPv6-only host) and `scpub_announce_ipv6` the
+IPv6 default beside it, so a dual-stack host announces both, the project
+network carries IPv6 natively (`scpub_ipv6_network`, a private range Docker
+translates to the host's address) and TURN listens on both. The inventory
+overrides either; an empty `scpub_announce_ipv6` keeps a host IPv4-only. Adding
+or changing an announced address is an identity change: the maintenance
+release refuses such a candidate, so apply it with `public.yml`.
+
+The provider's monthly transfer allowance is not visible from inside the host:
+set `scpub_transfer_allowance_tb` (and `scpub_transfer_reset_day` when the
+billing period does not start on the first). The monitoring collector totals
+the default interface's traffic per period in both directions, which is how
+providers usually count, and `TransferAllowanceNearlyUsed` fires at 80 % and
+`TransferAllowanceExhausted` at 100 %. `build/capacity.py suggest
+--included-egress-tb N` says what an allowance carries in participant-hours;
+for most hosts that, not CPU or the port, is the sustained-use ceiling.
+
 From the project root, using the controller environment from the setup guide:
 
 ```sh

@@ -58,6 +58,7 @@ IDENTITY_KEYS = frozenset(
         "WEBAUTHN_RP_ID",
         "WEBAUTHN_ORIGIN",
         "ANNOUNCE_IP",
+        "ANNOUNCE_IPV6",
         "BIND_ADDR",
         "PORT",
         "RUN_MIGRATIONS",

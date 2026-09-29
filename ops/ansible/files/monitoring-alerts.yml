@@ -46,6 +46,24 @@ groups:
         expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.1
         for: 5m
         labels: {severity: warning}
+      # The provider's monthly transfer allowance, when the inventory states it:
+      # both directions, since providers usually count both.
+      - alert: TransferAllowanceNearlyUsed
+        expr: >-
+          simplestchat_ops_transfer_allowance_bytes > 0
+          and (simplestchat_ops_transfer_period_tx_bytes + simplestchat_ops_transfer_period_rx_bytes)
+          > 0.8 * simplestchat_ops_transfer_allowance_bytes
+        labels: {severity: warning}
+      - alert: TransferAllowanceExhausted
+        expr: >-
+          simplestchat_ops_transfer_allowance_bytes > 0
+          and (simplestchat_ops_transfer_period_tx_bytes + simplestchat_ops_transfer_period_rx_bytes)
+          >= simplestchat_ops_transfer_allowance_bytes
+        labels: {severity: critical}
+      - alert: TransferAccountingFailed
+        expr: simplestchat_ops_transfer_collection_ok == 0
+        for: 15m
+        labels: {severity: warning}
       - alert: ContainerUnavailable
         expr: simplestchat_ops_container_running == 0 or simplestchat_ops_container_collection_ok == 0
         for: 2m

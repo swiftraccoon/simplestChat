@@ -29,9 +29,23 @@ scpub_registration_enabled: false
 # worker as measured on an EPYC-class VPS, and heavier shapes meet the
 # per-worker CPU guard first). `build/capacity.py suggest --vcpus N --memory-gib M`
 # prints the same numbers with what they carry; `run` measures a host.
+# The addresses clients reach: the host's default routes unless the inventory
+# says otherwise. A dual-stack host announces both; an IPv6-only host announces
+# IPv6 as its only address.
+scpub_announce_ip: "{{ ansible_default_ipv4.address | default(ansible_default_ipv6.address | default('')) }}"
+scpub_announce_ipv6: "{{ (ansible_default_ipv6.address | default('')) if ansible_default_ipv4.address is defined else '' }}"
+# The Compose network's IPv6 range when the host announces IPv6 (a private
+# range; Docker translates it to the host's address).
+scpub_ipv6_network: fd5c:5c68:a7d1::/64
 # The port the provider sells, Mbit/s: nearly every VPS has a gigabit port, and a
 # virtio interface does not report its speed (measure it instead, docs/performance.md).
 scpub_port_mbps: 1000
+# The provider's monthly transfer allowance, TB (0 = unknown); the monitoring
+# collector totals the interface's traffic per billing period and alerts at
+# 80 % and at 100 %. Providers usually count both directions.
+scpub_transfer_allowance_tb: 0
+scpub_transfer_reset_day: 1
+scpub_transfer_interface: "{{ ansible_default_ipv4.interface | default(ansible_default_ipv6.interface | default('eth0')) }}"
 # The reserve kept from the app for PostgreSQL, Caddy, TURN and the system.
 scpub_reserved_cpus: 1
 scpub_reserved_memory_share: 0.25

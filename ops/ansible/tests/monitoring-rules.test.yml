@@ -68,3 +68,37 @@ tests:
         alertname: ExternalCheckFailed
         exp_alerts:
           - exp_labels: {severity: warning, component: availability}
+  - name: The transfer allowance warns at eighty percent and turns critical when spent
+    interval: 30s
+    input_series:
+      - series: 'simplestchat_ops_transfer_allowance_bytes'
+        values: '1000x8'
+      - series: 'simplestchat_ops_transfer_period_tx_bytes'
+        values: '700x4 900x4'
+      - series: 'simplestchat_ops_transfer_period_rx_bytes'
+        values: '150x8'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: TransferAllowanceNearlyUsed
+        exp_alerts:
+          - exp_labels: {severity: warning}
+      - eval_time: 1m
+        alertname: TransferAllowanceExhausted
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: TransferAllowanceExhausted
+        exp_alerts:
+          - exp_labels: {severity: critical}
+  - name: An unknown allowance never alerts
+    interval: 30s
+    input_series:
+      - series: 'simplestchat_ops_transfer_allowance_bytes'
+        values: '0x8'
+      - series: 'simplestchat_ops_transfer_period_tx_bytes'
+        values: '900x8'
+      - series: 'simplestchat_ops_transfer_period_rx_bytes'
+        values: '900x8'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: TransferAllowanceNearlyUsed
+        exp_alerts: []

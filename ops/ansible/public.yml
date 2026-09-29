@@ -16,7 +16,8 @@
           - scpub_root == '/srv/simplestchat-public'
           - scbench_revision is match('^[a-f0-9]{40}$')
           - scpub_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
-          - scpub_announce_ip is match('^[0-9]{1,3}(?:\.[0-9]{1,3}){3}$')
+          - scpub_announce_ip is match('^(?:[0-9]{1,3}(?:\.[0-9]{1,3}){3}|[0-9a-f:]{3,39})$')
+          - scpub_announce_ipv6 == '' or scpub_announce_ipv6 is match('^[0-9a-f:]{3,39}$')
           - scpub_postgres_image is match('^docker.io/library/postgres:[a-z0-9.-]+@sha256:[a-f0-9]{64}$')
           - scpub_caddy_image is match('^docker.io/library/caddy:[a-z0-9.-]+@sha256:[a-f0-9]{64}$')
         fail_msg: Explicitly configure the public domain, address and immutable images on the prepared Debian host.

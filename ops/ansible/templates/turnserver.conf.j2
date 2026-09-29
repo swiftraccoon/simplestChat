@@ -1,5 +1,8 @@
 # coturn 4.18.0: TLS 1.2 minimum; DTLS, CLI, RFC5780 and web admin default off.
 listening-ip={{ scpub_announce_ip }}
+{% if scpub_announce_ipv6 %}
+listening-ip={{ scpub_announce_ipv6 }}
+{% endif %}
 relay-ip={{ scpub_announce_ip }}
 listening-port=3478
 tls-listening-port=5349

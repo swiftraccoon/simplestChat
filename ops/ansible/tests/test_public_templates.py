@@ -20,6 +20,8 @@ VALUES: JsonObject = {
     "scpub_caddy_image": "caddy:2.11.2-alpine@sha256:" + "c" * 64,
     "scpub_domain": "chat.example.test",
     "scpub_announce_ip": "192.0.2.10",
+    "scpub_announce_ipv6": "2001:db8::10",
+    "scpub_ipv6_network": "fd5c:5c68:a7d1::/64",
     "scpub_registration_enabled": False,
     # Sizing as group_vars derives it for a 4-vCPU host with 11967 MiB.
     "scpub_app_cpus": 3,
@@ -85,6 +87,42 @@ def environment(name: str, **overrides: JsonValue) -> dict[str, str]:
     )
 
 
+def derive_group_vars(facts: JsonObject, overrides: JsonObject) -> dict[str, str]:
+    """Render every templated sizing variable of group_vars from the given facts, in order."""
+    group_vars = obj(yaml_value((ROOT / "group_vars/benchmark_hosts.yml").read_text()))
+    jinja = Environment(undefined=StrictUndefined, autoescape=False)  # noqa: S701 - config, not HTML.
+    derived = [
+        name
+        for name, source in group_vars.items()
+        if name.startswith("scpub_")
+        and isinstance(source, (str, int, float))
+        and name != "scpub_registration_enabled"
+        and (isinstance(source, (int, float)) or source.startswith("{{"))
+    ]
+    values: dict[str, object] = dict(facts)
+    for name in derived:
+        source = overrides.get(name, group_vars[name])
+        values[name] = (
+            jinja.from_string(source).render(values) if isinstance(source, str) else source
+        )
+    return {name: str(values[name]) for name in derived}
+
+
+# Ansible always defines the default-route facts, as empty objects without a route.
+DUAL_STACK: JsonObject = {
+    "ansible_default_ipv4": {"address": "192.0.2.10", "interface": "eth0"},
+    "ansible_default_ipv6": {"address": "2001:db8::10", "interface": "eth0"},
+}
+FOUR_ONLY: JsonObject = {
+    "ansible_default_ipv4": {"address": "192.0.2.10", "interface": "ens3"},
+    "ansible_default_ipv6": {},
+}
+SIX_ONLY: JsonObject = {
+    "ansible_default_ipv4": {},
+    "ansible_default_ipv6": {"address": "2001:db8::10", "interface": "eth0"},
+}
+
+
 class PublicTemplateTests(unittest.TestCase):
     """Verify the public templates contract offline."""
 
@@ -145,6 +183,27 @@ class PublicTemplateTests(unittest.TestCase):
         # The managed host interpolates the base from app.env, which sets the ceiling.
         self.assertEqual(environment("public-app.env.j2")["MAX_PARTICIPANTS_PER_ROOM"], "525")
         self.assertEqual(environment("public-app.env.j2")["MAX_BROADCASTERS_PER_ROOM"], "30")
+
+    def test_a_dual_stack_host_gets_an_ipv6_network_and_listeners(self) -> None:
+        """IPv6 is announced, carried natively by the project network and offered by TURN."""
+        rendered = obj(yaml_value(render("public-compose.yml.j2")))
+        self.assertIs(at(rendered, "networks", "default", "enable_ipv6"), expr2=True)
+        self.assertEqual(
+            at(rendered, "networks", "default", "ipam", "config", 0, "subnet"),
+            "fd5c:5c68:a7d1::/64",
+        )
+        self.assertNotIn(
+            "networks", obj(yaml_value(render("public-compose.yml.j2", scpub_announce_ipv6="")))
+        )
+        self.assertEqual(environment("public-app.env.j2")["ANNOUNCE_IPV6"], "2001:db8::10")
+        self.assertEqual(
+            environment("public-app.env.j2", scpub_announce_ipv6="")["ANNOUNCE_IPV6"], ""
+        )
+        turn = render("turnserver.conf.j2", scpub_turn_secret="a" * 64).splitlines()
+        self.assertEqual(turn.count("listening-ip=192.0.2.10"), 1)
+        self.assertEqual(turn.count("listening-ip=2001:db8::10"), 1)
+        without = render("turnserver.conf.j2", scpub_turn_secret="a" * 64, scpub_announce_ipv6="")
+        self.assertNotIn("listening-ip=2001", without)
 
     def test_app_extends_existing_compose_and_proxy_is_nonroot(self) -> None:
         """Verify app extends existing compose and proxy is nonroot."""
@@ -230,28 +289,9 @@ class PublicTemplateTests(unittest.TestCase):
 
     def test_sizing_defaults_follow_the_host_and_yield_to_the_inventory(self) -> None:
         """The group_vars sizing expressions size a host the way build/capacity.py does."""
-        group_vars = obj(yaml_value((ROOT / "group_vars/benchmark_hosts.yml").read_text()))
-        jinja = Environment(undefined=StrictUndefined, autoescape=False)  # noqa: S701 - config, not HTML.
-
-        derived = [
-            name
-            for name, source in group_vars.items()
-            if name.startswith("scpub_")
-            and isinstance(source, (str, int, float))
-            and name != "scpub_registration_enabled"
-            and (isinstance(source, (int, float)) or source.startswith("{{"))
-        ]
-
-        def derive(facts: JsonObject, overrides: JsonObject) -> dict[str, str]:
-            values: dict[str, object] = dict(facts)
-            for name in derived:
-                source = overrides.get(name, group_vars[name])
-                values[name] = (
-                    jinja.from_string(source).render(values) if isinstance(source, str) else source
-                )
-            return {name: str(values[name]) for name in derived}
-
-        vps = derive({"ansible_processor_vcpus": 4, "ansible_memtotal_mb": 11967}, {})
+        vps = derive_group_vars(
+            {"ansible_processor_vcpus": 4, "ansible_memtotal_mb": 11967, **DUAL_STACK}, {}
+        )
         self.assertEqual(vps["scpub_app_cpus"], "3")
         self.assertEqual(vps["scpub_media_workers"], "3")
         self.assertEqual(int(vps["scpub_app_memory_mib"]), 11967 - 2991)
@@ -267,7 +307,9 @@ class PublicTemplateTests(unittest.TestCase):
         self.assertEqual(vps["scpub_turn_bps_capacity"], "500000000")
         self.assertEqual(vps["scpub_turn_total_quota"], "525")
         self.assertEqual(vps["scpub_turn_relay_port_max"], "50209")
-        large = derive({"ansible_processor_vcpus": 16, "ansible_memtotal_mb": 65536}, {})
+        large = derive_group_vars(
+            {"ansible_processor_vcpus": 16, "ansible_memtotal_mb": 65536, **SIX_ONLY}, {}
+        )
         self.assertEqual((large["scpub_app_cpus"], large["scpub_media_workers"]), ("15", "15"))
         self.assertEqual(int(large["scpub_app_memory_mib"]), 65536 - 16384)
         self.assertEqual(large["scpub_max_connections"], "2625")
@@ -275,7 +317,9 @@ class PublicTemplateTests(unittest.TestCase):
             (large["scpub_postgres_memory_mib"], large["scpub_caddy_memory_mib"]), ("4096", "2048")
         )
         self.assertEqual(large["scpub_turn_relay_port_max"], "54409")
-        small = derive({"ansible_processor_vcpus": 1, "ansible_memtotal_mb": 1024}, {})
+        small = derive_group_vars(
+            {"ansible_processor_vcpus": 1, "ansible_memtotal_mb": 1024, **FOUR_ONLY}, {}
+        )
         self.assertEqual((small["scpub_app_cpus"], small["scpub_media_workers"]), ("1", "1"))
         self.assertEqual(small["scpub_app_memory_mib"], "512")
         self.assertEqual((small["scpub_max_connections"], small["scpub_max_rooms"]), ("175", "175"))
@@ -283,8 +327,8 @@ class PublicTemplateTests(unittest.TestCase):
             (small["scpub_postgres_memory_mib"], small["scpub_caddy_memory_mib"]), ("1024", "256")
         )
         # Overrides carry through: a pinned worker count, a bigger reserve, a slower port.
-        pinned = derive(
-            {"ansible_processor_vcpus": 4, "ansible_memtotal_mb": 11967},
+        pinned = derive_group_vars(
+            {"ansible_processor_vcpus": 4, "ansible_memtotal_mb": 11967, **DUAL_STACK},
             {"scpub_media_workers": 2, "scpub_reserved_cpus": 2, "scpub_port_mbps": 100},
         )
         self.assertEqual((pinned["scpub_app_cpus"], pinned["scpub_media_workers"]), ("2", "2"))
@@ -294,6 +338,24 @@ class PublicTemplateTests(unittest.TestCase):
         rendered = environment("public-app.env.j2", scpub_media_workers=2)
         self.assertEqual(rendered["RTC_PORT_END"], "40001")
         self.assertEqual(rendered["MEDIA_WORKERS"], "2")
+
+    def test_announced_addresses_follow_the_default_routes(self) -> None:
+        """A dual-stack host announces both families, a single-stack host its one; overrides win."""
+        facts = {"ansible_processor_vcpus": 4, "ansible_memtotal_mb": 11967}
+        dual = derive_group_vars({**facts, **DUAL_STACK}, {})
+        self.assertEqual(dual["scpub_announce_ip"], "192.0.2.10")
+        self.assertEqual(dual["scpub_announce_ipv6"], "2001:db8::10")
+        self.assertEqual(dual["scpub_transfer_interface"], "eth0")
+        six = derive_group_vars({**facts, **SIX_ONLY}, {})
+        self.assertEqual(
+            (six["scpub_announce_ip"], six["scpub_announce_ipv6"]), ("2001:db8::10", "")
+        )
+        four = derive_group_vars({**facts, **FOUR_ONLY}, {})
+        self.assertEqual(
+            (four["scpub_announce_ipv6"], four["scpub_transfer_interface"]), ("", "ens3")
+        )
+        kept_four = derive_group_vars({**facts, **DUAL_STACK}, {"scpub_announce_ipv6": ""})
+        self.assertEqual(kept_four["scpub_announce_ipv6"], "")
 
     def test_the_maintenance_helper_protects_every_secret_and_identity_line(self) -> None:
         """A candidate app.env may change sizing; the helper refuses secret or identity changes."""
@@ -311,10 +373,12 @@ class PublicTemplateTests(unittest.TestCase):
             scpub_secrets=other_secrets,
             scpub_domain="other.example.test",
             scpub_announce_ip="192.0.2.99",
+            scpub_announce_ipv6="2001:db8::99",
             scpub_server_image="sha256:" + "d" * 64,
         )
         identity = {key for key in first if first[key] != second[key]}
         self.assertTrue(identity, "the fixture changed nothing")
+        self.assertIn("ANNOUNCE_IPV6", identity)
         self.assertLessEqual(identity, IDENTITY_KEYS)
         self.assertLessEqual({"RUN_MIGRATIONS", "BIND_ADDR", "PORT"}, IDENTITY_KEYS)
         # Sizing lines stay free for the candidate to follow the host.

@@ -1,6 +1,7 @@
 """Validate privacy, retention and replay boundaries without contacting a deployment."""
 
 import ast
+import datetime
 import io
 import json
 import re
@@ -72,6 +73,61 @@ class MonitoringTests(unittest.TestCase):
                 lines = []
                 collect.evidence(lines)
             self.assertIn("simplestchat_ops_backup_last_success_seconds 0", "\n".join(lines))
+
+    def test_transfer_totals_each_billing_period_and_survives_counter_restarts(self) -> None:
+        """Period totals grow by each sample's delta and start over with the period."""
+        settings: JsonObject = {
+            "transfer_interface": "eth0",
+            "transfer_allowance_tb": 5,
+            "transfer_reset_day": 5,
+        }
+        self.assertEqual(
+            collect.period_start(datetime.date(2026, 10, 3), 5), datetime.date(2026, 9, 5)
+        )
+        self.assertEqual(
+            collect.period_start(datetime.date(2026, 10, 5), 5), datetime.date(2026, 10, 5)
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            network = Path(directory) / "net"
+            statistics = network / "eth0" / "statistics"
+            statistics.mkdir(parents=True)
+            state = Path(directory) / "state"
+            state.mkdir()
+
+            def sample(tx: int, rx: int, day: datetime.date) -> dict[str, str]:
+                _ = (statistics / "tx_bytes").write_text(f"{tx}\n")
+                _ = (statistics / "rx_bytes").write_text(f"{rx}\n")
+                lines: list[str] = []
+                collect.transfer(lines, settings, network=network, state=state, today=day)
+                return dict(line.rsplit(" ", 1) for line in lines)
+
+            september = datetime.date(2026, 9, 29)
+            first = sample(100, 50, september)
+            # The first sample of a period has no history to count.
+            self.assertEqual(first["simplestchat_ops_transfer_period_tx_bytes"], "0")
+            self.assertEqual(first["simplestchat_ops_transfer_allowance_bytes"], "5000000000000.0")
+            second = sample(400, 50, september)
+            self.assertEqual(second["simplestchat_ops_transfer_period_tx_bytes"], "300")
+            self.assertEqual(second["simplestchat_ops_transfer_period_rx_bytes"], "0")
+            # A counter below its last reading restarted with the interface.
+            third = sample(120, 10, september)
+            self.assertEqual(third["simplestchat_ops_transfer_period_tx_bytes"], "420")
+            self.assertEqual(third["simplestchat_ops_transfer_period_rx_bytes"], "10")
+            record = decode_json((state / "transfer.json").read_bytes())
+            self.assertEqual(obj(record)["period"], "2026-09-05")
+            fresh = sample(200, 20, datetime.date(2026, 10, 6))
+            self.assertEqual(fresh["simplestchat_ops_transfer_period_tx_bytes"], "0")
+            self.assertEqual(
+                obj(decode_json((state / "transfer.json").read_bytes()))["period"], "2026-10-05"
+            )
+            with self.assertRaisesRegex(release.ReleaseError, "reset day"):
+                collect.transfer(
+                    [], dict(settings, transfer_reset_day=31), network=network, state=state
+                )
+            with self.assertRaisesRegex(release.ReleaseError, "interface"):
+                collect.transfer(
+                    [], dict(settings, transfer_interface="../x"), network=network, state=state
+                )
 
     def test_rules_and_exported_metrics_have_a_checked_contract(self) -> None:
         """No rule can silently disappear from the recorder or reference a misspelled metric."""

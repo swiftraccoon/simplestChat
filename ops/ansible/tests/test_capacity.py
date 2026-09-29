@@ -665,6 +665,18 @@ class SearchTests(unittest.TestCase):
         self.assertIn("about 800 viewers across the workers (network-bound", text)
         self.assertIn("Open UDP 40000-40006", text)
         self.assertIn("reference ceilings", text)
+        output = io.StringIO()
+        with redirect_stdout(output):
+            status = capacity.main(
+                ["suggest", "--vcpus", "4", "--memory-gib", "12", "--included-egress-tb", "5"]
+            )
+        self.assertEqual(status, 0)
+        self.assertIn(
+            "5 TB a month is about 4,649 meeting participant-hours or 11,111 webinar viewer-hours:"
+            + " 6 meeting participants or 15 viewers around the clock, and the host's 255 meeting"
+            + " participants use it in 18 hours.",
+            output.getvalue(),
+        )
         errors = io.StringIO()
         with redirect_stdout(io.StringIO()), redirect_stderr(errors):
             status = capacity.main(["suggest", "--vcpus", "0", "--memory-gib", "16"])

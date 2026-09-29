@@ -1086,7 +1086,11 @@ def suggest_for(
 
 
 def suggestion_lines(
-    suggestion: Suggestion, host: Host, ceilings: Mapping[Workload, Ceiling], source: str
+    suggestion: Suggestion,
+    host: Host,
+    ceilings: Mapping[Workload, Ceiling],
+    source: str,
+    included_egress_tb: float = 0.0,
 ) -> list[str]:
     """Say the suggestion for people: settings first, then what they carry and why."""
     deployment = suggestion.deployment
@@ -1097,7 +1101,7 @@ def suggestion_lines(
     monthly_tb = (
         suggestion.meeting_participants * per_participant * 3600 * HOURS_PER_MONTH / 8 / 1e6
     )
-    return [
+    lines = [
         f"Sizing a {host.vcpus}-vCPU, {host.memory_mib / 1024:g} GiB host with a"
         + f" {host.port_mbps:g} Mbit/s port ({source}):",
         "",
@@ -1122,6 +1126,23 @@ def suggestion_lines(
         "Egress is the next wall after CPU: check the provider's quota and price against the"
         + f" Mbit/s above (a full month of meetings at that rate is {monthly_tb:.1f} TB).",
     ]
+    webinar = ceilings.get("webinar")
+    per_viewer = webinar.egress_mbps / webinar.ceiling if webinar and webinar.ceiling else 0.0
+    if included_egress_tb > 0 and per_participant > 0 and per_viewer > 0:
+        allowance_bits = included_egress_tb * 1e12 * 8
+        participant_hours = allowance_bits / (per_participant * 1e6) / 3600
+        viewer_hours = allowance_bits / (per_viewer * 1e6) / 3600
+        lines.append(
+            f"A transfer allowance of {included_egress_tb:g} TB a month is about"
+            + f" {participant_hours:,.0f} meeting participant-hours or {viewer_hours:,.0f} webinar"
+            + f" viewer-hours: {participant_hours / HOURS_PER_MONTH:.0f} meeting participants or"
+            + f" {viewer_hours / HOURS_PER_MONTH:.0f} viewers around the clock, and the host's"
+            + f" {suggestion.meeting_participants} meeting participants use it in"
+            + f" {participant_hours / max(1, suggestion.meeting_participants):.0f} hours."
+            + " Providers usually count both directions, and a meeting participant uploads about"
+            + " as much as they download, so meetings spend it faster than this."
+        )
+    return lines
 
 
 def suggest(options: Options) -> int:
@@ -1145,7 +1166,9 @@ def suggest(options: Options) -> int:
     suggestion = suggest_for(
         host, ceilings, app_cpus=options.app_cpus, app_memory_mib=options.app_memory_mib
     )
-    for line in suggestion_lines(suggestion, host, ceilings, source):
+    for line in suggestion_lines(
+        suggestion, host, ceilings, source, included_egress_tb=options.included_egress_tb
+    ):
         print(line)  # noqa: T201 -- intentional report output.
     return 0
 
@@ -2322,6 +2345,9 @@ def parser() -> argparse.ArgumentParser:
     )
     _ = suggest_command.add_argument(
         "--calibration", help="a calibration.json from `run`; otherwise the reference ceilings"
+    )
+    _ = suggest_command.add_argument(
+        "--included-egress-tb", type=float, help="the provider's monthly transfer allowance, TB"
     )
     _ = suggest_command.add_argument("--app-cpus", type=float, help="CPUs for the app (vCPUs - 1)")
     _ = suggest_command.add_argument(

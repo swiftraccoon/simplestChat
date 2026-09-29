@@ -1,5 +1,6 @@
 """Sample fixed operational health signals without reading users or logging secrets."""
 
+import datetime
 import json
 import os
 import re
@@ -14,7 +15,7 @@ from typing import TYPE_CHECKING, cast
 from urllib.request import ProxyHandler, build_opener
 
 from monitoring_alerts import STATE, record
-from release_json import decode_json, object_value, string_value
+from release_json import JsonObject, decode_json, object_value, string_value
 from release_public import ReleaseError, atomic, require
 
 if TYPE_CHECKING:
@@ -22,6 +23,10 @@ if TYPE_CHECKING:
 
 MAX_OUTPUT = 65536
 MAX_BACKUPS = 10000
+# Providers sell transfer in decimal terabytes.
+TERABYTE = 1_000_000_000_000
+NETWORK = Path("/sys/class/net")
+MAX_RESET_DAY = 28
 ROOT = Path("/srv/simplestchat-public")
 SERVICES = {
     "app": "simplestchat-public-simplestchat-1",
@@ -188,6 +193,87 @@ def evidence(lines: list[str]) -> None:
     gauge(lines, "release_storage_bytes", float(size))
 
 
+def period_start(today: datetime.date, reset_day: int) -> datetime.date:
+    """Return the first day of the billing period `today` falls in."""
+    if today.day >= reset_day:
+        return today.replace(day=reset_day)
+    previous_month = today.replace(day=1) - datetime.timedelta(days=1)
+    return previous_month.replace(day=reset_day)
+
+
+def transfer_settings(configuration: JsonObject) -> tuple[str, float, int]:
+    """Read the interface, allowance and reset day the collector was configured with."""
+    interface = configuration.get("transfer_interface", "eth0")
+    if not isinstance(interface, str) or re.fullmatch(r"[A-Za-z0-9._-]{1,15}", interface) is None:
+        message = "Invalid transfer interface"
+        raise ReleaseError(message)
+    allowance = configuration.get("transfer_allowance_tb", 0)
+    if isinstance(allowance, bool) or not isinstance(allowance, (int, float)) or allowance < 0:
+        message = "Invalid transfer allowance"
+        raise ReleaseError(message)
+    reset_day = configuration.get("transfer_reset_day", 1)
+    if (
+        isinstance(reset_day, bool)
+        or not isinstance(reset_day, int)
+        or not 1 <= reset_day <= MAX_RESET_DAY
+    ):
+        message = "Invalid transfer reset day"
+        raise ReleaseError(message)
+    return interface, float(allowance), reset_day
+
+
+def transfer(
+    lines: list[str],
+    configuration: JsonObject,
+    *,
+    network: Path = NETWORK,
+    state: Path = STATE,
+    today: datetime.date | None = None,
+) -> None:
+    """Total the interface's traffic per billing period beside the provider's allowance.
+
+    The kernel counters restart with the interface, so the period's totals live
+    in the state directory and grow by each sample's delta; a counter below its
+    last reading restarted and contributes what it holds. The first sample of a
+    period counts nothing: the counter's history before it is unknown.
+    """
+    interface, allowance_tb, reset_day = transfer_settings(configuration)
+    counters = {
+        direction: int(
+            (network / interface / "statistics" / f"{direction}_bytes").read_text().strip()
+        )
+        for direction in ("tx", "rx")
+    }
+    period = period_start(today or datetime.datetime.now(tz=datetime.UTC).date(), reset_day)
+    path = state / "transfer.json"
+    previous = object_value(decode_json(path.read_bytes())) if path.exists() else {}
+    same_period = previous.get("period") == period.isoformat()
+    totals: dict[str, int] = {}
+    for direction, counter in counters.items():
+        total = previous.get(f"{direction}_bytes") if same_period else 0
+        last = previous.get(f"last_{direction}") if same_period else None
+        running = total if isinstance(total, int) and not isinstance(total, bool) else 0
+        if isinstance(last, int) and not isinstance(last, bool):
+            running += counter - last if counter >= last else counter
+        totals[direction] = running
+    record: JsonObject = {
+        "period": period.isoformat(),
+        "tx_bytes": totals["tx"],
+        "rx_bytes": totals["rx"],
+        "last_tx": counters["tx"],
+        "last_rx": counters["rx"],
+    }
+    atomic(path, record)
+    gauge(lines, "transfer_period_tx_bytes", totals["tx"])
+    gauge(lines, "transfer_period_rx_bytes", totals["rx"])
+    gauge(lines, "transfer_allowance_bytes", allowance_tb * TERABYTE)
+    gauge(
+        lines,
+        "transfer_period_start_timestamp_seconds",
+        datetime.datetime(period.year, period.month, period.day, tzinfo=datetime.UTC).timestamp(),
+    )
+
+
 def main() -> None:
     """Publish one atomic textfile; every missing subsystem has an explicit failure gauge."""
     require(os.geteuid() == 0, "Monitoring collection requires the prepared host")
@@ -213,6 +299,12 @@ def main() -> None:
         gauge(lines, "evidence_collection_ok", 0)
     else:
         gauge(lines, "evidence_collection_ok", 1)
+    try:
+        transfer(lines, configuration)
+    except (OSError, ValueError, ReleaseError):
+        gauge(lines, "transfer_collection_ok", 0)
+    else:
+        gauge(lines, "transfer_collection_ok", 1)
     try:
         healthy, pending, dropped = record(revision)
         gauge(lines, "recorder_ok", float(healthy))
