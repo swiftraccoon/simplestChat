@@ -91,6 +91,11 @@ export class SocialChat {
   private readonly sendButton = document.getElementById('chat-send-btn') as HTMLButtonElement;
   private readonly select = el('select');
   private readonly conversationStatus = el('span', '', 'conversation-status');
+  /** Who is composing in the visible conversation, until each notice expires. */
+  private readonly typingLine = el('div', '', 'typing-line');
+  private typing = new Map<string, { until: number; target: string | null }>();
+  private typingTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastTypingSent = 0;
   private readonly closeButton = button('Close PM', () => this.closePrivate());
   private readonly emojiPanel = el('div', undefined, 'emoji-panel');
   private readonly pendingStarted = new Map<string, number>();
@@ -144,6 +149,9 @@ export class SocialChat {
       button('Chat options', () => this.openPreferences()),
     );
     document.getElementById('chat-panel')!.prepend(toolbar, this.conversationStatus);
+    this.typingLine.hidden = true;
+    this.typingLine.setAttribute('aria-live', 'polite');
+    document.getElementById('chat-input-row')?.before(this.typingLine);
     const emojiButton = button(
       '☺',
       () => {
@@ -188,6 +196,7 @@ export class SocialChat {
     this.replyBar.hidden = true;
     document.getElementById('chat-input-row')!.before(this.replyBar);
     this.input.addEventListener('input', () => this.suggestMentions());
+    this.input.addEventListener('input', () => this.noteTyping());
     this.input.addEventListener('blur', () => this.closeMentions());
     this.input.addEventListener('keydown', (event) => this.onKey(event));
     this.input.addEventListener('input', () =>
@@ -341,6 +350,9 @@ export class SocialChat {
     this.cancelReply();
     this.composition.reset();
     this.temporaryIgnored.clear();
+    this.typing.clear();
+    this.lastTypingSent = 0;
+    this.renderTyping();
     this.scope = '';
     this.activeRoom = null;
     this.viewerKey = '';
@@ -446,6 +458,57 @@ export class SocialChat {
       if (this.store.names.has(message.participantId))
         this.store.names.set(message.participantId, message.nickname);
       this.render();
+    } else if (message.type === 'participantTyping') {
+      this.noteRemoteTyping(message.participantId, message.targetParticipantId ?? null);
+    }
+  }
+
+  /** Composing in an open conversation tells its recipients, at most every 2.5 s. */
+  private noteTyping(): void {
+    const room = this.options.getRoom();
+    if (!room?.localParticipantId || !room.connected || !room.canChat || this.input.disabled) return;
+    if (!this.input.value.trim()) return;
+    const now = Date.now();
+    if (now - this.lastTypingSent < 2500) return;
+    this.lastTypingSent = now;
+    room.sendTyping(this.store.active === 'public' ? undefined : this.store.active);
+  }
+
+  private noteRemoteTyping(id: string, target: string | null): void {
+    if (id === this.store.localId) return;
+    this.typing.set(id, { until: Date.now() + 4000, target });
+    this.renderTyping();
+  }
+
+  /** "Alice is typing…" for the visible conversation only; notices expire on their own. */
+  private renderTyping(): void {
+    const now = Date.now();
+    for (const [id, entry] of this.typing) if (entry.until <= now) this.typing.delete(id);
+    const room = this.options.getRoom();
+    const names: string[] = [];
+    for (const [id, entry] of this.typing) {
+      const visible =
+        this.store.active === 'public'
+          ? entry.target === null
+          : id === this.store.active && entry.target === this.store.localId;
+      if (!visible) continue;
+      const name = room?.getParticipants().get(id)?.name ?? this.store.names.get(id);
+      if (name) names.push(name);
+    }
+    this.typingLine.hidden = names.length === 0;
+    this.typingLine.textContent =
+      names.length === 0
+        ? ''
+        : names.length === 1
+          ? `${names[0]} is typing…`
+          : names.length === 2
+            ? `${names[0]} and ${names[1]} are typing…`
+            : 'Several people are typing…';
+    if (this.typingTimer !== null) clearTimeout(this.typingTimer);
+    this.typingTimer = null;
+    if (this.typing.size) {
+      const next = Math.min(...[...this.typing.values()].map((entry) => entry.until));
+      this.typingTimer = setTimeout(() => this.renderTyping(), Math.max(0, next - now));
     }
   }
 
@@ -819,6 +882,7 @@ export class SocialChat {
     this.closeButton.hidden = !privateChat;
     // Public chat needs no permanent banner; its mention hint lives in the composer.
     this.conversationStatus.hidden = !privateChat;
+    this.renderTyping();
     this.conversationStatus.textContent = privateChat
       ? 'Private · available while both people are in this room · not saved after leaving'
       : '';

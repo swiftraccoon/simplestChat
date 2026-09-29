@@ -52,6 +52,7 @@ export type ClientMessage =
       spatialLayer: number;
       temporalLayer?: number;
     }
+  | { type: 'typing'; targetParticipantId?: string }
   | {
       type: 'chatMessage';
       content: string;
@@ -209,6 +210,7 @@ export type ServerMessage =
   | { type: 'socialError'; requestId?: string; clientMessageId?: string; message: string }
   | { type: 'nicknameChanged'; participantId: string; nickname: string }
   | { type: 'chatStyleChanged'; participantId: string; chatStyle: ChatStyle }
+  | { type: 'participantTyping'; participantId: string; targetParticipantId?: string }
   | { type: 'messageReactions'; messageId: string; reactions: ChatReaction[] }
   | { type: 'activeSpeaker'; participantId: string }
   | { type: 'audioLevels'; levels: { participantId: string; volume: number }[] }

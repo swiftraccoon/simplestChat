@@ -660,6 +660,7 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         ClientMessage::RestartIce { .. } => OperationKind::RestartIce,
         ClientMessage::SetConsumerPreferredLayers { .. } => OperationKind::SetPreferredLayers,
         ClientMessage::ChatMessage { .. } => OperationKind::Chat,
+        ClientMessage::Typing { .. } => OperationKind::Chat,
         ClientMessage::PrivateMessage { .. } => OperationKind::PrivateMessage,
         ClientMessage::RetryChatMessage(retry) => {
             if retry.target_participant_id.is_some() {
@@ -2759,6 +2760,24 @@ async fn handle_client_message(
             }
             room_manager
                 .handle_chat_command(room_id, participant_id, sender, message)
+                .await?;
+        }
+        ClientMessage::Typing {
+            target_participant_id,
+        } => {
+            let room_id = current_room_id
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            if let Some(target) = target_participant_id.as_deref() {
+                validate_target_id(target)?;
+            }
+            room_manager
+                .relay_typing(
+                    room_id,
+                    participant_id,
+                    sender,
+                    target_participant_id.as_deref(),
+                )
                 .await?;
         }
         ClientMessage::SetChatPreferences { .. }

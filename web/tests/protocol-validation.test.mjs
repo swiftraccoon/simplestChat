@@ -268,6 +268,7 @@ const fixtures = [
   { type: 'socialResponse', requestId: 'request', action: 'getRoomSnapshot', data: snapshot },
   { type: 'socialError', requestId: 'request', clientMessageId: 'draft', message: 'Test error' },
   { type: 'nicknameChanged', participantId: 'participant', nickname: 'New name' },
+  { type: 'participantTyping', participantId: 'participant', targetParticipantId: 'local' },
   {
     type: 'chatStyleChanged',
     participantId: 'participant',
@@ -621,6 +622,7 @@ test('rejects missing or mistyped required top-level fields for every variant', 
     participantBanned: ['reason'],
     lobbyWaiting: ['topic'],
     lobbyDenied: ['reason'],
+    participantTyping: ['targetParticipantId'],
   };
   for (const fixture of fixtures) {
     for (const key of Object.keys(fixture)) {

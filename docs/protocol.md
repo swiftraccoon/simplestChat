@@ -376,6 +376,16 @@ the sanction and links the entry to it, and a report from another room is
 refused. `ReportEntry.outcome` is the newest linked entry (`action`,
 `createdAt`), so a resolved report shows what it led to.
 
+`typing` (optional `targetParticipantId`) says the sender is composing, and
+the server relays it as `participantTyping` to whoever would receive the
+message: everyone who does not ignore the sender for public chat, only the
+target for a private conversation (and only if they accept private messages
+and neither ignores the other). A sender who cannot chat relays nothing, and
+the server forwards at most one notice per sender every two seconds. The
+browser sends one while composing at most every 2.5 s and shows "Alice is
+typing…" beneath the visible conversation for four seconds per notice; nothing
+is retained or acknowledged.
+
 Modern chat sends include a strictly increasing safe-integer `sequence` alongside
 `clientMessageId`. The room snapshot supplies a separate `chatSessionId` for this
 membership; it survives grace reconnection and changes on a fresh join. A

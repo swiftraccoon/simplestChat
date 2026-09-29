@@ -104,6 +104,7 @@ async function fixture() {
   const state = {
     viewer: 'account-a',
     token: null,
+    typing: [],
     requests: [],
     sent: [],
     notifications: [],
@@ -157,6 +158,9 @@ async function fixture() {
     },
     retryChat(message) {
       state.sent.push(['retry', message]);
+    },
+    sendTyping(target) {
+      state.typing.push(target ?? 'public');
     },
   };
   class AudioContext {
@@ -1578,4 +1582,79 @@ test('a failed preference load keeps the browser copy and says so once', async (
     'Saved chat preferences could not be loaded; using this browser’s copy',
   ]);
   assert.ok(f.state.requests.some((request) => request.action === 'setChatPreferences'));
+});
+
+test('composing sends a typing notice at most every 2.5 s, for the open conversation, while chat is allowed', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const sent = f.state.typing;
+  const realNow = Date.now;
+  let now = 1_000_000;
+  Date.now = () => now;
+  try {
+    f.chat.input.value = '';
+    f.chat.input.emit('input');
+    assert.deepEqual(sent, [], 'an empty box is not composing');
+    f.chat.input.value = 'hel';
+    f.chat.input.emit('input');
+    f.chat.input.value = 'hello';
+    f.chat.input.emit('input');
+    assert.deepEqual(sent, ['public']);
+    now += 2600;
+    f.chat.input.emit('input');
+    assert.deepEqual(sent, ['public', 'public']);
+    f.chat.openPrivate('alice', 'Alice');
+    now += 2600;
+    f.chat.input.value = 'psst';
+    f.chat.input.emit('input');
+    assert.deepEqual(sent, ['public', 'public', 'alice']);
+    f.state.room.canChat = false;
+    now += 2600;
+    f.chat.input.emit('input');
+    assert.deepEqual(sent.length, 3, 'a muted or disabled composer stays quiet');
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test("a peer's typing shows in its own conversation only and expires on its own", async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.participants.set('bob', { id: 'bob', name: 'Bob' });
+  const realNow = Date.now;
+  let now = 5_000_000;
+  Date.now = () => now;
+  try {
+    assert.equal(f.chat.typingLine.hidden, true);
+    f.chat.handleEvent({ type: 'participantTyping', participantId: 'alice' });
+    assert.equal(f.chat.typingLine.hidden, false);
+    assert.equal(f.chat.typingLine.textContent, 'Alice is typing…');
+    f.chat.handleEvent({ type: 'participantTyping', participantId: 'bob' });
+    assert.equal(f.chat.typingLine.textContent, 'Alice and Bob are typing…');
+    f.chat.handleEvent({ type: 'participantTyping', participantId: 'local' });
+    assert.equal(f.chat.typingLine.textContent, 'Alice and Bob are typing…', 'never yourself');
+    // Private composing reaches only the private conversation with that person.
+    f.chat.handleEvent({
+      type: 'participantTyping',
+      participantId: 'alice',
+      targetParticipantId: 'local',
+    });
+    assert.equal(f.chat.typingLine.textContent, 'Bob is typing…');
+    f.chat.openPrivate('alice', 'Alice');
+    assert.equal(f.chat.typingLine.textContent, 'Alice is typing…');
+    f.chat.switchConversation('public');
+    assert.equal(f.chat.typingLine.textContent, 'Bob is typing…');
+    // Notices expire four seconds after they arrived.
+    now += 4100;
+    const [id, callback] = [...f.timers.entries()].at(-1);
+    f.timers.delete(id);
+    callback();
+    assert.equal(f.chat.typingLine.hidden, true);
+    f.chat.handleEvent({ type: 'participantTyping', participantId: 'alice' });
+    assert.equal(f.chat.typingLine.hidden, false);
+    f.chat.reset();
+    assert.equal(f.chat.typingLine.hidden, true);
+  } finally {
+    Date.now = realNow;
+  }
 });

@@ -274,6 +274,14 @@ pub enum ClientMessage {
         offset: Option<u32>,
     },
 
+    /// The sender is composing a message, for a private conversation when
+    /// `target_participant_id` is set; relayed to those who would receive it.
+    #[serde(rename_all = "camelCase")]
+    Typing {
+        #[serde(default)]
+        target_participant_id: Option<String>,
+    },
+
     // === Moderation ===
     /// Force-close a participant's camera/screen producer
     #[serde(rename_all = "camelCase")]
@@ -577,6 +585,14 @@ pub enum ServerMessage {
     ChatStyleChanged {
         participant_id: String,
         chat_style: ChatStyle,
+    },
+    /// A participant is composing a message; private when `target_participant_id`
+    /// is set (then only that target hears it).
+    #[serde(rename_all = "camelCase")]
+    ParticipantTyping {
+        participant_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        target_participant_id: Option<String>,
     },
     /// A message's reactions changed; sent to everyone who can see it.
     #[serde(rename_all = "camelCase")]

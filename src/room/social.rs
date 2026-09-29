@@ -24,6 +24,8 @@ const MAX_RUNTIME_BANS: usize = 2000;
 /// History entries an unpersisted room keeps in memory.
 const MAX_RUNTIME_MODERATION_EVENTS: usize = 200;
 const PAGE_SIZE: usize = 100;
+/// One typing notice per sender per conversation this often, at most.
+const TYPING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 const CHAT_RECEIPT_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 const CHAT_RECEIPTS: usize = 512;
 const CHAT_RECEIPT_BYTES: usize = 512 * 1024;
@@ -59,6 +61,7 @@ pub(crate) struct ParticipantSocial {
     joined_sequence: u64,
     allow_private_messages: bool,
     ignored: HashSet<String>,
+    last_typing: Option<std::time::Instant>,
 }
 
 #[cfg(test)]
@@ -198,6 +201,79 @@ mod tests {
             Some(id.into()),
             target,
         )
+    }
+
+    #[test]
+    fn typing_reaches_the_conversations_recipients_only_and_is_throttled() {
+        let (mut room, alice, bob, carol, mut receivers) = fixture();
+        room.participants
+            .get_mut(&carol.id)
+            .unwrap()
+            .social
+            .ignored
+            .insert(alice.id.clone());
+        room.relay_typing(&alice.id, &alice.sender, None).unwrap();
+        let event: Value = serde_json::from_str(&receivers[1].try_recv().unwrap()).unwrap();
+        assert_eq!(event["type"], "participantTyping");
+        assert_eq!(event["participantId"], alice.id);
+        assert!(event.get("targetParticipantId").is_none());
+        assert!(receivers[0].try_recv().is_err(), "never back to the sender");
+        assert!(
+            receivers[2].try_recv().is_err(),
+            "an ignoring peer hears nothing"
+        );
+        room.relay_typing(&alice.id, &alice.sender, None).unwrap();
+        assert!(
+            receivers[1].try_recv().is_err(),
+            "a second notice within the interval is dropped"
+        );
+
+        let rearm = |room: &mut Room| {
+            room.participants
+                .get_mut(&alice.id)
+                .unwrap()
+                .social
+                .last_typing = None;
+        };
+        rearm(&mut room);
+        room.relay_typing(&alice.id, &alice.sender, Some(&bob.id))
+            .unwrap();
+        let event: Value = serde_json::from_str(&receivers[1].try_recv().unwrap()).unwrap();
+        assert_eq!(event["targetParticipantId"], bob.id);
+        assert!(
+            receivers[2].try_recv().is_err(),
+            "private typing stays private"
+        );
+        room.participants
+            .get_mut(&bob.id)
+            .unwrap()
+            .social
+            .allow_private_messages = false;
+        rearm(&mut room);
+        room.relay_typing(&alice.id, &alice.sender, Some(&bob.id))
+            .unwrap();
+        assert!(
+            receivers[1].try_recv().is_err(),
+            "a closed inbox hears nothing"
+        );
+        rearm(&mut room);
+        room.relay_typing(&alice.id, &alice.sender, Some("nobody"))
+            .unwrap();
+        room.participants
+            .get_mut(&alice.id)
+            .unwrap()
+            .punitive
+            .text_muted = true;
+        rearm(&mut room);
+        room.relay_typing(&alice.id, &alice.sender, None).unwrap();
+        assert!(
+            receivers[1].try_recv().is_err(),
+            "a muted sender relays nothing"
+        );
+        assert!(
+            room.relay_typing(&alice.id, &bob.sender, None).is_err(),
+            "another socket cannot type as the sender"
+        );
     }
 
     #[test]
@@ -1605,6 +1681,7 @@ impl ParticipantSocial {
             joined_sequence,
             allow_private_messages: true,
             ignored: HashSet::new(),
+            last_typing: None,
         }
     }
 }
@@ -2193,7 +2270,81 @@ impl RoomSocial {
     }
 }
 
+impl Room {
+    /// Tell a conversation's recipients that `sender_id` is composing: everyone
+    /// who would receive the message and does not ignore the sender, at most
+    /// once per `TYPING_INTERVAL`. A sender who cannot chat is silently dropped.
+    pub(crate) fn relay_typing(
+        &mut self,
+        sender_id: &str,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
+        target: Option<&str>,
+    ) -> Result<()> {
+        let now = std::time::Instant::now();
+        let moderated = self.settings.as_ref().is_some_and(|s| s.moderated);
+        let chat_allowed = !self.settings.as_ref().is_some_and(|s| !s.allow_chat);
+        let (relay, target_accepts) = {
+            let sender = RoomManager::participant_for_sender(self, sender_id, expected_sender)?;
+            let allowed = chat_allowed
+                && moderation::can_chat(&sender.punitive, sender.role, moderated)
+                && !sender
+                    .social
+                    .last_typing
+                    .is_some_and(|last| now.duration_since(last) < TYPING_INTERVAL);
+            let target_accepts = target.is_some_and(|target| {
+                target != sender_id
+                    && !sender.social.ignored.contains(target)
+                    && self.participants.get(target).is_some_and(|recipient| {
+                        recipient.social.allow_private_messages
+                            && !recipient.social.ignored.contains(sender_id)
+                    })
+            });
+            (allowed, target_accepts)
+        };
+        if !relay {
+            return Ok(());
+        }
+        if let Some(sender) = self.participants.get_mut(sender_id) {
+            sender.social.last_typing = Some(now);
+        }
+        let event = ServerMessage::ParticipantTyping {
+            participant_id: sender_id.to_string(),
+            target_participant_id: target.map(String::from),
+        };
+        let json = crate::OutboundJson::from(serde_json::to_string(&event)?);
+        match target {
+            Some(target) => {
+                if target_accepts && let Some(recipient) = self.participants.get(target) {
+                    self.try_send_broadcast(&recipient.sender, json, &event);
+                }
+            }
+            None => {
+                for participant in self.participants.values() {
+                    if participant.id != sender_id
+                        && !participant.social.ignored.contains(sender_id)
+                    {
+                        self.try_send_broadcast(&participant.sender, json.clone(), &event);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 impl RoomManager {
+    pub async fn relay_typing(
+        &self,
+        room_id: &str,
+        sender_id: &str,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
+        target: Option<&str>,
+    ) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+        room.relay_typing(sender_id, expected_sender, target)
+    }
+
     pub async fn handle_chat_command(
         &self,
         room_id: &str,

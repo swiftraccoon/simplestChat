@@ -526,6 +526,10 @@ const messages = {
   }),
   nicknameChanged: message('nicknameChanged', { participantId: text, nickname: text }),
   chatStyleChanged: message('chatStyleChanged', { participantId: text, chatStyle }),
+  participantTyping: message('participantTyping', {
+    participantId: text,
+    targetParticipantId: optional(text),
+  }),
   activeSpeaker: message('activeSpeaker', { participantId: text }),
   audioLevels: message('audioLevels', {
     levels: list(

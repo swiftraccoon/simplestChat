@@ -155,6 +155,16 @@
   padding: 0.35rem 0.6rem;
   border-bottom: 1px solid var(--border);
 }
+.typing-line {
+  font-size: 0.75rem;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--text-dim);
+  padding: 0.15rem 0.6rem;
+}
+.typing-line[hidden] {
+  display: none;
+}
 .conversation-unread {
   font-size: 0.75rem;
   color: var(--accent);

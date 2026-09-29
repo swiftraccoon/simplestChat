@@ -304,6 +304,18 @@ export class RoomClient {
   preferChatStyle(chatStyle: ChatStyle | null): void {
     this.localChatStyle = chatStyle;
   }
+  /** Tells a conversation's recipients that the local participant is composing; best effort. */
+  sendTyping(targetId?: string): void {
+    if (!this.localParticipantId) return;
+    try {
+      this.signaling.send({
+        type: 'typing',
+        ...(targetId !== undefined && { targetParticipantId: targetId }),
+      });
+    } catch {
+      /* A closed socket loses nothing worth retrying. */
+    }
+  }
   /** Changes the local look for everyone in the room; accounts also keep it. */
   async setChatStyle(chatStyle: ChatStyle): Promise<ChatStyle> {
     const applied = (await this.requestSocial('setChatStyle', { chatStyle })).chatStyle;
@@ -1396,6 +1408,7 @@ export class RoomClient {
       case 'messageAck':
       case 'messageRetryResult':
       case 'messageReactions':
+      case 'participantTyping':
       case 'privateMessageReceived': {
         this.events.onSocialEvent?.(msg);
         break;
