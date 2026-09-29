@@ -104,6 +104,13 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
     let metrics = ServerMetrics::with_diagnostics(diagnostics);
     // Connect to database (optional)
     let db_pool = db::connect().await?;
+    if let Some(pool) = &db_pool {
+        // Moderation history and closed reports age out on their own.
+        let _retention = simplestChat::room::moderation::spawn_retention(
+            pool.clone(),
+            simplestChat::room::moderation::RetentionConfig::from_env()?,
+        );
+    }
 
     let room_manager =
         Arc::new(RoomManager::new(media_config, metrics.clone(), db_pool.clone()).await?);

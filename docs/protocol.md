@@ -374,7 +374,10 @@ PostgreSQL; an ad-hoc room keeps 200 in memory. `kick` and `ban` may name the
 open report they answer with `reportId`: the server resolves that report with
 the sanction and links the entry to it, and a report from another room is
 refused. `ReportEntry.outcome` is the newest linked entry (`action`,
-`createdAt`), so a resolved report shows what it led to.
+`createdAt`), so a resolved report shows what it led to. A six-hourly sweep
+clears a target's address after `MODERATION_ADDRESS_RETENTION_DAYS` and removes
+entries, closed reports and expired sanction rows after
+`MODERATION_HISTORY_RETENTION_DAYS`; open reports and live sanctions stay.
 
 `typing` (optional `targetParticipantId`) says the sender is composing, and
 the server relays it as `participantTyping` to whoever would receive the

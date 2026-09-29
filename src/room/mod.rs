@@ -4,6 +4,7 @@
 pub mod api;
 pub mod community;
 mod control;
+pub mod invites;
 pub mod moderation;
 pub mod roles;
 pub mod settings;
@@ -359,6 +360,29 @@ fn participant_ceiling() -> Result<Option<usize>> {
     }
 }
 
+/// The deployment's broadcaster ceiling for every room: past about thirty
+/// publishers the per-viewer bitrate cap, not CPU, starves every tile, while a
+/// one-to-many room keeps hundreds of viewers. Same shape as the participant one.
+fn parse_broadcaster_ceiling(value: Option<&str>) -> Result<Option<usize>> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    match value.parse::<usize>() {
+        Ok(ceiling) if (1..=1_000).contains(&ceiling) => Ok(Some(ceiling)),
+        _ => anyhow::bail!("MAX_BROADCASTERS_PER_ROOM must be a whole number from 1 to 1000"),
+    }
+}
+
+fn broadcaster_ceiling() -> Result<Option<usize>> {
+    match std::env::var("MAX_BROADCASTERS_PER_ROOM") {
+        Ok(value) => parse_broadcaster_ceiling(Some(&value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            anyhow::bail!("MAX_BROADCASTERS_PER_ROOM must be valid UTF-8")
+        }
+    }
+}
+
 fn room_delete_timeout(operation: &str) -> sqlx::Error {
     sqlx::Error::Protocol(format!("room deletion timed out while {operation}"))
 }
@@ -523,6 +547,8 @@ pub struct Room {
     pub router_id: String,
     pub participants: HashMap<String, Participant>,
     pub settings: Option<settings::RoomSettings>,
+    /// The deployment's broadcaster ceiling, applied beneath the room's own limit.
+    pub(crate) broadcaster_ceiling: Option<usize>,
     /// Whether this room is backed by a database row. Runtime settings on an
     /// ad-hoc room must never make it look persisted (and grant the first
     /// connection ownership of an existing room).
@@ -688,6 +714,7 @@ impl Room {
             id,
             router_id,
             social: social::RoomSocial::default(),
+            broadcaster_ceiling: None,
             participants: HashMap::new(),
             settings,
             persisted,
@@ -732,6 +759,7 @@ impl Room {
             id,
             router_id,
             social: social::RoomSocial::default(),
+            broadcaster_ceiling: None,
             participants: HashMap::new(),
             settings,
             persisted,
@@ -1221,6 +1249,7 @@ pub struct RoomManager {
     /// Server-wide participant ceiling per room, applied under any room's own
     /// limit; sized from the measured capacity of the deployment.
     max_participants_per_room: Option<usize>,
+    max_broadcasters_per_room: Option<usize>,
     /// CPU saturation monitor; fresh joins are refused while it reports saturation.
     saturation: std::sync::OnceLock<crate::saturation::SaturationMonitor>,
     /// Verification must remain available even if an administrator repeatedly
@@ -1392,6 +1421,7 @@ impl RoomManager {
         let allow_ad_hoc_rooms =
             environment_flag("ALLOW_AD_HOC_ROOMS", ALLOW_AD_HOC_ROOMS_BY_DEFAULT)?;
         let max_participants_per_room = participant_ceiling()?;
+        let max_broadcasters_per_room = broadcaster_ceiling()?;
         let media_server = Arc::new(MediaServer::new(media_config).await?);
 
         let password_verify_workers = std::env::var("MAX_PASSWORD_WORKERS")
@@ -1421,6 +1451,7 @@ impl RoomManager {
                 .unwrap_or(10_000),
             allow_ad_hoc_rooms,
             max_participants_per_room,
+            max_broadcasters_per_room,
             saturation: std::sync::OnceLock::new(),
             password_verify_work: Arc::new(tokio::sync::Semaphore::new(password_verify_workers)),
             // One bounded hashing lane prevents room settings from consuming
@@ -2265,7 +2296,7 @@ impl RoomManager {
             // Every runtime-room insertion is serialized by
             // `room_creation_lock`, which is still held here.
             debug_assert!(!rooms.contains_key(room_id));
-            let new_room = Arc::new(TokioRwLock::new(Room::new_with_observers(
+            let mut created = Room::new_with_observers(
                 room_id.to_string(),
                 router_id,
                 room_settings,
@@ -2274,7 +2305,9 @@ impl RoomManager {
                 active_speaker_observer,
                 audio_level_observer,
                 self.metrics.clone(),
-            )));
+            );
+            created.broadcaster_ceiling = self.max_broadcasters_per_room;
+            let new_room = Arc::new(TokioRwLock::new(created));
             if let Ok(_admission) = self.drain.admit() {
                 rooms.insert(room_id.to_string(), new_room.clone());
                 Some(new_room)
@@ -5890,14 +5923,7 @@ impl RoomManager {
             return false;
         }
 
-        if let Some(max) = room
-            .settings
-            .as_ref()
-            .and_then(|settings| settings.max_broadcasters)
-        {
-            let Ok(max) = usize::try_from(max) else {
-                return false;
-            };
+        if let Some(max) = Self::broadcaster_limit(room) {
             let broadcaster_count = room
                 .participants
                 .values()
@@ -5911,6 +5937,20 @@ impl RoomManager {
         true
     }
 
+    /// The room's own broadcaster limit beneath the deployment's ceiling; a
+    /// negative stored limit (which validation refuses) admits nobody.
+    fn broadcaster_limit(room: &Room) -> Option<usize> {
+        let own = room
+            .settings
+            .as_ref()
+            .and_then(|settings| settings.max_broadcasters)
+            .map(|maximum| usize::try_from(maximum).unwrap_or(0));
+        match (own, room.broadcaster_ceiling) {
+            (Some(own), Some(ceiling)) => Some(own.min(ceiling)),
+            (own, ceiling) => own.or(ceiling),
+        }
+    }
+
     /// Remove producer bookkeeping for streams that no longer satisfy current
     /// room policy. Physical mediasoup closure is deliberately performed by
     /// `close_revoked_producers` after the room lock is released.
@@ -5919,11 +5959,7 @@ impl RoomManager {
         participant_filter: Option<&str>,
         reason: &str,
     ) -> Vec<RevokedProducer> {
-        let max_broadcasters = room
-            .settings
-            .as_ref()
-            .and_then(|settings| settings.max_broadcasters)
-            .and_then(|maximum| usize::try_from(maximum).ok());
+        let max_broadcasters = Self::broadcaster_limit(room);
 
         // Determine which otherwise-authorized broadcasters survive a newly
         // reduced cap. Prefer more privileged roles, then stable participant ID,
@@ -8185,5 +8221,36 @@ mod security_tests {
             "microphone"
         ));
         assert!(!room.settings.as_ref().unwrap().allow_chat);
+    }
+}
+
+#[cfg(test)]
+mod broadcaster_ceiling_tests {
+    use super::*;
+
+    #[test]
+    fn broadcaster_ceiling_parses_like_the_participant_one() {
+        assert_eq!(parse_broadcaster_ceiling(None).unwrap(), None);
+        assert_eq!(parse_broadcaster_ceiling(Some(" ")).unwrap(), None);
+        assert_eq!(parse_broadcaster_ceiling(Some("30")).unwrap(), Some(30));
+        assert!(parse_broadcaster_ceiling(Some("0")).is_err());
+        assert!(parse_broadcaster_ceiling(Some("1001")).is_err());
+        assert!(parse_broadcaster_ceiling(Some("many")).is_err());
+    }
+
+    #[test]
+    fn the_deployment_ceiling_applies_beneath_a_rooms_own_broadcaster_limit() {
+        let mut room = Room::new("ceiling".into(), "router".into(), None, false, None);
+        assert_eq!(RoomManager::broadcaster_limit(&room), None);
+        room.broadcaster_ceiling = Some(30);
+        assert_eq!(RoomManager::broadcaster_limit(&room), Some(30));
+        let mut settings = RoomManager::default_room_settings("ceiling");
+        settings.max_broadcasters = Some(8);
+        room.settings = Some(settings);
+        assert_eq!(RoomManager::broadcaster_limit(&room), Some(8));
+        room.settings.as_mut().unwrap().max_broadcasters = Some(500);
+        assert_eq!(RoomManager::broadcaster_limit(&room), Some(30));
+        room.broadcaster_ceiling = None;
+        assert_eq!(RoomManager::broadcaster_limit(&room), Some(500));
     }
 }

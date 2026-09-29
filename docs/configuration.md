@@ -15,10 +15,13 @@
 | `MAX_CONNECTIONS_PER_IP` | `50` | Max concurrent WebSocket connections accepted from one client IP |
 | `WS_HANDSHAKES_PER_MINUTE` | `120` | Per-client IP (IPv6 `/64`) rate limit for WebSocket upgrade attempts |
 | `AUTH_REQUESTS_PER_MINUTE` | `60` | Per-IP rate limit for authentication endpoints |
+| `PROFILE_REQUESTS_PER_MINUTE` | `600` | Per-IP rate limit for public profile reads (`/api/auth/profiles/:id`, one per avatar a viewer sees), kept apart from the sign-in and refresh budget |
 | `AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE` | `20` | Per-account limit on signed-in password checks (password change, recovery key, passkey management) |
 | `AUTH_MAX_CONCURRENCY` | `16` | Global cap on concurrent expensive authentication operations |
 | `REGISTRATION_ENABLED` | `false` | Allow new password/passkey accounts; must be explicitly enabled on every bind address |
 | `REGISTRATIONS_PER_IP_PER_HOUR` | `5` | Registrations, including taken-email answers, one client IP (IPv6 `/64`) may receive per hour |
+| `MODERATION_ADDRESS_RETENTION_DAYS` | `30` | Days a sanction's address stays on a moderation history entry (1–3650) before the six-hourly sweep clears it |
+| `MODERATION_HISTORY_RETENTION_DAYS` | `365` | Days a history entry, a closed report or an expired sanction row stays (1–3650, at least the address period); open reports and live sanctions are never swept |
 | `MAX_USERS` | `100000` | Global database-backed account cap enforced transactionally |
 | `ROOM_API_REQUESTS_PER_MINUTE` | `120` | Per-IP rate limit for room-management HTTP endpoints |
 | `ROOM_API_MAX_CONCURRENCY` | `32` | Global cap on concurrent room-management HTTP requests |
@@ -35,6 +38,7 @@
 | `MAX_ROOMS` | `1000` | Maximum rooms held by one server process |
 | `MAX_PERSISTED_ROOMS` | `10000` | Global database-backed room cap enforced transactionally |
 | `MAX_PARTICIPANTS_PER_ROOM` | unset | Server-wide participant ceiling for every room (2–10000; unset or empty means none, and any other value fails startup rather than leaving rooms unlimited), applied beneath a room's own `max_participants` to joins and lobby admissions alike; a join past it is refused as "Room is full". Size it from measured capacity: on the deployed 2-CPU shape an all-publishing room is reliable to about 80 participants and a one-to-many room to about 500 viewers (see [performance results](performance-results.md)); on another host, [`build/capacity.py`](performance.md#sizing-a-host) measures it |
+| `MAX_BROADCASTERS_PER_ROOM` | unset | Server-wide ceiling on participants publishing media in one room (1–1000; unset or empty means none), applied beneath a room's own `max_broadcasters`. Past about thirty publishers the 3 Mbit/s per-viewer cap, not CPU, starves every tile ([performance results](performance-results.md)), while a one-to-many room keeps its hundreds of viewers; the public template sets 30 |
 | `ALLOW_AD_HOC_ROOMS` | `false` | Permit joins to create ephemeral rooms; must be explicitly enabled on every bind address |
 | `MAX_PASSWORD_WORKERS` | see note | Concurrent Argon2 verification cap (valid range 1–32) for both the room-password lane (default `2`) and the account-password lane (default `min(AUTH_MAX_CONCURRENCY, CPUs ÷ 2)`, at least 1, where CPUs honours a container quota); room-password hashing uses a separate single-worker lane |
 | `MAX_PRODUCERS_PER_PARTICIPANT` | `8` | Server-side media producer cap per participant |

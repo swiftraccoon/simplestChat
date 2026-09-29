@@ -278,6 +278,161 @@ pub(crate) async fn record_event(
     Ok(())
 }
 
+/// How long moderation data stays: addresses for `address_days`, whole
+/// entries, closed reports and expired sanctions for `history_days`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RetentionConfig {
+    pub address_days: u32,
+    pub history_days: u32,
+}
+
+const DEFAULT_ADDRESS_RETENTION_DAYS: u32 = 30;
+const DEFAULT_HISTORY_RETENTION_DAYS: u32 = 365;
+const MAX_RETENTION_DAYS: u32 = 3650;
+const RETENTION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
+const RETENTION_FIRST_DELAY: std::time::Duration = std::time::Duration::from_secs(60);
+const RETENTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// A whole number of days from 1 to 3650; unset or empty means the default.
+fn parse_days(name: &str, value: Option<&str>, default: u32) -> anyhow::Result<u32> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(default);
+    };
+    match value.parse::<u32>() {
+        Ok(days) if (1..=MAX_RETENTION_DAYS).contains(&days) => Ok(days),
+        _ => anyhow::bail!("{name} must be a whole number of days from 1 to {MAX_RETENTION_DAYS}"),
+    }
+}
+
+impl RetentionConfig {
+    /// `MODERATION_ADDRESS_RETENTION_DAYS` (30) and
+    /// `MODERATION_HISTORY_RETENTION_DAYS` (365); addresses never outlive entries.
+    pub fn from_env() -> anyhow::Result<Self> {
+        fn read(name: &str) -> anyhow::Result<Option<String>> {
+            match std::env::var(name) {
+                Ok(value) => Ok(Some(value)),
+                Err(std::env::VarError::NotPresent) => Ok(None),
+                Err(std::env::VarError::NotUnicode(_)) => {
+                    anyhow::bail!("{name} must be valid UTF-8")
+                }
+            }
+        }
+        let address = read("MODERATION_ADDRESS_RETENTION_DAYS")?;
+        let history = read("MODERATION_HISTORY_RETENTION_DAYS")?;
+        Self::parse(address.as_deref(), history.as_deref())
+    }
+
+    fn parse(address: Option<&str>, history: Option<&str>) -> anyhow::Result<Self> {
+        let address_days = parse_days(
+            "MODERATION_ADDRESS_RETENTION_DAYS",
+            address,
+            DEFAULT_ADDRESS_RETENTION_DAYS,
+        )?;
+        let history_days = parse_days(
+            "MODERATION_HISTORY_RETENTION_DAYS",
+            history,
+            DEFAULT_HISTORY_RETENTION_DAYS,
+        )?;
+        anyhow::ensure!(
+            address_days <= history_days,
+            "MODERATION_ADDRESS_RETENTION_DAYS must not exceed MODERATION_HISTORY_RETENTION_DAYS"
+        );
+        Ok(Self {
+            address_days,
+            history_days,
+        })
+    }
+}
+
+/// What one sweep removed.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct RetentionReport {
+    pub addresses_cleared: u64,
+    pub sanctions_removed: u64,
+    pub entries_removed: u64,
+    pub reports_removed: u64,
+}
+
+impl RetentionReport {
+    pub fn total(&self) -> u64 {
+        self.addresses_cleared
+            + self.sanctions_removed
+            + self.entries_removed
+            + self.reports_removed
+    }
+}
+
+/// Age moderation data out: a target's address goes after `address_days`, an
+/// expired sanction's row, a whole history entry and a closed report after
+/// `history_days`. Open reports and live sanctions stay whatever their age.
+pub async fn retire_old(
+    pool: &PgPool,
+    config: RetentionConfig,
+) -> Result<RetentionReport, sqlx::Error> {
+    let address_days = i32::try_from(config.address_days).unwrap_or(i32::MAX);
+    let history_days = i32::try_from(config.history_days).unwrap_or(i32::MAX);
+    let addresses_cleared = sqlx::query(
+        "UPDATE moderation_events SET target_ip = NULL
+         WHERE target_ip IS NOT NULL AND created_at < now() - make_interval(days => $1)",
+    )
+    .bind(address_days)
+    .execute(pool)
+    .await?
+    .rows_affected();
+    let sanctions_removed = sqlx::query(
+        "DELETE FROM room_states
+         WHERE expires_at IS NOT NULL AND expires_at < now() - make_interval(days => $1)",
+    )
+    .bind(history_days)
+    .execute(pool)
+    .await?
+    .rows_affected();
+    let entries_removed = sqlx::query(
+        "DELETE FROM moderation_events WHERE created_at < now() - make_interval(days => $1)",
+    )
+    .bind(history_days)
+    .execute(pool)
+    .await?
+    .rows_affected();
+    let reports_removed = sqlx::query(
+        "DELETE FROM room_reports
+         WHERE status <> 'open' AND resolved_at < now() - make_interval(days => $1)",
+    )
+    .bind(history_days)
+    .execute(pool)
+    .await?
+    .rows_affected();
+    Ok(RetentionReport {
+        addresses_cleared,
+        sanctions_removed,
+        entries_removed,
+        reports_removed,
+    })
+}
+
+/// Sweep every six hours, a minute after startup, each sweep bounded; a failed
+/// sweep is retried by the next one.
+pub fn spawn_retention(pool: PgPool, config: RetentionConfig) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        tokio::time::sleep(RETENTION_FIRST_DELAY).await;
+        let mut interval = tokio::time::interval(RETENTION_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            interval.tick().await;
+            match tokio::time::timeout(RETENTION_TIMEOUT, retire_old(&pool, config)).await {
+                Ok(Ok(report)) if report.total() > 0 => {
+                    tracing::info!(?report, "Moderation retention sweep");
+                }
+                Ok(Ok(_)) => {}
+                Ok(Err(error)) => {
+                    tracing::debug!(%error, "Moderation retention sweep failed; the next retries");
+                }
+                Err(_) => tracing::warn!("Moderation retention sweep exceeded its time budget"),
+            }
+        }
+    })
+}
+
 /// Write a history entry on its own, for a change that leaves no other row.
 pub(crate) async fn persist_event(
     pool: &PgPool,
@@ -682,6 +837,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn retention_periods_are_bounded_days_and_addresses_never_outlive_entries() {
+        let config = RetentionConfig::parse(None, None).unwrap();
+        assert_eq!(
+            config,
+            RetentionConfig {
+                address_days: 30,
+                history_days: 365
+            }
+        );
+        let config = RetentionConfig::parse(Some(" 7 "), Some("")).unwrap();
+        assert_eq!(
+            config,
+            RetentionConfig {
+                address_days: 7,
+                history_days: 365
+            }
+        );
+        assert!(RetentionConfig::parse(Some("0"), None).is_err());
+        assert!(RetentionConfig::parse(None, Some("3651")).is_err());
+        assert!(RetentionConfig::parse(Some("forever"), None).is_err());
+        assert!(RetentionConfig::parse(Some("400"), Some("365")).is_err());
+    }
+
+    #[test]
     fn guest_ipv6_identity_is_scoped_to_64_bit_prefix() {
         let first: IpAddr = "2001:db8:1:2::1".parse().unwrap();
         let rotated: IpAddr = "2001:db8:1:2:ffff:ffff:ffff:42".parse().unwrap();
@@ -879,6 +1058,54 @@ mod tests {
             events.iter().map(|event| event.action).collect::<Vec<_>>(),
             vec![ModerationAction::TextMute, ModerationAction::Kick]
         );
+
+        // Retention: an address goes first, whole entries and closed reports later;
+        // an open report stays whatever its age.
+        let kick_id = Uuid::parse_str(&events[1].event_id).unwrap();
+        sqlx::query(
+            "UPDATE moderation_events SET created_at = now() - interval '40 days' WHERE id = $1",
+        )
+        .bind(kick_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let config = RetentionConfig {
+            address_days: 30,
+            history_days: 365,
+        };
+        let swept = retire_old(&pool, config).await.unwrap();
+        assert_eq!(swept.addresses_cleared, 1);
+        assert_eq!(swept.entries_removed + swept.reports_removed, 0);
+        let events = list_events(&pool, &room_id, 0, 10).await.unwrap();
+        assert_eq!(events[1].target_ip, None);
+        assert_eq!(events[1].action, ModerationAction::Kick);
+        sqlx::query(
+            "UPDATE moderation_events SET created_at = now() - interval '400 days' WHERE id = $1",
+        )
+        .bind(kick_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "UPDATE room_reports SET resolved_at = now() - interval '400 days' WHERE id = $1",
+        )
+        .bind(report)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let swept = retire_old(&pool, config).await.unwrap();
+        assert_eq!((swept.entries_removed, swept.reports_removed), (1, 1));
+        let events = list_events(&pool, &room_id, 0, 10).await.unwrap();
+        assert_eq!(
+            events.iter().map(|event| event.action).collect::<Vec<_>>(),
+            vec![ModerationAction::TextMute]
+        );
+        let open: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM room_reports WHERE id = $1")
+            .bind(foreign_report)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(open, 1);
 
         for id in [&room_id, &other_room_id] {
             sqlx::query("DELETE FROM rooms WHERE id=$1")

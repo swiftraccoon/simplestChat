@@ -44,6 +44,9 @@ const DEFAULT_AUTH_REQUESTS_PER_MINUTE: u32 = 60;
 const DEFAULT_AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE: u32 = 20;
 const DEFAULT_AUTH_CONCURRENCY: usize = 16;
 const DEFAULT_ROOM_API_REQUESTS_PER_MINUTE: u32 = 120;
+/// Public profile reads (avatars for every participant a viewer sees) get their
+/// own address budget so a busy room cannot spend the sign-in and refresh one.
+const DEFAULT_PROFILE_REQUESTS_PER_MINUTE: u32 = 600;
 const DEFAULT_ROOM_API_CONCURRENCY: usize = 32;
 const DEFAULT_ROOM_CREATIONS_PER_ACCOUNT_PER_MINUTE: u32 = 10;
 const DEFAULT_WS_HANDSHAKES_PER_MINUTE: u32 = 120;
@@ -306,6 +309,7 @@ pub struct SignalingServer {
     ip_connection_limiter: IpConnectionLimiter,
     ws_handshake_guard: AuthGuard,
     auth_guard: AuthGuard,
+    profile_guard: AuthGuard,
     password_work: Arc<Semaphore>,
     max_password_work: usize,
     session_cleanup: crate::auth::session::SessionCleanup,
@@ -403,6 +407,10 @@ impl SignalingServer {
             password_workers,
             auth_concurrency, "Account password verification lane sized"
         );
+        let profile_requests_per_minute = env_u32(
+            "PROFILE_REQUESTS_PER_MINUTE",
+            DEFAULT_PROFILE_REQUESTS_PER_MINUTE,
+        );
         let room_api_requests_per_minute = env_u32(
             "ROOM_API_REQUESTS_PER_MINUTE",
             DEFAULT_ROOM_API_REQUESTS_PER_MINUTE,
@@ -459,6 +467,13 @@ impl SignalingServer {
             ),
             auth_guard: AuthGuard::new(
                 auth_requests_per_minute,
+                auth_concurrency,
+                trusted_proxy_secret.clone(),
+                allowed_origins.clone(),
+                metrics.clone(),
+            ),
+            profile_guard: AuthGuard::new(
+                profile_requests_per_minute,
                 auth_concurrency,
                 trusted_proxy_secret.clone(),
                 allowed_origins.clone(),
@@ -653,7 +668,6 @@ impl SignalingServer {
                     .patch(crate::auth::account::update_profile)
                     .layer(DefaultBodyLimit::max(256 * 1024)),
             )
-            .route("/profiles/{id}", get(crate::auth::account::public_profile))
             .route(
                 "/preferences",
                 get(crate::auth::account::get_preferences)
@@ -736,6 +750,18 @@ impl SignalingServer {
                 StatusCode::REQUEST_TIMEOUT,
                 HTTP_REQUEST_TIMEOUT,
             ));
+        // Beside the nested auth router, on its own address budget: a room's
+        // avatars must never spend a viewer's sign-in and refresh allowance.
+        let profile_routes = Router::new()
+            .route("/{id}", get(crate::auth::account::public_profile))
+            .layer(middleware::from_fn_with_state(
+                self.profile_guard.clone(),
+                guarded_api_request,
+            ))
+            .layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                HTTP_REQUEST_TIMEOUT,
+            ));
         let routes = Router::new()
             .merge(telemetry_routes)
             .route("/ws", get(ws_handler))
@@ -743,6 +769,7 @@ impl SignalingServer {
             .route("/ready", get(readiness_handler))
             .route("/metrics", get(metrics_handler))
             .route("/diagnostics/media", get(media_diagnostics::handler))
+            .nest("/api/auth/profiles", profile_routes)
             .nest("/api/auth", auth_routes)
             .nest("/api/rooms", room_routes)
             .layer(middleware::from_fn_with_state(
@@ -1488,6 +1515,79 @@ mod security_tests {
         drop(table);
         assert!(guard.allow_at(victim, started + PRINCIPAL_RATE_WINDOW));
         assert_eq!(guard.entries.lock().unwrap().entries.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn profile_reads_nest_beside_the_auth_router_on_their_own_guard() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let metrics = ServerMetrics::new();
+        let auth = AuthGuard::new(1, 4, Arc::new(None), Arc::new(Vec::new()), metrics.clone());
+        let profiles = AuthGuard::new(10, 4, Arc::new(None), Arc::new(Vec::new()), metrics);
+        let router = Router::new()
+            .nest(
+                "/api/auth/profiles",
+                Router::new()
+                    .route(
+                        "/{id}",
+                        get(
+                            |axum::extract::Path(id): axum::extract::Path<String>| async move {
+                                format!("profile {id}")
+                            },
+                        ),
+                    )
+                    .layer(middleware::from_fn_with_state(
+                        profiles,
+                        guarded_api_request,
+                    )),
+            )
+            .nest(
+                "/api/auth",
+                Router::new()
+                    .route("/refresh", axum::routing::post(|| async { "refreshed" }))
+                    .layer(middleware::from_fn_with_state(auth, guarded_api_request)),
+            );
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        let request = |line: &'static str| async move {
+            let mut connection = tokio::net::TcpStream::connect(address).await.unwrap();
+            connection
+                .write_all(
+                    format!("{line} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")
+                        .as_bytes(),
+                )
+                .await
+                .unwrap();
+            let mut response = String::new();
+            connection.read_to_string(&mut response).await.unwrap();
+            response
+        };
+        let result = tokio::time::timeout(Duration::from_secs(5), async {
+            // Profile reads keep answering after the auth budget (one request) is spent.
+            assert!(
+                request("POST /api/auth/refresh")
+                    .await
+                    .contains("refreshed")
+            );
+            assert!(
+                request("POST /api/auth/refresh")
+                    .await
+                    .starts_with("HTTP/1.1 429 ")
+            );
+            for _ in 0..3 {
+                let response = request("GET /api/auth/profiles/abc").await;
+                assert!(response.starts_with("HTTP/1.1 200 "), "{response}");
+                assert!(response.contains("profile abc"));
+            }
+        })
+        .await;
+        task.abort();
+        let _ = task.await;
+        result.unwrap();
     }
 
     #[tokio::test]

@@ -113,8 +113,10 @@ class PublicTemplateTests(unittest.TestCase):
         )
         # Forwarded, and empty when unset, which the server reads as no ceiling.
         self.assertEqual(base["MAX_PARTICIPANTS_PER_ROOM"], "${MAX_PARTICIPANTS_PER_ROOM:-}")
+        self.assertEqual(base["MAX_BROADCASTERS_PER_ROOM"], "${MAX_BROADCASTERS_PER_ROOM:-}")
         # The managed host interpolates the base from app.env, which sets the ceiling.
         self.assertEqual(environment("public-app.env.j2")["MAX_PARTICIPANTS_PER_ROOM"], "80")
+        self.assertEqual(environment("public-app.env.j2")["MAX_BROADCASTERS_PER_ROOM"], "30")
 
     def test_app_extends_existing_compose_and_proxy_is_nonroot(self) -> None:
         """Verify app extends existing compose and proxy is nonroot."""

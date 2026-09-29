@@ -28,6 +28,7 @@ services:
       MAX_CONNECTIONS_PER_IP: "${MAX_CONNECTIONS_PER_IP:-50}"
       WS_HANDSHAKES_PER_MINUTE: "${WS_HANDSHAKES_PER_MINUTE:-120}"
       AUTH_REQUESTS_PER_MINUTE: "${AUTH_REQUESTS_PER_MINUTE:-60}"
+      PROFILE_REQUESTS_PER_MINUTE: "${PROFILE_REQUESTS_PER_MINUTE:-600}"
       AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE: "${AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE:-20}"
       AUTH_MAX_CONCURRENCY: "${AUTH_MAX_CONCURRENCY:-16}"
       # Keep public account and anonymous room creation closed unless the
@@ -49,6 +50,7 @@ services:
       MAX_CONSUMERS_PER_PARTICIPANT: "${MAX_CONSUMERS_PER_PARTICIPANT:-64}"
       # Empty means no ceiling; size it with build/capacity.py.
       MAX_PARTICIPANTS_PER_ROOM: "${MAX_PARTICIPANTS_PER_ROOM:-}"
+      MAX_BROADCASTERS_PER_ROOM: "${MAX_BROADCASTERS_PER_ROOM:-}"
       # Secrets and deployment-specific origins should be injected through the
       # host environment or a Compose secrets overlay, not committed here.
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:?set ALLOWED_ORIGINS to the external HTTPS origin}"
