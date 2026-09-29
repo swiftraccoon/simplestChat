@@ -6,6 +6,7 @@ import io
 import json
 import math
 import os
+import re
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -677,6 +678,15 @@ class SearchTests(unittest.TestCase):
             + " participants use it in 18 hours.",
             output.getvalue(),
         )
+        fragment = io.StringIO()
+        with redirect_stdout(fragment):
+            status = capacity.main(["suggest", "--vcpus", "4", "--memory-gib", "12", "--env"])
+        self.assertEqual(status, 0)
+        lines = fragment.getvalue().splitlines()
+        self.assertTrue(all(re.fullmatch(r"[A-Z][A-Z0-9_]*=[^ ]+", line) for line in lines), lines)
+        self.assertIn("MEDIA_WORKERS=3", lines)
+        self.assertIn("RTC_PORT_END=40002", lines)
+        self.assertNotIn("host sysctl", fragment.getvalue())
         errors = io.StringIO()
         with redirect_stdout(io.StringIO()), redirect_stderr(errors):
             status = capacity.main(["suggest", "--vcpus", "0", "--memory-gib", "16"])

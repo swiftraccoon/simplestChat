@@ -1166,6 +1166,11 @@ def suggest(options: Options) -> int:
     suggestion = suggest_for(
         host, ceilings, app_cpus=options.app_cpus, app_memory_mib=options.app_memory_mib
     )
+    if options.env:
+        for setting in suggestion.settings:
+            if re.fullmatch(r"[A-Z][A-Z0-9_]*=.*", setting):
+                print(setting)  # noqa: T201 -- intentional report output.
+        return 0
     for line in suggestion_lines(
         suggestion, host, ceilings, source, included_egress_tb=options.included_egress_tb
     ):
@@ -1905,6 +1910,7 @@ class Options(argparse.Namespace):
     vcpus: int | None = None
     memory_gib: float | None = None
     calibration: str | None = None
+    env: bool = False
 
 
 def memory_limit(host_mib: int, share: float, most_mib: int) -> str:
@@ -2348,6 +2354,11 @@ def parser() -> argparse.ArgumentParser:
     )
     _ = suggest_command.add_argument(
         "--included-egress-tb", type=float, help="the provider's monthly transfer allowance, TB"
+    )
+    _ = suggest_command.add_argument(
+        "--env",
+        action="store_true",
+        help="print only the KEY=VALUE settings, ready for an env file",
     )
     _ = suggest_command.add_argument("--app-cpus", type=float, help="CPUs for the app (vCPUs - 1)")
     _ = suggest_command.add_argument(
