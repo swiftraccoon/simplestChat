@@ -3,6 +3,7 @@
 // Configuration for mediasoup workers, routers, and transports
 
 use mediasoup::prelude::*;
+use mediasoup::types::data_structures::SocketFlags;
 use mediasoup::worker::{WorkerDtlsFiles, WorkerLogLevel, WorkerLogTag};
 use std::num::NonZeroU8;
 
@@ -586,13 +587,17 @@ impl WebRtcTransportConfig {
 
     /// Announce `address` for the listener of its family, binding that family's
     /// unspecified address; a second family gets its own listener on the same
-    /// port (the worker binds IPv6 sockets v6-only, so both coexist).
+    /// port, bound v6-only (`SocketFlags::ipv6_only`) so both coexist.
     pub fn with_announced_address(mut self, address: IpAddr) -> Self {
         let unspecified = match address {
             IpAddr::V4(_) => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             IpAddr::V6(_) => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
         };
         let announced = Some(address.to_string());
+        let flags = address.is_ipv6().then_some(SocketFlags {
+            ipv6_only: true,
+            udp_reuse_port: false,
+        });
         let single_unannounced =
             self.listen_ips.len() == 1 && self.listen_ips[0].announced_address.is_none();
         if single_unannounced {
@@ -601,6 +606,7 @@ impl WebRtcTransportConfig {
             let first = &mut self.listen_ips[0];
             first.ip = unspecified;
             first.announced_address = announced;
+            first.flags = flags;
         } else if let Some(existing) = self
             .listen_ips
             .iter_mut()
@@ -614,7 +620,7 @@ impl WebRtcTransportConfig {
                 announced_address: announced,
                 port: None,
                 port_range: None,
-                flags: None,
+                flags,
                 send_buffer_size: None,
                 recv_buffer_size: None,
                 expose_internal_ip: false,
@@ -696,6 +702,12 @@ mod tests {
         let dual = single.with_announced_address(v6);
         assert_eq!(dual.listen_ips.len(), 2);
         assert_eq!(dual.listen_ips[1].ip, IpAddr::V6(Ipv6Addr::UNSPECIFIED));
+        assert!(
+            dual.listen_ips[1]
+                .flags
+                .is_some_and(|flags| flags.ipv6_only)
+        );
+        assert!(dual.listen_ips[0].flags.is_none());
         assert_eq!(
             dual.listen_ips[1].announced_address.as_deref(),
             Some("2001:db8::10")

@@ -7,6 +7,7 @@ use crate::media::types::{MediaError, MediaResult};
 use crate::saturation::{WorkerThreadInfo, WorkerThreads};
 use anyhow::Result;
 use mediasoup::prelude::*;
+use mediasoup::types::data_structures::SocketFlags;
 use mediasoup::worker::{WorkerDump, WorkerId};
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr};
@@ -99,13 +100,18 @@ fn webrtc_server_listen_infos(
     config: &MediaConfig,
 ) -> WebRtcServerListenInfos {
     let buffer = |bytes: u32| (bytes > 0).then_some(bytes);
+    // mediasoup sets IPV6_V6ONLY only from this flag; without it a `::` socket
+    // claims both families and collides with `0.0.0.0` on the same port.
     let info = |protocol, listener: &ListenInfo| ListenInfo {
         protocol,
         ip: listener.ip,
         announced_address: listener.announced_address.clone(),
         port: Some(port),
         port_range: None,
-        flags: None,
+        flags: listener.ip.is_ipv6().then_some(SocketFlags {
+            ipv6_only: true,
+            udp_reuse_port: false,
+        }),
         send_buffer_size: buffer(config.webrtc_send_buffer_bytes),
         recv_buffer_size: buffer(config.webrtc_recv_buffer_bytes),
         expose_internal_ip: false,
@@ -746,6 +752,7 @@ impl WorkerThreads for WorkerManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::media::config::WebRtcTransportConfig;
 
     async fn two_worker_manager() -> WorkerManager {
         let mut config = MediaConfig::default();
@@ -762,6 +769,23 @@ mod tests {
             .iter()
             .map(Worker::id)
             .collect()
+    }
+
+    #[tokio::test]
+    async fn a_dual_stack_worker_binds_both_families_on_one_port() {
+        // Without the v6-only flag the `::` bind fails with "address already in use".
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 1;
+        config.webrtc_server_port_base = reserve_worker_ports(1);
+        config.webrtc_transport_config = WebRtcTransportConfig::default()
+            .with_public_ip("127.0.0.1".parse().unwrap())
+            .with_announced_address("::1".parse().unwrap());
+        let infos = webrtc_server_listen_infos(config.webrtc_server_port_base, false, &config);
+        let manager = WorkerManager::new(Arc::new(config)).await.unwrap();
+        let ids = worker_ids(&manager).await;
+        assert!(manager.get_webrtc_server(ids[0]).await.is_ok());
+        manager.shutdown().await.unwrap();
+        drop(infos);
     }
 
     #[tokio::test]
