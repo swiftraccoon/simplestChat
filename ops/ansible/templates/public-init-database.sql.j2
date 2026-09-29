@@ -18,4 +18,6 @@ GRANT USAGE ON SCHEMA public TO simplestchat_app;
 
 -- Migration 011 can reuse this without granting database CREATE to its role.
 CREATE EXTENSION pg_trgm WITH SCHEMA public;
+-- Query statistics for the operator (the server is started with it preloaded).
+CREATE EXTENSION pg_stat_statements WITH SCHEMA public;
 COMMIT;

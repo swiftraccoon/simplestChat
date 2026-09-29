@@ -39,6 +39,25 @@ missing pinned dependency images, and installs commands. It does not start the
 public service. The public project must be stopped when applying configuration.
 Do not print resolved Compose configuration: it contains secrets.
 
+## Query statistics and slow queries
+
+PostgreSQL runs with `pg_stat_statements` preloaded (`track=all`,
+`track_io_timing=on`) and logs statements slower than 500 ms. Read the heaviest
+queries from the container as the operator (the app role has no access):
+
+```sh
+cid=$(docker ps -q --filter name=^simplestchat-public-postgres-1$)
+docker exec --user 999:999 "$cid" psql --host /run/simplestchat-postgres --username postgres \
+  --dbname simplestchat --command "SELECT calls, round(mean_exec_time::numeric, 2) AS ms,
+  rows, left(query, 100) AS query FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20"
+docker logs --since 24h "$cid" 2>&1 | grep 'duration:'
+```
+
+`SELECT pg_stat_statements_reset()` starts a fresh window. A new host gets the
+extension from the init SQL; the 2026-09-28 host was switched by hand with
+`ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements'`, a container
+restart (about ten seconds without the database) and `CREATE EXTENSION`.
+
 Registration is off by default; guests can still join the lobby, and any
 account can hand out registration invite codes (Account → Invite someone to
 register). Opting into

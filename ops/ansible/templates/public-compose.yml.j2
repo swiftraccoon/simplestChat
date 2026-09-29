@@ -57,6 +57,16 @@ services:
       - max_connections=50
       - -c
       - shared_buffers=256MB
+      # Query statistics and a slow-query log for the operator; the init SQL
+      # creates the extension on a new database (PUBLIC.md for an existing one).
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - track_io_timing=on
+      - -c
+      - log_min_duration_statement=500ms
     volumes:
       # PostgreSQL 18 places PGDATA beneath this version-independent parent.
       - "{{ scpub_root }}/postgres:/var/lib/postgresql"
