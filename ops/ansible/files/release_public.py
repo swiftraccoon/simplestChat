@@ -44,6 +44,28 @@ MAX_LAUNCHER_SECONDS = 900
 ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
 DOCKER = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
 SELECTION = ("compose.public.yml", "app.env", "images.json")
+# app.env lines a maintenance candidate may never change: secrets, the public
+# identity and the launcher's own switches. Everything else (sizing, limits,
+# logging, new settings) may follow the template.
+IDENTITY_KEYS = frozenset(
+    {
+        "SIMPLESTCHAT_IMAGE",
+        "DATABASE_URL",
+        "JWT_SECRET",
+        "METRICS_TOKEN",
+        "TRUSTED_PROXY_SECRET",
+        "ALLOWED_ORIGINS",
+        "WEBAUTHN_RP_ID",
+        "WEBAUTHN_ORIGIN",
+        "ANNOUNCE_IP",
+        "BIND_ADDR",
+        "PORT",
+        "RUN_MIGRATIONS",
+        "TURN_URLS",
+        "TURN_SECRET",
+        "TURN_TTL",
+    }
+)
 ID = re.compile(r"sha256:[a-f0-9]{64}")
 MAX_INSPECTION_BYTES = 2 * 1024 * 1024
 LEDGER_COLUMNS = 3
@@ -129,12 +151,14 @@ class ReleaseOptions:
     action: str
     revision: str
     quiet_seconds: int = 0
+    candidate_env: Path | None = None
 
 
 class _ArgumentValues(argparse.Namespace):
     action: str = ""
     revision: str = ""
     quiet_seconds: int = 0
+    candidate_env: str | None = None
 
 
 class ReleaseError(RuntimeError):
@@ -729,6 +753,45 @@ JOURNAL_COMPOSE = """    logging:
         max-buffer-size: 4m"""
 
 
+def dotenv_lines(text: str) -> dict[str, str]:
+    """Return the assignments of a dotenv text, keeping values verbatim."""
+    values: dict[str, str] = {}
+    for line in text.splitlines():
+        if line and not line.startswith("#"):
+            key, separator, value = line.partition("=")
+            require(
+                separator == "=" and re.fullmatch(r"[A-Z][A-Z0-9_]*", key) is not None,
+                "Malformed app.env line",
+            )
+            require(key not in values, f"Duplicate app.env line: {key}")
+            values[key] = value
+    return values
+
+
+def reviewed_candidate_environment(candidate: Path, report: JsonObject) -> str:
+    """Accept a re-rendered app.env whose identity lines equal the installed one's.
+
+    The playbook renders the template with the host's facts and the selected
+    image, so sizing and new settings may change; secrets and identity may not.
+    The changed keys go into the report so the outcome says what moved.
+    """
+    protected(candidate, limit=1024 * 1024)
+    installed = dotenv_lines((CONFIG / "app.env").read_text())
+    proposed = dotenv_lines(candidate.read_text())
+    for key in sorted(IDENTITY_KEYS):
+        require(
+            installed.get(key) == proposed.get(key),
+            f"The candidate app.env changes {key}; that needs full maintenance",
+        )
+    changed: list[JsonValue] = [
+        key
+        for key in sorted(installed.keys() | proposed.keys())
+        if installed.get(key) != proposed.get(key)
+    ]
+    report["environmentChanges"] = changed
+    return candidate.read_text()
+
+
 def journal_selection(compose: str, before: JsonObject) -> tuple[str, bool]:
     """Enable only the explicitly prepared persistent journal in the same replacement."""
     if not JOURNAL_SELECTION.exists():
@@ -754,19 +817,22 @@ def candidate_selection(
     new_image: str,
     old: JsonObject,
     turn: TurnConfiguration | None = None,
+    reviewed_environment: str | None = None,
 ) -> tuple[bytes, bytes]:
-    """Allow image selection and, explicitly, enabling the managed TURN relay."""
-    compose = (CONFIG / "compose.public.yml").read_text()
+    """Allow image selection and, explicitly, TURN or a reviewed app.env re-rendering."""
+    original = (CONFIG / "compose.public.yml").read_text()
     before = object_value(
         decode_json(runner.compose("--profile", "maintenance", "config", "--format", "json"))
     )
-    compose, journal_changed = journal_selection(compose, before)
+    compose, journal_changed = journal_selection(original, before)
     needle = f'image: "{old["serverImage"]}"'
     require(
         compose.count(needle) == IMAGE_SELECTIONS,
         "Expected only app and migration image selections; reapply reviewed configuration",
     )
-    environment = (CONFIG / "app.env").read_text()
+    environment = (
+        (CONFIG / "app.env").read_text() if reviewed_environment is None else reviewed_environment
+    )
     needle_env = f"SIMPLESTCHAT_IMAGE={old['serverImage']}"
     require(
         environment.splitlines().count(needle_env) == 1,
@@ -799,6 +865,30 @@ def candidate_selection(
         # Compose file continues to reference its ordinary protected app.env.
         require(compose.count("- ./app.env") == 1, "Unexpected application env_file selection")
         atomic(preview, selected_compose.replace(b"- ./app.env", f'- "{preview_env}"'.encode()))
+    base = before
+    if reviewed_environment is not None:
+        require(turn is None, "Enable TURN through full maintenance, not with a candidate app.env")
+        # The candidate, rendered through the installed files with the old image,
+        # is the baseline: the preview may differ from it only by the image.
+        require(original.count("- ./app.env") == 1, "Unexpected application env_file selection")
+        reviewed = runner.attempt / "reviewed.env"
+        reviewed_compose = runner.attempt / "reviewed-compose.yml"
+        atomic(reviewed, environment)
+        atomic(reviewed_compose, original.replace("- ./app.env", f'- "{reviewed}"'))
+        base = object_value(
+            decode_json(
+                runner.compose(
+                    "--profile",
+                    "maintenance",
+                    "config",
+                    "--format",
+                    "json",
+                    filename=reviewed_compose,
+                    envfile=reviewed,
+                )
+            )
+        )
+        atomic(preview, selected_compose.replace(b"- ./app.env", f'- "{preview_env}"'.encode()))
     after = object_value(
         decode_json(
             runner.compose(
@@ -812,27 +902,29 @@ def candidate_selection(
             )
         )
     )
-    expected = deepcopy(before)
+    expected = deepcopy(base)
     if journal_changed:
         object_value(object_value(expected["services"])["simplestchat"])["logging"] = (
             JOURNAL_LOGGING
         )
     for service in ("simplestchat", "migrate"):
         object_value(object_value(expected["services"])[service])["image"] = new_image
-    if turn is not None:
+    if turn is not None or reviewed_environment is not None:
         expected_environment = object_value(
             object_value(object_value(expected["services"])["simplestchat"])["environment"]
         )
-        expected_environment.update(turn.environment())
+        if turn is not None:
+            expected_environment.update(turn.environment())
         expected_environment["SIMPLESTCHAT_IMAGE"] = new_image
     # app.env is also a service env_file; preview overrides only interpolation,
     # so its image metadata is changed when the real file is installed below.
     require(after == expected, "Candidate changes configuration beyond the reviewed selection")
-    application = object_value(object_value(before["services"])["simplestchat"])
-    require(
-        object_value(application["environment"])["RUN_MIGRATIONS"] == "false",
-        "Runtime migrations must remain disabled",
-    )
+    for rendered in (before, after):
+        application = object_value(object_value(rendered["services"])["simplestchat"])
+        require(
+            object_value(application["environment"])["RUN_MIGRATIONS"] == "false",
+            "Runtime migrations must remain disabled",
+        )
     return selected_compose, preview_env.read_bytes()
 
 
@@ -1050,13 +1142,19 @@ class MaintenancePlan:
     migrations: dict[str, str]
 
 
-def prepare_maintenance(
-    runner: RunnerProtocol, manifest: Manifest, staged: JsonObject, report: JsonObject
+def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the stop stay one reviewed sequence.
+    runner: RunnerProtocol,
+    manifest: Manifest,
+    staged: JsonObject,
+    report: JsonObject,
+    candidate_env: Path | None = None,
 ) -> MaintenancePlan:
     """Back up, stop the app then the proxy, and select the candidate for the launcher.
 
     Unlike `deploy`, the candidate may carry migrations the database has not
-    applied; the applied ledger must still be a prefix of the packaged one.
+    applied; the applied ledger must still be a prefix of the packaged one. A
+    candidate app.env (the template re-rendered by the playbook) may change
+    sizing and settings, never secrets or identity.
     """
     for filename in SELECTION:
         protected(CONFIG / filename, limit=1024 * 1024)
@@ -1103,7 +1201,12 @@ def prepare_maintenance(
         "Applied migrations differ from the candidate's packaged ones; recover the ledger first",
     )
     require(packaged_migrations(runner, new_image) == packaged, "Candidate migration mismatch")
-    preview, preview_env = candidate_selection(runner, new_image, old)
+    reviewed_environment = (
+        None if candidate_env is None else reviewed_candidate_environment(candidate_env, report)
+    )
+    preview, preview_env = candidate_selection(
+        runner, new_image, old, reviewed_environment=reviewed_environment
+    )
     config = object_value(decode_json(runner.compose("config", "--format", "json")))
     environment = object_value(
         object_value(object_value(config["services"])["simplestchat"])["environment"]
@@ -1167,6 +1270,9 @@ def prepare_maintenance(
     atomic(CONFIG / "compose.public.yml", preview)
     atomic(CONFIG / "app.env", preview_env)
     atomic(CONFIG / "images.json", dict(old, revision=manifest["revision"], serverImage=new_image))
+    if candidate_env is not None:
+        # Consumed: the next maintenance renders its own.
+        candidate_env.unlink()
     # The launcher refuses an unfinished journal and holds the workload lock
     # itself; from here its own evidence directory records the deployment.
     journal(runner, finalized=True, phase="maintenance_selected")
@@ -1193,9 +1299,12 @@ def finish_maintenance(runner: RunnerProtocol, plan: MaintenancePlan, report: Js
     report["phase"] = "verify"
     ready(runner)
     ready(runner, origin=plan.origin)
+    app = runner.container("simplestchat")
+    require(app["image"] == plan.new_image, "Replacement is not the staged image")
     require(
-        runner.container("simplestchat")["image"] == plan.new_image,
-        "Replacement is not the staged image",
+        runner.compose("config", "--hash", "simplestchat").decode().split()
+        == ["simplestchat", app["configHash"]],
+        "The launcher did not start the app from the installed configuration",
     )
     database = runner.container("postgres")
     require(
@@ -1222,9 +1331,20 @@ def main() -> None:  # noqa: PLR0915 - one transaction per action, with the main
         default=0,
         help="wait up to this long for zero active rooms before replacing the app",
     )
+    _ = parser.add_argument(
+        "--candidate-env",
+        help="maintain: install this re-rendered app.env (identity lines unchanged) with the image",
+    )
     raw = parser.parse_args(namespace=_ArgumentValues())
     arguments = ReleaseOptions(
-        action=raw.action, revision=raw.revision, quiet_seconds=raw.quiet_seconds
+        action=raw.action,
+        revision=raw.revision,
+        quiet_seconds=raw.quiet_seconds,
+        candidate_env=None if raw.candidate_env is None else Path(raw.candidate_env),
+    )
+    require(
+        arguments.candidate_env is None or arguments.action == "maintain",
+        "--candidate-env applies to maintain",
     )
     require(os.geteuid() == 0, "Run as root on the prepared public host")
     require(re.fullmatch(r"[a-f0-9]{40}", arguments.revision), "Use the exact release commit")
@@ -1269,7 +1389,9 @@ def main() -> None:  # noqa: PLR0915 - one transaction per action, with the main
                 deploy(runner, manifest, staged, report, quiet_seconds=arguments.quiet_seconds)
             elif arguments.action == "maintain":
                 report["phase"] = "preflight"
-                plan = prepare_maintenance(runner, manifest, staged, report)
+                plan = prepare_maintenance(
+                    runner, manifest, staged, report, candidate_env=arguments.candidate_env
+                )
             else:
                 report["phase"] = "complete"
         if plan is not None:

@@ -2,7 +2,8 @@
 - name: Replace the public application through the maintenance launcher
   hosts: benchmark_hosts
   become: true
-  gather_facts: false
+  # The candidate app.env sizes the app from the host's CPUs and memory.
+  gather_facts: true
   serial: 1
   vars:
     ansible_pipelining: true
@@ -21,6 +22,49 @@
     # The launcher checks the packaged migrations against this clean checkout.
     - name: Obtain the exact application source for the launcher's checks
       ansible.builtin.import_tasks: tasks/source.yml
+
+    - name: Read the selected image identity for the candidate configuration
+      ansible.builtin.slurp:
+        src: "{{ scpub_config }}/images.json"
+      register: scpub_selected_images
+
+    - name: Read protected secrets for private configuration rendering
+      ansible.builtin.slurp:
+        src: "{{ scpub_config }}/secrets.json"
+      register: scpub_secret_file
+      no_log: true
+
+    - name: Keep secret values out of logs and persistent fact caches
+      ansible.builtin.set_fact:
+        scpub_secrets: "{{ scpub_secret_file.content | b64decode | from_json }}"
+        scpub_server_image: "{{ (scpub_selected_images.content | b64decode | from_json).serverImage }}"
+        cacheable: false
+      no_log: true
+
+    - name: Read the managed relay secret for candidate rendering
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-turn/secret
+      register: scpub_maintenance_turn_secret
+      when: scpub_turn_enabled | bool
+      no_log: true
+
+    - name: Retain the relay secret only in memory
+      ansible.builtin.set_fact:
+        scpub_turn_secret: "{{ scpub_maintenance_turn_secret.content | b64decode }}"
+        cacheable: false
+      when: scpub_turn_enabled | bool
+      no_log: true
+
+    # The helper installs it with the image after the stop, once its identity
+    # lines (secrets, origin, address, RUN_MIGRATIONS) match the installed file.
+    - name: Render the candidate application configuration from the host's facts
+      ansible.builtin.template:
+        src: public-app.env.j2
+        dest: "{{ scpub_config }}/app.env.candidate"
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
 
     - name: Render the runtime grants the launcher applies after migrating
       ansible.builtin.template:
@@ -46,5 +90,7 @@
           - /usr/local/libexec/simplestchat-public/release-public.py
           - maintain
           - "{{ scpub_release_revision }}"
+          - --candidate-env
+          - "{{ scpub_config }}/app.env.candidate"
       changed_when: true
       when: not ansible_check_mode

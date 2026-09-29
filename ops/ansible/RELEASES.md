@@ -261,12 +261,17 @@ ops/ansible/.venv/bin/python build/deploy.py --inventory ops/ansible/inventory.l
 The controller waits for the commit's CI and stages the image while chat stays
 online, exactly as a routine release does, then runs `ops/ansible/maintenance.yml`:
 it checks out the revision's source under `/srv/simplestchat-bench/sources/`
-(the launcher checks the packaged SQL against it), renders the runtime grants,
-and runs `release-public.py maintain <commit>` as a transient unit. That
-action requires the applied ledger to be a prefix of the candidate's packaged
-migrations, takes the live dump with its receipt, stops the app and then the
-proxy (Caddy's grace period would otherwise wait on the app's sockets), swaps
-the selection, and hands over to `/usr/local/bin/simplestchat-public-deploy`,
+(the launcher checks the packaged SQL against it), renders `app.env.candidate`
+from the current template with the host's facts (sizing and new settings may
+change; the secrets, the origin, the address, the image and `RUN_MIGRATIONS`
+may not, or the helper refuses it before the backup), renders the runtime
+grants, and runs `release-public.py maintain <commit> --candidate-env …` as a
+transient unit. That action requires the applied ledger to be a prefix of the
+candidate's packaged migrations, takes the live dump with its receipt, stops
+the app and then the proxy (Caddy's grace period would otherwise wait on the
+app's sockets), installs the candidate configuration with the new image
+(`outcome.json` lists the changed keys as `environmentChanges`), and hands
+over to `/usr/local/bin/simplestchat-public-deploy`,
 which migrates, applies the grants, restarts the app and the proxy, and keeps
 its own evidence under `results/deploy.*`. The helper then requires the staged
 image to be running on the same database container with the candidate's

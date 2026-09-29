@@ -201,7 +201,10 @@ sudo /usr/local/bin/simplestchat-public stop --timeout 60
 The automation refuses to compete with a running public project; it does not
 stop users' sessions automatically. Finish maintenance, apply `public.yml` when
 needed, and run the explicit deployment command again. This is a maintenance
-deployment, not a rolling upgrade.
+deployment, not a rolling upgrade. Sizing and other `app.env` changes that keep
+the secret and identity lines need no `public.yml` run: a maintenance release
+(`build/deploy.py --maintenance`, [RELEASES.md](RELEASES.md)) re-renders the
+file from the host's facts and installs it with the image.
 
 Persistent data lives under `/srv/simplestchat-public`: `postgres` contains the
 database, and `caddy-data`/`caddy-config` retain certificate and proxy state.

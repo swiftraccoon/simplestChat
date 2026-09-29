@@ -567,35 +567,77 @@ class MaintenancePlaybookTests(unittest.TestCase):
         """Read the maintenance playbook once per isolated test case."""
         return obj(yaml_value((ROOT / "maintenance.yml").read_text()), 0)
 
-    def test_source_grants_and_launcher_run_in_order_as_one_transient_unit(self) -> None:
-        """Verify source, grants and launcher run in order as one transient unit."""
+    def test_source_candidate_env_grants_and_launcher_run_as_one_transient_unit(self) -> None:
+        """Verify source, the candidate app.env, grants and launcher run in that order."""
         tasks = objects(self.play, "tasks")
         self.assertEqual(self.play["hosts"], "benchmark_hosts")
         self.assertEqual(self.play["serial"], 1)
-        self.assertIs(self.play["gather_facts"], expr2=False)
+        # The candidate app.env is sized from the host's facts.
+        self.assertIs(self.play["gather_facts"], expr2=True)
         self.assertEqual(at(self.play, "vars", "scbench_revision"), "{{ scpub_release_revision }}")
         assertions = strings(self.play, "pre_tasks", 0, "ansible.builtin.assert", "that")
         self.assertIn("scpub_release_revision is match('^[a-f0-9]{40}$')", assertions)
         self.assertIn("scpub_enabled | bool", assertions)
         self.assertEqual(tasks[0]["ansible.builtin.import_tasks"], "tasks/source.yml")
-        grants = obj(tasks[1]["ansible.builtin.template"])
-        self.assertEqual(grants["src"], "public-runtime-grants.sql.j2")
-        self.assertEqual(grants["dest"], "{{ scpub_config }}/runtime-grants.sql")
-        self.assertEqual(grants["mode"], "0600")
-        launcher = tasks[2]
+        templates = [
+            obj(task["ansible.builtin.template"])
+            for task in tasks
+            if "ansible.builtin.template" in task
+        ]
+        self.assertEqual(
+            [(template["src"], template["dest"]) for template in templates],
+            [
+                ("public-app.env.j2", "{{ scpub_config }}/app.env.candidate"),
+                ("public-runtime-grants.sql.j2", "{{ scpub_config }}/runtime-grants.sql"),
+            ],
+        )
+        self.assertTrue(all(template["mode"] == "0600" for template in templates))
+        candidate = next(task for task in tasks if "ansible.builtin.template" in task)
+        self.assertIs(candidate["no_log"], expr2=True)
+        # The template needs the secrets, the selected image and, when enabled, the relay secret.
+        facts = [
+            obj(task["ansible.builtin.set_fact"])
+            for task in tasks
+            if "ansible.builtin.set_fact" in task
+        ]
+        self.assertEqual(
+            facts[0]["scpub_server_image"],
+            "{{ (scpub_selected_images.content | b64decode | from_json).serverImage }}",
+        )
+        self.assertIn("scpub_secrets", facts[0])
+        self.assertIn("scpub_turn_secret", facts[1])
+        slurps = [
+            at(task, "ansible.builtin.slurp", "src")
+            for task in tasks
+            if "ansible.builtin.slurp" in task
+        ]
+        self.assertEqual(
+            slurps,
+            [
+                "{{ scpub_config }}/images.json",
+                "{{ scpub_config }}/secrets.json",
+                "/etc/simplestchat-turn/secret",
+            ],
+        )
+        for task in tasks:
+            if "ansible.builtin.slurp" in task and "secret" in str(task["ansible.builtin.slurp"]):
+                self.assertIs(task["no_log"], expr2=True)
+        launcher = tasks[-1]
         argv = strings(launcher, "ansible.builtin.command", "argv")
         self.assertEqual(argv[0], "systemd-run")
         self.assertIn("--property=RuntimeMaxSec=1800", argv)
         self.assertIn("--property=TimeoutStopSec=240", argv)
         self.assertIn("--wait", argv)
         self.assertEqual(
-            argv[-5:],
+            argv[-7:],
             [
                 "/usr/bin/python3",
                 "-B",
                 "/usr/local/libexec/simplestchat-public/release-public.py",
                 "maintain",
                 "{{ scpub_release_revision }}",
+                "--candidate-env",
+                "{{ scpub_config }}/app.env.candidate",
             ],
         )
         self.assertTrue(argv[1].startswith("--unit=simplestchat-maintenance-"))

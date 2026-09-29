@@ -251,7 +251,7 @@ class FixtureRunner:
                 obj(rendered, "services", "simplestchat")["logging"] = public.JOURNAL_LOGGING
             selected_environment = self.config / "app.env"
             candidate_environment = re.search(
-                r'- "([^"]+/candidate.env)"', selected_file.read_text()
+                r'- "([^"]+/(?:candidate|reviewed)\.env)"', selected_file.read_text()
             )
             if candidate_environment:
                 selected_environment = Path(candidate_environment.group(1))
@@ -877,6 +877,86 @@ class PublicReleaseTests(unittest.TestCase):
         for kind, args, _ in self.runner.calls:
             if kind == "docker" and "pg_restore" in args:
                 self.assertIn("--list", args, "maintenance never restores the live database")
+
+    def execute_maintenance(self, candidate: Path) -> None:
+        """Run the maintenance action with a re-rendered app.env candidate."""
+        with (
+            patch.object(
+                sys,
+                "argv",
+                ["release-public.py", "maintain", REVISION, "--candidate-env", str(candidate)],
+            ),
+            redirect_stdout(io.StringIO()),
+        ):
+            public.main()
+
+    def test_maintenance_installs_a_reviewed_candidate_env_and_reports_its_changes(self) -> None:
+        """A candidate that keeps every identity line is installed with the image and consumed."""
+        self.stage_with_new_migration()
+        (self.root / "sources" / REVISION / ".git").mkdir(parents=True)
+        candidate = self.config / "app.env.candidate"
+        _ = candidate.write_text(
+            "# rendered from the host's facts\n"
+            + (self.config / "app.env").read_text()
+            + "MEDIA_WORKERS=3\nMAX_CONNECTIONS=525\n"
+        )
+        with patch.object(public, "SOURCES", self.root / "sources"):
+            self.execute_maintenance(candidate)
+        report = self.report()
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["environmentChanges"], ["MAX_CONNECTIONS", "MEDIA_WORKERS"])
+        self.assertEqual(self.runner.launcher_runs, 1)
+        installed = (self.config / "app.env").read_text()
+        self.assertIn(f"SIMPLESTCHAT_IMAGE={NEW_IMAGE}\n", installed)
+        self.assertIn("MEDIA_WORKERS=3\n", installed)
+        self.assertIn("METRICS_TOKEN=fixture-metrics-token-with-at-least-32-bytes\n", installed)
+        self.assertFalse(candidate.exists(), "the candidate is consumed by its installation")
+        self.assertEqual(self.runner.app_image, NEW_IMAGE)
+
+    def test_maintenance_refuses_a_candidate_env_that_changes_identity_before_any_stop(
+        self,
+    ) -> None:
+        """A changed identity line, a malformed candidate or one outside maintenance stops early."""
+        self.stage_with_new_migration()
+        (self.root / "sources" / REVISION / ".git").mkdir(parents=True)
+        candidate = self.config / "app.env.candidate"
+        for text, reason in (
+            (
+                f"SIMPLESTCHAT_IMAGE={OLD_IMAGE}\nRUN_MIGRATIONS=false\nMETRICS_TOKEN=other\n",
+                "changes METRICS_TOKEN",
+            ),
+            (
+                f"SIMPLESTCHAT_IMAGE={OLD_IMAGE}\nRUN_MIGRATIONS=true\n"
+                + "METRICS_TOKEN=fixture-metrics-token-with-at-least-32-bytes\n",
+                "changes RUN_MIGRATIONS",
+            ),
+            ((self.config / "app.env").read_text() + "not an assignment\n", "Malformed app.env"),
+            (
+                (self.config / "app.env").read_text() + "MEDIA_WORKERS=3\nMEDIA_WORKERS=4\n",
+                "Duplicate",
+            ),
+        ):
+            _ = candidate.write_text(text)
+            with (
+                patch.object(public, "SOURCES", self.root / "sources"),
+                self.assertRaisesRegex(public.ReleaseError, reason),
+            ):
+                self.execute_maintenance(candidate)
+            for path in (self.root / "results").glob("release.*"):
+                shutil.rmtree(path)
+        self.assertEqual(self.maintenance_calls(), [])
+        self.assertTrue(candidate.exists())
+        self.assert_config_unchanged()
+        with (
+            patch.object(
+                sys,
+                "argv",
+                ["release-public.py", "deploy", REVISION, "--candidate-env", str(candidate)],
+            ),
+            redirect_stdout(io.StringIO()),
+            self.assertRaisesRegex(public.ReleaseError, "applies to maintain"),
+        ):
+            public.main()
 
     def test_maintenance_refuses_a_ledger_that_is_not_the_candidates_prefix(self) -> None:
         """A changed applied migration stops maintenance before any backup or stop."""

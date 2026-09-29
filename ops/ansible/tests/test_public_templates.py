@@ -9,6 +9,7 @@ from test_support import array, at, obj, string, yaml_value
 
 # isort: split
 from release_json import JsonObject, JsonValue
+from release_public import IDENTITY_KEYS
 
 ROOT = Path(__file__).resolve().parents[1]
 VALUES: JsonObject = {
@@ -255,6 +256,43 @@ class PublicTemplateTests(unittest.TestCase):
         rendered = environment("public-app.env.j2", scpub_media_workers=2)
         self.assertEqual(rendered["RTC_PORT_END"], "40001")
         self.assertEqual(rendered["MEDIA_WORKERS"], "2")
+
+    def test_the_maintenance_helper_protects_every_secret_and_identity_line(self) -> None:
+        """A candidate app.env may change sizing; the helper refuses secret or identity changes."""
+        other_secrets: JsonObject = {
+            name: f"{index:064x}"
+            for index, name in enumerate(obj(VALUES["scpub_secrets"]), start=101)
+        }
+        first = environment(
+            "public-app.env.j2", scpub_turn_enabled=True, scpub_turn_secret="a" * 64
+        )
+        second = environment(
+            "public-app.env.j2",
+            scpub_turn_enabled=True,
+            scpub_turn_secret="b" * 64,
+            scpub_secrets=other_secrets,
+            scpub_domain="other.example.test",
+            scpub_announce_ip="192.0.2.99",
+            scpub_server_image="sha256:" + "d" * 64,
+        )
+        identity = {key for key in first if first[key] != second[key]}
+        self.assertTrue(identity, "the fixture changed nothing")
+        self.assertLessEqual(identity, IDENTITY_KEYS)
+        self.assertLessEqual({"RUN_MIGRATIONS", "BIND_ADDR", "PORT"}, IDENTITY_KEYS)
+        # Sizing lines stay free for the candidate to follow the host.
+        self.assertFalse(
+            IDENTITY_KEYS
+            & {
+                "MEDIA_WORKERS",
+                "RTC_PORT_END",
+                "SIMPLESTCHAT_CPUS",
+                "SIMPLESTCHAT_MEMORY_LIMIT",
+                "MAX_CONNECTIONS",
+                "MAX_ROOMS",
+                "MAX_PARTICIPANTS_PER_ROOM",
+                "MAX_BROADCASTERS_PER_ROOM",
+            }
+        )
 
     def test_database_authentication_and_grants_are_explicit(self) -> None:
         """Verify database authentication and grants are explicit."""
