@@ -129,6 +129,14 @@ def render_fixture(
         "scpub_domain": "localhost",
         "scpub_announce_ip": "127.0.0.1",
         "scpub_registration_enabled": False,
+        # The smallest shape: the fixture proves the release path, not capacity.
+        "scpub_app_cpus": 1,
+        "scpub_media_workers": 1,
+        "scpub_app_memory_mib": 512,
+        "scpub_max_connections": 175,
+        "scpub_max_rooms": 175,
+        "scpub_max_participants_per_room": 175,
+        "scpub_max_broadcasters_per_room": 30,
         "scpub_secrets": {
             name: secrets.token_hex(32)
             for name in (

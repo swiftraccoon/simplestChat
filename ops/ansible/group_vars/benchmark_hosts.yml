@@ -22,6 +22,23 @@ scbench_workload:
 # Public deployment is a separate, explicitly enabled playbook.
 scpub_enabled: false
 scpub_registration_enabled: false
+# Sizing follows the host unless the inventory says otherwise (the model is
+# build/capacity.py's: the app takes all but one vCPU and the memory beyond a
+# quarter, at least 1 GiB, kept for the database, the proxy and the system;
+# MAX_CONNECTIONS counts the lightest participants, webinar viewers at 175 per
+# worker as measured on an EPYC-class VPS, and heavier shapes meet the
+# per-worker CPU guard first). `build/capacity.py suggest --vcpus N --memory-gib M`
+# prints the same numbers with what they carry; `run` measures a host.
+scpub_app_cpus: "{{ [1, (ansible_processor_vcpus | default(2) | int) - 1] | max }}"
+scpub_media_workers: "{{ scpub_app_cpus | int }}"
+scpub_app_memory_mib: "{{ [512, (ansible_memtotal_mb | default(2048) | int) - ([1024, ((ansible_memtotal_mb | default(2048) | int) * 0.25) | int] | max)] | max }}"
+scpub_webinar_viewers_per_worker: 175
+scpub_max_connections: "{{ (scpub_media_workers | int) * (scpub_webinar_viewers_per_worker | int) }}"
+scpub_max_rooms: "{{ [64, scpub_max_connections | int] | max }}"
+# A room's viewers spread over every worker, so one webinar may fill the host;
+# the broadcaster ceiling keeps the all-publishing grid within the per-viewer cap.
+scpub_max_participants_per_room: "{{ scpub_max_connections }}"
+scpub_max_broadcasters_per_room: 30
 scpub_release_deploy: false
 scpub_reboot: false
 scpub_config: /etc/simplestchat-public

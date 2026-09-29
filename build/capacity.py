@@ -14,6 +14,9 @@ stop, then prints the settings to use and writes calibration.json:
   webinar        one presenter and a growing audience
 
 `compare` ranks several hosts' reports by cost per 1,000 participant-hours.
+`suggest` sizes a host from its vCPUs, memory and port without measuring it,
+using a calibration report or the reference figures measured on an EPYC-class
+VPS, and prints the settings and what they carry per workload.
 
 The generator shares the host and costs about 1.5 times the server's CPU per
 participant, so the server gets a quarter of it (two workers for the one-room
@@ -27,6 +30,8 @@ later and Docker or Podman on Linux (Podman's VM on macOS works for trials).
   python3 build/capacity.py run --server-image IMAGE --generator-image IMAGE \
       --label cx32 --monthly-price 6.80
   python3 build/capacity.py compare results/capacity.*/calibration.json
+  python3 build/capacity.py suggest --vcpus 8 --memory-gib 16 [--port-mbps 1000] \
+      [--calibration results/capacity.<time>/calibration.json]
 """
 
 from __future__ import annotations
@@ -926,6 +931,225 @@ def cost_of(projection: Projection, prices: Prices) -> Cost:
     return Cost(participants, limited_by, gb_per_hour, per_1000, per_dollar)
 
 
+# Ceilings measured on an EPYC-class VPS (4 vCPUs, 12 GiB, KVM) on 2026-09-26 by
+# `run` (docs/performance-results.md), the fallback when a host has no report of
+# its own. Meetings and the webinar were measured per worker, the room on two.
+REFERENCE_CEILINGS: Final[dict[Workload, Ceiling]] = {
+    "meetings": Ceiling(
+        workload="meetings",
+        ceiling=85,
+        bound="measured",
+        busiest_worker=0.68,
+        egress_mbps=85 * 2.39,
+        memory_peak_bytes=170 * MIB,
+        workers=1,
+        limit="the worker CPU guard at 0.7 cores",
+    ),
+    "large-meeting": Ceiling(
+        workload="large-meeting",
+        ceiling=28,
+        bound="measured",
+        busiest_worker=0.36,
+        egress_mbps=28 * 3.0,
+        memory_peak_bytes=84 * MIB,
+        workers=2,
+        limit="the 3 Mbit/s per-viewer cap: every viewer downloads every tile",
+    ),
+    "webinar": Ceiling(
+        workload="webinar",
+        ceiling=175,
+        bound="measured",
+        busiest_worker=0.52,
+        egress_mbps=175 * 1.0,
+        memory_peak_bytes=224 * MIB,
+        workers=1,
+        limit="the join wave's keyframes with Chrome-timed publishers, then the worker guard",
+    ),
+}
+# A port is planned to its share of its speed; nearly every VPS has a gigabit port.
+DEFAULT_PORT_MBPS: Final = 1000.0
+
+
+def ceiling_from_record(workload: Workload, entry: Mapping[str, object]) -> Ceiling:
+    """Read one workload's ceiling back from a calibration report."""
+
+    def field_value(name: str, default: object) -> object:
+        camel = re.sub(r"_([a-z])", lambda match: match.group(1).upper(), name)
+        return entry.get(name, entry.get(camel, default))
+
+    ceiling = field_value("ceiling", None)
+    bound = field_value("bound", "measured")
+    return Ceiling(
+        workload=workload,
+        ceiling=None if ceiling is None else int(as_number(ceiling, "ceiling")),
+        bound=cast("Bound", bound if isinstance(bound, str) else "measured"),
+        busiest_worker=as_number(field_value("busiest_worker", 0.0), "busiest_worker"),
+        egress_mbps=as_number(field_value("egress_mbps", 0.0), "egress_mbps"),
+        memory_peak_bytes=int(as_number(field_value("memory_peak_bytes", 0), "memory_peak_bytes")),
+        workers=int(as_number(field_value("workers", 1), "workers")),
+        limit=str(field_value("limit", "") or ""),
+    )
+
+
+def ceilings_from_report(report: Mapping[str, object]) -> dict[Workload, Ceiling]:
+    """Read the measured ceilings of a `run` report, by workload."""
+    entries = as_object(report["ceilings"], "ceilings")
+    return {
+        workload: ceiling_from_record(workload, as_object(entries[workload], workload))
+        for workload in WORKLOADS
+        if workload in entries
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class Host:
+    """What an operator knows about a host before measuring it."""
+
+    vcpus: int
+    memory_mib: int
+    port_mbps: float = DEFAULT_PORT_MBPS
+
+
+@dataclass(frozen=True, slots=True)
+class Suggestion:
+    """Settings for a host and what they carry, before it is measured."""
+
+    deployment: Deployment
+    meeting_participants: int
+    meeting_limited_by: str
+    webinar_viewers: int
+    webinar_limited_by: str
+    room_participants: int
+    max_connections: int
+    settings: list[str]
+
+
+def suggest_for(
+    host: Host,
+    ceilings: Mapping[Workload, Ceiling],
+    *,
+    app_cpus: float | None = None,
+    app_memory_mib: int | None = None,
+) -> Suggestion:
+    """Size a host: all but one CPU and three quarters of the memory, capped by the port.
+
+    `MAX_CONNECTIONS` follows the lightest participant (a webinar viewer) so a
+    one-to-many room can fill the host; heavier shapes meet the per-worker CPU
+    guard first, which refuses joins by measured load rather than by count.
+    """
+    deployment = deployment_for(
+        host.vcpus, host.memory_mib, app_cpus=app_cpus, app_memory_mib=app_memory_mib
+    )
+    projection = project(ceilings, deployment)
+    meetings = cost_of(projection, Prices(monthly=0.0, port_mbps=host.port_mbps))
+    webinar = ceilings.get("webinar")
+    viewers, viewers_limited_by = 0, "cpu"
+    if webinar is not None and webinar.ceiling:
+        viewers = math.floor(webinar.ceiling / max(1, webinar.workers) * deployment.workers)
+        per_viewer_mbps = webinar.egress_mbps / webinar.ceiling
+        if host.port_mbps > 0 and per_viewer_mbps > 0:
+            network_bound = int(host.port_mbps * PORT_HEADROOM / per_viewer_mbps)
+            if network_bound < viewers:
+                viewers, viewers_limited_by = network_bound, "network"
+    room = ceilings.get("large-meeting")
+    room_participants = (
+        max(2, math.floor(room.ceiling * ROOM_LIMIT_SHARE)) if room and room.ceiling else 0
+    )
+    max_connections = max(meetings.participants, viewers, 10)
+    # The memory limit is the app's share of the host, a ceiling against a runaway
+    # process rather than the measured need; the room ceiling follows the webinar
+    # (viewers spread over every worker) and the broadcaster ceiling keeps the
+    # all-publishing grid within the per-viewer cap.
+    settings = [
+        line
+        for line in recommendations(ceilings, projection, deployment, 0)
+        if not line.startswith(("SIMPLESTCHAT_MEMORY_LIMIT=", "MAX_PARTICIPANTS_PER_ROOM="))
+    ]
+    settings += [
+        f"SIMPLESTCHAT_MEMORY_LIMIT={deployment.memory_mib}m",
+        f"MAX_CONNECTIONS={max_connections}",
+        f"MAX_ROOMS={max(64, max_connections)}",
+        f"MAX_PARTICIPANTS_PER_ROOM={max(2, viewers)}",
+        "MAX_BROADCASTERS_PER_ROOM=30",
+        f"RTC_PORT_END={40000 + deployment.workers - 1}",
+    ]
+    return Suggestion(
+        deployment=deployment,
+        meeting_participants=meetings.participants,
+        meeting_limited_by=meetings.limited_by,
+        webinar_viewers=viewers,
+        webinar_limited_by=viewers_limited_by,
+        room_participants=room_participants,
+        max_connections=max_connections,
+        settings=settings,
+    )
+
+
+def suggestion_lines(
+    suggestion: Suggestion, host: Host, ceilings: Mapping[Workload, Ceiling], source: str
+) -> list[str]:
+    """Say the suggestion for people: settings first, then what they carry and why."""
+    deployment = suggestion.deployment
+    meetings = ceilings.get("meetings")
+    per_participant = (
+        meetings.egress_mbps / meetings.ceiling if meetings and meetings.ceiling else 0.0
+    )
+    monthly_tb = (
+        suggestion.meeting_participants * per_participant * 3600 * HOURS_PER_MONTH / 8 / 1e6
+    )
+    return [
+        f"Sizing a {host.vcpus}-vCPU, {host.memory_mib / 1024:g} GiB host with a"
+        + f" {host.port_mbps:g} Mbit/s port ({source}):",
+        "",
+        *suggestion.settings,
+        "",
+        f"The app gets {deployment.app_cpus:g} CPUs ({deployment.workers} media workers) and"
+        + f" {deployment.memory_mib} MiB; the rest serves the database, the proxy, TURN and the"
+        + " system.",
+        f"Meetings of five: about {suggestion.meeting_participants} participants"
+        + f" ({suggestion.meeting_limited_by}-bound; {per_participant:.2f} Mbit/s of egress each,"
+        + f" {suggestion.meeting_participants * per_participant:.0f} Mbit/s in all).",
+        f"Webinars: about {suggestion.webinar_viewers} viewers across the workers"
+        + f" ({suggestion.webinar_limited_by}-bound; one room spreads over every worker).",
+        f"All-publishing rooms: {suggestion.room_participants} people, whatever the host: every"
+        + " viewer downloads every tile within the 3 Mbit/s per-viewer cap, which"
+        + " MAX_BROADCASTERS_PER_ROOM=30 keeps in reach; MAX_PARTICIPANTS_PER_ROOM follows the"
+        + " webinar instead.",
+        "MAX_CONNECTIONS counts the lightest participants; heavier shapes meet the per-worker CPU"
+        + " guard (0.7 cores) first. SIMPLESTCHAT_MEMORY_LIMIT is the app's share of the host, a"
+        + " ceiling against a runaway process: the guards refuse joins long before it fills.",
+        f"Open UDP 40000-{40000 + deployment.workers - 1} at the firewall: one port per worker.",
+        "Egress is the next wall after CPU: check the provider's quota and price against the"
+        + f" Mbit/s above (a full month of meetings at that rate is {monthly_tb:.1f} TB).",
+    ]
+
+
+def suggest(options: Options) -> int:
+    """Size a host from its facts (the `suggest` command)."""
+    if options.vcpus is None or options.memory_gib is None:
+        message = "suggest needs --vcpus and --memory-gib"
+        raise CapacityError(message)
+    if options.vcpus < 1 or options.memory_gib <= 0:
+        message = "a host has at least one vCPU and some memory"
+        raise CapacityError(message)
+    port_mbps = options.port_mbps or DEFAULT_PORT_MBPS
+    if options.calibration:
+        ceilings = ceilings_from_report(read_json(Path(options.calibration)))
+        source = f"ceilings from {options.calibration}"
+    else:
+        ceilings = REFERENCE_CEILINGS
+        source = (
+            "reference ceilings measured on an EPYC-class VPS on 2026-09-26; `run` measures yours"
+        )
+    host = Host(options.vcpus, int(options.memory_gib * 1024), port_mbps)
+    suggestion = suggest_for(
+        host, ceilings, app_cpus=options.app_cpus, app_memory_mib=options.app_memory_mib
+    )
+    for line in suggestion_lines(suggestion, host, ceilings, source):
+        print(line)  # noqa: T201 -- intentional report output.
+    return 0
+
+
 def recommendations(
     ceilings: Mapping[Workload, Ceiling],
     projection: Projection,
@@ -1655,6 +1879,9 @@ class Options(argparse.Namespace):
     included_egress_tb: float = 0.0
     port_mbps: float = 0.0
     reports: list[str] = field(default_factory=list[str])
+    vcpus: int | None = None
+    memory_gib: float | None = None
+    calibration: str | None = None
 
 
 def memory_limit(host_mib: int, share: float, most_mib: int) -> str:
@@ -2081,6 +2308,25 @@ def parser() -> argparse.ArgumentParser:
     _ = run.add_argument("--port-mbps", type=float, help="the host's network port, Mbit/s")
     compare_command = commands.add_parser("compare", help="rank calibration reports by cost")
     _ = compare_command.add_argument("reports", nargs="+")
+    suggest_command = commands.add_parser(
+        "suggest",
+        help="size a host from its vCPUs, memory and port",
+        argument_default=argparse.SUPPRESS,
+    )
+    _ = suggest_command.add_argument("--vcpus", type=int, required=True, help="the host's vCPUs")
+    _ = suggest_command.add_argument(
+        "--memory-gib", type=float, required=True, help="the host's memory, GiB"
+    )
+    _ = suggest_command.add_argument(
+        "--port-mbps", type=float, help="the host's network port, Mbit/s (1000)"
+    )
+    _ = suggest_command.add_argument(
+        "--calibration", help="a calibration.json from `run`; otherwise the reference ceilings"
+    )
+    _ = suggest_command.add_argument("--app-cpus", type=float, help="CPUs for the app (vCPUs - 1)")
+    _ = suggest_command.add_argument(
+        "--app-memory-mib", type=int, help="memory for the app (the host's less a quarter)"
+    )
     return root
 
 
@@ -2094,7 +2340,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ = signal.signal(signal.SIGTERM, stop)
     options = parser().parse_args(argv, namespace=Options())
     try:
-        return calibrate(options) if options.command == "run" else compare(options.reports)
+        if options.command == "run":
+            return calibrate(options)
+        if options.command == "suggest":
+            return suggest(options)
+        return compare(options.reports)
     except CapacityError as error:
         print(f"capacity: {error}", file=sys.stderr)  # noqa: T201 -- intentional error output.
         return 1

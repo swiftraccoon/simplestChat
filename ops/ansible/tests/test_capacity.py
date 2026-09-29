@@ -8,7 +8,7 @@ import math
 import os
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import override
@@ -592,6 +592,84 @@ class DropShareTests(unittest.TestCase):
 
 class SearchTests(unittest.TestCase):
     """The search projects upward, bisects, and stops once the ceiling is bracketed."""
+
+    def test_a_suggestion_sizes_a_host_from_its_facts(self) -> None:
+        """Four vCPUs and 12 GiB give the app three workers and three quarters of the memory."""
+        suggestion = capacity.suggest_for(capacity.Host(4, 12288), capacity.REFERENCE_CEILINGS)
+        self.assertEqual(suggestion.deployment.workers, 3)
+        self.assertEqual(suggestion.deployment.memory_mib, 12288 - 3072)
+        self.assertEqual(suggestion.meeting_participants, 255)
+        self.assertEqual(suggestion.meeting_limited_by, "cpu")
+        self.assertEqual((suggestion.webinar_viewers, suggestion.webinar_limited_by), (525, "cpu"))
+        self.assertEqual(suggestion.room_participants, 25)
+        self.assertEqual(suggestion.max_connections, 525)
+        self.assertIn("MEDIA_WORKERS=3", suggestion.settings)
+        self.assertIn("SIMPLESTCHAT_CPUS=3", suggestion.settings)
+        self.assertIn("SIMPLESTCHAT_MEMORY_LIMIT=9216m", suggestion.settings)
+        self.assertIn("MAX_CONNECTIONS=525", suggestion.settings)
+        self.assertIn("MAX_ROOMS=525", suggestion.settings)
+        self.assertIn("MAX_PARTICIPANTS_PER_ROOM=525", suggestion.settings)
+        self.assertIn("MAX_BROADCASTERS_PER_ROOM=30", suggestion.settings)
+        self.assertIn("RTC_PORT_END=40002", suggestion.settings)
+        self.assertEqual(
+            len([line for line in suggestion.settings if line.startswith("MAX_PARTICIPANTS")]), 1
+        )
+
+    def test_a_suggestion_is_bounded_by_the_port_and_follows_explicit_quotas(self) -> None:
+        """A slow port bounds meetings and webinars; explicit quotas replace the host rule."""
+        slow = capacity.suggest_for(capacity.Host(16, 65536, 100.0), capacity.REFERENCE_CEILINGS)
+        self.assertEqual(slow.deployment.workers, 15)
+        self.assertEqual(slow.meeting_limited_by, "network")
+        self.assertEqual(slow.meeting_participants, int(100 * 0.8 / 2.39))
+        self.assertEqual(slow.webinar_limited_by, "network")
+        self.assertEqual(slow.webinar_viewers, 80)
+        pinned = capacity.suggest_for(
+            capacity.Host(16, 65536), capacity.REFERENCE_CEILINGS, app_cpus=2.0, app_memory_mib=2048
+        )
+        self.assertEqual((pinned.deployment.workers, pinned.deployment.memory_mib), (2, 2048))
+        self.assertEqual(pinned.webinar_viewers, 350)
+
+    def test_a_calibration_report_supplies_the_ceilings(self) -> None:
+        """Ceilings read back from a report with camelCase keys, missing workloads left out."""
+        report = {
+            "ceilings": {
+                "meetings": capacity.record(capacity.REFERENCE_CEILINGS["meetings"]),
+                "webinar": {
+                    "workload": "webinar",
+                    "ceiling": 300,
+                    "egressMbps": 300.0,
+                    "workers": 2,
+                },
+            }
+        }
+        ceilings = capacity.ceilings_from_report(report)
+        self.assertEqual(set(ceilings), {"meetings", "webinar"})
+        self.assertEqual(ceilings["meetings"], capacity.REFERENCE_CEILINGS["meetings"])
+        self.assertEqual((ceilings["webinar"].ceiling, ceilings["webinar"].workers), (300, 2))
+        self.assertEqual(ceilings["webinar"].bound, "measured")
+        suggestion = capacity.suggest_for(capacity.Host(4, 12288), ceilings)
+        self.assertEqual(suggestion.webinar_viewers, 450)
+        self.assertEqual(suggestion.room_participants, 0)
+
+    def test_the_suggest_command_prints_settings_and_what_they_carry(self) -> None:
+        """The command needs the host's facts and prints an env fragment with its reasons."""
+        output = io.StringIO()
+        with redirect_stdout(output):
+            status = capacity.main(["suggest", "--vcpus", "8", "--memory-gib", "16"])
+        self.assertEqual(status, 0)
+        text = output.getvalue()
+        self.assertIn("Sizing a 8-vCPU, 16 GiB host with a 1000 Mbit/s port", text)
+        self.assertIn("MEDIA_WORKERS=7\n", text)
+        # Seven workers would carry 1,225 viewers; a gigabit port carries 800 of them.
+        self.assertIn("MAX_CONNECTIONS=800\n", text)
+        self.assertIn("about 800 viewers across the workers (network-bound", text)
+        self.assertIn("Open UDP 40000-40006", text)
+        self.assertIn("reference ceilings", text)
+        errors = io.StringIO()
+        with redirect_stdout(io.StringIO()), redirect_stderr(errors):
+            status = capacity.main(["suggest", "--vcpus", "0", "--memory-gib", "16"])
+        self.assertEqual(status, 1)
+        self.assertIn("at least one vCPU", errors.getvalue())
 
     def test_the_first_size_is_the_probe(self) -> None:
         """No trials: try the first size."""

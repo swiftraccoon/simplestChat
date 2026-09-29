@@ -20,6 +20,14 @@ VALUES: JsonObject = {
     "scpub_domain": "chat.example.test",
     "scpub_announce_ip": "192.0.2.10",
     "scpub_registration_enabled": False,
+    # Sizing as group_vars derives it for a 4-vCPU host with 11967 MiB.
+    "scpub_app_cpus": 3,
+    "scpub_media_workers": 3,
+    "scpub_app_memory_mib": 8976,
+    "scpub_max_connections": 525,
+    "scpub_max_rooms": 525,
+    "scpub_max_participants_per_room": 525,
+    "scpub_max_broadcasters_per_room": 30,
     "scpub_secrets": {
         name: f"{index:064x}"
         for index, name in enumerate(
@@ -115,7 +123,7 @@ class PublicTemplateTests(unittest.TestCase):
         self.assertEqual(base["MAX_PARTICIPANTS_PER_ROOM"], "${MAX_PARTICIPANTS_PER_ROOM:-}")
         self.assertEqual(base["MAX_BROADCASTERS_PER_ROOM"], "${MAX_BROADCASTERS_PER_ROOM:-}")
         # The managed host interpolates the base from app.env, which sets the ceiling.
-        self.assertEqual(environment("public-app.env.j2")["MAX_PARTICIPANTS_PER_ROOM"], "80")
+        self.assertEqual(environment("public-app.env.j2")["MAX_PARTICIPANTS_PER_ROOM"], "525")
         self.assertEqual(environment("public-app.env.j2")["MAX_BROADCASTERS_PER_ROOM"], "30")
 
     def test_app_extends_existing_compose_and_proxy_is_nonroot(self) -> None:
@@ -166,13 +174,13 @@ class PublicTemplateTests(unittest.TestCase):
             "RUN_MIGRATIONS": "false",
             "REGISTRATION_ENABLED": "false",
             "ALLOW_AD_HOC_ROOMS": "false",
-            "MEDIA_WORKERS": "2",
-            "RTC_PORT_END": "40001",
-            "SIMPLESTCHAT_CPUS": "2.0",
-            "SIMPLESTCHAT_MEMORY_LIMIT": "2g",
-            "MAX_CONNECTIONS": "200",
+            "MEDIA_WORKERS": "3",
+            "RTC_PORT_END": "40002",
+            "SIMPLESTCHAT_CPUS": "3",
+            "SIMPLESTCHAT_MEMORY_LIMIT": "8976m",
+            "MAX_CONNECTIONS": "525",
             "MAX_USERS": "100",
-            "MAX_ROOMS": "32",
+            "MAX_ROOMS": "525",
             "MAX_PERSISTED_ROOMS": "100",
             "WEBAUTHN_RP_ID": "chat.example.test",
             "WEBAUTHN_ORIGIN": "https://chat.example.test",
@@ -199,6 +207,54 @@ class PublicTemplateTests(unittest.TestCase):
         self.assertNotIn("JWT_SECRET", migration)
         self.assertNotIn("DATABASE_URL", proxy)
         self.assertNotIn(string(VALUES, "scpub_secrets", "owner_password"), "\n".join(app.values()))
+
+    def test_sizing_defaults_follow_the_host_and_yield_to_the_inventory(self) -> None:
+        """The group_vars sizing expressions size a host the way build/capacity.py does."""
+        group_vars = obj(yaml_value((ROOT / "group_vars/benchmark_hosts.yml").read_text()))
+        jinja = Environment(undefined=StrictUndefined, autoescape=False)  # noqa: S701 - config, not HTML.
+
+        def derive(facts: JsonObject, overrides: JsonObject) -> dict[str, int]:
+            values: dict[str, object] = dict(facts)
+            for name in (
+                "scpub_app_cpus",
+                "scpub_media_workers",
+                "scpub_app_memory_mib",
+                "scpub_webinar_viewers_per_worker",
+                "scpub_max_connections",
+                "scpub_max_rooms",
+                "scpub_max_participants_per_room",
+            ):
+                source = overrides.get(name, group_vars[name])
+                values[name] = (
+                    jinja.from_string(source).render(values) if isinstance(source, str) else source
+                )
+            return {name: int(str(values[name])) for name in values if name.startswith("scpub_")}
+
+        vps = derive({"ansible_processor_vcpus": 4, "ansible_memtotal_mb": 11967}, {})
+        self.assertEqual(vps["scpub_app_cpus"], 3)
+        self.assertEqual(vps["scpub_media_workers"], 3)
+        self.assertEqual(vps["scpub_app_memory_mib"], 11967 - 2991)
+        self.assertEqual(vps["scpub_max_connections"], 525)
+        self.assertEqual(vps["scpub_max_rooms"], 525)
+        self.assertEqual(vps["scpub_max_participants_per_room"], 525)
+        large = derive({"ansible_processor_vcpus": 16, "ansible_memtotal_mb": 65536}, {})
+        self.assertEqual((large["scpub_app_cpus"], large["scpub_media_workers"]), (15, 15))
+        self.assertEqual(large["scpub_app_memory_mib"], 65536 - 16384)
+        self.assertEqual(large["scpub_max_connections"], 2625)
+        small = derive({"ansible_processor_vcpus": 1, "ansible_memtotal_mb": 1024}, {})
+        self.assertEqual((small["scpub_app_cpus"], small["scpub_media_workers"]), (1, 1))
+        self.assertEqual(small["scpub_app_memory_mib"], 512)
+        self.assertEqual((small["scpub_max_connections"], small["scpub_max_rooms"]), (175, 175))
+        # A pinned worker count (a firewall that opens two ports) carries through.
+        pinned = derive(
+            {"ansible_processor_vcpus": 4, "ansible_memtotal_mb": 11967},
+            {"scpub_media_workers": 2},
+        )
+        self.assertEqual((pinned["scpub_app_cpus"], pinned["scpub_media_workers"]), (3, 2))
+        self.assertEqual(pinned["scpub_max_connections"], 350)
+        rendered = environment("public-app.env.j2", scpub_media_workers=2)
+        self.assertEqual(rendered["RTC_PORT_END"], "40001")
+        self.assertEqual(rendered["MEDIA_WORKERS"], "2")
 
     def test_database_authentication_and_grants_are_explicit(self) -> None:
         """Verify database authentication and grants are explicit."""

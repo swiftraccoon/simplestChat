@@ -316,7 +316,19 @@ python3 build/capacity.py run --server-image localhost/simplestchat-production:d
   --generator-image localhost/simplestchat-loadtest:dev \
   --label cx32 --monthly-price 6.80 [--egress-price-per-gb 0.01 --included-egress-tb 20]
 python3 build/capacity.py compare results/capacity.*/calibration.json
+python3 build/capacity.py suggest --vcpus 8 --memory-gib 16 [--port-mbps 1000] \
+  [--calibration results/capacity.<time>/calibration.json]
 ```
+
+`suggest` sizes a host without measuring it: from its vCPUs, memory and port
+(a gigabit port unless told otherwise) it prints the settings the managed
+deployment would derive (all but one CPU, one worker per app CPU, the memory
+beyond the host's reserve, `MAX_CONNECTIONS` from the lightest participants)
+and what they carry in meetings, webinars and all-publishing rooms, with what
+bounds each. Without `--calibration` it scales the ceilings measured on the
+4-vCPU reference VPS (85 meeting participants and 175 webinar viewers per
+worker, 28 in the grid), so a host with slower cores carries less; a `run`
+report of the host replaces them.
 
 Under each measured ceiling the summary says what the failure above it ran
 into. In an all-publishing room that is usually not CPU: a browser shows up to

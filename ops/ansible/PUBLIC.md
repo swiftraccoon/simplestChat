@@ -22,9 +22,23 @@ scpub_registration_enabled: false
 
 Replace the example domain and reserved address with your domain and the VPS's
 public IPv4 address. Point DNS at the VPS before deployment. Allow TCP 80/443,
-UDP 443, and UDP 40000–40001 through your provider firewall. HTTP port 3000 stays
-loopback-only; PostgreSQL uses a private Unix socket, not a published TCP port.
-Do not publish Caddy's administrative port.
+UDP 443, and one UDP port per media worker from 40000 (40000–40002 on a 4-vCPU
+host; `RTC_PORT_END` in the rendered `app.env`) through your provider firewall.
+HTTP port 3000 stays loopback-only; PostgreSQL uses a private Unix socket, not a
+published TCP port. Do not publish Caddy's administrative port.
+
+Sizing follows the host's facts: the app gets all but one vCPU, one media worker
+per app CPU, and the memory beyond a quarter (at least 1 GiB) kept for
+PostgreSQL, Caddy, TURN and the system; `MAX_CONNECTIONS` counts 175 webinar
+viewers per worker (the lightest participant, as measured on the 4-vCPU
+reference VPS) and `MAX_ROOMS` matches it. `group_vars/benchmark_hosts.yml`
+holds the expressions; set any of `scpub_app_cpus`, `scpub_media_workers`,
+`scpub_app_memory_mib`, `scpub_max_connections`, `scpub_max_rooms`,
+`scpub_max_participants_per_room` or `scpub_max_broadcasters_per_room` in the
+inventory to override one (`scpub_media_workers: 2` when the provider firewall
+opens only UDP 40000–40001). `build/capacity.py suggest --vcpus N --memory-gib M`
+prints the same numbers with what they carry, and the server logs its sizing
+at startup.
 
 From the project root, using the controller environment from the setup guide:
 

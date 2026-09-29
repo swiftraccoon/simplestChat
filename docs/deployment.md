@@ -84,13 +84,23 @@ HTTP/WebSocket is published only on host loopback; media UDP is public.
 Compose requires `ALLOWED_ORIGINS` and `TRUSTED_PROXY_SECRET` because the backend
 sees the proxy through a Docker bridge.
 
-Set `MEDIA_WORKERS`, `SIMPLESTCHAT_CPUS` and `SIMPLESTCHAT_MEMORY_LIMIT` for your
-workload; `build/capacity.py run` measures a host with the release images and
-prints them, with `MAX_PARTICIPANTS_PER_ROOM` and the socket-buffer sysctls
-([sizing a host](performance.md#sizing-a-host)). Keep `RTC_PORT_END`, the
-published UDP range and firewall rules aligned:
-each worker needs one port starting at 40000. Resource limits are not capacity
-guarantees. Compose sets the file-descriptor limit to 65536; configure an
+Size the app from the host, not from any particular VPS: one media worker per
+CPU given to the app, all but one CPU of a dedicated host, and the memory beyond
+a quarter (at least 1 GiB) kept for the database, the proxy and the system.
+`build/capacity.py suggest --vcpus N --memory-gib M [--port-mbps 1000]` prints
+`MEDIA_WORKERS`, `SIMPLESTCHAT_CPUS`, `SIMPLESTCHAT_MEMORY_LIMIT`,
+`MAX_CONNECTIONS`, `MAX_ROOMS` and `RTC_PORT_END` for that host with what they
+carry per room shape, from ceilings measured on a 4-vCPU reference VPS or from a
+`build/capacity.py run` report of your own host, which also gives
+`MAX_PARTICIPANTS_PER_ROOM` and the socket-buffer sysctls
+([sizing a host](performance.md#sizing-a-host)). The managed deployment derives
+the same numbers from the host's facts and the inventory overrides any of them
+([ops/ansible/PUBLIC.md](../ops/ansible/PUBLIC.md)). At startup the server logs
+its sizing (workers, CPU quota, memory limit, the participants those project to)
+and warns when workers outnumber the quota, CPUs sit idle or `MAX_CONNECTIONS`
+is out of proportion. Keep `RTC_PORT_END`, the published UDP range and firewall
+rules aligned: each worker needs one port starting at 40000. Resource limits
+are not capacity guarantees. Compose sets the file-descriptor limit to 65536; configure an
 appropriate limit separately for native deployments.
 
 Raise the kernel's socket buffer ceilings on the host: each media worker asks
