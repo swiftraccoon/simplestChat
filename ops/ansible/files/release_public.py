@@ -780,8 +780,9 @@ def reviewed_candidate_environment(candidate: Path, report: JsonObject) -> str:
     installed = dotenv_lines((CONFIG / "app.env").read_text())
     proposed = dotenv_lines(candidate.read_text())
     for key in sorted(IDENTITY_KEYS):
+        # The server reads an absent line and an empty one the same way.
         require(
-            installed.get(key) == proposed.get(key),
+            installed.get(key, "") == proposed.get(key, ""),
             f"The candidate app.env changes {key}; that needs full maintenance",
         )
     changed: list[JsonValue] = [

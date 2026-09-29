@@ -87,6 +87,14 @@ missing pinned dependency images, and installs commands. It does not start the
 public service. The public project must be stopped when applying configuration.
 Do not print resolved Compose configuration: it contains secrets.
 
+The image comes from the host's own build of `scbench_revision` by default. To
+apply configuration changes with the image CI tested instead, stage it while
+chat is live (`release.yml` with `scpub_release_deploy: false`, as
+`build/deploy.py` does), stop the project, and pass the same revision as
+`-e scpub_release_revision=<rev> -e scbench_revision=<rev>`: the playbook then
+selects the staged image, checks its revision label, and the launcher below
+starts it.
+
 ## Query statistics and slow queries
 
 PostgreSQL runs with `pg_stat_statements` preloaded (`track=all`,

@@ -15,6 +15,9 @@
           - scpub_config == '/etc/simplestchat-public'
           - scpub_root == '/srv/simplestchat-public'
           - scbench_revision is match('^[a-f0-9]{40}$')
+          # A release staged while chat was live may supply the image instead of
+          # an on-host build; its source checkout is the same revision.
+          - scpub_release_revision is not defined or scpub_release_revision == scbench_revision
           - scpub_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
           - scpub_announce_ip is match('^(?:[0-9]{1,3}(?:\.[0-9]{1,3}){3}|[0-9a-f:]{3,39})$')
           - scpub_announce_ipv6 == '' or scpub_announce_ipv6 is match('^[0-9a-f:]{3,39}$')
@@ -88,6 +91,7 @@
           - "/srv/simplestchat-bench/artifacts/{{ scbench_revision }}/images.json"
       changed_when: false
       check_mode: false
+      when: scpub_release_revision is not defined
 
     - name: Select the retained application artifact without rebuilding
       ansible.builtin.command:
@@ -95,14 +99,40 @@
       register: scpub_application_image
       changed_when: false
       check_mode: false
+      when: scpub_release_revision is not defined
 
-    - name: Require a content-addressed application image
-      ansible.builtin.assert:
-        that: scpub_application_image.stdout is match('^sha256:[a-f0-9]{64}$')
+    - name: Read the release the controller staged while chat was live
+      ansible.builtin.slurp:
+        src: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/staged.json"
+      register: scpub_staged_release
+      when: scpub_release_revision is defined
 
     - name: Retain the verified application image selection
       ansible.builtin.set_fact:
-        scpub_server_image: "{{ scpub_application_image.stdout }}"
+        scpub_server_image: >-
+          {{ (scpub_staged_release.content | b64decode | from_json).serverImage
+             if scpub_release_revision is defined else scpub_application_image.stdout }}
+
+    - name: Require a content-addressed application image
+      ansible.builtin.assert:
+        that: scpub_server_image is match('^sha256:[a-f0-9]{64}$')
+
+    - name: Require the staged image to carry the release revision
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - image
+          - inspect
+          - --format
+          - '{% raw %}{{ index .Config.Labels "org.opencontainers.image.revision" }}{% endraw %}'
+          - "{{ scpub_server_image }}"
+      register: scpub_staged_image
+      changed_when: false
+      check_mode: false
+      failed_when: scpub_staged_image.rc != 0 or scpub_staged_image.stdout | trim != scpub_release_revision
+      when: scpub_release_revision is defined
 
   tasks:
     - name: Create private configuration and persistent deployment directories

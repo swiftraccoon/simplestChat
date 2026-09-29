@@ -645,3 +645,48 @@ class MaintenancePlaybookTests(unittest.TestCase):
         self.assertEqual(at(launcher, "vars", "ansible_python_interpreter"), "/usr/bin/python3")
         source = (ROOT / "tasks/source.yml").read_text()
         self.assertIn("force: false", source)
+
+
+class PublicPlaybookSelectionTests(unittest.TestCase):
+    """The full playbook takes the image from an on-host build or a staged release."""
+
+    def test_a_staged_release_replaces_the_on_host_build_as_the_image_source(self) -> None:
+        """With scpub_release_revision the staged image is selected and its label checked."""
+        play = obj(yaml_value((ROOT / "public.yml").read_text()), 0)
+        assertions = strings(play, "pre_tasks", 0, "ansible.builtin.assert", "that")
+        self.assertIn(
+            "scpub_release_revision is not defined or scpub_release_revision == scbench_revision",
+            assertions,
+        )
+        tasks = {string(task, "name"): task for task in objects(play, "pre_tasks")}
+        for name in (
+            "Read the previously verified application image manifest",
+            "Select the retained application artifact without rebuilding",
+        ):
+            self.assertEqual(tasks[name]["when"], "scpub_release_revision is not defined")
+        staged = tasks["Read the release the controller staged while chat was live"]
+        self.assertEqual(staged["when"], "scpub_release_revision is defined")
+        self.assertEqual(
+            at(staged, "ansible.builtin.slurp", "src"),
+            "{{ scpub_root }}/releases/{{ scpub_release_revision }}/staged.json",
+        )
+        label = tasks["Require the staged image to carry the release revision"]
+        self.assertEqual(label["when"], "scpub_release_revision is defined")
+        self.assertIn(
+            "org.opencontainers.image.revision",
+            " ".join(strings(label, "ansible.builtin.command", "argv")),
+        )
+        self.assertIn("scpub_release_revision", string(label, "failed_when"))
+        selection = tasks["Retain the verified application image selection"]
+        self.assertIn(
+            "scpub_staged_release",
+            string(selection, "ansible.builtin.set_fact", "scpub_server_image"),
+        )
+        self.assertEqual(
+            at(
+                tasks["Require a content-addressed application image"],
+                "ansible.builtin.assert",
+                "that",
+            ),
+            "scpub_server_image is match('^sha256:[a-f0-9]{64}$')",
+        )
