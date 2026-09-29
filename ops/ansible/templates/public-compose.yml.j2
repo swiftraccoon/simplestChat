@@ -56,7 +56,7 @@ services:
       - -c
       - max_connections=50
       - -c
-      - shared_buffers=256MB
+      - shared_buffers={{ scpub_postgres_shared_buffers_mib }}MB
       # Query statistics and a slow-query log for the operator; the init SQL
       # creates the extension on a new database (PUBLIC.md for an existing one).
       - -c
@@ -94,8 +94,8 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 128
-    mem_limit: 1g
-    cpus: "1.0"
+    mem_limit: {{ scpub_postgres_memory_mib }}m
+    cpus: "{{ scpub_postgres_cpus }}"
     shm_size: 256m
     stop_grace_period: 60s
     logging: *bounded-logging
@@ -131,8 +131,8 @@ services:
     sysctls:
       net.ipv4.ip_unprivileged_port_start: "0"
     pids_limit: 128
-    mem_limit: 256m
-    cpus: "0.5"
+    mem_limit: {{ scpub_caddy_memory_mib }}m
+    cpus: "{{ scpub_caddy_cpus }}"
     stop_grace_period: 30s
     logging: *bounded-logging
 

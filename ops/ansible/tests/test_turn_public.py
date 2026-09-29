@@ -55,10 +55,12 @@ class TurnTemplateTests(unittest.TestCase):
             "denied-peer-ip=0.0.0.0-255.255.255.255",
             "denied-peer-ip=::-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
             "allowed-peer-ip=192.0.2.10",
+            "min-port=49160",
+            "max-port=50209",
             "user-quota=4",
-            "total-quota=400",
-            "max-bps=2000000",
-            "bps-capacity=100000000",
+            "total-quota=525",
+            "max-bps=4000000",
+            "bps-capacity=500000000",
             "log-min-level=warning",
         ):
             self.assertIn(required, lines)

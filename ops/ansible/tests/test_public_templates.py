@@ -29,6 +29,25 @@ VALUES: JsonObject = {
     "scpub_max_rooms": 525,
     "scpub_max_participants_per_room": 525,
     "scpub_max_broadcasters_per_room": 30,
+    "scpub_max_users": 100,
+    "scpub_max_persisted_rooms": 100,
+    "scpub_port_mbps": 1000,
+    "scpub_reserved_cpus": 1,
+    "scpub_reserved_memory_mib": 2991,
+    "scpub_postgres_memory_mib": 1495,
+    "scpub_postgres_shared_buffers_mib": 373,
+    "scpub_postgres_cpus": 1,
+    "scpub_caddy_memory_mib": 373,
+    "scpub_caddy_cpus": 0.5,
+    "scpub_turn_memory_mib": 512,
+    "scpub_turn_cpus": 1,
+    "scpub_turn_bps_capacity": 500000000,
+    "scpub_turn_max_bps": 4000000,
+    "scpub_turn_user_quota": 4,
+    "scpub_turn_total_quota": 525,
+    "scpub_turn_relay_threads": 1,
+    "scpub_turn_relay_port_min": 49160,
+    "scpub_turn_relay_port_max": 50209,
     "scpub_secrets": {
         name: f"{index:064x}"
         for index, name in enumerate(
@@ -214,45 +233,64 @@ class PublicTemplateTests(unittest.TestCase):
         group_vars = obj(yaml_value((ROOT / "group_vars/benchmark_hosts.yml").read_text()))
         jinja = Environment(undefined=StrictUndefined, autoescape=False)  # noqa: S701 - config, not HTML.
 
-        def derive(facts: JsonObject, overrides: JsonObject) -> dict[str, int]:
+        derived = [
+            name
+            for name, source in group_vars.items()
+            if name.startswith("scpub_")
+            and isinstance(source, (str, int, float))
+            and name != "scpub_registration_enabled"
+            and (isinstance(source, (int, float)) or source.startswith("{{"))
+        ]
+
+        def derive(facts: JsonObject, overrides: JsonObject) -> dict[str, str]:
             values: dict[str, object] = dict(facts)
-            for name in (
-                "scpub_app_cpus",
-                "scpub_media_workers",
-                "scpub_app_memory_mib",
-                "scpub_webinar_viewers_per_worker",
-                "scpub_max_connections",
-                "scpub_max_rooms",
-                "scpub_max_participants_per_room",
-            ):
+            for name in derived:
                 source = overrides.get(name, group_vars[name])
                 values[name] = (
                     jinja.from_string(source).render(values) if isinstance(source, str) else source
                 )
-            return {name: int(str(values[name])) for name in values if name.startswith("scpub_")}
+            return {name: str(values[name]) for name in derived}
 
         vps = derive({"ansible_processor_vcpus": 4, "ansible_memtotal_mb": 11967}, {})
-        self.assertEqual(vps["scpub_app_cpus"], 3)
-        self.assertEqual(vps["scpub_media_workers"], 3)
-        self.assertEqual(vps["scpub_app_memory_mib"], 11967 - 2991)
-        self.assertEqual(vps["scpub_max_connections"], 525)
-        self.assertEqual(vps["scpub_max_rooms"], 525)
-        self.assertEqual(vps["scpub_max_participants_per_room"], 525)
+        self.assertEqual(vps["scpub_app_cpus"], "3")
+        self.assertEqual(vps["scpub_media_workers"], "3")
+        self.assertEqual(int(vps["scpub_app_memory_mib"]), 11967 - 2991)
+        self.assertEqual(vps["scpub_max_connections"], "525")
+        self.assertEqual(vps["scpub_max_rooms"], "525")
+        self.assertEqual(vps["scpub_max_participants_per_room"], "525")
+        self.assertEqual(vps["scpub_reserved_memory_mib"], "2991")
+        self.assertEqual(
+            (vps["scpub_postgres_memory_mib"], vps["scpub_postgres_cpus"]), ("1495", "1")
+        )
+        self.assertEqual(vps["scpub_postgres_shared_buffers_mib"], "373")
+        self.assertEqual((vps["scpub_caddy_memory_mib"], vps["scpub_caddy_cpus"]), ("373", "0.5"))
+        self.assertEqual(vps["scpub_turn_bps_capacity"], "500000000")
+        self.assertEqual(vps["scpub_turn_total_quota"], "525")
+        self.assertEqual(vps["scpub_turn_relay_port_max"], "50209")
         large = derive({"ansible_processor_vcpus": 16, "ansible_memtotal_mb": 65536}, {})
-        self.assertEqual((large["scpub_app_cpus"], large["scpub_media_workers"]), (15, 15))
-        self.assertEqual(large["scpub_app_memory_mib"], 65536 - 16384)
-        self.assertEqual(large["scpub_max_connections"], 2625)
+        self.assertEqual((large["scpub_app_cpus"], large["scpub_media_workers"]), ("15", "15"))
+        self.assertEqual(int(large["scpub_app_memory_mib"]), 65536 - 16384)
+        self.assertEqual(large["scpub_max_connections"], "2625")
+        self.assertEqual(
+            (large["scpub_postgres_memory_mib"], large["scpub_caddy_memory_mib"]), ("4096", "2048")
+        )
+        self.assertEqual(large["scpub_turn_relay_port_max"], "54409")
         small = derive({"ansible_processor_vcpus": 1, "ansible_memtotal_mb": 1024}, {})
-        self.assertEqual((small["scpub_app_cpus"], small["scpub_media_workers"]), (1, 1))
-        self.assertEqual(small["scpub_app_memory_mib"], 512)
-        self.assertEqual((small["scpub_max_connections"], small["scpub_max_rooms"]), (175, 175))
-        # A pinned worker count (a firewall that opens two ports) carries through.
+        self.assertEqual((small["scpub_app_cpus"], small["scpub_media_workers"]), ("1", "1"))
+        self.assertEqual(small["scpub_app_memory_mib"], "512")
+        self.assertEqual((small["scpub_max_connections"], small["scpub_max_rooms"]), ("175", "175"))
+        self.assertEqual(
+            (small["scpub_postgres_memory_mib"], small["scpub_caddy_memory_mib"]), ("1024", "256")
+        )
+        # Overrides carry through: a pinned worker count, a bigger reserve, a slower port.
         pinned = derive(
             {"ansible_processor_vcpus": 4, "ansible_memtotal_mb": 11967},
-            {"scpub_media_workers": 2},
+            {"scpub_media_workers": 2, "scpub_reserved_cpus": 2, "scpub_port_mbps": 100},
         )
-        self.assertEqual((pinned["scpub_app_cpus"], pinned["scpub_media_workers"]), (3, 2))
-        self.assertEqual(pinned["scpub_max_connections"], 350)
+        self.assertEqual((pinned["scpub_app_cpus"], pinned["scpub_media_workers"]), ("2", "2"))
+        self.assertEqual(pinned["scpub_max_connections"], "350")
+        self.assertEqual((pinned["scpub_postgres_cpus"], pinned["scpub_caddy_cpus"]), ("2", "1.0"))
+        self.assertEqual(pinned["scpub_turn_bps_capacity"], "50000000")
         rendered = environment("public-app.env.j2", scpub_media_workers=2)
         self.assertEqual(rendered["RTC_PORT_END"], "40001")
         self.assertEqual(rendered["MEDIA_WORKERS"], "2")

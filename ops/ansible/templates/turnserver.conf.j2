@@ -3,8 +3,8 @@ listening-ip={{ scpub_announce_ip }}
 relay-ip={{ scpub_announce_ip }}
 listening-port=3478
 tls-listening-port=5349
-min-port=49160
-max-port=49959
+min-port={{ scpub_turn_relay_port_min }}
+max-port={{ scpub_turn_relay_port_max }}
 realm={{ scpub_domain }}
 use-auth-secret
 static-auth-secret={{ scpub_turn_secret }}
@@ -21,12 +21,12 @@ no-multicast-peers
 denied-peer-ip=0.0.0.0-255.255.255.255
 denied-peer-ip=::-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
 allowed-peer-ip={{ scpub_announce_ip }}
-user-quota=4
-total-quota=400
-max-bps=2000000
-bps-capacity=100000000
+user-quota={{ scpub_turn_user_quota }}
+total-quota={{ scpub_turn_total_quota }}
+max-bps={{ scpub_turn_max_bps }}
+bps-capacity={{ scpub_turn_bps_capacity }}
 stale-nonce=600
-relay-threads=1
+relay-threads={{ scpub_turn_relay_threads }}
 log-file=stdout
 log-min-level=warning
 {% if scpub_turn_metrics_enabled | default(false) %}

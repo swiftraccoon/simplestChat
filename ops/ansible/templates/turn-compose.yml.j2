@@ -20,8 +20,8 @@ services:
     cap_add: [NET_BIND_SERVICE]
     security_opt: [no-new-privileges:true]
     pids_limit: 64
-    mem_limit: 512m
-    cpus: "1.0"
+    mem_limit: {{ scpub_turn_memory_mib }}m
+    cpus: "{{ scpub_turn_cpus }}"
     ulimits:
       nofile: {soft: 8192, hard: 8192}
     restart: unless-stopped

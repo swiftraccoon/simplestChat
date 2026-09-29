@@ -137,6 +137,13 @@ def render_fixture(
         "scpub_max_rooms": 175,
         "scpub_max_participants_per_room": 175,
         "scpub_max_broadcasters_per_room": 30,
+        "scpub_max_users": 100,
+        "scpub_max_persisted_rooms": 100,
+        "scpub_postgres_memory_mib": 1024,
+        "scpub_postgres_shared_buffers_mib": 256,
+        "scpub_postgres_cpus": 1,
+        "scpub_caddy_memory_mib": 256,
+        "scpub_caddy_cpus": 0.5,
         "scpub_secrets": {
             name: secrets.token_hex(32)
             for name in (

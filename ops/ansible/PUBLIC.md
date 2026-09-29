@@ -42,6 +42,20 @@ the range itself; a host needs no firewall rule of its own for it.
 prints the same numbers with what they carry, and the server logs its sizing
 at startup.
 
+The reserve itself is a setting (`scpub_reserved_cpus` 1, a
+`scpub_reserved_memory_share` of 0.25 with at least
+`scpub_reserved_memory_min_mib` 1024), and the services in it get ceilings that
+grow with it: PostgreSQL half of the reserve within 1–4 GiB
+(`scpub_postgres_memory_mib`, `shared_buffers` a quarter of that), Caddy an
+eighth within 256 MiB–2 GiB (`scpub_caddy_memory_mib`), each with the reserved
+CPUs. TURN's capacity follows `scpub_port_mbps` (1000; set the port the
+provider sells, since a virtio interface does not report its speed):
+`bps-capacity` is half the port because a relay carries every stream twice,
+`total-quota` matches `MAX_CONNECTIONS`, the relay port range grows with it,
+and `max-bps` (4 Mbit/s) keeps a relayed viewer at the app's per-viewer cap.
+`scpub_max_users` and `scpub_max_persisted_rooms` (100 each) are policy, not
+capacity.
+
 From the project root, using the controller environment from the setup guide:
 
 ```sh
