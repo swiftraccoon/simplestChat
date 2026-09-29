@@ -13,6 +13,8 @@
 | `ALLOWED_ORIGINS` | same host only | Exact WebSocket origin allowlist; required for non-loopback binds, such as Compose |
 | `MAX_CONNECTIONS` | `10000` | Max concurrent WebSocket connections and retained reconnect-grace sessions |
 | `MAX_CONNECTIONS_PER_IP` | `50` | Max concurrent WebSocket connections accepted from one client IP |
+| `JOIN_ATTEMPTS_PER_IP_PER_MINUTE` | `30` | Room joins one client IP may start per minute across all rooms (1–100000) |
+| `JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE` | `10` | Room joins one client IP may start per minute into one room (1–100000) |
 | `WS_HANDSHAKES_PER_MINUTE` | `120` | Per-client IP (IPv6 `/64`) rate limit for WebSocket upgrade attempts |
 | `AUTH_REQUESTS_PER_MINUTE` | `60` | Per-IP rate limit for authentication endpoints |
 | `PROFILE_REQUESTS_PER_MINUTE` | `600` | Per-IP rate limit for public profile reads (`/api/auth/profiles/:id`, one per avatar a viewer sees), kept apart from the sign-in and refresh budget |
@@ -51,6 +53,7 @@
 | `TURN_SECRET` | (none) | TURN shared secret of at least 32 bytes; required when `TURN_URLS` is set |
 | `LIBWEBRTC_FIELD_TRIALS` | (mediasoup default) | libwebrtc field trials for the media workers' congestion controller as `Name/Value/` pairs, replacing mediasoup's default `WebRTC-Bwe-AlrLimitedBackoff/Enabled/`; the weekly impaired-network job is the way to evaluate a candidate before setting it |
 | `WEBRTC_MIN_OUTGOING_BITRATE` | `100000` | Floor in bit/s for each viewer's send-side bandwidth estimate: `0` or at least `30000`, up to the outgoing cap (3000000 by default). `0` keeps mediasoup's own 30 kbit/s floor; the default keeps the lowest simulcast layer flowing at a 150 kbit/s cap where mediasoup's floor loses frames (see the performance results of 2026-09-21). Invalid policies fail at startup. |
+| `WEBRTC_MAX_OUTGOING_BITRATE` | `3000000` | Per-viewer cap in bit/s on the send-side estimate, so the ceiling of an all-publishing room (every viewer downloads every tile, 100 kbit/s each at the lowest layer: about 28 people at the default). At least the floor above; `0` removes the cap. Raising it trades room size for egress per viewer |
 | `WEBRTC_MAX_INCOMING_BITRATE` | `3000000` | REMB ceiling in bit/s sent to each publisher (0 = none, at most 50000000). Must cover the largest simulcast ladder the client publishes (1080p: about 2.9 Mbit/s) or the browser starves the top layer |
 | `CPU_SATURATION_DISABLED` | `false` | Disable the saturation monitor. When enabled it reads the process cgroup's `cpu.stat` throttling counters, `cpu.pressure`, `memory.current` and `memory.max`, and each media worker thread's scheduler time, every 2 s; while the process is saturated, `/ready` returns 503 and fresh room joins are refused with a retry message (existing calls, reconnects and lobby admissions continue) |
 | `CPU_SATURATION_THROTTLED_FRACTION` | `0.5` | Share of cgroup enforcement periods throttled over the last 10 s that counts as saturated (0.05–1); saturation clears once the share falls below half of this |
@@ -70,6 +73,16 @@ Media allocation in `src/media/config.rs`:
   participants the reference costs project) and warns when workers outnumber the quota,
   CPUs sit idle or `MAX_CONNECTIONS` is out of proportion to the workers
 
+
+### Many people behind one address
+
+A school, an office or a venue reaches the server from one public address, and
+the per-address limits count all of them together: `MAX_CONNECTIONS_PER_IP`
+(50 sockets), `WS_HANDSHAKES_PER_MINUTE` (120), `JOIN_ATTEMPTS_PER_IP_PER_MINUTE`
+(30) and `JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE` (10), `AUTH_REQUESTS_PER_MINUTE`
+(60), `PROFILE_REQUESTS_PER_MINUTE` (600), `ROOM_API_REQUESTS_PER_MINUTE` (120)
+and `REGISTRATIONS_PER_IP_PER_HOUR` (5). Raise them together for such a
+deployment; the per-worker CPU guard, not these counts, protects the host.
 
 ## Health and readiness
 

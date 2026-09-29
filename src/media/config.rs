@@ -125,6 +125,10 @@ impl MediaConfig {
             config.webrtc_transport_config.max_incoming_bitrate =
                 Some(parse_bitrate("WEBRTC_MAX_INCOMING_BITRATE", &value)?).filter(|v| *v > 0);
         }
+        if let Ok(value) = std::env::var("WEBRTC_MAX_OUTGOING_BITRATE") {
+            config.webrtc_transport_config.max_outgoing_bitrate =
+                parse_bitrate("WEBRTC_MAX_OUTGOING_BITRATE", &value)?;
+        }
 
         config.validate()?;
         Ok(config)
@@ -613,6 +617,24 @@ mod tests {
         // the publisher's REMB ceiling or the browser starves the top layer.
         assert_eq!(config.max_incoming_bitrate, Some(3_000_000));
         assert!(config.max_incoming_bitrate.unwrap() >= 100_000 + 300_000 + 2_500_000 + 64_000);
+    }
+
+    #[test]
+    fn the_per_viewer_cap_is_a_setting_bounded_below_by_the_floor() {
+        assert_eq!(
+            parse_bitrate("WEBRTC_MAX_OUTGOING_BITRATE", "6000000").unwrap(),
+            6_000_000
+        );
+        let mut config = WebRtcTransportConfig {
+            max_outgoing_bitrate: 6_000_000,
+            ..WebRtcTransportConfig::default()
+        };
+        assert!(config.validate().is_ok());
+        config.max_outgoing_bitrate = 50_000;
+        assert!(
+            config.validate().is_err(),
+            "a cap under the floor fails startup"
+        );
     }
 
     #[test]

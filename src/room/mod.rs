@@ -173,8 +173,11 @@ const ROOM_ADMIN_MUTATION_WINDOW: std::time::Duration = std::time::Duration::fro
 const MAX_ROOM_ADMIN_MUTATIONS_PER_WINDOW: usize = 20;
 const ALLOW_AD_HOC_ROOMS_BY_DEFAULT: bool = false;
 const JOIN_RATE_WINDOW: std::time::Duration = std::time::Duration::from_secs(60);
+/// Defaults of `JOIN_ATTEMPTS_PER_IP_PER_MINUTE` and `JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE`:
+/// a school or an office behind one address raises them.
 const MAX_JOIN_ATTEMPTS_PER_IP: u32 = 30;
 const MAX_JOIN_ATTEMPTS_PER_ROOM_IP: u32 = 10;
+const MAX_JOIN_LIMIT: u32 = 100_000;
 const MAX_TRACKED_JOIN_KEYS: usize = 10_000;
 
 #[derive(Debug)]
@@ -373,6 +376,22 @@ fn parse_broadcaster_ceiling(value: Option<&str>) -> Result<Option<usize>> {
     }
 }
 
+fn parse_join_limit(name: &str, value: Option<&str>, default: u32) -> Result<u32> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(default);
+    };
+    match value.parse::<u32>() {
+        Ok(limit) if (1..=MAX_JOIN_LIMIT).contains(&limit) => Ok(limit),
+        _ => anyhow::bail!("{name} must be a whole number from 1 to {MAX_JOIN_LIMIT}"),
+    }
+}
+fn join_limit(name: &str, default: u32) -> Result<u32> {
+    match std::env::var(name) {
+        Ok(value) => parse_join_limit(name, Some(&value), default),
+        Err(std::env::VarError::NotPresent) => Ok(default),
+        Err(std::env::VarError::NotUnicode(_)) => anyhow::bail!("{name} must be valid UTF-8"),
+    }
+}
 fn broadcaster_ceiling() -> Result<Option<usize>> {
     match std::env::var("MAX_BROADCASTERS_PER_ROOM") {
         Ok(value) => parse_broadcaster_ceiling(Some(&value)),
@@ -1458,8 +1477,14 @@ impl RoomManager {
             // every CPU while the separate verification lane serves joiners.
             password_hash_work: Arc::new(tokio::sync::Semaphore::new(1)),
             max_password_verify_work: password_verify_workers,
-            join_attempts_by_ip: SharedRateLimiter::new(MAX_JOIN_ATTEMPTS_PER_IP),
-            join_attempts_by_room_ip: SharedRateLimiter::new(MAX_JOIN_ATTEMPTS_PER_ROOM_IP),
+            join_attempts_by_ip: SharedRateLimiter::new(join_limit(
+                "JOIN_ATTEMPTS_PER_IP_PER_MINUTE",
+                MAX_JOIN_ATTEMPTS_PER_IP,
+            )?),
+            join_attempts_by_room_ip: SharedRateLimiter::new(join_limit(
+                "JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE",
+                MAX_JOIN_ATTEMPTS_PER_ROOM_IP,
+            )?),
         })
     }
 
@@ -8227,6 +8252,16 @@ mod security_tests {
 #[cfg(test)]
 mod broadcaster_ceiling_tests {
     use super::*;
+
+    #[test]
+    fn join_limits_default_and_refuse_nonsense() {
+        assert_eq!(parse_join_limit("X", None, 30).unwrap(), 30);
+        assert_eq!(parse_join_limit("X", Some(" "), 30).unwrap(), 30);
+        assert_eq!(parse_join_limit("X", Some("500"), 30).unwrap(), 500);
+        assert!(parse_join_limit("X", Some("0"), 30).is_err());
+        assert!(parse_join_limit("X", Some("100001"), 30).is_err());
+        assert!(parse_join_limit("X", Some("ten"), 30).is_err());
+    }
 
     #[test]
     fn broadcaster_ceiling_parses_like_the_participant_one() {
