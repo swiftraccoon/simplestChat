@@ -654,6 +654,12 @@ impl SignalingServer {
                     .layer(DefaultBodyLimit::max(256 * 1024)),
             )
             .route("/profiles/{id}", get(crate::auth::account::public_profile))
+            .route(
+                "/preferences",
+                get(crate::auth::account::get_preferences)
+                    .put(crate::auth::account::put_preferences)
+                    .layer(DefaultBodyLimit::max(32 * 1024)),
+            )
             .route("/password", post(crate::auth::account::change_password))
             .route(
                 "/recovery/key",

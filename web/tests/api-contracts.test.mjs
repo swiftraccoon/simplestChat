@@ -36,6 +36,13 @@ const settings = {
   guestsCanBroadcast: true,
   topic: null,
 };
+const preferences = {
+  allowPrivateMessages: false,
+  sounds: true,
+  largeText: false,
+  timestamps: 'seconds',
+  ignored: [{ id: 'person', name: 'Person' }],
+};
 const endpoints = [
   [
     'public profile',
@@ -80,6 +87,20 @@ const endpoints = [
     '/api/rooms/room%20%2F%3F/identity',
     'PATCH',
     room,
+  ],
+  [
+    'chat preferences',
+    (api) => api.accountPreferences('token'),
+    '/api/auth/preferences',
+    'GET',
+    preferences,
+  ],
+  [
+    'chat preferences update',
+    (api) => api.updatePreferences('token', preferences),
+    '/api/auth/preferences',
+    'PUT',
+    preferences,
   ],
 ];
 

@@ -1,6 +1,8 @@
 import type { CreateRoomRequest } from './protocol';
 import {
+  type ChatPreferences,
   decodeAccountProfile,
+  decodeChatPreferences,
   decodePublicProfile,
   decodeRecoveryKey,
   decodeRoomDirectory,
@@ -261,6 +263,10 @@ export const api = {
     data: { current_password: string; new_password: string },
     signal?: AbortSignal,
   ) => apiNoContent('/api/auth/password', token, 'POST', data, signal),
+  accountPreferences: (token: string | null) =>
+    apiJson(decodeChatPreferences, '/api/auth/preferences', token),
+  updatePreferences: (token: string | null, data: ChatPreferences) =>
+    apiJson(decodeChatPreferences, '/api/auth/preferences', token, 'PUT', data),
   recoveryKey: (token: string | null, data: { current_password: string }) =>
     apiJson(decodeRecoveryKey, '/api/auth/recovery/key', token, 'POST', data),
   redeemRecovery: (data: { email: string; recovery_key: string; new_password: string }) =>

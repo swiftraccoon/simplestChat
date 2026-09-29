@@ -19,6 +19,8 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `accountProfile` | `GET /api/auth/profile` | `AccountProfile` |
 | `updateProfile` | `PATCH /api/auth/profile` | `AccountProfile` |
 | `changePassword` | `POST /api/auth/password` | `204`, no body |
+| `accountPreferences` | `GET /api/auth/preferences` | `ChatPreferences` |
+| `updatePreferences` | `PUT /api/auth/preferences` | `ChatPreferences` |
 | `recoveryKey` | `POST /api/auth/recovery/key` | `{ recovery_key: string }` |
 | `redeemRecovery` | `POST /api/auth/recovery/redeem` | `204`, no body |
 | `rooms` | `GET /api/rooms` with directory query parameters | `RoomListItem[]` |
@@ -32,7 +34,16 @@ when the room's live state was busy at listing time; the browser renders an
 unknown count rather than an empty room.
 
 Account/profile and directory fields use snake_case. `RoomSettings`, including
-the room-creation result, uses camelCase. Profile `avatar_url`, directory `topic`
+the room-creation result, uses camelCase, and so does `ChatPreferences`: it is
+the browser's own chat preference object (private-message opt-in, sounds, text
+size, timestamp format and the ignore list) kept on the account so it follows a
+signed-in viewer to other devices. The server validates it like the browser does
+(a known timestamp format, at most 100 ignored account ids, never the viewer's
+own) and reads a stored object leniently, so a build that adds a field never
+locks a client out of its settings. Desktop notification consent stays on the
+device and the chat look on the profile. `PUT` replaces the whole object; the
+newest write wins. A guest, or a viewer without a token, keeps everything in
+the browser. Profile `avatar_url`, directory `topic`
 and directory `image_url` are required nullable fields; null is not a missing
 response. Directory counts, description and visibility flags are also required.
 Unknown response fields are stripped before use. See the

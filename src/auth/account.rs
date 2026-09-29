@@ -62,6 +62,129 @@ pub struct UpdateProfileRequest {
     pub bio: String,
 }
 
+/// Chat preferences that follow an account across devices, in the browser's
+/// own shape (`Preferences` in web/src/social-chat.ts, camelCase). Desktop
+/// notification consent and the chat look stay where they are decided: the
+/// device and the profile.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ChatPreferences {
+    pub allow_private_messages: bool,
+    pub sounds: bool,
+    pub large_text: bool,
+    pub timestamps: String,
+    pub ignored: Vec<IgnoredPerson>,
+}
+
+impl Default for ChatPreferences {
+    fn default() -> Self {
+        Self {
+            allow_private_messages: true,
+            sounds: false,
+            large_text: false,
+            timestamps: "hover".to_string(),
+            ignored: Vec::new(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct IgnoredPerson {
+    pub id: String,
+    pub name: String,
+}
+
+const TIMESTAMP_FORMATS: [&str; 5] = ["hover", "time", "time12", "seconds", "datetime"];
+/// The same ceiling a room applies to a session's ignore list.
+const MAX_IGNORED: usize = 100;
+
+/// The browser's validation, repeated: a stored object must be one this build
+/// could have written, whatever client sent it.
+fn validate_preferences(preferences: &ChatPreferences, own_id: Uuid) -> Result<(), AuthError> {
+    if !TIMESTAMP_FORMATS.contains(&preferences.timestamps.as_str()) {
+        return Err(AuthError::InvalidInput("Unknown timestamp format"));
+    }
+    if preferences.ignored.len() > MAX_IGNORED {
+        return Err(AuthError::InvalidInput("Ignore list is full (100 people)"));
+    }
+    let mut seen = std::collections::HashSet::with_capacity(preferences.ignored.len());
+    for person in &preferences.ignored {
+        let id = Uuid::parse_str(&person.id)
+            .map_err(|_| AuthError::InvalidInput("Ignored people are named by account id"))?;
+        if id == own_id || !seen.insert(id) {
+            return Err(AuthError::InvalidInput(
+                "Ignore list repeats a person or names you",
+            ));
+        }
+        if person.name.is_empty() || !validate_text(&person.name, 64, false) {
+            return Err(AuthError::InvalidInput(
+                "Ignored names must be 1–64 bytes without control characters",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// What the row holds, read leniently: an object another build wrote yields
+/// the defaults rather than an error, so a client is never locked out of its
+/// own settings.
+fn stored_preferences(value: Option<serde_json::Value>) -> Result<ChatPreferences, AuthError> {
+    let value = value.ok_or(AuthError::InvalidToken)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
+}
+
+/// GET /api/auth/preferences
+pub async fn get_preferences(
+    State(server): State<SignalingServer>,
+    headers: HeaderMap,
+) -> Result<(HeaderMap, Json<ChatPreferences>), AuthError> {
+    let _permit = routes::acquire_auth_request(&server)?;
+    let claims = authenticated_claims(&server, &headers).await?;
+    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+    let id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
+    let stored: Option<serde_json::Value> =
+        sqlx::query_scalar("SELECT preferences FROM users WHERE id = $1 AND auth_version = $2")
+            .bind(id)
+            .bind(claims.auth_version)
+            .fetch_optional(pool)
+            .await
+            .map_err(routes::database_error)?;
+    Ok((
+        routes::no_store_headers(),
+        Json(stored_preferences(stored)?),
+    ))
+}
+
+/// PUT /api/auth/preferences: the whole object, last writer wins.
+pub async fn put_preferences(
+    State(server): State<SignalingServer>,
+    headers: HeaderMap,
+    Json(request): Json<ChatPreferences>,
+) -> Result<(HeaderMap, Json<ChatPreferences>), AuthError> {
+    let _permit = routes::acquire_auth_request(&server)?;
+    let claims = authenticated_claims(&server, &headers).await?;
+    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+    let id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
+    validate_preferences(&request, id)?;
+    let value = serde_json::to_value(&request)
+        .map_err(|_| AuthError::InvalidInput("Invalid preferences"))?;
+    let stored: Option<serde_json::Value> = sqlx::query_scalar(
+        "UPDATE users SET preferences = $2, updated_at = now()
+         WHERE id = $1 AND auth_version = $3
+         RETURNING preferences",
+    )
+    .bind(id)
+    .bind(&value)
+    .bind(claims.auth_version)
+    .fetch_optional(pool)
+    .await
+    .map_err(routes::database_error)?;
+    Ok((
+        routes::no_store_headers(),
+        Json(stored_preferences(stored)?),
+    ))
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ChangePasswordRequest {
@@ -544,6 +667,67 @@ mod tests {
         assert_eq!(recovery_hash(&first).unwrap().len(), 64);
         assert!(recovery_hash("guess").is_err());
         assert!(recovery_hash(&format!("{RECOVERY_PREFIX}{}", "A".repeat(1000))).is_err());
+    }
+
+    #[test]
+    fn preferences_are_validated_like_the_browser_and_read_leniently() {
+        let own = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        let mut preferences = ChatPreferences {
+            ignored: vec![IgnoredPerson {
+                id: other.to_string(),
+                name: "Maya".to_string(),
+            }],
+            ..ChatPreferences::default()
+        };
+        assert!(validate_preferences(&preferences, own).is_ok());
+        preferences.timestamps = "<script>".to_string();
+        assert!(validate_preferences(&preferences, own).is_err());
+        preferences.timestamps = "seconds".to_string();
+        preferences.ignored.push(IgnoredPerson {
+            id: own.to_string(),
+            name: "Me".to_string(),
+        });
+        assert!(validate_preferences(&preferences, own).is_err());
+        preferences.ignored.pop();
+        preferences.ignored.push(IgnoredPerson {
+            id: other.to_string(),
+            name: "Twice".to_string(),
+        });
+        assert!(validate_preferences(&preferences, own).is_err());
+        preferences.ignored.pop();
+        preferences.ignored[0].name = "a\u{7}b".to_string();
+        assert!(validate_preferences(&preferences, own).is_err());
+        preferences.ignored[0].name = "x".repeat(65);
+        assert!(validate_preferences(&preferences, own).is_err());
+        preferences.ignored[0].name = "Maya".to_string();
+        preferences.ignored = (0..=MAX_IGNORED)
+            .map(|_| IgnoredPerson {
+                id: Uuid::new_v4().to_string(),
+                name: "Crowd".to_string(),
+            })
+            .collect();
+        assert!(validate_preferences(&preferences, own).is_err());
+
+        // Stored objects from other builds: unknown keys drop, wrong shapes
+        // yield the defaults, and a missing row means the token is stale.
+        let stored = stored_preferences(Some(serde_json::json!({
+            "sounds": true,
+            "timestamps": "time12",
+            "futureSetting": 3,
+        })))
+        .unwrap();
+        assert!(stored.sounds && stored.allow_private_messages);
+        assert_eq!(stored.timestamps, "time12");
+        let stored = stored_preferences(Some(serde_json::json!({ "sounds": "yes" }))).unwrap();
+        assert!(!stored.sounds);
+        assert!(matches!(
+            stored_preferences(None),
+            Err(AuthError::InvalidToken)
+        ));
+        let serialized = serde_json::to_value(ChatPreferences::default()).unwrap();
+        assert_eq!(serialized["allowPrivateMessages"], true);
+        assert_eq!(serialized["largeText"], false);
     }
 
     #[test]

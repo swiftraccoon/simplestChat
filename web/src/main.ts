@@ -1173,6 +1173,7 @@ const socialChat = new SocialChat({
   telemetry: telemetry.record,
   getRoom: () => room,
   getViewerKey: () => auth.userId ?? 'guest',
+  getToken: () => auth.jwt,
   notify: (message) => showToast(message),
   participantAction: showModerationMenu,
 });

@@ -119,7 +119,7 @@ pub async fn connect() -> anyhow::Result<Option<PgPool>> {
 /// the binary against an unmigrated database fails here, at startup, with a message
 /// naming the gap, instead of on the first request that touches it.
 const EXPECTED_COLUMNS: [(&str, &str); 7] = [
-    ("users", "chat_style"),
+    ("users", "preferences"),
     ("sessions", "refresh_token_family_hash"),
     ("rooms", "updated_at"),
     ("room_states", "ip_address"),

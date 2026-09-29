@@ -2,7 +2,7 @@ import type { TelemetryHandler, TelemetryOutcome } from './telemetry-types';
 import type { RoomClient } from './room';
 import type { ChatEntry, ChatStyle, ChatStyleKind, ServerMessage } from './protocol';
 import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
-import { asyncButton, button, busy, el, field, modal } from './ui';
+import { api, asyncButton, button, busy, el, field, modal } from './ui';
 import { CHAT_PALETTE, chatColor } from './avatar-colors';
 
 /** How a viewer sees message times: on hover, or always in one format. */
@@ -76,6 +76,8 @@ type Options = {
   telemetry?: TelemetryHandler;
   getRoom: () => RoomClient | null;
   getViewerKey: () => string;
+  /** The account's bearer token, when the viewer has one: its preferences then follow it. */
+  getToken?: () => string | null;
   notify: (message: string) => void;
   participantAction: (id: string, name: string, x: number, y: number) => void;
 };
@@ -117,6 +119,7 @@ export class SocialChat {
   private activationSynced = false;
   private preferenceOperation = 0;
   private preferenceBusy = false;
+  private accountSync = 0;
   private preferencesDialog: ReturnType<typeof modal> | null = null;
   private audio: AudioContext | null = null;
   private seenAtBottom = true;
@@ -268,6 +271,20 @@ export class SocialChat {
     const current = (): boolean => this.contextCurrent(activation, room, viewerKey);
     const task = (async () => {
       let success = true;
+      // An account's saved copy replaces this browser's before the room hears
+      // the ignore list; a guest's push stays synchronous with the activation.
+      const token = this.accountToken(viewerKey);
+      if (token) {
+        try {
+          await this.loadAccountPreferences(viewerKey, token);
+        } catch {
+          if (current())
+            this.options.notify(
+              'Saved chat preferences could not be loaded; using this browser’s copy',
+            );
+        }
+        if (!current()) return;
+      }
       try {
         await this.pushPreferences(room, this.preferences, this.temporaryIgnored);
       } catch (error) {
@@ -1372,11 +1389,54 @@ export class SocialChat {
   }
   private savePreferences(viewer = this.viewerKey): void {
     if (viewer !== this.viewerKey || viewer !== this.options.getViewerKey()) return;
+    this.storePreferences(viewer);
+    this.syncAccountPreferences(viewer);
+  }
+  private storePreferences(viewer: string): void {
     try {
       localStorage.setItem(this.preferenceKey(viewer), JSON.stringify(this.preferences));
     } catch {
       /* Private browsing/quota. */
     }
+  }
+  /** The token of a signed-in viewer; guests keep everything in this browser. */
+  private accountToken(viewer: string): string | null {
+    if (viewer === 'guest') return null;
+    return this.options.getToken?.() ?? null;
+  }
+  /** Replace the synced subset with the account's saved copy, when the viewer has one. */
+  private async loadAccountPreferences(viewer: string, token: string): Promise<void> {
+    const saved = await api.accountPreferences(token);
+    if (this.viewerKey !== viewer) return;
+    const ignored = new Map<string, { id: string; name: string }>();
+    for (const entry of saved.ignored) {
+      if (entry.id === this.store.localId || ignored.size >= 100) continue;
+      ignored.set(entry.id, { id: entry.id, name: entry.name.slice(0, 128) });
+    }
+    this.preferences = {
+      ...this.preferences,
+      allowPrivateMessages: saved.allowPrivateMessages,
+      sounds: saved.sounds,
+      largeText: saved.largeText,
+      timestamps: TIMESTAMP_FORMATS.includes(saved.timestamps as TimestampFormat)
+        ? (saved.timestamps as TimestampFormat)
+        : 'hover',
+      ignored: [...ignored.values()],
+    };
+    this.storePreferences(viewer);
+  }
+  /** Save an account's synced subset; the newest write wins, and only the newest failure is reported. */
+  private syncAccountPreferences(viewer: string): void {
+    const token = this.accountToken(viewer);
+    if (!token) return;
+    const { allowPrivateMessages, sounds, largeText, timestamps, ignored } = this.preferences;
+    const attempt = ++this.accountSync;
+    api
+      .updatePreferences(token, { allowPrivateMessages, sounds, largeText, timestamps, ignored })
+      .catch(() => {
+        if (attempt === this.accountSync && this.viewerKey === viewer)
+          this.options.notify('Chat preferences could not be saved to your account');
+      });
   }
   private async pushPreferences(
     room: RoomClient,
@@ -1533,7 +1593,9 @@ export class SocialChat {
     view.body.append(
       el(
         'p',
-        'Account ignores and preferences are saved in this browser. Guest ignores last only for this room session.',
+        this.accountToken(viewer)
+          ? 'These preferences and your ignore list are saved to your account and follow you to other devices. Guest ignores last only for this room session.'
+          : 'Preferences are saved in this browser. Guest ignores last only for this room session.',
         'setting-hint',
       ),
     );

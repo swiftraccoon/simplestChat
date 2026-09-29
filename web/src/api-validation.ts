@@ -85,6 +85,22 @@ export const decodeAccountProfile = object<AccountProfile>({
 });
 export const decodeRecoveryKey = object<{ recovery_key: string }>({ recovery_key: text });
 
+/** An account's chat preferences as the server keeps them (src/auth/account.rs `ChatPreferences`). */
+export interface ChatPreferences {
+  allowPrivateMessages: boolean;
+  sounds: boolean;
+  largeText: boolean;
+  timestamps: string;
+  ignored: { id: string; name: string }[];
+}
+export const decodeChatPreferences = object<ChatPreferences>({
+  allowPrivateMessages: boolean,
+  sounds: boolean,
+  largeText: boolean,
+  timestamps: text,
+  ignored: list(object<{ id: string; name: string }>({ id: text, name: text })),
+});
+
 /** These fields are all serialized by src/room/api.rs, including nullable fields. */
 export const decodeRoomListItem = object<RoomListItem>({
   id: text,

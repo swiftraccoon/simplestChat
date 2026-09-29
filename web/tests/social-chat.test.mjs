@@ -99,8 +99,11 @@ async function fixture() {
   f.document.hidden = false;
   const documentListeners = new Map();
   f.document.addEventListener = (name, handler) => documentListeners.set(name, handler);
+  // The UI fixture's fetch stub keeps its own record; the chat state shadows it below.
+  const http = f.state;
   const state = {
     viewer: 'account-a',
+    token: null,
     requests: [],
     sent: [],
     notifications: [],
@@ -201,12 +204,13 @@ async function fixture() {
   const chat = new SocialChat({
     getRoom: () => state.room,
     getViewerKey: () => state.viewer,
+    getToken: () => state.token,
     notify: (text) => state.notifications.push(text),
     participantAction(...args) {
       state.actions.push(args);
     },
   });
-  return { ...f, state, chat, tab, participants, documentListeners, timers };
+  return { ...f, state, http, chat, tab, participants, documentListeners, timers };
 }
 
 function snapshot(messages) {
@@ -1479,4 +1483,99 @@ test('a reply quotes what it answers, travels with the send, and a quote finds t
     'You: q',
     'a quote of your own message says You, like the rest of the chat',
   );
+});
+
+const savedPreferences = {
+  allowPrivateMessages: false,
+  sounds: true,
+  largeText: true,
+  timestamps: 'seconds',
+  ignored: [
+    { id: '7d3f4d5a-1c2b-4e6f-8a9b-0c1d2e3f4a5b', name: 'Saved ignore' },
+    { id: 'local', name: 'Never yourself' },
+  ],
+};
+
+test('an account viewer loads its saved preferences before the room hears its ignore list', async () => {
+  const f = await fixture();
+  f.state.token = 'jwt';
+  f.http.response = { ok: true, status: 200, json: async () => savedPreferences };
+  await f.chat.activate();
+  assert.equal(f.http.requests.length, 1);
+  assert.equal(f.http.requests[0][0], '/api/auth/preferences');
+  assert.equal(f.http.requests[0][1].method, 'GET');
+  assert.equal(f.http.requests[0][1].headers.Authorization, 'Bearer jwt');
+  assert.equal(f.chat.preferences.timestamps, 'seconds');
+  assert.equal(f.chat.preferences.allowPrivateMessages, false);
+  assert.equal(f.chat.preferences.largeText, true);
+  assert.deepEqual(
+    f.chat.preferences.ignored.map((entry) => entry.id),
+    ['7d3f4d5a-1c2b-4e6f-8a9b-0c1d2e3f4a5b'],
+    'the viewer is never on its own list',
+  );
+  const pushed = f.state.requests.find((request) => request.action === 'setChatPreferences');
+  assert.deepEqual(pushed.data, {
+    allowPrivateMessages: false,
+    ignoredParticipantIds: ['7d3f4d5a-1c2b-4e6f-8a9b-0c1d2e3f4a5b'],
+  });
+  const stored = JSON.parse(f.state.storage.get('simplestchat.chat.v1.account-a'));
+  assert.equal(stored.timestamps, 'seconds', 'the browser copy follows the account');
+  assert.equal(f.state.notifications.length, 0);
+});
+
+test('guests and signed-out viewers never touch the account preference endpoints', async () => {
+  const f = await fixture();
+  f.state.viewer = 'guest';
+  f.state.token = 'jwt';
+  await f.chat.activate();
+  f.chat.setTimestampFormat('datetime');
+  assert.equal(f.http.requests.length, 0);
+  f.chat.reset();
+  f.state.viewer = 'account-a';
+  f.state.token = null;
+  await f.chat.activate();
+  f.chat.setTimestampFormat('time');
+  assert.equal(f.http.requests.length, 0);
+});
+
+test('a changed preference is written to the account, and only the newest failure is reported', async () => {
+  const f = await fixture();
+  f.state.token = 'jwt';
+  f.http.response = { ok: true, status: 200, json: async () => savedPreferences };
+  await f.chat.activate();
+  f.http.requests.length = 0;
+  f.chat.setTimestampFormat('datetime');
+  assert.equal(f.http.requests[0][0], '/api/auth/preferences');
+  assert.equal(f.http.requests[0][1].method, 'PUT');
+  const body = JSON.parse(f.http.requests[0][1].body);
+  assert.equal(body.timestamps, 'datetime');
+  assert.deepEqual(Object.keys(body).sort(), [
+    'allowPrivateMessages',
+    'ignored',
+    'largeText',
+    'sounds',
+    'timestamps',
+  ]);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(f.state.notifications.length, 0);
+  f.http.response = { ok: false, status: 500, text: async () => 'server fragment' };
+  f.chat.setTimestampFormat('time');
+  f.chat.setTimestampFormat('time12');
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(f.state.notifications, ['Chat preferences could not be saved to your account']);
+  assert.equal(f.chat.preferences.timestamps, 'time12', 'the browser copy is kept regardless');
+});
+
+test('a failed preference load keeps the browser copy and says so once', async () => {
+  const f = await fixture();
+  f.state.token = 'jwt';
+  f.state.storage.set('simplestchat.chat.v1.account-a', JSON.stringify({ timestamps: 'seconds' }));
+  f.http.response = { ok: false, status: 503, text: async () => 'down' };
+  await f.chat.activate();
+  assert.equal(f.chat.preferences.timestamps, 'seconds');
+  assert.deepEqual(f.state.notifications, [
+    'Saved chat preferences could not be loaded; using this browser’s copy',
+  ]);
+  assert.ok(f.state.requests.some((request) => request.action === 'setChatPreferences'));
 });
