@@ -35,8 +35,10 @@ reference VPS) and `MAX_ROOMS` matches it. `group_vars/benchmark_hosts.yml`
 holds the expressions; set any of `scpub_app_cpus`, `scpub_media_workers`,
 `scpub_app_memory_mib`, `scpub_max_connections`, `scpub_max_rooms`,
 `scpub_max_participants_per_room` or `scpub_max_broadcasters_per_room` in the
-inventory to override one (`scpub_media_workers: 2` when the provider firewall
-opens only UDP 40000–40001). `build/capacity.py suggest --vcpus N --memory-gib M`
+inventory to override one (for example `scpub_media_workers: 2` behind a
+firewall you cannot change that opens only UDP 40000–40001). Compose publishes
+the range itself; a host needs no firewall rule of its own for it.
+`build/capacity.py suggest --vcpus N --memory-gib M`
 prints the same numbers with what they carry, and the server logs its sizing
 at startup.
 
