@@ -22,7 +22,9 @@ only the application while keeping the database and proxy running.
    external HTTPS origin. `CADDY_UPSTREAM` defaults to `127.0.0.1:3000`; use
    `simplestchat:3000` for a proxy on the application's Compose network.
 2. Expose TCP 80/443 and the media worker's UDP ports starting at 40000. Keep
-   TCP 3000 private. Set `ANNOUNCE_IP` to the address clients can reach.
+   TCP 3000 private. Set `ANNOUNCE_IP` to the address clients can reach, and
+   `ANNOUNCE_IPV6` beside it on a dual-stack host: Compose publishes the media
+   ports on both families, and each family gets its own listener.
 3. Keep runtime secrets outside the repository in an owner-readable file
    (mode `0600`). Generate each with `openssl rand -base64 48`; use independent
    JWT, metrics, proxy and TURN secrets.

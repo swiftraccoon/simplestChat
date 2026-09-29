@@ -23,6 +23,8 @@ services:
       BIND_ADDR: "0.0.0.0"
       PORT: "3000"
       ANNOUNCE_IP: "${ANNOUNCE_IP:-127.0.0.1}"
+      # A dual-stack host announces its IPv6 address beside the IPv4 one.
+      ANNOUNCE_IPV6: "${ANNOUNCE_IPV6:-}"
       RUN_MIGRATIONS: "${RUN_MIGRATIONS:-false}"
       MAX_CONNECTIONS: "${MAX_CONNECTIONS:-10000}"
       MAX_CONNECTIONS_PER_IP: "${MAX_CONNECTIONS_PER_IP:-50}"

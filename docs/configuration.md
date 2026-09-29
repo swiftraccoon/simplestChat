@@ -2,7 +2,8 @@
 
 | Env Var | Default | Purpose |
 |---------|---------|---------|
-| `ANNOUNCE_IP` | `127.0.0.1` | Server's advertised IP for ICE candidates; set it to the client-reachable address in production |
+| `ANNOUNCE_IP` | `127.0.0.1` | The address clients reach, IPv4 or IPv6, advertised in ICE candidates; its family's listener binds the unspecified address. Set it to the client-reachable address in production |
+| `ANNOUNCE_IPV6` | unset | On a dual-stack host, the IPv6 address announced beside an IPv4 `ANNOUNCE_IP`: a second listener on `::` (v6-only, sharing each worker's port) offers IPv6 candidates. An IPv6-only host sets `ANNOUNCE_IP` to its IPv6 address instead |
 | `BIND_ADDR` | `127.0.0.1` | HTTP/WebSocket bind address; Compose overrides this inside its isolated network namespace |
 | `PORT` | `3000` | HTTP/WebSocket listen port for direct runs; the supplied Compose/Caddy path pins host and container port 3000 |
 | `DATABASE_URL` | (none) | PostgreSQL URL; remote hosts must use `sslmode=verify-full`; without it the server is anonymous-only |

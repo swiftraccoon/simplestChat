@@ -552,22 +552,84 @@ impl WebRtcTransportConfig {
             "minimum outgoing bitrate must not exceed maximum outgoing bitrate"
         );
         anyhow::ensure!(
+            !self.listen_ips.is_empty(),
+            "at least one media listener is needed"
+        );
+        let (v4, v6) = self.listen_ips.iter().fold((0, 0), |(v4, v6), listener| {
+            if listener.ip.is_ipv4() {
+                (v4 + 1, v6)
+            } else {
+                (v4, v6 + 1)
+            }
+        });
+        anyhow::ensure!(
+            v4 <= 1 && v6 <= 1,
+            "one media listener per address family: announce one IPv4 and at most one IPv6 address"
+        );
+        for listener in &self.listen_ips {
+            if let Some(announced) = listener.announced_address.as_deref() {
+                let parsed: IpAddr = announced
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("announced address {announced} is not an IP"))?;
+                anyhow::ensure!(
+                    parsed.is_ipv4() == listener.ip.is_ipv4(),
+                    "announced address {announced} does not match its listener's family"
+                );
+            }
+        }
+        anyhow::ensure!(
             self.enable_udp || self.enable_tcp,
             "at least one WebRTC transport protocol must be enabled"
         );
         Ok(())
     }
 
-    /// Sets the public IP address for the transport
-    pub fn with_public_ip(mut self, public_ip: IpAddr) -> Self {
-        if let Some(listen_ip) = self.listen_ips.first_mut() {
-            listen_ip.announced_address = Some(public_ip.to_string());
+    /// Announce `address` for the listener of its family, binding that family's
+    /// unspecified address; a second family gets its own listener on the same
+    /// port (the worker binds IPv6 sockets v6-only, so both coexist).
+    pub fn with_announced_address(mut self, address: IpAddr) -> Self {
+        let unspecified = match address {
+            IpAddr::V4(_) => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            IpAddr::V6(_) => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+        };
+        let announced = Some(address.to_string());
+        let single_unannounced =
+            self.listen_ips.len() == 1 && self.listen_ips[0].announced_address.is_none();
+        if single_unannounced {
+            // The default listener announces nothing yet: it takes the first
+            // address and its family.
+            let first = &mut self.listen_ips[0];
+            first.ip = unspecified;
+            first.announced_address = announced;
+        } else if let Some(existing) = self
+            .listen_ips
+            .iter_mut()
+            .find(|listener| listener.ip.is_ipv4() == address.is_ipv4())
+        {
+            existing.announced_address = announced;
+        } else {
+            self.listen_ips.push(ListenInfo {
+                protocol: Protocol::Udp,
+                ip: unspecified,
+                announced_address: announced,
+                port: None,
+                port_range: None,
+                flags: None,
+                send_buffer_size: None,
+                recv_buffer_size: None,
+                expose_internal_ip: false,
+            });
         }
         self
     }
+
+    /// Sets the public IP address for the transport (`ANNOUNCE_IP`, either family).
+    pub fn with_public_ip(self, public_ip: IpAddr) -> Self {
+        self.with_announced_address(public_ip)
+    }
 }
 
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::num::NonZeroU32;
 
 #[cfg(test)]
@@ -617,6 +679,49 @@ mod tests {
         // the publisher's REMB ceiling or the browser starves the top layer.
         assert_eq!(config.max_incoming_bitrate, Some(3_000_000));
         assert!(config.max_incoming_bitrate.unwrap() >= 100_000 + 300_000 + 2_500_000 + 64_000);
+    }
+
+    #[test]
+    fn announced_addresses_bind_their_own_families_on_one_port() {
+        let v4: IpAddr = "203.0.113.10".parse().unwrap();
+        let v6: IpAddr = "2001:db8::10".parse().unwrap();
+        let single = WebRtcTransportConfig::default().with_public_ip(v4);
+        assert_eq!(single.listen_ips.len(), 1);
+        assert_eq!(single.listen_ips[0].ip, IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+        assert_eq!(
+            single.listen_ips[0].announced_address.as_deref(),
+            Some("203.0.113.10")
+        );
+        assert!(single.validate().is_ok());
+        let dual = single.with_announced_address(v6);
+        assert_eq!(dual.listen_ips.len(), 2);
+        assert_eq!(dual.listen_ips[1].ip, IpAddr::V6(Ipv6Addr::UNSPECIFIED));
+        assert_eq!(
+            dual.listen_ips[1].announced_address.as_deref(),
+            Some("2001:db8::10")
+        );
+        assert!(dual.validate().is_ok());
+        // Announcing a family again replaces its address instead of adding a listener.
+        let replaced = dual.with_announced_address("2001:db8::20".parse().unwrap());
+        assert_eq!(replaced.listen_ips.len(), 2);
+        assert_eq!(
+            replaced.listen_ips[1].announced_address.as_deref(),
+            Some("2001:db8::20")
+        );
+        // An IPv6-only host announces IPv6 as ANNOUNCE_IP and binds only `::`.
+        let six_only = WebRtcTransportConfig::default().with_public_ip(v6);
+        assert_eq!(six_only.listen_ips.len(), 1);
+        assert_eq!(six_only.listen_ips[0].ip, IpAddr::V6(Ipv6Addr::UNSPECIFIED));
+        assert!(six_only.validate().is_ok());
+        let mut mismatched = WebRtcTransportConfig::default();
+        mismatched.listen_ips[0].announced_address = Some("2001:db8::10".to_owned());
+        assert!(
+            mismatched.validate().is_err(),
+            "an IPv6 address on the IPv4 listener"
+        );
+        let mut empty = WebRtcTransportConfig::default();
+        empty.listen_ips.clear();
+        assert!(empty.validate().is_err());
     }
 
     #[test]

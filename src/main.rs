@@ -84,23 +84,42 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
     let mut media_config = MediaConfig::from_env()?;
     simplestChat::sizing::announce(media_config.worker_config.num_workers);
 
-    // Set announced IP from environment variable (required for ICE candidates)
-    // Falls back to loopback; the local launcher can select an owned LAN address.
-    if let Ok(ip) = std::env::var("ANNOUNCE_IP") {
-        info!("Using ANNOUNCE_IP={}", ip);
-        let addr = ip
+    // The addresses clients reach, one listener per family: ANNOUNCE_IP (IPv4 or
+    // IPv6; loopback when unset, the local launcher selects an owned LAN address)
+    // and, on a dual-stack host, ANNOUNCE_IPV6 beside an IPv4 ANNOUNCE_IP.
+    let announced: std::net::IpAddr = match std::env::var("ANNOUNCE_IP") {
+        Ok(ip) => {
+            info!("Using ANNOUNCE_IP={}", ip);
+            ip.parse()
+                .map_err(|_| anyhow::anyhow!("Invalid ANNOUNCE_IP: {ip}"))?
+        }
+        Err(_) => {
+            let default_ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
+            info!("No ANNOUNCE_IP set, using {}", default_ip);
+            default_ip
+        }
+    };
+    media_config.webrtc_transport_config = media_config
+        .webrtc_transport_config
+        .with_public_ip(announced);
+    if let Some(ipv6) = std::env::var("ANNOUNCE_IPV6")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+    {
+        let address: std::net::Ipv6Addr = ipv6
             .parse()
-            .map_err(|_| anyhow::anyhow!("Invalid ANNOUNCE_IP: {ip}"))?;
-        media_config.webrtc_transport_config =
-            media_config.webrtc_transport_config.with_public_ip(addr);
-    } else {
-        // Use 127.0.0.1 as fallback for localhost testing.
-        let default_ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
-        info!("No ANNOUNCE_IP set, using {}", default_ip);
+            .map_err(|_| anyhow::anyhow!("Invalid ANNOUNCE_IPV6: {ipv6}"))?;
+        anyhow::ensure!(
+            announced.is_ipv4(),
+            "ANNOUNCE_IPV6 goes beside an IPv4 ANNOUNCE_IP; an IPv6 ANNOUNCE_IP already announces that family"
+        );
+        info!("Using ANNOUNCE_IPV6={address}");
         media_config.webrtc_transport_config = media_config
             .webrtc_transport_config
-            .with_public_ip(default_ip);
+            .with_announced_address(std::net::IpAddr::V6(address));
     }
+    media_config.validate()?;
 
     let metrics = ServerMetrics::with_diagnostics(diagnostics);
     // Connect to database (optional)

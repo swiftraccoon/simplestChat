@@ -95,15 +95,14 @@ pub struct WorkerManager {
 /// `SO_SNDBUF`, which the kernel clamps to its `net.core` ceilings.
 fn webrtc_server_listen_infos(
     port: u16,
-    announced_address: Option<String>,
     tcp: bool,
     config: &MediaConfig,
 ) -> WebRtcServerListenInfos {
     let buffer = |bytes: u32| (bytes > 0).then_some(bytes);
-    let info = |protocol| ListenInfo {
+    let info = |protocol, listener: &ListenInfo| ListenInfo {
         protocol,
-        ip: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        announced_address: announced_address.clone(),
+        ip: listener.ip,
+        announced_address: listener.announced_address.clone(),
         port: Some(port),
         port_range: None,
         flags: None,
@@ -111,12 +110,37 @@ fn webrtc_server_listen_infos(
         recv_buffer_size: buffer(config.webrtc_recv_buffer_bytes),
         expose_internal_ip: false,
     };
-    let infos = WebRtcServerListenInfos::new(info(Protocol::Udp));
-    if tcp {
-        infos.insert(info(Protocol::Tcp))
+    let fallback = ListenInfo {
+        protocol: Protocol::Udp,
+        ip: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+        announced_address: None,
+        port: None,
+        port_range: None,
+        flags: None,
+        send_buffer_size: None,
+        recv_buffer_size: None,
+        expose_internal_ip: false,
+    };
+    let listeners = &config.webrtc_transport_config.listen_ips;
+    let listeners: &[ListenInfo] = if listeners.is_empty() {
+        std::slice::from_ref(&fallback)
     } else {
-        infos
+        listeners
+    };
+    let mut entries = Vec::with_capacity(listeners.len() * 2);
+    for listener in listeners {
+        entries.push(info(Protocol::Udp, listener));
+        if tcp {
+            entries.push(info(Protocol::Tcp, listener));
+        }
     }
+    let mut entries = entries.into_iter();
+    let first = entries
+        .next()
+        .unwrap_or_else(|| info(Protocol::Udp, &fallback));
+    entries.fold(WebRtcServerListenInfos::new(first), |infos, entry| {
+        infos.insert(entry)
+    })
 }
 
 /// The kernel grants at most `net.core.rmem_max`/`wmem_max` per socket and
@@ -182,13 +206,6 @@ impl WorkerManager {
         let mut webrtc_servers = HashMap::new();
         let mut worker_consumer_counts = HashMap::new();
 
-        // Derive announced_address from transport config (if set)
-        let announced_address = config
-            .webrtc_transport_config
-            .listen_ips
-            .first()
-            .and_then(|li| li.announced_address.clone());
-
         let mut worker_threads = HashMap::new();
         warn_if_kernel_clamps_socket_buffers(&config);
 
@@ -219,7 +236,6 @@ impl WorkerManager {
             let port = config.worker_port(i)?;
             let server_options = WebRtcServerOptions::new(webrtc_server_listen_infos(
                 port,
-                announced_address.clone(),
                 config.webrtc_server_tcp,
                 &config,
             ));
@@ -578,18 +594,11 @@ impl WorkerManager {
         Self::setup_worker_handlers(&new_worker, pos, self.deaths.clone());
 
         // The listener reuses the dead worker's port so announced addresses stay stable.
-        let announced_address = self
-            .config
-            .webrtc_transport_config
-            .listen_ips
-            .first()
-            .and_then(|li| li.announced_address.clone());
         let port = self.config.worker_port(pos).map_err(|error| {
             MediaError::ConfigurationError(format!("Invalid worker port configuration: {error}"))
         })?;
         let server_options = WebRtcServerOptions::new(webrtc_server_listen_infos(
             port,
-            announced_address,
             self.config.webrtc_server_tcp,
             &self.config,
         ));
