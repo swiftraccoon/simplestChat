@@ -1,0 +1,50 @@
+---
+- name: Replace the public application through the maintenance launcher
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  serial: 1
+  vars:
+    ansible_pipelining: true
+    scbench_revision: "{{ scpub_release_revision }}"
+  pre_tasks:
+    - name: Require a staged exact revision on the prepared public host
+      ansible.builtin.assert:
+        that:
+          - scpub_enabled | bool
+          - scpub_release_revision is defined
+          - scpub_release_revision is match('^[a-f0-9]{40}$')
+          - scpub_config == '/etc/simplestchat-public'
+          - scpub_root == '/srv/simplestchat-public'
+        fail_msg: Stage the exact 40-character revision with release.yml first.
+  tasks:
+    # The launcher checks the packaged migrations against this clean checkout.
+    - name: Obtain the exact application source for the launcher's checks
+      ansible.builtin.import_tasks: tasks/source.yml
+
+    - name: Render the runtime grants the launcher applies after migrating
+      ansible.builtin.template:
+        src: public-runtime-grants.sql.j2
+        dest: "{{ scpub_config }}/runtime-grants.sql"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Replace the application through the launcher as a transient unit
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - "--unit=simplestchat-maintenance-{{ scpub_release_revision[:12] }}-{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%dT%H%M%S') }}"
+          - --property=Type=exec
+          - --property=RuntimeMaxSec=1800
+          - --property=TimeoutStopSec=240
+          - --wait
+          - /usr/bin/python3
+          - -B
+          - /usr/local/libexec/simplestchat-public/release-public.py
+          - maintain
+          - "{{ scpub_release_revision }}"
+      changed_when: true
+      when: not ansible_check_mode

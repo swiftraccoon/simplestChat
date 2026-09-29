@@ -122,6 +122,9 @@ class FixtureRunner:
         # None models an unreadable endpoint.
         self.metrics_rooms: list[int] | None = [0]
         self.rollback_unready: bool = False
+        self.proxy_running: bool = True
+        self.launcher_exit: int = 0
+        self.launcher_runs: int = 0
         self.validation_exit: bytes = b"0"
         self.validation_images: dict[str, str] = {}
         self.database: JsonObject = self._container("2", "sha256:" + "2" * 64, health=True)
@@ -168,8 +171,23 @@ class FixtureRunner:
         raise AssertionError(message)
 
     def run(self, args: Sequence[str], **kwargs: Unpack[public.CommandOptions]) -> bytes:
-        """Model only readiness requests and their selected failure conditions."""
+        """Model readiness requests, the maintenance launcher and their selected failures."""
         self.calls.append(("run", tuple(args), dict(kwargs)))
+        if list(args) == [public.LAUNCHER]:
+            # The launcher migrates, applies grants and starts everything it finds selected.
+            self.launcher_runs += 1
+            assert not self.app_running, "launcher needs the app stopped"
+            assert not self.proxy_running, "launcher needs the proxy stopped"
+            if self.launcher_exit != 0:
+                message = "fixture launcher failed"
+                raise public.ReleaseError(message)
+            self.app_image = string(
+                json_object((self.config / "images.json").read_text()), "serverImage"
+            )
+            self.database_migrations = dict(self.image_migrations)
+            self.app_running = True
+            self.proxy_running = True
+            return b""
         if args[0] == "/usr/bin/curl" and args[-1].endswith("/metrics"):
             if self.metrics_rooms is None:
                 message = "fixture metrics unavailable"
@@ -254,6 +272,10 @@ class FixtureRunner:
         if args == ("ps", "--all", "--quiet", "simplestchat"):
             return ("1" * 64).encode()
         if args[0] == "stop":
+            if args == ("stop", "--timeout", "3", "caddy"):
+                assert not self.app_running, "the app stops before the proxy"
+                self.proxy_running = False
+                return b""
             assert args == ("stop", "--timeout", "30", "simplestchat")
             self.app_running = False
             return b""
@@ -792,6 +814,118 @@ class PublicReleaseTests(unittest.TestCase):
         self.assertEqual(self.app_mutations(), [])
         self.assertEqual((self.root / "release-state.json").read_bytes(), journal)
         self.assert_config_unchanged()
+
+    def stage_with_new_migration(self) -> None:
+        """Package a second migration the live database has not applied."""
+        migrations = dict(MIGRATIONS, **{"2": hashlib.sha384(b"SELECT 2;\n").hexdigest()})
+        manifest = fixture_manifest(self.manifest["archiveSha256"])
+        manifest["migrations"] = migrations
+        _ = (self.directory / "release.json").write_text(json.dumps(manifest))
+        self.manifest = manifest
+        self.runner.image_migrations = dict(migrations)
+        _ = self.stage()
+
+    def maintenance_calls(self) -> list[tuple[str, ...]]:
+        """Return stops and launcher runs, in order."""
+        return [
+            args
+            for kind, args, _ in self.runner.calls
+            if (kind == "compose" and args[0] == "stop")
+            or (kind == "run" and args == (public.LAUNCHER,))
+        ]
+
+    def test_maintenance_backs_up_stops_app_then_proxy_selects_and_launches(self) -> None:
+        """Maintenance backs up, stops app then proxy, selects the candidate and launches."""
+        self.stage_with_new_migration()
+        source = self.root / "sources" / REVISION / ".git"
+        source.mkdir(parents=True)
+        database, proxy = deepcopy(self.runner.database), deepcopy(self.runner.proxy)
+        with patch.object(public, "SOURCES", self.root / "sources"):
+            self.execute("maintain")
+        report = self.report()
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["phase"], "complete")
+        self.assertTrue(report["launcherPassed"])
+        self.assertIn("backupSha256", report)
+        self.assertIn("interruptionStartedAt", report)
+        self.assertIn("interruptionFinishedAt", report)
+        self.assertNotIn("rollbackAttempted", report)
+        self.assertEqual(
+            self.maintenance_calls(),
+            [
+                ("stop", "--timeout", "30", "simplestchat"),
+                ("stop", "--timeout", "3", "caddy"),
+                (public.LAUNCHER,),
+            ],
+        )
+        self.assertEqual(self.runner.launcher_runs, 1)
+        self.assertEqual(self.runner.app_image, NEW_IMAGE)
+        self.assertEqual(self.runner.database_migrations, self.runner.image_migrations)
+        self.assertEqual(self.runner.database, database)
+        self.assertEqual(self.runner.proxy, proxy)
+        self.assertEqual(
+            json_object((self.config / "images.json").read_text())["serverImage"], NEW_IMAGE
+        )
+        self.assertIn(f"SIMPLESTCHAT_IMAGE={NEW_IMAGE}\n", (self.config / "app.env").read_text())
+        journal = json_object((self.root / "release-state.json").read_text())
+        self.assertTrue(journal["finalized"])
+        self.assertEqual(journal["phase"], "complete")
+        self.assertFalse(
+            any(kind == "compose" and args[0] == "up" for kind, args, _ in self.runner.calls),
+            "the launcher, not the helper, starts services during maintenance",
+        )
+        for kind, args, _ in self.runner.calls:
+            if kind == "docker" and "pg_restore" in args:
+                self.assertIn("--list", args, "maintenance never restores the live database")
+
+    def test_maintenance_refuses_a_ledger_that_is_not_the_candidates_prefix(self) -> None:
+        """A changed applied migration stops maintenance before any backup or stop."""
+        self.stage_with_new_migration()
+        (self.root / "sources" / REVISION / ".git").mkdir(parents=True)
+        self.runner.database_migrations = {"1": "e" * 96}
+        with (
+            patch.object(public, "SOURCES", self.root / "sources"),
+            self.assertRaisesRegex(public.ReleaseError, "Applied migrations differ"),
+        ):
+            self.execute("maintain")
+        self.assertFalse(self.report()["passed"])
+        self.assertEqual(self.maintenance_calls(), [])
+        self.assertNotIn("backupSha256", self.report())
+        self.assert_config_unchanged()
+
+    def test_maintenance_requires_the_source_checkout_before_stopping_anything(self) -> None:
+        """Without the revision's checkout the launcher would fail after the stop."""
+        self.stage_with_new_migration()
+        with (
+            patch.object(public, "SOURCES", self.root / "sources"),
+            self.assertRaisesRegex(public.ReleaseError, "source checkout"),
+        ):
+            self.execute("maintain")
+        self.assertEqual(self.maintenance_calls(), [])
+        self.assert_config_unchanged()
+
+    def test_maintenance_launcher_failure_keeps_the_selection_for_inspection(self) -> None:
+        """A failed launcher leaves the new selection, a finalized journal and a failed outcome."""
+        self.stage_with_new_migration()
+        (self.root / "sources" / REVISION / ".git").mkdir(parents=True)
+        self.runner.launcher_exit = 1
+        with (
+            patch.object(public, "SOURCES", self.root / "sources"),
+            self.assertRaisesRegex(public.ReleaseError, "launcher failed"),
+        ):
+            self.execute("maintain")
+        report = self.report()
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["phase"], "launcher")
+        self.assertFalse(report["launcherPassed"])
+        self.assertNotIn("rollbackAttempted", report)
+        self.assertEqual(len(self.maintenance_calls()), 3)
+        self.assertEqual(
+            json_object((self.config / "images.json").read_text())["serverImage"], NEW_IMAGE
+        )
+        journal = json_object((self.root / "release-state.json").read_text())
+        self.assertTrue(journal["finalized"])
+        self.assertEqual(journal["phase"], "maintenance_selected")
 
     def test_success_replaces_only_app_and_preserves_database_and_proxy(self) -> None:
         """Success replaces only app and preserves database and proxy."""

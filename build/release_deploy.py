@@ -54,6 +54,7 @@ class DeployOptions(argparse.Namespace):
     wait_seconds: int = 3600
     quiet_seconds: int = 600
     install_helpers: bool = False
+    maintenance: bool = False
     ansible_playbook: str | None = None
 
 
@@ -85,6 +86,14 @@ def options(argv: list[str] | None = None) -> DeployOptions:
         help=(
             "Explicitly reconcile release helpers "
             + "instead of requiring their exact installed hashes"
+        ),
+    )
+    _ = parser.add_argument(
+        "--maintenance",
+        action="store_true",
+        help=(
+            "Stage, then replace the app through the maintenance launcher "
+            + "(new migrations and grants; the app and proxy stop for the duration)"
         ),
     )
     _ = parser.add_argument(
@@ -307,11 +316,44 @@ def select_ci_artifact(args: DeployOptions, revision: str) -> JsonObject:
     return envelope
 
 
-def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlaybookTarget:
+    """The frozen inventory, host and controller environment every playbook run shares."""
+
+    playbook: str
+    inventory: Path
+    host: str
+    root: Path
+    environment: dict[str, str]
+
+
+def run_playbook(
+    runner: BUILD.Runner, target: PlaybookTarget, name: str, extra: JsonObject
+) -> None:
+    """Run one playbook from `ops/ansible` against the frozen host with explicit variables."""
+    _ = runner.run(
+        [
+            target.playbook,
+            "-i",
+            str(target.inventory),
+            str(target.root / "ops/ansible" / name),
+            "--limit",
+            target.host,
+            "--extra-vars",
+            json.dumps(extra),
+        ],
+        cwd=target.root,
+        env=target.environment,
+        timeout=2400,
+        capture=False,
+    )
+
+
+def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0915 - one release transaction: identity, CI, staging, optional maintenance, smoke.
     """Deploy the pinned artifact once to a frozen host, then run public verification."""
     report: JsonObject = {
         "schemaVersion": 1,
-        "operation": "deploy",
+        "operation": "maintenance" if args.maintenance else "deploy",
         "passed": False,
         "phase": "preflight",
         "deployed": False,
@@ -361,27 +403,23 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:
             "scpub_release_expected_revision": revision,
             "scpub_release_ci_run": envelope["ciRunId"],
             "scpub_release_prepared": not args.install_helpers,
-            "scpub_release_deploy": True,
+            "scpub_release_deploy": not args.maintenance,
             "scpub_release_quiet_seconds": args.quiet_seconds,
         }
         require(checkout_identity(inspector, root, args.repository) == revision, "checkout_changed")
         report.update(phase="deploy", remoteOutcome="inspect_if_interrupted")
-        _ = runner.run(
-            [
-                playbook,
-                "-i",
-                str(frozen_inventory),
-                str(root / "ops/ansible/release.yml"),
-                "--limit",
-                host,
-                "--extra-vars",
-                json.dumps(extra),
-            ],
-            cwd=root,
-            env=environment,
-            timeout=2400,
-            capture=False,
+        target = PlaybookTarget(
+            playbook=playbook,
+            inventory=frozen_inventory,
+            host=host,
+            root=root,
+            environment=environment,
         )
+        run_playbook(runner, target, "release.yml", extra)
+        if args.maintenance:
+            # Staged while live; the launcher now migrates, grants and restarts.
+            report.update(phase="maintenance", remoteOutcome="inspect_if_interrupted")
+            run_playbook(runner, target, "maintenance.yml", {"scpub_release_revision": revision})
         report.update(deployed=True, remoteOutcome="release_succeeded", phase="public_smoke")
         _, output = runner.run(
             [

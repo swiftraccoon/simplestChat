@@ -246,6 +246,36 @@ After success, verify normal browser use. The bounded
 [`build/public-smoke.mjs`](../../build/public-smoke.mjs) check writes one labeled
 public message and verifies two guest connections; it does not test media.
 
+## Schema and configuration changes: the maintenance release
+
+An app-only deployment refuses a candidate whose packaged migrations differ from
+the database ledger. When the candidate adds migrations (or the runtime grants
+changed), release it through the maintenance launcher instead:
+
+```sh
+ops/ansible/.venv/bin/python build/deploy.py --inventory ops/ansible/inventory.local.yml \
+  --repository swiftraccoon/simplestChat --origin https://research.clinic \
+  --limit public_vps --quiet-seconds 0 --maintenance [--install-helpers]
+```
+
+The controller waits for the commit's CI and stages the image while chat stays
+online, exactly as a routine release does, then runs `ops/ansible/maintenance.yml`:
+it checks out the revision's source under `/srv/simplestchat-bench/sources/`
+(the launcher checks the packaged SQL against it), renders the runtime grants,
+and runs `release-public.py maintain <commit>` as a transient unit. That
+action requires the applied ledger to be a prefix of the candidate's packaged
+migrations, takes the live dump with its receipt, stops the app and then the
+proxy (Caddy's grace period would otherwise wait on the app's sockets), swaps
+the selection, and hands over to `/usr/local/bin/simplestchat-public-deploy`,
+which migrates, applies the grants, restarts the app and the proxy, and keeps
+its own evidence under `results/deploy.*`. The helper then requires the staged
+image to be running on the same database container with the candidate's
+ledger, and records `interruptionStartedAt`/`FinishedAt` in its `outcome.json`
+(about 10 s on 2026-09-28). A failed launcher keeps the new selection and the
+stopped containers for inspection: the schema may already have moved, so there
+is no automatic rollback; fix the cause and run the maintenance release again.
+Pass `--install-helpers` whenever `release_public.py` changed, as for any release.
+
 ## Reboots and user recovery
 
 Use the explicit [reboot playbook](reboot.yml), not a full provisioning or initial

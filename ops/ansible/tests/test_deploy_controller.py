@@ -227,6 +227,7 @@ class DeployTests(unittest.TestCase):
             limit=None,
             wait_seconds=30,
             install_helpers=False,
+            maintenance=False,
             ansible_playbook=None,
         )
         self.calls = []
@@ -326,6 +327,29 @@ class DeployTests(unittest.TestCase):
         self.assertNotIn(SECRET, json.dumps(report))
         self.assertNotIn(SECRET, json.dumps(command))
         self.assertEqual(decode_json((evidence / "outcome.json").read_text()), report)
+
+    def test_maintenance_stages_live_then_runs_the_launcher_playbook_then_smokes(self) -> None:
+        """A maintenance release stages with deployment off, then hands over to maintenance.yml."""
+        self.args.maintenance = True
+        report, _ = self.execute()
+        self.assertTrue(report["passed"] and report["deployed"])
+        self.assertEqual(report["operation"], "maintenance")
+        playbooks = self.deployments()
+        self.assertEqual(len(playbooks), 2)
+        staging, maintenance = (call[0] for call in playbooks)
+        self.assertTrue(staging[staging.index("-i") + 2].endswith("ops/ansible/release.yml"))
+        staged_vars = object_value(decode_json(staging[staging.index("--extra-vars") + 1]))
+        self.assertIs(staged_vars["scpub_release_deploy"], expr2=False)
+        self.assertTrue(
+            maintenance[maintenance.index("-i") + 2].endswith("ops/ansible/maintenance.yml")
+        )
+        self.assertEqual(maintenance[maintenance.index("-i") + 1], staging[staging.index("-i") + 1])
+        self.assertEqual(maintenance[maintenance.index("--limit") + 1], "public")
+        self.assertEqual(
+            decode_json(maintenance[maintenance.index("--extra-vars") + 1]),
+            {"scpub_release_revision": REVISION},
+        )
+        self.assertLess(self.calls.index(playbooks[1]), self.calls.index(self.smokes()[0]))
 
     def test_helper_installation_is_only_selected_explicitly(self) -> None:
         """Verify helper installation is only selected explicitly."""

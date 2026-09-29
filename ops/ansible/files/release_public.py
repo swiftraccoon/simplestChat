@@ -1,9 +1,13 @@
-"""Stage a trusted prebuilt release or replace only the public application.
+"""Stage a release, replace only the public app, or replace it through the launcher.
 
-No builds, pulls, migrations, account seeding, database restoration, or host
-maintenance occur here. Persistent evidence and a workload lock make partial
-updates visible. A failed candidate gets one bounded image/config rollback;
-successful recovery never converts a failed release into a passed release.
+The maintenance action serves a candidate that carries schema or grant changes.
+No builds, pulls, account seeding, database restoration, or host maintenance
+occur here; `maintain` delegates migrations to the launcher, which checks the
+packaged SQL against the revision's source checkout and applies the runtime
+grants. Persistent evidence and a workload lock make partial updates visible.
+A failed app-only candidate gets one bounded image/config rollback; a failed
+maintenance keeps its new selection for inspection, since the schema may have
+moved. Successful recovery never converts a failed release into a passed one.
 """
 
 import argparse
@@ -34,6 +38,9 @@ from release_json import JsonObject, JsonValue, decode_json, object_value, strin
 ROOT = Path("/srv/simplestchat-public")
 CONFIG = Path("/etc/simplestchat-public")
 WORK = Path("/run/simplestchat-bench")
+SOURCES = Path("/srv/simplestchat-bench/sources")
+LAUNCHER = "/usr/local/bin/simplestchat-public-deploy"
+MAX_LAUNCHER_SECONDS = 900
 ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
 DOCKER = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
 SELECTION = ("compose.public.yml", "app.env", "images.json")
@@ -1033,10 +1040,181 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
         raise
 
 
-def main() -> None:
-    """Run one explicit staging or deployment transaction and retain its outcome."""
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MaintenancePlan:
+    """What a prepared maintenance replacement must show once the launcher returns."""
+
+    new_image: str
+    origin: str
+    database_id: str
+    migrations: dict[str, str]
+
+
+def prepare_maintenance(
+    runner: RunnerProtocol, manifest: Manifest, staged: JsonObject, report: JsonObject
+) -> MaintenancePlan:
+    """Back up, stop the app then the proxy, and select the candidate for the launcher.
+
+    Unlike `deploy`, the candidate may carry migrations the database has not
+    applied; the applied ledger must still be a prefix of the packaged one.
+    """
+    for filename in SELECTION:
+        protected(CONFIG / filename, limit=1024 * 1024)
+    old = object_value(decode_json((CONFIG / "images.json").read_text()))
+    old_image = string_value(old["serverImage"])
+    old_revision = string_value(old["revision"])
+    require(
+        ID.fullmatch(old_image) and re.fullmatch(r"[a-f0-9]{40}", old_revision),
+        "Invalid deployed identity",
+    )
+    _ = image_identity(runner, old_image, old_revision)
+    new_image = image_identity(runner, string_value(staged["serverImage"]), manifest["revision"])
+    require(old["serverImage"] != new_image, "This image is already selected")
+    source = SOURCES / manifest["revision"]
+    require(
+        (source / ".git").is_dir(),
+        "The launcher needs the revision's clean source checkout; run maintenance.yml",
+    )
+    app, database, proxy = (
+        runner.container(service) for service in ("simplestchat", "postgres", "caddy")
+    )
+    for service, container in (("simplestchat", app), ("postgres", database), ("caddy", proxy)):
+        fields = runner.compose("config", "--hash", service).decode().split()
+        require(
+            fields == [service, container["configHash"]],
+            "Running configuration differs from disk; use reviewed maintenance",
+        )
+    require(app["image"] == old["serverImage"], "Running app differs from selected image")
+    database_state = object_value(database["state"])
+    require(
+        object_value(database_state.get("Health", {})).get("Status") == "healthy",
+        "Database must be healthy",
+    )
+    require(
+        not runner.compose("--profile", "maintenance", "ps", "--all", "--quiet", "migrate").strip(),
+        "Inspect retained migration container first",
+    )
+    ready(runner, seconds=3)
+    database_id = string_value(database["id"])
+    applied = ledger(runner, database_id)
+    packaged = manifest["migrations"]
+    require(
+        all(packaged.get(version) == checksum for version, checksum in applied.items()),
+        "Applied migrations differ from the candidate's packaged ones; recover the ledger first",
+    )
+    require(packaged_migrations(runner, new_image) == packaged, "Candidate migration mismatch")
+    preview, preview_env = candidate_selection(runner, new_image, old)
+    config = object_value(decode_json(runner.compose("config", "--format", "json")))
+    environment = object_value(
+        object_value(object_value(config["services"])["simplestchat"])["environment"]
+    )
+    origin = string_value(environment["WEBAUTHN_ORIGIN"])
+    require(re.fullmatch(r"https://[a-z0-9.-]+", origin), "Unexpected public origin")
+    ready(runner, origin=origin, seconds=3)
+    backup = runner.attempt / "database-before.dump"
+    require(shutil.disk_usage(ROOT).free > 1024**3, "Insufficient backup headroom")
+    journal(runner, finalized=False, phase="live_backup")
+    _ = runner.docker(
+        "exec",
+        "--user",
+        "999:999",
+        database_id,
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=2s",
+        "45s",
+        "pg_dump",
+        "--host",
+        "/run/simplestchat-postgres",
+        "--username",
+        "postgres",
+        "--dbname",
+        "simplestchat",
+        "--format",
+        "custom",
+        timeout=60,
+        output_path=backup,
+    )
+    require(backup.stat().st_size > 0, "Empty live database backup")
+    _ = runner.docker(
+        "exec",
+        "--interactive",
+        "--user",
+        "999:999",
+        database_id,
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=2s",
+        "15s",
+        "pg_restore",
+        "--list",
+        input_path=backup,
+    )
+    report["backupSha256"] = sha256_file(backup)
+    write_backup_receipt(
+        runner.attempt, backup, string_value(report["backupSha256"]), manifest["revision"]
+    )
+    journal(runner, finalized=True, phase="backed_up")
+    for filename in SELECTION:
+        _ = shutil.copyfile(CONFIG / filename, runner.attempt / ("before-" + filename))
+    journal(runner, finalized=False, phase="maintenance_stop")
+    report["phase"] = "maintenance_stop"
+    report["interruptionStartedAt"] = timestamp()
+    # The app first: Compose would stop the proxy first, and Caddy's grace period
+    # then waits for the WebSockets the still-running app holds open.
+    _ = runner.compose("stop", "--timeout", "30", "simplestchat", timeout=45)
+    _ = runner.compose("stop", "--timeout", "3", "caddy", timeout=30)
+    atomic(CONFIG / "compose.public.yml", preview)
+    atomic(CONFIG / "app.env", preview_env)
+    atomic(CONFIG / "images.json", dict(old, revision=manifest["revision"], serverImage=new_image))
+    # The launcher refuses an unfinished journal and holds the workload lock
+    # itself; from here its own evidence directory records the deployment.
+    journal(runner, finalized=True, phase="maintenance_selected")
+    return MaintenancePlan(
+        new_image=new_image, origin=origin, database_id=database_id, migrations=dict(packaged)
+    )
+
+
+def launch_maintenance(runner: RunnerProtocol, report: JsonObject) -> None:
+    """Run the maintenance launcher, which migrates, grants and restarts everything."""
+    report["phase"] = "launcher"
+    started = time.monotonic()
+    try:
+        _ = runner.run([LAUNCHER], timeout=MAX_LAUNCHER_SECONDS)
+    except (ReleaseError, subprocess.TimeoutExpired):
+        report["launcherPassed"] = False
+        raise
+    report["launcherPassed"] = True
+    report["launcherSeconds"] = round(time.monotonic() - started, 1)
+
+
+def finish_maintenance(runner: RunnerProtocol, plan: MaintenancePlan, report: JsonObject) -> None:
+    """Require the launcher to have produced the selected image on a migrated database."""
+    report["phase"] = "verify"
+    ready(runner)
+    ready(runner, origin=plan.origin)
+    require(
+        runner.container("simplestchat")["image"] == plan.new_image,
+        "Replacement is not the staged image",
+    )
+    database = runner.container("postgres")
+    require(
+        string_value(database["id"]) == plan.database_id,
+        "The database container was replaced during maintenance",
+    )
+    require(
+        ledger(runner, plan.database_id) == plan.migrations,
+        "Ledger differs from the candidate after migration",
+    )
+    report["interruptionFinishedAt"] = timestamp()
+    report["phase"] = "complete"
+    journal(runner, finalized=True, phase="complete")
+
+
+def main() -> None:  # noqa: PLR0915 - one transaction per action, with the maintenance launcher run between two lock holds.
+    """Run one explicit staging, deployment or maintenance transaction and retain its outcome."""
     parser = argparse.ArgumentParser(description=__doc__)
-    _ = parser.add_argument("action", choices=("stage", "deploy"))
+    _ = parser.add_argument("action", choices=("stage", "deploy", "maintain"))
     _ = parser.add_argument("revision")
     _ = parser.add_argument(
         "--quiet-seconds",
@@ -1062,40 +1240,51 @@ def main() -> None:
 
     for signum in (signal.SIGTERM, signal.SIGINT):
         _ = signal.signal(signum, interrupted)
-    with workload_lock():
-        protected(ROOT / "releases", directory=True, modes=(0o700,))
-        directory = ROOT / "releases" / arguments.revision
-        protected(directory, directory=True, modes=(0o700,))
-        for filename in ("release.json", "image.tar"):
-            protected(directory / filename)
-        manifest = validate_manifest(directory / "release.json")
-        require(manifest["revision"] == arguments.revision, "Release directory identity differs")
-        protected(ROOT / "results", directory=True, modes=(0o700,))
-        attempt = Path(tempfile.mkdtemp(prefix="release.", dir=ROOT / "results"))
-        report: JsonObject = {
-            "action": arguments.action,
-            "revision": arguments.revision,
-            "startedAt": timestamp(),
-            "passed": False,
-            "phase": "stage",
-        }
-        try:
+    attempt: Path | None = None
+    report: JsonObject = {
+        "action": arguments.action,
+        "revision": arguments.revision,
+        "startedAt": timestamp(),
+        "passed": False,
+        "phase": "stage",
+    }
+    try:
+        plan: MaintenancePlan | None = None
+        with workload_lock():
+            protected(ROOT / "releases", directory=True, modes=(0o700,))
+            directory = ROOT / "releases" / arguments.revision
+            protected(directory, directory=True, modes=(0o700,))
+            for filename in ("release.json", "image.tar"):
+                protected(directory / filename)
+            manifest = validate_manifest(directory / "release.json")
+            require(
+                manifest["revision"] == arguments.revision, "Release directory identity differs"
+            )
+            protected(ROOT / "results", directory=True, modes=(0o700,))
+            attempt = Path(tempfile.mkdtemp(prefix="release.", dir=ROOT / "results"))
             runner = Runner(attempt)
             staged = stage(runner, directory, manifest)
             if arguments.action == "deploy":
                 report["phase"] = "preflight"
                 deploy(runner, manifest, staged, report, quiet_seconds=arguments.quiet_seconds)
+            elif arguments.action == "maintain":
+                report["phase"] = "preflight"
+                plan = prepare_maintenance(runner, manifest, staged, report)
             else:
                 report["phase"] = "complete"
-            report["passed"] = True
-        except BaseException as error:
-            report["failure"] = (
-                str(error)
-                if isinstance(error, (ReleaseError, ArtifactError))
-                else type(error).__name__
-            )
-            raise
-        finally:
+        if plan is not None:
+            # The launcher takes the workload lock itself, so it runs between holds.
+            launch_maintenance(runner, report)
+            with workload_lock():
+                finish_maintenance(runner, plan, report)
+        report["passed"] = True
+    except BaseException as error:
+        report["failure"] = (
+            str(error) if isinstance(error, (ReleaseError, ArtifactError)) else type(error).__name__
+        )
+        raise
+    finally:
+        if attempt is not None:
             report["finishedAt"] = timestamp()
             atomic(attempt / "outcome.json", report)
             _ = sys.stdout.write(json.dumps({"evidence": str(attempt), **report}) + "\n")

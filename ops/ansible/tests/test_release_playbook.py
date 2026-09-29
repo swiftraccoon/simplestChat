@@ -557,3 +557,49 @@ class ReleasePlaybookTests(unittest.TestCase):
 
 if __name__ == "__main__":
     _ = unittest.main()
+
+
+class MaintenancePlaybookTests(unittest.TestCase):
+    """The maintenance playbook checks out the source, renders grants and runs the launcher."""
+
+    @cached_property
+    def play(self) -> JsonObject:
+        """Read the maintenance playbook once per isolated test case."""
+        return obj(yaml_value((ROOT / "maintenance.yml").read_text()), 0)
+
+    def test_source_grants_and_launcher_run_in_order_as_one_transient_unit(self) -> None:
+        """Verify source, grants and launcher run in order as one transient unit."""
+        tasks = objects(self.play, "tasks")
+        self.assertEqual(self.play["hosts"], "benchmark_hosts")
+        self.assertEqual(self.play["serial"], 1)
+        self.assertIs(self.play["gather_facts"], expr2=False)
+        self.assertEqual(at(self.play, "vars", "scbench_revision"), "{{ scpub_release_revision }}")
+        assertions = strings(self.play, "pre_tasks", 0, "ansible.builtin.assert", "that")
+        self.assertIn("scpub_release_revision is match('^[a-f0-9]{40}$')", assertions)
+        self.assertIn("scpub_enabled | bool", assertions)
+        self.assertEqual(tasks[0]["ansible.builtin.import_tasks"], "tasks/source.yml")
+        grants = obj(tasks[1]["ansible.builtin.template"])
+        self.assertEqual(grants["src"], "public-runtime-grants.sql.j2")
+        self.assertEqual(grants["dest"], "{{ scpub_config }}/runtime-grants.sql")
+        self.assertEqual(grants["mode"], "0600")
+        launcher = tasks[2]
+        argv = strings(launcher, "ansible.builtin.command", "argv")
+        self.assertEqual(argv[0], "systemd-run")
+        self.assertIn("--property=RuntimeMaxSec=1800", argv)
+        self.assertIn("--property=TimeoutStopSec=240", argv)
+        self.assertIn("--wait", argv)
+        self.assertEqual(
+            argv[-5:],
+            [
+                "/usr/bin/python3",
+                "-B",
+                "/usr/local/libexec/simplestchat-public/release-public.py",
+                "maintain",
+                "{{ scpub_release_revision }}",
+            ],
+        )
+        self.assertTrue(argv[1].startswith("--unit=simplestchat-maintenance-"))
+        self.assertEqual(launcher["when"], "not ansible_check_mode")
+        self.assertEqual(at(launcher, "vars", "ansible_python_interpreter"), "/usr/bin/python3")
+        source = (ROOT / "tasks/source.yml").read_text()
+        self.assertIn("force: false", source)
