@@ -82,6 +82,7 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
 
     // Create room manager (includes media server)
     let mut media_config = MediaConfig::from_env()?;
+    simplestChat::sizing::announce(media_config.worker_config.num_workers);
 
     // Set announced IP from environment variable (required for ICE candidates)
     // Falls back to loopback; the local launcher can select an owned LAN address.

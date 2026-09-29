@@ -22,6 +22,7 @@ pub mod room;
 pub mod saturation;
 pub mod shutdown;
 pub mod signaling;
+pub mod sizing;
 pub mod turn;
 
 /// Serialized outbound signaling payload. A broadcast serializes once and

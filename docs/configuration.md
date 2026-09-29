@@ -65,7 +65,10 @@ Media allocation in `src/media/config.rs`:
 
 - **External WebRTC UDP ports**: worker N uses `WEBRTC_SERVER_PORT_BASE`+N, defaulting to 40000–40063 at the maximum worker count; Compose publishes the default range, so update its published ports/firewall if changing the base there
 - **Worker RTC allocation range**: 10000–59999
-- **Workers**: `MEDIA_WORKERS` when set; otherwise detected CPUs, always constrained to 1–64
+- **Workers**: `MEDIA_WORKERS` when set; otherwise detected CPUs, always constrained to 1–64.
+  Startup logs a `Sizing:` line (workers, the cgroup CPU quota and memory limit, the
+  participants the reference costs project) and warns when workers outnumber the quota,
+  CPUs sit idle or `MAX_CONNECTIONS` is out of proportion to the workers
 
 
 ## Health and readiness
