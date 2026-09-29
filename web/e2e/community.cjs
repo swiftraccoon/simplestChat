@@ -2104,6 +2104,24 @@ async function setRole(owner, name, role) {
       await owner.screenshot({ path: path.join(artifacts, 'mobile-account.png'), fullPage: true });
       await close(account);
       await owner.setViewportSize({ width: 1440, height: 1000 });
+      // The chat panel, its composer and its lines follow the resize handle.
+      const chatHandle = owner.getByRole('separator', { name: 'Resize chat panel', exact: true });
+      await chatHandle.waitFor({ state: 'visible' });
+      await chatHandle.focus();
+      for (let i = 0; i < 4; i++) await owner.keyboard.press('ArrowLeft');
+      await owner.waitForFunction(
+        () => document.querySelector('#sidebar-content').getBoundingClientRect().width >= 390,
+      );
+      const widths = await owner.evaluate(() =>
+        ['#sidebar-content', '#chat-panel', '#chat-input-row', '.conversation-toolbar'].map(
+          (selector) => Math.round(document.querySelector(selector).getBoundingClientRect().width),
+        ),
+      );
+      assert.ok(widths[0] >= 390, `chat panel widened by keyboard: ${widths.join(',')}`);
+      assert.ok(
+        widths.every((width) => Math.abs(width - widths[0]) <= 1),
+        `chat composer and toolbar follow the panel width: ${widths.join(',')}`,
+      );
     });
     await step('owned room typed-confirmation deletion disconnects participants', async () => {
       let mine = await header(owner, 'My rooms');

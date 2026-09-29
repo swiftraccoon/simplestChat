@@ -651,9 +651,9 @@ header h1 {
 
 /* ========== Chat ========== */
 
-#chat-panel {
-  position: relative;
-}
+/* The panel is a `.tab-content`: absolutely positioned over the sidebar content,
+   which is what makes it follow the panel's width. An id-level `position` here
+   once overrode that and left the chat 272 px wide at any panel width. */
 
 #chat-messages {
   flex: 1;
