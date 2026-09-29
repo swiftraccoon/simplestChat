@@ -188,7 +188,9 @@ const report = object<ReportEntry>({
   status: reportStatus,
   createdAt: text,
   resolvedAt: optional(text),
-  outcome: optional(object<{ action: string; createdAt: string }>({ action: text, createdAt: text })),
+  outcome: optional(
+    object<{ action: string; createdAt: string }>({ action: text, createdAt: text }),
+  ),
 });
 const moderationEvent = object<ModerationEventEntry>({
   eventId: text,

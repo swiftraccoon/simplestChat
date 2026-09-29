@@ -220,8 +220,7 @@ export class CommunityUI {
           duration.disabled = true;
           try {
             // A plain ban sends exactly the three arguments it always did.
-            const linked: [] | [string] =
-              options.reportId === undefined ? [] : [options.reportId];
+            const linked: [] | [string] = options.reportId === undefined ? [] : [options.reportId];
             await room.ban(
               id,
               reason.value.trim() || undefined,
@@ -591,8 +590,15 @@ export class CommunityUI {
       if (!view.dialog.open) return;
       list.replaceChildren();
       if (!invites.length) list.append(el('p', 'No unused invitations.', 'setting-hint'));
-      for (const invite of invites) list.append(this.inviteRow(invite, view, () => refresh(), () =>
-        api.revokeRoomInvite(token, room.id, invite.code)));
+      for (const invite of invites)
+        list.append(
+          this.inviteRow(
+            invite,
+            view,
+            () => refresh(),
+            () => api.revokeRoomInvite(token, room.id, invite.code),
+          ),
+        );
     };
     const create = asyncButton(
       'Create invitation',

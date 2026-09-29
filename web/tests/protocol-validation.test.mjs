@@ -678,7 +678,10 @@ test('rejects malformed nested participants, settings, messages, media and socia
     ['listRoomBans', { bans: [{ ...ban, authenticated: 1 }], hasMore: false }],
     ['listRoomMembers', { members: [{ ...member, online: 'false' }], hasMore: false }],
     ['listRoomReports', { reports: [{ ...report, status: 'pending' }], hasMore: false }],
-    ['listModerationEvents', { events: [{ ...event, targetAuthenticated: 'yes' }], hasMore: false }],
+    [
+      'listModerationEvents',
+      { events: [{ ...event, targetAuthenticated: 'yes' }], hasMore: false },
+    ],
     ['listModerationEvents', { events: [{ ...event, createdAt: null }], hasMore: false }],
     ['setChatPreferences', { allowPrivateMessages: true, ignoredParticipantIds: [1] }],
   ])

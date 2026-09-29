@@ -72,7 +72,11 @@
 
     - name: Install fixed monitoring settings without credentials
       ansible.builtin.copy:
-        content: "{{ {'domain': scpub_domain, 'transfer_allowance_tb': scpub_transfer_allowance_tb | float, 'transfer_reset_day': scpub_transfer_reset_day | int, 'transfer_interface': scpub_transfer_interface} | to_nice_json }}\n"
+        content: >
+          {{ {'domain': scpub_domain,
+              'transfer_allowance_tb': scpub_transfer_allowance_tb | float,
+              'transfer_reset_day': scpub_transfer_reset_day | int,
+              'transfer_interface': scpub_transfer_interface} | to_nice_json }}
         dest: /etc/simplestchat-monitoring/settings.json
         owner: root
         group: root

@@ -2029,7 +2029,9 @@ async function setRole(owner, name, role) {
       const authResponses = [];
       invitee.on('response', (response) => {
         if (response.url().includes('/api/auth/') || response.url().includes('/api/rooms/invites/'))
-          authResponses.push(`${response.request().method()} ${new URL(response.url()).pathname} ${response.status()}`);
+          authResponses.push(
+            `${response.request().method()} ${new URL(response.url()).pathname} ${response.status()}`,
+          );
       });
       await register(invitee, inviteeEmail, 'E2E Invitee');
       await invitee.goto(`${base}/?invite=${code}`);

@@ -466,7 +466,8 @@ export class SocialChat {
   /** Composing in an open conversation tells its recipients, at most every 2.5 s. */
   private noteTyping(): void {
     const room = this.options.getRoom();
-    if (!room?.localParticipantId || !room.connected || !room.canChat || this.input.disabled) return;
+    if (!room?.localParticipantId || !room.connected || !room.canChat || this.input.disabled)
+      return;
     if (!this.input.value.trim()) return;
     const now = Date.now();
     if (now - this.lastTypingSent < 2500) return;
