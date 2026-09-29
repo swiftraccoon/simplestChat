@@ -17,9 +17,9 @@ use super::{
     jwt, routes, session,
     types::{AuthError, Claims},
 };
-use crate::signaling::SignalingServer;
+use crate::signaling::{ClientIp, SignalingServer};
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
 };
@@ -492,13 +492,15 @@ async fn consume_recovery(
 /// validation, capacity and database failures. A lost success response cannot
 /// be recovered by redeeming the key again. The client should attempt sign-in
 /// using the new password rather than assuming that an unconfirmed reset failed.
-pub async fn redeem_recovery(
+pub(crate) async fn redeem_recovery(
     State(server): State<SignalingServer>,
+    Extension(ClientIp(source_ip)): Extension<ClientIp>,
     Json(request): Json<RedeemRecoveryRequest>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     let email = routes::canonicalize_email(&request.email)?;
-    if !server.allow_auth_principal(&email) {
-        return Err(AuthError::RateLimited);
+    // A guessed key is a failed sign-in: the same growing delay as a password.
+    if let Some(wait) = server.sign_in_wait(source_ip, &email) {
+        return Err(AuthError::TooManyFailures(wait));
     }
     validate_password(&request.new_password)?;
     let hash = recovery_hash(request.recovery_key.trim())?;
@@ -513,6 +515,7 @@ pub async fn redeem_recovery(
     .await
     .map_err(routes::database_error)?;
     if !eligible {
+        server.note_sign_in_failure(source_ip, &email);
         return Err(AuthError::InvalidCredentials);
     }
     let permit = server
@@ -520,6 +523,7 @@ pub async fn redeem_recovery(
         .ok_or(AuthError::ServiceBusy)?;
     let password_hash = routes::hash_password_async(request.new_password, permit).await?;
     let (id, version) = consume_recovery(pool, &email, &hash, &password_hash).await?;
+    server.note_sign_in_success(source_ip, &email);
     server.revoke_account_sessions(id.to_string(), version);
     Ok((
         routes::clear_refresh_cookie_headers(),

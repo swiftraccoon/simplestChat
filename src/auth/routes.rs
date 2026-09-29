@@ -262,8 +262,9 @@ pub(super) fn acquire_auth_request(
 }
 
 /// POST /api/auth/register
-pub async fn register(
+pub(crate) async fn register(
     State(server): State<SignalingServer>,
+    Extension(ClientIp(source_ip)): Extension<ClientIp>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
     if !server.registration_enabled() {
@@ -282,6 +283,11 @@ pub async fn register(
     }
     if super::common_passwords::is_common(&req.password) {
         return Err(AuthError::InvalidInput("Choose a less common password"));
+    }
+    // The taken-email answer below is the only way to learn whether an address
+    // has an account here, so each address gets a few answers an hour, not more.
+    if !server.allow_registration(source_ip) {
+        return Err(AuthError::RateLimited);
     }
     let _request_permit = acquire_auth_request(&server)?;
 
@@ -332,8 +338,9 @@ pub async fn register(
 }
 
 /// POST /api/auth/login
-pub async fn login(
+pub(crate) async fn login(
     State(server): State<SignalingServer>,
+    Extension(ClientIp(source_ip)): Extension<ClientIp>,
     Json(req): Json<LoginRequest>,
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
@@ -342,8 +349,10 @@ pub async fn login(
         return Err(AuthError::NotConfigured);
     }
     let email = canonicalize_email(&req.email)?;
-    if !server.allow_auth_principal(&email) {
-        return Err(AuthError::RateLimited);
+    // Only failures cost anything, and only this client's: knowing an email
+    // no longer lets a stranger hold its owner out of password sign-in.
+    if let Some(wait) = server.sign_in_wait(source_ip, &email) {
+        return Err(AuthError::TooManyFailures(wait));
     }
     if req.password.len() > MAX_PASSWORD_BYTES {
         return Err(AuthError::InvalidCredentials);
@@ -376,6 +385,7 @@ pub async fn login(
             }
         };
     if !has_password || !password_matches {
+        server.note_sign_in_failure(source_ip, &email);
         warn!("Failed login attempt");
         return Err(AuthError::InvalidCredentials);
     }
@@ -397,6 +407,7 @@ pub async fn login(
     let session_id = session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
     let token = jwt::create_session_token(&user_id, &row.2, secret, row.4, session_id)?;
     transaction.commit().await.map_err(database_error)?;
+    server.note_sign_in_success(source_ip, &email);
 
     info!(user_id, "User logged in");
     Ok((

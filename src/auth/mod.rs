@@ -3,6 +3,7 @@
 pub mod account;
 pub mod common_passwords;
 pub mod jwt;
+pub mod limiter;
 pub mod passkeys;
 pub mod password;
 pub mod routes;

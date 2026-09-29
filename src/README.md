@@ -24,7 +24,7 @@ HTTP / WebSocket
 | Routes, origin/limits, WebSocket lifecycle | `signaling/mod.rs`, `signaling/connection.rs` |
 | Dependency readiness | `signaling/readiness.rs`, `media/worker_manager.rs` |
 | Wire contract | `signaling/protocol.rs` and [web/src/protocol.ts](../web/src/protocol.ts) |
-| Password/passkey auth and JWT validation | `auth/routes.rs`, `auth/password.rs`, `auth/webauthn.rs`, `auth/jwt.rs` |
+| Password/passkey auth and JWT validation | `auth/routes.rs`, `auth/password.rs`, `auth/webauthn.rs`, `auth/jwt.rs`, `auth/limiter.rs` (sign-in failure delays, registration window) |
 | Profiles, recovery and refresh sessions | `auth/account.rs`, `auth/session.rs` |
 | Membership, lobby, chat and reconnect state | `room/mod.rs`, `room/social.rs` |
 | Ordered persistence and uncertain-write handling | `room/control.rs` |

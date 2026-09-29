@@ -50,6 +50,10 @@ const DEFAULT_WS_HANDSHAKES_PER_MINUTE: u32 = 120;
 const DEFAULT_CONNECTIONS_PER_IP: usize = 50;
 const DEFAULT_MAX_USERS: i64 = 100_000;
 const REGISTRATION_ENABLED_BY_DEFAULT: bool = false;
+/// Registrations, and taken-email answers, one client address may receive per
+/// hour: without email verification the register endpoint says whether an
+/// address has an account, so the answer is what is metered.
+const DEFAULT_REGISTRATIONS_PER_IP_PER_HOUR: u32 = 5;
 const MAX_TRACKED_AUTH_IPS: usize = 10_000;
 const PRINCIPAL_RATE_WINDOW: Duration = Duration::from_secs(60);
 // Four independently keyed 64K-wide rows cost 1 MiB per limiter. The
@@ -307,6 +311,8 @@ pub struct SignalingServer {
     session_cleanup: crate::auth::session::SessionCleanup,
     principal_auth_limiter: PrincipalRateLimiter,
     room_creation_limiter: PrincipalRateLimiter,
+    sign_in_failures: crate::auth::limiter::FailureLimiter,
+    registration_limiter: Arc<crate::auth::limiter::WindowLimiter>,
     room_api_guard: AuthGuard,
     telemetry_guard: AuthGuard,
     db_pool: Option<PgPool>,
@@ -380,6 +386,10 @@ impl SignalingServer {
         let auth_requests_per_account_per_minute = env_u32(
             "AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE",
             DEFAULT_AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE,
+        );
+        let registrations_per_ip_per_hour = env_u32(
+            "REGISTRATIONS_PER_IP_PER_HOUR",
+            DEFAULT_REGISTRATIONS_PER_IP_PER_HOUR,
         );
         let auth_concurrency = env_usize("AUTH_MAX_CONCURRENCY", DEFAULT_AUTH_CONCURRENCY);
         let password_workers = password_lane_capacity(
@@ -462,6 +472,11 @@ impl SignalingServer {
             session_cleanup: crate::auth::session::SessionCleanup::default(),
             principal_auth_limiter: PrincipalRateLimiter::new(auth_requests_per_account_per_minute),
             room_creation_limiter: PrincipalRateLimiter::new(room_creations_per_account),
+            sign_in_failures: crate::auth::limiter::FailureLimiter::new(),
+            registration_limiter: Arc::new(crate::auth::limiter::WindowLimiter::new(
+                registrations_per_ip_per_hour,
+                Duration::from_secs(3600),
+            )),
             room_api_guard: AuthGuard::new(
                 room_api_requests_per_minute,
                 room_api_concurrency,
@@ -562,6 +577,25 @@ impl SignalingServer {
 
     pub(crate) fn allow_auth_principal(&self, principal: &str) -> bool {
         self.principal_auth_limiter.allow(principal)
+    }
+
+    /// Whole seconds this client must wait before another password attempt on
+    /// the account, earned by its earlier failures; `None` means try now.
+    pub(crate) fn sign_in_wait(&self, address: IpAddr, account: &str) -> Option<u64> {
+        self.sign_in_failures.wait(address, account)
+    }
+
+    pub(crate) fn note_sign_in_failure(&self, address: IpAddr, account: &str) {
+        self.sign_in_failures.record_failure(address, account);
+    }
+
+    pub(crate) fn note_sign_in_success(&self, address: IpAddr, account: &str) {
+        self.sign_in_failures.record_success(address, account);
+    }
+
+    /// One of this address's hourly registration answers, taken if available.
+    pub(crate) fn allow_registration(&self, address: IpAddr) -> bool {
+        self.registration_limiter.allow(address)
     }
 
     pub(crate) fn allow_room_creation(&self, user_id: &str) -> bool {

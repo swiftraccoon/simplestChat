@@ -291,6 +291,7 @@ fi
   BIND_ADDR=127.0.0.1 PORT="${test_port}" ANNOUNCE_IP="${test_announce_ip}" \
   MEDIA_WORKERS=1 WEBRTC_SERVER_PORT_BASE="${media_port}" \
   ALLOWED_ORIGINS="${BASE_URL}" REGISTRATION_ENABLED=true ALLOW_AD_HOC_ROOMS=true \
+  REGISTRATIONS_PER_IP_PER_HOUR=100 \
   JWT_SECRET=disposable-test-only-jwt-secret-at-least-32-bytes \
     RUN_MIGRATIONS=true "${server_binary}"
 ) >"${test_artifacts}/server.log" 2>&1 &

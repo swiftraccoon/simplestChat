@@ -18,6 +18,8 @@ pub enum AuthError {
     MissingToken,
     TokenExpired,
     RateLimited,
+    /// Failed sign-ins have earned this client a wait, in whole seconds.
+    TooManyFailures(u64),
     ServiceBusy,
     RegistrationDisabled,
     DatabaseError(String),
@@ -27,9 +29,22 @@ pub enum AuthError {
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
-        let service_busy = matches!(&self, AuthError::ServiceBusy);
+        let retry_after = match &self {
+            AuthError::ServiceBusy => Some(1),
+            AuthError::TooManyFailures(seconds) => Some(*seconds),
+            _ => None,
+        };
+        let wait_message = match &self {
+            AuthError::TooManyFailures(seconds) => Some(format!(
+                "Too many failed attempts; try again in {seconds} s"
+            )),
+            _ => None,
+        };
         let (status, message) = match self {
             AuthError::InvalidInput(message) => (StatusCode::BAD_REQUEST, message),
+            AuthError::TooManyFailures(_) => {
+                (StatusCode::TOO_MANY_REQUESTS, "Too many failed attempts")
+            }
             AuthError::InvalidCredentials => {
                 (StatusCode::UNAUTHORIZED, "Invalid email or password")
             }
@@ -49,11 +64,12 @@ impl IntoResponse for AuthError {
                 "Authentication not configured",
             ),
         };
+        let message = wait_message.unwrap_or_else(|| message.to_owned());
         let mut response = (status, Json(serde_json::json!({ "error": message }))).into_response();
-        if service_busy {
-            response
-                .headers_mut()
-                .insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
+        if let Some(seconds) = retry_after
+            && let Ok(value) = HeaderValue::from_str(&seconds.to_string())
+        {
+            response.headers_mut().insert(header::RETRY_AFTER, value);
         }
         response
     }
