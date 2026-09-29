@@ -166,8 +166,8 @@ sudo /usr/local/bin/simplestchat-public logs --tail 100 simplestchat caddy
 ```
 
 TURN is opt-in; see the managed relay below. Direct and relayed media still need
-checks from real browsers and networks. The two-worker allocation and connection
-limits are starting settings, not measured capacity guarantees.
+checks from real browsers and networks. The sizing derived from the host is a
+starting point, not a measured guarantee: `build/capacity.py run` measures it.
 
 ## Managed TURN on the same VPS
 

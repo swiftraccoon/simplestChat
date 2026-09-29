@@ -11,31 +11,61 @@ Run guest rooms on their own, or add PostgreSQL for accounts and persistent room
   markers, drafts, ignore controls, personal chat colors and timestamp formats.
 - Password/passkey accounts, profiles, and saved recovery keys.
 - Responsive layout and per-participant volume, mute, and video controls.
+- Sizing derived from the host it runs on (workers, quotas, ceilings, addresses,
+  TURN capacity), every value overridable.
 
 Shared watch sessions, recording, durable chat history, and email verification
 are not implemented.
 
-## Run locally
+## Quick start
 
-Install rustup, Node/npm, and the [native build prerequisites](docs/development.md#prerequisites).
-From the repository root:
+Locally ([prerequisites](docs/development.md#prerequisites)):
 
 ```sh
-build/run-local.sh
+build/run-local.sh        # http://localhost:3000, guest rooms; --skip-web reuses the web build
 ```
 
-Open `http://localhost:3000` in two browser windows and join the same room.
-Enable your camera or microphone when ready; joining does not start capture.
+On a Debian 13 VPS, sized from the host's facts ([details](ops/ansible/PUBLIC.md)).
+DNS points at the host; TCP 80/443, UDP 443 and UDP 40000 + one port per CPU are open.
 
-The launcher installs missing OpenSSL, builds the web client, and runs the server
-with the pinned Rust toolchain. The first build can take several minutes.
-Use `build/run-local.sh --skip-web` for faster restarts when web files are unchanged.
-On macOS, the media address is detected automatically; elsewhere set `ANNOUNCE_IP`
-to your machine's LAN IPv4 address.
+```sh
+# Controller
+python3 -m venv ops/ansible/.venv && ops/ansible/.venv/bin/pip install -r ops/ansible/requirements.txt
+cp ops/ansible/inventory.example.yml ops/ansible/inventory.local.yml
+$EDITOR ops/ansible/inventory.local.yml   # host, ssh key, scbench_revision (full commit), scpub_enabled: true, scpub_domain
+export ANSIBLE_CONFIG=ops/ansible/ansible.cfg
+ops/ansible/.venv/bin/ansible-playbook -i ops/ansible/inventory.local.yml ops/ansible/site.yml
+# VPS: build the image once per commit
+sudo systemctl start simplestchat-image-build.service && sudo journalctl -fu simplestchat-image-build.service
+# Controller: render the configuration from the host's CPUs, memory and addresses
+ops/ansible/.venv/bin/ansible-playbook -i ops/ansible/inventory.local.yml ops/ansible/public.yml
+# VPS: migrate, create the owner and lobby, start the app and Caddy
+sudo systemd-run --unit=simplestchat-public-deploy --property=Type=exec --property=RuntimeMaxSec=900 --property=TimeoutStopSec=90 /usr/local/bin/simplestchat-public-deploy
+sudo journalctl -fu simplestchat-public-deploy.service
+# Verify; owner credentials are in /etc/simplestchat-public/owner.json on the VPS
+curl -s https://chat.example.com/ready
+```
 
-Without database settings, the server runs guest-only rooms. For accounts and
-persistent rooms, follow [local database setup](docs/development.md#accounts-and-persistent-rooms).
-For frontend hot reload, see [the web guide](web/README.md).
+Update after pushing to `main` ([releases](ops/ansible/RELEASES.md); add `--maintenance` for migrations or sizing changes):
+
+```sh
+ops/ansible/.venv/bin/python build/deploy.py --inventory ops/ansible/inventory.local.yml --repository OWNER/REPO --origin https://chat.example.com
+```
+
+Preview what a host carries before buying it, or size a plain Compose deployment
+([deployment guide](docs/deployment.md) for the proxy, database and TLS):
+
+```sh
+python3 build/capacity.py suggest --vcpus 4 --memory-gib 8 --included-egress-tb 5
+sudo install -d -m 700 /etc/simplestchat
+python3 build/capacity.py suggest --vcpus 4 --memory-gib 8 --env | sudo tee /etc/simplestchat/runtime.env
+printf 'ANNOUNCE_IP=203.0.113.10\nALLOWED_ORIGINS=https://chat.example.com\nJWT_SECRET=%s\nMETRICS_TOKEN=%s\nTRUSTED_PROXY_SECRET=%s\n' \
+  "$(openssl rand -base64 48)" "$(openssl rand -base64 48)" "$(openssl rand -base64 48)" | sudo tee -a /etc/simplestchat/runtime.env
+printf 'services:\n  simplestchat:\n    env_file:\n      - /etc/simplestchat/runtime.env\n' | sudo tee /etc/simplestchat/compose.runtime.yml
+sudo sysctl -w net.core.rmem_max=2097152 net.core.wmem_max=2097152
+docker compose --env-file /etc/simplestchat/runtime.env -f docker-compose.yml -f /etc/simplestchat/compose.runtime.yml up --build -d
+CADDY_DOMAIN=chat.example.com TRUSTED_PROXY_SECRET=$(sed -n 's/^TRUSTED_PROXY_SECRET=//p' /etc/simplestchat/runtime.env) caddy run --config Caddyfile
+```
 
 ## Project guide
 
@@ -44,12 +74,16 @@ For frontend hot reload, see [the web guide](web/README.md).
 | Build, local launch, and troubleshooting | [Development](docs/development.md) |
 | Quality standards and review requirements | [Contributing](CONTRIBUTING.md) |
 | Frontend development and modules | [Web client](web/README.md) |
-| Server architecture and protocol | [Rust server](src/README.md) |
+| Server architecture and protocol | [Rust server](src/README.md) · [Protocol](docs/protocol.md) |
 | Environment variables and limits | [Configuration](docs/configuration.md) |
 | Production setup and security | [Deployment](docs/deployment.md) |
+| Host preparation, image builds and private benchmarks | [Operations](ops/ansible/README.md) |
+| The managed public site: HTTPS, PostgreSQL, TURN, monitoring | [Public deployment](ops/ansible/PUBLIC.md) |
+| Routine and maintenance releases | [Releases](ops/ansible/RELEASES.md) |
 | Unit and integration tests | [Testing](docs/testing.md) |
 | Benchmarks and measurements | [Performance](docs/performance.md) · [Results](docs/performance-results.md) |
 | Sizing a server and comparing hosts' cost | [Sizing a host](docs/performance.md#sizing-a-host) |
+| Browser diagnostics | [Diagnostics](docs/diagnostics.md) |
 | Native dependency updates | [Vendor notes](vendor/README.md) |
 
 ## Checks
