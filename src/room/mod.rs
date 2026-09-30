@@ -520,7 +520,10 @@ fn try_send_essential(
     let result = sender.try_send(json);
     match &result {
         Ok(()) => {}
-        Err(mpsc::error::TrySendError::Full(_)) => metrics.inc_outbound_queue_full(),
+        Err(mpsc::error::TrySendError::Full(_)) => {
+            metrics.inc_outbound_queue_full();
+            crate::signaling::outbound::request_resync(sender);
+        }
         Err(mpsc::error::TrySendError::Closed(_)) => metrics.inc_outbound_queue_closed(),
     }
     result

@@ -237,3 +237,27 @@ fn simultaneous_grace_departures_do_not_attempt_quadratic_closed_queue_fanout() 
         0
     );
 }
+
+#[test]
+fn essential_overflow_requires_reconciliation_but_speaker_hints_remain_lossy() {
+    let metrics = ServerMetrics::new();
+    let (sender, mut receiver) = mpsc::channel(1);
+    let registration = crate::signaling::outbound::register(&sender);
+    sender
+        .try_send(crate::OutboundJson::from("queued"))
+        .unwrap();
+    let mut room = Room::new("room".into(), "router".into(), None, false, None);
+    room.participants
+        .insert("viewer".into(), participant("viewer", sender));
+    room.broadcast_all(&ServerMessage::AudioLevels { levels: Vec::new() });
+    assert!(!*registration.subscribe().borrow());
+    broadcast_departure(
+        &metrics,
+        room.participants.values().map(|p| &p.sender),
+        departure,
+    );
+    assert!(*registration.subscribe().borrow());
+    receiver.try_recv().unwrap();
+    // A recovered queue does not clear the lost-event signal.
+    assert!(*registration.subscribe().borrow());
+}

@@ -544,7 +544,10 @@ fn send_json(
     let json = crate::OutboundJson::from(serde_json::to_string(msg)?);
     if let Err(error) = sender.try_send(json) {
         match error {
-            mpsc::error::TrySendError::Full(_) => metrics.inc_outbound_queue_full(),
+            mpsc::error::TrySendError::Full(_) => {
+                metrics.inc_outbound_queue_full();
+                super::outbound::request_resync(sender);
+            }
             mpsc::error::TrySendError::Closed(_) => metrics.inc_outbound_queue_closed(),
         }
         anyhow::bail!("Outbound signaling queue unavailable");
@@ -944,6 +947,9 @@ async fn handle_connection_with_timing(
 
     // Bounded channel for sending messages to this client
     let (tx, mut rx) = mpsc::channel::<crate::OutboundJson>(CHANNEL_CAPACITY);
+    let overflow_registration = super::outbound::register(&tx);
+    let mut writer_overflow = overflow_registration.subscribe();
+    let mut reader_overflow = overflow_registration.subscribe();
 
     // Clone for the send task
     let send_metrics = metrics.clone();
@@ -962,6 +968,7 @@ async fn handle_connection_with_timing(
         tokio::select! {
             biased;
             _ = writer_drain.wait() => {},
+            _ = super::outbound::wait_for_resync(&mut writer_overflow) => {},
             _ = async {
                 loop {
                     let message = tokio::select! {
@@ -1015,6 +1022,17 @@ async fn handle_connection_with_timing(
                     "Shutdown socket notification could not be delivered"
                 );
             }
+        }
+        if *writer_overflow.borrow() && !writer_drain.is_draining() {
+            // This control path has no dependency on the full application queue.
+            let _ = tokio::time::timeout(
+                DRAIN_SEND_TIMEOUT,
+                ws_sender.send(Message::Close(Some(CloseFrame {
+                    code: close_code::AGAIN,
+                    reason: "Room updates missed; reconnect to synchronize".into(),
+                }))),
+            )
+            .await;
         }
         debug!(
             connection_id = diagnostic_connection_id,
@@ -1106,6 +1124,7 @@ async fn handle_connection_with_timing(
         let receive_result = tokio::select! {
             biased;
             _ = drain.wait() => break,
+            _ = super::outbound::wait_for_resync(&mut reader_overflow) => break,
             _ = tx.closed() => break,
             notice = auth_revocations.recv(), if is_authenticated => {
                 match notice {
@@ -2028,7 +2047,7 @@ async fn handle_connection_with_timing(
 
     if peer_close_received {
         // The peer-close path has already consumed the writer's join result.
-    } else if drain.is_draining() {
+    } else if drain.is_draining() || *reader_overflow.borrow() {
         // Give the independent writer its bounded close attempt before releasing
         // the connection permit. The RAII owner aborts it on cancellation.
         if tokio::time::timeout(
@@ -3281,16 +3300,19 @@ mod security_tests {
     fn direct_signaling_queue_rejections_are_counted_without_payloads() {
         let metrics = ServerMetrics::new();
         let (sender, receiver) = mpsc::channel(1);
+        let registration = crate::signaling::outbound::register(&sender);
         let message = ServerMessage::Error {
             message: "PRIVATE_FIXTURE_CONTENT".into(),
         };
         send_json(&metrics, &sender, &message).unwrap();
+        assert!(!*registration.subscribe().borrow());
         assert!(
             !send_json(&metrics, &sender, &message)
                 .unwrap_err()
                 .to_string()
                 .contains("PRIVATE")
         );
+        assert!(*registration.subscribe().borrow());
         drop(receiver);
         assert!(send_json(&metrics, &sender, &message).is_err());
         let rendered = metrics.render_prometheus(0, 0, 0);

@@ -4,6 +4,7 @@
 
 pub mod connection;
 mod media_diagnostics;
+pub(crate) mod outbound;
 pub mod protocol;
 mod readiness;
 pub(crate) mod telemetry;
