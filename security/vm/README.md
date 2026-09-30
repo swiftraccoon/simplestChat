@@ -176,9 +176,17 @@ events with allowlisted reasons and a boolean guest-origin flag. No raw QMP text
 paths, error descriptions or timestamps are published. Observer failures fail
 validation; incomplete observer cleanup also fails the cleanup assertion.
 
-With the retained `-no-reboot` option, QEMU documents a guest reset as a
-[shutdown with reason `guest-reset`](https://www.qemu.org/docs/master/interop/qemu-qmp-ref.html#event-SHUTDOWN).
-However, [QMP events are unavailable before capability
+Boot-only [run 36765241078](https://github.com/swiftraccoon/simplestChat/actions/runs/36765241078)
+observed a `SHUTDOWN` event with `reason: "guest-reset"` on the owned QMP socket,
+followed by process exit zero before SSH. QEMU's former `-no-reboot` option converts such a reset into a
+[shutdown](https://www.qemu.org/docs/master/interop/qemu-qmp-ref.html#event-SHUTDOWN).
+The controller now permits guest resets within the unchanged SSH retry budget,
+shared deadline, independent process timeout and output/QMP bounds. It does not
+restart a terminated QEMU process or infer why the guest reset. Boot acceptance
+still requires authenticated SSH and successful cloud-init; allowing a reset is
+not evidence of a successful boot or deployment.
+
+[QMP events are unavailable before capability
 negotiation](https://www.qemu.org/docs/master/interop/qmp-spec.html#capabilities-negotiation),
 so an absent event cannot prove that no reset or shutdown occurred. The report
 states this limitation explicitly. Boot milestones and QMP observations narrow

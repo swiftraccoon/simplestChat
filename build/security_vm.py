@@ -523,7 +523,6 @@ def qemu_command(work: Path, port: int, run_id: str) -> list[str]:
         "unix:" + str(work / "qmp.sock").replace(",", ",,") + ",server=on,wait=on",
         "-serial",
         "stdio",
-        "-no-reboot",
         "-sandbox",
         "on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny",
         "-blockdev",

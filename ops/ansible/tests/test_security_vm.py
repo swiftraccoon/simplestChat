@@ -245,7 +245,7 @@ class BoundaryTests(unittest.TestCase):
             args[args.index("-qmp") + 1],
             "unix:/owned/fixture,,with comma/qmp.sock,server=on,wait=on",
         )
-        self.assertIn("-no-reboot", args)
+        self.assertNotIn("-no-reboot", args)
         disks = [
             object_json(args[index + 1]) for index, item in enumerate(args) if item == "-blockdev"
         ]
