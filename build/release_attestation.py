@@ -104,6 +104,8 @@ def prepare(artifact: Path, security: Path, selection: JsonObject) -> JsonObject
         ("elfSha256", "elf.json"),
         ("secretPathMapSha256", "secret-paths.json"),
         ("databaseEvidenceSha256", "database-status.json"),
+        ("runtimeProofSha256", "runtime-proof.json"),
+        ("vexSha256", "vex.openvex.json"),
     ):
         trust.require(
             result.get(field) == sha256_file(security / name), "attestation_security_file"
@@ -111,6 +113,8 @@ def prepare(artifact: Path, security: Path, selection: JsonObject) -> JsonObject
     for source, name in (
         (security / "spdx/sbom.spdx.json", "sbom.spdx.json"),
         (security / "outcome.json", "image-security.json"),
+        (security / "runtime-proof.json", "runtime-proof.json"),
+        (security / "vex.openvex.json", "vex.openvex.json"),
     ):
         trust.require(
             not source.is_symlink() and 0 < source.stat().st_size <= trust.MAX_METADATA,

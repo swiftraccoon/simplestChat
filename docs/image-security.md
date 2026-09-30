@@ -428,17 +428,24 @@ Keep the entire output directory private. It contains original layer bytes,
 raw configuration, raw scanner reports, writable-mount evidence and database
 files. Publish only the explicit reviewed evidence set: `outcome.json`,
 `checks.json`, `elf.json`, `native.json`, `database-status.json`,
-`secret-paths.json`, `sbom/sbom.syft.json` and `spdx/sbom.spdx.json`. Trusted
+`secret-paths.json`, `runtime-proof.json`, `vex.openvex.json`,
+`sbom/sbom.syft.json` and `spdx/sbom.spdx.json`. Trusted
 release attestation must bind those successful results to the original archive
 bytes; a broad upload of the working directory is unsafe.
 
 The trusted `ci.yml` main-push signing job runs
 `build/release_attestation.py prepare` against those exact directories after all
-required gates pass. It emits `release-predicate.json` and copies only the SPDX
-SBOM and image-security outcome into the release artifact. The signed statement
-has `image.tar` and `sbom.spdx.json` as subjects and binds the other release files
-through the predicate's SHA-256 map. `release-attestation.jsonl` contains the
-signer's bundle. Signing a rebuilt image, a PR artifact, or a failed security
+required gates pass. It emits `release-predicate.json` and copies the SPDX SBOM,
+image-security outcome, runtime proof and conditional OpenVEX disposition into
+the release artifact. The signed statement has `image.tar`, `sbom.spdx.json`,
+`runtime-proof.json` and `vex.openvex.json` as subjects and binds the other release
+files through the predicate's SHA-256 map. Signing and subsequent deployment
+verification require matching proof/artifact identities, exact evidence hashes
+and a consistent conditional disposition. Required source reviews expire at
+the start of their stated UTC date; a previously signed release cannot bypass
+that expiry. When no reviewed affected RPM is present, the authenticated proof
+records `required: false` and the VEX statement list is empty.
+`release-attestation.jsonl` contains the signer's bundle. Signing a rebuilt image, a PR artifact, or a failed security
 outcome is outside this contract.
 
 Deployment verifies the bundle with GitHub's maintained cryptographic verifier

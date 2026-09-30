@@ -1,7 +1,7 @@
 """Receive one verified GitHub artifact URL over stdin; never log its signature.
 
 The controller sends a public envelope, waits for the ready receipt, then obtains
-and sends the expiring URL. Only eight selected artifact files are extracted into
+and sends the expiring URL. Only explicitly selected artifact files are extracted into
 private evidence. Docker, services, credentials and deployment state are untouched.
 """
 

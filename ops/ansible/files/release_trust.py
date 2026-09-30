@@ -9,10 +9,11 @@ is never a substitute for controller verification.
 from __future__ import annotations
 
 import re
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING
 
 from release_artifact import sha256_file
-from release_json import JsonObject, JsonValue, decode_json, object_value
+from release_json import JsonObject, JsonValue, array_value, decode_json, object_value, string_value
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -28,8 +29,10 @@ BOUND_FILES = (
     "source.json",
     "sbom.spdx.json",
     "image-security.json",
+    "runtime-proof.json",
+    "vex.openvex.json",
 )
-SUBJECTS = ("image.tar", "sbom.spdx.json")
+SUBJECTS = ("image.tar", "sbom.spdx.json", "runtime-proof.json", "vex.openvex.json")
 BUNDLE = "release-attestation.jsonl"
 PREDICATE = "release-predicate.json"
 MAX_METADATA = 64 * 1024**2
@@ -152,6 +155,7 @@ def bind_files(directory: Path, claim: JsonObject) -> None:
         and security.get("sbomSha256") == files["sbom.spdx.json"],
         "attestation_security_binding",
     )
+    bind_runtime(directory, security, claim)
     outcome = read(directory / "outcome.json")
     require(
         outcome.get("passed") is True
@@ -166,6 +170,51 @@ def bind_files(directory: Path, claim: JsonObject) -> None:
         and manifest.get("platform") == claim["platform"],
         "attestation_manifest_binding",
     )
+
+
+def bind_runtime(directory: Path, security: JsonObject, claim: JsonObject) -> None:
+    """Bind signed execution evidence and refuse an expired conditional disposition.
+
+    The trusted image gate evaluates reachability. This boundary checks the exact
+    authenticated output relationships afresh before signing, verification and
+    receipt publication; it does not reinterpret the package's affected status.
+    """
+    files = object_value(claim["fileDigests"])
+    required = security.get("vexRequired")
+    require(
+        type(required) is bool
+        and security.get("runtimeProofSha256") == files["runtime-proof.json"]
+        and security.get("vexSha256") == files["vex.openvex.json"],
+        "attestation_runtime_hash_binding",
+    )
+    proof = read(directory / "runtime-proof.json")
+    require(
+        type(proof.get("schemaVersion")) is int
+        and proof.get("schemaVersion") == 1
+        and proof.get("required") is required
+        and proof.get("passed") is True
+        and proof.get("archiveSha256") == files["image.tar"]
+        and all(proof.get(key) == claim[key] for key in ("imageId", "revision", "platform")),
+        "attestation_runtime_identity",
+    )
+    statements = array_value(read(directory / "vex.openvex.json").get("statements"))
+    require(len(statements) == (1 if required else 0), "attestation_runtime_disposition")
+    if required:
+        review = object_value(proof.get("sourceReview"))
+        expires = string_value(review.get("expires"))
+        require(
+            re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", expires)
+            and datetime.now(UTC).date() < date.fromisoformat(expires),
+            "attestation_runtime_review_expired",
+        )
+        require(
+            proof.get("scope") == "managed-default-server-dtls"
+            and all(
+                digest(proof.get(key)) and proof.get(key) == security.get(key)
+                for key in ("binarySha256", "nativeSha256", "elfSha256", "sbomSha256")
+            ),
+            "attestation_runtime_evidence_binding",
+        )
 
 
 def bind_received(directory: Path, envelope: JsonObject) -> None:

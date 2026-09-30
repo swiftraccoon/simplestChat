@@ -83,6 +83,8 @@ class SecurityWorkflowTests(unittest.TestCase):
             [
                 "${{ runner.temp }}/signed-release/image.tar",
                 "${{ runner.temp }}/signed-release/sbom.spdx.json",
+                "${{ runner.temp }}/signed-release/runtime-proof.json",
+                "${{ runner.temp }}/signed-release/vex.openvex.json",
             ],
         )
         self.assertEqual(at(attest, "with", "create-storage-record"), "false")
@@ -99,6 +101,8 @@ class SecurityWorkflowTests(unittest.TestCase):
             "source.json",
             "sbom.spdx.json",
             "image-security.json",
+            "runtime-proof.json",
+            "vex.openvex.json",
             "release-predicate.json",
             "release-attestation.jsonl",
         }

@@ -291,6 +291,8 @@ class ReleaseContainerCiTests(unittest.TestCase):
                         "outcome.json",
                         "checks.json",
                         "elf.json",
+                        "runtime-proof.json",
+                        "vex.openvex.json",
                         "native.json",
                         "database-status.json",
                         "scanner-result-*.json",

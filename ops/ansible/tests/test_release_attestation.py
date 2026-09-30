@@ -8,6 +8,7 @@ import json
 import sys
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import patch
@@ -73,6 +74,38 @@ def verified_output(claim: JsonObject) -> list[JsonValue]:
     ]
 
 
+def runtime_fixture(directory: Path) -> tuple[JsonObject, JsonObject, JsonObject]:
+    """Model a signed conditional disposition for receiver relationship checks."""
+    _, claim = fixture(directory)
+    security = trust.read(directory / "image-security.json")
+    proof = trust.read(directory / "runtime-proof.json")
+    proof.update(
+        required=True,
+        scope="managed-default-server-dtls",
+        sourceReview={"expires": (datetime.now(UTC).date() + timedelta(days=30)).isoformat()},
+    )
+    for key in ("binarySha256", "nativeSha256", "elfSha256", "sbomSha256"):
+        proof[key] = security.setdefault(key, "b" * 64)
+    security["vexRequired"] = True
+    _ = (directory / "vex.openvex.json").write_text('{"statements":[{"status":"not_affected"}]}')
+    publish_runtime_fixture(directory, proof, security, claim)
+    return proof, security, claim
+
+
+def publish_runtime_fixture(
+    directory: Path, proof: JsonObject, security: JsonObject, claim: JsonObject
+) -> None:
+    """Authenticate deliberately selected test bytes before checking their relationships."""
+    _ = (directory / "runtime-proof.json").write_text(json.dumps(proof))
+    for key, name in (
+        ("runtimeProofSha256", "runtime-proof.json"),
+        ("vexSha256", "vex.openvex.json"),
+    ):
+        checksum = hashlib.sha256((directory / name).read_bytes()).hexdigest()
+        security[key] = checksum
+        object_value(claim["fileDigests"])[name] = checksum
+
+
 class ReleaseAttestationTests(unittest.TestCase):
     """Authenticity, source identity and content bindings are independent requirements."""
 
@@ -112,6 +145,12 @@ class ReleaseAttestationTests(unittest.TestCase):
                     name: {"passed": True} for name in ("vulnerabilities", "licenses", "secrets")
                 },
             )
+            runtime = object_value(decode_json(files["runtime-proof.json"]))
+            runtime["imageId"] = image_id
+            runtime_bytes = json.dumps(runtime).encode()
+            _ = (security / "runtime-proof.json").write_bytes(runtime_bytes)
+            _ = (security / "vex.openvex.json").write_bytes(files["vex.openvex.json"])
+            result["runtimeProofSha256"] = hashlib.sha256(runtime_bytes).hexdigest()
             for field, name in (
                 ("nativeSha256", "native.json"),
                 ("elfSha256", "elf.json"),
@@ -152,6 +191,56 @@ class ReleaseAttestationTests(unittest.TestCase):
             _ = (security / "outcome.json").write_text('{"passed":false}')
             with self.assertRaisesRegex(trust.TrustError, "security_failed"):
                 _ = attest.prepare(root, security, selected)
+
+    def test_conditional_disposition_requires_matching_artifact_and_evidence(self) -> None:
+        """Even signed bytes cannot mix another image or contradictory disposition state."""
+        changes: tuple[tuple[str, JsonValue], ...] = (
+            ("required", False),
+            ("passed", False),
+            ("imageId", "sha256:" + "1" * 64),
+            ("archiveSha256", "1" * 64),
+            ("revision", "1" * 40),
+            ("platform", "linux/arm64"),
+            ("binarySha256", "1" * 64),
+            ("nativeSha256", "1" * 64),
+            ("elfSha256", "1" * 64),
+            ("sbomSha256", "1" * 64),
+            ("scope", "all-programs"),
+        )
+        for key, value in changes:
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                proof, security, claim = runtime_fixture(directory)
+                trust.bind_runtime(directory, security, claim)
+                proof[key] = value
+                publish_runtime_fixture(directory, proof, security, claim)
+                with self.assertRaisesRegex(trust.TrustError, "runtime_"):
+                    trust.bind_runtime(directory, security, claim)
+
+    def test_expired_signed_runtime_review_is_rejected_at_receipt_time(self) -> None:
+        """The review expiration date is exclusive and applies after signing as well."""
+        today = datetime.now(UTC).date()
+        for expires in (today.isoformat(), (today - timedelta(days=1)).isoformat(), "20990101"):
+            with self.subTest(expires=expires), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                proof, security, claim = runtime_fixture(directory)
+                object_value(proof["sourceReview"])["expires"] = expires
+                publish_runtime_fixture(directory, proof, security, claim)
+                with self.assertRaisesRegex(trust.TrustError, "review_expired"):
+                    trust.bind_runtime(directory, security, claim)
+
+    def test_conditional_disposition_requires_its_signed_nonempty_vex(self) -> None:
+        """No required proof can be paired with an empty or changed disposition file."""
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            proof, security, claim = runtime_fixture(directory)
+            security["vexSha256"] = "1" * 64
+            with self.assertRaisesRegex(trust.TrustError, "runtime_hash_binding"):
+                trust.bind_runtime(directory, security, claim)
+            _ = (directory / "vex.openvex.json").write_text('{"statements":[]}')
+            publish_runtime_fixture(directory, proof, security, claim)
+            with self.assertRaisesRegex(trust.TrustError, "runtime_disposition"):
+                trust.bind_runtime(directory, security, claim)
 
     def test_verifier_explicitly_enforces_trusted_workflow_and_source(self) -> None:
         """No permissive identity regex, self-hosted runner or unsigned fallback is offered."""
@@ -207,8 +296,8 @@ class ReleaseAttestationTests(unittest.TestCase):
             with self.subTest(output=output), self.assertRaises((trust.TrustError, KeyError)):
                 attest.verified_statement(output, selected, claim)
 
-    def test_both_subjects_are_verified_and_cached_proofs_are_not_reused(self) -> None:
-        """Every use invokes gh against the actual archive and SBOM bytes again."""
+    def test_all_subjects_are_verified_and_cached_proofs_are_not_reused(self) -> None:
+        """Every use verifies the actual archive, SBOM and runtime disposition bytes again."""
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             selected, claim = fixture(directory)
@@ -224,7 +313,7 @@ class ReleaseAttestationTests(unittest.TestCase):
             with patch.object(bounded_process, "run", side_effect=verified_command) as run:
                 first = attest.verify_directory(directory, selected)
                 second = attest.verify_directory(directory, selected)
-            self.assertEqual(run.call_count, 4)
+            self.assertEqual(run.call_count, 2 * len(trust.SUBJECTS))
             self.assertEqual(first, second)
             self.assertEqual(
                 [Path(call[3]).name for call in calls],
@@ -249,7 +338,13 @@ class ReleaseAttestationTests(unittest.TestCase):
 
     def test_changed_bundle_or_bound_file_during_verification_is_refused(self) -> None:
         """Verification results cannot bless a later replacement of the inspected bytes."""
-        for name in (trust.BUNDLE, "sbom.spdx.json", "source.json"):
+        for name in (
+            trust.BUNDLE,
+            "sbom.spdx.json",
+            "source.json",
+            "runtime-proof.json",
+            "vex.openvex.json",
+        ):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary)
                 selected, claim = fixture(directory)

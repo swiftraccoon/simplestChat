@@ -69,7 +69,7 @@ def envelope(data: bytes = b"fixture") -> JsonObject:
 
 
 def fixture_files() -> dict[str, bytes]:
-    """Build the four artifact files with a harmless non-executable image layer."""
+    """Build the current artifact files with a harmless non-executable image layer."""
     image = io.BytesIO()
     config = {
         "architecture": "amd64",
@@ -127,6 +127,18 @@ def fixture_files() -> dict[str, bytes]:
         "source.json": json.dumps(source).encode(),
         "sbom.spdx.json": b'{"spdxVersion":"SPDX-2.3"}',
     }
+    files["runtime-proof.json"] = json.dumps(
+        {
+            "schemaVersion": 1,
+            "required": False,
+            "passed": True,
+            "archiveSha256": manifest["archiveSha256"],
+            "imageId": "sha256:" + "f" * 64,
+            "revision": REVISION,
+            "platform": "linux/amd64",
+        }
+    ).encode()
+    files["vex.openvex.json"] = b'{"statements":[]}'
     files["image-security.json"] = json.dumps(
         {
             "passed": True,
@@ -135,6 +147,9 @@ def fixture_files() -> dict[str, bytes]:
             "imageId": "sha256:" + "f" * 64,
             "archiveSha256": manifest["archiveSha256"],
             "sbomSha256": hashlib.sha256(files["sbom.spdx.json"]).hexdigest(),
+            "runtimeProofSha256": hashlib.sha256(files["runtime-proof.json"]).hexdigest(),
+            "vexSha256": hashlib.sha256(files["vex.openvex.json"]).hexdigest(),
+            "vexRequired": False,
         }
     ).encode()
     claim = {

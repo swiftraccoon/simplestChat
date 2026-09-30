@@ -913,6 +913,8 @@ jobs:
             ${{ runner.temp }}/production-security/image/outcome.json
             ${{ runner.temp }}/production-security/image/checks.json
             ${{ runner.temp }}/production-security/image/elf.json
+            ${{ runner.temp }}/production-security/image/runtime-proof.json
+            ${{ runner.temp }}/production-security/image/vex.openvex.json
             ${{ runner.temp }}/production-security/image/native.json
             ${{ runner.temp }}/production-security/image/database-status.json
             ${{ runner.temp }}/production-security/image/scanner-result-*.json
@@ -970,7 +972,7 @@ jobs:
     permissions:
       contents: read
       id-token: write # Only the trusted main release signer can request an OIDC identity.
-      attestations: write # Publish the exact tested archive and SBOM attestation.
+      attestations: write # Publish exact image, SBOM and runtime-disposition evidence.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -990,13 +992,15 @@ jobs:
             --security-dir "$RUNNER_TEMP/image-security" \
             --repository "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA" \
             --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
-      - name: Sign the archive and SPDX evidence
+      - name: Sign the archive, SPDX and runtime disposition evidence
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
             ${{ runner.temp }}/signed-release/image.tar
             ${{ runner.temp }}/signed-release/sbom.spdx.json
+            ${{ runner.temp }}/signed-release/runtime-proof.json
+            ${{ runner.temp }}/signed-release/vex.openvex.json
           predicate-path: ${{ runner.temp }}/signed-release/release-predicate.json
           predicate-type: https://github.com/swiftraccoon/simplestChat/attestations/release/v1
           create-storage-record: false
@@ -1016,6 +1020,8 @@ jobs:
             ${{ runner.temp }}/signed-release/outcome.json
             ${{ runner.temp }}/signed-release/source.json
             ${{ runner.temp }}/signed-release/sbom.spdx.json
+            ${{ runner.temp }}/signed-release/runtime-proof.json
+            ${{ runner.temp }}/signed-release/vex.openvex.json
             ${{ runner.temp }}/signed-release/image-security.json
             ${{ runner.temp }}/signed-release/release-predicate.json
             ${{ runner.temp }}/signed-release/release-attestation.jsonl
