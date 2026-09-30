@@ -292,7 +292,7 @@ class BoundaryTests(unittest.TestCase):
             config = object_json(text)
             self.assertFalse(config["ssh_pwauth"])
             self.assertTrue(config["disable_root"])
-            self.assertEqual(config["ssh_genkeytypes"], [])
+            self.assertNotIn("ssh_genkeytypes", config)
             self.assertIn("[127.0.0.1]:22345 ssh-ed25519", (work / "known_hosts").read_text())
             self.assertIn(RUN, text)
             self.assertEqual((work / "user-data").stat().st_mode & 0o777, 0o600)

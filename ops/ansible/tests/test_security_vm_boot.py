@@ -19,7 +19,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "build"))
 import security_vm as vm
 from security_findings import object_value
 from security_tools import ToolError
-from test_security_vm import REVISION, FixtureObserver, RecordedHost, object_json
+from test_security_vm import (
+    REVISION,
+    FixtureObserver,
+    RecordedHost,
+    fixture_executable,
+    object_json,
+)
 
 # isort: split
 # Import only after the canonical security module installs the operations-helper path.
@@ -170,6 +176,132 @@ class BootModeTests(unittest.TestCase):
         )
         self.assertIn("--boot-only", cast("str", boot["run"]))
         self.assertNotIn("--artifact-dir", cast("str", boot["run"]))
+
+
+def cloud_report(**changes: object) -> bytes:
+    """Model the exact four-stage cloud-init JSON shape with inert private-field canaries."""
+    raw: dict[str, object] = {
+        "status": "done",
+        "extended_status": "done",
+        "stage": None,
+        "errors": [],
+        "recoverable_errors": {},
+        "detail": "private-fixture-datasource",
+        "datasource": "private-fixture-key",
+        **{
+            name: {"errors": [], "recoverable_errors": {}, "start": 1, "finished": 2}
+            for name in vm.CLOUD_STAGES
+        },
+        **changes,
+    }
+    return json.dumps(raw).encode()
+
+
+class CloudInitTests(unittest.TestCase):
+    """Retain actionable initialization counts without exposing raw cloud-init output."""
+
+    def test_only_exit_zero_complete_healthy_state_passes(self) -> None:
+        """Degraded, incomplete, disabled and stage errors remain blocking even with exit zero."""
+        self.assertTrue(vm.cloud_status(cloud_report(), 0)["passed"])
+        cases: tuple[tuple[int, dict[str, object]], ...] = (
+            (2, {}),
+            (1, {}),
+            (0, {"status": "disabled", "extended_status": "disabled"}),
+            (0, {"stage": "modules-final"}),
+            (0, {"extended_status": "degraded done"}),
+            (0, {"modules-final": {"errors": ["private-fixture"], "recoverable_errors": {}}}),
+        )
+        for status, changes in cases:
+            with self.subTest(status=status, changes=changes):
+                self.assertFalse(vm.cloud_status(cloud_report(**changes), status)["passed"])
+        raw = object_json(cloud_report())
+        del raw["init-local"]
+        self.assertFalse(vm.cloud_status(json.dumps(raw).encode(), 0)["passed"])
+
+    def test_degraded_report_keeps_only_classes_counts_and_known_status(self) -> None:
+        """Invalid-seed and unknown warnings remain failures without publishing message text."""
+        warning = "Invalid cloud-config provided: schema ssh_genkeytypes private-fixture-path"
+        recoverable = {"WARNING": [warning, "private-fixture-other"]}
+        data = cloud_report(
+            extended_status="degraded done",
+            recoverable_errors=recoverable,
+            init={"errors": [], "recoverable_errors": recoverable},
+        )
+        result = vm.cloud_status(data, 2)
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["extendedStatus"], "degraded done")
+        aggregate = object_value(result["aggregate"])
+        self.assertEqual(aggregate["recoverableErrors"], 2)
+        self.assertEqual(aggregate["failureClasses"], ["schema_validation", "ssh"])
+        self.assertEqual(aggregate["unclassifiedErrors"], 1)
+        self.assertNotIn("private-fixture", json.dumps(result))
+        self.assertNotIn("ssh_genkeytypes", json.dumps(result))
+
+    def test_malformed_oversized_or_ambiguous_status_is_rejected(self) -> None:
+        """Never scan through arbitrary prefixes or accept ambiguous/mistyped protocol fields."""
+        for data in (
+            b"..." + cloud_report(),
+            b'{"status":"done","status":"private-fixture"}',
+            cloud_report(status="private-fixture"),
+            cloud_report(recoverable_errors={"WARNING": "private-fixture"}),
+            cloud_report(errors=[True]),
+            b" " * (vm.MAX_CLOUD_STATUS + 1),
+        ):
+            with self.subTest(size=len(data)), self.assertRaises((ToolError, ValueError)):
+                _ = vm.cloud_status(data, 0)
+        raw = object_json(cloud_report())
+        del raw["stage"]
+        with self.assertRaisesRegex(ToolError, "vm_cloud_init_stage"):
+            _ = vm.cloud_status(json.dumps(raw).encode(), 0)
+
+    def test_boot_retains_safe_status_before_raising_for_exit_two_or_invalid_json(self) -> None:
+        """The final lifecycle receipt can diagnose failure after authenticated SSH."""
+        cases = (
+            (
+                cloud_report(
+                    extended_status="degraded done",
+                    recoverable_errors={"WARNING": ["schema private-fixture"]},
+                ),
+                "vm_cloud_init_unhealthy",
+                True,
+            ),
+            (b"private-fixture-invalid-json", "vm_cloud_init_report_invalid", False),
+        )
+        for data, failure, parsed in cases:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                work = Path(temporary)
+                host = vm.Host(work, time.monotonic() + 30)
+                guest = vm.Guest(host, [sys.executable, "-c", "import time; time.sleep(30)"])
+                try:
+                    with (
+                        patch.object(vm, "executable", side_effect=fixture_executable),
+                        patch.object(vm.Host, "run", side_effect=[(0, b""), (2, data)]) as command,
+                        self.assertRaisesRegex(ToolError, failure),
+                    ):
+                        vm.boot(host, guest, work, 22345)
+                    command.assert_called_with(
+                        "cloud-init",
+                        [
+                            "/usr/bin/ssh",
+                            *vm.ssh_options(work),
+                            "-i",
+                            str(work / "client"),
+                            "-p",
+                            "22345",
+                            "fixture@127.0.0.1",
+                            "sudo -n cloud-init status --wait --format=json",
+                        ],
+                        timeout=180,
+                        accepted=(0, 1, 2),
+                    )
+                    report = guest.diagnostics()
+                    cloud = object_value(report["cloudInit"])
+                    self.assertEqual(cloud["parsed"], parsed)
+                    self.assertEqual(cloud["exitStatus"], 2)
+                    self.assertTrue(report["authenticatedSsh"])
+                    self.assertNotIn("private-fixture", json.dumps(report))
+                finally:
+                    guest.close()
 
 
 class SerialPrivacyTests(unittest.TestCase):

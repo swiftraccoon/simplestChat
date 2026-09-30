@@ -38,6 +38,7 @@ from security_vm_qmp import Observer
 # security_context installs the canonical standalone operations-helper directory.
 import bounded_process
 from release_artifact import validate_manifest, verify_archive
+from release_json import decode_json
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -133,6 +134,99 @@ BOOT_MILESTONES = {
     "ssh": rb"started openssh|starting openssh|ssh.service",
 }
 BOOT_OVERLAP = 128
+MAX_CLOUD_STATUS = 65536
+MAX_CLOUD_GROUPS = 17
+MAX_CLOUD_ERRORS = 128
+MAX_CLOUD_MESSAGE = 4096
+MAX_CLOUD_TOTAL = 512
+CLOUD_STAGES = ("init-local", "init", "modules-config", "modules-final")
+CLOUD_RUNNING = ("not started", "running", "done", "disabled")
+CLOUD_CLASSES = {
+    "schema_validation": r"schema|invalid cloud.config|failed validating",
+    "deprecated_config": r"deprecat",
+    "hostname": r"hostname|host name",
+    "apt": r"\bapt\b|deb822|sources\.list",
+    "network": r"network|dhcp|dns|name resolution",
+    "ssh": r"\bssh\b|ssh_|host key|authorized.key",
+}
+
+
+def cloud_errors(value: object) -> dict[str, object]:
+    """Count bounded cloud-init errors and project only a fixed diagnostic vocabulary."""
+    require(isinstance(value, dict), "vm_cloud_init_record")
+    raw = cast("dict[str, object]", value)
+    errors, recoverable = raw.get("errors"), raw.get("recoverable_errors")
+    require(isinstance(errors, list) and isinstance(recoverable, dict), "vm_cloud_init_errors")
+    groups = [cast("list[object]", errors), *cast("dict[str, object]", recoverable).values()]
+    require(len(groups) <= MAX_CLOUD_GROUPS, "vm_cloud_init_error_limit")
+    messages: list[str] = []
+    for group in groups:
+        require(
+            isinstance(group, list) and len(cast("list[object]", group)) <= MAX_CLOUD_ERRORS,
+            "vm_cloud_init_errors",
+        )
+        for message in cast("list[object]", group):
+            require(
+                isinstance(message, str) and len(message) <= MAX_CLOUD_MESSAGE,
+                "vm_cloud_init_message",
+            )
+            messages.append(cast("str", message))
+    require(len(messages) <= MAX_CLOUD_TOTAL, "vm_cloud_init_error_limit")
+    classes: set[str] = set()
+    unclassified = 0
+    for message in messages:
+        matched = {
+            name for name, pattern in CLOUD_CLASSES.items() if re.search(pattern, message.lower())
+        }
+        classes.update(matched)
+        unclassified += not matched
+    return {
+        "errors": len(cast("list[object]", errors)),
+        "recoverableErrors": len(messages) - len(cast("list[object]", errors)),
+        "failureClasses": sorted(classes),
+        "unclassifiedErrors": unclassified,
+    }
+
+
+def cloud_status(data: bytes, exit_status: int) -> dict[str, object]:
+    """Require completed healthy initialization; never export raw CLI fields or error messages."""
+    require(len(data) <= MAX_CLOUD_STATUS, "vm_cloud_init_report_size")
+    decoded = decode_json(data)
+    require(isinstance(decoded, dict), "vm_cloud_init_record")
+    raw = cast("dict[str, object]", decoded)
+    require("stage" in raw, "vm_cloud_init_stage")
+    status, extended, stage = raw.get("status"), raw.get("extended_status"), raw.get("stage")
+    require(isinstance(status, str) and status in (*CLOUD_RUNNING, "error"), "vm_cloud_init_status")
+    labels = (
+        *CLOUD_RUNNING,
+        "degraded done",
+        "degraded running",
+        *("error - " + name for name in CLOUD_RUNNING),
+    )
+    require(isinstance(extended, str) and extended in labels, "vm_cloud_init_status")
+    require(
+        stage is None or (isinstance(stage, str) and stage in CLOUD_STAGES), "vm_cloud_init_stage"
+    )
+    aggregate = cloud_errors(raw)
+    stages = {name: cloud_errors(raw[name]) for name in CLOUD_STAGES if name in raw}
+    healthy = all(
+        item["errors"] == 0 and item["recoverableErrors"] == 0
+        for item in [aggregate, *stages.values()]
+    )
+    return {
+        "exitStatus": exit_status,
+        "parsed": True,
+        "status": status,
+        "extendedStatus": extended,
+        "stage": stage,
+        "aggregate": aggregate,
+        "stages": stages,
+        "passed": exit_status == 0
+        and status == extended == "done"
+        and stage is None
+        and len(stages) == len(CLOUD_STAGES)
+        and healthy,
+    }
 
 
 def startup_errors(content: bytes) -> dict[str, object]:
@@ -443,7 +537,6 @@ def create_seed(host: Host, work: Path, port: int, run_id: str) -> None:
         "hostname": "simplestchat-fixture",
         "ssh_pwauth": False,
         "disable_root": True,
-        "ssh_genkeytypes": [],
         "ssh_keys": {
             "ed25519_private": bounded_file(work / "host", 8192).decode(),
             "ed25519_public": host_public,
@@ -577,6 +670,7 @@ class Guest:
         self.serial_digest = hashlib.sha256()
         self.serial_tail = b""
         self.serial_milestones: set[str] = set()
+        self.cloud_init: dict[str, object] | None = None
         self.observer = Observer(qmp_path, host.deadline) if qmp_path is not None else None
         self.child = subprocess.Popen(  # noqa: S603 -- Fixed reviewed QEMU/prlimit argv; no shell.
             argv,
@@ -641,6 +735,8 @@ class Guest:
         }
         if self.observer is not None:
             result["qmp"] = self.observer.diagnostics()
+        if self.cloud_init is not None:
+            result["cloudInit"] = self.cloud_init
         with self.startup_lock:
             if not self.authenticated.is_set():
                 result["startupStderr"] = {
@@ -935,11 +1031,23 @@ def boot(host: Host, guest: Guest, work: Path, port: int) -> None:
     else:
         message = "vm_boot_timeout"
         raise ToolError(message)
-    _ = host.run(
+    status, data = host.run(
         "cloud-init",
-        ssh_command(work, port, ["sudo", "-n", "cloud-init", "status", "--wait"]),
+        ssh_command(work, port, ["sudo", "-n", "cloud-init", "status", "--wait", "--format=json"]),
         timeout=180,
+        accepted=(0, 1, 2),
     )
+    guest.cloud_init = {
+        "exitStatus": status,
+        "parsed": False,
+        "failure": "vm_cloud_init_report_invalid",
+    }
+    try:
+        guest.cloud_init = cloud_status(data, status)
+    except (ValueError, RecursionError) as error:
+        message = "vm_cloud_init_report_invalid"
+        raise ToolError(message) from error
+    require(guest.cloud_init["passed"] is True, "vm_cloud_init_unhealthy")
     guest.require_alive()
 
 

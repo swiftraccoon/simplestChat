@@ -125,6 +125,12 @@ installation and immutable dependency pulls; the only incoming forward is SSH on
 127.0.0.1. The guest additionally checks root execution, Debian/QEMU identity, a
 root-only ownership marker and an exact run/revision selection before its actions.
 
+The seed supplies its exact `ssh_keys` and omits `ssh_genkeytypes`. The pinned
+[Debian cloud-init schema](https://sources.debian.org/data/main/c/cloud-init/25.1.4-1%2Bdeb13u1/cloudinit/config/schemas/schema-cloud-config-v1.json)
+requires a nonempty list when that optional property is present; the supplied-key
+path does not use generated-key types. Full schema validation of the generated
+seed confirms this correction without changing the enrolled host key.
+
 Limits are 2 vCPUs, 3 GiB guest RAM, a 16 GiB overlay disk, 5 GiB process address
 space, 3,600 CPU seconds, 1,024 file descriptors and 512 processes. The controller
 has a 30-minute shared deadline, and an independent GNU timeout bounds QEMU to
@@ -158,6 +164,17 @@ or signal observed before cleanup from the reaped cleanup return code, and recor
 a fixed drainer failure class and numeric I/O errno. Output failures discovered
 during the final drain still fail validation even when resource cleanup succeeds;
 an incomplete drain cannot publish success.
+
+After SSH authentication, the controller requests `cloud-init status --wait
+--format=json`. The pinned CLI emits clean JSON in this mode. Exit codes 0, 1 and
+2 are captured before validation; success still requires exit 0, completed
+healthy status, no active stage, all four stage records and zero fatal or
+recoverable errors. JSON is limited to 64 KiB and rejects duplicate keys;
+bounded error groups/messages yield only fixed status/stage labels, counts and
+allowlisted diagnostic categories. Unknown warnings still count as errors.
+`vmLifecycle.cloudInit` preserves that projection before a failure is raised;
+malformed output retains only a fixed failure code and exit status. Raw error
+messages, datasource details, names, keys and paths remain private.
 
 Before the first authenticated SSH connection only, lifecycle evidence includes
 stderr byte count, SHA-256 and a diagnostic projection of at most the first 8 KiB,
