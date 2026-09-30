@@ -1,0 +1,54 @@
+---
+- name: Disable public PostgreSQL parameter logging without a database restart
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  serial: 1
+  pre_tasks:
+    - name: Require the canonical prepared public host
+      ansible.builtin.assert:
+        that:
+          - scpub_enabled | bool
+          - scpub_config == '/etc/simplestchat-public'
+          - scpub_root == '/srv/simplestchat-public'
+        fail_msg: Use the prepared public host with its canonical configuration paths.
+
+    - name: Require the existing protected helper directory
+      ansible.builtin.stat:
+        path: /usr/local/libexec/simplestchat-public
+        follow: false
+      register: scpub_logging_helpers
+
+    - name: Refuse an unprepared or replaced helper directory
+      ansible.builtin.assert:
+        that:
+          - scpub_logging_helpers.stat.isdir | default(false)
+          - not (scpub_logging_helpers.stat.islnk | default(false))
+          - scpub_logging_helpers.stat.uid == 0
+          - scpub_logging_helpers.stat.mode == '0755'
+        fail_msg: Install the reviewed public workflow before applying database logging policy.
+
+  tasks:
+    - name: Install the logging worker and its shared bounded release primitives
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: [bounded_process.py, release_json.py, release_artifact.py, release_public.py, database_logging.py]
+
+    - name: Apply and verify the two PostgreSQL logging limits under the workload lock
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -E
+          - -s
+          - -B
+          - /usr/local/libexec/simplestchat-public/database_logging.py
+          - apply
+      register: scpub_logging_result
+      changed_when: >-
+        scpub_logging_result.rc == 0 and
+        (scpub_logging_result.stdout | from_json).changed | bool
+      when: not ansible_check_mode

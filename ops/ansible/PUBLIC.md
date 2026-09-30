@@ -117,8 +117,31 @@ PostgreSQL runs with `pg_stat_statements` preloaded (`track=all`,
 `log_parameter_max_length=0` and `log_parameter_max_length_on_error=0` explicitly
 suppress bound parameter values in ordinary and error logging. These settings
 do not redact literals embedded in SQL text or every server error message; keep
-database logs private. See the [PostgreSQL logging controls](https://www.postgresql.org/docs/18/runtime-config-logging.html#GUC-LOG-PARAMETER-MAX-LENGTH). Read the heaviest
-queries from the container as the operator (the app role has no access):
+database logs private. See the [PostgreSQL logging controls](https://www.postgresql.org/docs/18/runtime-config-logging.html#GUC-LOG-PARAMETER-MAX-LENGTH).
+
+An existing database can apply these two limits without restarting any service:
+
+```sh
+cd ops/ansible
+.venv/bin/ansible-playbook -i inventory.local.yml --limit YOUR_HOST database-logging.yml
+```
+
+The worker holds the shared workload lock, identifies the current PostgreSQL
+container by its full ID, and reads only the two relevant `pg_settings` entries.
+It issues separate fixed `ALTER SYSTEM` statements, requests a configuration
+reload, then verifies both effective values, their sources and the absence of a
+pending restart in fresh sessions. Already explicit zero values require no
+change. Contradictory command-line settings or session/role/database overrides
+in the verification connection are refused; resolve those through the reviewed
+configuration workflow. Verification connects as `postgres` to `simplestchat`;
+it does not inspect overrides attached to other roles or existing application
+sessions. Each attempt retains root-private command evidence, worker/helper
+source digests and `outcome.json` under
+`/srv/simplestchat-public/results/database-logging.*`. An interrupted partial
+application is safe to repeat after inspecting that evidence. This operation
+does not query account/profile data or remove previously retained log contents.
+
+Read the heaviest queries from the container as the operator (the app role has no access):
 
 ```sh
 cid=$(docker ps -q --filter name=^simplestchat-public-postgres-1$)
