@@ -24,7 +24,7 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `registrationInvites` | `GET /api/auth/invites` | `RegistrationInvite[]` |
 | `createRegistrationInvite` | `POST /api/auth/invites` | `RegistrationInvite` |
 | `revokeRegistrationInvite` | `DELETE /api/auth/invites/:code` | `204`, no body |
-| `memberships` | `GET /api/rooms/memberships` | `MembershipItem[]` |
+| `memberships` | `GET /api/rooms/memberships?paginated=true[&after=<room-id>]` | `{ items: MembershipItem[], next_cursor: string \| null }` |
 | `roomInvites` | `GET /api/rooms/:id/invites` | `RoomInvite[]` |
 | `createRoomInvite` | `POST /api/rooms/:id/invites` | `RoomInvite` |
 | `revokeRoomInvite` | `DELETE /api/rooms/:id/invites/:code` | `204`, no body |
@@ -61,10 +61,30 @@ registration while `REGISTRATION_ENABLED` is false and is spent either way
 minted by a room admin for a role below their own (`role` 2–4, `uses` 1–100,
 `days` 1–30; twenty unused per room) and redeemed by any signed-in account,
 which gains the role in `room_roles` without ever losing a higher one; the
-owner stays the owner. `redeemInvite` answers with the room and the role now
-held, and 404 for a code that is unknown, spent or expired, a registration
-code included. Memberships list the rooms an account holds a role in but does
-not own. The browser carries a code as `?invite=CODE`: it prefills the account
+owner stays the owner. `redeemInvite` answers with the room and the role granted
+by that redemption. A successful account/code pair has a durable receipt: retrying
+with the same account returns the original result without spending another use or
+restoring a role that a moderator later removed. Receipts remain replayable until
+seven days after the invitation's expiry. Revocation deletes both the code and
+its receipts immediately. Without a retained receipt, an unknown, spent or expired
+code returns 404; a registration code also returns 404 on this room endpoint. The
+returned receipt is a historical result, never evidence of current authorization.
+
+Memberships list the rooms an account holds a role in but does not own. Request
+`paginated=true` to opt into cursor pages. Each paged response contains at most
+100 `items`, ordered by room ID, and a required
+`next_cursor` containing the last returned ID when another page exists; otherwise
+it is `null`. Omit `after` for the first page and pass `next_cursor` as `after` for
+the next. An `after` value also opts into the paged shape. Room renames do not change
+page order. Membership additions/removals can occur between pages; reload the
+first page to refresh the complete listing. These responses carry
+`Cache-Control: private, no-store`. Requests with neither `paginated=true` nor
+`after` retain the legacy array shape, limited to the first 100 memberships, so
+already-open older clients survive a server upgrade. New browsers also accept a
+legacy array from an older server; additional pages become available after the
+server upgrade.
+
+The browser carries a code as `?invite=CODE`: it prefills the account
 form, and once the viewer is signed in it is redeemed and the room joined. Profile `avatar_url`, directory `topic`
 and directory `image_url` are required nullable fields; null is not a missing
 response. Directory counts, description and visibility flags are also required.
@@ -77,7 +97,9 @@ methods above accept `204`, and they do not attempt JSON parsing. `ApiError`
 retains an unsuccessful HTTP status for UI decisions; invalid successful data
 produces a fixed error without including the response body. A network failure
 or invalid response does not prove a mutation was rolled back. Do not retry a
-password change, recovery-key replacement, redemption or room creation blindly.
+password change, recovery-key replacement, recovery redemption or room creation
+blindly. Room-invite redemption may be retried with the same account/code within
+the receipt window described above.
 
 ## Connection and authentication
 
@@ -445,6 +467,15 @@ new window and keeps the current account identity. Normal admitted disconnects c
 and media state for a 30-second grace period. Lobby disconnects and invalidated
 credentials are cleaned up immediately; grace capacity or expired state can also
 prevent recovery.
+
+A socket has a 64-message outbound application queue. If an essential room event
+or request response cannot be queued, an independent control signal retires that
+socket and attempts a `1013` close within one second. It cannot report the missing
+event through the already-full queue. The browser follows its normal reconnect
+and snapshot path, so it does not remain indefinitely on a partial room view.
+Speaker, audio-level, layer and bandwidth hints remain disposable. Existing
+`outbound_queue_full` metrics count essential enqueue failures; repeated failures
+coalesce into one retirement signal per connection.
 
 A new socket can send `reconnect` with the previous room/participant IDs and
 reconnect credential. The server validates the retained session and identity;
