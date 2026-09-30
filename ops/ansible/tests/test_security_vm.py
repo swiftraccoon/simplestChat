@@ -235,6 +235,7 @@ class BoundaryTests(unittest.TestCase):
             ("-machine", "q35,accel=kvm"),
             ("-smp", "2"),
             ("-m", "3072"),
+            ("-display", "none"),
             ("-monitor", "none"),
         ):
             self.assertEqual(args[args.index(option) + 1], value)
@@ -246,6 +247,9 @@ class BoundaryTests(unittest.TestCase):
             "unix:/owned/fixture,,with comma/qmp.sock,server=on,wait=on",
         )
         self.assertNotIn("-no-reboot", args)
+        self.assertIn("-nodefaults", args)
+        self.assertEqual(args.count("VGA"), 1)
+        self.assertEqual(args[args.index("VGA") - 1], "-device")
         disks = [
             object_json(args[index + 1]) for index, item in enumerate(args) if item == "-blockdev"
         ]

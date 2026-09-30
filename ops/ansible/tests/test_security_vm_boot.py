@@ -183,6 +183,10 @@ class SerialPrivacyTests(unittest.TestCase):
             host = vm.Host(Path(temporary), time.monotonic() + 30)
             guest = vm.Guest(host, [sys.executable, "-c", "import time; time.sleep(30)"])
             try:
+                guest.serial_capture(b"\x1b[H\x1b[JBooting `Debian GNU/")
+                guest.serial_capture(b"Linux'\r\n")
+                banner = object_value(guest.diagnostics()["startupSerial"])
+                self.assertEqual(banner["milestones"], ["grub"])
                 guest.serial_capture(b"SeaBIOS private-fixture-key\nBooting from hard disk\nGR")
                 guest.serial_capture(b"UB\nLinux version private-host\ngrowroot resize2fs\n")
                 guest.serial_capture(b"Kernel panic\n(initramfs)\nreboot: Restarting system\n")

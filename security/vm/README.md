@@ -142,6 +142,15 @@ timeout and preserved GitHub runner tracking identity provide additional process
 lifetime bounds. No helper can guarantee a final receipt after an uncatchable
 host termination.
 
+The pinned Debian cloud image configures GRUB for both `gfxterm` and serial
+output. QEMU retains `-nodefaults` and supplies an explicit VGA device while
+`-display none` keeps the guest headless. A bounded local TCG comparison of the
+exact checksum-pinned image stalled at its GRUB Debian-selection banner without
+VGA; changing only that device reached Linux and cloud-init. The baseline serial
+bytes matched the KVM failure's retained digest. This supports the device
+correction, but local emulation does not establish KVM boot success; the actual
+Linux workflow must still authenticate SSH and complete cloud-init.
+
 Only `summary.json` is suitable for CI artifact upload. It contains source/image
 identities, command exit statuses, Ansible recap counts and allowlisted aggregate
 guest assertions. Its `vmLifecycle` distinguishes the exact owned leader's exit
@@ -164,6 +173,8 @@ overlap across bounded reads; no serial text or extracted field is published. Th
 diagnostic observations, not authenticated guest health assertions. SSH
 authentication clears buffered startup text and suppresses both stderr and
 serial diagnostics before cloud-init or Ansible commands run.
+The exact ``Booting `Debian GNU/Linux'`` selection banner is classified as GRUB,
+not as evidence that the Linux kernel has started.
 
 The controller also observes the owned QEMU instance through a private Unix QMP
 socket in the generated directory (at most 100 path bytes). QEMU waits for this
