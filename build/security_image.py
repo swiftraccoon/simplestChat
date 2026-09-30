@@ -618,7 +618,6 @@ def execute(args: Options) -> bool:
             ),
         }
         write(output / "checks.json", checks)
-        outcome["passed"] = all(object_value(value)["passed"] is True for value in checks.values())
         outcome["checks"] = checks
         outcome["secretPathMapSha256"] = digest(output / "secret-paths.json")
         outcome["databaseEvidenceSha256"] = digest(output / "database-status.json")
@@ -630,6 +629,7 @@ def execute(args: Options) -> bool:
             "matching": "No inferred CPE applicability for adapted or static components",
             "limit": "Package scanning does not prove native libraries are vulnerability-free",
         }
+        outcome["passed"] = all(object_value(value)["passed"] is True for value in checks.values())
     except (
         ValueError,
         OSError,
