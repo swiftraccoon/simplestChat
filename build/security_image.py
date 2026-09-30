@@ -839,7 +839,7 @@ def execute(args: Options) -> bool:
         policy.require(notices.get("passed") is True, "image_runtime_notice_integrity")
         grype = object_value(policy.report(grype_dir / "grype.json"))
         policy.vulnerability_database_binding(grype, db_status)
-        outcome["runtimeRpms"] = policy.runtime_rpm_bindings(packages, elf)
+        outcome["runtimeRpms"] = policy.runtime_rpm_bindings(packages, elf, tree / "rootfs")
         vulnerabilities = policy.vulnerability_verdict(grype, exceptions, packages)
         vulnerabilities = runtime_disposition(
             tree=tree,

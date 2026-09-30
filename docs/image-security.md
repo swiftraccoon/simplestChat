@@ -69,6 +69,12 @@ host libraries cannot satisfy a missing dependency. The report records resolved
 file paths, byte counts and SHA-256 hashes. Native/package provenance must
 associate these files with their build or RPM identities separately.
 
+Runtime RPM ownership resolves the recorded file path through that same image
+filesystem, including Fedora's `/lib64` directory alias. The evidence preserves
+both the RPM path and resolved ELF path. Exactly one regular RPM file record must
+match the rehashed library's SHA-256 and size; duplicate claims, missing candidates
+and altered bytes fail. Equal bytes at a different path do not establish ownership.
+
 A hardening failure also retains bounded dynamic-dependency evidence in
 `elf.json`. Up to 32 identities are reported, prioritizing unapproved dependencies;
 the complete count, ordered-name digest and omission count remain explicit.

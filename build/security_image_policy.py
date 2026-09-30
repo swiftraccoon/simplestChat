@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import hashlib
 import re
+import stat
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
+import security_elf
 import security_image_advisories
 import security_tools
 from security_license_identity import raw_license_identity
@@ -644,11 +646,39 @@ def enrich_sbom(
     return value
 
 
-def runtime_rpm_bindings(packages: list[JsonObject], elf: JsonObject) -> list[JsonValue]:
-    """Bind every resolved runtime shared library to its image RPM and recorded digest."""
+def runtime_file_path(rootfs: Path, name: str) -> Path:
+    """Resolve one canonical RPM/ELF candidate inside the authenticated image only."""
+    require(
+        PurePosixPath(name).is_absolute()
+        and str(PurePosixPath(name)) == name
+        and ".." not in PurePosixPath(name).parts,
+        "image_runtime_rpm_path",
+    )
+    try:
+        return security_elf.image_path(rootfs, name)
+    except (OSError, ValueError) as error:
+        reason = "image_runtime_rpm_path"
+        raise security_tools.ToolError(reason) from error
+
+
+def runtime_rpm_bindings(
+    packages: list[JsonObject], elf: JsonObject, rootfs: Path
+) -> list[JsonValue]:
+    """Bind resolved runtime bytes to exactly one regular RPM file through image symlinks."""
+    require(rootfs.is_dir() and not rootfs.is_symlink(), "image_runtime_root")
     result: list[JsonValue] = []
     for value in array_value(elf["libraries"]):
         library = object_value(value)
+        name = string_value(library["path"])
+        resolved = runtime_file_path(rootfs, name)
+        content = security_elf.read_binary(resolved)
+        require(
+            "/" + resolved.relative_to(rootfs).as_posix() == name
+            and type(library["bytes"]) is int
+            and len(content) == library["bytes"]
+            and hashlib.sha256(content).hexdigest() == library["sha256"],
+            "image_runtime_library_identity",
+        )
         owners: list[JsonObject] = []
         for package in packages:
             if package["type"] != "rpm":
@@ -656,16 +686,28 @@ def runtime_rpm_bindings(packages: list[JsonObject], elf: JsonObject) -> list[Js
             metadata = object_value(package["metadata"])
             for item in array_value(metadata["files"]):
                 file = object_value(item)
-                if file["path"] != library["path"]:
+                recorded_name = string_value(file["path"])
+                # Only potential regular-file owners need resolving. Unrelated
+                # RPM config/ghost entries may legitimately be absent in the image.
+                if PurePosixPath(recorded_name).name != resolved.name:
+                    continue
+                if runtime_file_path(rootfs, recorded_name) != resolved:
                     continue
                 recorded = object_value(file["digest"])
                 require(
-                    recorded["algorithm"] == "sha256" and recorded["value"] == library["sha256"],
+                    type(file["mode"]) is int
+                    and stat.S_ISREG(file["mode"])
+                    and type(file["size"]) is int
+                    and file["size"] == library["bytes"]
+                    and recorded["algorithm"] == "sha256"
+                    and recorded["value"] == library["sha256"],
                     "image_runtime_rpm_digest",
                 )
                 owners.append(
                     {
-                        "path": library["path"],
+                        "path": recorded_name,
+                        "resolvedPath": name,
+                        "bytes": library["bytes"],
                         "sha256": library["sha256"],
                         "package": package["purl"],
                         "sourceRpm": metadata["sourceRpm"],

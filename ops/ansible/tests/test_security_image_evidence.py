@@ -119,6 +119,31 @@ def rpm_package() -> JsonObject:
     }
 
 
+def runtime_library_fixture(
+    root: Path, *, name: str = LIBRARY, recorded_name: str | None = None
+) -> tuple[JsonObject, JsonObject]:
+    """Use current Syft RPM regular-file fields with bounded inert image bytes."""
+    content = b"inert runtime library fixture\n"
+    path = root / name.removeprefix("/")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _ = path.write_bytes(content)
+    digest = hashlib.sha256(content).hexdigest()
+    package = rpm_package()
+    object_value(package["metadata"])["files"] = [
+        {
+            "digest": {"algorithm": "sha256", "value": digest},
+            "flags": "",
+            "groupName": "root",
+            "mode": 33261,
+            "path": recorded_name or name,
+            "size": len(content),
+            "userName": "root",
+        }
+    ]
+    elf: JsonObject = {"libraries": [{"path": name, "sha256": digest, "bytes": len(content)}]}
+    return package, elf
+
+
 def native_inventory() -> JsonObject:
     """Keep native production, tests, Windows inputs and builder keys distinguishable."""
     openssl = object_value(
@@ -635,42 +660,133 @@ class RuntimeAndDatabaseTests(unittest.TestCase):
 
     def test_runtime_library_has_one_matching_source_rpm_and_digest(self) -> None:
         """Only the exact library path and SHA-256 tie the ELF closure to an RPM owner."""
-        package = rpm_package()
-        elf: JsonObject = {"libraries": [{"path": LIBRARY, "sha256": DIGEST}]}
-        self.assertEqual(
-            policy.runtime_rpm_bindings([package], elf),
-            [
-                {
-                    "path": LIBRARY,
-                    "sha256": DIGEST,
-                    "package": package["purl"],
-                    "sourceRpm": "glibc-2.43-8.fc44.src.rpm",
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, elf = runtime_library_fixture(root)
+            library = object_value(array_value(elf["libraries"])[0])
+            self.assertEqual(
+                policy.runtime_rpm_bindings([package], elf, root),
+                [
+                    {
+                        "path": LIBRARY,
+                        "resolvedPath": LIBRARY,
+                        "bytes": library["bytes"],
+                        "sha256": library["sha256"],
+                        "package": package["purl"],
+                        "sourceRpm": "glibc-2.43-8.fc44.src.rpm",
+                    }
+                ],
+            )
+            for algorithm, digest in (("sha1", library["sha256"]), ("sha256", "b" * 64)):
+                altered = copy.deepcopy(package)
+                object_value(array_value(object_value(altered["metadata"])["files"])[0])[
+                    "digest"
+                ] = {
+                    "algorithm": algorithm,
+                    "value": digest,
                 }
-            ],
-        )
-        for algorithm, digest in (("sha1", DIGEST), ("sha256", "b" * 64)):
-            altered = rpm_package()
-            object_value(array_value(object_value(altered["metadata"])["files"])[0])["digest"] = {
-                "algorithm": algorithm,
-                "value": digest,
-            }
-            with self.subTest(algorithm=algorithm), self.assertRaisesRegex(ToolError, "rpm_digest"):
-                _ = policy.runtime_rpm_bindings([altered], elf)
+                with (
+                    self.subTest(algorithm=algorithm),
+                    self.assertRaisesRegex(ToolError, "rpm_digest"),
+                ):
+                    _ = policy.runtime_rpm_bindings([altered], elf, root)
 
     def test_missing_duplicate_owner_or_empty_library_closure_fails(self) -> None:
         """Shared-library coverage cannot accept an unowned file or competing RPM records."""
-        elf: JsonObject = {"libraries": [{"path": LIBRARY, "sha256": DIGEST}]}
-        for packages in ([], [rpm_package(), rpm_package()]):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, elf = runtime_library_fixture(root)
+            for packages in ([], [package, package]):
+                with self.assertRaisesRegex(ToolError, "rpm_owner"):
+                    _ = policy.runtime_rpm_bindings(packages, elf, root)
+            object_value(array_value(object_value(package["metadata"])["files"])[0])["path"] = (
+                "/usr/lib64/other.so"
+            )
             with self.assertRaisesRegex(ToolError, "rpm_owner"):
-                _ = policy.runtime_rpm_bindings(packages, elf)
-        package = rpm_package()
-        object_value(array_value(object_value(package["metadata"])["files"])[0])["path"] = (
-            "/usr/lib64/other.so"
-        )
-        with self.assertRaisesRegex(ToolError, "rpm_owner"):
-            _ = policy.runtime_rpm_bindings([package], elf)
-        with self.assertRaisesRegex(ToolError, "rpm_empty"):
-            _ = policy.runtime_rpm_bindings([rpm_package()], {"libraries": []})
+                _ = policy.runtime_rpm_bindings([package], elf, root)
+            with self.assertRaisesRegex(ToolError, "rpm_empty"):
+                _ = policy.runtime_rpm_bindings([package], {"libraries": []}, root)
+
+    def test_actual_fedora_libgcc_directory_alias_preserves_both_paths(self) -> None:
+        """Canonical x64 Syft owns /lib64 while ELF resolves the image's /usr/lib64 alias."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            name = "/usr/lib64/libgcc_s-16-20260819.so.1"
+            recorded = "/lib64/libgcc_s-16-20260819.so.1"
+            package, elf = runtime_library_fixture(root, name=name, recorded_name=recorded)
+            (root / "lib64").symlink_to("usr/lib64")
+            package.update(
+                {
+                    "name": "libgcc",
+                    "version": "16.2.1-2.fc44",
+                    "purl": "pkg:rpm/fedora/libgcc@16.2.1-2.fc44?arch=x86_64&distro=fedora-44"
+                    + "&upstream=gcc-16.2.1-2.fc44.src.rpm",
+                }
+            )
+            object_value(package["metadata"]).update(
+                {
+                    "name": "libgcc",
+                    "version": "16.2.1",
+                    "release": "2.fc44",
+                    "architecture": "x86_64",
+                    "sourceRpm": "gcc-16.2.1-2.fc44.src.rpm",
+                }
+            )
+            files = array_value(object_value(package["metadata"])["files"])
+            files.append({"path": "/etc/irrelevant-missing-config", "flags": "ghost"})
+            results = policy.runtime_rpm_bindings([package], elf, root)
+            self.assertEqual(len(results), 1)
+            result = object_value(results[0])
+            self.assertEqual(result["path"], recorded)
+            self.assertEqual(result["resolvedPath"], name)
+            self.assertEqual(result["package"], package["purl"])
+            # Two metadata claims remain ambiguous even when both aliases resolve identically.
+            canonical_claim = object_value(files[0]).copy()
+            canonical_claim["path"] = name
+            files.append(canonical_claim)
+            with self.assertRaisesRegex(ToolError, "rpm_owner"):
+                _ = policy.runtime_rpm_bindings([package], elf, root)
+
+    def test_directory_alias_requires_actual_image_link_not_a_path_rewrite(self) -> None:
+        """Equal bytes in separate directories do not establish ownership of the ELF path."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, elf = runtime_library_fixture(root, recorded_name="/lib64/libc.so.6")
+            (root / "lib64").mkdir()
+            _ = (root / "lib64/libc.so.6").write_bytes((root / LIBRARY[1:]).read_bytes())
+            with self.assertRaisesRegex(ToolError, "rpm_owner"):
+                _ = policy.runtime_rpm_bindings([package], elf, root)
+
+    def test_relevant_rpm_paths_must_exist_and_stay_inside_the_image(self) -> None:
+        """Missing candidates, traversal and escaping directory symlinks fail closed."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, elf = runtime_library_fixture(root)
+            entry = object_value(array_value(object_value(package["metadata"])["files"])[0])
+            (root / "lib64").symlink_to("../../outside")
+            for name in ("/missing/libc.so.6", "/usr/../usr/lib64/libc.so.6", "/lib64/libc.so.6"):
+                entry["path"] = name
+                with self.subTest(path=name), self.assertRaisesRegex(ToolError, "rpm_path"):
+                    _ = policy.runtime_rpm_bindings([package], elf, root)
+
+    def test_runtime_library_and_rpm_size_type_and_bytes_must_agree(self) -> None:
+        """A regular-file owner requires matching recorded size, mode and rehashed image bytes."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, elf = runtime_library_fixture(root)
+            for field, value in (("size", 1), ("size", True), ("mode", 41471), ("mode", True)):
+                altered = copy.deepcopy(package)
+                object_value(array_value(object_value(altered["metadata"])["files"])[0])[field] = (
+                    value
+                )
+                with (
+                    self.subTest(field=field, value=value),
+                    self.assertRaisesRegex(ToolError, "rpm_digest"),
+                ):
+                    _ = policy.runtime_rpm_bindings([altered], elf, root)
+            _ = (root / LIBRARY[1:]).write_bytes(b"changed runtime bytes")
+            with self.assertRaisesRegex(ToolError, "library_identity"):
+                _ = policy.runtime_rpm_bindings([package], elf, root)
 
     def test_vulnerability_scan_uses_exact_validated_database_and_no_filters(self) -> None:
         """Current Grype descriptor fields bind the offline scan to preparation evidence."""
