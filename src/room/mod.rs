@@ -1429,7 +1429,7 @@ impl RoomManager {
     /// Creates a new room manager
     ///
     /// # Errors
-    /// Returns an error if media server initialization fails
+    /// Returns an error if room configuration is invalid or media server initialization fails
     pub async fn new(
         media_config: MediaConfig,
         metrics: ServerMetrics,
@@ -1441,13 +1441,12 @@ impl RoomManager {
             environment_flag("ALLOW_AD_HOC_ROOMS", ALLOW_AD_HOC_ROOMS_BY_DEFAULT)?;
         let max_participants_per_room = participant_ceiling()?;
         let max_broadcasters_per_room = broadcaster_ceiling()?;
+        let password_verify_workers =
+            crate::configuration::read_usize("MAX_PASSWORD_WORKERS", 2, 1, 32)?;
+        let max_rooms = crate::configuration::read_usize("MAX_ROOMS", 1_000, 1, 1_000_000)?;
+        let max_persisted_rooms =
+            crate::configuration::read_usize("MAX_PERSISTED_ROOMS", 10_000, 1, 1_000_000)? as i64;
         let media_server = Arc::new(MediaServer::new(media_config).await?);
-
-        let password_verify_workers = std::env::var("MAX_PASSWORD_WORKERS")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .filter(|value| (1..=32).contains(value))
-            .unwrap_or(2);
 
         Ok(Self {
             rooms: Arc::new(StdRwLock::new(HashMap::new())),
@@ -1458,16 +1457,8 @@ impl RoomManager {
             room_creation_lock: Arc::new(tokio::sync::Mutex::new(())),
             deleting_rooms: Arc::new(StdRwLock::new(HashMap::new())),
             identity_updates: Arc::new(StdRwLock::new(HashSet::new())),
-            max_rooms: std::env::var("MAX_ROOMS")
-                .ok()
-                .and_then(|value| value.parse().ok())
-                .filter(|value| *value > 0)
-                .unwrap_or(1_000),
-            max_persisted_rooms: std::env::var("MAX_PERSISTED_ROOMS")
-                .ok()
-                .and_then(|value| value.parse().ok())
-                .filter(|value| (1..=1_000_000).contains(value))
-                .unwrap_or(10_000),
+            max_rooms,
+            max_persisted_rooms,
             allow_ad_hoc_rooms,
             max_participants_per_room,
             max_broadcasters_per_room,

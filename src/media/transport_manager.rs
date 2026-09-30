@@ -26,7 +26,7 @@ use uuid::Uuid;
 fn max_producers_per_participant() -> usize {
     std::env::var("MAX_PRODUCERS_PER_PARTICIPANT")
         .ok()
-        .and_then(|value| value.parse().ok())
+        .and_then(|value| value.trim().parse().ok())
         .filter(|value| *value > 0)
         .unwrap_or(8)
 }

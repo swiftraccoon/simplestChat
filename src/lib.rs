@@ -12,6 +12,7 @@
 //! [`shutdown`] coordinates one-way drain; the binary owns runtime deadlines.
 
 pub mod auth;
+pub mod configuration;
 pub mod db;
 pub mod diagnostics;
 pub mod invite_codes;

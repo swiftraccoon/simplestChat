@@ -66,6 +66,7 @@ pub(crate) fn append_error_metrics(out: &mut String) {
 }
 
 pub async fn connect() -> anyhow::Result<Option<PgPool>> {
+    let limits = crate::configuration::numeric_settings()?;
     let url = match std::env::var("DATABASE_URL") {
         Ok(url) => url,
         Err(_) => {
@@ -85,11 +86,13 @@ pub async fn connect() -> anyhow::Result<Option<PgPool>> {
     // round trip is cheaper than a user-facing failure on a stale connection
     // after a database restart.
     let pool = PgPoolOptions::new()
-        .max_connections(20)
-        .min_connections(2)
+        .max_connections(limits["DATABASE_MAX_CONNECTIONS"] as u32)
+        .min_connections(limits["DATABASE_MIN_CONNECTIONS"] as u32)
         .idle_timeout(Duration::from_secs(600))
         .max_lifetime(Duration::from_secs(1800))
-        .acquire_timeout(Duration::from_secs(3))
+        .acquire_timeout(Duration::from_secs(
+            limits["DATABASE_ACQUIRE_TIMEOUT_SECS"] as u64,
+        ))
         .acquire_slow_threshold(Duration::from_millis(500))
         .connect_with(options)
         .await?;

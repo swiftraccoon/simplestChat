@@ -26,6 +26,9 @@ services:
       # A dual-stack host announces its IPv6 address beside the IPv4 one.
       ANNOUNCE_IPV6: "${ANNOUNCE_IPV6:-}"
       RUN_MIGRATIONS: "${RUN_MIGRATIONS:-false}"
+      DATABASE_MAX_CONNECTIONS: "${DATABASE_MAX_CONNECTIONS:-20}"
+      DATABASE_MIN_CONNECTIONS: "${DATABASE_MIN_CONNECTIONS:-2}"
+      DATABASE_ACQUIRE_TIMEOUT_SECS: "${DATABASE_ACQUIRE_TIMEOUT_SECS:-3}"
       MAX_CONNECTIONS: "${MAX_CONNECTIONS:-10000}"
       MAX_CONNECTIONS_PER_IP: "${MAX_CONNECTIONS_PER_IP:-50}"
       # Joins one address may start per minute, overall and into one room; a

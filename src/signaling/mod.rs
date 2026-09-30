@@ -340,14 +340,8 @@ impl SignalingServer {
         metrics: ServerMetrics,
         db_pool: Option<PgPool>,
     ) -> anyhow::Result<Self> {
-        let mut max_connections: usize = std::env::var("MAX_CONNECTIONS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(10_000);
-        if max_connections == 0 {
-            warn!("MAX_CONNECTIONS=0 would reject all connections, using default 10000");
-            max_connections = 10_000;
-        }
+        let max_connections =
+            crate::configuration::read_usize("MAX_CONNECTIONS", 10_000, 1, 1_000_000)?;
         info!("Max connections: {}", max_connections);
 
         let jwt_secret = std::env::var("JWT_SECRET").ok();
@@ -384,22 +378,22 @@ impl SignalingServer {
         let trusted_proxy_secret = Arc::new(trusted_proxy_secret);
 
         let max_connections_per_ip =
-            env_usize("MAX_CONNECTIONS_PER_IP", DEFAULT_CONNECTIONS_PER_IP);
+            env_usize("MAX_CONNECTIONS_PER_IP", DEFAULT_CONNECTIONS_PER_IP)?;
         let auth_requests_per_minute =
-            env_u32("AUTH_REQUESTS_PER_MINUTE", DEFAULT_AUTH_REQUESTS_PER_MINUTE);
+            env_u32("AUTH_REQUESTS_PER_MINUTE", DEFAULT_AUTH_REQUESTS_PER_MINUTE)?;
         let auth_requests_per_account_per_minute = env_u32(
             "AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE",
             DEFAULT_AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE,
-        );
+        )?;
         let registrations_per_ip_per_hour = env_u32(
             "REGISTRATIONS_PER_IP_PER_HOUR",
             DEFAULT_REGISTRATIONS_PER_IP_PER_HOUR,
-        );
-        let auth_concurrency = env_usize("AUTH_MAX_CONCURRENCY", DEFAULT_AUTH_CONCURRENCY);
+        )?;
+        let auth_concurrency = env_usize("AUTH_MAX_CONCURRENCY", DEFAULT_AUTH_CONCURRENCY)?;
         let password_workers = password_lane_capacity(
-            std::env::var("MAX_PASSWORD_WORKERS")
-                .ok()
-                .and_then(|value| value.trim().parse().ok()),
+            std::env::var_os("MAX_PASSWORD_WORKERS")
+                .map(|_| crate::configuration::read_usize("MAX_PASSWORD_WORKERS", 2, 1, 32))
+                .transpose()?,
             auth_concurrency,
             std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get),
         );
@@ -410,19 +404,19 @@ impl SignalingServer {
         let profile_requests_per_minute = env_u32(
             "PROFILE_REQUESTS_PER_MINUTE",
             DEFAULT_PROFILE_REQUESTS_PER_MINUTE,
-        );
+        )?;
         let room_api_requests_per_minute = env_u32(
             "ROOM_API_REQUESTS_PER_MINUTE",
             DEFAULT_ROOM_API_REQUESTS_PER_MINUTE,
-        );
+        )?;
         let room_api_concurrency =
-            env_usize("ROOM_API_MAX_CONCURRENCY", DEFAULT_ROOM_API_CONCURRENCY);
+            env_usize("ROOM_API_MAX_CONCURRENCY", DEFAULT_ROOM_API_CONCURRENCY)?;
         let room_creations_per_account = env_u32(
             "ROOM_CREATIONS_PER_ACCOUNT_PER_MINUTE",
             DEFAULT_ROOM_CREATIONS_PER_ACCOUNT_PER_MINUTE,
-        );
+        )?;
         let ws_handshakes_per_minute =
-            env_u32("WS_HANDSHAKES_PER_MINUTE", DEFAULT_WS_HANDSHAKES_PER_MINUTE);
+            env_u32("WS_HANDSHAKES_PER_MINUTE", DEFAULT_WS_HANDSHAKES_PER_MINUTE)?;
         let allowed_origins = Arc::new(parse_allowed_origins()?);
         let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string());
         let externally_reachable = bind_addr
@@ -435,11 +429,12 @@ impl SignalingServer {
         // proxy, including the bundled Caddy deployment.
         let registration_enabled =
             env_bool("REGISTRATION_ENABLED", REGISTRATION_ENABLED_BY_DEFAULT)?;
-        let max_users = std::env::var("MAX_USERS")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .filter(|value| (1..=10_000_000).contains(value))
-            .unwrap_or(DEFAULT_MAX_USERS);
+        let max_users = crate::configuration::read_usize(
+            "MAX_USERS",
+            DEFAULT_MAX_USERS as usize,
+            1,
+            10_000_000,
+        )? as i64;
 
         let (webauthn, challenge_store) = crate::auth::webauthn::init_webauthn()?
             .map(|(w, c)| (Some(Arc::new(w)), Some(c)))
@@ -1140,20 +1135,12 @@ async fn ws_handler(
         })
 }
 
-fn env_usize(name: &str, default: usize) -> usize {
-    std::env::var(name)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(default)
+fn env_usize(name: &str, default: usize) -> anyhow::Result<usize> {
+    crate::configuration::read_usize(name, default, 1, 1_000_000)
 }
 
-fn env_u32(name: &str, default: u32) -> u32 {
-    std::env::var(name)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(default)
+fn env_u32(name: &str, default: u32) -> anyhow::Result<u32> {
+    Ok(crate::configuration::read_usize(name, default as usize, 1, 1_000_000)? as u32)
 }
 
 fn env_bool(name: &str, default: bool) -> anyhow::Result<bool> {

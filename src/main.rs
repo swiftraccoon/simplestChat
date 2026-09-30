@@ -35,6 +35,29 @@ async fn shutdown_signal() -> std::io::Result<()> {
 }
 
 fn main() -> Result<()> {
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    anyhow::ensure!(
+        arguments.is_empty() || arguments == ["--check-config"],
+        "Usage: simplestChat [--check-config]"
+    );
+    // Reject malformed numeric controls before native workers, migrations or
+    // listeners can have side effects. This check does not print secret values.
+    let numeric = simplestChat::configuration::numeric_settings()?;
+    if !arguments.is_empty() {
+        let media = MediaConfig::from_env()?;
+        let _ = SaturationConfig::from_env()?;
+        let turn = TurnConfig::from_env()?;
+        println!(
+            "{}",
+            serde_json::json!({
+                "version": 1, "numeric": numeric,
+                "mediaWorkers": media.worker_config.num_workers,
+                "turnConfigured": turn.is_some(),
+                "scope": "numeric limits, media policy, saturation policy and TURN syntax; no connectivity or credentials are exercised"
+            })
+        );
+        return Ok(());
+    }
     // Unlike the implicit Tokio main teardown, this cannot wait indefinitely
     // for an already-running blocking password job after drain times out.
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -168,10 +191,7 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
     // Create and start signaling server
     let signaling_server =
         SignalingServer::new(room_manager.clone(), turn_config, metrics, db_pool.clone())?;
-    let port: u16 = std::env::var("PORT")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(3000);
+    let port = simplestChat::configuration::read_usize("PORT", 3000, 1, 65535)? as u16;
 
     info!("Starting signaling server on port {}", port);
 
