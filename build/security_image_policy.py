@@ -8,6 +8,7 @@ Unknown licenses, missing inventories and stale databases fail closed.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -292,12 +293,13 @@ def license_verdict(
     blocked: list[JsonValue] = []
     waived: list[JsonValue] = []
     for package in packages:
+        records = array_value(package["licenses"])
         expressions = [
-            string_value(object_value(item).get("spdxExpression", ""))
-            for item in array_value(package["licenses"])
+            string_value(object_value(item).get("spdxExpression", "")) for item in records
         ]
         expression = " AND ".join("(" + item + ")" for item in expressions if item)
-        approved = bool(expression) and LicenseExpression(expression, allowed).allowed_expression()
+        complete = bool(expressions) and all(expressions)
+        approved = complete and LicenseExpression(expression, allowed).allowed_expression()
         if package.get("name") == "simplestChat" and package.get("type") == "rust-crate":
             approved = expressions == ["NOASSERTION"]
         if approved:
@@ -306,12 +308,26 @@ def license_verdict(
             package.get("purl")
             or (string_value(package["name"]) + "@" + string_value(package["version"]))
         )
-        fingerprint = "license:" + hashlib.sha256(expression.encode()).hexdigest()
+        # An unparsed declaration must bind its full raw record, including its
+        # evidence locations. It cannot borrow the fingerprint for an empty
+        # expression or disappear beside another recognized license record.
+        fingerprint = (
+            "license:" + hashlib.sha256(expression.encode()).hexdigest()
+            if complete
+            else "license-raw:"
+            + hashlib.sha256(
+                json.dumps(
+                    records, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+                ).encode()
+            ).hexdigest()
+        )
         finding: JsonObject = {
             "scope": scope,
             "expression": expression or "UNKNOWN",
             "fingerprint": fingerprint,
         }
+        if not complete:
+            finding["rawLicenseRecords"] = records
         (waived if permitted(exceptions, "image-license", fingerprint, scope) else blocked).append(
             finding
         )

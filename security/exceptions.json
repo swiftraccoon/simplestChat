@@ -260,6 +260,26 @@
       "reachability": "Explicit x86_64 policy inference from the same Fedora source RPM and unchanged inherited aggregate; no x86_64 binary observation is claimed. Only this package/version/source-RPM/architecture and exact expression match; unknown terms elsewhere remain blocked.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-libstdcxx-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license-raw:2fc048b97508ca11d98acff9164c553f8a6c78955bb90e9845e05be5b011c341",
+      "scope": "pkg:rpm/fedora/gpg-pubkey@36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6-6786af3b?distro=fedora-44",
+      "owner": "swiftraccoon",
+      "rationale": "Exact observed Fedora RPM public signing-key metadata, not an executable software package. The complete key-specific PURL and raw pubkey declaration/evidence remain visible; no package-name exemption or unknown software approval is introduced.",
+      "reachability": "Only the exact provisional ARM observation matches, including ordered complete raw records and RPM database layer identity. Different values, missing records, package identity, location or architecture require a new review; no final image pass is claimed.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license-raw:5022a5cf38402fc4b5eb58ee0fd85898d953b2201c5d4f8390ad2672ead4d75c",
+      "scope": "pkg:rpm/fedora/libtool-ltdl@2.5.4-10.fc44?arch=aarch64&distro=fedora-44&upstream=libtool-2.5.4-10.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Exact Fedora libtool-ltdl 2.5.4-10.fc44 declared LGPLv2+ record. Pinned Fedora legal data identifies this abbreviation as LGPL-2.0-or-later; preserve the raw declaration and its full scanner evidence rather than inventing a normalized SPDX observation.",
+      "reachability": "Only the exact provisional ARM observation matches, including ordered complete raw records and RPM database layer identity. Different values, missing records, package identity, location or architecture require a new review; no final image pass is claimed.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-license-review.md"
     }
   ]
 }

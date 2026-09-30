@@ -1,0 +1,716 @@
+{
+  "schemaVersion": 1,
+  "reviewed": "2026-09-30",
+  "scope": "Provisional ARM RPM license metadata only; not a final release image verdict.",
+  "observation": {
+    "reportSha256": "9756d443c7abbad467a0706e0d6cb08a087d9d20926c08364d403a46a555c075",
+    "sourceImageID": "sha256:da5ed9cff0af80751b165c7e8f8dbe795498b56f5a436e8533d09402aa7b1249",
+    "sourceId": "c8dcf9e9bb3df2c1e2d5ca83641a1800a4fd94fdbb9865cfa9c4230bbeaa2275",
+    "report": "results/security-scanner-reports-probe-20260930/sbom/sbom.syft.json"
+  },
+  "sources": {
+    "spdxVersion": "3.29.0",
+    "spdxLicensesSha256": "47d1cc681abe31166b342b6cc4aab13a6ba8ea5c48794697fe3bf8b1dbaf509a",
+    "spdxExceptionsSha256": "59ee7c150de521d635cbf9367b8cf543b8da6781ea3ac1c073d305524f84ada2",
+    "fedoraLegalCommit": "cbd8b74cd481a598668f05d1878fcd53a8ef78e4"
+  },
+  "standardTerms": [
+    {
+      "term": "AMD-newlib",
+      "fedoraExpression": "AMD-newlib",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "6389c9f875d7c8dc0b49706f3eb4fafca11d4ec6311d4f4468dc2a00f566df7f",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/AMD-newlib.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "Apache-2.0 WITH Swift-exception",
+      "fedoraExpression": "Apache-2.0 WITH Swift-exception",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "a5603bcb16d8d7f21a3b196184ad8678189a45ff9c94480f70c4a38798263cc8",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/Apache-2.0_WITH_Swift-exception.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "BSD-1-Clause",
+      "fedoraExpression": "BSD-1-Clause",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "3b5e1da2f6daaaf63e615d4b9b84e13064558ac18276cbe8a3de14891813907b",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/BSD-1-Clause.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "BSD-2-Clause-Darwin",
+      "fedoraExpression": "BSD-2-Clause-Darwin",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "9b5530d6450a17b0b06cfda73d65815b24b24a5605aabdbf283641011fa28dba",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/BSD-2-Clause-Darwin.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "BSD-2-Clause-FreeBSD",
+      "fedoraExpression": "BSD-2-Clause-FreeBSD",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "a9e31b3e77b74b8a1f7479b18c28af882ddf395d6a4c952a6a6cd3116977a12b",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/BSD-2-Clause-FreeBSD.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "BSD-2-Clause-Views",
+      "fedoraExpression": "BSD-2-Clause-Views",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "a67986d48161247124e2ced884068edbcd2d8a321080a8464f85ee617e93f948",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/BSD-2-Clause-Views.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "BSD-2-Clause-first-lines",
+      "fedoraExpression": "BSD-2-Clause-first-lines",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "45eb046a52303a2d32f03d45e44e99278f99d1151c84d6bdddfb845caf42c0ef",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/BSD-2-Clause-first-lines.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "BSD-4-Clause",
+      "fedoraExpression": "BSD-4-Clause",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "fef86a1e07e82f31c33575874fa7a203f49c82098ce95751ef78dd7463590ec1",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/BSD-4-Clause.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "BSD-4-Clause-UC",
+      "fedoraExpression": "BSD-4-Clause-UC",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "1a4f5271cc459cb870cb9acc0cc2bbcab1c1f078c8feba3d3253fb355207acd9",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/BSD-4-Clause-UC.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "BSD-Attribution-HPND-disclaimer",
+      "fedoraExpression": "BSD-Attribution-HPND-disclaimer",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "e47e44aaf6276c2ccb0b25d6db62c82edc1afbd4330fca7ada0c6651bca25ec3",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/BSD-Attribution-HPND-disclaimer.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "BSD-Source-Code",
+      "fedoraExpression": "BSD-Source-Code",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "74667823fee5287418121c26a87fb855790bbdd039c3058fd072544cc7dc9089",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/BSD-Source-Code.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "Brian-Gladman-2-Clause",
+      "fedoraExpression": "Brian-Gladman-2-Clause",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "e07a2da118decff2ad7354f58550c542809dbe46cc5f2df6661b44c8db6e6311",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/Brian-Gladman-2-Clause.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "CC-PDDC",
+      "fedoraExpression": "CC-PDDC",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "b1c6513dbaecba3fe979625861cfd094d35711e3849e1932bb1256c9b9e1cc9d",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/CC-PDDC.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "CMU-Mach",
+      "fedoraExpression": "CMU-Mach",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "a77f5255790c46dfc7016700401d9f71c7af2cb3b0e16836158b55aae3307cf8",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/CMU-Mach.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "CMU-Mach-nodoc",
+      "fedoraExpression": "CMU-Mach-nodoc",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "a06692cae427f043acf43621d5b141d1f96c0b9595bd5aa3d86fe0e05775f615",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/CMU-Mach-nodoc.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "FSFULLRWD",
+      "fedoraExpression": "FSFULLRWD",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "d89abb2dcc927d4b26c61d832b417c9617e5b182549d7e94ed1ceb19c308b465",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/FSFULLRWD.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "GPL-1.0-only",
+      "fedoraExpression": "GPL-1.0-only",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "59f20344da200eec94efc6497f0258c5be2c8e7da92facda2cb0c4a611ee524e",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GPL-1.0-only.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "GPL-2.0-only WITH ClassPath-exception-2.0",
+      "fedoraExpression": "GPL-2.0-only WITH Classpath-exception-2.0",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "f2b5cc2e4aaa0db28511beb4ce0e69544fa804c76ca932216c6d9300468100c7",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GPL-2.0-only_WITH_Classpath-exception-2.0.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "GPL-2.0-or-later WITH GCC-exception-2.0",
+      "fedoraExpression": "GPL-2.0-or-later WITH GCC-exception-2.0",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "4f3d9f882d4d6841adebf6b412db773cf929bde32a37862040930001878e6950",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GPL-2.0-or-later_WITH_GCC-exception-2.0.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "GPL-2.0-or-later WITH GNU-compiler-exception",
+      "fedoraExpression": "GPL-2.0-or-later WITH GNU-compiler-exception",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "7d2998c651dd670436da81325cf0b50169b12a4126e73afdf480030bb7a961e3",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GPL-2.0-or-later_WITH_GNU-compiler-exception.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "GPL-2.0-or-later WITH Libtool-exception",
+      "fedoraExpression": "GPL-2.0-or-later WITH Libtool-exception",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "41cd479481f919b6359d544119262a84ef1bc2d24ecb5d3161adf556d945e11a",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GPL-2.0-or-later_WITH_Libtool-exception.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "GPL-3.0-or-later WITH Autoconf-exception-generic-3.0",
+      "fedoraExpression": "GPL-3.0-or-later WITH Autoconf-exception-generic-3.0",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "046b0371e503013e0232cd168e6e8e412af62c37a7eb70ea62eefe95b1805263",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GPL-3.0-or-later_WITH_Autoconf-exception-generic-3.0.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "GPL-3.0-or-later WITH GCC-exception-3.1",
+      "fedoraExpression": "GPL-3.0-or-later WITH GCC-exception-3.1",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "8391f5001c142c6f8ef8794dfeb65c3692c7c006c5e31fd906a553dda4e0dfce",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GPL-3.0-or-later_WITH_GCC-exception-3.1.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "GPL-3.0-or-later WITH Texinfo-exception",
+      "fedoraExpression": "GPL-3.0-or-later WITH Texinfo-exception",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "d06c695266ceac383d8122669e96ee42b58b751d4eb015c523347f73f75c9ad5",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GPL-3.0-or-later_WITH_Texinfo-exception.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "HP-1986",
+      "fedoraExpression": "HP-1986",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "cd82cf0693414bb8870d26efa70b6ac9d3410c6255c0b71eb86e267ea0c78055",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/HP-1986.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "HPND",
+      "fedoraExpression": "HPND",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "389cffa9e1f9d889fb1d38bc9f846254cef0c8db2fadbe562e3e7f3a8c9bd438",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/HPND.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "HPND-Intel",
+      "fedoraExpression": "HPND-Intel",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "7e12d653360b70fb6f42d64e82f43ce88cad8ccd62050a401857560349df3d69",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/HPND-Intel.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "HPND-Markus-Kuhn",
+      "fedoraExpression": "HPND-Markus-Kuhn",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "1793cfb7018e46472f62a5e5028c87e5fdb6913e61258d09771d358cf9050764",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/HPND-Markus-Kuhn.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "HPND-export-US",
+      "fedoraExpression": "HPND-export-US",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "36e8a8bf65340e22b24dcc9f90cf79c5d3ad4fba8910e25db297a588558141d4",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/HPND-export-US.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "HPND-export-US-acknowledgement",
+      "fedoraExpression": "HPND-export-US-acknowledgement",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "6a57c58cfc4381a85d5f2d32fec01c66d7afacacd6788b78f4538f7a28b64ceb",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/HPND-export-US-acknowledgement.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "HPND-export-US-modify",
+      "fedoraExpression": "HPND-export-US-modify",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "bb9e71a00382ac379902cde1222ced5163f580866bd9cd8c293066f5f066d9ce",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/HPND-export-US-modify.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "HPND-export2-US",
+      "fedoraExpression": "HPND-export2-US",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "d0a9342ab62c64f79976de582b192493e00370f32623acd70ec6d89d8d84baa9",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/HPND-export2-US.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "HPND-merchantability-variant",
+      "fedoraExpression": "HPND-merchantability-variant",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "48b4d3f0f5dd55368ee42f82fba8834f16f9dfdff22af9d5ca50a74c14f5e533",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/HPND-merchantability-variant.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "ISC-Veillard",
+      "fedoraExpression": "ISC-Veillard",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "a7b2ae6108b94b2bc077c05d67051a01e5e5f7034bf6dc4474130dadae3a4be2",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/ISC-Veillard.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "Inner-Net-2.0",
+      "fedoraExpression": "Inner-Net-2.0",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "481af86b886350e4a074366d7ac836576663a0033f88da5cb634d9d2b8219b16",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/Inner-Net-2.0.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "LGPL-2.1-or-later WITH GCC-exception-2.0",
+      "fedoraExpression": "LGPL-2.1-or-later WITH GCC-exception-2.0",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "e48340c73c3b0e78bb9259bc76653dba17d5b3455a839115fef8e064394da089",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/LGPL-2.1-or-later_WITH_GCC-exception-2.0.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "LGPL-2.1-or-later WITH GNU-compiler-exception",
+      "fedoraExpression": "LGPL-2.1-or-later WITH GNU-compiler-exception",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "d0aa284ca9aa9767d7feae562532391535b58a5c51828486b86a8a1f38a11285",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/LGPL-2.1-or-later_WITH_GNU-compiler-exception.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "Linux-man-pages-copyleft-2-para",
+      "fedoraExpression": "Linux-man-pages-copyleft-2-para",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "c17e19fe8550fb5a8376af7353183e975d5a439e7358f627f56a27f3375efec7",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/Linux-man-pages-copyleft-2-para.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "MIT-CMU",
+      "fedoraExpression": "MIT-CMU",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "9fa417117387aeb5c333416ab9aef9f53db49ae05849a98dba8259960b6e6937",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/MIT-CMU.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "MIT-Modern-Variant",
+      "fedoraExpression": "MIT-Modern-Variant",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "d320065c11d757dc13fac93cad331d1fdfabef7b370d7cb0ab9ce3fb773d0528",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/MIT-Modern-Variant.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "MIT-open-group",
+      "fedoraExpression": "MIT-open-group",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "849a6681edb936beb14ac99e1821bf955e08a0b5ec2b225b8a1e9594cf87a04d",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/MIT-open-group.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "Martin-Birgmeier",
+      "fedoraExpression": "Martin-Birgmeier",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "6a201209a208e14f2c59a569057e3fa0acfdb572a045bd1e732039ed65e4e71a",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/Martin-Birgmeier.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "OAR",
+      "fedoraExpression": "OAR",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "71cf71416846f44639c0852d4565cdf1b3d4939fb6dbbaac2a221e7254b49c8f",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/OAR.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "OLDAP-2.8",
+      "fedoraExpression": "OLDAP-2.8",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "d946d094058585e9a8a60746c1a4ac9a3744c9478971fc7661ceb78e4dbe975d",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/OLDAP-2.8.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "OpenVision",
+      "fedoraExpression": "OpenVision",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "9f187a2b0144e479dad9295e5efdd5729ad8e0f2e6b279e092c6549c8fbcc653",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/OpenVision.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "SISSL",
+      "fedoraExpression": "SISSL",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "9d3b00d368d4e48b43df7cdb41f061fd1667c90c1f8099a4ef71c90bb28e5470",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/SISSL.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "SMLNJ",
+      "fedoraExpression": "SMLNJ",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "e5518eaf58f2d765c368e3de29ce43fc54162b61de85259c1d402aaee8e6ba84",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/SMLNJ.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "SunPro",
+      "fedoraExpression": "SunPro",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "0767bca0e3a799807d1ba1d457861da015da8133b354cf1441e434a16c614551",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/SunPro.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "Vim",
+      "fedoraExpression": "Vim",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "f6d11d140bb54b3fbfac4c62e992cb8082abf28a6196bccdf9911354d7db284f",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/Vim.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "W3C",
+      "fedoraExpression": "W3C",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "fe141004beacf8da962a013796ead95a683239938cb508b04de004b633d6fa34",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/W3C.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "X11",
+      "fedoraExpression": "X11",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "91c5700bc2f8a6be3b04e432d643700a53ecf487c733e6e478631a76de494042",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/X11.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "ZPL-2.1",
+      "fedoraExpression": "ZPL-2.1",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "7fcde76c3c214309f8910d01c36455e06af5dba70a602f954878bb20c3e0b22f",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/ZPL-2.1.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "blessing",
+      "fedoraExpression": "blessing",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "b8fcbf392da535bcde923ff57d7724ee83b3eb1192d98e1a512b44eeebafb94b",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/blessing.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "curl",
+      "fedoraExpression": "curl",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "55177bc0baac8a9f7b6532873324e728ae65835c296b79914833da866b615ffd",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/curl.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    },
+    {
+      "term": "dtoa",
+      "fedoraExpression": "dtoa",
+      "fedoraStatus": [
+        "allowed"
+      ],
+      "fedoraSha256": "f08a6368a2c70aaab1e1f65872cf623996bdef66ed2d38399b93b54b26bd526d",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/dtoa.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "allow-standard-software-term"
+    }
+  ],
+  "contextualTerms": [
+    {
+      "term": "GFDL-1.1-only",
+      "fedoraExpression": "GFDL-1.1-only",
+      "fedoraStatus": [
+        "allowed-documentation"
+      ],
+      "fedoraSha256": "177b6f883befcca7cc3f3e5daba51f1f3b5a181764e4825b39fb81aef24b1d8f",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GFDL-1.1-only.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "requires-package-context"
+    },
+    {
+      "term": "GFDL-1.1-or-later",
+      "fedoraExpression": "GFDL-1.1-or-later",
+      "fedoraStatus": [
+        "allowed-documentation"
+      ],
+      "fedoraSha256": "93f42ebc6061af99df44e110a9b38c902be5b0c1fda04d770584c474cc89f40d",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GFDL-1.1-or-later.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "requires-package-context"
+    },
+    {
+      "term": "GFDL-1.3-invariants-or-later",
+      "fedoraExpression": "GFDL-1.3-invariants-or-later",
+      "fedoraStatus": [
+        "allowed-documentation"
+      ],
+      "fedoraSha256": "e4babd4472fb649e75eaceb57d67cbce92df84deaa0a2a34701ed077790e8eda",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GFDL-1.3-invariants-or-later.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "requires-package-context"
+    },
+    {
+      "term": "GFDL-1.3-no-invariants-or-later",
+      "fedoraExpression": "GFDL-1.3-no-invariants-or-later",
+      "fedoraStatus": [
+        "allowed-documentation"
+      ],
+      "fedoraSha256": "e255767ccb128a9823db4a2388860041897808fd03ff8fbad8b300d1190d2ae1",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GFDL-1.3-no-invariants-or-later.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "requires-package-context"
+    },
+    {
+      "term": "GFDL-1.3-only",
+      "fedoraExpression": "GFDL-1.3-only",
+      "fedoraStatus": [
+        "allowed-documentation"
+      ],
+      "fedoraSha256": "8406af390234abaa25137bd1e27c8d341cd5ef4ae5077a11406f9a852747821f",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GFDL-1.3-only.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "requires-package-context"
+    },
+    {
+      "term": "GFDL-1.3-or-later",
+      "fedoraExpression": "GFDL-1.3-or-later",
+      "fedoraStatus": [
+        "allowed-documentation"
+      ],
+      "fedoraSha256": "34564842222258d765ed8b9e51ffccf664f9703685f9fd409b387b9bab791778",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/GFDL-1.3-or-later.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "requires-package-context"
+    },
+    {
+      "term": "OPUBL-1.0",
+      "fedoraExpression": "OPUBL-1.0",
+      "fedoraStatus": [
+        "not-allowed"
+      ],
+      "fedoraSha256": "c511611681dfdeb779ce97249ab905c9d488c6ccc61de9a0a9fbfb9df4f3111c",
+      "source": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/OPUBL-1.0.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "decision": "requires-package-context"
+    }
+  ],
+  "rawObservations": [
+    {
+      "name": "gpg-pubkey",
+      "version": "36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6-6786af3b",
+      "type": "rpm",
+      "purl": "pkg:rpm/fedora/gpg-pubkey@36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6-6786af3b?distro=fedora-44",
+      "licenses": [
+        {
+          "value": "pubkey",
+          "spdxExpression": "",
+          "type": "declared",
+          "urls": [],
+          "locations": [
+            {
+              "path": "/usr/lib/sysimage/rpm/rpmdb.sqlite",
+              "layerID": "sha256:121832a7edf8b8d6dcfd46c8c189a1a7491511e7f736d43c08024437542509c0",
+              "accessPath": "/usr/lib/sysimage/rpm/rpmdb.sqlite",
+              "annotations": {
+                "evidence": "primary"
+              }
+            }
+          ]
+        }
+      ],
+      "fingerprint": "license-raw:2fc048b97508ca11d98acff9164c553f8a6c78955bb90e9845e05be5b011c341",
+      "primaryEvidence": {
+        "url": "https://rpm.org/docs/latest/manual/tags",
+        "tag": "Pubkeys (266) is used in gpg-pubkey special packages",
+        "keyFingerprint": "36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6"
+      }
+    },
+    {
+      "name": "libtool-ltdl",
+      "version": "2.5.4-10.fc44",
+      "type": "rpm",
+      "purl": "pkg:rpm/fedora/libtool-ltdl@2.5.4-10.fc44?arch=aarch64&distro=fedora-44&upstream=libtool-2.5.4-10.fc44.src.rpm",
+      "licenses": [
+        {
+          "value": "LGPLv2+",
+          "spdxExpression": "",
+          "type": "declared",
+          "urls": [],
+          "locations": [
+            {
+              "path": "/usr/lib/sysimage/rpm/rpmdb.sqlite",
+              "layerID": "sha256:121832a7edf8b8d6dcfd46c8c189a1a7491511e7f736d43c08024437542509c0",
+              "accessPath": "/usr/lib/sysimage/rpm/rpmdb.sqlite",
+              "annotations": {
+                "evidence": "primary"
+              }
+            }
+          ]
+        }
+      ],
+      "fingerprint": "license-raw:5022a5cf38402fc4b5eb58ee0fd85898d953b2201c5d4f8390ad2672ead4d75c",
+      "licenseFile": {
+        "path": "/usr/share/licenses/libtool-ltdl/COPYING.LIB",
+        "size": 26419,
+        "digest": {
+          "algorithm": "sha256",
+          "value": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95"
+        }
+      },
+      "primaryEvidence": {
+        "url": "https://forge.fedoraproject.org/legal/fedora-license-data/src/commit/cbd8b74cd481a598668f05d1878fcd53a8ef78e4/data/LGPL-2.0-or-later.toml",
+        "sha256": "03823631baf2ddc9bf443d3d77149855f202dd0ddcf59edeb2d7b2a38e37feb8",
+        "declaredAbbreviation": "LGPLv2+",
+        "fedoraExpression": "LGPL-2.0-or-later",
+        "status": [
+          "allowed"
+        ],
+        "upstream": "https://www.gnu.org/s/libtool/manual/html_node/Using-libltdl.html"
+      }
+    }
+  ]
+}
