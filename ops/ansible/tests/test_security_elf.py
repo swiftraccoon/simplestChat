@@ -50,14 +50,19 @@ def metadata() -> dict[str, object]:
     }
 
 
-def fixture(*, library: bool = False, needed: tuple[str, ...] | None = None) -> bytes:
+def fixture(
+    *,
+    library: bool = False,
+    needed: tuple[str, ...] | None = None,
+    platform: str = "linux/amd64",
+) -> bytes:
     """Construct metadata-only ELF bytes; no executable program is present."""
     data = bytearray(FILE_SIZE)
     ident = b"\x7fELF\x02\x01\x01" + bytes(9)
     data[: elf.ELF_HEADER.size] = elf.ELF_HEADER.pack(
         ident,
         elf.ET_DYN,
-        62,
+        elf.PLATFORMS[platform][0],
         1,
         BASE,
         elf.ELF_HEADER.size,
@@ -83,7 +88,7 @@ def fixture(*, library: bool = False, needed: tuple[str, ...] | None = None) -> 
         offset += len(name) + 1
     entries.append((0, 0))
     dynamic = b"".join(elf.DYNAMIC_ENTRY.pack(*entry) for entry in entries)
-    interpreter = b"/lib64/ld-linux-x86-64.so.2\0"
+    interpreter = elf.PLATFORMS[platform][1].encode("ascii") + b"\0"
     programs = [
         (elf.PT_LOAD, EXECUTABLE_FLAGS, 0, BASE, 0, FILE_SIZE, FILE_SIZE, FILE_SIZE),
         (
@@ -318,6 +323,52 @@ class ElfSecurityTests(unittest.TestCase):
             with self.subTest(needed=changed.needed), self.assertRaises(elf.ElfError):
                 _ = elf.hardening(changed, "linux/amd64")
 
+    def test_direct_loader_dependency_is_restricted_to_selected_platform(self) -> None:
+        """An ABI loader may be explicit, without approving other loaders or shared libraries."""
+        for platform, (_, interpreter) in elf.PLATFORMS.items():
+            loader = Path(interpreter).name
+            with self.subTest(platform=platform):
+                parsed = elf.parse(
+                    fixture(platform=platform, needed=("libc.so.6", loader)), platform
+                )
+                self.assertTrue(elf.hardening(parsed, platform)["approvedLibraries"])
+                diagnostics = elf.dependency_diagnostics(parsed.needed, platform)
+                identities = cast("list[dict[str, object]]", diagnostics["identities"])
+                self.assertEqual(
+                    {item["name"]: item["approved"] for item in identities},
+                    {"libc.so.6": True, loader: True},
+                )
+                other_loaders = {
+                    Path(value[1]).name for key, value in elf.PLATFORMS.items() if key != platform
+                }
+                for unexpected in (*other_loaders, "ld-linux-fixture.so.2", "libssl.so.3"):
+                    with (
+                        self.subTest(unexpected=unexpected),
+                        self.assertRaisesRegex(elf.ElfError, "approvedLibraries"),
+                    ):
+                        _ = elf.hardening(replace(parsed, needed=(unexpected,)), platform)
+
+    def test_direct_loader_is_hashed_once_and_must_exist_inside_image(self) -> None:
+        """Explicit NEEDED linkage retains interpreter provenance and image isolation."""
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            rootfs(directory)
+            _ = (directory / "app/simplestChat").write_bytes(
+                fixture(needed=("libc.so.6", "ld-linux-x86-64.so.2"))
+            )
+            report = elf.audit(directory)
+            libraries = cast("list[dict[str, object]]", report["libraries"])
+            loaders = [
+                item for item in libraries if item["path"] == "/usr/lib64/ld-linux-x86-64.so.2"
+            ]
+            self.assertEqual(len(loaders), 1)
+            self.assertEqual(
+                loaders[0]["sha256"], hashlib.sha256(fixture(library=True)).hexdigest()
+            )
+            (directory / "usr/lib64/ld-linux-x86-64.so.2").unlink()
+            with self.assertRaises(FileNotFoundError):
+                _ = elf.audit(directory)
+
     def test_current_build_uses_one_pinned_auditable_tool_without_path_fallback(self) -> None:
         """Both cache warmup and final production build retain the audited build command."""
         dockerfile = (ROOT / "Dockerfile").read_text()
@@ -347,14 +398,14 @@ class ElfSecurityTests(unittest.TestCase):
             self.assertEqual(evidence["omitted"], 0)
             self.assertEqual(
                 {string(row, "name"): row["approved"] for row in objects(evidence, "identities")},
-                {"libc.so.6": True, "libstdc++.so.6": False, "ld-linux-x86-64.so.2": False},
+                {"libc.so.6": True, "libstdc++.so.6": False, "ld-linux-x86-64.so.2": True},
             )
             self.assertEqual(output.stat().st_mode & 0o777, 0o600)
 
     def test_dependency_diagnostics_hide_unusual_strings_and_bound_complete_identity(self) -> None:
         """Only a small conventional SONAME set is printed; other bytes are hashed."""
         private = "NeverPublishFixtureCredentialValue.so"
-        evidence = elf.dependency_diagnostics((private,))
+        evidence = elf.dependency_diagnostics((private,), "linux/amd64")
         self.assertNotIn(private, json.dumps(evidence))
         self.assertEqual(
             evidence["identities"],
@@ -369,7 +420,7 @@ class ElfSecurityTests(unittest.TestCase):
         needed = tuple(
             f"libfixture{index}.so.1" for index in range(elf.MAX_DIAGNOSTIC_DEPENDENCIES + 2)
         )
-        evidence = elf.dependency_diagnostics(needed)
+        evidence = elf.dependency_diagnostics(needed, "linux/amd64")
         self.assertEqual(evidence["count"], len(needed))
         self.assertEqual(evidence["omitted"], 2)
         self.assertEqual(

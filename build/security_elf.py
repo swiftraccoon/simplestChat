@@ -371,12 +371,18 @@ def dependency_metadata(section: bytes | None) -> dict[str, object]:
     }
 
 
-def dependency_diagnostics(needed: tuple[str, ...]) -> dict[str, object]:
+def runtime_libraries(platform: str) -> frozenset[str]:
+    """Include the selected ABI loader, which glibc may link directly as needed."""
+    return RUNTIME_LIBRARIES | {PurePosixPath(PLATFORMS[platform][1]).name}
+
+
+def dependency_diagnostics(needed: tuple[str, ...], platform: str) -> dict[str, object]:
     """Identify rejected linkage without exposing arbitrary artifact strings."""
     identities: list[dict[str, object]] = []
+    allowed = runtime_libraries(platform)
     # Prioritize unapproved names so approved dependencies cannot crowd the
     # useful diagnostic out of the bounded report. Hashes bind omitted names.
-    ordered = sorted(needed, key=lambda name: (name in RUNTIME_LIBRARIES, name))
+    ordered = sorted(needed, key=lambda name: (name in allowed, name))
     for name in ordered[:MAX_DIAGNOSTIC_DEPENDENCIES]:
         conventional = re.fullmatch(
             r"(?:lib[a-z][a-z0-9_+.-]{0,47}\.so(?:\.[0-9]{1,8}){0,4}"
@@ -387,7 +393,7 @@ def dependency_diagnostics(needed: tuple[str, ...]) -> dict[str, object]:
             {
                 "name": name if conventional else None,
                 "sha256": hashlib.sha256(name.encode("ascii")).hexdigest(),
-                "approved": name in RUNTIME_LIBRARIES,
+                "approved": name in allowed,
             }
         )
     return {
@@ -416,11 +422,11 @@ def hardening(elf: Elf, platform: str) -> dict[str, bool]:
         ),
         "noTextRelocations": DT_TEXTREL not in elf.dynamic and not bool(flags & DF_TEXTREL),
         "noRpath": DT_RPATH not in elf.dynamic and DT_RUNPATH not in elf.dynamic,
-        "approvedLibraries": bool(elf.needed) and set(elf.needed) <= RUNTIME_LIBRARIES,
+        "approvedLibraries": bool(elf.needed) and set(elf.needed) <= runtime_libraries(platform),
     }
     if not all(checks.values()):
         reason = "elf_hardening:" + ",".join(name for name, ok in checks.items() if not ok)
-        raise ElfError(reason, dependencies=dependency_diagnostics(elf.needed))
+        raise ElfError(reason, dependencies=dependency_diagnostics(elf.needed, platform))
     return checks
 
 
@@ -496,7 +502,7 @@ def audit(root: Path, platform: str = "linux/amd64") -> dict[str, object]:
     )
     libraries: list[dict[str, object]] = []
     visited: set[Path] = set()
-    allowed = RUNTIME_LIBRARIES | {PurePosixPath(interpreter).name}
+    allowed = runtime_libraries(platform)
     while queue:
         path = queue.popleft()
         if path in visited:

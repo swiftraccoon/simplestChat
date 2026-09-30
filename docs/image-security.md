@@ -50,8 +50,18 @@ The application must encode all of these properties:
 - A present, non-executable GNU stack declaration.
 - No writable executable load segment or text relocations.
 - No runtime library search-path override through `RPATH` or `RUNPATH`.
-- Only the declared glibc/math/compiler-support dynamic libraries. OpenSSL and
-  the C++ runtime are intended to be statically linked in this build.
+- Only the declared glibc/math/compiler-support dynamic libraries and the
+  selected platform's loader SONAME. OpenSSL and the C++ runtime are intended
+  to be statically linked in this build.
+
+The expected loader may appear as both `PT_INTERP` and a direct `DT_NEEDED`
+dependency: `ld-linux-x86-64.so.2` on amd64 or `ld-linux-aarch64.so.1` on arm64.
+glibc's [linker-script design](https://sourceware.org/legacy-ml/libc-alpha/2013-05/msg00231.html)
+includes the loader through `AS_NEEDED`, so direct linkage is legitimate.
+The executable and transitive dependency checks share this platform-specific
+allowlist; a loader from another architecture remains forbidden. The loader
+still has to resolve inside the selected image and retain its hashed RPM
+provenance, whether reached through one or both metadata entries.
 
 The interpreter and transitive shared libraries must resolve within the same
 image filesystem. Absolute symlinks are interpreted relative to that image;
