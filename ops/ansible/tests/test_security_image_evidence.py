@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import tempfile
 import tomllib
@@ -120,11 +121,45 @@ def rpm_package() -> JsonObject:
 
 def native_inventory() -> JsonObject:
     """Keep native production, tests, Windows inputs and builder keys distinguishable."""
+    openssl = object_value(
+        object_value(policy.report(ROOT / "vendor/native-components.json"))["openssl"]
+    ).copy()
+    prefix = "/opt/openssl-3.5.9"
+    disabled = b"shared\ndso\nmodule\nengine\n"
+    libraries: list[JsonValue] = [
+        {"library": name, "path": f"{prefix}/lib/lib{name}.a", "sha256": DIGEST, "size": 12}
+        for name in ("ssl", "crypto")
+    ]
+    openssl["build"] = {
+        "version_header": {
+            "path": prefix + "/include/openssl/opensslv.h",
+            "sha256": DIGEST,
+            "size": 100,
+        },
+        "configuration_header": {
+            "path": prefix + "/include/openssl/configuration.h",
+            "sha256": DIGEST,
+            "size": 100,
+        },
+        "disabled_options_record": {
+            "path": prefix + "/share/simplestchat/openssl-disabled.txt",
+            "sha256": hashlib.sha256(disabled).hexdigest(),
+            "size": len(disabled),
+        },
+        "disabled_options": ["shared", "dso", "module", "engine"],
+        "static_libraries": libraries,
+    }
+    archives: list[JsonValue] = [{"sha256": DIGEST, "library": "worker"}]
+    archives.extend(
+        {**object_value(library), "provider": provider, "out_dir": "/app/target/release/build/out"}
+        for library in libraries
+        for provider in ("mediasoup-sys", "openssl-sys")
+    )
     return {
         "binary": {"sha256": DIGEST, "size": 123},
         "native_manifest_sha256": runner.digest(ROOT / "vendor/native-components.json"),
         "cargo_lock_sha256": runner.digest(ROOT / "Cargo.lock"),
-        "static_archives": [{"sha256": DIGEST, "library": "worker"}],
+        "static_archives": archives,
         "wrap_components": [
             {"name": "abseil", "version": "1", "usage": "production", "license": "Apache-2.0"},
             {
@@ -142,7 +177,7 @@ def native_inventory() -> JsonObject:
             "version": "m77",
             "license": "BSD-3-Clause",
         },
-        "openssl": {"version": "3.5.9", "license": "Apache-2.0"},
+        "openssl": openssl,
         "registry_component": {"name": "AWS-LC", "version": "5.7.0", "license": "ISC AND MIT"},
         "toolchain": {
             "static_cxx_owner": "libstdc++-static\t0:16.2.1-2.fc44.aarch64\t"
@@ -551,6 +586,48 @@ class NativeEvidenceTests(unittest.TestCase):
             _ = path.write_text(json.dumps(receipt))
             with self.assertRaisesRegex(ToolError, "inventory_missing"):
                 _ = runner.native_binding(tree, {"binarySha256": DIGEST, "binaryBytes": 123})
+
+    def test_current_openssl_configuration_and_link_input_contract_is_mandatory(self) -> None:
+        """Missing configuration or mismatched source and library evidence cannot pass."""
+        expected = object_value(
+            object_value(policy.report(ROOT / "vendor/native-components.json"))["openssl"]
+        )
+        good = native_inventory()
+        policy.openssl_build_binding(good, expected)
+        component_changes: tuple[tuple[str, JsonValue], ...] = (
+            ("source", {}),
+            ("installer_sha256", "b" * 64),
+            ("configure_options", ["no-shared"]),
+            ("build", {}),
+        )
+        for changed_field, replacement in component_changes:
+            value = copy.deepcopy(good)
+            object_value(value["openssl"])[changed_field] = replacement
+            with self.subTest(field=changed_field), self.assertRaises(ToolError):
+                policy.openssl_build_binding(value, expected)
+        value = copy.deepcopy(good)
+        del object_value(value["openssl"])["build"]
+        with self.assertRaises(ToolError):
+            policy.openssl_build_binding(value, expected)
+        build_changes: tuple[tuple[str, JsonValue], ...] = (
+            ("disabled_options", ["shared", "dso", "engine"]),
+            ("static_libraries", []),
+            (
+                "configuration_header",
+                {"path": "/outside/configuration.h", "sha256": DIGEST, "size": 100},
+            ),
+        )
+        for field, replacement in build_changes:
+            value = copy.deepcopy(good)
+            object_value(object_value(value["openssl"])["build"])[field] = replacement
+            with self.subTest(field=field), self.assertRaises(ToolError):
+                policy.openssl_build_binding(value, expected)
+        for field, replacement in (("sha256", "b" * 64), ("size", True), ("provider", "other")):
+            value = copy.deepcopy(good)
+            library = object_value(array_value(value["static_archives"])[1])
+            library[field] = replacement
+            with self.subTest(field=field), self.assertRaises(ToolError):
+                policy.openssl_build_binding(value, expected)
 
 
 class RuntimeAndDatabaseTests(unittest.TestCase):

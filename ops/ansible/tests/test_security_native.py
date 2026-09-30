@@ -166,6 +166,7 @@ class Fixture:
                     "format": "tar.gz",
                 },
                 "installer_sha256": vendor.sha256(installer),
+                "configure_options": list(native.OPENSSL_OPTIONS),
             },
             "registry_component": {
                 "name": "AWS-LC",
@@ -196,6 +197,16 @@ class Fixture:
             _ = put(self.openssl, "lib/lib" + name + ".a", b"!<arch>\n" + name.encode())
         _ = put(
             self.openssl, "include/openssl/opensslv.h", b'# define OPENSSL_VERSION_STR "3.5.9"\n'
+        )
+        _ = put(
+            self.openssl,
+            "include/openssl/configuration.h",
+            b"# define OPENSSL_NO_DSO\n# define OPENSSL_NO_ENGINE\n",
+        )
+        _ = put(
+            self.openssl,
+            "share/simplestchat/openssl-disabled.txt",
+            b"shared\ndso\nmodule\nengine\n",
         )
         return component
 
@@ -393,6 +404,12 @@ class NativeTests(unittest.TestCase):
             object_value(report["binary"])["sha256"], vendor.sha256(fixture.binary.read_bytes())
         )
         self.assertEqual(len(array_value(report["static_archives"])), 7)
+        openssl = object_value(object_value(report["openssl"])["build"])
+        self.assertEqual(openssl["disabled_options"], ["shared", "dso", "module", "engine"])
+        self.assertEqual(
+            object_value(openssl["configuration_header"])["sha256"],
+            vendor.sha256((fixture.openssl / "include/openssl/configuration.h").read_bytes()),
+        )
         self.assertEqual(object_value(report["registry_component"])["verified_files"], 3)
         self.assertIn(
             "libstdc++-static", str(object_value(report["toolchain"])["static_cxx_owner"])
@@ -697,6 +714,45 @@ class NativeTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             _ = self.produce()
         self.assertEqual(fixture.arguments.output.read_bytes(), original)
+
+    def test_openssl_dynamic_loading_and_engine_configuration_are_required(self) -> None:
+        """An installed version alone cannot certify that dynamic loading was disabled."""
+        fixture = self.current()
+        for contents in (
+            b"# define OPENSSL_NO_DSO\n",
+            b"# define OPENSSL_NO_ENGINE\n",
+            b"# define OPENSSL_NO_DSO\n# define OPENSSL_NO_ENGINE\n#undef OPENSSL_NO_DSO\n",
+        ):
+            _ = put(fixture.openssl, "include/openssl/configuration.h", contents)
+            with (
+                self.subTest(contents=contents),
+                self.assertRaisesRegex(native.NativeError, "dynamic loading"),
+            ):
+                _ = self.produce()
+
+    def test_openssl_module_disable_comes_from_configdata_not_an_invented_macro(self) -> None:
+        """No OPENSSL_NO_MODULE macro is expected; actual disabled options remain mandatory."""
+        fixture = self.current()
+        _ = self.produce()
+        for contents in (b"shared\ndso\nengine\n", b"shared\ndso\nmodule\nengine\nother\n"):
+            _ = put(fixture.openssl, "share/simplestchat/openssl-disabled.txt", contents)
+            with (
+                self.subTest(contents=contents),
+                self.assertRaisesRegex(native.NativeError, "disable modules"),
+            ):
+                _ = self.produce()
+
+    def test_openssl_configuration_binds_both_actual_static_archives(self) -> None:
+        """A changed link input cannot retain the prior configured-library receipt."""
+        fixture = self.current()
+        report = self.produce()
+        _ = put(fixture.openssl, "lib/libssl.a", b"!<arch>\nchanged after link capture")
+        with self.assertRaisesRegex(native.NativeError, "static link archives differ"):
+            _ = native.openssl_build_evidence(
+                fixture.openssl,
+                object_value(report["openssl"]),
+                array_value(report["static_archives"]),
+            )
 
     def test_same_package_host_and_target_events_remain_distinct(self) -> None:
         """Cargo emits distinct output directories when host and target instances differ."""

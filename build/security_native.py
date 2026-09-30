@@ -47,6 +47,9 @@ MAX_LICENSE = 4096
 RPM_FIELDS = 3
 SOURCE_REGISTRY = "registry+https://github.com/rust-lang/crates.io-index"
 SYSTEM_ROOT = Path("/usr")
+OPENSSL_OPTIONS = ("no-shared", "no-dso", "no-module", "no-engine", "no-tests")
+OPENSSL_DISABLED = ("shared", "dso", "module", "engine")
+OPENSSL_PROVIDERS = frozenset({"mediasoup-sys", "openssl-sys"})
 
 
 class NativeError(ValueError):
@@ -205,7 +208,9 @@ def validate_adapted(root: Path, value: JsonValue) -> None:
 
 def validate_openssl(root: Path, value: JsonValue) -> None:
     """Bind OpenSSL identity to the actual checksum-checking build helper."""
-    component = vendor.fields(value, {"version", "source", "installer_sha256", "license"})
+    component = vendor.fields(
+        value, {"version", "source", "installer_sha256", "license", "configure_options"}
+    )
     source = vendor.parse_source(component["source"])
     version = text(component, "version")
     installer = vendor.read_regular(root / "build/install-openssl.sh", vendor.MAX_MANIFEST)
@@ -217,8 +222,59 @@ def validate_openssl(root: Path, value: JsonValue) -> None:
         != f"https://github.com/openssl/openssl/releases/download/openssl-{version}/openssl-{version}.tar.gz"
         or f"openssl_version='{version}'\n".encode() not in installer
         or f"openssl_sha256='{source.sha256}'\n".encode() not in installer
+        or strings(component["configure_options"]) != list(OPENSSL_OPTIONS)
     ):
         raise NativeError("OpenSSL source or installer identity differs")
+
+
+def openssl_build_evidence(
+    prefix: Path, component: JsonObject, archives: Sequence[JsonValue]
+) -> JsonObject:
+    """Bind installed configuration and both providers to the same static OpenSSL bytes."""
+    version_path = prefix / "include/openssl/opensslv.h"
+    configuration_path = prefix / "include/openssl/configuration.h"
+    disabled_path = prefix / "share/simplestchat/openssl-disabled.txt"
+    header = vendor.read_regular(version_path, vendor.MAX_MANIFEST)
+    if f'# define OPENSSL_VERSION_STR "{text(component, "version")}"' not in header.decode():
+        raise NativeError("Built OpenSSL headers differ from the declared source version")
+    configuration = vendor.read_regular(configuration_path, vendor.MAX_MANIFEST)
+    for macro in ("OPENSSL_NO_DSO", "OPENSSL_NO_ENGINE"):
+        definitions = re.findall(
+            rf"^\s*#\s*define\s+{macro}\s*$", configuration.decode(), re.MULTILINE
+        )
+        if len(definitions) != 1 or re.search(rf"#\s*undef\s+{macro}\b", configuration.decode()):
+            raise NativeError("Built OpenSSL permits dynamic loading or engines")
+    disabled = vendor.read_regular(disabled_path, vendor.MAX_MANIFEST)
+    if disabled != ("\n".join(OPENSSL_DISABLED) + "\n").encode():
+        raise NativeError("Built OpenSSL configuration does not disable modules")
+    libraries: list[JsonValue] = []
+    for library in ("ssl", "crypto"):
+        actual = archive_record(prefix / "lib" / f"lib{library}.a")
+        linked = [
+            object_value(item) for item in archives if object_value(item)["library"] == library
+        ]
+        if (
+            len(linked) != len(OPENSSL_PROVIDERS)
+            or frozenset(text(item, "provider") for item in linked) != OPENSSL_PROVIDERS
+            or any(any(item[key] != actual[key] for key in actual) for item in linked)
+        ):
+            raise NativeError("OpenSSL configuration and static link archives differ")
+        libraries.append({"library": library, **actual})
+    return {
+        **component,
+        "build": {
+            **{
+                key: {"path": str(path), "sha256": vendor.sha256(body), "size": len(body)}
+                for key, path, body in (
+                    ("version_header", version_path, header),
+                    ("configuration_header", configuration_path, configuration),
+                    ("disabled_options_record", disabled_path, disabled),
+                )
+            },
+            "disabled_options": list[JsonValue](OPENSSL_DISABLED),
+            "static_libraries": libraries,
+        },
+    }
 
 
 def validate_registry_lock(root: Path, value: JsonValue) -> None:
@@ -805,12 +861,9 @@ def produce(build: Build) -> None:
     licenses = rust_licenses(build, graph, integrity, embedded)
     archives, runtime = link_archives(build, graph, manifest)
     toolchain = toolchain_evidence(build.root, runtime)
-    openssl = object_value(manifest["openssl"])
-    header = vendor.read_regular(
-        build.openssl_prefix / "include/openssl/opensslv.h", vendor.MAX_MANIFEST
-    ).decode()
-    if f'# define OPENSSL_VERSION_STR "{text(openssl, "version")}"' not in header:
-        raise NativeError("Built OpenSSL headers differ from the declared source version")
+    openssl = openssl_build_evidence(
+        build.openssl_prefix, object_value(manifest["openssl"]), archives
+    )
     report: JsonObject = {
         "native_manifest_sha256": vendor.sha256(
             vendor.read_regular(build.root / "vendor/native-components.json", vendor.MAX_MANIFEST)

@@ -120,6 +120,16 @@ crate, compiler identity, builder RPM/source-RPM identities, and the final
 executable's SHA-256. Fedora signing-key pseudo-packages are recorded separately;
 they are not misrepresented as source-backed runtime packages.
 
+OpenSSL's current build receipt requires the reviewed `no-shared`, `no-dso`,
+`no-module` and `no-engine` configuration. It binds the installed version and
+configuration header hashes, the build-system disabled-options record, and the
+actual `ssl`/`crypto` archive identities referenced by both native link providers.
+The image consumer checks those records against the current source/installer
+manifest and link inputs; a version-only receipt is insufficient. These settings
+disable dynamic loading and engines while retaining the default, base and legacy
+providers as built-in code. They do not remove legacy algorithms or establish
+that every other component in the process is incapable of dynamic loading.
+
 Rust license evidence covers both the successful Cargo compiler-artifact stream
 and the dependency graph decoded from the exact final executable's `.dep-v0`
 section. These inventories can differ: embedded metadata can include optional

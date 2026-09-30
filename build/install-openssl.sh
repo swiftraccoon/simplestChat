@@ -62,6 +62,9 @@ cd "$build_dir/openssl-${openssl_version}"
     --openssldir="$install_prefix/ssl" \
     --libdir=lib \
     no-shared \
+    no-dso \
+    no-module \
+    no-engine \
     no-tests
 
 if command -v nproc >/dev/null 2>&1; then
@@ -74,6 +77,18 @@ fi
 
 make -s -j "$build_jobs"
 make -s install_sw
+
+# Retain the build system's actual disabled settings, not a copy of command-line
+# intent. OpenSSL deliberately has no OPENSSL_NO_MODULE configuration macro.
+# no-module retains default/base providers and builds the legacy provider in.
+mkdir -p "$install_prefix/share/simplestchat"
+perl -I. -Mconfigdata -e '
+    for my $option (qw(shared dso module engine)) {
+        die "OpenSSL build option is not disabled: $option\n"
+            unless exists $configdata::disabled{$option};
+        print "$option\n";
+    }
+' > "$install_prefix/share/simplestchat/openssl-disabled.txt"
 
 test -f "$install_prefix/lib/libssl.a"
 test -f "$install_prefix/lib/libcrypto.a"

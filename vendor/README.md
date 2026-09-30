@@ -291,6 +291,21 @@ and other release lines. Updating the source pin requires rebuilding the worker,
 Rust executables, native test image and production/load-generator images;
 previous binaries and historical scan receipts do not acquire the fix.
 
+The maintained installer also configures `no-dso`, `no-module` and `no-engine`
+alongside `no-shared`. Dynamic provider and engine loading is disabled in these
+static libraries. Default and base providers remain built in; OpenSSL also builds
+the legacy provider in when modules are disabled, so this does **not** remove
+legacy algorithms. These settings follow the authenticated 3.5.9 source's
+`Configure`, `providers/build.info` and `INSTALL.md` semantics.
+
+The installer records `shared`, `dso`, `module` and `engine` from the completed
+build's `configdata.pm` disabled map. Native evidence requires that exact installed
+record, `OPENSSL_NO_DSO` and `OPENSSL_NO_ENGINE` in `configuration.h`, and the
+declared version header. There is intentionally no `OPENSSL_NO_MODULE` macro.
+The receipt binds those files, the reviewed source/installer/options and both
+actual static libraries; mediasoup and Rust must link identical `ssl`/`crypto`
+archive hashes. Image consumption requires this current receipt contract.
+
 The build script copies the crate's allowlisted package inputs into a fresh
 Cargo `OUT_DIR` snapshot and runs Meson there. It tracks the complete immutable
 crate source, the relevant declared tool/compiler and pip environment, resolved

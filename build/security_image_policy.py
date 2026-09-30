@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import re
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
@@ -33,6 +33,8 @@ MAX_MATCHES = 100000
 MAX_EXPRESSION = 4096
 MAX_LICENSE_DEPTH = 32
 RPM_FIELDS = 3
+OPENSSL_LIBRARIES = ("ssl", "crypto")
+OPENSSL_PROVIDERS = frozenset({"mediasoup-sys", "openssl-sys"})
 MIN_DATABASE_HOURS = 1
 MAX_DATABASE_HOURS = 120
 TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+:-]*|[()]")
@@ -526,6 +528,82 @@ def native_packages(native: JsonObject) -> list[JsonObject]:
         )
     result[-1] = static_rpm(result[-1], owner)
     return result
+
+
+def openssl_build_binding(native: JsonObject, expected: JsonObject) -> None:
+    """Require current configured-source evidence and the exact two linked OpenSSL archives."""
+    component = object_value(native["openssl"])
+    require(
+        set(component) == set(expected) | {"build"}
+        and all(component[key] == expected[key] for key in expected)
+        and component["configure_options"]
+        == ["no-shared", "no-dso", "no-module", "no-engine", "no-tests"],
+        "image_openssl_source_binding",
+    )
+    build = object_value(component["build"])
+    require(
+        set(build)
+        == {
+            "version_header",
+            "configuration_header",
+            "disabled_options_record",
+            "disabled_options",
+            "static_libraries",
+        }
+        and build["disabled_options"] == ["shared", "dso", "module", "engine"],
+        "image_openssl_configuration",
+    )
+    records = [
+        object_value(build[key])
+        for key in ("version_header", "configuration_header", "disabled_options_record")
+    ]
+    libraries = [object_value(value) for value in array_value(build["static_libraries"])]
+    require(
+        len(libraries) == len(OPENSSL_LIBRARIES)
+        and [item.get("library") for item in libraries] == list(OPENSSL_LIBRARIES),
+        "image_openssl_archives",
+    )
+    for item in [*records, *libraries]:
+        path = string_value(item["path"])
+        require(
+            set(item)
+            == (
+                {"path", "sha256", "size", "library"}
+                if item in libraries
+                else {"path", "sha256", "size"}
+            )
+            and PurePosixPath(path).is_absolute()
+            and str(PurePosixPath(path)) == path
+            and ".." not in PurePosixPath(path).parts
+            and re.fullmatch(r"[a-f0-9]{64}", string_value(item["sha256"]))
+            and type(item["size"]) is int
+            and 0 < item["size"] <= 512 * 1024 * 1024,
+            "image_openssl_artifact_identity",
+        )
+    suffix = "/include/openssl/opensslv.h"
+    prefix = string_value(records[0]["path"]).removesuffix(suffix)
+    require(
+        records[0]["path"] == prefix + suffix
+        and records[1]["path"] == prefix + "/include/openssl/configuration.h"
+        and records[2]["path"] == prefix + "/share/simplestchat/openssl-disabled.txt"
+        and records[2]["sha256"] == hashlib.sha256(b"shared\ndso\nmodule\nengine\n").hexdigest()
+        and records[2]["size"] == len(b"shared\ndso\nmodule\nengine\n"),
+        "image_openssl_configuration_identity",
+    )
+    linked = [object_value(item) for item in array_value(native["static_archives"])]
+    for library in libraries:
+        name = string_value(library["library"])
+        matches = [item for item in linked if item["library"] == name]
+        require(
+            library["path"] == f"{prefix}/lib/lib{name}.a"
+            and len(matches) == len(OPENSSL_PROVIDERS)
+            and frozenset(string_value(item["provider"]) for item in matches) == OPENSSL_PROVIDERS
+            and all(
+                all(item[key] == library[key] for key in ("path", "sha256", "size"))
+                for item in matches
+            ),
+            "image_openssl_archive_binding",
+        )
 
 
 def enrich_sbom(

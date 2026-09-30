@@ -702,6 +702,12 @@ def native_binding(tree: Path, elf: JsonObject) -> JsonObject:
         and bool(object_value(native["registry_component"])),
         "image_native_inventory_missing",
     )
+    policy.openssl_build_binding(
+        native,
+        object_value(
+            object_value(policy.report(ROOT / "vendor/native-components.json"))["openssl"]
+        ),
+    )
     return native
 
 
