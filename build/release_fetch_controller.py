@@ -30,6 +30,7 @@ from types import FrameType
 from typing import IO, TypeGuard
 from urllib.parse import urlsplit
 
+import release_trust
 from release_json import (
     DuplicateJsonError,
     JsonObject,
@@ -98,6 +99,7 @@ class FetchOptions(ReleaseSelection):
     identity: str
     output_parent: str
     port: int = 22
+    verified_directory: str | None = None
 
 
 @dataclass
@@ -113,6 +115,7 @@ class RawOptions(argparse.Namespace):
     identity: str = ""
     output_parent: str = ""
     port: str = "22"
+    verified_directory: str | None = None
 
 
 def options(argv: list[str] | None = None) -> FetchOptions:
@@ -130,6 +133,7 @@ def options(argv: list[str] | None = None) -> FetchOptions:
     ):
         _ = parser.add_argument("--" + name, required=True)
     _ = parser.add_argument("--port", default="22")
+    _ = parser.add_argument("--verified-directory")
     raw = parser.parse_args(argv, namespace=RawOptions())
 
     def numeric(value: str) -> int:
@@ -148,6 +152,7 @@ def options(argv: list[str] | None = None) -> FetchOptions:
         raw.identity,
         raw.output_parent,
         numeric(raw.port),
+        raw.verified_directory,
     )
     require(
         re.fullmatch(
@@ -260,30 +265,13 @@ def verified_envelope(args: ReleaseSelection) -> JsonObject:
         api(f"repos/{args.repository}/actions/runs/{association['id']}"),
         "workflow_identity_or_success_mismatch",
     )
-    from_ci = build_run.get("path") == ".github/workflows/ci.yml"
-    if from_ci:
-        # A normal CI artifact is acceptable only from the exact successful
-        # trusted push run supplied as the CI gate, never a PR or a second run.
-        require(
-            association["id"] == args.ci_run and build_run.get("head_branch") == "main",
-            "artifact_ci_run_mismatch",
-        )
-        expected_build = ("CI", ".github/workflows/ci.yml", "push")
-        runs = [(association["id"], build_run, *expected_build)]
-    else:
-        expected_build = (
-            "Build production release artifact",
-            ".github/workflows/release-artifact.yml",
-            "workflow_dispatch",
-        )
-        ci_run = record(
-            api(f"repos/{args.repository}/actions/runs/{args.ci_run}"),
-            "workflow_identity_or_success_mismatch",
-        )
-        runs = [
-            (association["id"], build_run, *expected_build),
-            (args.ci_run, ci_run, "CI", ".github/workflows/ci.yml", "push"),
-        ]
+    require(
+        association["id"] == args.ci_run
+        and build_run.get("head_branch") == "main"
+        and positive(build_run.get("run_attempt")),
+        "artifact_ci_run_mismatch",
+    )
+    runs = [(association["id"], build_run, "CI", ".github/workflows/ci.yml", "push")]
     for run_id, run, name, path, event in runs:
         require(
             type(run.get("id")) is int
@@ -304,6 +292,7 @@ def verified_envelope(args: ReleaseSelection) -> JsonObject:
         "artifactId": args.artifact_id,
         "buildRunId": association["id"],
         "ciRunId": args.ci_run,
+        "runAttempt": build_run["run_attempt"],
         "revision": args.revision,
         "artifactZipBytes": size,
         "zipSha256": string_value(digest).removeprefix("sha256:"),
@@ -573,6 +562,13 @@ def verified_receipt(value: JsonValue, envelope: JsonObject) -> JsonObject:
         "receiver_failure_invalid",
     )
     if value["passed"]:
+        claim = record(
+            record(envelope["attestation"], "receiver_attestation_missing")["predicate"],
+            "receiver_attestation_missing",
+        )
+        files = record(
+            release_trust.predicate(claim, envelope)["fileDigests"], "receiver_attestation_missing"
+        )
         require(
             value["status"] == "complete"
             and value["settled"]
@@ -580,8 +576,8 @@ def verified_receipt(value: JsonValue, envelope: JsonObject) -> JsonObject:
             and failure is None
             and value["phase"] == "complete"
             and value["downloadedBytes"] == envelope["artifactZipBytes"]
-            and value["archiveSha256"] is not None
-            and value["manifestSha256"] is not None,
+            and value["archiveSha256"] == files["image.tar"]
+            and value["manifestSha256"] == files["release.json"],
             "receiver_success_inconsistent",
         )
     else:
@@ -650,7 +646,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901, PLR0912, PLR0915 
         signum: signal.signal(signum, interrupted)
         for signum in (signal.SIGALRM, signal.SIGINT, signal.SIGTERM)
     }
-    _ = signal.alarm(420)
+    _ = signal.alarm(1080)
     previous_umask = os.umask(0o077)
     try:
         Path(args.output_parent).mkdir(mode=0o700, exist_ok=True)
@@ -658,6 +654,16 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901, PLR0912, PLR0915 
         report["evidence"] = str(directory)
         report["phase"] = "github_metadata"
         envelope = verified_envelope(args)
+        report["phase"] = "attestation"
+        import release_attestation  # noqa: PLC0415 -- Keep the pure GitHub metadata client independently importable.
+
+        envelope = (
+            release_attestation.verify_directory(Path(args.verified_directory), envelope)
+            if args.verified_directory is not None
+            else release_attestation.fetch_verify(
+                download_url(args), directory / "verified", envelope
+            )
+        )
         save(directory / "artifact.json", envelope)
         report["phase"] = "receiver_preflight"
         receiver = Receiver(args)

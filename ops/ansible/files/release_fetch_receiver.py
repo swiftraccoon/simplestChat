@@ -29,6 +29,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
 
+import release_trust
 from release_artifact import ArtifactError, Manifest, sha256_file, validate_manifest, verify_archive
 from release_json import (
     DuplicateJsonError,
@@ -46,14 +47,14 @@ LINE_BYTES = 16384
 CHUNK = 1024 * 1024
 MAX_ZIP_BYTES = 2 * 1024**3
 MAX_IMAGE_BYTES = 2 * 1024**3
-MAX_METADATA_BYTES = 8 * CHUNK
-MAX_EXTRACTED_BYTES = MAX_IMAGE_BYTES + 16 * CHUNK
+MAX_METADATA_BYTES = 64 * CHUNK
+MAX_EXTRACTED_BYTES = MAX_IMAGE_BYTES + 128 * CHUNK
 MAX_ZIP_MEMBERS = 256
 ZIP_END_HEADER_BYTES = 22
 ZIP64_OFFSET = 0xFFFFFFFF
 ASCII_SPACE = 32
 ASCII_DELETE = 127
-SELECTED = ("image.tar", "release.json", "outcome.json", "source.json")
+SELECTED = (*release_trust.BOUND_FILES, release_trust.PREDICATE, release_trust.BUNDLE)
 SOURCE_KEYS = {
     "Dockerfile",
     ".dockerignore",
@@ -70,6 +71,8 @@ ENVELOPE_KEYS = {
     "revision",
     "artifactZipBytes",
     "zipSha256",
+    "runAttempt",
+    "attestation",
 }
 FAILURE_CLASSES = {
     "precondition_failed",
@@ -198,7 +201,7 @@ def validate_envelope(value: JsonValue) -> JsonObject:
         ),
         "invalid_envelope",
     )
-    for key in ("artifactId", "buildRunId", "ciRunId"):
+    for key in ("artifactId", "buildRunId", "ciRunId", "runAttempt"):
         identifier = value[key]
         require(type(identifier) is int and 0 < identifier <= 2**63 - 1, "invalid_envelope")
     revision, digest, size = value["revision"], value["zipSha256"], value["artifactZipBytes"]
@@ -207,6 +210,11 @@ def validate_envelope(value: JsonValue) -> JsonObject:
     )
     require(isinstance(digest, str) and re.fullmatch(r"[a-f0-9]{64}", digest), "invalid_envelope")
     require(type(size) is int and 0 < size <= MAX_ZIP_BYTES, "invalid_envelope")
+    try:
+        _ = release_trust.proof(value["attestation"], value)
+    except (ValueError, KeyError) as error:
+        message = "invalid_envelope"
+        raise FetchError(message) from error
     return value
 
 
@@ -459,6 +467,7 @@ def validate_build_evidence(attempt: Path, envelope: JsonObject) -> Manifest:
     manifest = validate_manifest(attempt / "release.json")
     require(manifest["revision"] == envelope["revision"], "release_revision_mismatch")
     _ = verify_archive(attempt / "image.tar", manifest)
+    release_trust.bind_received(attempt, envelope)
     return manifest
 
 

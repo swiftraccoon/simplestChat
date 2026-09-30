@@ -95,33 +95,21 @@ class ReleasePlaybookTests(unittest.TestCase):
             "ansible_ssh_private_key_file": "/private/controller key",
         }
 
-    def test_artifact_sources_are_mutually_exclusive_and_select_their_own_revision(self) -> None:
-        """Verify artifact sources are mutually exclusive and select their own revision."""
-        expression = (
-            "(scpub_release_directory is defined) != (scpub_release_artifact_id is defined)"
-        )
+    def test_only_current_signed_github_artifacts_can_select_a_release(self) -> None:
+        """An unsigned local directory cannot bypass the required source/run contract."""
         assertions = strings(self.play, "pre_tasks", 0, "ansible.builtin.assert", "that")
-        self.assertIn(expression, assertions)
-        evaluate = Environment(undefined=StrictUndefined, autoescape=False).compile_expression(  # noqa: S701 - config.
-            expression
-        )
-        self.assertFalse(evaluate())
-        self.assertTrue(evaluate(scpub_release_directory="/release"))
-        self.assertTrue(evaluate(scpub_release_artifact_id=1234))
-        self.assertFalse(
-            evaluate(scpub_release_directory="/release", scpub_release_artifact_id=1234)
-        )
-        local = self.pre_task("Select the verified local source revision")
+        self.assertIn("scpub_release_directory is not defined", assertions)
+        self.assertIn("scpub_release_artifact_id is defined", assertions)
         remote = self.pre_task("Select the explicitly pinned GitHub revision")
-        self.assertEqual(local["when"], "scpub_release_directory is defined")
-        self.assertEqual(remote["when"], "scpub_release_artifact_id is defined")
-        self.assertEqual(
-            at(local, "ansible.builtin.set_fact", "scpub_release_revision"),
-            "{{ (scpub_validated_release.stdout | from_json).revision }}",
-        )
         self.assertEqual(
             at(remote, "ansible.builtin.set_fact", "scpub_release_revision"),
             "{{ scpub_release_expected_revision }}",
+        )
+        self.assertFalse(
+            any(
+                task.get("name") == "Select the verified local source revision"
+                for task in objects(self.play, "pre_tasks")
+            )
         )
 
     def test_github_source_requires_exact_identities_and_explicit_supported_ssh(self) -> None:
@@ -209,11 +197,13 @@ class ReleasePlaybookTests(unittest.TestCase):
                 "{{ ansible_ssh_private_key_file }}",
                 "--output-parent",
                 "{{ (playbook_dir ~ '/../../results') | realpath }}",
+                "--verified-directory",
+                "{{ (scpub_validated_release.stdout | from_json).directory }}",
             ],
         )
         self.assertEqual(fetch["delegate_to"], "localhost")
         self.assertIs(fetch["become"], expr2=False)
-        self.assertEqual(fetch["timeout"], 450)
+        self.assertEqual(fetch["timeout"], 1080)
         self.assertEqual(
             fetch["when"], ["not ansible_check_mode", "scpub_release_artifact_id is defined"]
         )
@@ -308,12 +298,6 @@ class ReleasePlaybookTests(unittest.TestCase):
             )
         assertions = strings(self.play, "pre_tasks", 0, "ansible.builtin.assert", "that")
         self.assertIn("scpub_enabled | bool", assertions)
-        local_source = self.pre_task("Require an absolute local artifact directory")
-        self.assertEqual(local_source["when"], "scpub_release_directory is defined")
-        self.assertIn(
-            "scpub_release_directory is match('^/')",
-            strings(local_source, "ansible.builtin.assert", "that"),
-        )
         self.assertIn("scpub_config == '/etc/simplestchat-public'", assertions)
         self.assertIn("scpub_root == '/srv/simplestchat-public'", assertions)
         self.assertIs(self.play["gather_facts"], expr2=False)
@@ -329,53 +313,40 @@ class ReleasePlaybookTests(unittest.TestCase):
             ["/usr/bin/python3", "-B", "-c"],
         )
 
-    def test_no_overwrite_is_paired_with_exact_controller_and_destination_identity(self) -> None:
-        """Verify no overwrite is paired with exact controller and destination identity."""
-        validation = next(
-            task
-            for task in objects(self.play, "pre_tasks")
-            if task.get("register") == "scpub_validated_release"
+    def test_attestation_precedes_every_remote_preflight_and_cached_bytes_are_reverified(
+        self,
+    ) -> None:
+        """Fresh cryptographic verification is mandatory even in prepared and check modes."""
+        validation = self.pre_task(
+            "Verify the signed release on the controller before any remote preflight"
         )
         self.assertEqual(validation["delegate_to"], "localhost")
         self.assertIs(validation["become"], expr2=False)
         self.assertIs(validation["changed_when"], expr2=False)
-        self.assertEqual(validation["when"], "scpub_release_directory is defined")
-        code = string(validation, "ansible.builtin.command", "argv", 3)
-        self.assertIn("validate_manifest(root / 'release.json')", code)
-        self.assertIn("verify_archive(root / 'image.tar', manifest)", code)
-        self.assertIn("'image.tar': manifest['archiveSha256']", code)
-        self.assertIn("'release.json': sha256_file(root / 'release.json')", code)
-        transfer = next(
-            task
-            for task in self.tasks
-            if task.get("loop") == ["release.json", "image.tar"] and "ansible.builtin.copy" in task
+        self.assertIs(validation["check_mode"], expr2=False)
+        self.assertNotIn("when", validation)
+        argv = strings(validation, "ansible.builtin.command", "argv")
+        self.assertIn("{{ playbook_dir }}/../../build/verify-release.py", argv)
+        self.assertIn("--artifact-dir", argv)
+        self.assertIn("--ci-run", argv)
+        preflight = self.pre_task(
+            "Verify the host and exact prepared helpers without broad fact gathering"
         )
-        copy = obj(transfer, "ansible.builtin.copy")
-        self.assertIs(copy["force"], expr2=False)
+        pre_tasks = objects(self.play, "pre_tasks")
+        self.assertLess(pre_tasks.index(validation), pre_tasks.index(preflight))
+        fetch = self.command("--artifact-id")
+        fetch_argv = strings(fetch, "ansible.builtin.command", "argv")
         self.assertEqual(
-            copy["dest"], "{{ scpub_root }}/releases/{{ scpub_release_revision }}/{{ item }}"
+            fetch_argv[-2:],
+            [
+                "--verified-directory",
+                "{{ (scpub_validated_release.stdout | from_json).directory }}",
+            ],
         )
-        self.assertEqual((copy["owner"], copy["group"], copy["mode"]), ("root", "root", "0600"))
-        inspection = next(
-            task for task in self.tasks if task.get("register") == "scpub_transferred_files"
+        self.assertLess(self.tasks.index(fetch), self.tasks.index(self.command("stage")))
+        self.assertFalse(
+            any(task.get("loop") == ["release.json", "image.tar"] for task in self.tasks)
         )
-        self.assertEqual(at(inspection, "ansible.builtin.stat", "checksum_algorithm"), "sha256")
-        self.assertIs(at(inspection, "ansible.builtin.stat", "follow"), expr2=False)
-        comparison = next(task for task in self.tasks if "ansible.builtin.assert" in task)
-        self.assertEqual(comparison["loop"], "{{ scpub_transferred_files.results | default([]) }}")
-        assertions = strings(comparison, "ansible.builtin.assert", "that")
-        for assertion in [
-            "item.stat.isreg | default(false)",
-            "item.stat.uid == 0",
-            "item.stat.mode == '0600'",
-            "item.stat.checksum == (scpub_validated_release.stdout | from_json)[item.item]",
-        ]:
-            self.assertIn(assertion, assertions)
-        self.assertLess(self.tasks.index(transfer), self.tasks.index(inspection))
-        self.assertLess(self.tasks.index(inspection), self.tasks.index(comparison))
-        self.assertLess(self.tasks.index(comparison), self.tasks.index(self.command("stage")))
-        for task in (transfer, inspection, comparison):
-            self.assertEqual(task["when"], "scpub_release_directory is defined")
 
     def test_python_helper_and_shared_module_are_installed_together(self) -> None:
         """Verify python helper and shared module are installed together."""
@@ -431,8 +402,7 @@ class ReleasePlaybookTests(unittest.TestCase):
         )
         self.assertEqual(
             storage["when"],
-            "not (scpub_release_prepared | default(false) | bool) "
-            + "or scpub_release_directory is defined",
+            "not (scpub_release_prepared | default(false) | bool)",
         )
         self.assertIs(at(self.play, "vars", "ansible_pipelining"), expr2=True)
         # Do not override the delegated controller's Python with Debian's path.

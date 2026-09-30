@@ -34,7 +34,7 @@ BASE_HELPERS = {
     "reboot-public.py",
     "reboot_public.py",
 }
-FETCH_HELPERS = {"fetch-release.py", "release_fetch_receiver.py"}
+FETCH_HELPERS = {"fetch-release.py", "release_fetch_receiver.py", "release_trust.py"}
 MAX_HELPER = 1024 * 1024
 MAX_REQUEST = 4096
 REQUEST_ARGUMENTS = 2

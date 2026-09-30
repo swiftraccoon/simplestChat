@@ -246,6 +246,21 @@ files. Publish only the explicit reviewed evidence set: `outcome.json`,
 release attestation must bind those successful results to the original archive
 bytes; a broad upload of the working directory is unsafe.
 
+The trusted `ci.yml` main-push signing job runs
+`build/release_attestation.py prepare` against those exact directories after all
+required gates pass. It emits `release-predicate.json` and copies only the SPDX
+SBOM and image-security outcome into the release artifact. The signed statement
+has `image.tar` and `sbom.spdx.json` as subjects and binds the other release files
+through the predicate's SHA-256 map. `release-attestation.jsonl` contains the
+signer's bundle. Signing a rebuilt image, a PR artifact, or a failed security
+outcome is outside this contract.
+
+Deployment verifies the bundle with GitHub's maintained cryptographic verifier
+before any remote action, then checks its exact source, workflow, run, attempt
+and file relationships. The receiver rehashes the downloaded bytes against that
+verified claim. The separate manual build workflow and unsigned local builds
+are not deployable. See [release verification](../ops/ansible/RELEASES.md#trusted-artifact-requirements).
+
 Run the archive, ELF, policy, lifecycle and evidence-join fixtures with the
 maintained environment:
 

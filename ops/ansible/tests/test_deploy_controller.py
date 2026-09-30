@@ -22,6 +22,7 @@ from test_support import ROOT
 
 # Bootstrap flat checkout imports before loading helpers.
 # isort: split
+import release_attestation
 import release_build as BUILD  # noqa: N812 -- Keep established helper aliases.
 import release_deploy as DEPLOY  # noqa: N812 -- Keep established helper aliases.
 import release_fetch_controller as FETCH  # noqa: N812 -- Keep established helper aliases.
@@ -43,6 +44,7 @@ def ci_run(**changes: JsonValue) -> JsonObject:
             "path": ".github/workflows/ci.yml",
             "event": "push",
             "head_branch": "main",
+            "run_attempt": 1,
             "head_sha": REVISION,
             "status": "completed",
             "conclusion": "success",
@@ -242,15 +244,22 @@ class DeployTests(unittest.TestCase):
         self.smoke_passed = True
 
     def execute(
-        self, records: list[JsonObject] | None = None
+        self, records: list[JsonObject] | None = None, *, attestation_error: Exception | None = None
     ) -> tuple[JsonObject, MagicMock | AsyncMock]:
         """Deploy the pinned artifact once to a frozen host, then run public verification."""
 
         def runner(output: Path | None = None) -> FakeRunner:
             return FakeRunner(self, output)
 
+        def verified_fixture(_url: str, _path: Path, value: JsonObject) -> JsonObject:
+            if attestation_error is not None:
+                raise attestation_error
+            return value
+
         with (
             patch.object(BUILD, "Runner", side_effect=runner),
+            patch.object(FETCH, "download_url", return_value="https://fixture.invalid"),
+            patch.object(release_attestation, "fetch_verify", side_effect=verified_fixture),
             patch.object(
                 DEPLOY,
                 "controller_tools",
@@ -301,9 +310,12 @@ class DeployTests(unittest.TestCase):
                 "scpub_release_prepared": True,
                 "scpub_release_deploy": True,
                 "scpub_release_quiet_seconds": 600,
+                "scpub_release_verified_directory": str(
+                    Path(string_value(report["evidence"])) / "verified"
+                ),
             },
         )
-        self.assertEqual(configuration["timeout"], 2400)
+        self.assertEqual(configuration["timeout"], 4500)
         self.assertEqual(command[command.index("--limit") + 1], "public")
         self.assertTrue(
             self.calls.index(self.deployments()[0]) < self.calls.index(self.smokes()[0])
@@ -522,6 +534,20 @@ class DeployTests(unittest.TestCase):
         ):
             _ = DEPLOY.select_ci_artifact(self.args, REVISION)
         sleep.assert_not_called()
+
+    def test_failed_signature_stops_before_any_remote_playbook_or_service_action(self) -> None:
+        """Helper installation and maintenance are gated just as strictly as ordinary deployment."""
+        for install, maintenance in ((False, False), (True, False), (True, True)):
+            self.inventory_reads = self.revision_reads = 0
+            self.calls = []
+            self.args.install_helpers, self.args.maintenance = install, maintenance
+            with self.subTest(install=install, maintenance=maintenance):
+                report, _ = self.execute(attestation_error=ValueError("invalid signature"))
+                self.assertFalse(report["passed"])
+                self.assertEqual(report["phase"], "attestation")
+                self.assertEqual(report["remoteOutcome"], "not_started")
+                self.assertEqual(self.deployments(), [])
+                self.assertEqual(self.smokes(), [])
 
     def test_wrong_workflow_revision_repository_or_artifact_cannot_be_selected(self) -> None:
         """Verify wrong workflow revision repository or artifact cannot be selected."""

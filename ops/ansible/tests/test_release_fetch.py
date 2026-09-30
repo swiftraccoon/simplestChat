@@ -30,6 +30,7 @@ import test_support
 
 # isort: split
 import release_fetch_receiver as fetch
+import release_trust
 from release_artifact import ArtifactError, sha256_file
 from release_json import JsonObject, JsonValue, decode_json, integer_value
 from test_support import obj, string
@@ -53,11 +54,17 @@ def envelope(data: bytes = b"fixture") -> JsonObject:
         "schemaVersion": 1,
         "repository": "owner/repo",
         "artifactId": 123,
-        "buildRunId": 456,
+        "buildRunId": 789,
+        "runAttempt": 1,
         "ciRunId": 789,
         "revision": REVISION,
         "artifactZipBytes": len(data),
         "zipSha256": hashlib.sha256(data).hexdigest(),
+        "attestation": {
+            "predicate": json_object(fixture_files()[release_trust.PREDICATE]),
+            "bundleSha256": hashlib.sha256(fixture_files()[release_trust.BUNDLE]).hexdigest(),
+            "verificationSha256": dict.fromkeys(release_trust.SUBJECTS, "c" * 64),
+        },
     }
 
 
@@ -100,19 +107,57 @@ def fixture_files() -> dict[str, bytes]:
         "migrations": {"1": hashlib.sha384(b"SELECT 1;").hexdigest()},
         "createdAt": "2026-09-13T00:00:00Z",
     }
-    outcome = {"schemaVersion": 1, "revision": REVISION, "passed": True, "error": None}
+    outcome = {
+        "schemaVersion": 1,
+        "revision": REVISION,
+        "passed": True,
+        "error": None,
+        "exportedImageId": "sha256:" + "f" * 64,
+    }
     source = {
         "revision": REVISION,
         "inputsSha256": {
             name: hashlib.sha256(name.encode()).hexdigest() for name in fetch.SOURCE_KEYS
         },
     }
-    return {
+    files = {
         "image.tar": image.getvalue(),
         "release.json": json.dumps(manifest).encode(),
         "outcome.json": json.dumps(outcome).encode(),
         "source.json": json.dumps(source).encode(),
+        "sbom.spdx.json": b'{"spdxVersion":"SPDX-2.3"}',
     }
+    files["image-security.json"] = json.dumps(
+        {
+            "passed": True,
+            "revision": REVISION,
+            "platform": "linux/amd64",
+            "imageId": "sha256:" + "f" * 64,
+            "archiveSha256": manifest["archiveSha256"],
+            "sbomSha256": hashlib.sha256(files["sbom.spdx.json"]).hexdigest(),
+        }
+    ).encode()
+    claim = {
+        "schemaVersion": 1,
+        "repository": "owner/repo",
+        "revision": REVISION,
+        "runId": 789,
+        "runAttempt": 1,
+        "workflow": release_trust.WORKFLOW,
+        "ref": release_trust.REF,
+        "event": "push",
+        "platform": "linux/amd64",
+        "imageId": "sha256:" + "f" * 64,
+        "securityPassed": True,
+        "fileDigests": {
+            name: hashlib.sha256(files[name]).hexdigest() for name in release_trust.BOUND_FILES
+        },
+    }
+    files[release_trust.PREDICATE] = json.dumps(claim).encode()
+    files[release_trust.BUNDLE] = (
+        b'{"inert":"unsigned unit fixture never accepted by cryptographic verifier"}'
+    )
+    return files
 
 
 def make_zip(

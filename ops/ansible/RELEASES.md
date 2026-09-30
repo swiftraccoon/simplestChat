@@ -39,8 +39,8 @@ and trusted SSH access. Select exactly one inventory host; use `--limit` if need
 Its `scpub_domain` must match `--origin` so verification targets the deployed site.
 The default CI wait is one hour; `--wait-seconds` changes that bound. Changed
 checkout state, failed CI, expired/missing artifacts, or mismatched helpers stop
-the command before deployment. Older commits without a CI production artifact
-can use the manual build/staging paths below.
+the command before deployment. Every deployable artifact must carry the current
+trusted CI attestation; unsigned and manually built artifacts are rejected.
 
 Prepared-host checks are enabled by default. After reviewing helper changes,
 `--install-helpers` explicitly installs the current helpers instead of requiring
@@ -69,61 +69,44 @@ unfinished-operation checks remain authoritative; inspect evidence before retryi
 A failed post-deployment smoke does not trigger another restart or rollback; the
 report distinguishes a successful release from failed public verification.
 
-## Manual fallback: build on your Mac or CI
+## Trusted artifact requirements
 
-Use Python 3.12+, Git, and a running local Docker Engine with Buildx. Docker API
-1.48+ is required for platform-specific image export. Docker Desktop can build
-Linux/amd64 on Apple Silicon using emulation; a native Linux/amd64 CI runner is
-usually faster. No registry or additional VPS is required.
+The deployment artifact is produced only by `.github/workflows/ci.yml` on a
+`push` to `refs/heads/main`. Its signing job waits for the release smoke and all
+required CI, security and CodeQL jobs. Pull-request caches or artifacts are never
+promoted. The separate manual image-build workflow is useful for diagnostics;
+its output has no deployment eligibility, even if another run passed for the
+same commit. Local `build/build-release.py` output likewise cannot be staged as a
+public release without the trusted signer contract.
 
-The manual **Build production release artifact** GitHub Actions workflow runs
-this same builder on Linux. It is a fallback, not part of routine deployment;
-it performs a separate build. Select the reviewed commit/branch and require the
-normal CI checks to pass. Download its `simplestchat-production-<commit>` artifact
-or use the direct GitHub transfer below.
-It has no registry credentials, push permission, SSH access, or deployment step.
-Before staging, check that `outcome.json` reports `passed: true` and the artifact
-contains `release.json`. Failed build evidence may also be retained by the
-workflow; the staging validator checks image integrity, not the build outcome.
+The controller downloads and verifies the exact API-digested artifact locally
+before SSH, helper installation, remote preflight, image import or service
+operations. `gh attestation verify` validates the signed bundle, GitHub OIDC
+issuer, exact CI workflow/main-ref identity, signer and source revision, and
+GitHub-hosted runner. Additional checks bind the certificate's exact run and
+attempt, the archive and SPDX SBOM subjects, and every release metadata file.
+A saved success receipt is not trusted: cached candidate bytes are verified again.
 
-Commit the release first, then select a fresh output directory:
+The current artifact contains `image.tar`, `release.json`, `outcome.json`,
+`source.json`, `sbom.spdx.json`, `image-security.json`, `release-predicate.json`
+and `release-attestation.jsonl`. The predicate binds the original export and
+successful image-security outcome by SHA-256. The receiver receives the verified
+claim through authenticated controller SSH stdin and independently compares the
+downloaded file hashes before publishing anything. No artifact-provided
+`verified` marker can authorize a release.
 
-```sh
-python3 build/build-release.py --output "$PWD/results/release-candidate"
-```
-
-The builder takes the exact clean Git revision, normalizes source permissions,
-builds only the production target, and exports `image.tar` with `release.json`.
-The manifest records the archive checksum, platform, source revision, and SQL
-checksums. Build logs and the outcome remain beside the artifact. Existing
-directories are never overwritten; inspect failures before starting a new attempt.
-
-The builder does not push images or deploy services. It refuses remote Docker
-endpoints, custom builders, running public/benchmark containers, and unfinished
-local benchmark work. Keep native dependency pins and the existing Docker cache;
-never compile on the live VPS as part of this release path.
+The controller needs disk space for its ZIP and extracted image in addition to
+the VPS's retained evidence. GitHub CLI must support the exact verifier flags;
+unsupported versions fail instead of relaxing verification. See the maintained
+[GitHub verifier contract](https://cli.github.com/manual/gh_attestation_verify)
+and [image security evidence](../../docs/image-security.md).
 
 ## Stage while chat stays online
-
-From the controller environment described in [setup](README.md):
-
-```sh
-ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
-  ops/ansible/.venv/bin/ansible-playbook \
-  -i ops/ansible/inventory.local.yml ops/ansible/release.yml \
-  -e "scpub_release_directory=$PWD/results/release-candidate"
-```
-
-This verifies the artifact locally, transfers it to private release storage,
-checks the exact destination bytes, imports it, and validates its runtime identity
-and packaged SQL checksums. Importing an image uses disk and CPU but does not
-stop public containers. Reusing a commit with different artifact bytes is refused.
-Nothing is published to a registry. The destination's own immutable image ID is
-recorded; image IDs need not be portable between Docker image stores.
 
 ### Fetch a GitHub artifact directly onto the VPS
 
 This avoids sending the image archive through your controller's SSH connection.
+The controller still downloads its own copy for cryptographic verification.
 Use Python 3.12+ and GitHub CLI on the controller, authenticated with
 `gh auth login --hostname github.com`. Only GitHub.com is supported; no GitHub
 token is installed on the VPS.
@@ -132,16 +115,16 @@ Select the exact artifact ID, reviewed 40-character commit, and successful push 
 ID for that commit. Review the repository's build and CI workflows before trusting
 their results. The controller verifies the artifact identity and successful build
 and CI runs before requesting a short-lived download URL. A normal CI artifact
-must belong to that exact successful push CI run; the manual build workflow is
-also supported with a separate successful CI run for the same commit. To list
-artifact IDs from the selected build run:
+must belong to that exact successful main-push CI run and attempt. The manual
+build workflow is not accepted. To list artifact IDs from the selected run:
 
 ```sh
 gh api repos/OWNER/REPOSITORY/actions/runs/BUILD_RUN_ID/artifacts \
   --jq '.artifacts[] | {id, name}'
 ```
 
-Replace the uppercase placeholders, and omit `scpub_release_directory`:
+Replace the uppercase placeholders. The unsigned `scpub_release_directory`
+mode is not accepted:
 
 ```sh
 ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
@@ -164,8 +147,9 @@ not use Ansible's global `ansible_ssh_args`. Host-key checking remains strict.
 
 The URL is sent only over SSH after the receiver is ready; the API token remains
 on the controller. The receiver has a 300-second deadline and the controller a
-420-second deadline. Downloaded ZIP and image bytes are verified before the common
-image-staging checks run. Existing release bytes are never overwritten. Private
+1080-second deadline, including local verification. The Ansible controller-only
+verification step has a separate 660-second bound. Downloaded ZIP and signed
+image evidence are verified before the common image-staging checks run. Existing release bytes are never overwritten. Private
 evidence is retained under the controller's `results/` and the VPS's release
 storage; console output omits credentials and signed URLs. This still stages only:
 deployment requires the explicit choice below. Inspect any failure before another
@@ -174,8 +158,8 @@ attempt; a timeout is not proof that remote work has stopped.
 ZIP archives and images are each limited to 2 GiB. Every attempt keeps its ZIP
 and extracted image for inspection, even when the selected release is already
 present and identical. Budget disk space for both; no retained evidence is
-automatically deleted. Check mode skips the download and does not validate GitHub
-access or remote runtime behavior.
+automatically deleted. Check mode still performs controller-side signature
+verification, then skips remote transfer and runtime changes.
 
 ### Faster runs on a prepared host
 
@@ -184,7 +168,9 @@ release command. This skips helper installation and checks every required helper
 against the exact SHA-256 of your controller checkout, including file types,
 ownership and permissions. A missing or changed helper fails before transfer or
 staging; it is never silently reused. GitHub fetching creates its new private
-release directory itself. Local archives still use the verified SSH-copy path.
+release directory itself. A previously downloaded signed candidate may be supplied
+as `scpub_release_verified_directory`; it is reverified against the selected
+GitHub artifact/run before remote work, with no unsigned-directory fallback.
 
 If helpers need updating, review the mismatch, then run the same stage-only
 command without prepared mode. This reconciles the helpers and release storage;

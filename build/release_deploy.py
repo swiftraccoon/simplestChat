@@ -23,6 +23,7 @@ from pathlib import Path
 from types import FrameType
 from urllib.parse import urlsplit
 
+import release_attestation
 import release_build as BUILD  # noqa: N812 -- Keep established helper aliases.
 import release_fetch_controller as FETCH  # noqa: N812 -- Keep established helper aliases.
 from release_json import JsonObject, JsonValue, array_value, integer_value
@@ -344,7 +345,7 @@ def run_playbook(
         ],
         cwd=target.root,
         env=target.environment,
-        timeout=2400,
+        timeout=4500 if name == "release.yml" else 2400,
         capture=False,
     )
 
@@ -386,6 +387,17 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0
         runner = BUILD.Runner(directory)
         report["phase"] = "ci"
         envelope = select_ci_artifact(args, revision)
+        report["phase"] = "attestation"
+        selection = FETCH.ReleaseSelection(
+            args.repository,
+            integer_value(envelope["artifactId"]),
+            revision,
+            integer_value(envelope["ciRunId"]),
+        )
+        verified_directory = directory / "verified"
+        envelope = release_attestation.fetch_verify(
+            FETCH.download_url(selection), verified_directory, envelope
+        )
         BUILD.write_json(directory / "selection.json", envelope)
         report.update(ciRunId=envelope["ciRunId"], artifactId=envelope["artifactId"])
         require(
@@ -402,6 +414,7 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0
             "scpub_release_artifact_id": envelope["artifactId"],
             "scpub_release_expected_revision": revision,
             "scpub_release_ci_run": envelope["ciRunId"],
+            "scpub_release_verified_directory": str(verified_directory),
             "scpub_release_prepared": not args.install_helpers,
             "scpub_release_deploy": not args.maintenance,
             "scpub_release_quiet_seconds": args.quiet_seconds,

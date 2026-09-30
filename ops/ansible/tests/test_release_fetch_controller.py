@@ -25,7 +25,9 @@ import test_support
 
 # Bootstrap flat checkout imports before loading helpers.
 # isort: split
+import release_attestation
 import release_fetch_controller as FETCH  # noqa: N812 -- Keep established helper aliases.
+import release_trust
 from release_json import JsonObject, JsonValue, decode_json, object_value, string_value
 
 if TYPE_CHECKING:
@@ -45,12 +47,39 @@ def envelope() -> JsonObject:
         "schemaVersion": 1,
         "repository": "owner/repo",
         "artifactId": 123,
-        "buildRunId": 456,
+        "buildRunId": 789,
+        "runAttempt": 1,
         "ciRunId": 789,
         "revision": REVISION,
         "artifactZipBytes": 12345,
         "zipSha256": "b" * 64,
+        "attestation": {
+            "predicate": {
+                "schemaVersion": 1,
+                "repository": "owner/repo",
+                "revision": REVISION,
+                "runId": 789,
+                "runAttempt": 1,
+                "workflow": release_trust.WORKFLOW,
+                "ref": release_trust.REF,
+                "event": "push",
+                "platform": "linux/amd64",
+                "imageId": "sha256:" + "f" * 64,
+                "securityPassed": True,
+                "fileDigests": {
+                    name: ("c" * 64 if name == "image.tar" else "d" * 64)
+                    for name in release_trust.BOUND_FILES
+                },
+            },
+            "bundleSha256": "e" * 64,
+            "verificationSha256": dict.fromkeys(release_trust.SUBJECTS, "f" * 64),
+        },
     }
+
+
+def metadata_envelope() -> JsonObject:
+    """Return API identity alone, before cryptographic verification."""
+    return {key: value for key, value in envelope().items() if key != "attestation"}
 
 
 def receipt(**changes: JsonValue) -> JsonObject:
@@ -87,7 +116,7 @@ def api_records() -> list[JsonObject]:
         "size_in_bytes": 12345,
         "digest": "sha256:" + "b" * 64,
         "workflow_run": {
-            "id": 456,
+            "id": 789,
             "head_sha": REVISION,
             "repository_id": 42,
             "head_repository_id": 42,
@@ -104,12 +133,13 @@ def api_records() -> list[JsonObject]:
         artifact,
         dict(
             common,
-            id=456,
-            name="Build production release artifact",
-            path=".github/workflows/release-artifact.yml",
-            event="workflow_dispatch",
+            id=789,
+            name="CI",
+            path=".github/workflows/ci.yml",
+            event="push",
+            head_branch="main",
+            run_attempt=1,
         ),
-        dict(common, id=789, name="CI", path=".github/workflows/ci.yml", event="push"),
     ]
 
 
@@ -263,8 +293,19 @@ class ControllerTests(unittest.TestCase):
             str(self.identity),
             "--output-parent",
             str(self.root),
+            "--verified-directory",
+            str(self.root / "verified"),
         ]
         self.args = FETCH.options(self.argv)
+
+        def verified_fixture(_path: Path, value: JsonObject) -> JsonObject:
+            return value
+
+        verifier = patch.object(
+            release_attestation, "verify_directory", side_effect=verified_fixture
+        )
+        _ = verifier.start()
+        self.addCleanup(verifier.stop)
 
     def run_main(
         self, receiver: FakeReceiver, *, url: str = URL
@@ -342,12 +383,11 @@ class ControllerTests(unittest.TestCase):
     def test_exact_artifact_build_and_ci_run_are_required(self) -> None:
         """Verify exact artifact build and ci run are required."""
         with patch.object(FETCH, "api", side_effect=api_records()) as api:
-            self.assertEqual(FETCH.verified_envelope(self.args), envelope())
+            self.assertEqual(FETCH.verified_envelope(self.args), metadata_envelope())
         self.assertEqual(
             [call.args[0] for call in api.call_args_list],
             [
                 "repos/owner/repo/actions/artifacts/123",
-                "repos/owner/repo/actions/runs/456",
                 "repos/owner/repo/actions/runs/789",
             ],
         )
@@ -362,7 +402,7 @@ class ControllerTests(unittest.TestCase):
             (0, ("workflow_run", "id"), True),
             (0, ("workflow_run", "head_repository_id"), True),
         ]
-        for index in (1, 2):
+        for index in (1,):
             cases.extend(
                 (index, (key,), value)
                 for key, value in (
@@ -419,12 +459,13 @@ class ControllerTests(unittest.TestCase):
 
     def test_successful_main_push_ci_can_supply_its_own_exact_artifact(self) -> None:
         """Verify successful main push ci can supply its own exact artifact."""
-        artifact, _, run = api_records()
+        artifact, run = api_records()
         object_value(artifact["workflow_run"])["id"] = self.args.ci_run
         run["head_branch"] = "main"
         with patch.object(FETCH, "api", side_effect=[artifact, run]) as api:
             self.assertEqual(
-                FETCH.verified_envelope(self.args), dict(envelope(), buildRunId=self.args.ci_run)
+                FETCH.verified_envelope(self.args),
+                dict(metadata_envelope(), buildRunId=self.args.ci_run),
             )
         self.assertEqual(
             [call.args[0] for call in api.call_args_list],
@@ -444,7 +485,7 @@ class ControllerTests(unittest.TestCase):
 
     def test_ci_artifacts_require_the_same_successful_trusted_push_run(self) -> None:
         """Verify ci artifacts require the same successful trusted push run."""
-        artifact, _, run = api_records()
+        artifact, run = api_records()
         object_value(artifact["workflow_run"])["id"] = self.args.ci_run
         run["head_branch"] = "main"
         changes: list[tuple[int, tuple[str, ...], JsonValue]] = [
@@ -581,6 +622,8 @@ class ControllerTests(unittest.TestCase):
             ("downloadedBytes", True),
             ("downloadedBytes", 12344),
             ("archiveSha256", None),
+            ("archiveSha256", "e" * 64),
+            ("manifestSha256", "e" * 64),
             ("manifestSha256", URL),
             ("phase", "download"),
             ("settled", False),
@@ -690,6 +733,33 @@ class ControllerTests(unittest.TestCase):
             {path.name for path in Path(string_value(report["evidence"])).iterdir()},
             {"outcome.json"},
         )
+
+    def test_signature_failure_prevents_ssh_even_with_matching_ci_metadata(self) -> None:
+        """A successful run and ZIP digest cannot substitute for cryptographic evidence."""
+        with (
+            patch.object(FETCH, "verified_envelope", return_value=envelope()),
+            patch.object(
+                release_attestation, "verify_directory", side_effect=ValueError("invalid signature")
+            ),
+            patch.object(FETCH, "Receiver") as remote,
+            patch.object(FETCH, "download_url") as lookup,
+            redirect_stdout(io.StringIO()) as output,
+        ):
+            self.assertEqual(FETCH.main(self.argv), 1)
+        remote.assert_not_called()
+        lookup.assert_not_called()
+        self.assertEqual(object_value(decode_json(output.getvalue()))["phase"], "attestation")
+
+    def test_manual_build_workflow_is_never_deployment_eligible(self) -> None:
+        """Matching revision and success do not grant the separate manual workflow trust."""
+        records = api_records()
+        records[1].update(
+            name="Build production release artifact",
+            path=".github/workflows/release-artifact.yml",
+            event="workflow_dispatch",
+        )
+        with patch.object(FETCH, "api", side_effect=records), self.assertRaises(FETCH.FetchError):
+            _ = FETCH.verified_envelope(self.args)
 
     def test_nonzero_exit_cannot_turn_a_passed_looking_receipt_into_success(self) -> None:
         """Verify nonzero exit cannot turn a passed looking receipt into success."""

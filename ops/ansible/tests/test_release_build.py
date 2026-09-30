@@ -457,18 +457,20 @@ class ReleaseBuildTests(unittest.TestCase):
                 )
             )
 
-    def test_generated_build_and_export_evidence_pass_the_real_github_receiver_contract(
+    def test_generated_build_and_export_require_attestation_before_receiver_publication(
         self,
     ) -> None:
-        """Verify generated build and export evidence pass the real github receiver contract."""
+        """Require a signature in addition to valid builder source and archive evidence."""
         for label, image_id in (("build", None), ("export", IMAGE_ID)):
             with self.subTest(mode=label):
                 output = self.root / f"receiver-contract-{label}"
                 _ = BUILD.build_release(
                     output, 120, root=self.root, runner=FakeRunner(), image_id=image_id
                 )
-                manifest = RECEIVER.validate_build_evidence(output, {"revision": REVISION})
-                self.assertEqual(manifest, ARTIFACT.validate_manifest(output / "release.json"))
+                manifest = ARTIFACT.validate_manifest(output / "release.json")
+                _ = ARTIFACT.verify_archive(output / "image.tar", manifest)
+                with self.assertRaises(KeyError):
+                    _ = RECEIVER.validate_build_evidence(output, {"revision": REVISION})
                 source_path = output / "source.json"
                 source = object_value(decode_json(source_path.read_text()))
                 self.assertEqual(set(source), {"revision", "inputsSha256"})
