@@ -76,7 +76,11 @@ aggregation must require every expected language job.
 
 `plan` and `check` are read-only GitHub operations. They require current successful
 analyses for all five security categories: Actions, JavaScript/TypeScript, Python,
-Rust and C/C++. They paginate all alert states. An active finding manually
+Rust and C/C++. The live Git reference must equal the requested revision before
+and after planning; historical revisions cannot be checked through current alert
+state. The newest analysis for every category must match that revision. Once
+those five categories are found, older analysis history is not required. All
+alert-state pages are still read completely. An active finding manually
 dismissed in GitHub is still assessed against repository policy; remote dismissal
 is not an exclusion. Missing or stale analysis cannot produce a passing report.
 `plan` exits successfully after producing a valid plan even if its `passed` field

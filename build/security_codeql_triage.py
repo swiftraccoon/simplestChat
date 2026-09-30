@@ -254,6 +254,13 @@ class Github:
         """No shell, external hostname, API retries or unbounded output is permitted."""
         remaining = self.deadline - time.monotonic()
         require(remaining > 0, "codeql_api_deadline")
+        reference_read = suffix.startswith("git/ref/")
+        require(not reference_read or body is None, "codeql_ref_read_only")
+        endpoint = (
+            f"repos/{self.repository}/{suffix}"
+            if reference_read
+            else f"repos/{self.repository}/code-scanning/{suffix}"
+        )
         argv = [
             self.executable,
             "api",
@@ -265,7 +272,7 @@ class Github:
             "Accept: application/vnd.github+json",
             "-H",
             "X-GitHub-Api-Version: 2022-11-28",
-            f"repos/{self.repository}/code-scanning/{suffix}",
+            endpoint,
         ]
         if body:
             argv += ["--input", "-"]
@@ -282,20 +289,54 @@ class Github:
         require(status == 0, "codeql_api_failed")
         return decode_json(output)
 
-    def pages(self, resource: str, reference: str) -> list[JsonObject]:
+    def head(self, reference: str) -> str:
+        """Bind API plans to the current exact Git reference, including historical fixed alerts."""
+        require(
+            re.fullmatch(r"refs/(?:heads/[A-Za-z0-9._/-]+|pull/[0-9]+/merge)", reference)
+            and all(part not in {"", ".", ".."} for part in reference.split("/")),
+            "codeql_ref",
+        )
+        raw = object_value(self.request("git/ref/" + reference.removeprefix("refs/")))
+        target = object_value(raw["object"])
+        require(raw["ref"] == reference and target["type"] == "commit", "codeql_ref_identity")
+        revision = string_value(target["sha"])
+        require(re.fullmatch(r"[a-f0-9]{40}", revision), "codeql_ref_revision")
+        return revision
+
+    def pages(
+        self, resource: str, reference: str, *, revision: str | None = None
+    ) -> list[JsonObject]:
         """Request all states; remote dismissals are evidence, never policy authority."""
         entries: list[JsonObject] = []
+        categories: set[str] = set()
+        expected = {f"/language:{language}/security" for language in LANGUAGES}
+        require(revision is None or resource == "analyses", "codeql_page_revision")
         for page in range(1, MAX_PAGES + 1):
             query = urlencode(
-                {"ref": reference, "tool_name": "CodeQL", "per_page": MAX_PAGE, "page": page}
+                {
+                    "ref": reference,
+                    "tool_name": "CodeQL",
+                    "per_page": MAX_PAGE,
+                    "page": page,
+                    "sort": "created",
+                    "direction": "desc",
+                }
             )
             selected = array_value(self.request(resource + "?" + query))
             require(len(selected) <= MAX_PAGE, "codeql_page_size")
-            entries.extend(object_value(item) for item in selected)
+            for item in selected:
+                value = object_value(item)
+                if revision is not None:
+                    category = string_value(value["category"]).rstrip("/")
+                    if category not in expected or category in categories:
+                        continue
+                    categories.add(category)
+                entries.append(value)
+            if revision is not None and categories >= expected:
+                return entries
             if len(selected) < MAX_PAGE:
                 return entries
-        require(len(entries) < MAX_PAGES * MAX_PAGE, "codeql_pagination_limit")
-        return entries
+        raise ToolError("codeql_pagination_limit")  # noqa: EM101 -- Fixed safe code.
 
 
 def api_finding(
@@ -344,7 +385,8 @@ def api_plan(  # noqa: PLR0913 -- Explicit API identity, policy and verified sou
     require(
         re.fullmatch(r"refs/(?:heads/[A-Za-z0-9._/-]+|pull/[0-9]+/merge)", reference), "codeql_ref"
     )
-    analyses = client.pages("analyses", reference)
+    require(client.head(reference) == revision, "codeql_ref_head_changed")
+    analyses = client.pages("analyses", reference, revision=revision)
     categories: set[str] = set()
     for item in analyses:
         if item["commit_sha"] != revision:
@@ -366,14 +408,18 @@ def api_plan(  # noqa: PLR0913 -- Explicit API identity, policy and verified sou
         require(number not in seen, "codeql_duplicate_alert")
         seen.add(number)
         require(raw["state"] in {"open", "dismissed", "fixed"}, "codeql_alert_state")
-        if object_value(raw["most_recent_instance"])["state"] == "fixed":
+        instance = object_value(raw["most_recent_instance"])
+        require(instance["ref"] == reference, "codeql_alert_ref")
+        if instance["state"] == "fixed":
             continue
         findings.append(api_finding(raw, root, revision, reference, sources))
+    require(client.head(reference) == revision, "codeql_ref_head_changed")
     return {
         "schemaVersion": 1,
         "repository": client.repository,
         "revision": revision,
         "ref": reference,
+        "refHead": revision,
         "reviewSha256": review_identity(),
         "analysisCategories": list[JsonValue](sorted(categories)),
         **verdict(findings, reviews),

@@ -143,11 +143,21 @@ class FixtureGithub(triage.Github):
         self.alerts: list[JsonObject] = [alert()]
         self.calls: list[tuple[str, JsonObject | None]] = []
         self.changed_at_read: bool = False
+        self.current_head: str = REVISION
 
     @override
-    def pages(self, resource: str, reference: str) -> list[JsonObject]:
-        """Return independent snapshots as the real JSON boundary does."""
+    def head(self, reference: str) -> str:
+        """Represent independent current-ref state for temporal regression fixtures."""
         if reference != REFERENCE:
+            raise AssertionError(reference)
+        return self.current_head
+
+    @override
+    def pages(
+        self, resource: str, reference: str, *, revision: str | None = None
+    ) -> list[JsonObject]:
+        """Return independent snapshots as the real JSON boundary does."""
+        if reference != REFERENCE or revision not in {None, REVISION}:
             raise AssertionError(reference)
         return copy.deepcopy(self.analyses if resource == "analyses" else self.alerts)
 
@@ -373,6 +383,63 @@ class CodeqlTriageTests(unittest.TestCase):
             limits = cast("bounded_process.Limits", process.call_args.kwargs["limits"])
             self.assertLessEqual(limits.timeout, 20)
             self.assertEqual(limits.stdout, triage.MAX_SOURCE)
+
+    def test_historical_revision_cannot_pass_using_a_newer_fixed_alert(self) -> None:
+        """A newer ref or foreign fixed instance must never clear an older requested revision."""
+        client = FixtureGithub()
+        candidate = client.alerts[0]
+        candidate["state"] = "fixed"
+        instance = object_value(candidate["most_recent_instance"])
+        instance["state"] = "fixed"
+        instance["commit_sha"] = "c" * 40
+        client.current_head = "c" * 40
+        with self.assertRaises(ToolError):
+            _ = triage.api_plan(client, ROOT, REVISION, REFERENCE, [])
+        client.current_head = REVISION
+        instance["ref"] = "refs/heads/other"
+        with self.assertRaises(ToolError):
+            _ = triage.api_plan(client, ROOT, REVISION, REFERENCE, [])
+
+    def test_newest_analysis_is_selected_before_revision_validation(self) -> None:
+        """Older matching analyses cannot replace a newer category from a different head."""
+        fixture = FixtureGithub()
+        with patch.object(shutil, "which", return_value="/fixture/gh"):
+            client = triage.Github("owner/repository")
+        newer = copy.deepcopy(fixture.analyses)
+        for item in newer:
+            item["commit_sha"] = "c" * 40
+        with patch.object(client, "request", return_value=newer + fixture.analyses):
+            selected = client.pages("analyses", REFERENCE, revision=REVISION)
+            self.assertEqual(selected, newer)
+
+    def test_ref_lookup_is_read_only_and_validates_returned_identity(self) -> None:
+        """The fixed git/ref endpoint must identify exactly the requested commit reference."""
+        with patch.object(shutil, "which", return_value="/fixture/gh"):
+            client = triage.Github("owner/repository")
+        value: JsonObject = {"ref": REFERENCE, "object": {"type": "commit", "sha": REVISION}}
+        with patch.object(client, "request", return_value=value) as request:
+            self.assertEqual(client.head(REFERENCE), REVISION)
+            request.assert_called_once_with("git/ref/heads/main")
+            value["ref"] = "refs/heads/other"
+            with self.assertRaises(ToolError):
+                _ = client.head(REFERENCE)
+
+    def test_current_analysis_coverage_stops_before_unbounded_historical_tail(self) -> None:
+        """All current categories on the first full page do not require scanning old history."""
+        fixture = FixtureGithub()
+        with patch.object(shutil, "which", return_value="/fixture/gh"):
+            client = triage.Github("owner/repository")
+        history = copy.deepcopy(fixture.analyses[0])
+        history["commit_sha"] = "c" * 40
+        page = fixture.analyses + [history] * (triage.MAX_PAGE - len(fixture.analyses))
+        with patch.object(client, "request", return_value=page) as request:
+            selected = client.pages("analyses", REFERENCE, revision=REVISION)
+            self.assertEqual(selected, fixture.analyses)
+            request.assert_called_once()
+        with patch.object(client, "request", return_value=[history] * triage.MAX_PAGE) as request:
+            with self.assertRaises(ToolError):
+                _ = client.pages("analyses", REFERENCE, revision=REVISION)
+            self.assertEqual(request.call_count, triage.MAX_PAGES)
 
     def test_cli_preserves_fixed_validation_code_without_raw_report_values(self) -> None:
         """Private failure evidence identifies a schema refusal without including input text."""
