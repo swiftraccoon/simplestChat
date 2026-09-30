@@ -1346,6 +1346,7 @@ let roomBrowserPage = 1;
 let roomBrowserQuery = '';
 let roomBrowserHasMore = false;
 let roomBrowserRequest = 0;
+let roomBrowserController: AbortController | null = null;
 const MIN_ROOM_SEARCH_TRIGRAM_LEN = 3;
 
 function hasIndexableRoomSearchTrigram(query: string): boolean {
@@ -1363,6 +1364,7 @@ function hasIndexableRoomSearchTrigram(query: string): boolean {
 
 function showRoomSearchMinimum(): void {
   roomBrowserRequest++;
+  roomBrowserController?.abort();
   roomBrowserPage = 1;
   roomBrowserHasMore = false;
   roomLoadMore.hidden = true;
@@ -1375,6 +1377,9 @@ function showRoomSearchMinimum(): void {
 
 async function loadRoomBrowser(append = false): Promise<void> {
   const request = ++roomBrowserRequest;
+  roomBrowserController?.abort();
+  const controller = new AbortController();
+  roomBrowserController = controller;
   if (!append) {
     roomBrowserPage = 1;
     clearChildren(roomList);
@@ -1384,7 +1389,7 @@ async function loadRoomBrowser(append = false): Promise<void> {
   try {
     const params = new URLSearchParams({ page: String(roomBrowserPage), limit: '20' });
     if (roomBrowserQuery) params.set('q', roomBrowserQuery);
-    const rooms = await api.rooms(params).catch((error: unknown) => {
+    const rooms = await api.rooms(params, controller.signal).catch((error: unknown) => {
       if (!(error instanceof ApiError)) throw error;
       const explanation =
         error.status === 404 || error.status === 503

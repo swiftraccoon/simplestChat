@@ -188,9 +188,13 @@ test('passkey management endpoints have fixed strict contracts and preserve canc
     state.response = { ok: true, status: 200, json: async () => body };
     assert.deepEqual(await invoke(), body);
     assert.equal(state.requests.at(-1)[0], path);
-    assert.equal(state.requests.at(-1)[1].signal, signal);
+    assert.ok(state.requests.at(-1)[1].signal instanceof AbortSignal);
+    assert.equal(state.requests.at(-1)[1].signal.aborted, false);
     state.response.json = async () => ({ ...body, private: 'server secret' });
-    await assert.rejects(invoke, /invalid data/);
+    await assert.rejects(
+      invoke,
+      path === '/api/auth/passkeys' ? /invalid data/ : ui.ApiOutcomeUnknownError,
+    );
   }
   for (const invalid of [
     { ...summary, password_enabled: 'false' },
@@ -210,7 +214,7 @@ test('passkey management endpoints have fixed strict contracts and preserve canc
     state.response.json = async () => invalid;
     await assert.rejects(
       () => ui.api.passkeyAction('token', { operation: { action: 'add' } }, signal),
-      /invalid data/,
+      ui.ApiOutcomeUnknownError,
     );
   }
 });
@@ -259,7 +263,10 @@ for (const [name, request, path, method, valid] of endpoints) {
     ]) {
       state.response = { ok: true, status: 200, json: async () => payload };
       await assert.rejects(request(ui.api), {
-        message: 'The server returned invalid data. Please try again.',
+        message:
+          method === 'GET'
+            ? 'The server returned invalid data. Please try again.'
+            : new ui.ApiOutcomeUnknownError().message,
       });
     }
     state.response = {
@@ -270,7 +277,10 @@ for (const [name, request, path, method, valid] of endpoints) {
       },
     };
     await assert.rejects(request(ui.api), {
-      message: 'The server returned invalid data. Please try again.',
+      message:
+        method === 'GET'
+          ? 'The server returned invalid data. Please try again.'
+          : new ui.ApiOutcomeUnknownError().message,
     });
     state.response = {
       ok: true,
@@ -280,7 +290,10 @@ for (const [name, request, path, method, valid] of endpoints) {
       },
     };
     await assert.rejects(request(ui.api), {
-      message: 'The server returned invalid data. Please try again.',
+      message:
+        method === 'GET'
+          ? 'The server returned invalid data. Please try again.'
+          : new ui.ApiOutcomeUnknownError().message,
     });
   });
 }
@@ -372,7 +385,7 @@ test('only password, recovery redemption and deletion accept 204 and never parse
   assert.equal(Object.hasOwn(state.requests[1][1].headers, 'Authorization'), false);
   assert.equal(Object.hasOwn(state.requests[2][1], 'body'), false);
   state.response = { ok: true, status: 200, json: async () => ({ accepted: true }) };
-  for (const call of calls) await assert.rejects(call(), /unexpected response/);
+  for (const call of calls) await assert.rejects(call(), ui.ApiOutcomeUnknownError);
 });
 
 test('non-string JSON errors retain bounded plain text and network failures keep their identity', async () => {

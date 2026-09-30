@@ -130,15 +130,17 @@ export async function busy(
 ): Promise<void> {
   if (buttonNode.disabled) return;
   buttonNode.disabled = true;
+  let uncertain = false;
   error.hidden = true;
   try {
     await work();
   } catch (failure) {
+    uncertain = failure instanceof ApiOutcomeUnknownError;
     error.textContent =
       failure instanceof Error ? failure.message : 'The action could not be completed';
     error.hidden = false;
   } finally {
-    buttonNode.disabled = false;
+    buttonNode.disabled = uncertain;
   }
 }
 
@@ -150,6 +152,68 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+}
+
+/** A transport failure cannot establish whether a server-side change committed. */
+export class ApiOutcomeUnknownError extends Error {
+  constructor() {
+    super(
+      'This change may have completed, but its response could not be confirmed. Reload and check the current state before trying again.',
+    );
+    this.name = 'ApiOutcomeUnknownError';
+  }
+}
+
+/** Own the whole response, including its body, rather than only waiting for headers. */
+async function boundedApi<T>(
+  method: string,
+  signal: AbortSignal | undefined,
+  work: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const deadline = Date.now() + 15_000;
+  const cancel = (): void => controller.abort(signal?.reason);
+  signal?.addEventListener('abort', cancel, { once: true });
+  if (signal?.aborted) cancel();
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 15_000);
+  let aborted: () => void = () => {};
+  let started = false;
+  try {
+    controller.signal.throwIfAborted();
+    const stopped = new Promise<never>((_, reject) => {
+      aborted = () => reject(new DOMException('Request cancelled', 'AbortError'));
+      controller.signal.addEventListener('abort', aborted, { once: true });
+    });
+    started = true;
+    const value = await Promise.race([work(controller.signal), stopped]);
+    if (Date.now() >= deadline) {
+      timedOut = true;
+      throw new Error('Response deadline passed');
+    }
+    return value;
+  } catch (error) {
+    if (
+      method !== 'GET' &&
+      started &&
+      !(
+        error instanceof ApiError &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        error.status !== 408
+      )
+    )
+      throw new ApiOutcomeUnknownError();
+    if (timedOut) throw new Error('The server took too long to respond. Please try again.');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    controller.signal.removeEventListener('abort', aborted);
+    signal?.removeEventListener('abort', cancel);
   }
 }
 
@@ -197,16 +261,18 @@ async function apiJson<T>(
   signal?: AbortSignal,
   credentials: RequestCredentials = 'same-origin',
 ): Promise<T> {
-  const response = await apiResponse(path, token, method, data, signal, credentials);
-  try {
-    if (response.status === 204) throw new Error('Expected JSON response');
-    const value: unknown = await response.json();
-    return decode(value);
-  } catch {
-    // JSON parse errors and decoded field failures must never display response
-    // fragments, which can contain profile, account or infrastructure details.
-    throw new Error('The server returned invalid data. Please try again.');
-  }
+  return boundedApi(method, signal, async (ownedSignal) => {
+    const response = await apiResponse(path, token, method, data, ownedSignal, credentials);
+    try {
+      if (response.status === 204) throw new Error('Expected JSON response');
+      const value: unknown = await response.json();
+      return decode(value);
+    } catch {
+      // JSON parse errors and decoded field failures must never display response
+      // fragments, which can contain profile, account or infrastructure details.
+      throw new Error('The server returned invalid data. Please try again.');
+    }
+  });
 }
 
 async function apiNoContent(
@@ -216,9 +282,11 @@ async function apiNoContent(
   data?: unknown,
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await apiResponse(path, token, method, data, signal);
-  if (response.status !== 204)
-    throw new Error('The server returned an unexpected response. Please try again.');
+  return boundedApi(method, signal, async (ownedSignal) => {
+    const response = await apiResponse(path, token, method, data, ownedSignal);
+    if (response.status !== 204)
+      throw new Error('The server returned an unexpected response. Please try again.');
+  });
 }
 
 /** Endpoint-owned contracts: callers cannot select an arbitrary response type or decoder. */
@@ -306,8 +374,8 @@ export const api = {
     apiJson(decodeRecoveryKey, '/api/auth/recovery/key', token, 'POST', data),
   redeemRecovery: (data: { email: string; recovery_key: string; new_password: string }) =>
     apiNoContent('/api/auth/recovery/redeem', null, 'POST', data),
-  rooms: (query: URLSearchParams) =>
-    apiJson(decodeRoomDirectory, `/api/rooms?${query}`, null, 'GET', undefined, undefined, 'omit'),
+  rooms: (query: URLSearchParams, signal?: AbortSignal) =>
+    apiJson(decodeRoomDirectory, `/api/rooms?${query}`, null, 'GET', undefined, signal, 'omit'),
   ownRooms: (token: string | null) => apiJson(decodeRoomDirectory, '/api/rooms/mine', token),
   createRoom: (token: string | null, data: CreateRoomRequest) =>
     apiJson(decodeRoomSettings, '/api/rooms', token, 'POST', data),

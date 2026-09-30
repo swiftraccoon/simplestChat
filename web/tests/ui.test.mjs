@@ -179,6 +179,7 @@ test('API helper scopes credentials, serializes JSON, and accepts empty successf
       credentials: 'same-origin',
       headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
       body: '{"current_password":"old","new_password":"new"}',
+      signal: state.requests[0][1].signal,
     },
   ]);
   state.response = { ok: true, status: 200, json: async () => [] };
