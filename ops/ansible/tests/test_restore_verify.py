@@ -56,9 +56,12 @@ class RestoreTests(unittest.TestCase):
             outcome["backupMigrations"] = dict(ledger)
             with self.subTest(ledger=ledger), self.assertRaises(release.ReleaseError):
                 _ = restore.backup_migrations(outcome, packaged)
-        with self.assertRaisesRegex(release.ReleaseError, "Legacy maintenance"):
-            _ = restore.backup_migrations({"action": "maintain"}, packaged)
-        self.assertEqual(restore.backup_migrations({"action": "deploy"}, packaged), packaged)
+        for action in ("maintain", "deploy"):
+            with (
+                self.subTest(action=action),
+                self.assertRaisesRegex(release.ReleaseError, "recorded migration ledger"),
+            ):
+                _ = restore.backup_migrations({"action": action}, packaged)
 
     def test_container_has_no_live_mounts_ports_or_network(self) -> None:
         """The only writable storage is capped tmpfs and Docker may never pull an image."""
@@ -92,14 +95,25 @@ class RestoreTests(unittest.TestCase):
             runner = release.Runner(root)
             identity = "a" * 64
             present = False
+            name = ""
             commands: list[tuple[str, ...]] = []
 
             def docker(*arguments: str, **_options: Unpack[release.CommandOptions]) -> bytes:
-                nonlocal present
+                nonlocal present, name
                 commands.append(arguments)
                 if arguments[0] == "create":
                     present = True
+                    name = arguments[arguments.index("--name") + 1]
                     return identity.encode()
+                if arguments[0] == "inspect":
+                    return json.dumps(
+                        {
+                            "id": identity,
+                            "name": "/" + name,
+                            "image": "sha256:" + "c" * 64,
+                            "owner": name,
+                        }
+                    ).encode()
                 if arguments[0] == "ps":
                     return identity.encode() if present else b""
                 if arguments[0] == "rm":
@@ -144,7 +158,7 @@ class RestoreTests(unittest.TestCase):
             runner = release.Runner(Path(directory))
             with patch.object(runner, "docker", return_value=b"a\nb") as docker:
                 with self.assertRaises(release.ReleaseError):
-                    restore.cleanup(runner, "owned-fixture")
+                    restore.cleanup(runner, "scpub-restore-" + "a" * 32, "sha256:" + "b" * 64)
                 self.assertEqual(docker.call_count, 1)
 
     def test_timestamp_requires_verification_and_cleanup_and_snapshot_removal(self) -> None:
@@ -166,6 +180,7 @@ class RestoreTests(unittest.TestCase):
                         {
                             "revision": "a" * 40,
                             "backupSha256": "b" * 64,
+                            "backupMigrations": {"1": "c" * 96},
                         }
                     )
                 )

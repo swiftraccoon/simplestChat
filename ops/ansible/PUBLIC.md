@@ -319,7 +319,13 @@ daemon-side dump to finish before other work is admitted:
 sudo /usr/bin/python3 -E -s -B /usr/local/libexec/simplestchat-public/backup_public.py cleanup
 ```
 
+Local dumps cannot survive loss of the VPS. The separate, explicit
+[encrypted offsite backup workflow](BACKUPS.md) uploads these exact archives and
+schedules isolated restore drills. It requires a destination, pinned SSH host
+keys and private credentials supplied by the operator; no remote repository is
+silently created or selected.
+
 Application SQL migrations run only during explicit deployment. PostgreSQL
-major-version upgrades, database rollback, secret rotation and off-host backup
-replication are not automated; review and plan them separately. Nightly local
-scheduling is provided by the opt-in backup playbook above.
+major-version upgrades, database rollback and secret rotation remain explicit
+maintenance operations. Local and encrypted offsite scheduling are separate
+opt-ins; neither restores data into the running application database.

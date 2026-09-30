@@ -1,0 +1,26 @@
+[Unit]
+Description=Encrypted simplestChat backup {{ item.action }}
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RuntimeDirectory=simplestchat-bench
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+ExecStart=/usr/bin/python3 -E -s -B /usr/local/libexec/simplestchat-public/backup_offsite.py {{ item.action }}
+ExecStopPost=/usr/bin/python3 -E -s -B /usr/local/libexec/simplestchat-public/backup_offsite.py recover
+UMask=0077
+TimeoutStartSec=2100
+TimeoutStopSec=180
+MemoryMax=512M
+TasksMax=64
+CPUQuota=50%
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/simplestchat-monitoring /run/simplestchat-bench
+RestrictSUIDSGID=true
+LockPersonality=true

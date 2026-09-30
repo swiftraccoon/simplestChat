@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from types import FrameType
 from typing import NoReturn
@@ -22,6 +23,9 @@ from release_json import JsonObject, decode_json, object_value, string_value
 STATE = Path("/var/lib/simplestchat-monitoring")
 VERIFY_SQL = Path("/usr/local/libexec/simplestchat-public/restore-verify.sql")
 MAX_BACKUP = 64 * 1024 * 1024
+MIN_RESTORE_MEMORY_MIB = 512
+MAX_RESTORE_MEMORY_MIB = 65536
+RESTORE_PROCESS_RESERVE_MIB = 256
 PRIVATE_MODE = 0o600
 LABEL = "clinic.research.simplestchat.restore"
 SOCKET = "/var/run/postgresql"
@@ -29,6 +33,32 @@ DATABASE = "restorecheck"
 ROLE_SQL = b"""CREATE ROLE simplestchat_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
 CREATE ROLE simplestchat_migrate NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
 """
+
+
+@dataclass(frozen=True)
+class RestoreLimits:
+    """Explicit isolated-database resource ceilings; exceeding them fails the drill."""
+
+    memory_mib: int = 512
+    data_mib: int = 256
+
+    def validate(self) -> None:
+        """Keep operator-selected disposable memory allocation bounded and coherent."""
+        release.require(
+            type(self.memory_mib) is int
+            and MIN_RESTORE_MEMORY_MIB <= self.memory_mib <= MAX_RESTORE_MEMORY_MIB,
+            "Invalid restore memory ceiling",
+        )
+        release.require(
+            type(self.data_mib) is int
+            and RESTORE_PROCESS_RESERVE_MIB
+            <= self.data_mib
+            <= self.memory_mib - RESTORE_PROCESS_RESERVE_MIB,
+            "Restore data must fit within its memory ceiling with process headroom",
+        )
+
+
+DEFAULT_RESTORE_LIMITS = RestoreLimits()
 
 
 class Arguments(argparse.Namespace):
@@ -63,8 +93,11 @@ def snapshot(source: Path, target: Path, expected: str) -> None:
         )
 
 
-def create_arguments(name: str, image: str) -> list[str]:
+def create_arguments(
+    name: str, image: str, limits: RestoreLimits = DEFAULT_RESTORE_LIMITS
+) -> list[str]:
     """Use only disposable memory filesystems and the already present production image."""
+    limits.validate()
     return [
         "create",
         "--name",
@@ -83,9 +116,9 @@ def create_arguments(name: str, image: str) -> list[str]:
         "--security-opt",
         "no-new-privileges:true",
         "--memory",
-        "512m",
+        f"{limits.memory_mib}m",
         "--memory-swap",
-        "512m",
+        f"{limits.memory_mib}m",
         "--cpus",
         "0.5",
         "--pids-limit",
@@ -95,7 +128,7 @@ def create_arguments(name: str, image: str) -> list[str]:
         "--log-driver",
         "none",
         "--tmpfs",
-        "/var/lib/postgresql:rw,nosuid,nodev,noexec,size=256m,uid=999,gid=999,mode=0700",
+        f"/var/lib/postgresql:rw,nosuid,nodev,noexec,size={limits.data_mib}m,uid=999,gid=999,mode=0700",
         "--tmpfs",
         "/var/run/postgresql:rw,nosuid,nodev,noexec,size=1m,uid=999,gid=999,mode=0700",
         "--tmpfs",
@@ -155,8 +188,14 @@ def sql(runner: release.RunnerProtocol, container: str, source: bytes) -> bytes:
     )
 
 
-def cleanup(runner: release.RunnerProtocol, name: str) -> None:
+def cleanup(runner: release.RunnerProtocol, name: str, image: str, expected_id: str = "") -> None:
     """Remove only the unique labeled container, including one created before a timeout."""
+    release.require(
+        re.fullmatch(r"scpub-restore-[a-f0-9]{32}", name)
+        and release.ID.fullmatch(image)
+        and (not expected_id or re.fullmatch(r"[a-f0-9]{64}", expected_id)),
+        "Invalid owned restore identity",
+    )
     selectors = (
         "ps",
         "--all",
@@ -170,26 +209,62 @@ def cleanup(runner: release.RunnerProtocol, name: str) -> None:
     identity = runner.docker(*selectors).decode().strip()
     if identity:
         release.require(re.fullmatch("[a-f0-9]{64}", identity), "Ambiguous restore container")
+        metadata = object_value(
+            decode_json(
+                runner.docker(
+                    "inspect",
+                    "--format",
+                    '{"id":{{json .Id}},"name":{{json .Name}},"image":{{json .Image}},'
+                    + '"owner":{{json (index .Config.Labels "'
+                    + LABEL
+                    + '")}}}',
+                    identity,
+                )
+            )
+        )
+        release.require(
+            (not expected_id or identity == expected_id)
+            and metadata.get("id") == identity
+            and metadata.get("name") == "/" + name
+            and metadata.get("image") == image
+            and metadata.get("owner") == name,
+            "Restore container ownership changed",
+        )
         _ = runner.docker("rm", "--force", "--volumes", identity, timeout=30)
     release.require(not runner.docker(*selectors).strip(), "Restore container cleanup incomplete")
 
 
 def verify(
-    runner: release.RunnerProtocol, image: str, backup: Path, migrations: dict[str, str]
+    runner: release.RunnerProtocol,
+    image: str,
+    backup: Path,
+    migrations: dict[str, str],
+    *,
+    limits: RestoreLimits = DEFAULT_RESTORE_LIMITS,
 ) -> JsonObject:
     """Restore all archive sections and validate before destroying the owned database."""
     name = "scpub-restore-" + uuid.uuid4().hex
-    report: JsonObject = {"container": name, "cleanupPassed": False, "verified": False}
+    report: JsonObject = {
+        "container": name,
+        "containerId": "",
+        "postgresImage": image,
+        "cleanupPassed": False,
+        "verified": False,
+    }
     release.atomic(runner.attempt / "restore.json", report)
     release.require(
         not runner.docker("ps", "--all", "--quiet", "--filter", f"label={LABEL}").strip(),
         "Inspect the retained restore container before starting another",
     )
     try:
-        identity = runner.docker(*create_arguments(name, image), timeout=30).decode().strip()
+        identity = (
+            runner.docker(*create_arguments(name, image, limits), timeout=30).decode().strip()
+        )
         release.require(
             re.fullmatch("[a-f0-9]{64}", identity), "Invalid restore container identity"
         )
+        report["containerId"] = identity
+        release.atomic(runner.attempt / "restore.json", report)
         _ = runner.docker("start", identity)
         deadline = time.monotonic() + 30
         while True:
@@ -263,7 +338,7 @@ def verify(
         report["verified"] = True
     finally:
         try:
-            cleanup(runner, name)
+            cleanup(runner, name, image, string_value(report["containerId"]))
             report["cleanupPassed"] = True
         finally:
             release.atomic(runner.attempt / "restore.json", report)
@@ -273,12 +348,7 @@ def verify(
 def backup_migrations(outcome: JsonObject, packaged: dict[str, str]) -> dict[str, str]:
     """Bind the archive to its pre-upgrade ledger while checking candidate checksums."""
     recorded = outcome.get("backupMigrations")
-    if recorded is None:
-        release.require(
-            outcome.get("action") != "maintain",
-            "Legacy maintenance backup lacks its pre-upgrade migration ledger",
-        )
-        return dict(packaged)
+    release.require(recorded is not None, "Backup lacks its recorded migration ledger")
     migrations = {
         version: string_value(checksum) for version, checksum in object_value(recorded).items()
     }

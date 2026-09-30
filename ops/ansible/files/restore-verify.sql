@@ -45,8 +45,8 @@ DO $$ BEGIN
           COALESCE((SELECT max(id) FROM operations.alerts),0) THEN
         RAISE EXCEPTION 'Incident uniqueness or sequence differs';
     END IF;
-    -- Older version-1 archives legitimately predate external evidence. A partial
-    -- newer schema is never treated as an old archive and silently ignored.
+    -- External collection is an optional feature of local monitoring. An
+    -- incomplete external schema is never accepted as a disabled feature.
     IF (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
         WHERE n.nspname='operations' AND c.relkind='r' AND c.relname IN
         ('external_schema_version','external_runs','external_status')) NOT IN (0,3) THEN

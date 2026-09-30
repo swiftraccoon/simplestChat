@@ -1,0 +1,122 @@
+---
+- name: Schedule encrypted offsite backups and isolated restore drills
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: true
+  serial: 1
+  pre_tasks:
+    - name: Require an explicit SFTP repository and private controller credential files
+      ansible.builtin.assert:
+        that:
+          - scpub_enabled | bool
+          - scpub_backup_enabled | default(false) | bool
+          - scmon_enabled | bool
+          - scpub_backup_offsite_enabled | default(false) | bool
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'x86_64'
+          - scpub_backup_offsite_host is match('^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$')
+          - scpub_backup_offsite_user is match('^[a-z_][a-z0-9_-]{0,31}$')
+          - scpub_backup_offsite_repository is match('^/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+$')
+          - scpub_backup_offsite_port | default(22) is integer
+          - scpub_backup_offsite_port | default(22) | int >= 1
+          - scpub_backup_offsite_port | default(22) | int <= 65535
+          - scpub_backup_restore_archive_mib | default(64) is integer
+          - scpub_backup_restore_archive_mib | default(64) | int >= 1
+          - scpub_backup_restore_archive_mib | default(64) | int <= 4096
+          - scpub_backup_restore_memory_mib | default(512) is integer
+          - scpub_backup_restore_memory_mib | default(512) | int >= 512
+          - scpub_backup_restore_memory_mib | default(512) | int <= 65536
+          - scpub_backup_restore_memory_mib | default(512) | int <= (ansible_facts.memtotal_mb | int) // 2
+          - scpub_backup_restore_data_mib | default(256) is integer
+          - scpub_backup_restore_data_mib | default(256) | int >= 256
+          - scpub_backup_restore_data_mib | default(256) | int <= (scpub_backup_restore_memory_mib | default(512) | int) - 256
+          - scpub_backup_offsite_identity_file is defined
+          - scpub_backup_offsite_known_hosts_file is defined
+          - scpub_backup_offsite_password_file is defined
+        fail_msg: Supply the opted-in initialized SFTP repository, pinned host keys, credentials and bounded restore resources.
+
+    - name: Verify the prepared public host before installing helpers
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/release_preflight.py', rstrip=false) }}"
+          - '{}'
+      changed_when: false
+      check_mode: false
+
+  tasks:
+    - name: Install the pinned Debian archive client
+      ansible.builtin.apt:
+        # Debian trixie amd64 package, verified at packages.debian.org on 2026-09-30.
+        name: restic=0.18.0-1+b4
+        state: present
+        update_cache: true
+        install_recommends: false
+        fail_on_autoremove: true
+
+    - name: Create private offsite settings
+      ansible.builtin.file:
+        path: /etc/simplestchat-backup
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Install explicit credentials and supplied host-key trust without logging values
+      ansible.builtin.copy:
+        src: "{{ item.source }}"
+        dest: "/etc/simplestchat-backup/{{ item.name }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - {name: identity, source: "{{ scpub_backup_offsite_identity_file }}"}
+        - {name: known_hosts, source: "{{ scpub_backup_offsite_known_hosts_file }}"}
+        - {name: password, source: "{{ scpub_backup_offsite_password_file }}"}
+      no_log: true
+
+    - name: Install the current offsite repository settings
+      ansible.builtin.copy:
+        dest: /etc/simplestchat-backup/settings.json
+        owner: root
+        group: root
+        mode: '0600'
+        content: >-
+          {{ {'schemaVersion': 1, 'host': scpub_backup_offsite_host, 'user': scpub_backup_offsite_user,
+              'port': scpub_backup_offsite_port | default(22), 'repositoryPath': scpub_backup_offsite_repository,
+              'archiveLimitMiB': scpub_backup_restore_archive_mib | default(64),
+              'restoreMemoryMiB': scpub_backup_restore_memory_mib | default(512),
+              'restoreDataMiB': scpub_backup_restore_data_mib | default(256)} | to_nice_json }}
+
+    - name: Install the reviewed offsite and restore workers
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: [backup_offsite.py, backup_public.py, restore_verify.py, restore-verify.sql, release_public.py, release_artifact.py, release_json.py]
+
+    - name: Install bounded upload and restore units
+      ansible.builtin.template:
+        src: "backup-offsite.{{ item.kind }}.j2"
+        dest: "/etc/systemd/system/simplestchat-backup-{{ item.action }}.{{ item.kind }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - {action: upload, kind: service}
+        - {action: upload, kind: timer}
+        - {action: restore, kind: service}
+        - {action: restore, kind: timer}
+
+    - name: Enable the explicit offsite schedules
+      ansible.builtin.systemd_service:
+        name: "simplestchat-backup-{{ item }}.timer"
+        daemon_reload: true
+        enabled: true
+        state: started
+      loop: [upload, restore]

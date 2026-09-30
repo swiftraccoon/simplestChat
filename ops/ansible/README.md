@@ -16,6 +16,8 @@ They stage an image while chat is live and leave PostgreSQL/Caddy running during
 application replacement. The routine `build/deploy.py` command selects the image
 normal CI already tested; no second image build or manual artifact IDs are needed.
 The same guide covers explicit, ordered host reboots.
+[Encrypted offsite backups and isolated restore drills](BACKUPS.md) are a
+separate opt-in after local backups and monitoring are prepared.
 
 Docker access is root-equivalent. Host orchestration runs as root; application
 and load-generator containers run as UID/GID 10001 with read-only filesystems,

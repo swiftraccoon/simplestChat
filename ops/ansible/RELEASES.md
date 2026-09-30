@@ -230,8 +230,9 @@ migrations. It takes a live consistent PostgreSQL dump before stopping the app.
 The dump is first written privately as a partial file. Its contents listing is
 checked, its bytes are flushed before rename, and the containing directory is
 flushed before a durable SHA256 receipt is published. Headroom reserves twice
-the current database size plus 1 GiB. Off-host retention and
-restoration drills remain separate responsibilities.
+the current database size plus 1 GiB. Off-host storage and restoration are
+separate opt-ins; the [scheduled encrypted workflow](BACKUPS.md) covers nightly
+archives, while this release dump remains private rollback evidence.
 
 Only the application is replaced. Caddy and PostgreSQL must retain their IDs,
 start times, and restart counts. The candidate must have the selected image and
@@ -299,6 +300,8 @@ environment has validated changes. An identical image and unchanged configuratio
 are refused before backup or interruption. `backupMigrations` in the release
 outcome records the applied ledger before migration separately from the target
 revision; restore verification checks the archive against that older ledger.
+Every restore requires this recorded ledger. Development evidence created before
+this contract is rejected; the verifier does not substitute the target schema.
 
 Pass `--install-helpers` whenever `release_public.py` changed, as for any release.
 

@@ -1,0 +1,14 @@
+[Unit]
+Description=Schedule simplestChat backup {{ item.action }}
+
+[Timer]
+{% if item.action == 'upload' %}
+OnCalendar=*-*-* 04:30:00 UTC
+{% else %}
+OnCalendar=Sun *-*-* 06:00:00 UTC
+{% endif %}
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

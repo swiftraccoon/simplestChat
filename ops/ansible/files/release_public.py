@@ -493,6 +493,7 @@ def workload_lock(
     after_reboot: bool = False,
     cancel_reboot: bool = False,
     recover_expired_backup: bool = False,
+    recover_offsite_backup: bool = False,
 ) -> Generator[None]:
     """Serialize work and reject any unfinished persistent ownership journal."""
     require(not (after_reboot and cancel_reboot), "Choose one reboot recovery action")
@@ -518,6 +519,7 @@ def workload_lock(
                 and (
                     record.get("finalized") is True
                     or (recover_expired_backup and expired_backup(record))
+                    or (recover_offsite_backup and record.get("operation") == "offsite_backup")
                 ),
                 "Resolve unfinished benchmark cleanup before releasing",
             )
