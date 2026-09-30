@@ -75,7 +75,13 @@ a substitute for that check. This cleanup belongs only to the disposable CI
 runner and is not a local workstation prerequisite.
 
 Use the repository's hash-pinned Ansible environment (`ops/ansible/requirements.txt`)
-and a supported controller Python (3.12–3.14). GNU `timeout` and `prlimit` must be available. Both inputs below
+and a supported controller Python (3.12–3.14). Playbooks run as a module through
+that controller's Python interpreter, with the default stdout callback and
+automatic callback loading disabled. The allowlisted environment omits
+`ANSIBLE_CALLBACKS_ENABLED`: an empty string requests an empty plugin name in
+the pinned Ansible release and aborts task startup. An inert local task regression
+checks callback initialization and exclusion of ambient callback settings.
+GNU `timeout` and `prlimit` must be available. Both inputs below
 must be absolute paths; the output directory must not already exist. Keep the
 release and evidence outside the checkout so the clean-tree precondition remains
 meaningful:

@@ -397,7 +397,6 @@ class Host:
                 "ANSIBLE_LOCAL_TEMP": str(local_tmp),
                 "ANSIBLE_NOCOLOR": "1",
                 "ANSIBLE_STDOUT_CALLBACK": "default",
-                "ANSIBLE_CALLBACKS_ENABLED": "",
                 "ANSIBLE_LOAD_CALLBACK_PLUGINS": "0",
             }
         )

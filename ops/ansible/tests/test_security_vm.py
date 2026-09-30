@@ -369,6 +369,65 @@ class BoundaryTests(unittest.TestCase):
                 _ = vm.guest_action(host, Path("/owned"), 22345, RUN, "backup-restore")
 
 
+class AnsibleStartupTests(unittest.TestCase):
+    """Exercise pinned Ansible callback initialization using only an inert local action."""
+
+    def test_real_task_startup_excludes_ambient_callbacks(self) -> None:
+        """An omitted callback override remains the empty list instead of an empty plugin name."""
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(
+                os.environ,
+                {
+                    "ANSIBLE_CALLBACKS_ENABLED": "private_callback_fixture",
+                    "ANSIBLE_STDOUT_CALLBACK": "private_stdout_fixture",
+                },
+            ),
+        ):
+            root = Path(temporary)
+            host = vm.Host(root, time.monotonic() + 20)
+            self.assertNotIn("ANSIBLE_CALLBACKS_ENABLED", host.env)
+            self.assertEqual(host.env["ANSIBLE_STDOUT_CALLBACK"], "default")
+            self.assertEqual(host.env["ANSIBLE_LOAD_CALLBACK_PLUGINS"], "0")
+            playbook = root / "local.yml"
+            _ = playbook.write_text(
+                json.dumps(
+                    [
+                        {
+                            "name": "Local callback fixture",
+                            "hosts": "vmfixture",
+                            "connection": "local",
+                            "gather_facts": False,
+                            "tasks": [
+                                {
+                                    "name": "Validate constant fixture",
+                                    "ansible.builtin.assert": {"that": [True], "quiet": True},
+                                }
+                            ],
+                        }
+                    ]
+                )
+            )
+            status, output = host.run(
+                "ansible-startup",
+                [
+                    sys.executable,
+                    "-m",
+                    "ansible.cli.playbook",
+                    "-i",
+                    "vmfixture,",
+                    "--limit",
+                    "vmfixture",
+                    "--forks",
+                    "1",
+                    str(playbook),
+                ],
+                timeout=20,
+            )
+            self.assertEqual(status, 0)
+            self.assertEqual(vm.recap(output, unchanged=True)["ok"], 1)
+
+
 class StartupDiagnosticTests(unittest.TestCase):
     """Recognize actionable emulator failures without publishing any arbitrary input words."""
 
