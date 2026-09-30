@@ -1903,6 +1903,68 @@ mod security_tests {
 
     #[tokio::test]
     #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+    async fn database_membership_handler_always_returns_a_private_cursor_page() {
+        use crate::room::invites::{MembershipParams, list_memberships};
+        let pool = PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+            .await
+            .unwrap();
+        let user = uuid::Uuid::new_v4();
+        sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Page test')")
+            .bind(user)
+            .bind(format!("{user}@membership-handler.invalid"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        let mut media = crate::media::config::MediaConfig::default();
+        media.worker_config.num_workers = 1;
+        media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
+        let metrics = ServerMetrics::new();
+        let manager = Arc::new(
+            RoomManager::new(media, metrics.clone(), None)
+                .await
+                .unwrap(),
+        );
+        let mut server = SignalingServer::new(manager, None, metrics, Some(pool.clone())).unwrap();
+        let secret = "disposable-membership-handler-secret-at-least-32-bytes";
+        server.jwt_secret = Some(secret.into());
+        let token = crate::auth::jwt::create_token(&user.to_string(), "Page test", secret).unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::AUTHORIZATION,
+            format!("Bearer {token}").parse().unwrap(),
+        );
+        for after in [None, Some("room-100".to_string())] {
+            let (response_headers, axum::Json(page)) = list_memberships(
+                State(server.clone()),
+                headers.clone(),
+                Query(MembershipParams { after }),
+            )
+            .await
+            .unwrap();
+            assert_eq!(response_headers[header::CACHE_CONTROL], "private, no-store");
+            assert_eq!(
+                serde_json::to_value(page).unwrap(),
+                serde_json::json!({"items": [], "next_cursor": null})
+            );
+        }
+        assert!(
+            list_memberships(
+                State(server),
+                HeaderMap::new(),
+                Query(MembershipParams::default()),
+            )
+            .await
+            .is_err()
+        );
+        sqlx::query("DELETE FROM users WHERE id=$1")
+            .bind(user)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
     async fn database_password_and_passkey_signup_share_taken_email_budget() {
         use crate::auth::{
             routes,

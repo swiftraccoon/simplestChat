@@ -25,7 +25,7 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `registrationInvites` | `GET /api/auth/invites` | `RegistrationInvite[]` |
 | `createRegistrationInvite` | `POST /api/auth/invites` | `RegistrationInvite` metadata plus one-time `code` |
 | `revokeRegistrationInvite` | `DELETE /api/auth/invites/:id` | `204`, no body |
-| `memberships` | `GET /api/rooms/memberships?paginated=true[&after=<room-id>]` | `{ items: MembershipItem[], next_cursor: string \| null }` |
+| `memberships` | `GET /api/rooms/memberships[?after=<room-id>]` | `{ items: MembershipItem[], next_cursor: string \| null }` |
 | `roomInvites` | `GET /api/rooms/:id/invites` | `RoomInvite[]` |
 | `createRoomInvite` | `POST /api/rooms/:id/invites` | `RoomInvite` metadata plus one-time `code` |
 | `revokeRoomInvite` | `DELETE /api/rooms/:id/invites/:invite_id` | `204`, no body |
@@ -86,19 +86,14 @@ its receipts immediately. Without a retained receipt, an unknown, spent or expir
 code returns 404; a registration code also returns 404 on this room endpoint. The
 returned receipt is a historical result, never evidence of current authorization.
 
-Memberships list the rooms an account holds a role in but does not own. Request
-`paginated=true` to opt into cursor pages. Each paged response contains at most
-100 `items`, ordered by room ID, and a required
+Memberships list the rooms an account holds a role in but does not own. Every
+response contains at most 100 `items`, ordered by room ID, and a required
 `next_cursor` containing the last returned ID when another page exists; otherwise
 it is `null`. Omit `after` for the first page and pass `next_cursor` as `after` for
-the next. An `after` value also opts into the paged shape. Room renames do not change
-page order. Membership additions/removals can occur between pages; reload the
-first page to refresh the complete listing. These responses carry
-`Cache-Control: private, no-store`. Requests with neither `paginated=true` nor
-`after` retain the legacy array shape, limited to the first 100 memberships, so
-already-open older clients survive a server upgrade. New browsers also accept a
-legacy array from an older server; additional pages become available after the
-server upgrade.
+the next. Room renames do not change page order. Membership additions/removals
+can occur between pages; reload the first page to refresh the complete listing.
+These responses carry `Cache-Control: private, no-store`. `after` is the only
+supported query parameter.
 
 The browser carries a room code in `#invite=CODE` and a registration code in
 `#register-invite=CODE`. Fragments are not sent in the HTTP request target.

@@ -129,10 +129,9 @@ Room invitation preview and acceptance take JSON bodies and require an account.
 Preview does not grant membership or join; acceptance requires an explicit user
 action and still does not join. A redemption receipt commits with the role grant
 and usage decrement. Repeating an account/code pair cannot consume a second use
-or restore a subsequently removed role. Membership listings opt into stable
-room-ID cursor pages of 100 rows with `paginated=true`, so accounts with more
-memberships can retrieve the remainder. Requests without paging parameters retain
-the existing array response.
+or restore a subsequently removed role. Every membership listing returns a
+stable room-ID cursor page with `items` and `next_cursor`. Pages contain at most
+100 rows; pass the cursor as `after` to retrieve the remainder.
 
 The retention job runs after one minute and every six hours thereafter. Each
 statement selects at most 1,000 eligible parent rows, skips locked rows and

@@ -101,28 +101,10 @@ pub struct MembershipPage {
     pub next_cursor: Option<String>,
 }
 
-/// Existing open clients receive their array shape until they opt into paging.
-#[derive(Serialize)]
-#[serde(untagged)]
-pub enum MembershipResponse {
-    Legacy(Vec<MembershipItem>),
-    Page(MembershipPage),
-}
-
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MembershipParams {
     pub after: Option<String>,
-    #[serde(default)]
-    pub paginated: bool,
-}
-
-fn membership_response(params: &MembershipParams, page: MembershipPage) -> MembershipResponse {
-    if params.paginated || params.after.is_some() {
-        MembershipResponse::Page(page)
-    } else {
-        MembershipResponse::Legacy(page.items)
-    }
 }
 
 /// Mint a code for `room_id`; `None` when the room already holds its limit.
@@ -588,7 +570,7 @@ pub async fn list_memberships(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Query(params): Query<MembershipParams>,
-) -> Result<(HeaderMap, Json<MembershipResponse>), RoomApiError> {
+) -> Result<(HeaderMap, Json<MembershipPage>), RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
     if params
@@ -603,20 +585,17 @@ pub async fn list_memberships(
         .map_err(room_database_error)?;
     Ok((
         private_headers(),
-        Json(membership_response(
-            &params,
-            MembershipPage {
-                next_cursor: batch.next_cursor,
-                items: batch
-                    .rows
-                    .into_iter()
-                    .map(|(row, role)| MembershipItem {
-                        room: room_list_item(&server, row),
-                        role: Role::from_db(role).name(),
-                    })
-                    .collect(),
-            },
-        )),
+        Json(MembershipPage {
+            next_cursor: batch.next_cursor,
+            items: batch
+                .rows
+                .into_iter()
+                .map(|(row, role)| MembershipItem {
+                    room: room_list_item(&server, row),
+                    role: Role::from_db(role).name(),
+                })
+                .collect(),
+        }),
     ))
 }
 
@@ -625,32 +604,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn membership_paging_is_opt_in_for_older_open_clients() {
-        for (uri, paged) in [
-            ("/api/rooms/memberships", false),
-            ("/api/rooms/memberships?paginated=false", false),
-            ("/api/rooms/memberships?paginated=true", true),
-            ("/api/rooms/memberships?after=room-100", true),
-            (
-                "/api/rooms/memberships?paginated=false&after=room-100",
-                true,
-            ),
+    fn membership_query_accepts_only_the_optional_cursor() {
+        for (uri, after) in [
+            ("/api/rooms/memberships", None),
+            ("/api/rooms/memberships?after=room-100", Some("room-100")),
         ] {
             let Query(params) =
                 Query::<MembershipParams>::try_from_uri(&uri.parse().unwrap()).unwrap();
-            let response = membership_response(
-                &params,
-                MembershipPage {
-                    items: Vec::new(),
-                    next_cursor: None,
-                },
-            );
-            let json = serde_json::to_value(response).unwrap();
-            if paged {
-                assert_eq!(json, serde_json::json!({"items": [], "next_cursor": null}));
-            } else {
-                assert_eq!(json, serde_json::json!([]));
-            }
+            assert_eq!(params.after.as_deref(), after);
+        }
+        for uri in [
+            "/api/rooms/memberships?paginated=false",
+            "/api/rooms/memberships?paginated=true",
+            "/api/rooms/memberships?after=room-100&paginated=true",
+            "/api/rooms/memberships?unknown=value",
+        ] {
+            assert!(Query::<MembershipParams>::try_from_uri(&uri.parse().unwrap()).is_err());
         }
     }
 
