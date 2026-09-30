@@ -1,5 +1,201 @@
 # Performance results
 
+## Thirty active microphones per room on an OVH VPS — 2026-09-30
+
+The automated private-host workflow passed its first live acceptance: the
+[bootstrap controller](../ops/ansible/BOOTSTRAP.md) reused the existing SSH key
+and trusted host key, advanced the exact source revision through Ansible, and
+retained its provisioning evidence. The [capacity controller](../ops/ansible/CAPACITY.md)
+prepared the checkout, built and verified both images through the canonical
+image-build service, ran bounded experiments, collected their archives, and
+verified that owned containers were gone. Recollecting the first successful run
+after systemd had unloaded its transient unit also passed, using the retained
+result. This exercised bootstrap's key-only rerun; first-login password rotation
+was not repeated on the already enrolled host.
+
+The separate `ovh-timeout-cleanup` drill deliberately stopped a thirty-person
+run with a 120-second runtime limit. Systemd recorded `Result=timeout`, the
+measurement child exited 143, and the controller returned 1. The retained
+outcome stayed `passed=false`, with `finalized=true`; inspection recorded empty
+container lists and no residuals. The missing final calibration was classified
+as `invalid_json_file`, so an interrupted experiment could not become a passing
+capacity result. This verifies deadline enforcement, failure reporting and
+cleanup for the observed run. Explicit recovery then confirmed that no removal
+was needed, preserved the failed measurement verdict, and retained a separate
+receipt. A final key-only bootstrap preflight passed without provisioning.
+
+The test VM had six logical CPUs, 11,682 MiB RAM, Debian 13 and kernel
+`6.12.111+deb13-amd64`, under OpenStack/KVM. Its exposed CPU model was
+`Intel Core Processor (Haswell, no TSX)`, a virtual identifier rather than proof
+of the physical processor. Source was `47aa837d9cf563b108256ed1cc0ecaaac8eb60ca`;
+the server image was `e33b141660cdae01` and the generator `a4662c961df0d9c8`
+(first sixteen SHA256 digits). The quoted 2 Gbit/s port, unlimited transfer and
+$12.32 monthly price were supplied planning inputs, not a verified current offer
+or a measured WAN rate.
+
+Every room contained thirty participants, all continuously publishing synthetic
+32 kbit/s audio at fifty packets/second and receiving the other twenty-nine
+publishers. Every participant also sent a 128-byte text message approximately
+every thirty seconds. Both room limits were thirty. Each run used a thirty-second
+warmup and sixty-second measurement after its join ramp; one-worker runs joined
+at 0.5 clients/second, two-worker runs at 1 client/second, and the three-worker
+runs at 1.5 clients/second. Server and generator memory ceilings were 3,504 and
+5,841 MiB respectively.
+
+| People / rooms | Server CPU quota / workers | Generator CPU quota | Verdict | Peak worker CPU, cores | Mean server / generator CPU, cores | Peak server memory | Estimated media egress |
+|---|---|---:|---|---:|---|---:|---:|
+| 30 / 1 | 1 / 1 | 4.8 | pass | 0.334 | 0.324 / 1.131 | 58 MiB | 49.4 Mbit/s |
+| 60 / 2 | 1 / 1 | 4.8 | pass | 0.674 | 0.647 / 2.133 | 108 MiB | 98.8 Mbit/s |
+| 90 / 3 | 2 / 2 | 3.8 | pass | 0.540 | 1.006 / 2.338 | 161 MiB | 148.2 Mbit/s |
+| 120 / 4 | 2 / 2 | 3.8 | valid failure: worker guard | 0.721 | 1.349 / 2.825 | 212 MiB | 197.7 Mbit/s |
+| 150 / 5 | 3 / 3 | 4.8 | 3/3 pass; medians shown | 0.606 | 1.696 / 3.655 | 270 MiB | 246.9 Mbit/s |
+
+The first four configurations ran once each; the 150-person configuration ran
+three times. The first four runs received at least the expected audio packet
+count on every consumer: 870, 1,740, 2,610 and 3,480 consumers respectively.
+Text acknowledgements were 58/58, 116/116, 174/174 and 232/232;
+corresponding peer deliveries were 1,682/1,682, 3,364/3,364,
+5,046/5,046 and 6,728/6,728.
+
+All three 150-person runs passed and validated all 4,350 audio consumers. The
+minimum per-consumer packet-count ratios were 99.7667%, 99.7333% and 99.7667%,
+above the 95% coverage gate. Each run delivered all 290 text acknowledgements
+and 8,410 peer messages: 870 acknowledgements and 25,230 peer deliveries in total.
+Acknowledgement P99 ranged from 9–18 ms (median 11 ms), and delivery P99 from
+13–18 ms (median 17 ms). The generator's maximum runtime lag within each
+sixty-second steady measurement window was 25, 27 and 31 ms (median 27 ms);
+whole-run maxima, including ramp and warmup, were 25, 38 and 31 ms. These
+packet-count ratios compare reception with the nominal sending cadence; a small
+deficit alone does not establish network loss. In the first 150-person run,
+publishers queued 449,676 of 450,000 ideal frames. That source-cadence deficit
+accounts for 92% of the receive-count shortfall after fanout; each receiver
+differed from its publisher's queued count by at most one packet in the finite
+measurement window. Across all seven runs there were no refused joins, failed
+consumers, worker socket drops, receive-buffer errors or generator throttling.
+
+The 120-person measurement was valid and failed solely because the busiest
+worker reached **0.72056 cores against the 0.70 guard**. Audio and text still
+passed, and cleanup completed. The controller returned failure and preserved the
+failed step, even though the underlying measurement process completed normally.
+The 60-person single-worker pass was also close to this guard; it does not justify
+assuming sixty people per worker at every larger configuration. These short runs
+establish observed passing points and a guard crossing, not a stable maximum.
+
+Across the three 150-person runs, peak worker CPU ranged from 0.591–0.614 cores
+(median 0.606). Mean server CPU was 1.695–1.731 cores (median 1.696), generator
+CPU 3.649–3.668 cores (median 3.655), and server peak memory 269.3–270.4 MiB
+(median 270 MiB). Host busy time was 90.7–91.0%, host steal 0.0091–0.0122%,
+and neither container was throttled. Estimated media egress was
+246.796–246.887 Mbit/s (median 246.874).
+
+The server and generator CPU ceilings were 3 and 4.8 cores: their sum exceeds
+the VM's six logical CPUs. CPU quotas cap usage; they do not reserve or create
+cores. The observed delivery and resource gates passed despite the limited
+co-located host headroom. Larger experiments need the same validity checks;
+generator contention must not be mistaken for an application limit.
+
+The measured server and generator shared a loopback network namespace. The
+workload omitted PostgreSQL, public TLS/TURN, Internet paths and browser audio
+decoding. Packet coverage therefore establishes this synthetic forwarding and
+text workload, not decoded voice quality or production readiness at the same
+population. The generated five-CPU deployment projections and small memory
+recommendations remain extrapolations; those deployment sizes were not tested.
+
+Traffic for full rooms follows the generator's fixed profile. Each received
+packet contains an 80-byte audio payload; the measurement tool adds 62 bytes for
+IPv4, UDP, RTP, extensions and SRTP. Estimated egress per room is therefore
+`30 × 29 × 50 × (80 + 62) × 8 = 49,416,000 bits/second`, or 43,500 outgoing
+media packets/second. That is 1.6472 Mbit/s and 0.74124 decimal GB per occupied
+participant-hour in a full thirty-person room. It excludes other link/control
+overhead, and IPv6 adds another twenty bytes per packet.
+
+For the requested populations, rounding up to complete rooms gives the following
+planning envelope. TB is decimal; transfer assumes thirty days at the stated
+daily occupancy. Partly occupied final rooms generate less traffic.
+
+| Target people | Planning slots / rooms | Estimated egress | Transfer at 8 h/day | Transfer at 24 h/day | Current capacity evidence |
+|---|---|---:|---:|---:|---|
+| 50 | 60 / 2 | 98.8 Mbit/s | 10.7 TB | 32.0 TB | A 60-person synthetic run passed on this VPS. |
+| 150 | 150 / 5 | 247.1 Mbit/s | 26.7 TB | 80.1 TB | Three of three 150-person, three-worker runs passed on this VPS. |
+| 500 | 510 / 17 | 840.1 Mbit/s | 90.7 TB | 272.2 TB | CPU/RAM capacity unmeasured; a 1 Gbit/s port leaves little headroom. |
+| 2,000 | 2,010 / 67 | 3,310.9 Mbit/s | 357.6 TB | 1,072.7 TB | Exceeds one 2 Gbit/s port; larger network and compute capacity remain unmeasured. |
+
+The quoted six-vCPU/12-GB VPS is a measured candidate for the 50- and 150-person
+targets under this workload. Three short repetitions support the 150-person
+result; they do not establish sustained performance across different host load
+or real Internet conditions. The 500- and 2,000-person targets require their own
+capacity evidence before choosing final CPU/RAM budgets or an optimal price.
+Multiple application hosts also require room-aware ownership and routing,
+which are not implemented; a generic load
+balancer does not supply that behavior. This table describes thirty-person rooms,
+not one room containing hundreds or thousands of publishers.
+
+For selecting the next hosts to benchmark, the following are provisional
+deployment budgets. They reserve space for PostgreSQL, proxy, TURN and the
+system; they are not measured hardware minima. For larger targets, the CPU
+starting point is about 45 active participants per media worker, as observed
+at 90 participants on two workers, rounded upward to a practical host size.
+Per-core performance must be measured again on each candidate.
+
+| Target people | Candidate CPU budget | Candidate RAM | Network port to investigate | Basis |
+|---|---:|---:|---|---|
+| 50 | Existing 6-vCPU VPS | Existing 12 GB | Existing quoted 2 Gbit/s | The 60-person workload passed; a smaller host was not compared. |
+| 150 | Existing 6-vCPU VPS | Existing 12 GB | Existing quoted 2 Gbit/s | Three-worker tests passed three times, leaving application CPU room for deployment overhead. |
+| 500 | 16 comparable vCPUs | 16–32 GB | At least 2 Gbit/s | About twelve media workers plus service headroom; unmeasured projection. |
+| 2,000 | 48–64 comparable vCPUs | 32–64 GB | At least 5 Gbit/s; preferably 10 Gbit/s for margin | About forty-five media workers plus service headroom; unmeasured projection. |
+
+The larger RAM ranges are operating allowances, not linear extrapolations of
+the small guest-only process footprints. Database size, authenticated sessions,
+relay allocation count and retention policy need separate budgets. At the
+supplied price, four or fourteen of the six-vCPU hosts would cost $49.28 or
+$172.48 monthly and provide 600 or 2,100 nominal places if each were budgeted
+at the measured 150-person point. This arithmetic is a future cost comparison;
+the current application cannot use those nodes as one load-balanced site until
+the [multi-node ownership and routing design](deployment.md#multiple-application-nodes-required-design-work)
+is implemented and tested. No larger host or competing provider was measured
+to establish a price optimum.
+
+To reproduce the 150-person configuration, use a clean checkout of the source
+revision above, the pinned Ansible environment, and a dedicated benchmark host
+prepared with the bootstrap guide. The ignored inventory and alias below name
+the test host; substitute your own private benchmark inventory and alias:
+
+```sh
+ops/ansible/.venv/bin/python build/run-vps-capacity.py \
+  --inventory ops/ansible/inventory.local.ovh-test.yml --limit ovh_test \
+  --revision 47aa837d9cf563b108256ed1cc0ecaaac8eb60ca \
+  --prepare --build-images --label ovh-audio150-3w-repro \
+  --workload meetings --first-size 150 --steps 1 --meeting-size 30 \
+  --speakers 30 --audio-only --chat-interval-ms 30000 \
+  --server-cpus 3 --generator-cpus 4.8 --app-cpus 5 \
+  --port-mbps 2000 --monthly-price 12.32 --runtime-seconds 900
+```
+
+For the other completed configurations, change `--first-size`, `--server-cpus`
+and `--generator-cpus` to the matching table row and choose a new label. After
+preparation and image building, omit those two actions to repeat against the
+verified images. Each invocation retains a new evidence directory. See the
+[capacity guide](../ops/ansible/CAPACITY.md#collect-or-recover-an-interrupted-run)
+for collection and owned-resource recovery.
+
+Retained local evidence: bootstrap `results/bootstrap-ovh.20260930T051434Z`;
+30 people `results/vps-capacity.20260930T052222Z.6f8dcfeb`; recollection
+`results/vps-capacity.20260930T053028Z.85d46b6e`; 60 people
+`results/vps-capacity.20260930T053054Z.4c11a5f1`; 90 people
+`results/vps-capacity.20260930T053523Z.5c5416e4`; 120 people
+`results/vps-capacity.20260930T054001Z.b7dfb9e5`; 150 people
+`results/vps-capacity.20260930T054412Z.3592dc63`,
+`results/vps-capacity.20260930T054805Z.393eb5a4` and
+`results/vps-capacity.20260930T055139Z.7123638d`; timeout drill
+`results/vps-capacity.20260930T055559Z.f4edda31`; recovery check
+`results/vps-capacity.20260930T055844Z.79c48f0a`; final preflight
+`results/bootstrap-ovh-final.20260930T055940Z`. Each completed capacity
+measurement directory contains its controller report and the collected
+calibration, generator summary and cleanup evidence under `remote/`;
+the interrupted timeout run retains its
+available logs and failure/cleanup outcome. These generated artifacts remain
+untracked.
+
 ## Keyframe storms in a 545-viewer webinar — 2026-09-26
 
 Why the largest webinar lost a few viewers' video (the Mac calibration below
