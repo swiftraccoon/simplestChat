@@ -27,20 +27,30 @@ host; `RTC_PORT_END` in the rendered `app.env`) through your provider firewall.
 HTTP port 3000 stays loopback-only; PostgreSQL uses a private Unix socket, not a
 published TCP port. Do not publish Caddy's administrative port.
 
-Sizing follows the host's facts: the app gets all but one vCPU, one media worker
-per app CPU, and the memory beyond a quarter (at least 1 GiB) kept for
-PostgreSQL, Caddy, TURN and the system; `MAX_CONNECTIONS` counts 175 webinar
-viewers per worker (the lightest participant, as measured on the 4-vCPU
-reference VPS) and `MAX_ROOMS` matches it. `group_vars/benchmark_hosts.yml`
-holds the expressions; set any of `scpub_app_cpus`, `scpub_media_workers`,
+Sizing follows the host's facts: the app gets all but one vCPU, up to 64 media
+workers, and the memory beyond a quarter (at least 1 GiB) kept for PostgreSQL,
+Caddy, TURN and the system. `MAX_CONNECTIONS` starts from reference workload
+estimates, including 175 webinar viewers per worker, then accounts for the
+application memory budget and advertised network port. `MAX_ROOMS` follows the
+connection limit, with a minimum of 64; room membership is capped at 10,000.
+The Ansible filter in `filter_plugins/sizing.py` calls the same model as
+`build/capacity.py suggest`. These are planning estimates from reference
+measurements, not measured capacity for your host or a guarantee that runtime
+CPU admission guards prevent memory or network exhaustion.
+
+`group_vars/benchmark_hosts.yml` holds the defaults; set any of `scpub_app_cpus`, `scpub_media_workers`,
 `scpub_app_memory_mib`, `scpub_max_connections`, `scpub_max_rooms`,
 `scpub_max_participants_per_room` or `scpub_max_broadcasters_per_room` in the
 inventory to override one (for example `scpub_media_workers: 2` behind a
 firewall you cannot change that opens only UDP 40000–40001). Compose publishes
 the range itself; a host needs no firewall rule of its own for it.
-`build/capacity.py suggest --vcpus N --memory-gib M`
-prints the same numbers with what they carry, and the server logs its sizing
-at startup.
+`build/capacity.py suggest --vcpus N --memory-gib M --port-mbps P`
+previews the defaults for the same host facts and port, and the server logs its
+sizing at startup. Explicit inventory overrides remain operator policy. A
+128-vCPU, 256-GiB host with a 40-Gbit/s port, for example, still receives at most
+64 media workers and a 10,000-member room limit; adding CPUs does not remove
+those implementation limits. Measure the intended workload before increasing
+admission limits.
 
 The reserve itself is a setting (`scpub_reserved_cpus` 1, a
 `scpub_reserved_memory_share` of 0.25 with at least

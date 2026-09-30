@@ -53,14 +53,17 @@ scpub_reserved_memory_min_mib: 1024
 scpub_host_memory_mib: "{{ ansible_memtotal_mb | default(2048) | int }}"
 scpub_reserved_memory_mib: "{{ [scpub_reserved_memory_min_mib | int, ((scpub_host_memory_mib | int) * (scpub_reserved_memory_share | float)) | int] | max }}"
 scpub_app_cpus: "{{ [1, (ansible_processor_vcpus | default(2) | int) - (scpub_reserved_cpus | int)] | max }}"
-scpub_media_workers: "{{ scpub_app_cpus | int }}"
+scpub_media_workers: "{{ [64, [1, scpub_app_cpus | int] | max] | min }}"
 scpub_app_memory_mib: "{{ [512, (scpub_host_memory_mib | int) - (scpub_reserved_memory_mib | int)] | max }}"
 scpub_webinar_viewers_per_worker: 175
-scpub_max_connections: "{{ (scpub_media_workers | int) * (scpub_webinar_viewers_per_worker | int) }}"
+scpub_capacity_plan: >-
+  {{ (scpub_media_workers | int) | simplestchat_capacity(
+    scpub_app_memory_mib | int, scpub_port_mbps | float, scpub_webinar_viewers_per_worker | int) }}
+scpub_max_connections: "{{ scpub_capacity_plan.connections }}"
 scpub_max_rooms: "{{ [64, scpub_max_connections | int] | max }}"
 # A room's viewers spread over every worker, so one webinar may fill the host;
 # the broadcaster ceiling keeps the all-publishing grid within the per-viewer cap.
-scpub_max_participants_per_room: "{{ scpub_max_connections }}"
+scpub_max_participants_per_room: "{{ scpub_capacity_plan.participants }}"
 scpub_max_broadcasters_per_room: 30
 # Policy, not capacity: accounts and persisted rooms the site admits.
 scpub_max_users: 100

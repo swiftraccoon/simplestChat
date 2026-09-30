@@ -12,7 +12,12 @@ from typing import cast
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-for directory in ("build", "ops/ansible/files", "ops/ansible/callback_plugins"):
+for directory in (
+    "build",
+    "ops/ansible/files",
+    "ops/ansible/callback_plugins",
+    "ops/ansible/filter_plugins",
+):
     sys.path.insert(0, str(ROOT / directory))
 
 # isort: split

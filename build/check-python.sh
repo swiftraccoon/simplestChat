@@ -21,7 +21,7 @@ sources=()
 while IFS= read -r -d '' source; do
   case "$source" in
     vendor/*|reference/*) continue ;; # Third-party source has its own upstream policy.
-    build/*.py|ops/ansible/files/*.py|ops/ansible/callback_plugins/*.py|ops/ansible/tests/*.py|typings/*.pyi)
+    build/*.py|ops/ansible/files/*.py|ops/ansible/callback_plugins/*.py|ops/ansible/filter_plugins/*.py|ops/ansible/tests/*.py|typings/*.pyi)
       sources+=("$source") ;;
     *) printf 'Python source outside the checked roots: %s\n' "$source" >&2; exit 1 ;;
   esac

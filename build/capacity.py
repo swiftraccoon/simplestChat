@@ -805,6 +805,8 @@ PORT_HEADROOM: Final = 0.8
 DEFAULT_WORKER_THRESHOLD: Final = 0.7
 # The most media workers the server accepts (`MAX_MEDIA_WORKERS`).
 MAX_MEDIA_WORKERS: Final = 64
+# Room admission uses this same upper bound in the Rust server.
+MAX_ROOM_PARTICIPANTS: Final = 10000
 # A limit allows twice the memory a measured peak needed.
 MEMORY_HEADROOM: Final = 2.0
 # The host keeps a quarter of its memory, at least 1 GiB, for the database,
@@ -1046,6 +1048,11 @@ def suggest_for(
     viewers, viewers_limited_by = 0, "cpu"
     if webinar is not None and webinar.ceiling:
         viewers = math.floor(webinar.ceiling / max(1, webinar.workers) * deployment.workers)
+        if webinar.memory_peak_bytes:
+            per_viewer_bytes = webinar.memory_peak_bytes / webinar.ceiling * MEMORY_HEADROOM
+            memory_bound = math.floor(deployment.memory_mib * MIB / per_viewer_bytes)
+            if memory_bound < viewers:
+                viewers, viewers_limited_by = memory_bound, "memory"
         per_viewer_mbps = webinar.egress_mbps / webinar.ceiling
         if host.port_mbps > 0 and per_viewer_mbps > 0:
             network_bound = int(host.port_mbps * PORT_HEADROOM / per_viewer_mbps)
@@ -1069,7 +1076,7 @@ def suggest_for(
         f"SIMPLESTCHAT_MEMORY_LIMIT={deployment.memory_mib}m",
         f"MAX_CONNECTIONS={max_connections}",
         f"MAX_ROOMS={max(64, max_connections)}",
-        f"MAX_PARTICIPANTS_PER_ROOM={max(2, viewers)}",
+        f"MAX_PARTICIPANTS_PER_ROOM={max(2, min(MAX_ROOM_PARTICIPANTS, viewers))}",
         "MAX_BROADCASTERS_PER_ROOM=30",
         f"RTC_PORT_END={40000 + deployment.workers - 1}",
     ]
@@ -1083,6 +1090,53 @@ def suggest_for(
         max_connections=max_connections,
         settings=settings,
     )
+
+
+def managed_limits(
+    workers: int,
+    memory_mib: int,
+    port_mbps: float,
+    viewers_per_worker: int = 175,
+) -> dict[str, int]:
+    """Apply the adviser's model to managed deployment's explicit resource budgets.
+
+    Ansible calls this function through its local filter plugin. A calibrated
+    per-worker viewer override changes CPU capacity while preserving reference
+    per-viewer memory and traffic costs. Inventory limits remain explicit policy
+    overrides; these defaults cannot promise a particular production capacity.
+    """
+    if not 1 <= workers <= MAX_MEDIA_WORKERS:
+        message = "media workers must be between 1 and 64"
+        raise CapacityError(message)
+    if memory_mib < MINIMUM_APP_MEMORY_MIB:
+        message = "app memory must be at least 512 MiB"
+        raise CapacityError(message)
+    if not math.isfinite(port_mbps) or port_mbps <= 0:
+        message = "port speed must be a finite positive Mbit/s value"
+        raise CapacityError(message)
+    if not 1 <= viewers_per_worker <= MAX_ROOM_PARTICIPANTS:
+        message = "viewers per worker must be between 1 and 10000"
+        raise CapacityError(message)
+    ceilings = dict(REFERENCE_CEILINGS)
+    webinar = ceilings["webinar"]
+    share = viewers_per_worker / 175
+    ceilings["webinar"] = replace(
+        webinar,
+        ceiling=viewers_per_worker,
+        memory_peak_bytes=math.ceil(webinar.memory_peak_bytes * share),
+        egress_mbps=webinar.egress_mbps * share,
+    )
+    suggestion = suggest_for(
+        Host(workers + 1, memory_mib, port_mbps),
+        ceilings,
+        app_cpus=workers,
+        app_memory_mib=memory_mib,
+    )
+    return {
+        "connections": suggestion.max_connections,
+        "rooms": max(64, suggestion.max_connections),
+        "participants": max(2, min(MAX_ROOM_PARTICIPANTS, suggestion.webinar_viewers)),
+    }
 
 
 def suggestion_lines(
@@ -1121,7 +1175,8 @@ def suggestion_lines(
         + " webinar instead.",
         "MAX_CONNECTIONS counts the lightest participants; heavier shapes meet the per-worker CPU"
         + " guard (0.7 cores) first. SIMPLESTCHAT_MEMORY_LIMIT is the app's share of the host, a"
-        + " ceiling against a runaway process: the guards refuse joins long before it fills.",
+        + " process ceiling, not a memory admission guard; monitor RSS and measure the intended"
+        + " workload before raising these estimates.",
         f"Open UDP 40000-{40000 + deployment.workers - 1} at the firewall: one port per worker.",
         "Egress is the next wall after CPU: check the provider's quota and price against the"
         + f" Mbit/s above (a full month of meetings at that rate is {monthly_tb:.1f} TB).",
@@ -1188,9 +1243,8 @@ def recommendations(
     lines = [f"SIMPLESTCHAT_CPUS={deployment.app_cpus:g}", f"MEDIA_WORKERS={deployment.workers}"]
     room = ceilings.get("large-meeting")
     if room is not None and room.ceiling:
-        lines.append(
-            f"MAX_PARTICIPANTS_PER_ROOM={max(2, math.floor(room.ceiling * ROOM_LIMIT_SHARE))}"
-        )
+        room_limit = max(2, min(MAX_ROOM_PARTICIPANTS, math.floor(room.ceiling * ROOM_LIMIT_SHARE)))
+        lines.append(f"MAX_PARTICIPANTS_PER_ROOM={room_limit}")
     if projection.memory_limit_mib:
         lines.append(f"SIMPLESTCHAT_MEMORY_LIMIT={projection.memory_limit_mib}m")
     if deployment.worker_threshold != DEFAULT_WORKER_THRESHOLD:

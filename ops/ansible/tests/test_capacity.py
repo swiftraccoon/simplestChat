@@ -630,6 +630,22 @@ class SearchTests(unittest.TestCase):
         self.assertEqual((pinned.deployment.workers, pinned.deployment.memory_mib), (2, 2048))
         self.assertEqual(pinned.webinar_viewers, 350)
 
+    def test_webinars_respect_memory_and_generated_limits_are_accepted(self) -> None:
+        """CPU-rich hosts still have finite memory and the server's room/worker bounds."""
+        small = capacity.suggest_for(capacity.Host(8, 2048), capacity.REFERENCE_CEILINGS)
+        self.assertEqual((small.webinar_viewers, small.webinar_limited_by), (400, "memory"))
+        large = capacity.suggest_for(capacity.Host(128, 262144, 40000), capacity.REFERENCE_CEILINGS)
+        self.assertEqual(large.deployment.workers, 64)
+        self.assertEqual(large.webinar_viewers, 11200)
+        self.assertIn("MAX_PARTICIPANTS_PER_ROOM=10000", large.settings)
+        self.assertIn("MAX_CONNECTIONS=11200", large.settings)
+        for workers, memory, port in [(65, 4096, 1000), (1, 1, 1000), (1, 4096, 0)]:
+            with (
+                self.subTest(workers=workers, memory=memory, port=port),
+                self.assertRaises(capacity.CapacityError),
+            ):
+                _ = capacity.managed_limits(workers, memory, port)
+
     def test_a_calibration_report_supplies_the_ceilings(self) -> None:
         """Ceilings read back from a report with camelCase keys, missing workloads left out."""
         report = {

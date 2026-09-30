@@ -3,13 +3,20 @@
 import re
 import unittest
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from jinja2 import Environment, StrictUndefined
+from jinja2.nativetypes import NativeEnvironment
 from test_support import array, at, obj, string, yaml_value
 
 # isort: split
+import capacity
 from release_json import JsonObject, JsonValue
 from release_public import IDENTITY_KEYS
+from sizing import FilterModule
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
 
 ROOT = Path(__file__).resolve().parents[1]
 VALUES: JsonObject = {
@@ -90,7 +97,9 @@ def environment(name: str, **overrides: JsonValue) -> dict[str, str]:
 def derive_group_vars(facts: JsonObject, overrides: JsonObject) -> dict[str, str]:
     """Render every templated sizing variable of group_vars from the given facts, in order."""
     group_vars = obj(yaml_value((ROOT / "group_vars/benchmark_hosts.yml").read_text()))
-    jinja = Environment(undefined=StrictUndefined, autoescape=False)  # noqa: S701 - config, not HTML.
+    jinja = NativeEnvironment(undefined=StrictUndefined, autoescape=False)
+    # Jinja types only its built-in filters, although this is its public extension API.
+    cast("MutableMapping[str, object]", jinja.filters).update(FilterModule.filters())
     derived = [
         name
         for name, source in group_vars.items()
@@ -103,7 +112,9 @@ def derive_group_vars(facts: JsonObject, overrides: JsonObject) -> dict[str, str
     for name in derived:
         source = overrides.get(name, group_vars[name])
         values[name] = (
-            jinja.from_string(source).render(values) if isinstance(source, str) else source
+            cast("object", jinja.from_string(source).render(values))
+            if isinstance(source, str) and source.startswith("{{")
+            else source
         )
     return {name: str(values[name]) for name in derived}
 
@@ -312,11 +323,11 @@ class PublicTemplateTests(unittest.TestCase):
         )
         self.assertEqual((large["scpub_app_cpus"], large["scpub_media_workers"]), ("15", "15"))
         self.assertEqual(int(large["scpub_app_memory_mib"]), 65536 - 16384)
-        self.assertEqual(large["scpub_max_connections"], "2625")
+        self.assertEqual(large["scpub_max_connections"], "800")
         self.assertEqual(
             (large["scpub_postgres_memory_mib"], large["scpub_caddy_memory_mib"]), ("4096", "2048")
         )
-        self.assertEqual(large["scpub_turn_relay_port_max"], "54409")
+        self.assertEqual(large["scpub_turn_relay_port_max"], "50759")
         small = derive_group_vars(
             {"ansible_processor_vcpus": 1, "ansible_memtotal_mb": 1024, **FOUR_ONLY}, {}
         )
@@ -332,12 +343,43 @@ class PublicTemplateTests(unittest.TestCase):
             {"scpub_media_workers": 2, "scpub_reserved_cpus": 2, "scpub_port_mbps": 100},
         )
         self.assertEqual((pinned["scpub_app_cpus"], pinned["scpub_media_workers"]), ("2", "2"))
-        self.assertEqual(pinned["scpub_max_connections"], "350")
+        self.assertEqual(pinned["scpub_max_connections"], "80")
         self.assertEqual((pinned["scpub_postgres_cpus"], pinned["scpub_caddy_cpus"]), ("2", "1.0"))
         self.assertEqual(pinned["scpub_turn_bps_capacity"], "6250000")
         rendered = environment("public-app.env.j2", scpub_media_workers=2)
         self.assertEqual(rendered["RTC_PORT_END"], "40001")
         self.assertEqual(rendered["MEDIA_WORKERS"], "2")
+
+    def test_managed_and_adviser_limits_agree_across_host_shapes(self) -> None:
+        """Both setup paths obey memory, bandwidth and runtime limits using one model."""
+        for cpus, memory, port in [
+            (1, 1024, 1000),
+            (8, 2048, 1000),
+            (8, 16384, 1000),
+            (64, 131072, 1000),
+            (128, 262144, 40000),
+            (16, 65536, 100),
+        ]:
+            with self.subTest(cpus=cpus, memory=memory, port=port):
+                managed = derive_group_vars(
+                    {"ansible_processor_vcpus": cpus, "ansible_memtotal_mb": memory, **FOUR_ONLY},
+                    {"scpub_port_mbps": port},
+                )
+                suggested = capacity.suggest_for(
+                    capacity.Host(cpus, memory, port), capacity.REFERENCE_CEILINGS
+                )
+                settings = dict(line.split("=", 1) for line in suggested.settings)
+                for managed_key, runtime_key in [
+                    ("scpub_media_workers", "MEDIA_WORKERS"),
+                    ("scpub_max_connections", "MAX_CONNECTIONS"),
+                    ("scpub_max_participants_per_room", "MAX_PARTICIPANTS_PER_ROOM"),
+                ]:
+                    self.assertEqual(managed[managed_key], settings[runtime_key])
+                self.assertLessEqual(int(settings["MEDIA_WORKERS"]), 64)
+                self.assertLessEqual(int(settings["MAX_PARTICIPANTS_PER_ROOM"]), 10000)
+                # coturn accepts bytes/second; its aggregate cap is half the sold port.
+                self.assertEqual(int(managed["scpub_turn_bps_capacity"]) * 8, port * 500000)
+                self.assertEqual(int(managed["scpub_turn_max_bps"]) * 8, 4000000)
 
     def test_announced_addresses_follow_the_default_routes(self) -> None:
         """A dual-stack host announces both families, a single-stack host its one; overrides win."""
