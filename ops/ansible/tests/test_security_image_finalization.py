@@ -15,6 +15,7 @@ import release_build
 import security_image as image
 import security_image_policy as image_policy
 from release_json import decode_json, object_value
+from test_security_image_advisories import empty_grype, openssl
 
 _ = ROOT
 IMAGE = "sha256:" + "a" * 64
@@ -63,6 +64,33 @@ class ImageFinalizationTests(unittest.TestCase):
             self.assertNotIn("error", outcome)
             for name in ("secretPathMap", "databaseEvidence", "sbom", "native", "elf"):
                 self.assertEqual(outcome[name + "Sha256"], "e" * 64)
+
+    def test_known_advisory_blocks_final_outcome_and_preserves_other_evidence(self) -> None:
+        """An ingestion gap still fails the image while retaining completed scanner evidence."""
+        real_verdict = image_policy.vulnerability_verdict
+        with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
+            output = Path(temporary).resolve() / "out"
+            passing_scans(stack, output)
+            _ = stack.enter_context(patch.object(image, "digest", return_value="e" * 64))
+            _ = stack.enter_context(
+                patch.object(
+                    image_policy,
+                    "vulnerability_verdict",
+                    return_value=real_verdict(empty_grype(), [], [openssl()]),
+                )
+            )
+            self.assertFalse(image.execute(image.Options(image_id=IMAGE, output=output)))
+            outcome = object_value(decode_json((output / "outcome.json").read_text()))
+            self.assertFalse(outcome["passed"])
+            self.assertNotIn("error", outcome)
+            self.assertEqual(outcome["sbomSha256"], "e" * 64)
+            checks = object_value(decode_json((output / "checks.json").read_text()))
+            self.assertTrue(object_value(checks["licenses"])["passed"])
+            self.assertTrue(object_value(checks["secrets"])["passed"])
+            vulnerabilities = object_value(checks["vulnerabilities"])
+            self.assertFalse(vulnerabilities["passed"])
+            self.assertEqual(vulnerabilities["matches"], 0)
+            self.assertFalse(object_value(vulnerabilities["reviewedAdvisories"])["passed"])
 
     def test_final_evidence_failure_keeps_successful_checks_but_fails_outcome(self) -> None:
         """A missing SPDX report after policy evaluation must fail both receipt and exit."""

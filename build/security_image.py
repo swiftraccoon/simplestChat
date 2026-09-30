@@ -782,7 +782,7 @@ def execute(args: Options) -> bool:
         policy.vulnerability_database_binding(grype, db_status)
         outcome["runtimeRpms"] = policy.runtime_rpm_bindings(packages, elf)
         checks: JsonObject = {
-            "vulnerabilities": policy.vulnerability_verdict(grype, exceptions),
+            "vulnerabilities": policy.vulnerability_verdict(grype, exceptions, packages),
             "licenses": policy.license_verdict(packages, image_policy, exceptions),
             "secrets": policy.secret_verdict(
                 policy.report(secret_dir / "gitleaks.json"),

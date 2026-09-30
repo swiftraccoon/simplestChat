@@ -366,6 +366,28 @@ hashes. This release-freshness check complements advisory matching; it is not a
 vulnerability-free or application-reachability verdict. Empty advisory API
 responses likewise do not establish indexing or complete native coverage.
 
+### Reviewed OpenSSL RPM safeguard
+
+The image gate additionally applies
+`security/advisories/openssl-cve-2026-84782.json` to every observed Fedora OpenSSL
+source-RPM subpackage. The reviewed policy records the official CNA and advisory
+URLs and SHA-256 hashes. The current scope is Fedora 44's OpenSSL 3.5 series:
+3.5.0 through 3.5.8 are affected; 3.5.9 and later patches pass this particular
+check. Different series require a new review. Package name, upstream version,
+release, epoch, architecture, source RPM and qualified PURL must agree; missing
+or inconsistent identities fail. A higher RPM release suffix does not prove a
+distribution backport and cannot bypass the affected upstream version.
+
+`checks.json` retains these results under `vulnerabilities.reviewedAdvisories`,
+including the policy digest, source evidence, assessed package identities and
+blocked findings. Grype's match count and findings remain unchanged; independent
+advisory findings carry their own source marker and are included in the overall
+blocked list. Existing Grype exceptions cannot waive this safeguard. All other
+image checks and evidence collection still complete for an affected package.
+This is a known-advisory check, not a claim of exhaustive native coverage or
+application reachability, and it does not assert that Fedora has published a
+fixed RPM. A zero-match scanner result cannot override it.
+
 ## Evidence handling
 
 A passing `outcome.json` binds the archive, selected image, revision, platform,

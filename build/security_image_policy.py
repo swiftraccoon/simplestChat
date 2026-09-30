@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
+import security_image_advisories
 import security_tools
 from security_license_identity import raw_license_identity
 from security_policy import permitted
@@ -225,8 +226,10 @@ def inventory(value: JsonObject, policy: JsonObject) -> list[JsonObject]:
     return packages
 
 
-def vulnerability_verdict(value: JsonObject, exceptions: Sequence[ExceptionRecord]) -> JsonObject:
-    """Include unfixed high/critical matches and fail unknown severity or ignored results."""
+def vulnerability_verdict(
+    value: JsonObject, exceptions: Sequence[ExceptionRecord], packages: Sequence[JsonObject]
+) -> JsonObject:
+    """Retain scanner matches and independently block reviewed known-advisory gaps."""
     descriptor = object_value(value["descriptor"])
     require(
         descriptor.get("name") == "grype" and descriptor.get("version") == "0.119.0",
@@ -259,7 +262,15 @@ def vulnerability_verdict(value: JsonObject, exceptions: Sequence[ExceptionRecor
             "fixState": object_value(vulnerability["fix"]).get("state"),
         }
         (waived if permitted(exceptions, "grype", fingerprint, scope) else blocked).append(finding)
-    return {"passed": not blocked, "matches": len(matches), "blocked": blocked, "waived": waived}
+    advisories = security_image_advisories.verdict(packages)
+    blocked.extend(array_value(advisories["blocked"]))
+    return {
+        "passed": not blocked,
+        "matches": len(matches),
+        "blocked": blocked,
+        "waived": waived,
+        "reviewedAdvisories": advisories,
+    }
 
 
 def secret_verdict(

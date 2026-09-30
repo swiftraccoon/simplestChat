@@ -100,8 +100,8 @@ class ImagePolicyTests(unittest.TestCase):
     def test_unfixed_high_critical_unknown_and_scoped_exceptions(self) -> None:
         """Never use only-fixed or ignore filters to hide unresolved high severity."""
         for severity in ("High", "Critical", "Unknown"):
-            self.assertFalse(image.vulnerability_verdict(vulnerability(severity), [])["passed"])
-        self.assertTrue(image.vulnerability_verdict(vulnerability("Low"), [])["passed"])
+            self.assertFalse(image.vulnerability_verdict(vulnerability(severity), [], [])["passed"])
+        self.assertTrue(image.vulnerability_verdict(vulnerability("Low"), [], [])["passed"])
         waiver = ExceptionRecord(
             "grype",
             "CVE-fixture",
@@ -112,13 +112,13 @@ class ImagePolicyTests(unittest.TestCase):
             NOW.date(),
             "https://example.org/review/1",
         )
-        self.assertTrue(image.vulnerability_verdict(vulnerability(), [waiver])["passed"])
+        self.assertTrue(image.vulnerability_verdict(vulnerability(), [waiver], [])["passed"])
         changed = copy.deepcopy(vulnerability())
         changed["ignoredMatches"] = [{}]
         with self.assertRaises(ToolError):
-            _ = image.vulnerability_verdict(changed, [waiver])
+            _ = image.vulnerability_verdict(changed, [waiver], [])
         with self.assertRaises(ToolError):
-            _ = image.vulnerability_verdict(vulnerability("made-up"), [])
+            _ = image.vulnerability_verdict(vulnerability("made-up"), [], [])
 
     def test_spdx_boolean_grammar_precedence_and_invalid_tokens(self) -> None:
         """Choose an allowed OR branch while requiring every AND term and exact exceptions."""
