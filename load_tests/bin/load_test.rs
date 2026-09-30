@@ -1486,6 +1486,7 @@ fn write_results_sync(
     }
     let attempt_coverage =
         gate_attempt_coverage(&all_metrics, config.churner_count()?, &mut failures);
+    let continuous_audio = gate_continuous_audio(config, &all_metrics, &mut failures);
     if let Some(chat) = &chat {
         failures.extend(chat.failure_reasons.iter().cloned());
     }
@@ -1498,6 +1499,9 @@ fn write_results_sync(
     });
     report["attemptCoverage"] = serde_json::to_value(attempt_coverage)?;
     report["subscriptionPlan"] = serde_json::to_value(config.planned_subscriptions()?)?;
+    if let Some(continuous_audio) = continuous_audio {
+        report["continuousAudio"] = continuous_audio;
+    }
     if let Some(chat) = chat {
         report["chat"] = serde_json::to_value(chat)?;
     }
@@ -1520,6 +1524,69 @@ fn write_results_sync(
         config.output_dir.display()
     );
     Ok(passed)
+}
+
+/// Continuous multi-speaker audio has a known packet cadence. Retain historical
+/// one-speaker/video verdicts, but never describe a sparse trickle as full audio.
+fn gate_continuous_audio(
+    config: &TestConfig,
+    clients: &[ClientMetrics],
+    failures: &mut Vec<String>,
+) -> Option<serde_json::Value> {
+    let profile = config.profile.browser()?;
+    let publishers = ((config.num_clients as f64 * config.publish_ratio).ceil() as usize)
+        .max(1)
+        .min(config.num_clients);
+    if !config.media_config.audio_enabled
+        || config.media_config.video_enabled
+        || config.churn_rate != 0.0
+        || profile.speakers_per_room <= 1
+        || profile.speakers_per_room < publishers.div_ceil(config.num_rooms.max(1))
+    {
+        return None;
+    }
+    let mut evidence = Vec::new();
+    let mut passed = true;
+    for client in clients {
+        for consumer in &client.consumer_delivery {
+            if consumer.is_audio != Some(true) {
+                continue;
+            }
+            let expected = consumer.eligible_seconds as u64
+                * u64::from(browser_profile::AUDIO_FRAMES_PER_SECOND);
+            let covered = expected > 0
+                && consumer.eligible_packets.is_some_and(|received| {
+                    received.saturating_mul(100) >= expected.saturating_mul(95)
+                });
+            if !covered {
+                passed = false;
+                failures.push(format!(
+                    "{} audio consumer {}: expected at least 95% of {expected} packets in complete eligible seconds, observed {:?}",
+                    client.client_id, consumer.consumer_id, consumer.eligible_packets,
+                ));
+            }
+            evidence.push(serde_json::json!({
+                "clientId": client.client_id,
+                "consumerId": consumer.consumer_id,
+                "producerId": consumer.producer_id,
+                "eligibleSeconds": consumer.eligible_seconds,
+                "expectedPackets": expected,
+                "receivedPackets": consumer.eligible_packets,
+                "ratio": consumer.eligible_packets.filter(|_| expected > 0).map(|received| received as f64 / expected as f64),
+                "passed": covered,
+            }));
+        }
+    }
+    if evidence.is_empty() {
+        passed = false;
+        failures.push("Continuous audio produced no per-consumer delivery evidence".into());
+    }
+    Some(serde_json::json!({
+        "passed": passed,
+        "framesPerSecond": browser_profile::AUDIO_FRAMES_PER_SECOND,
+        "minimumRatio": 0.95,
+        "consumers": evidence,
+    }))
 }
 
 fn generator_provenance(config: &TestConfig) -> Result<serde_json::Value> {
@@ -3747,9 +3814,76 @@ fn observe_chat(
 }
 
 #[cfg(test)]
-mod chat_signaling_tests {
+mod chat_and_continuous_audio_tests {
     use super::*;
     use simplestChat::signaling::protocol::{ChatEntry, ChatStyle};
+
+    fn audio_config() -> TestConfig {
+        let mut browser = BrowserOptions::default();
+        browser.set("--profile", "browser").unwrap();
+        browser.set("--speakers", "2").unwrap();
+        TestConfig {
+            num_clients: 2,
+            profile: browser.profile(false).unwrap(),
+            media_config: MediaConfig::audio_only(),
+            ..Default::default()
+        }
+    }
+
+    fn audio_evidence(received: Option<u64>) -> ClientMetrics {
+        let mut client = MetricsCollector::new("client-0".into()).generate_report();
+        client.consumer_delivery.push(
+            serde_json::from_value(serde_json::json!({
+                "consumerId": "audio", "producerId": "peer-audio", "ssrc": 1,
+                "isAudio": true, "packetsBySecond": [1,1,1,1,1,1,1,1,1,1],
+                "eligibleSeconds": 10, "eligiblePackets": received,
+                "secondsWithPackets": 10, "longestGapSeconds": 0,
+                "passed": true, "skippedShortLived": false,
+            }))
+            .unwrap(),
+        );
+        client
+    }
+
+    #[test]
+    fn continuous_audio_needs_95_percent_not_only_nonempty_seconds() {
+        let config = audio_config();
+        for (received, expected_pass) in [
+            (Some(500), true),
+            (Some(475), true),
+            (Some(474), false),
+            (Some(10), false),
+            (None, false),
+        ] {
+            let mut failures = Vec::new();
+            let report =
+                gate_continuous_audio(&config, &[audio_evidence(received)], &mut failures).unwrap();
+            assert_eq!(report["passed"], expected_pass);
+            assert_eq!(failures.is_empty(), expected_pass);
+            assert_eq!(report["consumers"][0]["expectedPackets"], 500);
+        }
+        let mut failures = Vec::new();
+        assert_eq!(
+            gate_continuous_audio(&config, &[], &mut failures).unwrap()["passed"],
+            false
+        );
+    }
+
+    #[test]
+    fn historical_single_speaker_and_video_profiles_keep_their_verdicts() {
+        let mut config = audio_config();
+        if let Profile::Browser(profile) = &mut config.profile {
+            profile.speakers_per_room = 1;
+        }
+        assert!(
+            gate_continuous_audio(&config, &[audio_evidence(Some(10))], &mut Vec::new()).is_none()
+        );
+        let mut config = audio_config();
+        config.media_config.video_enabled = true;
+        assert!(
+            gate_continuous_audio(&config, &[audio_evidence(Some(10))], &mut Vec::new()).is_none()
+        );
+    }
 
     #[tokio::test]
     async fn paced_chat_uses_the_real_signaling_writer_and_ack_observer() -> Result<()> {

@@ -138,6 +138,9 @@ pub struct ConsumerDelivery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub first_packet_ms: Option<u64>,
     pub eligible_seconds: usize,
+    /// Packets in complete eligible seconds only; old reports omit this evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eligible_packets: Option<u64>,
     pub seconds_with_packets: usize,
     pub longest_gap_seconds: usize,
     pub passed: bool,
@@ -553,6 +556,7 @@ impl Measurements {
                         },
                     ),
                     eligible_seconds: eligible.len(),
+                    eligible_packets: Some(eligible.iter().sum()),
                     seconds_with_packets,
                     longest_gap_seconds,
                     passed,
@@ -908,6 +912,26 @@ mod planned_subscription_tests {
         // Deliberately register in reverse canonical report order.
         edge(observations, "video", "video-peer", false);
         edge(observations, "audio", "audio-peer", true);
+    }
+
+    #[test]
+    fn eligible_packet_counts_exclude_partial_lifetime_boundaries() {
+        let (observations, start) = fixture();
+        edge(&observations, "audio", "audio-peer", true);
+        {
+            let mut consumers = observations.consumers.lock().unwrap();
+            let consumer = &mut consumers[0];
+            consumer.full_window = false;
+            consumer.created = start - Duration::from_millis(2500);
+            consumer.closed = Some(start + Duration::from_millis(18_800));
+            consumer.packets_by_second.fill(50);
+            for index in [0, 18, 19] {
+                consumer.packets_by_second[index] = 9_999;
+            }
+        }
+        let report = observations.delivery_report();
+        assert_eq!(report[0].eligible_seconds, 17);
+        assert_eq!(report[0].eligible_packets, Some(850));
     }
 
     fn coverage(observations: &Measurements) -> AttemptCoverage {

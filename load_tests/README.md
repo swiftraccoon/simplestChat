@@ -132,6 +132,16 @@ inventory combinations fail before connections open. These checks exercise
 guest signaling and synthetic RTP, not account/database capacity, rendered
 chat responsiveness or decoded speech quality.
 
+Browser-profile audio-only runs with multiple speakers covering every publisher
+also require each consumer to receive at least 95% of the expected 50 packets/s
+over its complete eligible seconds. Partial setup/departure seconds are excluded
+using the existing stable-delivery interval. `continuousAudio` records the
+expected and received counts, ratio and verdict for every consumer; missing
+evidence fails. This check supplements subscription ownership, sustained-media
+and publisher offered-load checks. Historical single-speaker and video-profile
+verdicts are unchanged; generator throttling and scheduling delay still require
+separate inspection before interpreting a failure as server capacity.
+
 `--profile browser` makes each client cost the server what the web client
 costs, so capacity figures measured with it hold for real rooms:
 
