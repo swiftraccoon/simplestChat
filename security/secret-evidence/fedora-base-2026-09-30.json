@@ -1,0 +1,520 @@
+{
+  "schemaVersion": 1,
+  "reviewedOn": "2026-09-30",
+  "canonicalRevision": "463303ae4c41842a7f4f53f12d330f11f50bee71",
+  "canonicalImageId": "sha256:af47243c41cb21d6099bbaaee80dd3a5b14b9c9206deee9dd13458a8f4849a08",
+  "baseIndex": "sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80",
+  "baseManifest": "sha256:be9d65e2344d805cc11114319c685ecaa96b6d9b4350a0a6460cdb931babbd19",
+  "baseImageId": "ccb55df1d2413428166d80b08aa37a4bdcb61a63d09fff6f8abc0d561f311053",
+  "baseLayer": "sha256:8fe4b47a217bc002f0c86b6150035f88b3931a8d54b12053ba2b9bca79d762f3",
+  "fileCount": 5,
+  "findingCount": 15,
+  "rawMatchesPublished": false,
+  "projectionSourceSha256": "de5343a3df952911f0ba6a17c445251909629f851014065c261c4e2e33f9975c",
+  "gitleaks": {
+    "version": "8.30.1",
+    "archiveSha256": "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5",
+    "files": {
+      "gitleaks": "ba52fb1bfabbcde42f032afad3d6e0b19dff8ed105229a16e7caa338bbc0e84f"
+    }
+  },
+  "reproductionPlatform": "darwin-arm64",
+  "canonicalScannerPlatform": "linux-amd64",
+  "reproduction": "All original file and projection SHA256/size records match; all15 canonical rule/path/start-line tuples reproduce exactly using the maintained projector and pinned Gitleaks8.30.1. Default detector config and decoding flags are unchanged; local report redaction is disabled only inside this private evidence directory to review the exact matches.",
+  "sources": [
+    {
+      "name": "gnutls-3.8.13.tar.xz",
+      "url": "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-3.8.13.tar.xz",
+      "exit": 0,
+      "sha256": "ffed8ec1bf09c2426d4f14aae377de4753b53e537d685e604e99a8b16ca9c97e",
+      "bytes": 7275324
+    },
+    {
+      "name": "libssh-0.12.2.tar.xz",
+      "url": "https://www.libssh.org/files/0.12/libssh-0.12.2.tar.xz",
+      "exit": 0,
+      "sha256": "49560f677d96e3706a904ac2de1116e25f3680937d51e5c92198fcba4a1c1e9f",
+      "bytes": 759680
+    },
+    {
+      "name": "P_RSA3072SHA384.json",
+      "url": "https://raw.githubusercontent.com/tpm2-software/tpm2-tss/4.1.3/dist/fapi-profiles/P_RSA3072SHA384.json",
+      "exit": 0,
+      "sha256": "7f0a1d5529f987faf93be4baae05bf02f2619dbda4a9499b664c9cef46318e85",
+      "bytes": 3890
+    },
+    {
+      "name": "P_ECCP384SHA384.json",
+      "url": "https://raw.githubusercontent.com/tpm2-software/tpm2-tss/4.1.3/dist/fapi-profiles/P_ECCP384SHA384.json",
+      "exit": 0,
+      "sha256": "b13a1027cd41dc4dcef1b7dc326021421cfd2789a453807e20393374aac0f428",
+      "bytes": 3740
+    },
+    {
+      "name": "file-Magdir-ssh",
+      "url": "https://raw.githubusercontent.com/file/file/FILE5_46/magic/Magdir/ssh",
+      "exit": 0,
+      "sha256": "38e6e7049f18a557950a50167c40a4dff7529bbfdaaa240d612889431cd382fd",
+      "bytes": 3045
+    },
+    {
+      "name": "file-5.46.tar.gz",
+      "url": "https://astron.com/pub/file/file-5.46.tar.gz",
+      "exit": 0,
+      "sha256": "c9cc77c7c560c543135edc555af609d5619dbef011997e988ce40a3d75d86088",
+      "bytes": 1312892
+    }
+  ],
+  "files": [
+    {
+      "path": "000/etc/tpm2-tss/fapi-profiles/P_ECCP384SHA384.json",
+      "projectionBytes": 36618,
+      "projectionFormat": "ascii-printable",
+      "projectionSha256": "fd4821426aadbb79f27573ee89543ee44b3f47377930c5e412bbc2907605e311",
+      "sha256": "b13a1027cd41dc4dcef1b7dc326021421cfd2789a453807e20393374aac0f428",
+      "sourceBytes": 3740,
+      "neutralName": "content-000339",
+      "rpmPurl": "pkg:rpm/fedora/tpm2-tss@4.1.3-9.fc44?arch=x86_64&distro=fedora-44&upstream=tpm2-tss-4.1.3-9.fc44.src.rpm",
+      "disposition": "reviewed-public-data",
+      "findings": [
+        {
+          "fingerprint": "generic-api-key:000/etc/tpm2-tss/fapi-profiles/P_ECCP384SHA384.json:32920:b13a1027cd41dc4dcef1b7dc326021421cfd2789a453807e20393374aac0f428",
+          "line": 32920,
+          "path": "000/etc/tpm2-tss/fapi-profiles/P_ECCP384SHA384.json",
+          "rule": "generic-api-key",
+          "classification": "public-upstream-tpm-policy-digest",
+          "rationale": "The complete profile file exactly matches upstream tpm2-tss 4.1.3. The match is a 48-byte SHA-384 authorization-policy digest in public NV metadata, not a bearer token or secret authorization value.",
+          "sourceMember": "dist/fapi-profiles/P_ECCP384SHA384.json",
+          "sourceSha256": "b13a1027cd41dc4dcef1b7dc326021421cfd2789a453807e20393374aac0f428",
+          "jsonPath": "ek_policy.policy.0.branches.1.policy.0.nvPublic.nvPublic.authPolicy",
+          "matchedHexCharacters": 96
+        }
+      ]
+    },
+    {
+      "path": "000/etc/tpm2-tss/fapi-profiles/P_RSA3072SHA384.json",
+      "projectionBytes": 36768,
+      "projectionFormat": "ascii-printable",
+      "projectionSha256": "d9e5324b47e286846f85af1f12326a25e69c65ae150029933385697e90834bc7",
+      "sha256": "7f0a1d5529f987faf93be4baae05bf02f2619dbda4a9499b664c9cef46318e85",
+      "sourceBytes": 3890,
+      "neutralName": "content-000341",
+      "rpmPurl": "pkg:rpm/fedora/tpm2-tss@4.1.3-9.fc44?arch=x86_64&distro=fedora-44&upstream=tpm2-tss-4.1.3-9.fc44.src.rpm",
+      "disposition": "reviewed-public-data",
+      "findings": [
+        {
+          "fingerprint": "generic-api-key:000/etc/tpm2-tss/fapi-profiles/P_RSA3072SHA384.json:32927:7f0a1d5529f987faf93be4baae05bf02f2619dbda4a9499b664c9cef46318e85",
+          "line": 32927,
+          "path": "000/etc/tpm2-tss/fapi-profiles/P_RSA3072SHA384.json",
+          "rule": "generic-api-key",
+          "classification": "public-upstream-tpm-policy-digest",
+          "rationale": "The complete profile file exactly matches upstream tpm2-tss 4.1.3. The match is a 48-byte SHA-384 authorization-policy digest in public NV metadata, not a bearer token or secret authorization value.",
+          "sourceMember": "dist/fapi-profiles/P_RSA3072SHA384.json",
+          "sourceSha256": "7f0a1d5529f987faf93be4baae05bf02f2619dbda4a9499b664c9cef46318e85",
+          "jsonPath": "ek_policy.policy.0.branches.1.policy.0.nvPublic.nvPublic.authPolicy",
+          "matchedHexCharacters": 96
+        }
+      ]
+    },
+    {
+      "path": "000/usr/lib64/libgnutls.so.30.42.0",
+      "projectionBytes": 2916934,
+      "projectionFormat": "ascii-printable",
+      "projectionSha256": "afe4a83e9d6705c236870e0a5c447ea49bc469ddae503ac874167e10c07e974e",
+      "sha256": "c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+      "sourceBytes": 2884056,
+      "neutralName": "content-000892",
+      "rpmPurl": "pkg:rpm/fedora/gnutls@3.8.13-1.fc44?arch=x86_64&distro=fedora-44&upstream=gnutls-3.8.13-1.fc44.src.rpm",
+      "disposition": "reviewed-public-data",
+      "findings": [
+        {
+          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359612:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "line": 1359612,
+          "path": "000/usr/lib64/libgnutls.so.30.42.0",
+          "rule": "private-key",
+          "classification": "public-upstream-algorithm-self-test-key",
+          "rationale": "Complete PEM material matches a deliberately public constant in the official GnuTLS 3.8.13 algorithm self-test implementation, not an application or deployment credential. The reviewed key is imported only into local self-test signing/encryption checks in this source context.",
+          "sourceMember": "gnutls-3.8.13/lib/crypto-selftests-pk.c",
+          "sourceSha256": "6e596be00754107fd7f7d1f132c2dc8cd0ff12bbdfc6de08c162a1dd5eedc7e8",
+          "constant": "eddsa_ed448_privkey",
+          "fullPemMatch": true,
+          "constantSha256": "19eb40f0c2c341a16b99274151649822a7611744d99cf29ac8e1365d74a0a8bc",
+          "sourceLine": 258,
+          "supportingSourceLines": [
+            274,
+            298,
+            390,
+            416,
+            488,
+            541,
+            576,
+            579,
+            1020,
+            1030
+          ]
+        },
+        {
+          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359693:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "line": 1359693,
+          "path": "000/usr/lib64/libgnutls.so.30.42.0",
+          "rule": "private-key",
+          "classification": "public-upstream-algorithm-self-test-key",
+          "rationale": "Complete PEM material matches a deliberately public constant in the official GnuTLS 3.8.13 algorithm self-test implementation, not an application or deployment credential. The reviewed key is imported only into local self-test signing/encryption checks in this source context.",
+          "sourceMember": "gnutls-3.8.13/lib/crypto-selftests-pk.c",
+          "sourceSha256": "6e596be00754107fd7f7d1f132c2dc8cd0ff12bbdfc6de08c162a1dd5eedc7e8",
+          "constant": "eddsa_ed25519_privkey",
+          "fullPemMatch": true,
+          "constantSha256": "3aed91bdaf682226d080b2d6cd473ec542de17924db839ed58dc0247a1e2b5f8",
+          "sourceLine": 246,
+          "supportingSourceLines": [
+            274,
+            298,
+            390,
+            416,
+            488,
+            541,
+            576,
+            579,
+            1020,
+            1030
+          ]
+        },
+        {
+          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359705:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "line": 1359705,
+          "path": "000/usr/lib64/libgnutls.so.30.42.0",
+          "rule": "private-key",
+          "classification": "public-upstream-algorithm-self-test-key",
+          "rationale": "Complete PEM material matches a deliberately public constant in the official GnuTLS 3.8.13 algorithm self-test implementation, not an application or deployment credential. The reviewed key is imported only into local self-test signing/encryption checks in this source context.",
+          "sourceMember": "gnutls-3.8.13/lib/crypto-selftests-pk.c",
+          "sourceSha256": "6e596be00754107fd7f7d1f132c2dc8cd0ff12bbdfc6de08c162a1dd5eedc7e8",
+          "constant": "gost12_512_privkey",
+          "fullPemMatch": true,
+          "constantSha256": "c72070fc1ffb2df729650b949157c85ec03d8ec9743ba7956c03e21d385bce4e",
+          "sourceLine": 238,
+          "supportingSourceLines": [
+            274,
+            298,
+            390,
+            416,
+            488,
+            541,
+            576,
+            579,
+            1020,
+            1030
+          ]
+        },
+        {
+          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359733:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "line": 1359733,
+          "path": "000/usr/lib64/libgnutls.so.30.42.0",
+          "rule": "private-key",
+          "classification": "public-upstream-algorithm-self-test-key",
+          "rationale": "Complete PEM material matches a deliberately public constant in the official GnuTLS 3.8.13 algorithm self-test implementation, not an application or deployment credential. The reviewed key is imported only into local self-test signing/encryption checks in this source context.",
+          "sourceMember": "gnutls-3.8.13/lib/crypto-selftests-pk.c",
+          "sourceSha256": "6e596be00754107fd7f7d1f132c2dc8cd0ff12bbdfc6de08c162a1dd5eedc7e8",
+          "constant": "gost12_256_privkey",
+          "fullPemMatch": true,
+          "constantSha256": "3de5d1d9ca9af8e24d29bab925c3d500c2cdd11a06c4a2c6a6b336e73bb3ad56",
+          "sourceLine": 231,
+          "supportingSourceLines": [
+            274,
+            298,
+            390,
+            416,
+            488,
+            541,
+            576,
+            579,
+            1020,
+            1030
+          ]
+        },
+        {
+          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359741:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "line": 1359741,
+          "path": "000/usr/lib64/libgnutls.so.30.42.0",
+          "rule": "private-key",
+          "classification": "public-upstream-algorithm-self-test-key",
+          "rationale": "Complete PEM material matches a deliberately public constant in the official GnuTLS 3.8.13 algorithm self-test implementation, not an application or deployment credential. The reviewed key is imported only into local self-test signing/encryption checks in this source context.",
+          "sourceMember": "gnutls-3.8.13/lib/crypto-selftests-pk.c",
+          "sourceSha256": "6e596be00754107fd7f7d1f132c2dc8cd0ff12bbdfc6de08c162a1dd5eedc7e8",
+          "constant": "gost01_privkey",
+          "fullPemMatch": true,
+          "constantSha256": "b8369cc647a1e1e8f8e420b6b8580c36223f89b0f8e70281732d028aebf15fac",
+          "sourceLine": 224,
+          "supportingSourceLines": [
+            274,
+            298,
+            390,
+            416,
+            488,
+            541,
+            576,
+            579,
+            1020,
+            1030
+          ]
+        },
+        {
+          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359862:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "line": 1359862,
+          "path": "000/usr/lib64/libgnutls.so.30.42.0",
+          "rule": "private-key",
+          "classification": "public-upstream-algorithm-self-test-key",
+          "rationale": "Complete PEM material matches a deliberately public constant in the official GnuTLS 3.8.13 algorithm self-test implementation, not an application or deployment credential. The reviewed key is imported only into local self-test signing/encryption checks in this source context.",
+          "sourceMember": "gnutls-3.8.13/lib/crypto-selftests-pk.c",
+          "sourceSha256": "6e596be00754107fd7f7d1f132c2dc8cd0ff12bbdfc6de08c162a1dd5eedc7e8",
+          "constant": "ecdsa_secp521r1_privkey",
+          "fullPemMatch": true,
+          "constantSha256": "f8766749b0c6f9b5661364568226af0ba7ae8d87c0073df24e440de4417521cd",
+          "sourceLine": 203,
+          "supportingSourceLines": [
+            274,
+            298,
+            390,
+            416,
+            488,
+            541,
+            576,
+            579,
+            1020,
+            1030
+          ]
+        },
+        {
+          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359978:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "line": 1359978,
+          "path": "000/usr/lib64/libgnutls.so.30.42.0",
+          "rule": "private-key",
+          "classification": "public-upstream-algorithm-self-test-key",
+          "rationale": "Complete PEM material matches a deliberately public constant in the official GnuTLS 3.8.13 algorithm self-test implementation, not an application or deployment credential. The reviewed key is imported only into local self-test signing/encryption checks in this source context.",
+          "sourceMember": "gnutls-3.8.13/lib/crypto-selftests-pk.c",
+          "sourceSha256": "6e596be00754107fd7f7d1f132c2dc8cd0ff12bbdfc6de08c162a1dd5eedc7e8",
+          "constant": "ecdsa_secp384r1_privkey",
+          "fullPemMatch": true,
+          "constantSha256": "293216817f0d585f0b54f225582f59e7b2e2a795b5f8002e2d71c5e3d49ce9b0",
+          "sourceLine": 185,
+          "supportingSourceLines": [
+            274,
+            298,
+            390,
+            416,
+            488,
+            541,
+            576,
+            579,
+            1020,
+            1030
+          ]
+        },
+        {
+          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1360058:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "line": 1360058,
+          "path": "000/usr/lib64/libgnutls.so.30.42.0",
+          "rule": "private-key",
+          "classification": "public-upstream-algorithm-self-test-key",
+          "rationale": "Complete PEM material matches a deliberately public constant in the official GnuTLS 3.8.13 algorithm self-test implementation, not an application or deployment credential. The reviewed key is imported only into local self-test signing/encryption checks in this source context.",
+          "sourceMember": "gnutls-3.8.13/lib/crypto-selftests-pk.c",
+          "sourceSha256": "6e596be00754107fd7f7d1f132c2dc8cd0ff12bbdfc6de08c162a1dd5eedc7e8",
+          "constant": "ecdsa_secp256r1_privkey",
+          "fullPemMatch": true,
+          "constantSha256": "d653005e4d23cf91e3572fe8148ab6db2e474924d9711838521d3ba352b193f5",
+          "sourceLine": 140,
+          "supportingSourceLines": [
+            274,
+            298,
+            390,
+            416,
+            488,
+            541,
+            576,
+            579,
+            1020,
+            1030
+          ]
+        },
+        {
+          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1360133:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "line": 1360133,
+          "path": "000/usr/lib64/libgnutls.so.30.42.0",
+          "rule": "private-key",
+          "classification": "public-upstream-algorithm-self-test-key",
+          "rationale": "Complete PEM material matches a deliberately public constant in the official GnuTLS 3.8.13 algorithm self-test implementation, not an application or deployment credential. The reviewed key is imported only into local self-test signing/encryption checks in this source context.",
+          "sourceMember": "gnutls-3.8.13/lib/crypto-selftests-pk.c",
+          "sourceSha256": "6e596be00754107fd7f7d1f132c2dc8cd0ff12bbdfc6de08c162a1dd5eedc7e8",
+          "constant": "dsa_2048_privkey",
+          "fullPemMatch": true,
+          "constantSha256": "80ec06e06b06635bcad5c71b0e9e7a3516c02133c682a2369b09599addb8d7f3",
+          "sourceLine": 110,
+          "supportingSourceLines": [
+            274,
+            298,
+            390,
+            416,
+            488,
+            541,
+            576,
+            579,
+            1020,
+            1030
+          ]
+        },
+        {
+          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1360538:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "line": 1360538,
+          "path": "000/usr/lib64/libgnutls.so.30.42.0",
+          "rule": "private-key",
+          "classification": "public-upstream-algorithm-self-test-key",
+          "rationale": "Complete PEM material matches a deliberately public constant in the official GnuTLS 3.8.13 algorithm self-test implementation, not an application or deployment credential. The reviewed key is imported only into local self-test signing/encryption checks in this source context.",
+          "sourceMember": "gnutls-3.8.13/lib/crypto-selftests-pk.c",
+          "sourceSha256": "6e596be00754107fd7f7d1f132c2dc8cd0ff12bbdfc6de08c162a1dd5eedc7e8",
+          "constant": "rsa_2048_privkey",
+          "fullPemMatch": true,
+          "constantSha256": "f4b1de2f94f1df2d588ff6c18290e0f7f5091267b9ef0da8433c622bad3d127a",
+          "sourceLine": 43,
+          "supportingSourceLines": [
+            274,
+            298,
+            390,
+            416,
+            488,
+            541,
+            576,
+            579,
+            1020,
+            1030
+          ]
+        }
+      ]
+    },
+    {
+      "path": "000/usr/lib64/libssh.so.4.12.0",
+      "projectionBytes": 711710,
+      "projectionFormat": "ascii-printable",
+      "projectionSha256": "37af8a0a9298fd5e65aded1a120ce00ee170bf02f235e3d03eec8e017d52d733",
+      "sha256": "a03dafdd2d7ac474c3451644eac5426161b6fc363e583de67c0ac436af0a6341",
+      "sourceBytes": 678832,
+      "neutralName": "content-000973",
+      "rpmPurl": "pkg:rpm/fedora/libssh@0.12.2-1.fc44?arch=x86_64&distro=fedora-44&upstream=libssh-0.12.2-1.fc44.src.rpm",
+      "disposition": "reviewed-public-data",
+      "findings": [
+        {
+          "fingerprint": "private-key:000/usr/lib64/libssh.so.4.12.0:402805:a03dafdd2d7ac474c3451644eac5426161b6fc363e583de67c0ac436af0a6341",
+          "line": 402805,
+          "path": "000/usr/lib64/libssh.so.4.12.0",
+          "rule": "private-key",
+          "classification": "public-upstream-parser-literals",
+          "rationale": "All three nonempty printable segments exactly match official libssh 0.12.2 sources: the BEGIN delimiter, a parser error diagnostic, and the END delimiter. There is no encoded key payload.",
+          "sources": [
+            {
+              "member": "include/libssh/pki_priv.h",
+              "lines": [
+                43,
+                44
+              ],
+              "sha256": "6f9c784d9bd2b4255e112d83be9ccda0697e1ede5453af70f8e7c915999451af"
+            },
+            {
+              "member": "src/pki_container_openssh.c",
+              "lines": [
+                252,
+                254,
+                257,
+                261,
+                650,
+                654
+              ],
+              "sha256": "2f9222e1eb1c27d89567598b6532d5d643cf52354e65e1612168086a0c54a818"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "000/usr/share/misc/magic.mgc",
+      "projectionBytes": 10392670,
+      "projectionFormat": "ascii-printable",
+      "projectionSha256": "1f007d3bf3ddecf2d31da340f440c8953ae2d61e614ec1de0967e1029a10958a",
+      "sha256": "7c7cb700483efbe0dc4009589912911bae33a669bf17f71b1ae03a5f5e2de4f9",
+      "sourceBytes": 10359792,
+      "neutralName": "content-002772",
+      "rpmPurl": "pkg:rpm/fedora/file-libs@5.46-10.fc44?arch=x86_64&distro=fedora-44&upstream=file-5.46-10.fc44.src.rpm",
+      "disposition": "reviewed-public-data",
+      "findings": [
+        {
+          "fingerprint": "private-key:000/usr/share/misc/magic.mgc:37079:7c7cb700483efbe0dc4009589912911bae33a669bf17f71b1ae03a5f5e2de4f9",
+          "line": 37079,
+          "path": "000/usr/share/misc/magic.mgc",
+          "rule": "private-key",
+          "classification": "public-upstream-file-recognition-patterns",
+          "rationale": "The binary ASCII projection places distinct compiled file-recognition records next to each other. All PEM markers in this match map to file 5.46 magic/Magdir/ssh or ssl; neither match contains a paired private-key END marker or an encoded key payload.",
+          "sources": [
+            {
+              "member": "magic/Magdir/ssh",
+              "lines": [
+                8,
+                11,
+                15,
+                18
+              ],
+              "sha256": "38e6e7049f18a557950a50167c40a4dff7529bbfdaaa240d612889431cd382fd"
+            },
+            {
+              "member": "magic/Magdir/ssl",
+              "lines": [
+                9
+              ],
+              "sha256": "2a606fb0edfe4df2cb3ffdef8a412a74cdf154bec64d21c8fd5624fbfbe3aee0"
+            }
+          ]
+        },
+        {
+          "fingerprint": "private-key:000/usr/share/misc/magic.mgc:75777:7c7cb700483efbe0dc4009589912911bae33a669bf17f71b1ae03a5f5e2de4f9",
+          "line": 75777,
+          "path": "000/usr/share/misc/magic.mgc",
+          "rule": "private-key",
+          "classification": "public-upstream-file-recognition-patterns",
+          "rationale": "The binary ASCII projection places distinct compiled file-recognition records next to each other. All PEM markers in this match map to file 5.46 magic/Magdir/ssh or ssl; neither match contains a paired private-key END marker or an encoded key payload.",
+          "sources": [
+            {
+              "member": "magic/Magdir/ssh",
+              "lines": [
+                8,
+                11,
+                15,
+                18
+              ],
+              "sha256": "38e6e7049f18a557950a50167c40a4dff7529bbfdaaa240d612889431cd382fd"
+            },
+            {
+              "member": "magic/Magdir/ssl",
+              "lines": [
+                9
+              ],
+              "sha256": "2a606fb0edfe4df2cb3ffdef8a412a74cdf154bec64d21c8fd5624fbfbe3aee0"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "No updated layer001 RPM database bytes were reviewed in this unit.",
+    "No image gate pass or deployment approval is implied.",
+    "Source archives were retrieved over HTTPS from primary upstream publishers; no claim of separate detached-signature verification is made."
+  ],
+  "artifact": {
+    "id": 11112446228,
+    "ciRunId": 36743690076,
+    "zipSha256": "84d9985b5f0d0ad7b87f0d91dd02b3c1de8ff84dc879460d105e890e1038e5cd",
+    "url": "https://github.com/swiftraccoon/simplestChat/actions/runs/36743690076/artifacts/11112446228"
+  },
+  "review": {
+    "owner": "swiftraccoon",
+    "expires": "2026-11-29",
+    "authority": "Agent-performed technical review under the owner-authorized security rollout; independently checked against the canonical findings and exact original/projected file bytes.",
+    "scope": "Only the 15 retained exact scanner fingerprints and five immutable base-layer paths; no package-wide or rule-wide exemption."
+  }
+}
