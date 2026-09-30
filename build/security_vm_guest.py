@@ -329,8 +329,10 @@ def configured_service(value: JsonObject, name: str) -> None:
     memory, pids = value.get("mem_limit"), value.get("pids_limit")
     cpus = value.get("cpus")
     release.require(
-        type(memory) is int
-        and 0 < memory <= MAX_MEMORY
+        isinstance(memory, str)
+        and len(memory) <= len(str(MAX_MEMORY))
+        and re.fullmatch(r"[1-9][0-9]*", memory) is not None
+        and int(memory) <= MAX_MEMORY
         and type(pids) is int
         and 0 < pids <= MAX_PIDS,
         "Fixture Compose resource limits differ",

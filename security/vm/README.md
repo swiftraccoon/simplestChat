@@ -35,6 +35,13 @@ roots, dropped capabilities, no-new-privileges and finite CPU/memory/PID limits.
 Only application HTTP is published on the guest loopback address. PostgreSQL and
 the temporary migrator use their real isolated network configuration.
 
+The provisioned Compose 5.5.1 renderer represents `mem_limit` as a decimal byte
+string. The guest accepts only its bounded positive canonical decimal form and
+applies the memory ceiling after conversion; container-inspect memory remains an
+integer. A daemon-free regression renders the real four-service templates with
+the pinned Compose version. It is optional when that tool is absent locally and
+required in the production-image CI job with `VM_COMPOSE_REQUIRED=1`.
+
 The real application image runs every packaged migration against a new PostgreSQL
 database. The fixture installs the maintained runtime grants and operations
 schema, adds one synthetic account and room plus two synthetic operational

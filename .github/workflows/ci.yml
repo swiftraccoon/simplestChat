@@ -878,6 +878,14 @@ jobs:
           test "$(<"${RUNNER_TEMP}/release-container-controller.status")" = 0
           test -x "${RUNNER_TEMP}/release-container-controller/bin/python"
 
+      - name: Verify the guest checker against pinned Compose JSON
+        timeout-minutes: 2
+        env:
+          VM_COMPOSE_REQUIRED: "1"
+        run: |
+          "${RUNNER_TEMP}/release-container-controller/bin/python" -B -m unittest discover \
+            -s ops/ansible/tests -p test_security_vm_guest.py -k ComposeSerializationTests -v
+
       - name: App-only release and rollback on a disposable host
         timeout-minutes: 10
         run: |

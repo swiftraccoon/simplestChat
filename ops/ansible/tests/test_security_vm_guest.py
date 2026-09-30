@@ -6,6 +6,7 @@ import io
 import json
 import os
 import platform
+import shutil
 import sys
 import tempfile
 import time
@@ -21,12 +22,13 @@ from test_support import ROOT, objects, strings, yaml_value
 import bounded_process
 import release_public as release
 import security_vm_guest as guest
-from release_json import decode_json, object_value
+import test_public_templates as templates
+from release_json import decode_json, object_value, string_value
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from release_json import JsonObject
+    from release_json import JsonObject, JsonValue
 
 _ = ROOT  # Import the test bootstrap before the flat installed-helper modules.
 
@@ -114,6 +116,21 @@ def runtime_container() -> JsonObject:
             "NanoCpus": 10**9,
             "NetworkMode": "none",
         },
+    }
+
+
+def configured_migrate() -> JsonObject:
+    """Represent the current Compose JSON model, before container creation."""
+    return {
+        "user": "10001:10001",
+        "read_only": True,
+        "cap_drop": ["ALL"],
+        "security_opt": ["no-new-privileges:true"],
+        "mem_limit": "1073741824",
+        "pids_limit": 256,
+        "cpus": 1.0,
+        "network_mode": "none",
+        "init": True,
     }
 
 
@@ -436,17 +453,7 @@ class GuestAssertionTests(unittest.TestCase):
 
     def test_configured_sandbox_requires_all_controls(self) -> None:
         """Dropping a single declared capability or resource guard must fail the fixture."""
-        valid: JsonObject = {
-            "user": "10001:10001",
-            "read_only": True,
-            "cap_drop": ["ALL"],
-            "security_opt": ["no-new-privileges:true"],
-            "mem_limit": 1024**3,
-            "pids_limit": 256,
-            "cpus": 1.0,
-            "network_mode": "none",
-            "init": True,
-        }
+        valid = configured_migrate()
         guest.configured_service(valid, "migrate")
         changes: list[JsonObject] = [
             {"user": "0:0"},
@@ -455,7 +462,7 @@ class GuestAssertionTests(unittest.TestCase):
             {"cap_add": ["SYS_ADMIN"]},
             {"security_opt": []},
             {"privileged": True},
-            {"mem_limit": 0},
+            {"mem_limit": "0"},
             {"pids_limit": -1},
             {"cpus": 0},
             {"network_mode": "host"},
@@ -474,12 +481,48 @@ class GuestAssertionTests(unittest.TestCase):
         with self.assertRaisesRegex(release.ReleaseError, "loopback-only"):
             guest.configured_service(app, "simplestchat")
 
+    def test_configured_memory_requires_bounded_canonical_decimal_bytes(self) -> None:
+        """Reject coercions and unbounded, noncanonical or out-of-range memory declarations."""
+        valid = configured_migrate()
+        for memory in ("1", str(guest.MAX_MEMORY)):
+            with self.subTest(memory=memory):
+                guest.configured_service({**valid, "mem_limit": memory}, "migrate")
+        invalid: list[JsonValue] = [
+            None,
+            True,
+            1073741824,
+            1073741824.0,
+            [],
+            {},
+            "",
+            "0",
+            "-1",
+            "+1",
+            "01",
+            " 1",
+            "1 ",
+            "1\n",
+            "1.0",
+            "1e9",
+            "1g",
+            "\u0661",
+            str(guest.MAX_MEMORY + 1),
+            "9" * 10000,
+        ]
+        for memory in invalid:
+            with (
+                self.subTest(memory=memory),
+                self.assertRaisesRegex(release.ReleaseError, "resource limits differ"),
+            ):
+                guest.configured_service({**valid, "mem_limit": memory}, "migrate")
+
     def test_running_service_checks_actual_identity_and_limits(self) -> None:
         """A correct Compose declaration cannot substitute for real runtime metadata."""
         value = runtime_container()
         self.assertEqual(guest.running_service(value, "migrate", IMAGE), CONTAINER)
         for section, key, replacement in (
             ("host", "Memory", 0),
+            ("host", "Memory", "1073741824"),
             ("host", "NanoCpus", 0),
             ("host", "ReadonlyRootfs", False),
             ("host", "NetworkMode", "host"),
@@ -520,6 +563,98 @@ class GuestAssertionTests(unittest.TestCase):
         self.assertIn(("rm", CONTAINER), runner.commands)
         self.assertFalse(runner.present)
         self.assertEqual(runner.commands[-1], ("ps", "--all", "--quiet", "migrate"))
+
+
+class ComposeSerializationTests(unittest.TestCase):
+    """Exercise the pinned real renderer without an engine or application processes."""
+
+    def renderer(self, directory: Path, environment: dict[str, str]) -> list[str]:
+        """Find exactly the provisioned Compose version; the deployment CI requires it."""
+        defaults = object_value(
+            yaml_value((ROOT / "ops/ansible/group_vars/benchmark_hosts.yml").read_text())
+        )
+        expected = string_value(defaults["scbench_docker_compose_version"]).partition("-")[0]
+        candidates: list[list[str]] = []
+        standalone, docker = shutil.which("docker-compose"), shutil.which("docker")
+        if standalone is not None:
+            candidates.append([standalone])
+        if docker is not None:
+            candidates.append([docker, "compose"])
+        for command in candidates:
+            status, output, _error = bounded_process.run(
+                [*command, "version", "--short"],
+                cwd=directory,
+                env=environment,
+                limits=bounded_process.Limits(timeout=10, stdout=1024, stderr=4096),
+            )
+            if status == 0 and output.strip() == expected.encode():
+                return command
+        if os.environ.get("VM_COMPOSE_REQUIRED") == "1":
+            self.fail("The provisioned Compose version is required for this regression")
+        reason = "Optional inert renderer check requires the provisioned Compose version"
+        raise unittest.SkipTest(reason)
+
+    def test_real_pinned_compose_model_passes_guest_checks(self) -> None:
+        """The actual four-service JSON model satisfies the independent guest assertions."""
+        with tempfile.TemporaryDirectory(prefix="simplestchat-vm-compose.") as temporary:
+            directory = Path(temporary).resolve()
+            environment = {
+                "PATH": "/usr/bin:/bin",
+                "HOME": str(directory),
+                "LC_ALL": "C",
+                # No engine exists at this private path; config must remain daemon-free.
+                "DOCKER_HOST": "unix://" + str(directory / "absent.sock"),
+            }
+            command = self.renderer(directory, environment)
+            for template, name in (
+                ("public-compose.yml.j2", "compose.public.yml"),
+                ("public-app.env.j2", "app.env"),
+                ("public-migration.env.j2", "migration.env"),
+                ("public-proxy.env.j2", "proxy.env"),
+            ):
+                _ = (directory / name).write_text(
+                    templates.render(
+                        template,
+                        scpub_config=str(directory),
+                        scpub_root=str(directory / "data"),
+                        scpub_domain="vm-fixture.test",
+                        scpub_announce_ip="127.0.0.1",
+                        scpub_announce_ipv6="",
+                        scpub_media_workers=1,
+                        scpub_app_cpus=1,
+                        scpub_app_memory_mib=1024,
+                        scpub_postgres_memory_mib=1024,
+                        scpub_postgres_shared_buffers_mib=256,
+                    )
+                    + "\n"
+                )
+            _ = (directory / "compose.base.yml").write_bytes(
+                (ROOT / "docker-compose.yml").read_bytes()
+            )
+            status, output, error = bounded_process.run(
+                [
+                    *command,
+                    "--env-file",
+                    str(directory / "app.env"),
+                    "-f",
+                    str(directory / "compose.public.yml"),
+                    "--profile",
+                    "maintenance",
+                    "config",
+                    "--format",
+                    "json",
+                ],
+                cwd=directory,
+                env=environment,
+                limits=bounded_process.Limits(timeout=20, stdout=65536, stderr=4096),
+            )
+            self.assertEqual(status, 0, error.decode())
+            runner = RecordedRunner()
+            runner.output = output
+            self.assertEqual(guest.configuration(runner)["services"], 4)
+            services = object_value(object_value(decode_json(output))["services"])
+            for name in ("simplestchat", "migrate", "postgres"):
+                self.assertEqual(object_value(services[name])["mem_limit"], "1073741824")
 
 
 if __name__ == "__main__":

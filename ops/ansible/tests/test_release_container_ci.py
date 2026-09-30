@@ -211,6 +211,28 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertNotRegex(command, r"\b(?:apt|apt-get|systemctl|service|dockerd)\b")
         self.assertNotRegex(command, r"\b(?:latest|prune|remove|upgrade)\b")
 
+    def test_guest_compose_contract_runs_with_required_pinned_renderer(self) -> None:
+        """The real JSON contract regression cannot silently skip in production-image CI."""
+        step = self.step("Verify the guest checker against pinned Compose JSON")
+        self.assertNotIn("if", step)
+        self.assertNotIn("continue-on-error", step)
+        self.assertEqual(step["timeout-minutes"], "2")
+        self.assertEqual(string(step, "env", "VM_COMPOSE_REQUIRED"), "1")
+        self.assertIn(
+            '"${RUNNER_TEMP}/release-container-controller/bin/python" -B -m unittest discover',
+            string(step, "run"),
+        )
+        self.assertIn(
+            "-s ops/ansible/tests -p test_security_vm_guest.py -k ComposeSerializationTests -v",
+            string(step, "run"),
+        )
+        position = self.steps.index(step)
+        self.assertLess(self.steps.index(self.step(COMPOSE_TOOL)), position)
+        self.assertLess(
+            self.steps.index(self.step("Install isolated release-container checks")), position
+        )
+        self.assertLess(position, self.steps.index(self.step(INTEGRATION)))
+
     def test_dependencies_use_existing_pinned_controller_requirements_in_an_isolated_venv(
         self,
     ) -> None:
