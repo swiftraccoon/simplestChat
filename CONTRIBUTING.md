@@ -15,11 +15,17 @@ After installing the pinned dependencies and native prerequisites, run:
 
 ```sh
 build/check.sh
+build/check-security.sh fast
 ```
 
-The same entry point is used by CI. It stops on the first failure and does not
-install dependencies, start the application, or create a database. You can run
+CI also uses `build/check.sh`. It stops on the first failure and does not install
+dependencies, start the application, or create a database. You can run
 `--web`, `--rust`, or `--helpers` separately while iterating.
+
+The separate [security gate](docs/security.md) installs checksum-pinned scanners
+and audits current source, workflow policy and dependency locks. Run it before
+publishing changes; native and release-image changes also need the relevant deep
+or exact-image tier. Keep full scanner evidence private.
 
 | Group | What it checks | What it does not prove |
 | --- | --- | --- |
