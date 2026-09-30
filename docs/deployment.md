@@ -4,7 +4,123 @@ Deploy one application replica behind an HTTPS reverse proxy, with PostgreSQL
 and optional TURN. WebAuthn challenges, rate limits and room/media state are
 process-local; multiple replicas require a shared-state and routing design.
 
+## Capacity planning and scaling
+
+### Supported operating model
+
+The supported topology is one application process with several native media
+workers, PostgreSQL, an HTTPS reverse proxy and optional TURN. The reverse proxy
+handles HTTPS and WebSocket upgrades. Media reaches the worker's announced UDP
+address directly or through TURN; an HTTP load balancer does not distribute that
+media. Adding workers distributes rooms and a large room's receive-side work
+inside the process. Publishers in a room still share its primary worker, so
+additional CPUs do not multiply every workload's capacity equally.
+
+Scale this topology vertically first. Set the actual application CPU and memory
+budgets, worker count, sold network-port speed and monthly transfer allowance.
+The reference estimates come from a particular measured CPU and media policy;
+use the capacity runner on a disposable host to validate the intended workload
+before admitting that many users. The runner generates load and is a separate,
+explicitly operated measurement step, not part of ordinary setup.
+
+The Python adviser and managed Ansible deployment share `build/capacity.py`'s
+calculation through a controller-side filter. It bounds meeting and webinar
+estimates by CPU, measured per-participant memory with a twofold allowance, and
+80% of the sold network port. Default workers are bounded at 64 and generated
+room ceilings at 10,000, matching runtime constraints. A calibrated
+`scpub_webinar_viewers_per_worker` override changes the CPU projection while
+retaining reference per-viewer memory and egress costs. Explicit connection or
+room overrides are operator policy and can exceed the estimate; they require
+their own justification and measurement.
+
+| Example host | Application workers | Proposed connections | Main limiting resource |
+|---|---:|---:|---|
+| 4 vCPU, 12 GiB, 1 Gbit/s | 3 | 525 | Reference webinar CPU estimate |
+| 8 vCPU, 16 GiB, 1 Gbit/s | 7 | 800 | Network port |
+| 8 vCPU, 2 GiB, 1 Gbit/s | 7 | 400 | Application memory estimate |
+| 128 vCPU, 256 GiB, 40 Gbit/s | 64 | 11,200 | Worker bound; each room remains capped at 10,000 |
+
+These examples compare the same reference workload; they are not throughput
+guarantees or recommended production service levels. Particularly small hosts
+can have service memory ceilings whose sum exceeds physical RAM: Docker ceilings
+are not reservations. Leave measured headroom for PostgreSQL, TURN, proxy,
+kernel buffers and maintenance. Track resident memory, cgroup pressure and
+transfer consumption alongside CPU. Fast overload can outrun a sampling guard.
+
+### A practical expansion sequence
+
+1. Establish a baseline using real-browser first-frame latency, media quality,
+   join refusals, per-worker CPU, pool acquisition time and sustained egress.
+   Distinguish many small meetings from one publishing grid or one presenter
+   with viewers. Each puts pressure on a different resource.
+2. Produce candidate settings with `build/capacity.py suggest`, then run the
+   binary's offline `--check-config` with the intended environment. Validate the
+   host's CPU quota, memory ceiling, worker UDP range, announced addresses,
+   firewall, TURN limits and transfer budget together.
+3. Increase one constrained resource or policy at a time. Raising connection
+   limits alone does not provide CPU, memory or network capacity. Raising the
+   viewer bitrate cap changes both feasible grid size and egress. A shared-NAT
+   venue may need higher per-address admission limits even at modest total load.
+4. Apply through the maintenance workflow, with a backup and reviewed recovery
+   path. Process-local calls are interrupted by replacement. A quiet-window
+   observation cannot guarantee an empty server when admission remains open.
+5. Repeat the browser and media checks, compare to the baseline, and inspect
+   refused admissions and database queueing during the target load. Keep the
+   previous artifact, configuration and backup evidence until the new operating
+   point has been assessed.
+
+The PostgreSQL application pool is configurable, but additional connections can
+increase contention rather than reduce latency. Budget the sum of all pools
+plus maintenance and monitoring below PostgreSQL's available slots. Signed-in
+sockets still periodically validate sessions; at large authenticated populations
+this workload needs direct measurement. Neither a larger pool nor readiness
+success establishes an authenticated-user capacity guarantee.
+
+TURN's `max-bps` and `bps-capacity` use **bytes per second**. The managed defaults
+are 500,000 bytes/s per allocation (4 Mbit/s) and half the sold port in aggregate:
+62,500,000 bytes/s on a 1-Gbit/s port. `total-quota` counts allocations, not people;
+one browser can need more than one allocation. Measure allocation count and
+bidirectional relay traffic before treating a connection estimate as a relayed
+user estimate.
+
+### Multiple application nodes: required design work
+
+Running additional replicas behind round-robin HTTP routing is not supported.
+Sharing PostgreSQL does not share active rooms, native routers, reconnect grace,
+passkey challenges, rate-limit windows or revocation notifications. Ordinary
+browser affinity also cannot ensure that different participants in one room
+reach the same room owner. Readiness routing and affinity alone do not resolve
+these ownership requirements.
+
+A future multi-node implementation needs an explicit room directory and a
+single live owner for each room generation, with leases and fencing so an old
+owner cannot publish after replacement. Admission must route both a room's
+initial join and every reconnect to that owner, or return a deliberate
+relocation response the client understands. Node identity, public media
+addresses and TURN reachability must travel with the selected owner.
+
+Account ceremonies and session revocation need shared or correctly routed
+state, and admission limits need an explicit cluster-wide or per-node policy.
+Control notifications require ordered delivery and a replay/snapshot recovery
+contract. Capacity placement should account for primary-worker load, receive
+load, memory and egress rather than socket count alone. A shared database pool
+budget and migration ownership are also necessary as processes multiply.
+
+Finally, define failure behavior before claiming availability: a failed SFU
+cannot transparently transfer its live native transports to another process.
+Clients need a bounded reconnect/renegotiation path with observable interruption.
+Exercise stale ownership, node loss, rolling drain, expired leases, duplicate
+notifications and database outages in integration tests before enabling multiple
+nodes. The present worker-recovery reservation and overflow reconciliation
+improve one process; they do not implement this distributed protocol.
+
 ## Production setup
+
+Run the host-side setup and Compose commands in this section from a root shell
+(`sudo -i`), with the checkout as the working directory. The files beneath
+`/etc/simplestchat` belong to root and stay readable only by their owner. Run Caddy
+through its system service with the separate private environment file described
+below; the interactive shell is for setup, not the long-running proxy.
 
 For repeatable VPS preparation and private container benchmarks, see the
 [operations automation](../ops/ansible/README.md). It prepares the host without
@@ -49,6 +165,11 @@ registration only for controlled enrollment or after adding verification and
 abuse controls; email ownership is not verified. Authenticated users can create persisted rooms without enabling
 ad-hoc room creation. Add passkey and TURN settings from
 [configuration](configuration.md) if needed.
+
+For a guest-only installation, omit `DATABASE_URL` and deliberately set
+`ALLOW_AD_HOC_ROOMS=true` so the first guest can create a room. Database-backed
+installations may keep ad-hoc creation closed and create a persisted room through
+an account. The managed deployment instead seeds its owner and lobby explicitly.
 
 Keep an overlay such as `/etc/simplestchat/compose.runtime.yml` outside the checkout:
 
@@ -207,7 +328,7 @@ If recreation fails the gauge stays low until the server is restarted.
 
 Alert on the rejection counters as well: `simplestchat_api_requests_rejected_total` (HTTP 429/503 from rate limits, concurrency caps, the password lane or a busy service) and `simplestchat_upgrades_rejected_total` (WebSocket upgrades refused by handshake, connection or per-IP limits), and on `simplestchat_media_worker_deaths_total`, because each death interrupts that worker's calls even though the worker is recreated. `simplestchat_connection_permits_in_use` is the quantity `MAX_CONNECTIONS` is enforced against, including handshake authentication work, and can exceed `simplestchat_connections_active`.
 
-**Saturation.** `simplestchat_cpu_saturated` is 1 while the process's cgroup is throttled for more than half of its enforcement periods or its CPU pressure exceeds the configured level; `/ready` returns 503 and fresh joins are refused (counted by `simplestchat_joins_refused_saturated_total`) until the signals fall below half the thresholds. `simplestchat_cpu_throttled_fraction` and `simplestchat_cpu_pressure_some_avg10` are the raw readings, and the two `_available` gauges say whether the cgroup files were readable. `simplestchat_memory_saturated` is 1 while `simplestchat_memory_usage_fraction` (memory in use over the cgroup limit, readable when `simplestchat_memory_limit_available` is 1) has reached `MEMORY_SATURATION_FRACTION`; it refuses joins and fails readiness the same way and clears below 90 % of the threshold. `simplestchat_media_worker_cpu{worker="N"}` is each media worker thread's share of one core over the same window and `simplestchat_media_worker_saturated{worker="N"}` is 1 while it exceeds `CPU_SATURATION_WORKER_UTILIZATION`: a room's producers live on one worker and its viewers spread to other workers once that worker carries 64 consumers, so a room with many publishers can still pin its primary core while the quota shows headroom; rooms on that worker refuse fresh joins (same counter), new rooms and new viewers are placed on another worker, and `/ready` fails only when every worker is saturated. Alert on the saturated gauges and on the refusal counter: all mean users were turned away and the host, the quota, the worker count or the connection limit needs revisiting. `MAX_PARTICIPANTS_PER_ROOM` (80 in the public template) keeps any single room under the size where all-publishing rooms lose clients on this shape, and `simplestchat_client_events_duration_seconds{name="media_first_video_frame",outcome="ok"}` records real browsers' time from attaching a remote track to its first frame (Firefox reports the first decoded frame), the latency figure to watch rather than the synthetic generator's connection setup time. See [capacity](performance-results.md) for how the limit was chosen.
+**Saturation.** `simplestchat_cpu_saturated` is 1 while the process's cgroup is throttled for more than half of its enforcement periods or its CPU pressure exceeds the configured level; `/ready` returns 503 and fresh joins are refused (counted by `simplestchat_joins_refused_saturated_total`) until the signals fall below half the thresholds. `simplestchat_cpu_throttled_fraction` and `simplestchat_cpu_pressure_some_avg10` are the raw readings, and the two `_available` gauges say whether the cgroup files were readable. `simplestchat_memory_saturated` is 1 while `simplestchat_memory_usage_fraction` (memory in use over the cgroup limit, readable when `simplestchat_memory_limit_available` is 1) has reached `MEMORY_SATURATION_FRACTION`; it refuses joins and fails readiness the same way and clears below 90 % of the threshold. `simplestchat_media_worker_cpu{worker="N"}` is each media worker thread's share of one core over the same window and `simplestchat_media_worker_saturated{worker="N"}` is 1 while it exceeds `CPU_SATURATION_WORKER_UTILIZATION`: a room's producers live on one worker and its viewers spread to other workers once that worker carries 64 consumers, so a room with many publishers can still pin its primary core while the quota shows headroom; rooms on that worker refuse fresh joins (same counter), new rooms and new viewers are placed on another worker, and `/ready` fails only when every worker is saturated. Alert on the saturated gauges and on the refusal counter: all mean users were turned away and the host, the quota, the worker count or the connection limit needs revisiting. `MAX_PARTICIPANTS_PER_ROOM` (derived from host capacity in the public template) bounds room membership, while `MAX_BROADCASTERS_PER_ROOM` (30 in the public template) separately bounds publishers, and `simplestchat_client_events_duration_seconds{name="media_first_video_frame",outcome="ok"}` records real browsers' time from attaching a remote track to its first frame (Firefox reports the first decoded frame), the latency figure to watch rather than the synthetic generator's connection setup time. See [capacity](performance-results.md) for how the limit was chosen.
 
 **Media quality, server side.** The bounded sampler reports SFU transmission scores,
 spatial layers, receive-transport loss and outgoing bitrate estimates. Current
@@ -352,14 +473,32 @@ local recording cannot run. The external GitHub workflows retain their own evide
 which the separate importer backfills after the host recovers, within the bounds
 below. Same-host PostgreSQL history is not an off-host backup.
 
-The separate `simplestchat-monitoring-external.timer` imports the public repository's
-availability and media-canary evidence every ten minutes. It calls only GitHub's
-fixed HTTPS API for `swiftraccoon/simplestChat`, without a token, redirects or an
-inherited proxy. A durable cadence guard permits at most eight requests per
+The separate `simplestchat-monitoring-external.timer` is opt-in. Set
+`scmon_external_repository: OWNER/REPOSITORY` in the inventory before applying
+monitoring; leave it empty to keep the importer stopped. Use the public repository
+whose maintained availability and canary workflows actually check this host, with
+`CANARY_ORIGIN=https://<scpub_domain>` and its reserved `CANARY_ROOM` configured.
+There is no default upstream evidence source. A run's title must include the exact
+configured HTTPS origin; the maintained workflows set that title from the same
+`CANARY_ORIGIN` used by the checks. Other origins and older, unbound run titles
+cannot establish coverage. Review the selected repository's workflow code before
+trusting it; a title is an attribution contract with that code, not independent
+proof of what an arbitrary workflow did.
+
+The importer calls only GitHub's fixed HTTPS API, without a token, redirects or
+an inherited proxy. A durable cadence guard permits at most eight requests per
 invocation (normally at most 48 per hour), with bounded response sizes, timeouts
 and rate-limit backoff. This shares GitHub's unauthenticated per-IP quota with any
 other callers on that public IP. Applying the playbook validates and reloads the
 Prometheus rules; neither application nor public proxy replacement is required.
+
+Polling state records the configured repository and origin. Changing either, or
+adopting legacy state that has no attribution, stops import instead of relabeling
+historical evidence. Preserve the old state, spool and database records and plan
+an explicitly reviewed evidence migration before enabling a different source.
+Do not delete state to bypass this check. Missing external coverage remains
+visible in the monitoring rules even when the optional importer is disabled;
+local monitoring does not imply that external checks are configured.
 
 Each completed run attempt has an immutable `(run_id, attempt)` record. Reruns
 remain distinct. Actual required job steps must complete successfully: a green
@@ -447,8 +586,10 @@ bound to loopback. Rules cover scrape availability, sample freshness, saturation
 refusals, worker deaths, database/container/host pressure, disk space, public
 readiness, TURN health, certificate expiry, backup age and collector/recorder
 health. Thresholds are operational starting points, not measured capacity claims.
-Backup freshness currently measures nonempty release backups; this is not a
-scheduled backup policy or proof of recovery. Run the installed restore verifier
+Backup freshness counts completed release and optional nightly backup receipts
+whose dump still has its recorded size. It does not prove archive integrity or
+recovery. Install the opt-in [nightly backup timer](../ops/ansible/PUBLIC.md#maintenance-and-data)
+for scheduling; its dumps remain local and need a separate off-host copy policy. Run the installed restore verifier
 against an explicitly selected existing release attempt:
 
 ```sh
@@ -467,7 +608,8 @@ or attached application. It has a read-only root filesystem, no capabilities,
 Archives are capped at 64 MB; larger restores require reviewed resource limits.
 
 The complete archive is restored in one transaction with ownership and ACLs
-preserved, then checked against the release migration checksums, required schema,
+preserved, then checked against its recorded pre-upgrade `backupMigrations` ledger and the
+reviewed release's checksums, required schema,
 validated constraints/indexes, incident sequence/uniqueness and application role
 privacy. Active and resolved incidents are retained. PostgreSQL
 [pg_amcheck](https://www.postgresql.org/docs/18/app-pgamcheck.html) additionally
@@ -477,6 +619,10 @@ the restored data. The local role stubs have no login or production passwords;
 this does not verify recovery of host secrets or a complete production cutover.
 Each restore and structural check has a 120-second deadline. Existing backups
 from before the operational schema was installed fail the current schema check.
+Legacy app-only releases without `backupMigrations` use their same-schema release
+manifest. Legacy maintenance archives without that field require a reviewed
+pre-upgrade ledger; the verifier refuses to guess it from the newer target schema.
+The verifier currently accepts release attempts, not nightly dump paths.
 
 Only successful restore, verification, container removal and snapshot removal
 allow the helper to update

@@ -136,7 +136,8 @@ Projected to seven app CPUs this host would carry about 612 meeting participants
 
 ## An all-publishing room on the VPS's own cores — 2026-09-26
 
-`MAX_PARTICIPANTS_PER_ROOM` is 80 in the public template, sized from the Mac VM's
+At the time of this experiment, `MAX_PARTICIPANTS_PER_ROOM` was 80 in the public
+template, sized from the Mac VM's
 200-publisher result scaled by the 2.5 factor measured for viewers. These runs measure it
 on the VPS itself: the deployed server image (`aebd7f7`, image `d0c99e8fbbc11079`) as an
 owned loopback-only container under the production quota (2 CPUs, 2 GiB, two workers),

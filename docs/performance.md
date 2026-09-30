@@ -322,13 +322,19 @@ python3 build/capacity.py suggest --vcpus 8 --memory-gib 16 [--port-mbps 1000] \
 
 `suggest` sizes a host without measuring it: from its vCPUs, memory and port
 (a gigabit port unless told otherwise) it prints the settings the managed
-deployment would derive (all but one CPU, one worker per app CPU, the memory
-beyond the host's reserve, `MAX_CONNECTIONS` from the lightest participants)
+deployment would derive using the same calculation (all but one CPU, one worker
+per whole app CPU up to 64, the memory beyond the host's reserve,
+`MAX_CONNECTIONS` from the lightest participants)
 and what they carry in meetings, webinars and all-publishing rooms, with what
 bounds each. Without `--calibration` it scales the ceilings measured on the
 4-vCPU reference VPS (85 meeting participants and 175 webinar viewers per
 worker, 28 in the grid), so a host with slower cores carries less; a `run`
-report of the host replaces them.
+report of the host replaces them. Meeting and webinar estimates both honor
+measured memory costs with a twofold allowance and 80% of the network port;
+generated room ceilings never exceed the runtime's 10,000-participant maximum.
+Measurements without a memory sample cannot establish a memory bound. The
+adviser does not account for every database, reconnect, proxy or relay workload;
+see the [scaling procedure and limits](deployment.md#capacity-planning-and-scaling).
 
 Under each measured ceiling the summary says what the failure above it ran
 into. In an all-publishing room that is usually not CPU: a browser shows up to
