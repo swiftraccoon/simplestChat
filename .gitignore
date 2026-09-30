@@ -15,6 +15,7 @@
 !/docs/native-security.md
 !/docs/authorization-testing.md
 !/docs/response-policy.md
+!/docs/image-security.md
 /build.log
 web/node_modules
 web/dist

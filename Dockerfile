@@ -79,22 +79,19 @@ RUN set -eu; \
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /app
+# Authenticate the exact cargo-auditable executable before either Cargo build.
+# Its dependency section must survive in the final executable for image auditing.
+COPY build/security_tools.py build/security-tools.lock.json ./build/
+RUN python3 build/security_tools.py install --tools cargo-auditable --directory /opt/security-tools
 # The toolchain and build-required rustfmt component are installed above. Do not
 # copy the developer toolchain file: its IDE-only components would enter this layer.
 COPY build/pip-constraints.txt /opt/simplestchat/pip-constraints.txt
 ENV PIP_CONSTRAINT=/opt/simplestchat/pip-constraints.txt
 COPY Cargo.toml Cargo.lock ./
 COPY vendor ./vendor
-RUN grep -Fq 'source_filename = abseil-cpp-20240722.2.tar.gz' \
-        vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp.wrap \
-    && grep -Fq 'source_hash = ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8' \
-        vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp.wrap \
-    && grep -Fq 'patch_directory = abseil-cpp' \
-        vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp.wrap \
-    && echo '454b10520ba4ba4a9995612ba2d9e6490b5477bb5093eff54af4c84917f71f19  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/abseil-cpp/meson.build' \
-        | sha256sum --check --strict \
-    && echo '7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/abseil-cpp/LICENSE.build' \
-        | sha256sum --check --strict
+COPY build/security_vendor.py ./build/
+COPY ops/ansible/files/bounded_process.py ops/ansible/files/release_json.py ./ops/ansible/files/
+RUN python3 build/security_vendor.py verify --cache /tmp/vendor-cache --output /app/vendor-evidence
 
 # Warm every dependency, including the native worker, against stub sources.
 # This layer is reused until the manifest, lockfile or vendored patches change,
@@ -103,17 +100,24 @@ RUN mkdir -p src load_tests/bin \
     && printf '#![allow(non_snake_case)]\nfn main() {}\n' > src/main.rs \
     && printf '#![allow(non_snake_case)]\n' > src/lib.rs \
     && printf 'fn main() {}\n' > load_tests/bin/load_test.rs \
-    && cargo build --locked --release --bin simplestChat \
+    && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
     && rm -rf src load_tests \
         target/release/simplestChat \
         target/release/deps/simplestChat-* target/release/deps/libsimplestChat-* \
         target/release/.fingerprint/simplestChat-*
 COPY src ./src
 COPY migrations/*.sql ./migrations/
-RUN cargo build --locked --release --bin simplestChat \
+RUN python3 build/security_tools.py path cargo-auditable --directory /opt/security-tools \
+    && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
+        --message-format=json > /app/cargo-build.json \
     && strings target/release/simplestChat | grep -Fq 'OpenSSL 3.5.8 25 Aug 2026' \
     && ! strings target/release/simplestChat | grep -Fq 'OpenSSL 3.0.8' \
     && ! ldd target/release/simplestChat | grep -Eq 'lib(ssl|crypto)\.so'
+COPY build/security_native.py build/install-openssl.sh ./build/
+RUN python3 build/security_native.py --root /app \
+    --vendor-report /app/vendor-evidence/report.json \
+    --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
+    --openssl-prefix /opt/openssl-3.5.8 --output /app/native-components.build.json
 
 # The load tester has a separate target so its WebRTC client dependencies and
 # executable are absent from the default production image.
@@ -139,6 +143,7 @@ WORKDIR /app
 ARG SOURCE_REVISION=unknown
 ENV SOURCE_REVISION=${SOURCE_REVISION}
 COPY --from=builder /app/target/release/simplestChat /app/simplestChat
+COPY --from=builder /app/native-components.build.json /usr/share/simplestchat/native-components.json
 COPY --from=builder /app/migrations /app/migrations
 COPY --from=builder /app/vendor/seclists-passwords/LICENSE /app/vendor/seclists-passwords/README.md /usr/share/licenses/simplestchat/seclists/
 COPY --from=web-builder /web/dist /app/web/dist

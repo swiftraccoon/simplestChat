@@ -1,0 +1,57 @@
+{
+  "scannerBase": "docker.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80",
+  "distribution": {
+    "id": "fedora",
+    "version": "44"
+  },
+  "maximumDatabaseAgeHours": 120,
+  "blockedSeverities": [
+    "High",
+    "Critical"
+  ],
+  "allowedLicenses": [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "Artistic-2.0",
+    "BSD-2-Clause",
+    "BSD-2-Clause-Patent",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CC-BY-4.0",
+    "CC-BY-SA-4.0",
+    "FSFAP",
+    "FSFUL",
+    "FSFULLR",
+    "GPL-1.0-or-later",
+    "GPL-2.0-only",
+    "GPL-2.0-or-later",
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
+    "ISC",
+    "LGPL-2.0-or-later",
+    "LGPL-2.1-only",
+    "LGPL-2.1-or-later",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "OpenSSL",
+    "PSF-2.0",
+    "Python-2.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Unlicense",
+    "Zlib",
+    "zlib-acknowledgement"
+  ],
+  "firstParty": {
+    "name": "simplestChat",
+    "source": "local",
+    "license": "NOASSERTION",
+    "cargoPublish": false,
+    "policy": "unpublished-application"
+  }
+}
