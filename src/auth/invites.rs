@@ -21,17 +21,25 @@ const REGISTRATION_INVITE_DAYS: i32 = 7;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct RegistrationInvite {
-    pub code: String,
+    pub id: Uuid,
     pub uses_left: i32,
     pub expires_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
 }
 
+/// The secret is returned only by creation, never by listing.
+#[derive(Debug, Serialize)]
+pub struct CreatedRegistrationInvite {
+    #[serde(flatten)]
+    pub details: RegistrationInvite,
+    pub code: String,
+}
+
 async fn live_invites(pool: &PgPool, user: Uuid) -> Result<Vec<RegistrationInvite>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT code, uses_left, expires_at, created_at FROM invites
+        "SELECT id, uses_left, expires_at, created_at FROM invites
          WHERE kind = 'registration' AND created_by = $1 AND uses_left > 0 AND expires_at > now()
-         ORDER BY created_at DESC, code",
+         ORDER BY created_at DESC, id",
     )
     .bind(user)
     .fetch_all(pool)
@@ -46,10 +54,10 @@ pub(crate) async fn consume_registration_invite(
 ) -> Result<Option<Uuid>, sqlx::Error> {
     sqlx::query_scalar(
         "UPDATE invites SET uses_left = uses_left - 1
-         WHERE code = $1 AND kind = 'registration' AND uses_left > 0 AND expires_at > now()
+         WHERE code_hash = $1 AND kind = 'registration' AND uses_left > 0 AND expires_at > now()
          RETURNING created_by",
     )
-    .bind(code)
+    .bind(invite_codes::digest(code))
     .fetch_optional(&mut *transaction)
     .await
 }
@@ -81,7 +89,7 @@ pub async fn list(
 pub async fn create(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
-) -> Result<(HeaderMap, Json<RegistrationInvite>), AuthError> {
+) -> Result<(HeaderMap, Json<CreatedRegistrationInvite>), AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
     let code =
@@ -106,33 +114,38 @@ pub async fn create(
         ));
     }
     let invite: RegistrationInvite = sqlx::query_as(
-        "INSERT INTO invites (code, kind, created_by, uses_left, expires_at)
+        "INSERT INTO invites (code_hash, kind, created_by, uses_left, expires_at)
          VALUES ($1, 'registration', $2, 1, now() + make_interval(days => $3))
-         RETURNING code, uses_left, expires_at, created_at",
+         RETURNING id, uses_left, expires_at, created_at",
     )
-    .bind(&code)
+    .bind(invite_codes::digest(&code))
     .bind(user)
     .bind(REGISTRATION_INVITE_DAYS)
     .fetch_one(&mut *transaction)
     .await
     .map_err(routes::database_error)?;
     transaction.commit().await.map_err(routes::database_error)?;
-    Ok((routes::no_store_headers(), Json(invite)))
+    Ok((
+        routes::no_store_headers(),
+        Json(CreatedRegistrationInvite {
+            details: invite,
+            code,
+        }),
+    ))
 }
 
-/// DELETE /api/auth/invites/:code — take back one of the account's own codes.
+/// DELETE /api/auth/invites/:id — take back one of the account's own codes.
 pub async fn revoke(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
-    Path(code): Path<String>,
+    Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
-    let code = invite_codes::normalize(&code).ok_or(AuthError::InviteNotFound)?;
     let removed = sqlx::query(
-        "DELETE FROM invites WHERE code = $1 AND kind = 'registration' AND created_by = $2",
+        "DELETE FROM invites WHERE id = $1 AND kind = 'registration' AND created_by = $2",
     )
-    .bind(&code)
+    .bind(id)
     .bind(user)
     .execute(&pool)
     .await
@@ -166,10 +179,10 @@ mod tests {
         let stale = invite_codes::generate().unwrap();
         for (code, days) in [(&live, 7), (&stale, -1)] {
             sqlx::query(
-                "INSERT INTO invites (code, kind, created_by, uses_left, expires_at)
+                "INSERT INTO invites (code_hash, kind, created_by, uses_left, expires_at)
                  VALUES ($1, 'registration', $2, 1, now() + make_interval(days => $3))",
             )
-            .bind(code)
+            .bind(invite_codes::digest(code))
             .bind(inviter)
             .bind(days)
             .execute(&pool)

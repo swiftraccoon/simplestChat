@@ -657,7 +657,7 @@ impl SignalingServer {
                 "/invites",
                 get(crate::auth::invites::list).post(crate::auth::invites::create),
             )
-            .route("/invites/{code}", delete(crate::auth::invites::revoke))
+            .route("/invites/{id}", delete(crate::auth::invites::revoke))
             .route(
                 "/preferences",
                 get(crate::auth::account::get_preferences)
@@ -712,12 +712,16 @@ impl SignalingServer {
             .route("/", post(crate::room::api::create_room))
             .route("/mine", get(crate::room::api::owned_rooms))
             .route("/memberships", get(crate::room::invites::list_memberships))
-            .route("/invites/{code}", post(crate::room::invites::redeem))
+            .route("/invites/preview", post(crate::room::invites::preview))
+            .route("/invites/redeem", post(crate::room::invites::redeem))
             .route(
                 "/{id}/invites",
                 get(crate::room::invites::list).post(crate::room::invites::create),
             )
-            .route("/{id}/invites/{code}", delete(crate::room::invites::revoke))
+            .route(
+                "/{id}/invites/{invite_id}",
+                delete(crate::room::invites::revoke),
+            )
             .route(
                 "/{id}/identity",
                 patch(crate::room::api::update_room_identity)

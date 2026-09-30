@@ -437,9 +437,9 @@ async fn retire_old_batch(
     .await?
     .rows_affected();
     let invites_removed = sqlx::query(
-        "DELETE FROM invites WHERE code IN (
-             SELECT code FROM invites WHERE expires_at < now() - make_interval(days => $1)
-             ORDER BY expires_at, code LIMIT $2 FOR UPDATE SKIP LOCKED
+        "DELETE FROM invites WHERE code_hash IN (
+             SELECT code_hash FROM invites WHERE expires_at < now() - make_interval(days => $1)
+             ORDER BY expires_at, code_hash LIMIT $2 FOR UPDATE SKIP LOCKED
          )",
     )
     .bind(super::invites::INVITE_RECEIPT_RETENTION_DAYS)
@@ -1188,14 +1188,14 @@ mod tests {
         // A small batch makes bounded progress past locked invitation rows, and
         // cascades receipts only once their seven-day replay window has ended.
         let codes: Vec<String> = (0..5)
-            .map(|_| Uuid::new_v4().simple().to_string())
+            .map(|_| crate::invite_codes::digest(&Uuid::new_v4().to_string()))
             .collect();
         for (index, code) in codes.iter().enumerate() {
-            sqlx::query("INSERT INTO invites(code,kind,room_id,role,created_by,uses_left,expires_at) VALUES($1,'room',$2,1,$3,0,now()-make_interval(days=>$4))")
+            sqlx::query("INSERT INTO invites(code_hash,kind,room_id,role,created_by,uses_left,expires_at) VALUES($1,'room',$2,1,$3,0,now()-make_interval(days=>$4))")
                 .bind(code).bind(&room_id).bind(owner).bind(if index == 4 {1_i32} else {8_i32})
                 .execute(&pool).await.unwrap();
             sqlx::query(
-                "INSERT INTO invite_redemptions(code,user_id,granted_role) VALUES($1,$2,2)",
+                "INSERT INTO invite_redemptions(invite_hash,user_id,granted_role) VALUES($1,$2,2)",
             )
             .bind(code)
             .bind(member)
@@ -1204,7 +1204,7 @@ mod tests {
             .unwrap();
         }
         let mut lock = pool.begin().await.unwrap();
-        sqlx::query("SELECT code FROM invites WHERE code=$1 FOR UPDATE")
+        sqlx::query("SELECT code_hash FROM invites WHERE code_hash=$1 FOR UPDATE")
             .bind(&codes[0])
             .execute(&mut *lock)
             .await
@@ -1221,14 +1221,14 @@ mod tests {
         let second = retire_old_batch(&pool, config, 2).await.unwrap();
         assert_eq!(second.invites_removed, 2);
         let retained: Vec<String> =
-            sqlx::query_scalar("SELECT code FROM invites WHERE code=ANY($1)")
+            sqlx::query_scalar("SELECT code_hash FROM invites WHERE code_hash=ANY($1)")
                 .bind(&codes)
                 .fetch_all(&pool)
                 .await
                 .unwrap();
         assert_eq!(retained, vec![codes[4].clone()]);
         let receipts: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM invite_redemptions WHERE code=ANY($1)")
+            sqlx::query_scalar("SELECT COUNT(*) FROM invite_redemptions WHERE invite_hash=ANY($1)")
                 .bind(&codes)
                 .fetch_one(&pool)
                 .await

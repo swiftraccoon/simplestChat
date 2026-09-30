@@ -35,12 +35,26 @@ pub(crate) const INVITE_RECEIPT_RETENTION_DAYS: i32 = 7;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct RoomInvite {
-    pub code: String,
+    pub id: Uuid,
     #[sqlx(try_from = "i16")]
     pub role: InviteRole,
     pub uses_left: i32,
     pub expires_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+}
+
+/// The secret is returned once; subsequent listings contain metadata only.
+#[derive(Debug, Serialize)]
+pub struct CreatedRoomInvite {
+    #[serde(flatten)]
+    pub details: RoomInvite,
+    pub code: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InviteCodeRequest {
+    pub code: String,
 }
 
 /// A stored role value as its name; the table's CHECK keeps it in range.
@@ -119,7 +133,7 @@ pub async fn create_room_invite(
     uses: i32,
     days: i32,
     created_by: Uuid,
-) -> Result<Option<RoomInvite>, sqlx::Error> {
+) -> Result<Option<CreatedRoomInvite>, sqlx::Error> {
     let code =
         invite_codes::generate().map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
     let mut transaction = pool.begin().await?;
@@ -138,11 +152,11 @@ pub async fn create_room_invite(
         return Ok(None);
     }
     let invite: RoomInvite = sqlx::query_as(
-        "INSERT INTO invites (code, kind, room_id, role, created_by, uses_left, expires_at)
+        "INSERT INTO invites (code_hash, kind, room_id, role, created_by, uses_left, expires_at)
          VALUES ($1, 'room', $2, $3, $4, $5, now() + make_interval(days => $6))
-         RETURNING code, role, uses_left, expires_at, created_at",
+         RETURNING id, role, uses_left, expires_at, created_at",
     )
-    .bind(&code)
+    .bind(invite_codes::digest(&code))
     .bind(room_id)
     .bind(role.to_db())
     .bind(created_by)
@@ -151,7 +165,10 @@ pub async fn create_room_invite(
     .fetch_one(&mut *transaction)
     .await?;
     transaction.commit().await?;
-    Ok(Some(invite))
+    Ok(Some(CreatedRoomInvite {
+        details: invite,
+        code,
+    }))
 }
 
 pub async fn list_room_invites(
@@ -159,9 +176,9 @@ pub async fn list_room_invites(
     room_id: &str,
 ) -> Result<Vec<RoomInvite>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT code, role, uses_left, expires_at, created_at FROM invites
+        "SELECT id, role, uses_left, expires_at, created_at FROM invites
          WHERE room_id = $1 AND uses_left > 0 AND expires_at > now()
-         ORDER BY created_at DESC, code",
+         ORDER BY created_at DESC, id",
     )
     .bind(room_id)
     .fetch_all(pool)
@@ -171,12 +188,12 @@ pub async fn list_room_invites(
 pub async fn revoke_room_invite(
     pool: &PgPool,
     room_id: &str,
-    code: &str,
+    id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     Ok(
-        sqlx::query("DELETE FROM invites WHERE room_id = $1 AND code = $2 AND kind = 'room'")
+        sqlx::query("DELETE FROM invites WHERE room_id = $1 AND id = $2 AND kind = 'room'")
             .bind(room_id)
-            .bind(code)
+            .bind(id)
             .execute(pool)
             .await?
             .rows_affected()
@@ -196,17 +213,18 @@ pub async fn redeem_room_invite(
     code: &str,
     user_id: Uuid,
 ) -> Result<Option<(String, String, Role)>, sqlx::Error> {
+    let hash = invite_codes::digest(code);
     let mut transaction = pool.begin().await?;
     // Serialize all attempts against this code before checking the receipt.
     // A repeated successful request never spends again or re-grants a role that
     // a moderator has subsequently changed.
     let invitation: Option<(String, i16, Uuid, i32, bool)> = sqlx::query_as(
         "SELECT room_id, role, created_by, uses_left, expires_at > clock_timestamp()
-         FROM invites WHERE code = $1 AND kind = 'room'
+         FROM invites WHERE code_hash = $1 AND kind = 'room'
            AND expires_at > clock_timestamp() - make_interval(days => $2)
          FOR UPDATE",
     )
-    .bind(code)
+    .bind(&hash)
     .bind(INVITE_RECEIPT_RETENTION_DAYS)
     .fetch_optional(&mut *transaction)
     .await?;
@@ -222,9 +240,9 @@ pub async fn redeem_room_invite(
         return Ok(None);
     };
     let receipt: Option<i16> = sqlx::query_scalar(
-        "SELECT granted_role FROM invite_redemptions WHERE code = $1 AND user_id = $2",
+        "SELECT granted_role FROM invite_redemptions WHERE invite_hash = $1 AND user_id = $2",
     )
-    .bind(code)
+    .bind(&hash)
     .bind(user_id)
     .fetch_optional(&mut *transaction)
     .await?;
@@ -259,18 +277,43 @@ pub async fn redeem_room_invite(
         .await?;
         Role::from_db(stored)
     };
-    sqlx::query("UPDATE invites SET uses_left = uses_left - 1 WHERE code = $1")
-        .bind(code)
+    sqlx::query("UPDATE invites SET uses_left = uses_left - 1 WHERE code_hash = $1")
+        .bind(&hash)
         .execute(&mut *transaction)
         .await?;
-    sqlx::query("INSERT INTO invite_redemptions (code, user_id, granted_role) VALUES ($1, $2, $3)")
-        .bind(code)
-        .bind(user_id)
-        .bind(granted as i16)
-        .execute(&mut *transaction)
-        .await?;
+    sqlx::query(
+        "INSERT INTO invite_redemptions (invite_hash, user_id, granted_role) VALUES ($1, $2, $3)",
+    )
+    .bind(&hash)
+    .bind(user_id)
+    .bind(granted as i16)
+    .execute(&mut *transaction)
+    .await?;
     transaction.commit().await?;
     Ok(Some((room_id, display_name, granted)))
+}
+
+/// Read-only preview; possession of the code and an authenticated account may
+/// reveal the destination label and offered role, but never joins or grants it.
+/// A retained receipt remains previewable for the same account on a retry.
+async fn preview_room_invite(
+    pool: &PgPool,
+    code: &str,
+    user_id: Uuid,
+) -> Result<Option<(String, String, i16)>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT i.room_id, r.display_name, i.role FROM invites i
+         JOIN rooms r ON r.id = i.room_id
+         LEFT JOIN invite_redemptions receipt ON receipt.invite_hash = i.code_hash AND receipt.user_id = $2
+         WHERE i.code_hash = $1 AND i.kind = 'room'
+           AND ((i.uses_left > 0 AND i.expires_at > now())
+             OR (receipt.user_id IS NOT NULL AND i.expires_at > now() - make_interval(days => $3)))",
+    )
+    .bind(invite_codes::digest(code))
+    .bind(user_id)
+    .bind(INVITE_RECEIPT_RETENTION_DAYS)
+    .fetch_optional(pool)
+    .await
 }
 
 /// A directory row joined with the account's stored role.
@@ -419,7 +462,7 @@ pub async fn create(
     headers: HeaderMap,
     Path(room_id): Path<String>,
     Json(request): Json<CreateRoomInviteRequest>,
-) -> Result<(HeaderMap, Json<RoomInvite>), RoomApiError> {
+) -> Result<(HeaderMap, Json<CreatedRoomInvite>), RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
     let granting = Role::from_u8(request.role).ok_or_else(|| bad_request("Choose a role"))?;
@@ -454,19 +497,18 @@ pub async fn create(
     Ok((private_headers(), Json(invite)))
 }
 
-/// DELETE /api/rooms/:id/invites/:code (Admin+)
+/// DELETE /api/rooms/:id/invites/:invite_id (Admin+)
 pub async fn revoke(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
-    Path((room_id, code)): Path<(String, String)>,
+    Path((room_id, invite_id)): Path<(String, Uuid)>,
 ) -> Result<StatusCode, RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
     if room_role(&pool, &room_id, user).await? < Role::Admin {
         return Err(forbidden("Only room admins manage invitations"));
     }
-    let code = invite_codes::normalize(&code).ok_or_else(|| bad_request("Invalid invite code"))?;
-    if !revoke_room_invite(&pool, &room_id, &code)
+    if !revoke_room_invite(&pool, &room_id, invite_id)
         .await
         .map_err(room_database_error)?
     {
@@ -477,15 +519,16 @@ pub async fn revoke(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// POST /api/rooms/invites/:code — accept a room invitation.
+/// POST /api/rooms/invites/redeem — explicitly accept a body-only secret.
 pub async fn redeem(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
-    Path(code): Path<String>,
+    Json(request): Json<InviteCodeRequest>,
 ) -> Result<(HeaderMap, Json<InviteRedemption>), RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
-    let code = invite_codes::normalize(&code).ok_or_else(|| bad_request("Invalid invite code"))?;
+    let code =
+        invite_codes::normalize(&request.code).ok_or_else(|| bad_request("Invalid invite code"))?;
     let (room_id, display_name, role) = redeem_room_invite(&pool, &code, user)
         .await
         .map_err(room_database_error)?
@@ -504,6 +547,38 @@ pub async fn redeem(
             room_id,
             display_name,
             role: role.name(),
+        }),
+    ))
+}
+
+/// POST /api/rooms/invites/preview — inspect before explicit acceptance.
+pub async fn preview(
+    State(server): State<SignalingServer>,
+    headers: HeaderMap,
+    Json(request): Json<InviteCodeRequest>,
+) -> Result<(HeaderMap, Json<InviteRedemption>), RoomApiError> {
+    let _permit = acquire_room_api_request(&server)?;
+    let (user, pool) = caller(&server, &headers).await?;
+    let code =
+        invite_codes::normalize(&request.code).ok_or_else(|| bad_request("Invalid invite code"))?;
+    let (room_id, display_name, role) = preview_room_invite(&pool, &code, user)
+        .await
+        .map_err(room_database_error)?
+        .ok_or_else(|| {
+            RoomApiError::from(
+                (
+                    StatusCode::NOT_FOUND,
+                    "This invitation is invalid, used up or expired",
+                )
+                    .into_response(),
+            )
+        })?;
+    Ok((
+        private_headers(),
+        Json(InviteRedemption {
+            room_id,
+            display_name,
+            role: Role::from_db(role).name(),
         }),
     ))
 }
@@ -614,8 +689,42 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(invite_codes::is_valid(&invite.code));
-        assert_eq!((invite.role.0, invite.uses_left), (Role::Member, 2));
+        assert_eq!(
+            (invite.details.role.0, invite.details.uses_left),
+            (Role::Member, 2)
+        );
         assert_eq!(list_room_invites(&pool, &room_id).await.unwrap().len(), 1);
+
+        let listed =
+            serde_json::to_value(list_room_invites(&pool, &room_id).await.unwrap()).unwrap();
+        assert!(listed[0].get("code").is_none());
+        assert!(listed[0].get("code_hash").is_none());
+        assert_eq!(listed[0]["id"], invite.details.id.to_string());
+        let stored: String = sqlx::query_scalar("SELECT code_hash FROM invites WHERE id = $1")
+            .bind(invite.details.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(stored, invite_codes::digest(&invite.code));
+        assert_ne!(stored, invite.code);
+        for _ in 0..2 {
+            assert_eq!(
+                preview_room_invite(&pool, &invite.code, alice)
+                    .await
+                    .unwrap(),
+                Some((room_id.clone(), "Invited room".into(), Role::Member.to_db()))
+            );
+        }
+        assert_eq!(
+            list_room_invites(&pool, &room_id).await.unwrap()[0].uses_left,
+            2
+        );
+        assert_eq!(
+            roles::resolve_role(&pool, &room_id, Some(&alice), &owner, true)
+                .await
+                .unwrap(),
+            Role::User
+        );
 
         // Alice becomes a member; a lost-response retry must not spend twice.
         let (redeemed_room, name, role) = redeem_room_invite(&pool, &invite.code, alice)
@@ -673,11 +782,13 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        sqlx::query("UPDATE invites SET expires_at = now() - interval '1 minute' WHERE code = $1")
-            .bind(&fresh.code)
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "UPDATE invites SET expires_at = now() - interval '1 minute' WHERE code_hash = $1",
+        )
+        .bind(invite_codes::digest(&fresh.code))
+        .execute(&pool)
+        .await
+        .unwrap();
         assert!(
             redeem_room_invite(&pool, &fresh.code, alice)
                 .await
@@ -689,12 +800,12 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(
-            revoke_room_invite(&pool, &room_id, &live.code)
+            revoke_room_invite(&pool, &room_id, live.details.id)
                 .await
                 .unwrap()
         );
         assert!(
-            !revoke_room_invite(&pool, &room_id, &live.code)
+            !revoke_room_invite(&pool, &room_id, live.details.id)
                 .await
                 .unwrap()
         );
@@ -713,11 +824,12 @@ mod tests {
             .expect("initial single-use redemption succeeds");
         assert_eq!(first.2, Role::Member);
         assert_eq!(Some(first), second.unwrap());
-        let remaining: i32 = sqlx::query_scalar("SELECT uses_left FROM invites WHERE code = $1")
-            .bind(&retry.code)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+        let remaining: i32 =
+            sqlx::query_scalar("SELECT uses_left FROM invites WHERE code_hash = $1")
+                .bind(invite_codes::digest(&retry.code))
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(remaining, 0);
         // A role removed after redemption is never restored by a retry.
         sqlx::query("DELETE FROM room_roles WHERE room_id = $1 AND user_id = $2")
@@ -742,11 +854,13 @@ mod tests {
         .unwrap();
         assert_eq!(roles, 0);
         // Receipt retries survive expiry for seven days; new users cannot redeem them.
-        sqlx::query("UPDATE invites SET expires_at = now() - interval '1 day' WHERE code = $1")
-            .bind(&retry.code)
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "UPDATE invites SET expires_at = now() - interval '1 day' WHERE code_hash = $1",
+        )
+        .bind(invite_codes::digest(&retry.code))
+        .execute(&pool)
+        .await
+        .unwrap();
         assert!(
             redeem_room_invite(&pool, &retry.code, alice)
                 .await
@@ -759,11 +873,13 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-        sqlx::query("UPDATE invites SET expires_at = now() - interval '8 days' WHERE code = $1")
-            .bind(&retry.code)
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "UPDATE invites SET expires_at = now() - interval '8 days' WHERE code_hash = $1",
+        )
+        .bind(invite_codes::digest(&retry.code))
+        .execute(&pool)
+        .await
+        .unwrap();
         assert!(
             redeem_room_invite(&pool, &retry.code, alice)
                 .await
@@ -772,7 +888,7 @@ mod tests {
         );
         // Explicit revocation immediately invalidates an existing receipt too.
         assert!(
-            revoke_room_invite(&pool, &room_id, &invite.code)
+            revoke_room_invite(&pool, &room_id, invite.details.id)
                 .await
                 .unwrap()
         );
@@ -783,8 +899,8 @@ mod tests {
                 .is_none()
         );
         let receipts: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM invite_redemptions WHERE code = $1")
-                .bind(&invite.code)
+            sqlx::query_scalar("SELECT COUNT(*) FROM invite_redemptions WHERE invite_hash = $1")
+                .bind(invite_codes::digest(&invite.code))
                 .fetch_one(&pool)
                 .await
                 .unwrap();
