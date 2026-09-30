@@ -13,19 +13,6 @@ pub fn secret_is_strong(secret: &str) -> bool {
     secret.len() >= MIN_SECRET_BYTES
 }
 
-pub fn create_token(user_id: &str, display_name: &str, secret: &str) -> Result<String, AuthError> {
-    create_token_with_version(user_id, display_name, secret, 0)
-}
-
-pub fn create_token_with_version(
-    user_id: &str,
-    display_name: &str,
-    secret: &str,
-    auth_version: i64,
-) -> Result<String, AuthError> {
-    issue(user_id, display_name, secret, auth_version, None)
-}
-
 /// The token a sign-in or refresh issues: bound to its refresh session, so
 /// signing that session out retires it before its 15-minute expiry.
 pub fn create_session_token(
@@ -34,22 +21,6 @@ pub fn create_session_token(
     secret: &str,
     auth_version: i64,
     session: uuid::Uuid,
-) -> Result<String, AuthError> {
-    issue(
-        user_id,
-        display_name,
-        secret,
-        auth_version,
-        Some(session.to_string()),
-    )
-}
-
-fn issue(
-    user_id: &str,
-    display_name: &str,
-    secret: &str,
-    auth_version: i64,
-    sid: Option<String>,
 ) -> Result<String, AuthError> {
     if !secret_is_strong(secret) {
         return Err(AuthError::NotConfigured);
@@ -66,7 +37,7 @@ fn issue(
         aud: JWT_AUDIENCE.to_string(),
         exp: (now.as_secs() + TOKEN_LIFETIME_SECS) as usize,
         auth_version,
-        sid,
+        sid: session,
     };
 
     encode(
@@ -104,36 +75,24 @@ pub fn validate_token(token: &str, secret: &str) -> Result<Claims, AuthError> {
     Ok(data.claims)
 }
 
-/// Access tokens are invalidated immediately when account credentials change.
+/// Require the current account version and its live, unexpired issuing session.
 pub async fn validate_current_claims(
     pool: &sqlx::PgPool,
     claims: &Claims,
 ) -> Result<(), AuthError> {
     let user_id = uuid::Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
-    let version: Option<i64> = match &claims.sid {
-        // A token issued with a session lives only while that session does.
-        Some(sid) => {
-            let session = uuid::Uuid::parse_str(sid).map_err(|_| AuthError::InvalidToken)?;
-            sqlx::query_scalar(
-                "SELECT auth_version FROM users
-                 WHERE id = $1
-                   AND EXISTS (
-                       SELECT 1 FROM sessions
-                       WHERE id = $2 AND user_id = $1 AND expires_at > clock_timestamp()
-                   )",
-            )
-            .bind(user_id)
-            .bind(session)
-            .fetch_optional(pool)
-            .await
-        }
-        None => {
-            sqlx::query_scalar("SELECT auth_version FROM users WHERE id = $1")
-                .bind(user_id)
-                .fetch_optional(pool)
-                .await
-        }
-    }
+    let version: Option<i64> = sqlx::query_scalar(
+        "SELECT auth_version FROM users
+         WHERE id = $1
+           AND EXISTS (
+               SELECT 1 FROM sessions
+               WHERE id = $2 AND user_id = $1 AND expires_at > clock_timestamp()
+           )",
+    )
+    .bind(user_id)
+    .bind(claims.sid)
+    .fetch_optional(pool)
+    .await
     .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
     if version == Some(claims.auth_version) {
         Ok(())
@@ -147,38 +106,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn legacy_hs256_fixture_without_auth_version_remains_compatible() {
-        // Frozen pre-auth-version claims, signed independently using Node's
-        // HMAC-SHA256 implementation. Expiry is 2100-01-01 UTC; this fixture
-        // deliberately avoids the current JWT encoder's round-trip behavior.
-        const SECRET: &str = "legacy-jwt-test-secret-at-least-32-bytes";
-        const TOKEN: &str = concat!(
-            "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.",
-            "eyJzdWIiOiJsZWdhY3ktdXNlciIsIm5hbWUiOiJBbGljZSIsImlzcyI6InNpbXBsZXN0Y2hhdCIsImF1ZCI6InNpbXBsZXN0Y2hhdCIsImV4cCI6NDEwMjQ0NDgwMH0.",
-            "p02jEpzdoVDcxs2deBDIs4FG0Qo8pyQyldeflBP2QaE"
-        );
-        let claims = validate_token(TOKEN, SECRET).unwrap();
-        assert_eq!(claims.sub, "legacy-user");
-        assert_eq!(claims.name, "Alice");
-        assert_eq!(claims.iss, JWT_ISSUER);
-        assert_eq!(claims.aud, JWT_AUDIENCE);
-        assert_eq!(claims.auth_version, 0);
-        assert_eq!(claims.exp, 4_102_444_800);
-        let tampered = TOKEN.replacen("p02jEpz", "q02jEpz", 1);
-        assert!(matches!(
-            validate_token(&tampered, SECRET),
-            Err(AuthError::InvalidToken)
-        ));
-    }
-
-    #[test]
-    fn signed_tokens_still_require_issuer_audience_subject_and_expiry() {
+    fn signed_tokens_require_session_account_version_and_standard_claims() {
         let secret = "claim-validation-test-secret-at-least-32-bytes";
         let claims = serde_json::json!({
             "sub": "user-123", "name": "Alice", "iss": JWT_ISSUER,
-            "aud": JWT_AUDIENCE, "exp": 4_102_444_800_u64, "auth_version": 7
+            "aud": JWT_AUDIENCE, "exp": 4_102_444_800_u64, "auth_version": 7,
+            "sid": uuid::Uuid::new_v4()
         });
-        for field in ["iss", "aud", "sub", "exp"] {
+        for field in ["iss", "aud", "sub", "exp", "auth_version", "sid"] {
             let mut missing = claims.clone();
             missing.as_object_mut().unwrap().remove(field);
             let token = encode(
@@ -191,6 +126,24 @@ mod tests {
                 matches!(validate_token(&token, secret), Err(AuthError::InvalidToken)),
                 "missing {field}"
             );
+        }
+        for sid in [
+            serde_json::Value::Null,
+            serde_json::json!("invalid-session"),
+            serde_json::json!(7),
+        ] {
+            let mut malformed = claims.clone();
+            malformed["sid"] = sid;
+            let token = encode(
+                &Header::new(Algorithm::HS256),
+                &malformed,
+                &EncodingKey::from_secret(secret.as_bytes()),
+            )
+            .unwrap();
+            assert!(matches!(
+                validate_token(&token, secret),
+                Err(AuthError::InvalidToken)
+            ));
         }
         for field in ["iss", "aud"] {
             let mut wrong = claims.clone();
@@ -221,17 +174,27 @@ mod tests {
     #[test]
     fn test_create_and_validate_token() {
         let secret = "test-secret-at-least-32-bytes-long!!";
-        let token = create_token("user-123", "Alice", secret).unwrap();
+        let session = uuid::Uuid::new_v4();
+        let token = create_session_token("user-123", "Alice", secret, 0, session).unwrap();
         let claims = validate_token(&token, secret).unwrap();
         assert_eq!(claims.sub, "user-123");
         assert_eq!(claims.name, "Alice");
-        let token = create_token_with_version("user-123", "Alice", secret, 7).unwrap();
+        assert_eq!(claims.sid, session);
+        let token =
+            create_session_token("user-123", "Alice", secret, 7, uuid::Uuid::new_v4()).unwrap();
         assert_eq!(validate_token(&token, secret).unwrap().auth_version, 7);
     }
 
     #[test]
     fn test_invalid_secret_rejects() {
-        let token = create_token("user-123", "Alice", "secret-1-at-least-32-bytes-long!!").unwrap();
+        let token = create_session_token(
+            "user-123",
+            "Alice",
+            "secret-1-at-least-32-bytes-long!!",
+            0,
+            uuid::Uuid::new_v4(),
+        )
+        .unwrap();
         let result = validate_token(&token, "secret-2-at-least-32-bytes-long!!");
         assert!(matches!(result, Err(AuthError::InvalidToken)));
     }
@@ -240,7 +203,7 @@ mod tests {
     fn test_weak_secret_rejects() {
         assert!(!secret_is_strong("secret"));
         assert!(matches!(
-            create_token("user-123", "Alice", "secret"),
+            create_session_token("user-123", "Alice", "secret", 0, uuid::Uuid::new_v4()),
             Err(AuthError::NotConfigured)
         ));
     }
@@ -265,7 +228,7 @@ mod tests {
             aud: JWT_AUDIENCE.to_string(),
             exp: now.saturating_sub(1),
             auth_version: 0,
-            sid: None,
+            sid: uuid::Uuid::new_v4(),
         };
         let token = encode(
             &Header::new(Algorithm::HS256),

@@ -79,15 +79,6 @@ fn refresh_cookie_headers(raw_token: &str) -> HeaderMap {
         header::SET_COOKIE,
         HeaderValue::from_str(&cookie).expect("server-generated refresh cookie is valid"),
     );
-    // Best-effort cleanup for old host-only cookies. A Domain-scoped legacy
-    // cookie cannot be cleared here, so authentication deliberately ignores
-    // the legacy name entirely (see refresh_token_from_headers).
-    headers.append(
-        header::SET_COOKIE,
-        HeaderValue::from_static(
-            "refresh_token=; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh; Max-Age=0",
-        ),
-    );
     headers
 }
 
@@ -97,12 +88,6 @@ pub(super) fn clear_refresh_cookie_headers() -> HeaderMap {
         header::SET_COOKIE,
         HeaderValue::from_static(
             "__Host-refresh_token=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
-        ),
-    );
-    headers.append(
-        header::SET_COOKIE,
-        HeaderValue::from_static(
-            "refresh_token=; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh; Max-Age=0",
         ),
     );
     headers
@@ -119,13 +104,8 @@ pub(super) fn no_store_headers() -> HeaderMap {
 }
 
 fn refresh_token_from_headers(headers: &HeaderMap) -> Option<&str> {
-    cookie_value(headers, REFRESH_COOKIE_NAME).filter(|token| {
-        !token.is_empty()
-            && token.len() <= 128
-            && token
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
-    })
+    cookie_value(headers, REFRESH_COOKIE_NAME)
+        .filter(|token| session::refresh_token_is_valid(token))
 }
 
 fn cookie_value<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
@@ -951,19 +931,7 @@ mod tests {
     }
 
     #[test]
-    fn prefers_host_prefixed_refresh_cookie() {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            header::COOKIE,
-            HeaderValue::from_static(
-                "refresh_token=legacy-token; __Host-refresh_token=current-token",
-            ),
-        );
-        assert_eq!(refresh_token_from_headers(&headers), Some("current-token"));
-    }
-
-    #[test]
-    fn rejects_legacy_refresh_cookie_even_when_it_is_the_only_cookie() {
+    fn rejects_non_host_prefixed_refresh_cookie() {
         let mut headers = HeaderMap::new();
         headers.insert(
             header::COOKIE,
@@ -973,7 +941,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_the_versioned_opaque_refresh_token_format() {
+    fn accepts_the_current_opaque_refresh_token_format() {
         let token = session::generate_refresh_token().unwrap();
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -987,17 +955,24 @@ mod tests {
     }
 
     #[test]
-    fn rejects_delimiter_characters_not_accepted_by_previous_servers() {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            header::COOKIE,
-            HeaderValue::from_static("__Host-refresh_token=v1.invalid.invalid"),
-        );
-        assert_eq!(refresh_token_from_headers(&headers), None);
+    fn rejects_unsupported_or_malformed_refresh_cookies() {
+        for raw in [
+            "v1.invalid.invalid".to_string(),
+            uuid::Uuid::new_v4().to_string(),
+            format!("v1l{}", "A".repeat(91)),
+            "invalid-token".to_string(),
+        ] {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                header::COOKIE,
+                HeaderValue::from_str(&format!("__Host-refresh_token={raw}")).unwrap(),
+            );
+            assert_eq!(refresh_token_from_headers(&headers), None);
+        }
     }
 
     #[test]
-    fn refresh_response_sets_host_cookie_and_expires_legacy_cookie() {
+    fn refresh_response_sets_and_clears_only_the_current_host_cookie() {
         let headers = refresh_cookie_headers("safe-token");
         let cookies = headers
             .get_all(header::SET_COOKIE)
@@ -1007,9 +982,14 @@ mod tests {
         assert!(cookies.iter().any(|cookie| {
             cookie.starts_with("__Host-refresh_token=safe-token;") && cookie.contains("Path=/;")
         }));
-        assert!(cookies.iter().any(|cookie| {
-            cookie.starts_with("refresh_token=;") && cookie.contains("Max-Age=0")
-        }));
+        assert_eq!(cookies.len(), 1);
+        let cleared = clear_refresh_cookie_headers();
+        let cleared: Vec<_> = cleared.get_all(header::SET_COOKIE).iter().collect();
+        assert_eq!(cleared.len(), 1);
+        assert_eq!(
+            cleared[0],
+            "__Host-refresh_token=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
+        );
         assert_eq!(
             headers
                 .get(header::CACHE_CONTROL)

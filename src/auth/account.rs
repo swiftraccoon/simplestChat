@@ -772,18 +772,27 @@ mod tests {
         let id: Uuid = sqlx::query_scalar("INSERT INTO users (email, display_name, password_hash, recovery_key_hash) VALUES ($1, 'Recovery test', 'old-hash', $2) RETURNING id")
             .bind(&email).bind(&key_hash).fetch_one(&pool).await.unwrap();
         let secret = "account-recovery-test-secret-at-least-32-bytes";
-        let old_token = jwt::create_token(&id.to_string(), "Recovery test", secret).unwrap();
+        let original_session =
+            session::create_session(&pool, &id, &session::generate_refresh_token().unwrap())
+                .await
+                .unwrap();
+        session::create_session(&pool, &id, &session::generate_refresh_token().unwrap())
+            .await
+            .unwrap();
+        let old_token = jwt::create_session_token(
+            &id.to_string(),
+            "Recovery test",
+            secret,
+            0,
+            original_session,
+        )
+        .unwrap();
         let old_claims = jwt::validate_token(&old_token, secret).unwrap();
         assert!(
             jwt::validate_current_claims(&pool, &old_claims)
                 .await
                 .is_ok()
         );
-        for _ in 0..2 {
-            session::create_session(&pool, &id, &session::generate_refresh_token().unwrap())
-                .await
-                .unwrap();
-        }
         assert!(
             consume_recovery(&pool, &email, &session::hash_token("wrong"), "bad-hash")
                 .await
@@ -821,8 +830,13 @@ mod tests {
             jwt::validate_current_claims(&pool, &old_claims).await,
             Err(AuthError::InvalidToken)
         ));
+        let new_session =
+            session::create_session(&pool, &id, &session::generate_refresh_token().unwrap())
+                .await
+                .unwrap();
         let current_token =
-            jwt::create_token_with_version(&id.to_string(), "Recovery test", secret, 1).unwrap();
+            jwt::create_session_token(&id.to_string(), "Recovery test", secret, 1, new_session)
+                .unwrap();
         let current_claims = jwt::validate_token(&current_token, secret).unwrap();
         assert!(
             jwt::validate_current_claims(&pool, &current_claims)

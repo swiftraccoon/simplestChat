@@ -119,11 +119,8 @@ pub struct Claims {
     pub iss: String,
     pub aud: String,
     pub exp: usize,
-    #[serde(default)]
     pub auth_version: i64,
     /// The refresh session this token was issued with. Validation requires that
-    /// session to exist, so logout retires the token; tokens without one (older
-    /// issues, fixtures) are bound only by their expiry and the account version.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sid: Option<String>,
+    /// live session to belong to the account, so logout retires the token.
+    pub sid: uuid::Uuid,
 }

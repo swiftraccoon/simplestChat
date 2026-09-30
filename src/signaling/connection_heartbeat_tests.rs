@@ -479,7 +479,7 @@ async fn expired_or_unverifiable_account_cannot_receive_heartbeats() {
             aud: "test".into(),
             exp,
             auth_version: 0,
-            sid: None,
+            sid: uuid::Uuid::new_v4(),
         }))
         .await;
         let first = tokio::time::timeout(TEST_IDLE, fixture.peer.next()).await;
@@ -495,9 +495,14 @@ async fn expired_or_unverifiable_account_cannot_receive_heartbeats() {
 async fn renewal_transport_loss_and_drain_do_not_invalidate_credentials() {
     let fixture = Fixture::new().await;
     let secret = "interrupted-renewal-fixture-secret-at-least-32-bytes";
-    let token =
-        crate::auth::jwt::create_token(&Uuid::new_v4().to_string(), "Renewal fixture", secret)
-            .unwrap();
+    let token = crate::auth::jwt::create_session_token(
+        &Uuid::new_v4().to_string(),
+        "Renewal fixture",
+        secret,
+        0,
+        Uuid::new_v4(),
+    )
+    .unwrap();
     let claims = crate::auth::jwt::validate_token(&token, secret).unwrap();
     let token = serde_json::from_value(serde_json::json!(token)).unwrap();
     let authenticator = RenewalAuthenticator::new(secret.into(), Arc::new(Semaphore::new(1)));
@@ -545,9 +550,22 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
         "INSERT INTO users (email, display_name, password_hash) VALUES ($1, 'Renewal fixture', 'unused-fixture-hash') RETURNING id",
     ).bind(email).fetch_one(&pool).await.unwrap();
     let secret = "same-socket-renewal-fixture-secret-at-least-32-bytes";
+    let session_id = crate::auth::session::create_session(
+        &pool,
+        &account_id,
+        &crate::auth::session::generate_refresh_token().unwrap(),
+    )
+    .await
+    .unwrap();
     let mut original = crate::auth::jwt::validate_token(
-        &crate::auth::jwt::create_token(&account_id.to_string(), "Renewal fixture", secret)
-            .unwrap(),
+        &crate::auth::jwt::create_session_token(
+            &account_id.to_string(),
+            "Renewal fixture",
+            secret,
+            0,
+            session_id,
+        )
+        .unwrap(),
         secret,
     )
     .unwrap();
@@ -571,8 +589,14 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
             let participant_id = account_id.to_string();
             let room = fixture.manager.room_for_connection_tests("heartbeat-test");
             let before = room.read().await.participants[&participant_id].clone();
-            let token = crate::auth::jwt::create_token(&participant_id, "Renewal fixture", secret)
-                .map_err(|_| anyhow::anyhow!("fixture token could not be issued"))?;
+            let token = crate::auth::jwt::create_session_token(
+                &participant_id,
+                "Renewal fixture",
+                secret,
+                0,
+                session_id,
+            )
+            .map_err(|_| anyhow::anyhow!("fixture token could not be issued"))?;
             let renewed = fixture.request(serde_json::json!({
             "type": "renewAuthentication", "requestId": "renewal-fixture-1", "token": token,
         }), "authenticationRenewed").await?;

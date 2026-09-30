@@ -264,6 +264,14 @@ ops/ansible/.venv/bin/python build/deploy.py --inventory ops/ansible/inventory.l
   --limit public_vps --quiet-seconds 0 --maintenance [--install-helpers]
 ```
 
+Migration `022_require_current_sessions.sql` deliberately deletes all existing
+refresh sessions before requiring a nonnullable refresh-family hash. Release it
+through this maintenance path: every signed-in client must sign in once afterward.
+Accounts, passwords, passkeys, recovery keys and room memberships remain intact.
+There is no compatibility parser for older refresh formats or sessionless access
+tokens. Review this sign-in impact alongside the usual pre-release backup; do not
+edit the already-published migrations 010 or 013 to avoid the reset.
+
 The controller waits for the commit's CI and stages the image while chat stays
 online, exactly as a routine release does, then runs `ops/ansible/maintenance.yml`:
 it checks out the revision's source under `/srv/simplestchat-bench/sources/`

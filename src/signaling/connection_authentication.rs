@@ -223,7 +223,7 @@ mod tests {
             aud: "simplestchat".into(),
             exp,
             auth_version: 0,
-            sid: None,
+            sid: uuid::Uuid::new_v4(),
         }
     }
 
@@ -274,7 +274,14 @@ mod tests {
 
         async fn renew_without_database(&mut self) -> RenewalOutcome {
             let secret = "renewal-priority-fixture-secret-at-least-32-bytes";
-            let token = jwt::create_token(&self.current.sub, &self.current.name, secret).unwrap();
+            let token = jwt::create_session_token(
+                &self.current.sub,
+                &self.current.name,
+                secret,
+                self.current.auth_version,
+                self.current.sid,
+            )
+            .unwrap();
             let token = serde_json::from_value(serde_json::json!(token)).unwrap();
             let authenticator =
                 RenewalAuthenticator::new(secret.into(), Arc::new(tokio::sync::Semaphore::new(1)));
@@ -537,7 +544,14 @@ mod tests {
     fn renewal_validator_accepts_an_ordinary_refreshed_token() {
         let secret = "ordinary-renewal-fixture-secret-at-least-32-bytes";
         let mut current = claims(unix_seconds() as usize + 60);
-        let token = jwt::create_token(&current.sub, &current.name, secret).unwrap();
+        let token = jwt::create_session_token(
+            &current.sub,
+            &current.name,
+            secret,
+            current.auth_version,
+            current.sid,
+        )
+        .unwrap();
         let token: AuthenticationToken = serde_json::from_value(serde_json::json!(token)).unwrap();
         let auth =
             RenewalAuthenticator::new(secret.into(), Arc::new(tokio::sync::Semaphore::new(1)));

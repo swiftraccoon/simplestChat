@@ -104,6 +104,19 @@ failures at other addresses cannot continuously deny the owner's proof. The HTTP
 failure tables use bounded LRU eviction, with no shared overflow penalty;
 resource admission remains a separate protection against distributed traffic.
 
+Access JWTs require an explicit account `auth_version` and a UUID `sid` naming
+an unexpired session belonging to that account. Every HTTP authorization and
+socket revalidation enforces both; logout removes the session, and recovery or
+password changes remove all sessions and advance the account version. There is
+no sessionless token issuer or validator. Refresh tokens have one opaque format:
+`v1n` followed by two 43-character unpadded base64url secrets (generation, then
+family), each encoding 32 random bytes. Only hashes persist, the family hash is
+required, and token rotation retains the existing bounded concurrency/replay rules.
+Only the secure HttpOnly `__Host-refresh_token` cookie is issued and cleared.
+Migration 022 invalidates all existing sign-ins once and makes the family hash
+nonnullable; accounts, password/passkey credentials, recovery keys and memberships
+are preserved. The startup schema check refuses a nullable family column.
+
 Authenticated HTTP mints a 256-bit one-use upgrade ticket, consumed from the
 `ticket.` WebSocket subprotocol. Pending records contain a digest, session-bound
 claims and a monotonic deadline of at most 30 seconds; at most 10,000 records are

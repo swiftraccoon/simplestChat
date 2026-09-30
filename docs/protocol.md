@@ -196,6 +196,17 @@ loopback origins. Origin-less native clients are handled separately. See
 Authentication comes from the handshake, not from participant IDs in messages.
 The server also enforces JWT expiry and account revocation on open sockets.
 
+Access JWTs always include `auth_version` and a UUID `sid`. Authorization requires
+the current account version and the named, unexpired session belonging to that
+account; there is no sessionless JWT contract. Refresh tokens are opaque to the
+browser and use only the secure HttpOnly `__Host-refresh_token` cookie at `Path=/`
+with `SameSite=Strict`. The server accepts its single current `v1n` format (two
+43-character unpadded base64url secrets encoding 32 bytes each), never a raw UUID
+or another family format. Issuance and sign-out set or clear only this cookie.
+Migration 022 invalidates existing sign-ins once, preserving accounts,
+password/passkey credentials, recovery keys and memberships. Affected clients
+must sign in again; no token transition or fallback is provided.
+
 The browser schedules HTTP token refresh after 12 minutes. Network failures or
 HTTP 5xx responses retain the current session for up to three refresh requests
 within 15 seconds of starting scheduled refresh, capped by the accepted token's

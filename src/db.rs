@@ -143,21 +143,17 @@ async fn verify_schema(pool: &PgPool) -> anyhow::Result<()> {
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!(
-        "SELECT c.table_name::text, c.column_name::text
+        "SELECT c.table_name::text, c.column_name::text, c.is_nullable::text
          FROM information_schema.columns c
          JOIN (VALUES {expected}) AS e(table_name, column_name)
            ON c.table_name = e.table_name AND c.column_name = e.column_name
          WHERE c.table_schema = 'public'"
     );
-    let present: Vec<(String, String)> = sqlx::query_as(sqlx::AssertSqlSafe(sql))
+    let present: Vec<(String, String, String)> = sqlx::query_as(sqlx::AssertSqlSafe(sql))
         .fetch_all(pool)
         .await
         .context("could not inspect the database schema")?;
-    let missing: Vec<String> = EXPECTED_COLUMNS
-        .iter()
-        .filter(|(table, column)| !present.iter().any(|(t, c)| t == table && c == column))
-        .map(|(table, column)| format!("{table}.{column}"))
-        .collect();
+    let missing = schema_gaps(&present);
     if !missing.is_empty() {
         bail!(
             "database schema is behind this build (missing {}); run the migrations first",
@@ -165,6 +161,20 @@ async fn verify_schema(pool: &PgPool) -> anyhow::Result<()> {
         );
     }
     Ok(())
+}
+
+fn schema_gaps(present: &[(String, String, String)]) -> Vec<String> {
+    let mut missing: Vec<String> = EXPECTED_COLUMNS
+        .iter()
+        .filter(|(table, column)| !present.iter().any(|(t, c, _)| t == table && c == column))
+        .map(|(table, column)| format!("{table}.{column}"))
+        .collect();
+    if present.iter().any(|(table, column, nullable)| {
+        table == "sessions" && column == "refresh_token_family_hash" && nullable != "NO"
+    }) {
+        missing.push("sessions.refresh_token_family_hash NOT NULL".to_string());
+    }
+    missing
 }
 
 fn require_verified_remote_database(options: &PgConnectOptions) -> anyhow::Result<()> {
@@ -217,6 +227,29 @@ fn run_migrations() -> anyhow::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn schema_requires_nonnullable_refresh_families() {
+        let mut columns: Vec<_> = EXPECTED_COLUMNS
+            .iter()
+            .map(|(table, column)| (table.to_string(), column.to_string(), "NO".to_string()))
+            .collect();
+        assert!(schema_gaps(&columns).is_empty());
+        let family = columns
+            .iter_mut()
+            .find(|(table, column, _)| table == "sessions" && column == "refresh_token_family_hash")
+            .unwrap();
+        family.2 = "YES".into();
+        assert_eq!(
+            schema_gaps(&columns),
+            vec!["sessions.refresh_token_family_hash NOT NULL"]
+        );
+        columns.retain(|(table, _, _)| table != "sessions");
+        assert_eq!(
+            schema_gaps(&columns),
+            vec!["sessions.refresh_token_family_hash"]
+        );
+    }
 
     #[test]
     fn pool_failures_are_classified_without_error_text() {

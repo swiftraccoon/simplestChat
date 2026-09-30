@@ -84,9 +84,6 @@ impl TicketStore {
         now: Instant,
         epoch: u64,
     ) -> Result<TicketResponse, AuthError> {
-        if claims.sid.is_none() {
-            return Err(AuthError::InvalidToken);
-        }
         let expires_in = (claims.exp as u64)
             .saturating_sub(epoch)
             .min(TICKET_TTL_SECONDS);
@@ -188,7 +185,7 @@ mod tests {
             aud: "simplestchat".into(),
             exp: (epoch + 900) as usize,
             auth_version: 0,
-            sid: Some(uuid::Uuid::new_v4().to_string()),
+            sid: uuid::Uuid::new_v4(),
         }
     }
 
@@ -223,9 +220,6 @@ mod tests {
                 .take_at(&third.ticket, now + Duration::from_secs(30), 1030)
                 .is_err()
         );
-        let mut unbound = identity;
-        unbound.sid = None;
-        assert!(store.issue_at(unbound, now, 1000).is_err());
     }
 
     #[test]
@@ -282,7 +276,7 @@ mod tests {
             transaction.commit().await.unwrap();
             let mut identity = claims(epoch_seconds().unwrap());
             identity.sub = user.to_string();
-            identity.sid = Some(sid.to_string());
+            identity.sid = sid;
             identities.push((identity, refresh));
         }
         let first = store.issue(identities[0].0.clone()).unwrap();

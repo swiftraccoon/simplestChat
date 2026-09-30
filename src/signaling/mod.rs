@@ -1927,7 +1927,21 @@ mod security_tests {
         let mut server = SignalingServer::new(manager, None, metrics, Some(pool.clone())).unwrap();
         let secret = "disposable-membership-handler-secret-at-least-32-bytes";
         server.jwt_secret = Some(secret.into());
-        let token = crate::auth::jwt::create_token(&user.to_string(), "Page test", secret).unwrap();
+        let session_id = crate::auth::session::create_session(
+            &pool,
+            &user,
+            &crate::auth::session::generate_refresh_token().unwrap(),
+        )
+        .await
+        .unwrap();
+        let token = crate::auth::jwt::create_session_token(
+            &user.to_string(),
+            "Page test",
+            secret,
+            0,
+            session_id,
+        )
+        .unwrap();
         let mut headers = HeaderMap::new();
         headers.insert(
             header::AUTHORIZATION,

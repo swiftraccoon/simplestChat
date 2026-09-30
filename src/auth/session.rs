@@ -9,10 +9,8 @@ use uuid::Uuid;
 
 const MAX_ACTIVE_SESSIONS_PER_USER: i64 = 32;
 const REFRESH_SECRET_BYTES: usize = 32;
-const REFRESH_TOKEN_NEW_FAMILY_PREFIX: &str = "v1n";
-const REFRESH_TOKEN_LEGACY_FAMILY_PREFIX: &str = "v1l";
+const REFRESH_TOKEN_PREFIX: &str = "v1n";
 const ENCODED_REFRESH_SECRET_LEN: usize = 43;
-const ENCODED_LEGACY_FAMILY_LEN: usize = 48;
 // Permit an immediately concurrent request to lose the rotation race without
 // treating it as theft. It receives no token and cannot extend this window.
 pub(crate) const CONCURRENT_REFRESH_GRACE_SECONDS: i64 = 2;
@@ -60,19 +58,12 @@ fn random_secret() -> Result<[u8; REFRESH_SECRET_BYTES], AuthError> {
 
 /// The token remains opaque to clients. The generation secret comes first so
 /// log truncation is less likely to expose the stable family capability.
-fn build_refresh_token(family_secret: &[u8]) -> Result<RefreshToken, AuthError> {
+fn build_refresh_token(
+    family_secret: &[u8; REFRESH_SECRET_BYTES],
+) -> Result<RefreshToken, AuthError> {
     let generation_secret = random_secret()?;
-    let prefix = match family_secret.len() {
-        REFRESH_SECRET_BYTES => REFRESH_TOKEN_NEW_FAMILY_PREFIX,
-        36 => REFRESH_TOKEN_LEGACY_FAMILY_PREFIX,
-        length => {
-            return Err(AuthError::DatabaseError(format!(
-                "Invalid refresh-token family secret length: {length}"
-            )));
-        }
-    };
     let raw = format!(
-        "{prefix}{}{}",
+        "{REFRESH_TOKEN_PREFIX}{}{}",
         URL_SAFE_NO_PAD.encode(generation_secret),
         URL_SAFE_NO_PAD.encode(family_secret)
     );
@@ -83,47 +74,23 @@ fn build_refresh_token(family_secret: &[u8]) -> Result<RefreshToken, AuthError> 
     })
 }
 
-/// Return the stable secret carried by a versioned token. An existing UUID
-/// token is itself the family secret, which makes migration session-preserving.
-fn family_secret(raw_token: &str) -> Option<Vec<u8>> {
-    if raw_token.is_empty()
-        || raw_token.len() > 128
-        || !raw_token
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
-    {
+/// Validate the sole opaque refresh-token format before any database lookup.
+pub(super) fn refresh_token_is_valid(raw_token: &str) -> bool {
+    family_secret(raw_token).is_some()
+}
+
+/// Return the 256-bit stable family capability from the current token format.
+fn family_secret(raw_token: &str) -> Option<[u8; REFRESH_SECRET_BYTES]> {
+    let payload = raw_token.strip_prefix(REFRESH_TOKEN_PREFIX)?;
+    if payload.len() != ENCODED_REFRESH_SECRET_LEN * 2 || !payload.is_ascii() {
         return None;
     }
-
-    let (encoded_generation, encoded_family, expected_family_len) =
-        if let Some(payload) = raw_token.strip_prefix(REFRESH_TOKEN_NEW_FAMILY_PREFIX) {
-            if payload.len() != ENCODED_REFRESH_SECRET_LEN * 2 {
-                return None;
-            }
-            let (generation, family) = payload.split_at(ENCODED_REFRESH_SECRET_LEN);
-            (generation, family, REFRESH_SECRET_BYTES)
-        } else if let Some(payload) = raw_token.strip_prefix(REFRESH_TOKEN_LEGACY_FAMILY_PREFIX) {
-            if payload.len() != ENCODED_REFRESH_SECRET_LEN + ENCODED_LEGACY_FAMILY_LEN {
-                return None;
-            }
-            let (generation, family) = payload.split_at(ENCODED_REFRESH_SECRET_LEN);
-            (generation, family, 36)
-        } else {
-            // The only refresh tokens issued before the versioned format were
-            // canonical, lowercase, hyphenated UUID v4 strings.
-            let legacy_uuid = Uuid::parse_str(raw_token).ok()?;
-            if legacy_uuid.hyphenated().to_string() != raw_token {
-                return None;
-            }
-            return Some(raw_token.as_bytes().to_vec());
-        };
-
-    let generation = URL_SAFE_NO_PAD.decode(encoded_generation).ok()?;
-    let family = URL_SAFE_NO_PAD.decode(encoded_family).ok()?;
-    if generation.len() != REFRESH_SECRET_BYTES || family.len() != expected_family_len {
+    let (generation, family) = payload.split_at(ENCODED_REFRESH_SECRET_LEN);
+    let generation = URL_SAFE_NO_PAD.decode(generation).ok()?;
+    if generation.len() != REFRESH_SECRET_BYTES {
         return None;
     }
-    Some(family)
+    URL_SAFE_NO_PAD.decode(family).ok()?.try_into().ok()
 }
 
 #[cfg(test)]
@@ -131,16 +98,17 @@ pub(crate) async fn create_session(
     pool: &PgPool,
     user_id: &Uuid,
     refresh_token: &RefreshToken,
-) -> Result<(), AuthError> {
+) -> Result<Uuid, AuthError> {
     let mut transaction = pool
         .begin()
         .await
         .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
-    create_session_with(&mut transaction, user_id, refresh_token).await?;
+    let session = create_session_with(&mut transaction, user_id, refresh_token).await?;
     transaction
         .commit()
         .await
-        .map_err(|error| AuthError::DatabaseError(error.to_string()))
+        .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+    Ok(session)
 }
 
 pub(crate) async fn create_session_with(
@@ -249,7 +217,7 @@ pub(crate) async fn rotate_refresh_token_with(
     // Re-check after acquiring the per-user lock. All login and refresh paths
     // use users->sessions ordering, so concurrent rotations serialize without
     // lock inversion and a rotation never changes the session count.
-    let current_session = sqlx::query_as::<_, (Uuid, Option<String>)>(
+    let current_session = sqlx::query_as::<_, (Uuid, String)>(
         "SELECT id, refresh_token_family_hash
          FROM sessions
          WHERE refresh_token_hash = $1
@@ -264,10 +232,7 @@ pub(crate) async fn rotate_refresh_token_with(
     .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
 
     if let Some((session_id, stored_family_hash)) = current_session {
-        if stored_family_hash
-            .as_deref()
-            .is_some_and(|stored_hash| stored_hash != family_hash)
-        {
+        if stored_family_hash != family_hash {
             return Err(AuthError::InvalidToken);
         }
 
@@ -457,7 +422,7 @@ mod tests {
 
     #[test]
     fn fixed_v1_refresh_fixture_preserves_base64url_and_family_hashes() {
-        // Frozen pre-migration v1n format: 32 0xff generation bytes, then
+        // Fixed current v1n format: 32 0xff generation bytes, then
         // 32 0xfb family bytes. Expected hashes were independently checked
         // with Node's crypto implementation, not this crate's encoder/hasher.
         const GENERATION: &str = "__________________________________________8";
@@ -502,10 +467,10 @@ mod tests {
         let second = generate_refresh_token().unwrap();
 
         assert_ne!(first.raw, second.raw);
-        assert!(first.raw.starts_with(REFRESH_TOKEN_NEW_FAMILY_PREFIX));
+        assert!(first.raw.starts_with(REFRESH_TOKEN_PREFIX));
         assert_eq!(
             first.raw.len(),
-            REFRESH_TOKEN_NEW_FAMILY_PREFIX.len() + ENCODED_REFRESH_SECRET_LEN * 2
+            REFRESH_TOKEN_PREFIX.len() + ENCODED_REFRESH_SECRET_LEN * 2
         );
         assert!(
             first
@@ -535,40 +500,17 @@ mod tests {
     }
 
     #[test]
-    fn legacy_uuid_tokens_can_be_migrated_without_storing_them_raw() {
-        let legacy = Uuid::new_v4().to_string();
-        let family = family_secret(&legacy).unwrap();
-        let successor = build_refresh_token(&family).unwrap();
-
-        assert_eq!(hash_token(&legacy), successor.family_hash);
-        assert_eq!(family_secret(&successor.raw).unwrap(), legacy.as_bytes());
-        assert!(
-            successor
-                .raw
-                .starts_with(REFRESH_TOKEN_LEGACY_FAMILY_PREFIX)
-        );
-        assert_eq!(
-            successor.raw.len(),
-            REFRESH_TOKEN_LEGACY_FAMILY_PREFIX.len()
-                + ENCODED_REFRESH_SECRET_LEN
-                + ENCODED_LEGACY_FAMILY_LEN
-        );
-    }
-
-    #[test]
-    fn malformed_versioned_tokens_have_no_family_capability() {
-        let uppercase_legacy = Uuid::new_v4().to_string().to_ascii_uppercase();
+    fn unsupported_or_malformed_tokens_have_no_family_capability() {
+        let uuid = Uuid::new_v4().to_string();
         let malformed = [
             String::new(),
             "not-a-uuid".to_owned(),
-            uppercase_legacy,
+            uuid.clone(),
+            uuid.to_ascii_uppercase(),
             "v1.invalid.invalid".to_owned(),
             format!("v1n{}", "A".repeat(ENCODED_REFRESH_SECRET_LEN * 2 - 1)),
             format!("v1n{}", "A".repeat(ENCODED_REFRESH_SECRET_LEN * 2 + 1)),
-            format!(
-                "v1l{}",
-                "A".repeat(ENCODED_REFRESH_SECRET_LEN + ENCODED_LEGACY_FAMILY_LEN - 1)
-            ),
+            format!("v1l{}", "A".repeat(ENCODED_REFRESH_SECRET_LEN + 48)),
             format!("v1x{}", "A".repeat(ENCODED_REFRESH_SECRET_LEN * 2)),
             format!("v2n{}", "A".repeat(ENCODED_REFRESH_SECRET_LEN * 2)),
         ];
@@ -579,10 +521,99 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+    async fn database_current_session_migration_preserves_accounts_and_requires_families() {
+        let pool = PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+            .await
+            .unwrap();
+        let mut transaction = pool.begin().await.unwrap();
+        // Shadow the current schema only within this rolled-back transaction.
+        // The nullable fixture recreates the pre-022 invariant without changing
+        // any persistent database table or already-applied migration ledger.
+        sqlx::raw_sql("SET LOCAL search_path TO pg_temp, pg_catalog;
+            CREATE TEMP TABLE users (LIKE public.users INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+            CREATE TEMP TABLE webauthn_credentials (LIKE public.webauthn_credentials INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+            CREATE TEMP TABLE room_roles (LIKE public.room_roles INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+            CREATE TEMP TABLE sessions (LIKE public.sessions INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+            ALTER TABLE sessions ALTER COLUMN refresh_token_family_hash DROP NOT NULL;
+            INSERT INTO users(id,email,display_name,password_hash,recovery_key_hash)
+                VALUES('11111111-1111-4111-8111-111111111111','migration@example.test','Migration test','password-sentinel',repeat('a',64));
+            INSERT INTO webauthn_credentials(user_id,credential_json,credential_id)
+                VALUES('11111111-1111-4111-8111-111111111111','{\"passkey\":\"sentinel\"}','passkey-sentinel');
+            INSERT INTO room_roles(room_id,user_id,role)
+                VALUES('migration-room','11111111-1111-4111-8111-111111111111',2);
+            INSERT INTO sessions(user_id,refresh_token_hash,refresh_token_family_hash,expires_at)
+                VALUES('11111111-1111-4111-8111-111111111111',repeat('b',64),NULL,now()+interval '1 day'),
+                      ('11111111-1111-4111-8111-111111111111',repeat('c',64),repeat('d',64),now()+interval '1 day');")
+            .execute(&mut *transaction).await.unwrap();
+        let before: serde_json::Value = sqlx::query_scalar(
+            "SELECT jsonb_build_object(
+            'users',(SELECT jsonb_agg(to_jsonb(u)) FROM users u),
+            'passkeys',(SELECT jsonb_agg(to_jsonb(c)) FROM webauthn_credentials c),
+            'memberships',(SELECT jsonb_agg(to_jsonb(r)) FROM room_roles r))",
+        )
+        .fetch_one(&mut *transaction)
+        .await
+        .unwrap();
+        sqlx::raw_sql(include_str!(
+            "../../migrations/022_require_current_sessions.sql"
+        ))
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        let after: serde_json::Value = sqlx::query_scalar(
+            "SELECT jsonb_build_object(
+            'users',(SELECT jsonb_agg(to_jsonb(u)) FROM users u),
+            'passkeys',(SELECT jsonb_agg(to_jsonb(c)) FROM webauthn_credentials c),
+            'memberships',(SELECT jsonb_agg(to_jsonb(r)) FROM room_roles r))",
+        )
+        .fetch_one(&mut *transaction)
+        .await
+        .unwrap();
+        assert_eq!(
+            before, after,
+            "credentials, profiles and memberships are unchanged"
+        );
+        let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions")
+            .fetch_one(&mut *transaction)
+            .await
+            .unwrap();
+        assert_eq!(remaining, 0, "every pre-migration sign-in is invalidated");
+        let required: bool = sqlx::query_scalar("SELECT attnotnull FROM pg_attribute WHERE attrelid='pg_temp.sessions'::regclass AND attname='refresh_token_family_hash'")
+            .fetch_one(&mut *transaction).await.unwrap();
+        assert!(required);
+        let refresh = generate_refresh_token().unwrap();
+        insert_session_with(
+            &mut *transaction,
+            &Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap(),
+            &refresh,
+        )
+        .await
+        .unwrap();
+        sqlx::query("SAVEPOINT missing_family")
+            .execute(&mut *transaction)
+            .await
+            .unwrap();
+        let missing_family = sqlx::query("INSERT INTO sessions(user_id,refresh_token_hash,expires_at) VALUES('11111111-1111-4111-8111-111111111111',repeat('e',64),now()+interval '1 day')")
+            .execute(&mut *transaction).await.unwrap_err();
+        assert_eq!(
+            missing_family
+                .as_database_error()
+                .unwrap()
+                .code()
+                .as_deref(),
+            Some("23502")
+        );
+        sqlx::query("ROLLBACK TO SAVEPOINT missing_family")
+            .execute(&mut *transaction)
+            .await
+            .unwrap();
+        transaction.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
     async fn database_logout_retires_the_access_token_issued_with_its_session() {
-        use crate::auth::jwt::{
-            create_session_token, create_token, validate_current_claims, validate_token,
-        };
+        use crate::auth::jwt::{create_session_token, validate_current_claims, validate_token};
         let database_url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL");
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(4)
@@ -614,10 +645,7 @@ mod tests {
             validate_token(&issued, secret).unwrap()
         };
         let (first, second) = (token(sessions[0].1), token(sessions[1].1));
-        assert_eq!(
-            first.sid.as_deref(),
-            Some(sessions[0].1.to_string().as_str())
-        );
+        assert_eq!(first.sid, sessions[0].1);
         assert!(validate_current_claims(&pool, &first).await.is_ok());
 
         assert!(
@@ -633,14 +661,25 @@ mod tests {
             validate_current_claims(&pool, &second).await.is_ok(),
             "another session's token is untouched"
         );
-        let legacy = validate_token(
-            &create_token(&subject, "logout test", secret).unwrap(),
-            secret,
-        )
-        .unwrap();
+        let missing_session = token(Uuid::new_v4());
         assert!(
-            validate_current_claims(&pool, &legacy).await.is_ok(),
-            "a token without a session is bound only by the account version"
+            validate_current_claims(&pool, &missing_session)
+                .await
+                .is_err()
+        );
+        let other_user: Uuid = sqlx::query_scalar(
+            "INSERT INTO users(email,display_name) VALUES($1,'Other account') RETURNING id",
+        )
+        .bind(format!("session-owner-{}@example.test", Uuid::new_v4()))
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let mut wrong_account = second.clone();
+        wrong_account.sub = other_user.to_string();
+        assert!(
+            validate_current_claims(&pool, &wrong_account)
+                .await
+                .is_err()
         );
 
         // A refresh rotates the token but keeps the session, so the next access
@@ -656,8 +695,19 @@ mod tests {
         }
         assert!(validate_current_claims(&pool, &second).await.is_ok());
 
-        sqlx::query("DELETE FROM users WHERE id = $1")
-            .bind(user_id)
+        sqlx::query(
+            "UPDATE sessions SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",
+        )
+        .bind(second.sid)
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(
+            validate_current_claims(&pool, &second).await.is_err(),
+            "an expired session cannot authorize an unexpired JWT"
+        );
+        sqlx::query("DELETE FROM users WHERE id = ANY($1)")
+            .bind(&[user_id, other_user][..])
             .execute(&pool)
             .await
             .unwrap();
@@ -815,44 +865,8 @@ mod tests {
                 .unwrap();
         assert_eq!(oracle_count, 1);
 
-        // Existing UUID sessions survive migration and gain the same replay
-        // behavior after their first rotation.
-        let legacy_user_id: Uuid = sqlx::query_scalar(
-            "INSERT INTO users (email, display_name)
-             VALUES ($1, 'legacy test') RETURNING id",
-        )
-        .bind(format!("legacy-{}@example.test", Uuid::new_v4()))
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        let legacy_raw = Uuid::new_v4().to_string();
-        let legacy_hash = hash_token(&legacy_raw);
-        sqlx::query(
-            "INSERT INTO sessions (
-                 user_id, refresh_token_hash, refresh_token_family_hash, expires_at
-             ) VALUES ($1, $2, $2, clock_timestamp() + interval '7 days')",
-        )
-        .bind(legacy_user_id)
-        .bind(&legacy_hash)
-        .execute(&pool)
-        .await
-        .unwrap();
-        let legacy_successor = match rotate_and_commit(&pool, &legacy_raw).await.unwrap() {
-            RefreshRotation::Rotated { refresh_token, .. } => refresh_token,
-            _ => panic!("legacy current token did not rotate"),
-        };
-        assert_eq!(legacy_successor.family_hash, legacy_hash);
-
         sqlx::query("DELETE FROM users WHERE id = ANY($1)")
-            .bind(
-                &[
-                    cap_user_id,
-                    replay_user_id,
-                    older_user_id,
-                    oracle_user_id,
-                    legacy_user_id,
-                ][..],
-            )
+            .bind(&[cap_user_id, replay_user_id, older_user_id, oracle_user_id][..])
             .execute(&pool)
             .await
             .unwrap();
