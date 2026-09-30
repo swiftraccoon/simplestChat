@@ -276,6 +276,13 @@ fn env_number(name: &'static str, default: u64) -> io::Result<u64> {
 }
 
 impl Diagnostics {
+    /// Give in-process request tests the real recorder without process-global
+    /// environment changes or a production configuration bypass.
+    #[cfg(test)]
+    pub(crate) fn with_test_writer(writer: impl Write + Send + 'static) -> io::Result<Self> {
+        Self::with_writer(writer, Limits::default())
+    }
+
     /// Enables a new private JSONL file only when `DIAGNOSTICS_PATH` is set.
     /// Existing files (including symlinks) are never overwritten. The path must
     /// be absolute; its parent must already exist. Numeric limits fail closed.

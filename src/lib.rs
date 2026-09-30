@@ -26,6 +26,9 @@ pub mod signaling;
 pub mod sizing;
 pub mod turn;
 
+#[cfg(test)]
+mod security_canary_tests;
+
 /// Serialized outbound signaling payload. A broadcast serializes once and
 /// every recipient's writer sends the same buffer; cloning is a refcount
 /// bump and the WebSocket frame is built without copying the text again.

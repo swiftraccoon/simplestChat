@@ -184,6 +184,13 @@ those inventories change, exercise real handlers, and check rejected sessions,
 roles and cross-room state. Database cases use disposable PostgreSQL transactions.
 An inventory entry is not itself proof that all races or permissions are correct.
 
+The `runtime_canary` regressions send inert credentials and messages through real
+in-process authentication routes and signaling dispatch. They require actual
+success/denial events and complete bounded diagnostic capture, then reject
+submitted or issued secrets in tracing, metrics, diagnostic exports and URL
+surfaces. See [runtime exposure coverage and limits](testing.md#runtime-secret-exposure-regressions).
+These tests complement the secret scanner's detector self-test.
+
 The Rust `boundary_properties` filter runs finite normalization, serialization,
 limiter and ticket-clock checks. The disposable release fixture adds five fixed
 anonymous HTTPS response-policy checks through real Caddy; see

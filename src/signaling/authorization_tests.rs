@@ -9,6 +9,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "auth_secret_canary_tests.rs"]
+mod secret_canary_tests;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub(super) struct Manifest {

@@ -4,6 +4,9 @@
 use super::super::authorization_tests::manifest;
 use super::*;
 
+#[path = "connection_secret_canary_tests.rs"]
+mod secret_canary_tests;
+
 #[tokio::test]
 async fn authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes() {
     let metrics = ServerMetrics::new();

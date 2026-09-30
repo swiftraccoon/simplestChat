@@ -34,6 +34,49 @@ database to check chat/state access during blocked SQL and publication after
 the requesting task is cancelled. It is a concurrency regression test, not a
 database-outage or throughput benchmark.
 
+### Runtime secret exposure regressions
+
+The `runtime_canary` Rust tests submit unique inert values through the real
+in-process Axum router and signaling dispatcher, then inspect application
+observations. They complement the Gitleaks detector self-test: a working secret
+scanner does not prove the running application keeps credentials out of logs.
+
+```sh
+build/with-test-postgres.sh \
+  cargo test --locked --all-features --lib runtime_canary \
+  -- --include-ignored --test-threads=1
+```
+
+The database case registers an owned account, checks accepted and rejected
+password login, reads its profile, issues a WebSocket ticket, rotates its refresh
+cookie, rejects malformed credentials and an absent invitation, then checks
+logout revocation. Submitted canaries and issued access, refresh and WebSocket
+credentials must remain absent from real tracing JSON, the authenticated metrics
+response, the enabled media snapshot, request URIs and URL-bearing response
+headers. Intended authentication bodies, refresh cookies and profile data remain
+observable only to their test client; they are not mistaken for logging leaks.
+Cleanup names only the account created by that fixture.
+
+The dispatcher case admits an owned participant, delivers a chat message and
+denies a subsequent message after membership removal. It checks the actual reply
+channel, membership event and successful/failed diagnostic operation records,
+then verifies that names, messages, supplied passwords and reconnect credentials
+are absent from tracing, metrics and the real diagnostic JSONL recorder. Recorder
+shutdown must flush successfully. Both capture buffers are capped at one MiB;
+overflow remains a test failure even if a logging layer swallows its write error.
+HTTP response collection is capped at 512 KiB. Positive event assertions prevent
+an empty capture from passing.
+
+The subscriber follows request-future polling across awaits without changing the
+process-global subscriber. Capture uses the default production info-level JSON
+filter, and the guards check complete values plus standalone URL-form and Base64
+encodings. These tests cover the selected request futures and exports; they do
+not cover uninstrumented detached tasks, arbitrary partial/nested encodings,
+browser storage, PostgreSQL/proxy logs or external artifact upload pipelines.
+No network client, deployed target or existing database is used. Ordinary Rust
+tests run the dispatcher and capture checks; CI's disposable database suite also
+runs the ignored authentication case.
+
 ### Python automation
 
 Use Python 3.12 or newer and the pinned controller/checking environment:
