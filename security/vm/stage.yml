@@ -1,0 +1,105 @@
+---
+- name: Stage the immutable application only inside the disposable VM fixture
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Require the generated fixture identity and loopback-only transport
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'vmfixture'
+          - ansible_host == '127.0.0.1'
+          - vm_fixture_run_id is match('^[a-f0-9]{32}$')
+          - scbench_revision is match('^[a-f0-9]{40}$')
+
+    - name: Inspect the cloud-init fixture marker without exposing its contents
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-vm-fixture
+      register: vm_fixture_marker
+      no_log: true
+
+    - name: Require this exact owned guest
+      ansible.builtin.assert:
+        that:
+          - vm_fixture_marker.content | b64decode | trim == vm_fixture_run_id
+      no_log: true
+
+  tasks:
+    - name: Create the private fixture and canonical release directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - /root/simplestchat-vm-fixture
+        - /etc/simplestchat-public
+        - /srv/simplestchat-public
+        - /srv/simplestchat-public/results
+        - /srv/simplestchat-public/releases
+        - "/srv/simplestchat-public/releases/{{ scbench_revision }}"
+
+    - name: Create the canonical root-controlled helper directory
+      ansible.builtin.file:
+        path: /usr/local/libexec/simplestchat-public
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install the unchanged maintained release and backup implementations
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../ops/ansible/files/{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - bounded_process.py
+        - release-public.py
+        - release_public.py
+        - release_artifact.py
+        - release_json.py
+        - backup_public.py
+        - restore_verify.py
+        - restore-verify.sql
+        - monitoring-schema.sql
+
+    - name: Retain the fixture-only guest assertions
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../build/security_vm_guest.py"
+        dest: /root/simplestchat-vm-fixture/security_vm_guest.py
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Bind guest assertions to this run and release revision
+      ansible.builtin.copy:
+        content: "{{ {'schemaVersion': 1, 'runId': vm_fixture_run_id, 'revision': scbench_revision} | to_json }}\n"
+        dest: /root/simplestchat-vm-fixture/selection.json
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Transfer only the canonical release manifest and image archive
+      ansible.builtin.copy:
+        src: "{{ vm_fixture_artifact_dir }}/{{ item }}"
+        dest: "/srv/simplestchat-public/releases/{{ scbench_revision }}/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop: [release.json, image.tar]
+
+    - name: Validate and stage the genuine application using the release transaction
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -E
+          - -s
+          - -B
+          - /usr/local/libexec/simplestchat-public/release-public.py
+          - stage
+          - "{{ scbench_revision }}"
+      changed_when: true
+      no_log: true

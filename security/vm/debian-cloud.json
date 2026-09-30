@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "distribution": "Debian 13",
+  "architecture": "amd64",
+  "url": "https://cloud.debian.org/images/cloud/trixie/20260914-2601/debian-13-genericcloud-amd64-20260914-2601.qcow2",
+  "sha512": "95e110dfcdbd0ed8a82a75ed9579802f9950cabf51a810dcc6388e81bc778188713878b9f28d583a0ea602fbf48b35996ae9ad37f584166d8fbd6489df248f53",
+  "checksumsUrl": "https://cloud.debian.org/images/cloud/trixie/20260914-2601/SHA512SUMS"
+}
