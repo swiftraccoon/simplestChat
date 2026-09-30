@@ -20,7 +20,8 @@ pub struct RoomIdentityUpdate {
 impl RoomIdentityUpdate {
     pub fn validate(&self) -> Result<(), AuthError> {
         if self.display_name.trim().is_empty()
-            || !validate_text(&self.display_name, settings::MAX_DISPLAY_NAME_LEN, false)
+            || self.display_name.len() > settings::MAX_DISPLAY_NAME_LEN
+            || !crate::labels::is_plain(&self.display_name)
         {
             return Err(AuthError::InvalidInput(
                 "Room name must be 1–128 bytes without control characters",
@@ -234,6 +235,10 @@ mod tests {
         assert!(identity.validate().is_ok());
         identity.display_name = " ".into();
         assert!(identity.validate().is_err());
+        for label in ["Sam\u{202E}", "\u{200D}", "Sam\u{FEFF}"] {
+            identity.display_name = label.into();
+            assert!(identity.validate().is_err());
+        }
         identity.display_name = "Valid".into();
         identity.topic = Some("x".repeat(513));
         assert!(identity.validate().is_err());

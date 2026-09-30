@@ -642,21 +642,30 @@ struct MediaControlIpcReservation {
 
 impl Room {
     /// Whether a participant or lobby entry other than `except` already uses
-    /// `name`, ignoring case and surrounding spaces.
+    /// `name`, using the shared Unicode identity comparison.
     pub(crate) fn name_in_use(&self, name: &str, except: Option<&str>) -> bool {
-        let wanted = name.trim().to_lowercase();
+        let wanted = crate::labels::comparison_key(name);
         self.participants
             .values()
             .filter(|participant| Some(participant.id.as_str()) != except)
             .map(|participant| participant.name.as_str())
             .chain(self.lobby.values().map(|entry| entry.name.as_str()))
-            .any(|taken| taken.trim().to_lowercase() == wanted)
+            .any(|taken| crate::labels::comparison_key(taken) == wanted)
     }
 
-    /// The requested guest name, or "name (n)" with the smallest free n from 2,
+    /// The requested participant name, or "name (n)" with the smallest free n from 2,
     /// kept within the participant name limit.
-    pub(crate) fn unique_guest_name(&self, name: String) -> String {
-        if !self.name_in_use(&name, None) {
+    pub(crate) fn unique_participant_name(&self, name: String) -> String {
+        // Normalize each occupied label once. Repeatedly scanning and folding
+        // the roster for every suffix would make many equal names quadratic.
+        let occupied: HashSet<String> = self
+            .participants
+            .values()
+            .map(|participant| participant.name.as_str())
+            .chain(self.lobby.values().map(|entry| entry.name.as_str()))
+            .map(crate::labels::comparison_key)
+            .collect();
+        if !occupied.contains(&crate::labels::comparison_key(&name)) {
             return name;
         }
         let base: String = name
@@ -666,7 +675,7 @@ impl Room {
             .collect();
         (2..)
             .map(|n| format!("{} ({n})", base.trim_end()))
-            .find(|candidate| !self.name_in_use(candidate, None))
+            .find(|candidate| !occupied.contains(&crate::labels::comparison_key(candidate)))
             .expect("some suffix is free")
     }
 
@@ -2763,13 +2772,10 @@ impl RoomManager {
                 anyhow::bail!("Room lobby is full");
             }
 
-            // A guest whose name is already in use here gets a numbered one, so a
-            // newcomer cannot pass for someone present. Accounts keep their names.
-            let participant_name = if authenticated {
-                participant_name
-            } else {
-                room.unique_guest_name(participant_name)
-            };
+            // Account display names are not globally unique either. Apply the
+            // same room-local disambiguation to every join; stable UUIDs remain
+            // the authorization and message identity, never the display label.
+            let participant_name = room.unique_participant_name(participant_name);
 
             // Re-check is_first under write lock (another join could have raced)
             let is_first = room.participants.is_empty() && room.lobby.is_empty();
@@ -2844,8 +2850,8 @@ impl RoomManager {
                 drop(admission);
 
                 info!(
-                    "Participant {} ({}) entered lobby for room {}",
-                    participant_id, participant_name, room_id
+                    "Participant {} entered lobby for room {}",
+                    participant_id, room_id
                 );
                 return Ok(JoinResult::Lobbied);
             }
@@ -2872,10 +2878,7 @@ impl RoomManager {
             // under the process-wide admission guard.
             drop(admission);
 
-            info!(
-                "Participant {} ({}) joined room {}",
-                participant_id, participant_name, room_id
-            );
+            info!("Participant {} joined room {}", participant_id, room_id);
 
             // Notify other participants
             room.broadcast_except(
@@ -6477,7 +6480,12 @@ mod security_tests {
             "a taken name gains the smallest free number, ignoring case and spaces"
         );
         let (account, _tx4, _rx4) = join(uuid::Uuid::new_v4().to_string(), "Maya", true).await;
-        assert_eq!(account, "Maya", "an account keeps its profile name");
+        assert_eq!(
+            account, "Maya (4)",
+            "accounts also receive an unambiguous room label"
+        );
+        let (variant, _tx7, _rx7) = join("g7".into(), "Ma\u{200D}ya", false).await;
+        assert_eq!(variant, "Ma\u{200D}ya (5)");
         let long = "x".repeat(crate::signaling::connection::MAX_PARTICIPANT_NAME_LEN);
         let (_l1, _tx5, _rx5) = join("g5".into(), &long, false).await;
         let (l2, _tx6, _rx6) = join("g6".into(), &long, false).await;
