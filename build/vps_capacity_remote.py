@@ -614,7 +614,7 @@ def start(request: dict[str, object], helper: str, process_helper: str) -> dict[
             "helper_revision_mismatch",
         )
         require(
-            (source / "build/bounded_process.py").read_text() == process_helper,
+            (source / "ops/ansible/files/bounded_process.py").read_text() == process_helper,
             "process_helper_revision_mismatch",
         )
         _ = images_for(request)

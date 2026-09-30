@@ -511,8 +511,9 @@ class RemoteTests(unittest.TestCase):
         self.directory.rmdir()
         helper = (ROOT / "build/vps_capacity_remote.py").read_text()
         _ = (self.source / "build/vps_capacity_remote.py").write_text(helper)
-        process_helper = (ROOT / "build/bounded_process.py").read_text()
-        _ = (self.source / "build/bounded_process.py").write_text(process_helper)
+        process_helper = (ROOT / "ops/ansible/files/bounded_process.py").read_text()
+        (self.source / "ops/ansible/files").mkdir(parents=True, exist_ok=True)
+        _ = (self.source / "ops/ansible/files/bounded_process.py").write_text(process_helper)
         with (
             patch.object(remote, "workload_lock", return_value=nullcontext()),
             patch.object(remote, "preflight", return_value={}),

@@ -26,6 +26,7 @@ CONFIG = Path("/etc/simplestchat-public")
 ROOT = Path("/srv/simplestchat-public")
 HELPERS = Path("/usr/local/libexec/simplestchat-public")
 BASE_HELPERS = {
+    "bounded_process.py",
     "release-public.py",
     "release_public.py",
     "release_artifact.py",

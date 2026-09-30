@@ -80,8 +80,11 @@ class ControllerTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve() / "checkout"
         (self.root / "build").mkdir(parents=True)
+        (self.root / "ops/ansible/files").mkdir(parents=True)
         _ = (self.root / "build/vps_capacity_remote.py").write_text("# committed fixture\n")
-        _ = (self.root / "build/bounded_process.py").write_text("# committed process fixture\n")
+        _ = (self.root / "ops/ansible/files/bounded_process.py").write_text(
+            "# committed process fixture\n"
+        )
         private = self.root.parent / "private"
         private.mkdir(mode=0o700)
         identity, known = private / "key", private / "known_hosts"

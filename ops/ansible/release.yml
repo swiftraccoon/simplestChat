@@ -102,6 +102,7 @@
           - >-
             {{ (({
               'release-public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release-public.py', rstrip=false) | hash('sha256'),
+              'bounded_process.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/bounded_process.py', rstrip=false) | hash('sha256'),
               'release_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_public.py', rstrip=false) | hash('sha256'),
               'release_artifact.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_artifact.py', rstrip=false) | hash('sha256'),
               'release_json.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_json.py', rstrip=false) | hash('sha256'),
@@ -142,7 +143,14 @@
         owner: root
         group: root
         mode: '0644'
-      loop: [release-public.py, release_public.py, release_artifact.py, release_json.py, reboot-public.py, reboot_public.py]
+      loop:
+        - bounded_process.py
+        - release-public.py
+        - release_public.py
+        - release_artifact.py
+        - release_json.py
+        - reboot-public.py
+        - reboot_public.py
       when: not (scpub_release_prepared | default(false) | bool)
 
     - name: Install the bounded GitHub artifact receiver

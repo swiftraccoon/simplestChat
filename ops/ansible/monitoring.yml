@@ -126,6 +126,7 @@
         - restore_verify.py
         - restore-verify.sql
         - turn_public.py
+        - bounded_process.py
         - release_public.py
         - release_artifact.py
         - release_json.py

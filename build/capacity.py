@@ -52,6 +52,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, NoReturn, cast
 
+# The subprocess boundary is shared with the flat installed operations helpers.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ops/ansible/files"))
+
+# isort: split
 import bounded_process
 import capacity_artifacts
 

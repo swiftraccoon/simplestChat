@@ -493,7 +493,7 @@ def execute(args: Options, root: Path = ROOT) -> dict[str, object]:  # noqa: PLR
         target,
         helper,
         output,
-        process_helper=(root / "build/bounded_process.py").read_text(encoding="utf-8"),
+        process_helper=(root / "ops/ansible/files/bounded_process.py").read_text(encoding="utf-8"),
     )
     report: dict[str, object] = {
         "schemaVersion": 1,

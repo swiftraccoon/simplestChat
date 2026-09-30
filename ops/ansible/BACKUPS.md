@@ -85,7 +85,7 @@ contents. No remote snapshots are deleted or pruned by this workflow. Configure
 storage-side retention, capacity and deletion protection separately.
 
 A restore retrieves the selected receipt and archive through `restic dump`.
-A kernel file-size ceiling bounds each download. The helper checks private file
+A streaming byte ceiling bounds each download before it is written. The helper checks private file
 ownership, type and mode, the receipt schema, archive size and SHA256 before
 running PostgreSQL. The isolated restore uses the exact recorded local image
 with `--pull never`, restores every archive section, compares the migration
@@ -102,6 +102,13 @@ PostgreSQL processes. Choose limits for the actual restored data and repeat the
 drill after growth. An archive, expanded database or process that exceeds its
 bound fails verification; it does not produce a success timestamp. Downloads
 reserve their configured maximum plus 1 GiB of local free space.
+
+All installed helper commands stream stdout and stderr under live byte limits;
+ordinary command output is capped at 2 MiB per stream. An explicit archive
+output path allows at most 4 GiB, further restricted by its configured download
+limit and the initial free space less a 1 GiB reserve. Nightly and release dumps
+use this same archive ceiling. An overflow cancels the owned process group,
+retains bounded failure evidence and cannot publish a successful receipt.
 
 Each operation retains private command evidence under
 `/var/lib/simplestchat-monitoring/offsite/{upload,restore}.*`. Success writes an

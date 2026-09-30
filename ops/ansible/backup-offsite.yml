@@ -98,7 +98,15 @@
         owner: root
         group: root
         mode: '0644'
-      loop: [backup_offsite.py, backup_public.py, restore_verify.py, restore-verify.sql, release_public.py, release_artifact.py, release_json.py]
+      loop:
+        - bounded_process.py
+        - backup_offsite.py
+        - backup_public.py
+        - restore_verify.py
+        - restore-verify.sql
+        - release_public.py
+        - release_artifact.py
+        - release_json.py
 
     - name: Install bounded upload and restore units
       ansible.builtin.template:

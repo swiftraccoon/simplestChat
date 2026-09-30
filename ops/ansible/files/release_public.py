@@ -16,7 +16,6 @@ import hashlib
 import json
 import os
 import re
-import select
 import shutil
 import signal
 import stat
@@ -26,7 +25,7 @@ import tempfile
 import time
 import uuid
 from collections.abc import Generator, Sequence
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -34,6 +33,7 @@ from pathlib import Path
 from types import FrameType
 from typing import NoReturn, Protocol, TypedDict, Unpack
 
+import bounded_process
 from release_artifact import ArtifactError, Manifest, sha256_file, validate_manifest, verify_archive
 from release_json import JsonObject, JsonValue, decode_json, object_value, string_value
 
@@ -75,7 +75,8 @@ IDENTITY_KEYS = frozenset(
 )
 ID = re.compile(r"sha256:[a-f0-9]{64}")
 MAX_INSPECTION_BYTES = 2 * 1024 * 1024
-MAX_GROUP_INSPECTION_BYTES = 65536
+MAX_ARCHIVE_OUTPUT_BYTES = 4 * 1024**3
+ARCHIVE_FREE_RESERVE_BYTES = 1024**3
 LEDGER_COLUMNS = 3
 IMAGE_SELECTIONS = 2
 CONTAINER_FORMAT = (
@@ -100,6 +101,7 @@ class CommandOptions(TypedDict, total=False):
     input_data: bytes | None
     input_path: Path | None
     output_path: Path | None
+    output_limit: int | None
 
 
 class AttemptContext(Protocol):
@@ -114,15 +116,7 @@ class AttemptContext(Protocol):
 class RunnerProtocol(AttemptContext, Protocol):
     """Permit only bounded byte-producing commands and scoped container lookup."""
 
-    def run(
-        self,
-        args: Sequence[str],
-        *,
-        timeout: float = 30,
-        input_data: bytes | None = None,
-        input_path: Path | None = None,
-        output_path: Path | None = None,
-    ) -> bytes:
+    def run(self, args: Sequence[str], **options: Unpack[CommandOptions]) -> bytes:
         """Run a bounded command and retain its private evidence."""
         ...
 
@@ -249,94 +243,16 @@ def atomic(path: Path, data: JsonValue | bytes) -> None:
         os.close(directory)
 
 
-def leader_exited(pid: int) -> bool:
-    """Observe exit without reaping the leader that reserves its process-group identity."""
-    return os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None
-
-
-def process_group_rows(pid: int) -> bytes | None:
-    """Read a complete bounded Darwin process-group snapshot using only the fixed system ps."""
-    try:
-        child = subprocess.Popen(  # noqa: S603 -- trusted system utility and numeric owned group.
-            ["/bin/ps", "-g", str(pid), "-o", "pid=,pgid=,stat="],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=ENV,
-            start_new_session=True,
-        )
-    except OSError:
-        return None
-    output, error = bytearray(), bytearray()
-    try:
-        require(
-            child.stdout is not None and child.stderr is not None,
-            "Missing process inspection pipes",
-        )
-        streams = [stream for stream in (child.stdout, child.stderr) if stream is not None]
-        deadline = time.monotonic() + 2
-        while streams:
-            remaining = deadline - time.monotonic()
-            require(remaining > 0, "Process inspection timed out")
-            ready_streams, _, _ = select.select(streams, [], [], min(remaining, 0.1))
-            for stream in ready_streams:
-                chunk = os.read(stream.fileno(), 4096)
-                if not chunk:
-                    streams.remove(stream)
-                    continue
-                target = output if stream is child.stdout else error
-                require(
-                    len(target) + len(chunk) <= MAX_GROUP_INSPECTION_BYTES,
-                    "Process inspection overflow",
-                )
-                target.extend(chunk)
-        if child.wait(timeout=max(0.001, deadline - time.monotonic())) != 0 or error:
-            return None
-        return bytes(output)
-    except (OSError, ReleaseError, subprocess.SubprocessError):
-        return None
-    finally:
-        if child.returncode is None:
-            # ps is a trusted no-fork utility. Its failure cannot recurse through
-            # the group-signaling path whose ambiguity it is helping resolve.
-            with suppress(ProcessLookupError):
-                child.kill()
-            _ = child.wait(timeout=5)
-        for stream in (child.stdout, child.stderr):
-            if stream is not None:
-                stream.close()
-
-
-def darwin_zombie_group(pid: int) -> bool:
-    """Accept Darwin zombie-only EPERM only with complete group membership and a reserved leader."""
-    if not leader_exited(pid):
-        return False
-    output = process_group_rows(pid)
-    if output is None:
-        return False
-    members: set[int] = set()
-    for row in output.splitlines():
-        match = re.fullmatch(
-            rb"[ \t]*([1-9][0-9]{0,9})[ \t]+([1-9][0-9]{0,9})[ \t]+Z[+<>AELNSsVWX]*[ \t]*", row
-        )
-        if match is None:
-            return False
-        member, group = int(match[1]), int(match[2])
-        if group != pid or member in members:
-            return False
-        members.add(member)
-    return pid in members and leader_exited(pid)
-
-
-def signal_group(pid: int, signum: signal.Signals) -> None:
-    """Signal the owned group, refusing to hide permission failures involving any live member."""
-    try:
-        os.killpg(pid, signum)
-    except ProcessLookupError:
-        return
-    except PermissionError:
-        if sys.platform != "darwin" or not darwin_zombie_group(pid):
-            raise
+def archive_output_budget(path: Path, selected: int | None) -> int:
+    """Limit explicit archive writes by operator policy and current filesystem headroom."""
+    requested = MAX_ARCHIVE_OUTPUT_BYTES if selected is None else selected
+    require(
+        type(requested) is int and 0 < requested <= MAX_ARCHIVE_OUTPUT_BYTES,
+        "Invalid archive output limit",
+    )
+    maximum = min(requested, shutil.disk_usage(path.parent).free - ARCHIVE_FREE_RESERVE_BYTES)
+    require(maximum > 0, "Insufficient archive output reserve")
+    return maximum
 
 
 class Runner:
@@ -347,19 +263,22 @@ class Runner:
         self.attempt: Path = attempt
         self.number: int = 0
 
-    def run(
-        self,
-        args: Sequence[str],
-        *,
-        timeout: float = 30,
-        input_data: bytes | None = None,
-        input_path: Path | None = None,
-        output_path: Path | None = None,
-    ) -> bytes:
+    def run(self, args: Sequence[str], **options: Unpack[CommandOptions]) -> bytes:
         """Execute explicit argv with bounded cleanup and private immutable output."""
+        timeout = options.get("timeout", 30)
+        input_data, input_path = options.get("input_data"), options.get("input_path")
+        output_path, output_limit = options.get("output_path"), options.get("output_limit")
         self.number += 1
         prefix = self.attempt / f"{self.number:03d}"
         target = output_path or prefix.with_suffix(".stdout")
+        require(
+            output_path is not None or output_limit is None, "Output limits require an archive path"
+        )
+        maximum = (
+            archive_output_budget(output_path, output_limit)
+            if output_path
+            else MAX_INSPECTION_BYTES
+        )
         source = input_path.open("rb") if input_path else None
         process: subprocess.Popen[bytes] | None = None
         try:
@@ -368,17 +287,35 @@ class Runner:
                     args,
                     stdin=source
                     or (subprocess.PIPE if input_data is not None else subprocess.DEVNULL),
-                    stdout=output,
-                    stderr=error,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                     env=ENV,
                     start_new_session=True,
                 )
-                _ = process.communicate(input_data, timeout=timeout)
+                _ = bounded_process.pump(
+                    process,
+                    output,
+                    error,
+                    bounded_process.Limits(
+                        timeout=timeout, stdout=maximum, stderr=MAX_INSPECTION_BYTES
+                    ),
+                    input_data=input_data or b"",
+                )
+        except bounded_process.ProcessError as error:
+            if str(error) == "command_timed_out":
+                raise subprocess.TimeoutExpired(args, timeout) from error
+            raise ReleaseError(str(error)) from error
         finally:
             if source:
                 source.close()
-            if process is not None and process.returncode is None:
-                self.stop(process)
+            if process is not None:
+                try:
+                    if process.returncode is None:
+                        self.stop(process)
+                finally:
+                    for stream in (process.stdin, process.stdout, process.stderr):
+                        if stream is not None:
+                            stream.close()
         if process is None:
             message = "Command failed before creating an owned process"
             raise ReleaseError(message)
@@ -395,15 +332,8 @@ class Runner:
 
     @staticmethod
     def stop(process: subprocess.Popen[bytes]) -> None:
-        """Remove the owned process group before reaping its PID-reserving leader."""
-        signal_group(process.pid, signal.SIGTERM)
-        deadline = time.monotonic() + 10
-        while not leader_exited(process.pid):
-            if time.monotonic() >= deadline:
-                break
-            time.sleep(0.1)
-        signal_group(process.pid, signal.SIGKILL)
-        _ = process.wait(timeout=5)
+        """Use the shared bounded process-group cleanup, retaining ownership until reaping."""
+        bounded_process.stop(process)
 
     def docker(self, *args: str, **kwargs: Unpack[CommandOptions]) -> bytes:
         """Use the fixed local Unix socket without inherited Docker configuration."""

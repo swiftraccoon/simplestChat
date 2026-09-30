@@ -243,18 +243,16 @@ def selection(configured: Settings, snapshot: str, stamp: str) -> tuple[str, str
 def retrieve(
     runner: release.RunnerProtocol, configured: Settings, snapshot: str, target: Path, maximum: int
 ) -> None:
-    """Stream one exact file with a kernel-enforced output-file size ceiling."""
+    """Stream one exact file with a byte ceiling enforced before retained writes."""
     _ = runner.run(
         [
-            "/usr/bin/prlimit",
-            f"--fsize={maximum}:{maximum}",
-            "--",
             *configured.command(),
             "dump",
             snapshot,
             str(nightly.TARGET / target.name),
         ],
         output_path=target,
+        output_limit=maximum,
         timeout=900,
     )
 

@@ -207,7 +207,8 @@ class OffsiteBackupTests(unittest.TestCase):
             if arguments[-1].endswith(".json")
             else 64 * offsite.MIB
         )
-        self.assertEqual(arguments[:3], ["/usr/bin/prlimit", f"--fsize={maximum}:{maximum}", "--"])
+        self.assertEqual(arguments[0], "/usr/bin/restic")
+        self.assertEqual(options.get("output_limit"), maximum)
         self.assertEqual(arguments[-3:-1], ["dump", SNAPSHOT])
         target = options.get("output_path")
         self.assertIsNotNone(target)

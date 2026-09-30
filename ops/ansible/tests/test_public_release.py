@@ -21,9 +21,8 @@ import unittest
 from collections.abc import Sequence
 from contextlib import redirect_stdout
 from copy import deepcopy
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Protocol, Unpack, final, override
+from typing import Protocol, Unpack, final, override
 from unittest.mock import patch
 
 # Fixture assertions and literal expected limits document the tested contract.
@@ -1532,198 +1531,120 @@ class PublicReleaseTests(unittest.TestCase):
             self.fail("Conflicting recovery modes must be rejected")
 
 
-@dataclass(slots=True, kw_only=True)
-class ChildProcess:
-    """Model one owned subprocess without creating an operating-system process."""
-
-    pid: int = 12345
-    returncode: int | None = 0
-    timed_out: bool = False
-    signals: list[int] = field(default_factory=list)
-    waits: list[float] = field(default_factory=list)
-
-    def communicate(self, _input: bytes | None = None, *, timeout: float) -> tuple[None, None]:
-        """Model a completed command or the caller's configured timeout."""
-        if self.timed_out:
-            command = "fixture"
-            raise subprocess.TimeoutExpired(command, timeout)
-        return None, None
-
-    def poll(self) -> int | None:
-        """Return whether the owned child still requires cleanup."""
-        return self.returncode
-
-    def send_signal(self, signum: int) -> None:
-        """Record direct-child cleanup without touching a real PID."""
-        self.signals.append(signum)
-
-    def wait(self, *, timeout: float) -> int:
-        """Record bounded exit observation after the cleanup signal."""
-        self.waits.append(timeout)
-        self.returncode = 0
-        return 0
-
-
-@dataclass(slots=True)
-class ProcessCapture:
-    """Retain exactly the stream handles and environment passed to a fake child."""
-
-    stdin: IO[bytes] | None = None
-    stdout: IO[bytes] | None = None
-    environment: dict[str, str] = field(default_factory=dict)
-    start_new_session: bool = False
-
-
 @final
 class PublicRunnerTests(unittest.TestCase):
-    """Exercise private command I/O and cleanup with an in-memory child model."""
+    """Exercise actual local pipes, byte budgets and cleanup without Docker or a network."""
 
-    def __init__(self, methodName: str = "runTest") -> None:  # noqa: N803 - unittest's public constructor keyword.
-        """Keep collection free of resource allocation and external commands."""
+    def __init__(self, methodName: str = "runTest") -> None:  # noqa: N803 -- unittest API.
+        """Keep discovery free of processes and filesystem state."""
         super().__init__(methodName)
-        self.temporary: tempfile.TemporaryDirectory[str] | None = None
         self.directory = Path()
-        self.runner = public.Runner(self.directory)
+        self.runner = public.Runner(Path())
 
     @override
     def setUp(self) -> None:
-        """Create isolated fixtures and register reversible test substitutions."""
-        self.temporary = tempfile.TemporaryDirectory(prefix="simplestchat-release-runner-test.")
-        self.directory = Path(self.temporary.name)
+        """Retain output only in this test's disposable private directory."""
+        temporary = tempfile.TemporaryDirectory(prefix="simplestchat-release-runner-test.")
+        self.addCleanup(temporary.cleanup)
+        self.directory = Path(temporary.name)
         self.runner = public.Runner(self.directory)
 
-    @override
-    def tearDown(self) -> None:
-        """Restore process state and remove only owned temporary fixtures."""
-        if self.temporary is not None:
-            self.temporary.cleanup()
-
-    def test_backup_streams_through_files_without_loading_command_output(self) -> None:
-        """Backup streams through files without loading command output."""
-        source = self.directory / "input.dump"
-        target = self.directory / "output.dump"
-        _ = source.write_bytes(b"fixture database archive")
-        child = ChildProcess()
-        captured = ProcessCapture()
-
-        def spawn(
-            _args: Sequence[str],
-            *,
-            stdin: IO[bytes] | int,
-            stdout: IO[bytes],
-            stderr: IO[bytes],
-            env: dict[str, str],
-            start_new_session: bool,
-        ) -> ChildProcess:
-            assert not isinstance(stdin, int)
-            assert not stderr.closed
-            captured.stdin, captured.stdout = stdin, stdout
-            captured.environment = env
-            captured.start_new_session = start_new_session
-            _ = stdout.write(stdin.read())
-            return child
-
-        with patch.object(subprocess, "Popen", side_effect=spawn):
-            result = self.runner.run(
-                ["fixture-no-execution"], input_path=source, output_path=target
-            )
+    def test_archive_streams_through_files_above_the_inspection_limit(self) -> None:
+        """An explicit archive path supports bounded dumps larger than captured command output."""
+        source, target = self.directory / "input.dump", self.directory / "output.dump"
+        _ = source.write_bytes(b"x" * (4 * 1024 * 1024))
+        result = self.runner.run(
+            [
+                sys.executable,
+                "-c",
+                "import shutil,sys; shutil.copyfileobj(sys.stdin.buffer,sys.stdout.buffer)",
+            ],
+            input_path=source,
+            output_path=target,
+            timeout=5,
+        )
         self.assertEqual(result, b"")
         self.assertEqual(target.read_bytes(), source.read_bytes())
-        assert captured.stdin is not None
-        assert captured.stdout is not None
-        self.assertTrue(captured.stdin.closed)
-        self.assertTrue(captured.stdout.closed)
-        self.assertEqual(captured.environment, public.ENV)
-        self.assertTrue(captured.start_new_session)
 
-    def test_oversized_inspection_is_retained_but_not_returned(self) -> None:
-        """Oversized inspection is retained but not returned."""
-        child = ChildProcess()
-
-        def spawn(
-            _args: Sequence[str],
-            *,
-            stdin: IO[bytes] | int,
-            stdout: IO[bytes],
-            stderr: IO[bytes],
-            env: dict[str, str],
-            start_new_session: bool,
-        ) -> ChildProcess:
-            assert stdin == subprocess.DEVNULL
-            assert not stderr.closed
-            assert env == public.ENV
-            assert start_new_session
-            _ = stdout.write(b"x" * (2 * 1024 * 1024 + 1))
-            return child
-
-        with (
-            patch.object(subprocess, "Popen", side_effect=spawn),
-            self.assertRaisesRegex(public.ReleaseError, "exceeded its bound"),
-        ):
-            _ = self.runner.run(["fixture-no-execution"])
-        self.assertEqual((self.directory / "001.stdout").stat().st_size, 2 * 1024 * 1024 + 1)
-
-    def test_timeout_cleanup_does_not_claim_group_cleanup_after_permission_failure(self) -> None:
-        """A denied group signal cannot be hidden by stopping only its direct child."""
-        child = ChildProcess(returncode=None, timed_out=True)
-        with (
-            patch.object(subprocess, "Popen", return_value=child),
-            patch.object(os, "killpg", side_effect=PermissionError("fixture")) as group,
-            patch.object(public, "leader_exited", return_value=False),
-            self.assertRaises(PermissionError),
-        ):
-            _ = self.runner.run(["fixture-no-execution"], timeout=1)
-        group.assert_called_once_with(12345, signal.SIGTERM)
-        self.assertEqual(child.signals, [])
-        self.assertEqual(child.waits, [])
-
-    def test_zombie_only_permission_handling_requires_complete_darwin_proof(self) -> None:
-        """Only an exited reserved leader and complete same-group zombie rows permit EPERM."""
-        for platform, rows, accepted in (
-            ("darwin", b"123 123 Zs\n", True),
-            ("darwin", b"123 123 Zs\n124 123 Z\n", True),
-            ("darwin", b"123 123 Zs\n124 123 S\n", False),
-            ("darwin", b"123 123 Zs\n124 456 Z\n", False),
-            ("darwin", b"123 123 Zs\n123 123 Zs\n", False),
-            ("darwin", b"123 123 Zombie\n", False),
-            ("darwin", b"123 123 Zs\n" + b"9" * 5000, False),
-            ("darwin", b"", False),
-            ("darwin", None, False),
-            ("linux", b"123 123 Zs\n", False),
-        ):
-            with (
-                self.subTest(platform=platform, rows=rows),
-                patch.object(sys, "platform", platform),
-                patch.object(os, "killpg", side_effect=PermissionError),
-                patch.object(public, "leader_exited", return_value=True),
-                patch.object(public, "process_group_rows", return_value=rows),
-            ):
-                if accepted:
-                    public.signal_group(123, signal.SIGKILL)
-                else:
-                    with self.assertRaises(PermissionError):
-                        public.signal_group(123, signal.SIGKILL)
-
-    def test_timeout_cleanup_keeps_leader_unreaped_until_group_escalation(self) -> None:
-        """The nonreaping exit check reserves the process-group identity through SIGKILL."""
-        child = ChildProcess(returncode=None, timed_out=True)
-        calls: list[int] = []
-
-        def signal_group(_pid: int, signal_number: int) -> None:
-            calls.append(signal_number)
-
-        with (
-            patch.object(subprocess, "Popen", return_value=child),
-            patch.object(os, "killpg", side_effect=signal_group),
-            patch.object(os, "waitid", return_value=object()) as observation,
-            self.assertRaises(subprocess.TimeoutExpired),
-        ):
-            _ = self.runner.run(["fixture-no-execution"], timeout=1)
-        observation.assert_called_once_with(
-            os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT
+    def test_duplex_input_and_both_outputs_are_serviced_without_deadlock(self) -> None:
+        """A full stderr pipe cannot block a command waiting for its large stdin request."""
+        script = (
+            "import sys; sys.stderr.buffer.write(b'e'*200000); sys.stderr.flush(); "
+            + "sys.stdout.buffer.write(sys.stdin.buffer.read())"
         )
-        self.assertEqual(calls, [signal.SIGTERM, signal.SIGKILL])
-        self.assertEqual(child.waits, [5])
+        result = self.runner.run(
+            [sys.executable, "-c", script], input_data=b"x" * 300000, timeout=5
+        )
+        self.assertEqual(result, b"x" * 300000)
+        self.assertEqual((self.directory / "001.stderr").read_bytes(), b"e" * 200000)
+
+    def test_stdout_and_stderr_overflow_are_capped_before_disk_writes(self) -> None:
+        """Noisy commands cannot consume disk beyond either stream's declared budget."""
+        for channel in ("stdout", "stderr"):
+            with (
+                self.subTest(channel=channel),
+                self.assertRaisesRegex(public.ReleaseError, channel + "_limit_exceeded"),
+            ):
+                _ = self.runner.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        f"import sys,time; sys.{channel}.buffer.write(b'x'*3000000); "
+                        + f"sys.{channel}.flush(); time.sleep(30)",
+                    ],
+                    timeout=5,
+                )
+            path = self.directory / f"{self.runner.number:03d}.{channel}"
+            self.assertEqual(path.stat().st_size, public.MAX_INSPECTION_BYTES)
+
+    def test_archive_explicit_limit_and_filesystem_reserve_apply_before_writes(self) -> None:
+        """Configured download limits and real free-space headroom each constrain archive output."""
+        disk = shutil.disk_usage(self.directory)
+        for explicit, free, expected in (
+            (1024, disk.free, 1024),
+            (None, public.ARCHIVE_FREE_RESERVE_BYTES + 2048, 2048),
+        ):
+            target = self.directory / f"archive-{expected}.dump"
+            with (
+                self.subTest(explicit=explicit),
+                patch.object(shutil, "disk_usage", return_value=disk._replace(free=free)),
+                self.assertRaisesRegex(public.ReleaseError, "stdout_limit_exceeded"),
+            ):
+                _ = self.runner.run(
+                    [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'x'*4096)"],
+                    output_path=target,
+                    output_limit=explicit,
+                )
+            self.assertEqual(target.stat().st_size, expected)
+
+    def test_invalid_archive_limits_fail_before_starting_a_child(self) -> None:
+        """Malformed and unlimited budgets never reach the subprocess boundary."""
+        for maximum in (0, -1, True, public.MAX_ARCHIVE_OUTPUT_BYTES + 1):
+            with (
+                self.subTest(maximum=maximum),
+                patch.object(subprocess, "Popen") as launch,
+                self.assertRaises(public.ReleaseError),
+            ):
+                _ = self.runner.run(
+                    ["never-executed"], output_path=self.directory / "archive", output_limit=maximum
+                )
+            launch.assert_not_called()
+
+    def test_deadline_still_applies_when_the_child_closes_both_output_pipes(self) -> None:
+        """EOF cannot hide a still-running command from its deadline."""
+        started = time.monotonic()
+        with self.assertRaises(subprocess.TimeoutExpired):
+            _ = self.runner.run(
+                [sys.executable, "-c", "import os,time; os.close(1); os.close(2); time.sleep(30)"],
+                timeout=0.2,
+            )
+        self.assertLess(time.monotonic() - started, 3)
+
+    def test_nonzero_exit_retains_bounded_private_output(self) -> None:
+        """A command failure keeps its diagnostic files without returning them as success."""
+        with self.assertRaisesRegex(public.ReleaseError, "inspect private output"):
+            _ = self.runner.run([sys.executable, "-c", "print('fixture'); raise SystemExit(7)"])
+        self.assertEqual((self.directory / "001.stdout").read_bytes(), b"fixture\n")
 
 
 class BackupReceiptTests(unittest.TestCase):
