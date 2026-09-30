@@ -103,8 +103,12 @@ npm --prefix web run build
 cargo build --locked --release --bin simplestChat
 ```
 
-The OpenSSL helper installs the checksum-pinned static build. Python build tools
-use the constraints file. Run the server from the repository root so it can
+The OpenSSL helper installs the checksum-pinned static build. Its download permits
+three transient-error retries with curl's default backoff, a 180-second retry
+window, a 20-second connection timeout and a 120-second limit per attempt. An
+attempt already in progress may finish beyond the retry window; exhausted retries
+or a checksum mismatch fail the build. Python build tools use the constraints file.
+Run the server from the repository root so it can
 find `web/dist` and migrations; reload Rust Analyzer after the first native setup.
 
 ### Rust toolchain troubleshooting

@@ -36,6 +36,7 @@ trap cleanup EXIT HUP INT TERM
 
 archive="$build_dir/openssl-${openssl_version}.tar.gz"
 curl --fail --show-error --location --proto '=https' --tlsv1.2 \
+    --retry 3 --retry-max-time 180 --connect-timeout 20 --max-time 120 \
     "$openssl_url" --output "$archive"
 
 if command -v sha256sum >/dev/null 2>&1; then

@@ -15,7 +15,7 @@
     "Cargo.toml": "ce13864478643b6fea30e91b3a304081b32ea26493e5cae88f9399c4dcf75a5f",
     "Cargo.lock": "bbb0a2ee470fe936915482aa326dec2914fce7a08e09a73d74453fe76f740560",
     "vendor/integrity.json": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
-    "vendor/native-components.json": "ef0a879b5baa680bd64af9bb0a13e4fe309e75145565888f31bced54b01f30ea"
+    "vendor/native-components.json": "a196de6bff7714f80bf3b6c0d950d5454fa616e7693af510279c87d253d63ac8"
   },
   "profileFiles": {
     "ops/ansible/files/runtime_profile.py": "22f9b098a6b19be111291c467e2a34a5c7c0f53a6aa3691f71390ddf8bd85965",
