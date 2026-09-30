@@ -212,7 +212,7 @@ async function acceptPendingInvite(): Promise<void> {
   try {
     const accepted = await api.redeemInvite(auth.jwt, code);
     showToast(
-      `You are now ${accepted.role === 'admin' ? 'an' : 'a'} ${accepted.role} of ${accepted.display_name}`,
+      `Invitation confirmed for ${accepted.display_name}. Joining with your current permissions.`,
     );
     openRoomFromDialog(accepted.room_id);
   } catch (error) {
