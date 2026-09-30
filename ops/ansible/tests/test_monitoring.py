@@ -2,8 +2,10 @@
 
 import ast
 import datetime
+import hashlib
 import io
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -24,12 +26,12 @@ from release_json import JsonObject, decode_json
 class MonitoringTests(unittest.TestCase):
     """Keep alert data finite and failures visible while PostgreSQL is unavailable."""
 
-    def test_backup_freshness_counts_only_receipted_dumps_of_the_recorded_size(self) -> None:
+    def test_backup_freshness_counts_only_integrity_checked_private_receipts(self) -> None:
         """A dump file exists before pg_dump runs; only a receipt after listing counts."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             state = root / "state"
-            state.mkdir()
+            state.mkdir(mode=0o750)
             partial = root / "results" / "release.partial"
             partial.mkdir(parents=True)
             _ = (partial / "database-before.dump").write_bytes(b"x" * 100)
@@ -37,7 +39,15 @@ class MonitoringTests(unittest.TestCase):
             good.mkdir()
             _ = (good / "database-before.dump").write_bytes(b"y" * 40)
             _ = (good / "database-before.receipt.json").write_text(
-                json.dumps({"schemaVersion": 1, "dump": "database-before.dump", "bytes": 40})
+                json.dumps(
+                    {
+                        "schemaVersion": 1,
+                        "dump": "database-before.dump",
+                        "bytes": 40,
+                        "sha256": hashlib.sha256(b"y" * 40).hexdigest(),
+                        "completedAt": release.timestamp(),
+                    }
+                )
             )
             grown = root / "results" / "release.grown"
             grown.mkdir()
@@ -46,7 +56,11 @@ class MonitoringTests(unittest.TestCase):
                 json.dumps({"schemaVersion": 1, "dump": "database-before.dump", "bytes": 4})
             )
             (root / "releases").mkdir()
+            good.chmod(0o700)
+            (good / "database-before.dump").chmod(0o600)
+            (good / "database-before.receipt.json").chmod(0o600)
             with (
+                patch.object(release, "ROOT_UID", os.getuid()),
                 patch.object(collect, "ROOT", root),
                 patch.object(collect, "STATE", state),
                 patch.object(collect, "command", return_value="0\t/tmp"),
@@ -65,6 +79,7 @@ class MonitoringTests(unittest.TestCase):
                 delta=1,
             )
             with (
+                patch.object(release, "ROOT_UID", os.getuid()),
                 patch.object(collect, "ROOT", root),
                 patch.object(collect, "STATE", state),
                 patch.object(collect, "command", return_value="0\t/tmp"),

@@ -300,7 +300,13 @@ filesystem growth.
 `scpub_backup_keep_at_least` accepts integers from 1–365 (default 3). Pruning
 retains the newest verified archives and removes older eligible pairs only after
 a new successful archive. Private nightly command logs share the age limit.
-Release evidence is separate and is never automatically pruned.
+Release evidence is separate and is never automatically pruned. The collector
+requires current receipt schema, a regular root-owned 0600 receipt and dump,
+matching size and SHA256, and a valid completion time before reporting backup
+freshness. It reuses a verified digest for at most 24 hours while the file's
+identity, size and modification/change timestamps remain unchanged, checking
+ownership and permissions on every collection. Changed files are hashed again.
+An archive listing does not advance restore-drill freshness.
 
 Normal failure cleanup removes the worker's own partial dump. The wrapper has an
 EXIT cleanup trap; startup also checks for stale partials. An abrupt termination

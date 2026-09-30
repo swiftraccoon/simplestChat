@@ -16,7 +16,7 @@ from urllib.request import ProxyHandler, build_opener
 
 from monitoring_alerts import STATE, record
 from release_json import JsonObject, decode_json, object_value, string_value
-from release_public import ReleaseError, atomic, require
+from release_public import ReleaseError, atomic, protected, require, validated_backup
 
 if TYPE_CHECKING:
     from http.client import HTTPResponse
@@ -168,21 +168,35 @@ def readiness_and_tls(lines: list[str], domain: str) -> None:
 def evidence(lines: list[str]) -> None:
     """Report backup/restore evidence truthfully without counting a backup as a restore."""
     # A dump file exists before pg_dump starts and survives its failure; only the
-    # receipt the release writes after the dump listed counts, and only while the
-    # dump it names still has the recorded size.
+    # receipt written after durable publication counts. Verify current bytes,
+    # schema and private ownership before using its recorded completion time.
     receipts = list((ROOT / "results").glob("release.*/database-before.receipt.json")) + list(
         (ROOT / "backups" / "nightly").glob("*.receipt.json")
     )
     require(len(receipts) <= MAX_BACKUPS, "Too many release backup entries")
+    protected(STATE, directory=True, modes=(0o750,))
+    cached: JsonObject = {}
+    cache_path = STATE / "backup-integrity-cache.json"
+    if cache_path.exists() or cache_path.is_symlink():
+        protected(cache_path, limit=2 * 1024 * 1024)
+        cache_record = object_value(decode_json(cache_path.read_bytes()))
+        require(
+            type(cache_record.get("schemaVersion")) is int and cache_record["schemaVersion"] == 1,
+            "Invalid backup digest cache",
+        )
+        cached = object_value(cache_record.get("entries"))
+    refreshed: JsonObject = {}
     latest = 0.0
     for receipt in receipts:
         try:
-            record = object_value(decode_json(receipt.read_bytes()))
-            dump = receipt.with_name(str(record["dump"]))
-            if record.get("bytes") == dump.stat().st_size > 0:
-                latest = max(latest, receipt.stat().st_mtime)
+            key = str(receipt)
+            entry = object_value(cached[key]) if key in cached else {}
+            _dump, _record, completed = validated_backup(receipt, digest_cache=entry)
+            refreshed[key] = entry
+            latest = max(latest, completed)
         except (OSError, ValueError, KeyError, ReleaseError):
             continue
+    atomic(cache_path, {"schemaVersion": 1, "entries": refreshed})
     gauge(lines, "backup_last_success_seconds", latest)
     # Restore exercises are separate operator-owned evidence, never inferred from pg_restore --list.
     restore = STATE / "restore-verified.timestamp"
