@@ -6,6 +6,7 @@ import io
 import json
 import os
 import platform
+import sys
 import tempfile
 import time
 import unittest
@@ -14,9 +15,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Unpack
 from unittest.mock import patch
 
-from test_support import ROOT
+from test_support import ROOT, objects, strings, yaml_value
 
 # isort: split
+import bounded_process
 import release_public as release
 import security_vm_guest as guest
 from release_json import decode_json, object_value
@@ -133,6 +135,86 @@ def unit_properties() -> dict[str, str]:
 
 class GuestGuardTests(unittest.TestCase):
     """Guard failures occur before commands or mutable fixture state can be created."""
+
+    def test_stage_installs_complete_imports_before_public_preparation(self) -> None:
+        """A fresh guest can import staged helpers without checkout paths or prior installs."""
+        tasks = objects(yaml_value((ROOT / "security/vm/stage.yml").read_text()), 0, "tasks")
+        installation = next(
+            task
+            for task in tasks
+            if task["name"] == "Install the unchanged maintained release and backup implementations"
+        )
+        names = strings(installation, "loop")
+        self.assertLess(names.index("runtime_profile.py"), names.index("release_public.py"))
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            for name in names:
+                self.assertEqual(Path(name).name, name)
+                _ = (directory / name).write_bytes((ROOT / "ops/ansible/files" / name).read_bytes())
+            command = [
+                sys.executable,
+                "-I",
+                "-B",
+                "-c",
+                "import importlib, pathlib, sys; sys.path.insert(0, sys.argv[1]); "
+                + "[importlib.import_module(name) for name in "
+                + "('release_public', 'backup_public', 'restore_verify')]; "
+                + "assert pathlib.Path(sys.modules['runtime_profile'].__file__) "
+                + "== pathlib.Path(sys.argv[1]) / 'runtime_profile.py'",
+                str(directory),
+            ]
+            status, _output, error = bounded_process.run(
+                command,
+                cwd=directory,
+                env={},
+                limits=bounded_process.Limits(timeout=5, stdout=65536, stderr=65536),
+            )
+            self.assertEqual(status, 0, error.decode())
+            (directory / "runtime_profile.py").unlink()
+            status, _output, error = bounded_process.run(
+                command,
+                cwd=directory,
+                env={},
+                limits=bounded_process.Limits(timeout=5, stdout=65536, stderr=65536),
+            )
+            self.assertNotEqual(status, 0)
+            self.assertIn(b"ModuleNotFoundError: No module named 'runtime_profile'", error)
+
+    def test_runtime_profile_permissions_are_checked_before_the_daemon(self) -> None:
+        """The newly required installed dependency receives the same origin and mode checks."""
+        library = ROOT / "ops/ansible/files"
+
+        def read(path: Path, *, mode: int = 0o600) -> bytes:
+            if path == guest.MARKER:
+                return (RUN_ID + "\n").encode()
+            if path == guest.ROOT / "selection.json":
+                return json.dumps(
+                    {"schemaVersion": 1, "runId": RUN_ID, "revision": REVISION}
+                ).encode()
+            if path == library / "runtime_profile.py":
+                self.assertEqual(mode, 0o644)
+                reason = "fixture_runtime_profile_permissions"
+                raise release.ReleaseError(reason)
+            return b"fixture helper"
+
+        with (
+            patch.object(os, "geteuid", return_value=0),
+            patch.object(platform, "system", return_value="Linux"),
+            patch.object(platform, "machine", return_value="x86_64"),
+            patch.object(
+                platform,
+                "freedesktop_os_release",
+                return_value={"ID": "debian", "VERSION_ID": "13"},
+            ),
+            patch.object(Path, "open", return_value=io.BytesIO(b"QEMU\n")),
+            patch.object(Path, "lstat") as inspect_path,
+            patch.object(guest, "directory"),
+            patch.object(guest, "LIBRARY", library),
+            patch.object(guest, "private_file", side_effect=read),
+            self.assertRaisesRegex(release.ReleaseError, "fixture_runtime_profile_permissions"),
+        ):
+            _ = guest.guard(RUN_ID)
+        inspect_path.assert_not_called()
 
     def test_selection_has_one_strict_schema_and_owner(self) -> None:
         """Booleans, duplicate fields, extra options and foreign runs cannot select a guest."""

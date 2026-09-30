@@ -223,6 +223,7 @@ def guard(run_id: str) -> Selection:
     _ = directory(LIBRARY, mode=0o755)
     for name in (
         "bounded_process",
+        "runtime_profile",
         "release_public",
         "release_artifact",
         "release_json",
