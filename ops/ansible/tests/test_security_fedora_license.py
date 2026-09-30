@@ -61,8 +61,8 @@ class FedoraRuntimeReviewTests(unittest.TestCase):
         )
         self.assertNotIn("LicenseRef-Fedora-Public-Domain", array_value(policy["allowedLicenses"]))
 
-    def test_same_source_x86_policy_is_explicit_and_distinct_from_arm_observation(self) -> None:
-        """Supported release architecture gets its own review rather than a wildcard scope."""
+    def test_observed_architectures_keep_distinct_exact_reviews(self) -> None:
+        """Canonical x86 evidence confirms its scope without weakening separate ARM review."""
         self.assertEqual(observation()["platform"], "linux/arm64")
         current = reviews.read_exceptions(today=TODAY)
         scoped = [entry for entry in current if entry.scanner == "image-license"]
@@ -74,7 +74,8 @@ class FedoraRuntimeReviewTests(unittest.TestCase):
                 self.assertEqual(len(matching), 1)
                 self.assertTrue(image.license_verdict([selected], policy, matching)["passed"])
                 if architecture == "x86_64":
-                    self.assertIn("inference", matching[0].reachability)
+                    self.assertIn("now confirmed", matching[0].reachability)
+                    self.assertIn("canonical linux/amd64", matching[0].reachability)
         self.assertNotEqual(package()["purl"], package("x86_64")["purl"])
 
     def test_changed_identity_or_license_does_not_borrow_review(self) -> None:

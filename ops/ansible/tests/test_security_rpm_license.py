@@ -16,15 +16,45 @@ import security_policy as reviews
 from release_json import JsonObject, JsonValue, array_value, object_value, string_value
 
 EVIDENCE = ROOT / "security/license-evidence/fedora-rpm-review-2026-09-30.json"
+CANONICAL = ROOT / "security/license-evidence/fedora-runtime-2026-09-30.json"
 TODAY = date(2026, 9, 30)
 REVIEWED_SOFTWARE_TERMS = 55
 CONTEXTUAL_TERMS = 7
 
 
 def observations() -> list[JsonObject]:
-    """Load the exact raw records from the separately retained ARM observation."""
-    value = object_value(image.report(EVIDENCE))
-    return [object_value(item) for item in array_value(value["rawObservations"])]
+    """Load current canonical raw records without inventing architecture or SPDX data."""
+    value = object_value(image.report(CANONICAL))
+    public_key = next(
+        object_value(item)
+        for item in array_value(value["existingReviewMatches"])
+        if object_value(item)["name"] == "gpg-pubkey"
+    )
+    libtool = next(
+        object_value(item)
+        for item in array_value(value["packages"])
+        if object_value(item)["name"] == "libtool-ltdl"
+    )
+    identity = object_value(libtool["canonical"])
+    declaration = object_value(
+        object_value(value["declarations"])[string_value(libtool["declaration"])]
+    )
+    return [
+        {
+            **public_key,
+            "type": "rpm",
+            "fingerprint": public_key["reviewFingerprint"],
+            "rawLicenseRecordsSha256": public_key["rawRecordsSha256"],
+        },
+        {
+            **identity,
+            "name": "libtool-ltdl",
+            "type": "rpm",
+            "licenses": declaration["records"],
+            "fingerprint": declaration["reviewFingerprint"],
+            "rawLicenseRecordsSha256": declaration["recordsSha256"],
+        },
+    ]
 
 
 class RpmLicenseReviewTests(unittest.TestCase):

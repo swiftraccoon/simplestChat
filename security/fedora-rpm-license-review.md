@@ -70,11 +70,14 @@ The earlier `license-raw:` identity is replaced without a compatibility path.
 A missing record, changed declaration, additional unparsed record or different
 evidence location cannot inherit the review. A recognized declaration alongside
 an unparsed declaration remains blocking until the complete set is reviewed.
-The reviews originate from the retained ARM observation. The `libtool-ltdl`
-PURL remains specific to its aarch64 version and source RPM. The public-key
-record remains specific to its exact key fingerprint and architecture-neutral
-PURL. Equivalent declarations at those exact scopes can reuse review after a
-layer rebuild; a different package architecture, version, source or key cannot.
+The reviews originate from the retained ARM observation. That `libtool-ltdl`
+observation is now historical: the [canonical runtime review](fedora-runtime-license-review.md)
+replaces its active aarch64 scope with the actually observed x86_64 package and
+retains the same raw declaration fingerprint and matching notice bytes. The
+public-key record remains specific to its exact key fingerprint and
+architecture-neutral PURL. Equivalent declarations at the current exact scopes
+can reuse review after a layer rebuild; a different package architecture,
+version, source or key cannot.
 The canonical release SBOM must still establish the actual observed package
 identity and complete declarations before any exception applies.
 

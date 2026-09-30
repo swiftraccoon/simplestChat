@@ -257,9 +257,9 @@
       "scope": "pkg:rpm/fedora/libstdc%2B%2B-static@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
       "owner": "swiftraccoon",
       "rationale": "Exact Fedora GCC 16.2.1-2.fc44 source-spec aggregate inherited by libstdc++-static; upstream libstdc++ code documents GPLv3 with GCC Runtime Library Exception 3.1. Preserve the complete observed expression; this review does not license arbitrary GCC or newlib components.",
-      "reachability": "Explicit x86_64 policy inference from the same Fedora source RPM and unchanged inherited aggregate; no x86_64 binary observation is claimed. Only this package/version/source-RPM/architecture and exact expression match; unknown terms elsewhere remain blocked.",
+      "reachability": "The former same-source policy inference is now confirmed by the canonical linux/amd64 image 6f3b0661ae0462644633bdc8461c24a1207e31eae68c5c9c23381bb499a53da6 and authenticated native receipt. The exact x86_64 package/version/source RPM and full aggregate match; unknown terms elsewhere remain blocked. This does not establish a complete image or redistribution pass.",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-libstdcxx-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
     },
     {
       "scanner": "image-license",
@@ -274,12 +274,12 @@
     {
       "scanner": "image-license",
       "fingerprint": "license-raw-v2:a37d632812a30cba50e38e890c319d6a0ba027548fa0dca3b3d3a8e597af604b",
-      "scope": "pkg:rpm/fedora/libtool-ltdl@2.5.4-10.fc44?arch=aarch64&distro=fedora-44&upstream=libtool-2.5.4-10.fc44.src.rpm",
+      "scope": "pkg:rpm/fedora/libtool-ltdl@2.5.4-10.fc44?arch=x86_64&distro=fedora-44&upstream=libtool-2.5.4-10.fc44.src.rpm",
       "owner": "swiftraccoon",
       "rationale": "Exact Fedora libtool-ltdl 2.5.4-10.fc44 declared LGPLv2+ record. Pinned Fedora legal data identifies this abbreviation as LGPL-2.0-or-later; preserve the raw declaration and its full scanner evidence rather than inventing a normalized SPDX observation.",
-      "reachability": "Review originates from the retained provisional ARM observation and binds the exact package PURL plus every ordered declaration field and evidence path. Only a well-formed SHA-256 location layer digest is represented by a stable marker; complete original records and their independent digest remain in each image report. Changed values, missing records or layer fields, package identity, source paths or annotations require a new review. Equivalent declarations at the same exact scope may reuse review after a layer rebuild; no final image pass is claimed.",
+      "reachability": "Observed in canonical linux/amd64 image 6f3b0661ae0462644633bdc8461c24a1207e31eae68c5c9c23381bb499a53da6. Exact raw declaration fingerprint and LGPL notice bytes match the retained review. This replaces the provisional ARM scope; it does not approve other architectures, metadata changes, arbitrary loader use, or an overall image pass.",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-license-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
     },
     {
       "scanner": "codeql",
@@ -1270,6 +1270,256 @@
       "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 465a36f3c06f71753da0d1f21cef3f451ec2ef2fb23d5d22a6898d943858d26e. Reviewed cfg(test) helper and all 13 caller paths; no sensitive value is formatted. No blanket test/query exclusion. Changed helper, range or message requires another exact review; changed callers require renewed source review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-102"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:a95ec2b294e702e627453c21ffc51fd5030be21fa2c061938c79b12b4cbdf318",
+      "scope": "pkg:rpm/fedora/coreutils@9.10-5.fc44?arch=x86_64&distro=fedora-44&upstream=coreutils-9.10-5.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Fedora carries a software-and-documentation aggregate. The exact 9.10 release manual identifies GFDL 1.3-or-later without invariant sections or cover texts. The 9.10-5 spec requires the same-version coreutils-common package, which retains the matching COPYING notice. Keep the complete observed aggregate.",
+      "reachability": "The canonical artifact retains the exact coreutils-common notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:a95ec2b294e702e627453c21ffc51fd5030be21fa2c061938c79b12b4cbdf318",
+      "scope": "pkg:rpm/fedora/coreutils-common@9.10-5.fc44?arch=x86_64&distro=fedora-44&upstream=coreutils-9.10-5.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "This exact source RPM owns the shared COPYING notice for coreutils. Its bytes match the official 9.10 release archive. Documentation-specific GFDL terms are assessed in package context; GPL/LGPL software terms remain declared and unchanged.",
+      "reachability": "The canonical artifact retains the exact coreutils-common notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:7a83333b5c40fc3861d45f33561e2c101361f2447791a1eca86a00409e2f5623",
+      "scope": "pkg:rpm/fedora/filesystem@3.18-52.fc44?arch=x86_64&distro=fedora-44&upstream=filesystem-3.18-52.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Official Koji build 2897885 binds filesystem 3.18-52.fc44 to dist-git cf9061fec83ccac5a1ef2359b7a91e39f0c406f6, resolving autorelease identity. Exact observed metadata has 1,551 directories, 15 symlinks and six zero-byte ghost placeholders, with no regular-file payload. The spec includes layout-maintenance Lua scriptlets and declares the Fedora public-domain identifier. This remains a review of the exact package context, not every public-domain label.",
+      "reachability": "Canonical RPM metadata matches the exact reviewed layout/ghost context, including source scriptlet limitations. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:30642b306924ce375ecb58acd5513b6bf1b01d94b18a6cfbde3817bc0871424c",
+      "scope": "pkg:rpm/fedora/glibc@2.43-8.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-8.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Official Koji build 3073599 binds glibc 2.43-8.fc44 to dist-git 35dbb287f9fb06e287a9c703eb9da8ff63399aa6, resolving the earlier branch-spec mismatch. All four regular installed notices match the exact upstream 2.43 texts, and COPYING.LIB resolves to the matching LGPL notice. The exact spec establishes shared notice ownership and same-version common/minimal dependencies. Documentation conditions are preserved; glibc-doc is absent from the observed runtime RPM set.",
+      "reachability": "The canonical artifact retains the exact glibc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:30642b306924ce375ecb58acd5513b6bf1b01d94b18a6cfbde3817bc0871424c",
+      "scope": "pkg:rpm/fedora/glibc-common@2.43-8.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-8.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Official Koji build 3073599 binds glibc 2.43-8.fc44 to dist-git 35dbb287f9fb06e287a9c703eb9da8ff63399aa6, resolving the earlier branch-spec mismatch. All four regular installed notices match the exact upstream 2.43 texts, and COPYING.LIB resolves to the matching LGPL notice. The exact spec establishes shared notice ownership and same-version common/minimal dependencies. Documentation conditions are preserved; glibc-doc is absent from the observed runtime RPM set.",
+      "reachability": "The canonical artifact retains the exact glibc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:30642b306924ce375ecb58acd5513b6bf1b01d94b18a6cfbde3817bc0871424c",
+      "scope": "pkg:rpm/fedora/glibc-minimal-langpack@2.43-8.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-8.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Official Koji build 3073599 binds the exact 2.43-8 source spec. It defines minimal-langpack as an empty metapackage requiring the exact glibc and glibc-common versions; the actual RPM inventory confirms zero owned files and all three matching packages. Shared glibc notice ownership and all notice hashes are established. Preserve the source aggregate and documentation conditions.",
+      "reachability": "The canonical artifact retains the exact glibc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:59fc3235815b71343bd3d6e627aa659af173efde6a93d0bfedd5e44bb775f370",
+      "scope": "pkg:rpm/fedora/gmp@6.3.0-5.fc44?arch=x86_64&distro=fedora-44&epoch=1&upstream=gmp-6.3.0-5.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Official Koji build 2899297 binds epoch 1 GMP 6.3.0-5.fc44 to exact dist-git 262e6901f376fafb620dff101a304d01494dcad1. All four installed notices match the exact GNU 6.3.0 release archive. Its manual specifies no invariant sections but required front/back cover texts. The exact spec assigns that manual to gmp-devel, absent from the observed runtime RPM set. Preserve the complete RPM aggregate and runtime GPL/LGPL notices.",
+      "reachability": "The canonical artifact retains the exact gmp notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:fed0b291d9dd49163fde987a1ea7d899700b4eea7affa7d60372426bddfb4fca",
+      "scope": "pkg:rpm/fedora/grep@3.12-3.fc44?arch=x86_64&distro=fedora-44&upstream=grep-3.12-3.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "The exact Fedora 3.12-3 spec retains software GPL/LGPL terms and documentation-only GFDL. The official 3.12 manual has no invariant sections or cover texts. Installed COPYING matches the release archive exactly; the full declared aggregate remains unchanged.",
+      "reachability": "The canonical artifact retains the exact grep notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:f60c35cb217da7289a3c96d27f9e5070f61cbb94dacd349e0d324864bfcf0778",
+      "scope": "pkg:rpm/fedora/gzip@1.14-2.fc44?arch=x86_64&distro=fedora-44&upstream=gzip-1.14-2.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "The exact Fedora 1.14-2 spec identifies documentation GFDL separately from program GPL. The release manual states GFDL 1.3-or-later without invariant or cover texts, while RPM metadata declares GFDL 1.3-only. Preserve the RPM declaration and both installed notices rather than silently rewriting that difference.",
+      "reachability": "The canonical artifact retains the exact gzip notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:102727600049ec08f1046537d2944366d3a7984e53ac4bcf80679d1f465f7251",
+      "scope": "pkg:rpm/fedora/libevent@2.1.13-1.fc44?arch=x86_64&distro=fedora-44&upstream=libevent-2.1.13-1.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Current observed version is 2.1.13-1, replacing the earlier 2.1.12-17 preparation. Its installed LICENSE matches the exact upstream 2.1.13 tag. That tag retains BSD terms, ISC arc4random attribution and the explicit public-domain dedication in DNS source/header. The pinned Fedora 2.1.13-1 spec describes that split. This candidate does not reuse the prior version PURL.",
+      "reachability": "The canonical artifact retains the exact libevent notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:6f12c7538c3b4b2a7cb6716b4c1c9c425027f83531e990c6caa64f6cda9a5fe2",
+      "scope": "pkg:rpm/fedora/libfsverity@1.6-4.fc44?arch=x86_64&distro=fedora-44&upstream=fsverity-utils-1.6-4.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "The exact Fedora 1.6-4 spec marks its automatically converted Callaway BSD label for review. The installed LICENSE matches upstream fsverity-utils v1.6 MIT text byte-for-byte. This supports review of this package and unchanged declaration only; it does not permit the generic Callaway label or rewrite the scanner metadata.",
+      "reachability": "The canonical artifact retains the exact libfsverity notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c",
+      "scope": "pkg:rpm/fedora/libgcc@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "The exact Fedora GCC 16.2.1-2 aggregate and source revision are already retained. At that revision libgcc2.c grants GPL3-or-later with the GCC Runtime Library Exception 3.1. All five installed GCC notices remain required, including the exception. Compilation and redistribution conditions remain separate from accepting the aggregate metadata.",
+      "reachability": "The canonical artifact retains the exact libgcc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c",
+      "scope": "pkg:rpm/fedora/libgomp@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "The exact GCC source revision libgomp.h grants GPL3-or-later with Runtime Library Exception 3.1. This subpackage inherits the unchanged Fedora GCC aggregate and owns no notice file. Require the same-source libgcc notice set in the image; do not claim the entire compiler aggregate applies as a single runtime license.",
+      "reachability": "The canonical artifact retains the exact libgcc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:7a83333b5c40fc3861d45f33561e2c101361f2447791a1eca86a00409e2f5623",
+      "scope": "pkg:rpm/fedora/libselinux@3.11-2.fc44?arch=x86_64&distro=fedora-44&upstream=libselinux-3.11-2.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Official Koji binds exact 3.11-2.fc44 to Fedora commit b756484481d400807162729464a9ecb85c97ed3c. The authenticated 3.11 archive LICENSE matches the installed notice exactly. All four recorded Fedora patches leave that notice unchanged; the new SHA256 source/header retain explicit public-domain attribution. Preserve this exact package/declaration/notice context; no general LicenseRef approval follows.",
+      "reachability": "The canonical artifact retains the exact libselinux notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c",
+      "scope": "pkg:rpm/fedora/libstdc%2B%2B@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "The Fedora GCC 16.2.1-2 spec has the previously reviewed source-wide aggregate and no per-libstdc++ license override. Exact GCC revision stl_algobase.h grants GPL 3-or-later with GCC runtime exception 3.1; COPYING.RUNTIME preserves the exception conditions. The official libstdc++ manual separately describes runtime code and documentation licenses. No individually owned license file appears for this RPM; libgcc carries shared GCC notices. Existing libstdc++-static exceptions have different PURLs and cannot authorize this dynamic-runtime package. Keep the entire observed aggregate unchanged.",
+      "reachability": "The canonical artifact retains the exact libgcc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:2a5cd32d156021c5bce40e5dee1d7f47fc548ae1783d7869ea3799e1b2263597",
+      "scope": "pkg:rpm/fedora/libxcrypt@4.5.2-3.fc44?arch=x86_64&distro=fedora-44&upstream=libxcrypt-4.5.2-3.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Official Koji binds 4.5.2-3.fc44 to Fedora commit da4ebbd1399bfc4dc96cec0dad7db4abf81490c6. The source archive matches that commit\u2019s SHA512. Applying only the exact two LICENSING hunks from its recorded thread-local-output patch reconstructs all 6,148 installed bytes and SHA256 ee26dd8a96fbf600623760499ea1ddddd5703186226b08ba72c39134fff5b758. AUTHORS and COPYING.LIB match upstream unchanged. Preserve all added test/Autoconf attributions and the complete RPM declaration.",
+      "reachability": "The canonical artifact retains the exact libxcrypt notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:72acbf25f9b0ed34c3adf86a02864a1380767369d40ed3b2eb578ec1af4e1d83",
+      "scope": "pkg:rpm/fedora/popt@1.19-10.fc44?arch=x86_64&distro=fedora-44&upstream=popt-1.19-10.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "The installed COPYING is the MIT notice. At the exact upstream 1.19 release tag, src/lookup3.c identifies its Bob Jenkins hashing implementation as public domain with no warranty. This explains the additional Fedora public-domain component without removing either term of the observed MIT AND public-domain declaration.",
+      "reachability": "The canonical artifact retains the exact popt notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:09d101514957666a873e63848a6c12a0b0bb08f434db1c4ffbeaf2d292fc2a58",
+      "scope": "pkg:rpm/fedora/readline@8.3-4.fc44?arch=x86_64&distro=fedora-44&upstream=readline-8.3-4.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "The readline-8.3 Texinfo manual explicitly assigns GFDL 1.3-or-later with no invariant sections, front-cover texts or back-cover texts. The installed COPYING/USAGE files retain software notices. Preserve GPL 3-or-later, GPL 2-or-later and documentation terms together as declared; a documentation-context review does not license the runtime under GFDL.",
+      "reachability": "The canonical artifact retains the exact readline notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:b72d0f3068219740f5c4ab8e300be6d0ca7d70c854f4e9b772bd69922cc84ede",
+      "scope": "pkg:rpm/fedora/rootfiles@9.0-6.fc44?arch=noarch&distro=fedora-44&upstream=rootfiles-9.0-6.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Pinned Fedora legal data permits the specific LicenseRef-Not-Copyrightable identifier for nonexpressive/trivial material. The package owns no dedicated license file. All six nonempty-digest payload files were read and independently matched to the retained RPM inventory: tmpfiles copy directives and short default shell initialization templates. This records the distribution classification and exact content context; it is not an independent legal finding about originality or a wildcard allowance for other custom identifiers.",
+      "reachability": "The six actual template payload SHA-256 values match the exact canonical SPDX document; ghost entries are not treated as verified content. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:7a83333b5c40fc3861d45f33561e2c101361f2447791a1eca86a00409e2f5623",
+      "scope": "pkg:rpm/fedora/setup@2.15.0-28.fc44?arch=noarch&distro=fedora-44&upstream=setup-2.15.0-28.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "The installed RPM-recorded COPYING explicitly places the setup package in the public domain and permits unrestricted use, copying, distribution and modification. The exact notice hash is retained. This is package-level primary evidence for the named Fedora public-domain classification; no independently fetched upstream source tag is asserted.",
+      "reachability": "The canonical artifact retains the exact setup notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:adb0ac3b20b5f933623670fd873e969dbac77eadd946649c0b7683e0c87b6f82",
+      "scope": "pkg:rpm/fedora/tzdata@2026c-2.fc44?arch=noarch&distro=fedora-44&upstream=tzdata-2026c-2.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Official Koji binds exact 2026c-2.fc44 to Fedora commit 51f4bc555c69c04300c38945d13ed00657d7f150. Both IANA archives and the javazic archive match its source hashes; IANA LICENSE matches the installed notice. The authenticated Java compiler supplies concrete GPL2/ClassPath source context for the aggregate and the spec\u2019s separate Java output. tzdata-java and Java payload paths are absent from the observed runtime RPM inventory. Preserve the whole declaration and all attribution; no conclusion about generated-output licensing or tool redistribution is inferred.",
+      "reachability": "The canonical artifact retains the exact tzdata notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:bb3f33b374637fdc1c0f31661b684339a87dd1dcb6096980313eb8ddaa14b0c5",
+      "scope": "pkg:rpm/fedora/util-linux-core@2.41.5-1.fc44?arch=x86_64&distro=fedora-44&upstream=util-linux-2.41.5-1.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "The exact 2.41.5 tagged include/xalloc.h and lib/colors.c declare public-domain/no-copyright code. Tagged COPYING matches the installed GPL 2 notice. Ten installed license texts are independently hashed, but the presence of additional copied texts (including EUPL) does not alone establish that a component bearing that license is shipped in this subpackage. Preserve the complete RPM declaration and scope the custom-term review to these documented helper components.",
+      "reachability": "The canonical artifact retains the exact util-linux-core notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:d40108afa2b4493cd6b9aa96c8d5709f0e5c0209d1548bbb5817c869d7c654b0",
+      "scope": "pkg:rpm/fedora/vim-data@9.2.1129-1.fc44?arch=noarch&distro=fedora-44&epoch=2&upstream=vim-9.2.1129-1.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Pinned Fedora legal data generally rejects OPUBL-1.0 but explicitly permits documentation without section VI options and lists Vim. The exact upstream v9.2.1129 user manual assigns Open Publication License 1.0-or-later without exercising those options; its charity appeal is encouraged, not a stated distribution condition. Installed vim-data LICENSE is the separate Vim software notice. Neither inspected vim subpackage owns the manual path in the retained image; the metadata can reflect the source-wide aggregate. Keep every declared software term and limit any later exception to the exact package/expression with this documented context.",
+      "reachability": "The canonical artifact retains the exact vim-data notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:d40108afa2b4493cd6b9aa96c8d5709f0e5c0209d1548bbb5817c869d7c654b0",
+      "scope": "pkg:rpm/fedora/vim-minimal@9.2.1129-1.fc44?arch=x86_64&distro=fedora-44&epoch=2&upstream=vim-9.2.1129-1.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "This package shares the exact Vim source RPM and complete aggregate with vim-data, whose software LICENSE supplies the retained notice. The tagged manual and pinned Fedora Vim-specific Open Publication context are the same. No individually owned license file appears here. This does not infer that the minimal binary is governed by the documentation license or that all Open Publication variants are acceptable.",
+      "reachability": "The canonical artifact retains the exact vim-data notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:94134be676675c5ba629f85c6669a86f9988dc782fb24088a55dd05fa507535e",
+      "scope": "pkg:rpm/fedora/xz@5.8.2-2.fc44?arch=x86_64&distro=fedora-44&epoch=1&upstream=xz-5.8.2-2.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "The exact 5.8.2 tagged COPYING byte-matches the installed notice. It distinguishes 0BSD liblzma/CLI code, GPL 2-or-later gzip-derived scripts and public-domain file-format documentation/older translations, with optional LGPL getopt and noninstalled build machinery separately explained. Preserve the complete 0BSD AND GPL 2-or-later AND public-domain RPM expression; do not flatten the package to the library-only license.",
+      "reachability": "The canonical artifact retains the exact xz notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
     }
   ]
 }
