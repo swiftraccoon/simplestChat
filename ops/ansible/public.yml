@@ -333,6 +333,7 @@
         mode: '0644'
       loop:
         - bounded_process.py
+        - runtime_profile.py
         - release-public.py
         - release_public.py
         - release_artifact.py

@@ -28,6 +28,7 @@ import test_support
 # isort: split
 import reboot_public as reboot
 import release_public as public
+import test_runtime_profile as runtime_fixture
 from release_artifact import sha256_file
 from release_json import JsonObject, decode_json
 from test_support import at, obj, objects, string, strings, yaml_value
@@ -145,6 +146,9 @@ class FixtureRunner:
                     "labels": {"org.opencontainers.image.revision": REVISION},
                     "cmd": ["/app/simplestChat"],
                     "entrypoint": None,
+                    "workingDir": "/app",
+                    "hasHealthcheck": False,
+                    "envNames": ["PATH", "RUST_LOG"],
                 }
             ).encode()
         if args[0] == "inspect":
@@ -244,6 +248,11 @@ class PublicRebootTests(unittest.TestCase):
         self.resolved = {
             "services": {service: {"restart": "unless-stopped"} for service in reboot.SERVICES}
         }
+        obj(self.resolved, "services", "simplestchat").update(runtime_fixture.service())
+        obj(self.resolved, "services", "simplestchat")["image"] = APP_IMAGE
+        obj(self.resolved, "services", "simplestchat", "volumes", 0)["source"] = str(
+            self.root / "postgres-socket"
+        )
         obj(self.resolved, "services", "simplestchat")["environment"] = {
             "RUN_MIGRATIONS": "false",
             "WEBAUTHN_ORIGIN": "https://fixture.invalid",

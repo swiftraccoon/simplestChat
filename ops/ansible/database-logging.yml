@@ -36,7 +36,7 @@
         owner: root
         group: root
         mode: '0644'
-      loop: [bounded_process.py, release_json.py, release_artifact.py, release_public.py, database_logging.py]
+      loop: [bounded_process.py, release_json.py, runtime_profile.py, release_artifact.py, release_public.py, database_logging.py]
 
     - name: Apply and verify the two PostgreSQL logging limits under the workload lock
       ansible.builtin.command:

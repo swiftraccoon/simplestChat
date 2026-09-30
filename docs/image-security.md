@@ -87,6 +87,23 @@ to the exact selected image ID. Matching layers alone do not establish image
 identity because configuration bytes can differ. Signer preparation independently
 rehashes the selected archive config before issuing its predicate.
 
+## Managed runtime profile
+
+The runtime layer removes `/etc/ld.so.cache` after its last package installation
+and installs the reviewed `security/runtime/nsswitch.conf`. Name-service lookups
+use glibc's built-in `files` implementation and ordinary container DNS for hosts;
+the image no longer selects optional systemd NSS modules. This does not remove
+their RPM inventory or claim that every installed program has the same behavior.
+
+Managed deployment validates the resolved application and migration services
+before startup or replacement. It retains the audited image command, user and
+working directory, rejects healthchecks and lifecycle hooks, and allows only the
+read-only database socket mount and bounded `noexec` temporary directory. Loader,
+OpenSSL provider and locale-module environment overrides are rejected, including
+empty values. The same helper checks image defaults and is bound into runtime
+evidence. These controls define the supported application profile; arbitrary
+administrator-selected programs and altered containers require separate review.
+
 ## Validation
 
 The ELF fixtures are inert byte arrays, never executed. They cover independent

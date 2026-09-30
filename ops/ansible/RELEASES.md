@@ -301,6 +301,18 @@ this contract is rejected; the verifier does not substitute the target schema.
 
 Pass `--install-helpers` whenever `release_public.py` changed, as for any release.
 
+The managed application and migration services retain the image's audited
+`/app/simplestChat` command, non-root user and working directory. Release selection,
+the initial deployment launcher and reboot preparation reject alternate commands,
+healthchecks, lifecycle hooks, unreviewed mounts and dynamic-loader overrides.
+`LD_*`, `OPENSSL_*`, `GLIBC_TUNABLES`, `GCONV_PATH` and `LOCPATH` are forbidden even
+when their values are empty. The only additional application mount is the
+read-only PostgreSQL socket; `/tmp` remains bounded and `noexec`. The validators
+inspect the resolved Compose model, including environment files, and retain
+fixed diagnostics instead of configuration values. These restrictions define
+the supported managed profile; an administrator's separate command or modified
+container is outside its image-specific applicability evidence.
+
 ## Reboots and user recovery
 
 Use the explicit [reboot playbook](reboot.yml), not a full provisioning or initial

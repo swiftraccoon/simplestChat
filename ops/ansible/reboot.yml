@@ -50,6 +50,7 @@
         mode: '0644'
       loop:
         - bounded_process.py
+        - runtime_profile.py
         - reboot-public.py
         - reboot_public.py
         - release-public.py

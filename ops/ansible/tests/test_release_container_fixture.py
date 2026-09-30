@@ -295,6 +295,7 @@ class ReleaseContainerFixtureTests(unittest.TestCase):
         }
         with (
             patch.object(release, "CONFIG", self.config),
+            patch.object(release, "ROOT", self.root),
             patch.object(release, "DOCKER", [docker]),
         ):
             before = decode_json(

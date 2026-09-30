@@ -100,6 +100,7 @@
         mode: '0644'
       loop:
         - bounded_process.py
+        - runtime_profile.py
         - backup_offsite.py
         - backup_public.py
         - restore_verify.py

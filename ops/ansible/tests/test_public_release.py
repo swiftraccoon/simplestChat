@@ -31,6 +31,7 @@ import test_support
 
 # isort: split
 import release_public as public
+import runtime_profile
 from release_artifact import ArtifactError, Manifest, sha256_file
 from release_json import JsonObject, JsonValue, decode_json
 from test_support import obj, string
@@ -53,7 +54,11 @@ MIGRATIONS = {"1": hashlib.sha384(b"SELECT 1;\n").hexdigest()}
 IMAGE_TEMPLATE = (
     '{"id":{{json .Id}},"os":{{json .Os}},"architecture":{{json .Architecture}},'
     '"user":{{json .Config.User}},"labels":{{json .Config.Labels}},'
-    '"cmd":{{json .Config.Cmd}},"entrypoint":{{json (index .Config "Entrypoint")}}}'
+    '"cmd":{{json .Config.Cmd}},"entrypoint":{{json (index .Config "Entrypoint")}},'
+    '"workingDir":{{json .Config.WorkingDir}},'
+    '"hasHealthcheck":{{if index .Config "Healthcheck"}}true{{else}}false{{end}},'
+    '"envNames":[{{range $i, $v := .Config.Env}}{{if $i}},{{end}}'
+    '{{json (index (split $v "=") 0)}}{{end}}]}'
 )
 
 
@@ -243,6 +248,31 @@ class FixtureRunner:
                     "caddy": {"image": self.proxy["image"]},
                 }
             }
+            for name in ("simplestchat", "migrate"):
+                service = obj(rendered, "services", name)
+                service.update(
+                    {
+                        "user": "10001:10001",
+                        "init": True,
+                        "read_only": True,
+                        "cap_drop": ["ALL"],
+                        "security_opt": ["no-new-privileges:true"],
+                        "volumes": [
+                            {
+                                "type": "bind",
+                                "source": str(public.ROOT / "postgres-socket"),
+                                "target": "/run/simplestchat-postgres",
+                                "read_only": True,
+                            }
+                        ],
+                        "tmpfs": [
+                            "/tmp:rw,nosuid,nodev,noexec,size="  # noqa: S108 - inert container mount.
+                            + ("32m" if name == "migrate" else "64m")
+                            + ",mode=1777"
+                        ],
+                    }
+                )
+            obj(rendered, "services", "migrate")["environment"] = {"RUN_MIGRATIONS": "true"}
             source = selected_file.read_text()
             if "    logging: *bounded-logging" in source:
                 obj(rendered, "services", "simplestchat")["logging"] = public.LOCAL_LOGGING
@@ -332,6 +362,9 @@ class FixtureRunner:
                     },
                     "cmd": ["/app/simplestChat"],
                     "entrypoint": None,
+                    "workingDir": "/app",
+                    "hasHealthcheck": False,
+                    "envNames": ["PATH", "RUST_LOG", "SOURCE_REVISION"],
                 }
             ).encode()
         if args[0] == "create":
@@ -418,6 +451,9 @@ class PublicImageIdentityTests(unittest.TestCase):
             "labels": {"org.opencontainers.image.revision": REVISION},
             "cmd": ["/app/simplestChat"],
             "entrypoint": None,
+            "workingDir": "/app",
+            "hasHealthcheck": False,
+            "envNames": ["PATH", "RUST_LOG"],
         }
 
     def test_only_optional_entrypoint_uses_safe_map_lookup(self) -> None:
@@ -427,7 +463,7 @@ class PublicImageIdentityTests(unittest.TestCase):
         self.assertEqual(
             runner.calls, [("docker", ("image", "inspect", "--format", IMAGE_TEMPLATE, TAG), {})]
         )
-        self.assertEqual(IMAGE_TEMPLATE.count("index "), 1)
+        self.assertEqual(IMAGE_TEMPLATE.count("index .Config"), 2)
         self.assertNotIn(".Config.Entrypoint", IMAGE_TEMPLATE)
 
     def test_empty_entrypoint_forms_are_allowed_but_nonempty_or_malformed_values_are_rejected(
@@ -465,6 +501,8 @@ class PublicImageIdentityTests(unittest.TestCase):
             ("labels", {"org.opencontainers.image.revision": OLD_REVISION}, "revision mismatch"),
             ("cmd", [], "entrypoint"),
             ("cmd", ["/bin/sh"], "entrypoint"),
+            ("workingDir", "/", "execution defaults"),
+            ("hasHealthcheck", True, "execution defaults"),
         )
         for key, replacement, reason in replacements:
             with self.subTest(key=key, replacement=replacement):
@@ -480,11 +518,11 @@ class PublicImageIdentityTests(unittest.TestCase):
     def test_actual_go_template_tolerates_only_the_optional_absent_entrypoint(self) -> None:
         """Actual go template tolerates only the optional absent entrypoint."""
         source = r"""package main
-import ("encoding/json"; "fmt"; "os"; "text/template")
+import ("encoding/json"; "fmt"; "os"; "strings"; "text/template")
 func main() {
     var input struct { Format string; Value any }
     if err := json.NewDecoder(os.Stdin).Decode(&input); err != nil { panic(err) }
-    functions := template.FuncMap{"json": func(value any) (string, error) {
+    functions := template.FuncMap{"split": strings.Split, "json": func(value any) (string, error) {
         result, err := json.Marshal(value); return string(result), err
     }}
     configured := template.New("inspect").Option("missingkey=error").Funcs(functions)
@@ -527,6 +565,8 @@ func main() {
                     "User": "10001:10001",
                     "Labels": {"org.opencontainers.image.revision": REVISION},
                     "Cmd": ["/app/simplestChat"],
+                    "WorkingDir": "/app",
+                    "Env": ["PATH=/usr/bin", "RUST_LOG=simplestChat=info"],
                 },
             }
 
@@ -568,7 +608,7 @@ func main() {
             # lookup behavior for every mandatory Config identity field.
             broken = actual_template.replace('(index .Config "Entrypoint")', ".Config.Entrypoint")
             self.assertNotEqual(render(value, broken).returncode, 0)
-            for required in ("User", "Labels", "Cmd"):
+            for required in ("User", "Labels", "Cmd", "WorkingDir", "Env"):
                 data = deepcopy(value)
                 del obj(data, "Config")[required]
                 with self.subTest(missing=required):
@@ -1529,6 +1569,27 @@ class PublicReleaseTests(unittest.TestCase):
             public.workload_lock(after_reboot=True, cancel_reboot=True),
         ):
             self.fail("Conflicting recovery modes must be rejected")
+
+    def test_unchanged_forbidden_environment_is_rejected_before_replacement(self) -> None:
+        """Matching old/new Compose models cannot carry an unreviewed loader override forward."""
+        with (self.config / "app.env").open("a") as stream:
+            _ = stream.write("LD_LIBRARY_PATH=\n")
+        with self.assertRaises(runtime_profile.RuntimeProfileError):
+            _ = public.candidate_selection(self.runner, NEW_IMAGE, {"serverImage": OLD_IMAGE})
+        self.assertFalse(
+            any(
+                kind == "compose" and args[0] in {"up", "stop"}
+                for kind, args, _ in self.runner.calls
+            )
+        )
+
+    def test_candidate_environment_cannot_add_loader_override(self) -> None:
+        """A reviewed sizing/configuration update must still satisfy the execution profile."""
+        environment = (self.config / "app.env").read_text() + "OPENSSL_MODULES=\n"
+        with self.assertRaises(runtime_profile.RuntimeProfileError):
+            _ = public.candidate_selection(
+                self.runner, NEW_IMAGE, {"serverImage": OLD_IMAGE}, reviewed_environment=environment
+            )
 
 
 @final

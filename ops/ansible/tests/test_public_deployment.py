@@ -48,6 +48,8 @@ class PublicDeploymentTests(unittest.TestCase):
         self.assertIn('git -C "$source_root" status --porcelain --untracked-files=all', script)
         self.assertIn("org.opencontainers.image.revision", script)
         self.assertIn("--cap-drop ALL --cap-add NET_BIND_SERVICE", script)
+        for proof in ("runtime-compose.json", "runtime-image.json"):
+            self.assertLess(script.index(proof), script.index("phase=proxy_validation"))
         self.assertIn("hashlib.sha384", script)
         self.assertIn("actual == expected", script)
         self.assertLess(

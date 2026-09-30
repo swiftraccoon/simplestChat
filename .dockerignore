@@ -16,6 +16,11 @@ build/**
 !build/security_vendor.py
 !build/security_native.py
 !build/security_elf.py
+!security/
+security/**
+!security/runtime/
+security/runtime/**
+!security/runtime/nsswitch.conf
 !ops/
 ops/**
 !ops/ansible/

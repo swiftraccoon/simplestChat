@@ -22,6 +22,7 @@ from types import FrameType
 from typing import NoReturn
 
 import release_public as public
+import runtime_profile
 from release_artifact import sha256_file
 from release_json import JsonObject, decode_json, object_value, string_value
 
@@ -166,6 +167,12 @@ def capture(runner: public.RunnerProtocol) -> JsonObject:
     environment = object_value(application["environment"])
     public.require(
         environment["RUN_MIGRATIONS"] == "false", "Runtime migrations must remain disabled"
+    )
+    runtime_profile.validate_compose(
+        resolved,
+        public.ROOT / "postgres-socket",
+        string_value(selected["serverImage"]),
+        include_migration=False,
     )
     public.require(
         all(object_value(services[service])["restart"] == "unless-stopped" for service in SERVICES),

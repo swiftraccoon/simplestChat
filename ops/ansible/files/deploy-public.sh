@@ -97,6 +97,11 @@ compose config --quiet
 source_root="/srv/simplestchat-bench/sources/$revision"
 [[ $(git -C "$source_root" rev-parse HEAD) == "$revision" ]]
 [[ -z $(git -C "$source_root" status --porcelain --untracked-files=all) ]]
+# Reject execution, loader and mount overrides before starting any application.
+# The validator emits only a fixed receipt; resolved secrets stay in the pipe.
+profile=/usr/local/libexec/simplestchat-public/runtime_profile.py
+compose --profile maintenance config --format json | timeout 15s python3 "$profile" compose --image-id "$server_image" >"$attempt/runtime-compose.json"
+docker_owned image inspect --format '{{json .Config}}' "$server_image" | timeout 15s python3 "$profile" image >"$attempt/runtime-image.json"
 
 phase=proxy_validation
 printf '%s\n' "$validation_name" >"$attempt/validation-name.txt"

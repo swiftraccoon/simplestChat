@@ -34,8 +34,9 @@ from types import FrameType
 from typing import NoReturn, Protocol, TypedDict, Unpack
 
 import bounded_process
+import runtime_profile
 from release_artifact import ArtifactError, Manifest, sha256_file, validate_manifest, verify_archive
-from release_json import JsonObject, JsonValue, decode_json, object_value, string_value
+from release_json import JsonObject, JsonValue, array_value, decode_json, object_value, string_value
 
 ROOT = Path("/srv/simplestchat-public")
 ROOT_UID = 0
@@ -87,7 +88,11 @@ CONTAINER_FORMAT = (
 IMAGE_FORMAT = (
     '{"id":{{json .Id}},"os":{{json .Os}},"architecture":{{json .Architecture}},'
     '"user":{{json .Config.User}},"labels":{{json .Config.Labels}},'
-    '"cmd":{{json .Config.Cmd}},"entrypoint":{{json (index .Config "Entrypoint")}}}'
+    '"cmd":{{json .Config.Cmd}},"entrypoint":{{json (index .Config "Entrypoint")}},'
+    '"workingDir":{{json .Config.WorkingDir}},'
+    '"hasHealthcheck":{{if index .Config "Healthcheck"}}true{{else}}false{{end}},'
+    '"envNames":[{{range $i, $v := .Config.Env}}{{if $i}},{{end}}'
+    '{{json (index (split $v "=") 0)}}{{end}}]}'
 )
 LEDGER_QUERY = (
     "SELECT version, success, encode(checksum, 'hex') FROM public._sqlx_migrations ORDER BY version"
@@ -507,6 +512,13 @@ def image_identity(runner: RunnerProtocol, selector: str, revision: str) -> str:
         value["cmd"] == ["/app/simplestChat"] and value["entrypoint"] in (None, []),
         "Unexpected image entrypoint",
     )
+    require(
+        value["workingDir"] == "/app" and value["hasHealthcheck"] is False,
+        "Unexpected image execution defaults",
+    )
+    runtime_profile.validate_environment_names(
+        [string_value(item) for item in array_value(value["envNames"])]
+    )
     return identifier
 
 
@@ -889,6 +901,9 @@ def candidate_selection(
     before = object_value(
         decode_json(runner.compose("--profile", "maintenance", "config", "--format", "json"))
     )
+    runtime_profile.validate_compose(
+        before, ROOT / "postgres-socket", string_value(old["serverImage"])
+    )
     compose, journal_changed = journal_selection(original, before)
     needle = f'image: "{old["serverImage"]}"'
     require(
@@ -967,6 +982,7 @@ def candidate_selection(
             )
         )
     )
+    runtime_profile.validate_compose(after, ROOT / "postgres-socket", new_image)
     expected = deepcopy(base)
     if journal_changed:
         object_value(object_value(expected["services"])["simplestchat"])["logging"] = (

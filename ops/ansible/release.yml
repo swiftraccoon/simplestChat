@@ -94,6 +94,7 @@
               'release_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_public.py', rstrip=false) | hash('sha256'),
               'release_artifact.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_artifact.py', rstrip=false) | hash('sha256'),
               'release_json.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_json.py', rstrip=false) | hash('sha256'),
+              'runtime_profile.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/runtime_profile.py', rstrip=false) | hash('sha256'),
               'reboot-public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/reboot-public.py', rstrip=false) | hash('sha256'),
               'reboot_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/reboot_public.py', rstrip=false) | hash('sha256')
             } | combine(({
@@ -134,6 +135,7 @@
         mode: '0644'
       loop:
         - bounded_process.py
+        - runtime_profile.py
         - release-public.py
         - release_public.py
         - release_artifact.py

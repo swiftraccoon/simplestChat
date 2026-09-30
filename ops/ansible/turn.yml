@@ -63,6 +63,7 @@
             {{ {
               'turn_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/turn_public.py', rstrip=false) | hash('sha256'),
               'bounded_process.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/bounded_process.py', rstrip=false) | hash('sha256'),
+              'runtime_profile.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/runtime_profile.py', rstrip=false) | hash('sha256'),
               'release_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_public.py', rstrip=false) | hash('sha256'),
               'release_artifact.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_artifact.py', rstrip=false) | hash('sha256'),
               'release_json.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_json.py', rstrip=false) | hash('sha256')
@@ -201,6 +202,7 @@
             mode: '0644'
           loop:
             - bounded_process.py
+            - runtime_profile.py
             - turn_public.py
             - release_public.py
             - release_artifact.py

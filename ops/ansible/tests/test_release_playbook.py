@@ -485,7 +485,11 @@ class ReleasePlaybookTests(unittest.TestCase):
                 (PROJECT / "docker-compose.yml").read_bytes()
             )
             runner = RELEASE.Runner(attempt)
-            with patch.object(RELEASE, "CONFIG", config), patch.object(RELEASE, "DOCKER", [docker]):
+            with (
+                patch.object(RELEASE, "CONFIG", config),
+                patch.object(RELEASE, "ROOT", root / "data"),
+                patch.object(RELEASE, "DOCKER", [docker]),
+            ):
                 before = obj(
                     decode_json(
                         runner.compose("--profile", "maintenance", "config", "--format", "json")
