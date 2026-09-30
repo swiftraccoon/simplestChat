@@ -323,15 +323,34 @@ function clearSpeakingHighlights(): void {
   }
 }
 
+// Persisting preferences is optional; blocked or full storage must not stop a call.
+const memoryPreferences = new Map<string, string>();
+function readLocalPreference(key: string): string | null {
+  if (memoryPreferences.has(key)) return memoryPreferences.get(key) ?? null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writeLocalPreference(key: string, value: string): void {
+  memoryPreferences.set(key, value);
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* Keep the value for this tab. */
+  }
+}
+
 // Push-to-Talk state
 type MicMode = 'open' | 'ptt';
-let personalMicMode: MicMode = localStorage.getItem('micMode') === 'ptt' ? 'ptt' : 'open';
+let personalMicMode: MicMode = readLocalPreference('micMode') === 'ptt' ? 'ptt' : 'open';
 let micMode: MicMode = personalMicMode;
 let pttHeld = false;
 let pttActivation = 0;
 
 // Restore display name from localStorage
-const savedName = localStorage.getItem('displayName');
+const savedName = readLocalPreference('displayName');
 if (savedName) nameInput.value = savedName;
 
 // --- Utility ---
@@ -775,11 +794,11 @@ function isDesktopLayout(): boolean {
 }
 
 function getLayout(): 'modern' | 'classic' {
-  return localStorage.getItem('layout') === 'modern' ? 'modern' : 'classic';
+  return readLocalPreference('layout') === 'modern' ? 'modern' : 'classic';
 }
 
 function setLayout(layout: 'modern' | 'classic'): void {
-  localStorage.setItem('layout', layout);
+  writeLocalPreference('layout', layout);
   roomScreen.classList.remove('layout-modern', 'layout-classic');
   roomScreen.classList.add(`layout-${layout}`);
   layoutSelect.value = layout;
@@ -2031,7 +2050,7 @@ joinBtn.addEventListener(
     )
       return;
 
-    localStorage.setItem('displayName', name);
+    writeLocalPreference('displayName', name);
 
     joinBtn.disabled = true;
     joinBtn.textContent = 'Joining...';
@@ -3225,7 +3244,7 @@ function setMicMode(mode: MicMode, remember = true): void {
   }
   if (remember) {
     personalMicMode = mode;
-    localStorage.setItem('micMode', mode);
+    writeLocalPreference('micMode', mode);
   }
   const effectiveMode = room?.roomSettings?.pushToTalk ? 'ptt' : mode;
   const changed = micMode !== effectiveMode;

@@ -626,3 +626,34 @@ test('forgetting this device clears every key the app wrote and nothing else', a
   forgetThisDevice();
   assert.deepEqual([...stored.keys()], ['someone-elses-key']);
 });
+
+test('blocked storage keeps optional preferences in memory without interrupting initialization', async () => {
+  const source = `const memoryPreferences = new Map(); ${await functionSource('readLocalPreference')} ${await functionSource('writeLocalPreference')} export { readLocalPreference, writeLocalPreference };`;
+  for (const mode of ['get', 'read', 'write']) {
+    const storage = {
+      getItem: () => {
+        if (mode === 'read') throw new Error('Blocked');
+        return 'saved';
+      },
+      setItem: () => {
+        if (mode === 'write') throw new Error('Full');
+      },
+    };
+    const blocked = {
+      get localStorage() {
+        if (mode === 'get') throw new Error('Blocked');
+        return storage;
+      },
+    };
+    // The VM global is accessed lazily, just like a browser's storage getter.
+    const api = evaluateTypeScript(source.replaceAll('localStorage.', 'browser.localStorage.'), {
+      globals: { browser: blocked },
+    });
+    assert.equal(
+      api.readLocalPreference('layout'),
+      mode === 'get' || mode === 'read' ? null : 'saved',
+    );
+    api.writeLocalPreference('layout', 'modern');
+    assert.equal(api.readLocalPreference('layout'), 'modern');
+  }
+});
