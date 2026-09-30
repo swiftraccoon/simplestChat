@@ -126,7 +126,7 @@
         {
           "path": "build.rs",
           "upstream_sha256": "8e776fe8ae227a3fa5a5df485967b19ce40d434a7249fdc70f4796395a06da9a",
-          "vendored_sha256": "f84633aa16a82a31e54fd455552ab9c8afc65d3a5f817108dd953892336dd4af"
+          "vendored_sha256": "b090621e380b9c8cf9aef3d4ed51d8d5dd36bd56317727542be3b4d5558f43fe"
         },
         {
           "path": "deps/libwebrtc/libwebrtc/modules/congestion_controller/rtp/transport_feedback_adapter.cc",

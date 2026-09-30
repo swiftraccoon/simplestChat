@@ -288,6 +288,10 @@ Python configuration files, and the supported `OPENSSL_DIR` headers, pkg-config
 metadata, and static archives. Each build-script attempt removes only its own
 prior snapshot, native build directory, Python tool directory, and worker
 archive before rebuilding.
+On Unix, `/dev/null` is excluded from configuration-file timestamp tracking:
+`PIP_CONFIG_FILE=/dev/null` disables external pip configuration, and writes to
+the device do not change configuration contents. The environment variable and
+all genuine configuration/certificate file paths remain tracked.
 This makes source/wrap changes and interrupted builds deterministic without
 letting Meson download or extract files into the maintained vendor tree. Keep
 `PACKAGE_SOURCE_PATHS` in `build.rs` synchronized with `package.include` in

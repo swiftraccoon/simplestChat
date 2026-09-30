@@ -168,6 +168,17 @@ fn add_pip_constraint(command: &mut Command, pip_constraint: Option<&Path>) {
     }
 }
 
+fn track_configuration_file(path: &Path) {
+    // PIP_CONFIG_FILE=/dev/null disables external pip configuration. Writes to
+    // that device change its mtime without changing any configuration bytes.
+    // Tracking it would rebuild the worker on every Cargo invocation.
+    #[cfg(unix)]
+    if path == Path::new("/dev/null") {
+        return;
+    }
+    println!("cargo:rerun-if-changed={}", path.display());
+}
+
 fn main() {
     let source_dir = PathBuf::from(
         env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set by Cargo"),
@@ -190,7 +201,7 @@ fn main() {
     }
     for name in ["PIP_CERT", "PIP_CLIENT_CERT", "PIP_CONFIG_FILE"] {
         if let Some(path) = resolve_path_environment(name, &source_dir) {
-            println!("cargo:rerun-if-changed={}", path.display());
+            track_configuration_file(&path);
         }
     }
     if !docs_rs {
