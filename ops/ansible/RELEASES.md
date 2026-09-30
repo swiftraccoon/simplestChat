@@ -90,14 +90,16 @@ attempt, the archive, SPDX SBOM, runtime proof and VEX subjects, and every relea
 metadata file. Required runtime source reviews must remain unexpired at verification.
 A saved success receipt is not trusted: cached candidate bytes are verified again.
 
-The current artifact contains `image.tar`, `release.json`, `outcome.json`,
+The current ten-file artifact contains `image.tar`, `release.json`, `outcome.json`,
 `source.json`, `sbom.spdx.json`, `image-security.json`, `runtime-proof.json`,
 `vex.openvex.json`, `release-predicate.json` and `release-attestation.jsonl`. The
 predicate binds the original export and successful image-security outcome by
-SHA-256. The receiver receives the verified
-claim through authenticated controller SSH stdin and independently compares the
-downloaded file hashes before publishing anything. No artifact-provided
-`verified` marker can authorize a release.
+SHA-256. The separate `runtime-license-evidence.json` notice report stays in the
+production-security CI artifact, outside this release ZIP. Its hash is bound by
+the signed `image-security.json`, and signing verifies the report's exact bytes.
+The receiver accepts the verified claim through authenticated controller SSH
+stdin and independently compares the downloaded file hashes before publishing
+anything. No artifact-provided `verified` marker can authorize a release.
 
 The controller needs disk space for its ZIP and extracted image in addition to
 the VPS's retained evidence. GitHub CLI must support the exact verifier flags;

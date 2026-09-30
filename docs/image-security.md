@@ -98,7 +98,8 @@ or findings for another package.
 
 The proof binds the archive and image configuration, source revision, application
 binary, actual ELF/native evidence files and SPDX SBOM. It requires authenticated
-static OpenSSL 3.5.9 with shared libraries, DSO, modules and engines disabled;
+static OpenSSL 3.5.9 with shared libraries, dynamic loading and engines disabled
+while retaining built-in providers, including legacy algorithms;
 no loader cache, preload or hwcaps paths; no ELF audit/filter or RPATH/RUNPATH
 hooks; identical bytes for every present standard-directory candidate of each
 approved dependency; and the exact files/DNS NSS configuration. Image defaults
@@ -447,12 +448,14 @@ release, epoch, architecture, source RPM and qualified PURL must agree; missing
 or inconsistent identities fail. A higher RPM release suffix does not prove a
 distribution backport and cannot bypass the affected upstream version.
 
-`checks.json` retains these results under `vulnerabilities.reviewedAdvisories`,
-including the policy digest, source evidence, assessed package identities and
-blocked findings. Grype's match count and findings remain unchanged; independent
-advisory findings carry their own source marker and are included in the overall
-blocked list. Existing Grype exceptions cannot waive this safeguard. All other
-image checks and evidence collection still complete for an affected package.
+When policy evaluation completes, `checks.json` retains these results under
+`vulnerabilities.reviewedAdvisories`, including the policy digest, source evidence,
+assessed package identities and blocked findings. Grype's match count and findings
+remain unchanged; independent advisory findings carry their own source marker
+and are included in the overall
+blocked list. Existing Grype exceptions cannot waive this safeguard. If the
+required runtime proof fails, `outcome.json.vulnerabilityFindings` retains the
+pre-disposition findings and the gate fails before later policy checks complete.
 This is a known-advisory check, not a claim of exhaustive native coverage or
 application reachability, and it does not assert that Fedora has published a
 fixed RPM. A zero-match scanner result cannot override it.
@@ -473,8 +476,11 @@ This report grants no license approval or automatic exception. A reviewer can
 compare its exact hashes with reviewed upstream notice evidence even when the
 license gate fails and the release archive is not published. The image outcome
 binds the report hash, and signing verifies those bytes before attesting the
-outcome. Missing or unfamiliar notices still require review; the report is not
-a claim that every applicable notice obligation has been fulfilled.
+outcome. The report is published with the production-security CI evidence,
+separately from the ten-file release ZIP; its hash remains authenticated through
+the signed `image-security.json`. Missing or unfamiliar notices still require
+review; the report is not a claim that every applicable notice obligation has
+been fulfilled.
 
 A passing `outcome.json` binds the archive, selected image, revision, platform,
 SPDX SBOM, native and ELF reports, database evidence, secret-path map, tool lock,

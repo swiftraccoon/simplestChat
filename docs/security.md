@@ -163,10 +163,12 @@ trust and architecture boundaries, with no PR cache fallback into main builds.
 The pinned local `act` runner remains a privileged execution environment: run
 only trusted changes inside the documented disposable engine.
 
-The main-push signer attests the original image archive and SPDX document only
-after the aggregate gate succeeds. Deployment verifies that signature against
-the exact repository, workflow, source revision, run and attempt before remote
-operations. Unsigned development builds are not eligible. See the
+After the aggregate gate succeeds, the main-push signer attests four subjects:
+the original image archive, SPDX SBOM, runtime proof and OpenVEX disposition.
+The signed predicate binds the remaining release metadata. Deployment verifies
+the signatures against the exact repository, workflow, source revision, run and
+attempt before remote operations; required runtime source reviews must also
+remain unexpired. Unsigned development builds are not eligible. See the
 [release procedure](../ops/ansible/RELEASES.md) for acquisition and verification.
 
 The daily [disposable Debian VM check](../security/vm/README.md) acquires that
