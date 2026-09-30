@@ -138,6 +138,7 @@ class FixtureGithub(triage.Github):
             super().__init__("owner/repository")
         self.analyses: list[JsonObject] = [
             {
+                "id": index,
                 "ref": REFERENCE,
                 "commit_sha": REVISION,
                 "error": "",
@@ -146,7 +147,7 @@ class FixtureGithub(triage.Github):
                 "tool": {"name": "CodeQL"},
                 "category": f"/language:{language}/security",
             }
-            for language in sorted(triage.LANGUAGES)
+            for index, language in enumerate(sorted(triage.LANGUAGES), start=1)
         ]
         self.alerts: list[JsonObject] = [alert()]
         self.calls: list[tuple[str, JsonObject | None]] = []

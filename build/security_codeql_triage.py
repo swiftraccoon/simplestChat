@@ -1,6 +1,6 @@
 """Enforce exact CodeQL reviews and separately plan authorized alert dismissals.
 
-SARIF checks are local and need no GitHub token. API plan/check are read-only;
+SARIF checks are local and need no GitHub token. API health/plan/check are read-only;
 apply requires an explicit flag, an unchanged plan and fresh exact alert reads.
 No query, path, severity class or remote dismissal acts as an exclusion.
 """
@@ -427,6 +427,47 @@ def api_finding(
     }
 
 
+def analysis_health(client: Github, revision: str, reference: str) -> JsonObject:
+    """Require GitHub's newest five security analyses to be healthy at the current exact ref."""
+    require(re.fullmatch(r"[a-f0-9]{40}", revision), "codeql_revision")
+    require(client.head(reference) == revision, "codeql_ref_head_changed")
+    analyses = client.pages("analyses", reference, revision=revision)
+    categories: set[str] = set()
+    expected = {f"/language:{language}/security" for language in LANGUAGES}
+    records: list[JsonValue] = []
+    for item in analyses:
+        category = string_value(item["category"]).rstrip("/")
+        require(category in expected and category not in categories, "codeql_analysis_category")
+        require(
+            item["ref"] == reference
+            and item["commit_sha"] == revision
+            and object_value(item["tool"])["name"] == "CodeQL",
+            "codeql_analysis_identity",
+        )
+        require(item["error"] == "" and item["warning"] == "", "codeql_analysis_failed")
+        require(positive(item["rules_count"]) > 0, "codeql_analysis_empty")
+        records.append(
+            {
+                "id": positive(item["id"]),
+                "category": category,
+                "rulesCount": item["rules_count"],
+            }
+        )
+        categories.add(category)
+    require(categories == expected, "codeql_missing_current_analysis")
+    require(client.head(reference) == revision, "codeql_ref_head_changed")
+    return {
+        "schemaVersion": 1,
+        "passed": True,
+        "repository": client.repository,
+        "revision": revision,
+        "ref": reference,
+        "refHead": revision,
+        "analysisCategories": list[JsonValue](sorted(categories)),
+        "analyses": records,
+    }
+
+
 def api_plan(  # noqa: PLR0913 -- Explicit API identity, policy and verified source inputs.
     client: Github,
     root: Path,
@@ -437,24 +478,7 @@ def api_plan(  # noqa: PLR0913 -- Explicit API identity, policy and verified sou
     sources: NativeSources | None = None,
 ) -> JsonObject:
     """Require all five exact-revision analyses and assess every still-active alert."""
-    require(
-        re.fullmatch(r"refs/(?:heads/[A-Za-z0-9._/-]+|pull/[0-9]+/merge)", reference), "codeql_ref"
-    )
-    require(client.head(reference) == revision, "codeql_ref_head_changed")
-    analyses = client.pages("analyses", reference, revision=revision)
-    categories: set[str] = set()
-    for item in analyses:
-        if item["commit_sha"] != revision:
-            continue
-        require(
-            item["ref"] == reference and object_value(item["tool"])["name"] == "CodeQL",
-            "codeql_analysis_identity",
-        )
-        require(item["error"] == "" and item.get("warning", "") == "", "codeql_analysis_failed")
-        require(positive(item["rules_count"]) > 0, "codeql_analysis_empty")
-        categories.add(string_value(item["category"]).rstrip("/"))
-    expected = {f"/language:{language}/security" for language in LANGUAGES}
-    require(categories >= expected, "codeql_missing_current_analysis")
+    health = analysis_health(client, revision, reference)
     findings: list[JsonObject] = []
     seen: set[int] = set()
     for raw in client.pages("alerts", reference):
@@ -476,7 +500,7 @@ def api_plan(  # noqa: PLR0913 -- Explicit API identity, policy and verified sou
         "ref": reference,
         "refHead": revision,
         "reviewSha256": review_identity(),
-        "analysisCategories": list[JsonValue](sorted(categories)),
+        "analysisCategories": health["analysisCategories"],
         **verdict(findings, reviews),
         "policySha256": policy_identity(),
     }
@@ -620,7 +644,7 @@ class Options(argparse.Namespace):
 def main(argv: Sequence[str] | None = None) -> int:
     """Publish bounded evidence and fail High/Critical checks without modifying GitHub state."""
     parser = argparse.ArgumentParser(description=__doc__)
-    _ = parser.add_argument("mode", choices=("sarif", "plan", "check", "apply"))
+    _ = parser.add_argument("mode", choices=("health", "sarif", "plan", "check", "apply"))
     _ = parser.add_argument("--input", type=Path)
     _ = parser.add_argument("--output", type=Path, required=True)
     _ = parser.add_argument("--repository", default="swiftraccoon/simplestChat")
@@ -662,6 +686,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             ).encode(),
             0o600,
         )
+        if args.mode == "health":
+            require(args.input is None, "codeql_unexpected_input")
+            require(args.source_cache is None, "codeql_unexpected_source_cache")
+            output = analysis_health(Github(args.repository), args.revision, args.reference)
+            write_private(
+                args.output / "report.json", (json.dumps(output, indent=2) + "\n").encode(), 0o600
+            )
+            return 0
         reviews = security_policy.read_exceptions()
         sources = (
             NativeSources(ROOT, args.revision, args.source_cache)

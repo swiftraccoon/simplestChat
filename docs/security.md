@@ -151,6 +151,22 @@ query, analyzer version, primary range, rendered-message digest and complete
 source identity. Generated native files require authenticated upstream archive
 and maintained-overlay evidence. Missing or incomplete analysis fails the gate.
 
+The required aggregate also runs `build/security_codeql_triage.py health` against
+GitHub's stored analysis records. For each of the five security categories, the
+newest record must match the caller's exact ref and commit, contain executed
+queries, and have no error or warning. A successful upload or green analysis job
+does not establish successful ingestion. The check reads the current ref before
+and after bounded, uncached API requests; missing, stale or inaccessible evidence
+blocks signing. It reads no exception ledger or source archives. Only compact
+analysis identities/counts or a fixed failure code are retained.
+
+This aggregate uses `contents: read` and `security-events: read` with the workflow's
+`GITHUB_TOKEN`, including fork PR merge refs; it has no mutation or signing
+permission. GitHub permits [read permissions for fork workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions),
+and the [analysis-list API](https://docs.github.com/en/rest/code-scanning/code-scanning#list-code-scanning-analyses-for-a-repository)
+requires read access. API authorization failures fail the same gate without a
+credential fallback or a fork-specific skip.
+
 The [exact review procedure](../security/codeql-review-2026-09-30.md) separates
 local enforcement, read-only GitHub plans and authorized false-positive dismissal.
 Remote dismissal alone never exempts a finding from the repository gate. CI

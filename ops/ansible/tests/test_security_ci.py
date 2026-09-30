@@ -41,12 +41,43 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(set(strings(gate, "needs")), GATES)
         self.assertEqual(set(obj(ci, "jobs")) - {"required", "release-security"}, GATES)
         steps = objects(gate, "steps")
-        self.assertEqual(len(steps), 1)
         self.assertEqual(at(steps[0], "env", "GATE_RESULTS"), "${{ toJSON(needs) }}")
         command = string(steps[0], "run")
         self.assertIn("set(results) != expected", command)
         self.assertIn('item["result"] != "success"', command)
         self.assertNotIn("continue-on-error", gate)
+
+    def test_aggregate_checks_stored_codeql_health_before_signing(self) -> None:
+        """Green jobs do not certify failed ingestion; fork PRs use the same read-only gate."""
+        gate = obj(workflow("ci.yml"), "jobs", "required")
+        self.assertEqual(gate["permissions"], {"contents": "read", "security-events": "read"})
+        self.assertEqual(gate["timeout-minutes"], "7")
+        steps = objects(gate, "steps")
+        self.assertEqual(len(steps), 4)
+        self.assertTrue(string(steps[1], "uses").startswith("actions/checkout@"))
+        self.assertEqual(at(steps[1], "with", "persist-credentials"), "false")
+        health = steps[2]
+        self.assertEqual(health["env"], {"GH_TOKEN": "${{ github.token }}"})
+        self.assertNotIn("if", health)
+        self.assertNotIn("continue-on-error", health)
+        command = string(health, "run")
+        self.assertIn("python3 build/security_codeql_triage.py health", command)
+        for argument in (
+            '--repository "$GITHUB_REPOSITORY"',
+            '--revision "$GITHUB_SHA"',
+            '--ref "$GITHUB_REF"',
+            '--output "$RUNNER_TEMP/codeql-analysis-health"',
+        ):
+            self.assertIn(argument, command)
+        self.assertEqual(steps[3]["if"], "${{ always() }}")
+        self.assertTrue(string(steps[3], "uses").startswith("actions/upload-artifact@"))
+        self.assertEqual(
+            string(steps[3], "with", "path").splitlines(),
+            [
+                "${{ runner.temp }}/codeql-analysis-health/report.json",
+                "${{ runner.temp }}/codeql-analysis-health/failure.json",
+            ],
+        )
 
     def test_signing_only_follows_all_main_push_gates(self) -> None:
         """PRs and partial CI runs cannot request a signing identity."""
