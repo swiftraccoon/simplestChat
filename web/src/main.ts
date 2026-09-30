@@ -94,6 +94,8 @@ const roomSearchInput = document.getElementById('room-search-input') as HTMLInpu
 const roomList = document.getElementById('room-list')!;
 const roomLoadMore = document.getElementById('room-load-more') as HTMLButtonElement;
 const createRoomBtn = document.getElementById('create-room-btn')!;
+const serverMode = document.getElementById('server-mode')!;
+const capabilitiesRetry = document.getElementById('server-features-retry') as HTMLButtonElement;
 const joinFormDivider = document.getElementById('join-form-divider')!;
 
 // Login modal
@@ -172,14 +174,17 @@ document.getElementById('personal-settings-controls')!.remove();
 
 // --- Auth ---
 let capabilities: ServerCapabilities | null = null;
+let capabilitiesLoading = false;
 const auth = new AuthManager();
 auth.setTelemetryHandler(telemetry.record);
 const authFlow = new AuthDialogFlow(() => auth.cancelPasskeyAttempt());
 
 function updateAuthUI(): void {
-  roomBrowser.hidden = capabilities?.roomDirectory === false;
+  signInBtn.hidden = capabilities?.accounts !== true;
+  document.getElementById('community-actions')!.hidden = capabilities?.accounts !== true;
+  roomBrowser.hidden = capabilities?.roomDirectory !== true;
   joinFormDivider.hidden = roomBrowser.hidden;
-  createRoomBtn.hidden = !auth.isLoggedIn || capabilities?.roomCreation === false;
+  createRoomBtn.hidden = !auth.isLoggedIn || capabilities?.roomCreation !== true;
   if (auth.isLoggedIn) {
     authBarGuest.hidden = true;
     authBarUser.hidden = false;
@@ -237,7 +242,12 @@ function consumeInviteLocation(selectedRoom: string): boolean {
 /** A link can preview an offer; only its explicitly clicked acceptance mutates membership. */
 async function previewPendingInvite(): Promise<void> {
   const code = pendingInvite;
-  if (!code || inviteView?.dialog.open) return;
+  if (!code || !capabilities || inviteView?.dialog.open) return;
+  if (!capabilities.accounts) {
+    pendingInvite = null;
+    showToast('Invitations are unavailable on this server.', 4000, 'error');
+    return;
+  }
   if (pendingInviteKind === 'registration') {
     openAuthDialog(registerModal);
     return;
@@ -1493,22 +1503,38 @@ function applyCapabilities(value: ServerCapabilities): void {
     value.passwordRegistration === 'invite'
       ? 'An invite code lets you create a password account. You can add a passkey later when this server supports it.'
       : 'Choose a sign-in method supported by this server.';
-  const notice = document.getElementById('server-mode')!;
-  notice.hidden = value.accounts || value.roomDirectory;
-  notice.textContent = value.adHocRooms
+  serverMode.hidden = value.accounts || value.roomDirectory;
+  serverMode.textContent = value.adHocRooms
     ? 'Guest rooms are available. Enter your name and a room ID to join.'
     : 'Rooms are not available on this server yet. Contact its host for help.';
   updateAuthUI();
 }
-observeUiTask(
-  api
-    .capabilities()
-    .then(applyCapabilities)
-    .catch(() => {
-      // Older hosts may not expose capabilities; preserve their existing flows.
-    }),
-  'Could not load server features',
+/** Discovery owns a single bounded read; failure never guesses available actions. */
+async function loadCapabilities(): Promise<void> {
+  if (capabilities || capabilitiesLoading) return;
+  capabilitiesLoading = true;
+  capabilitiesRetry.disabled = true;
+  serverMode.hidden = false;
+  serverMode.textContent = 'Checking server features…';
+  try {
+    applyCapabilities(await api.capabilities());
+    navigation.resumePendingJoin();
+    observeUiTask(previewPendingInvite(), 'Invitation not reviewed');
+  } catch {
+    serverMode.textContent =
+      'Server features could not be loaded. Check your connection and try again.';
+  } finally {
+    capabilitiesLoading = false;
+    capabilitiesRetry.disabled = false;
+    if (capabilities && document.activeElement === capabilitiesRetry) nameInput.focus();
+    capabilitiesRetry.hidden = capabilities !== null;
+  }
+}
+capabilitiesRetry.addEventListener(
+  'click',
+  asyncUiAction(loadCapabilities, 'Could not load server features'),
 );
+observeUiTask(loadCapabilities(), 'Could not load server features');
 
 // Try to restore auth session from cookie, then connect WS
 observeUiTask(
@@ -1524,7 +1550,8 @@ observeUiTask(
 // --- Join form ---
 function updateJoinBtn(): void {
   joinBtn.disabled =
-    (capabilities !== null && !capabilities.roomDirectory && !capabilities.adHocRooms) ||
+    capabilities === null ||
+    (!capabilities.roomDirectory && !capabilities.adHocRooms) ||
     navigationPending ||
     departureInProgress !== null ||
     room !== null ||
@@ -1585,6 +1612,7 @@ function showRoomSearchMinimum(): void {
 }
 
 async function loadRoomBrowser(append = false): Promise<void> {
+  if (!capabilities?.roomDirectory) return;
   const request = ++roomBrowserRequest;
   roomBrowserController?.abort();
   const controller = new AbortController();
@@ -1602,7 +1630,7 @@ async function loadRoomBrowser(append = false): Promise<void> {
       if (!(error instanceof ApiError)) throw error;
       const explanation =
         error.status === 404 || error.status === 503
-          ? 'The room directory is unavailable on this server. Local guest rooms can still be joined by name below; browsing saved rooms requires a configured database.'
+          ? 'The room directory is temporarily unavailable. You can still try joining a room by its ID below.'
           : error.status === 429
             ? 'Too many room searches. Wait a moment and try again.'
             : 'Could not load the room directory. You can still join directly by room name below.';
@@ -1752,6 +1780,15 @@ roomLoadMore.addEventListener('click', () => {
 
 // --- Auth Events ---
 function openAuthDialog(dialog: HTMLDialogElement): void {
+  if (!capabilities?.accounts) return;
+  if (
+    dialog === registerModal &&
+    capabilities.passwordRegistration === 'disabled' &&
+    capabilities.passkeyRegistration === 'disabled'
+  ) {
+    showToast('Account registration is unavailable on this server.', 4000, 'error');
+    return;
+  }
   if (!dismissAuth()) return;
   dialog.hidden = false;
   dialog.showModal();
@@ -2168,7 +2205,7 @@ async function joinRoomWithPassword(
 
 // --- Create Room ---
 createRoomBtn.addEventListener('click', () => {
-  if (!auth.isLoggedIn) return;
+  if (!auth.isLoggedIn || !capabilities?.roomCreation) return;
   createRoomAttempt++;
   createRoomModal.hidden = false;
   createRoomModal.showModal();

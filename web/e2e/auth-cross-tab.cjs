@@ -2,6 +2,7 @@
  * HTTP/signaling fixtures avoid creating accounts or joining real rooms. */
 const assert = require('node:assert/strict');
 const { browserOptions } = require('./browser-options.cjs');
+const { capabilities } = require('./capabilities-fixture.cjs');
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const origin = new URL(process.env.BASE_URL || 'http://127.0.0.1:38179');
 if (
@@ -107,7 +108,9 @@ async function scenario(browser, storageOnly) {
     await context.route('**/api/**', async (route) => {
       const request = route.request();
       const pathname = new URL(request.url()).pathname;
-      if (pathname === '/api/auth/ws-ticket') {
+      if (pathname === '/api/capabilities') {
+        await route.fulfill({ json: capabilities });
+      } else if (pathname === '/api/auth/ws-ticket') {
         assert.equal(request.method(), 'POST');
         assert.deepEqual(request.postDataJSON(), {});
         await route.fulfill({ json: { ticket: 'a'.repeat(43), expires_in: 30 } });

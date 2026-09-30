@@ -131,8 +131,11 @@ require WebAuthn configuration. Password registration is `open`, `invite` or
 `disabled`; passkey registration is `open` or `disabled`. A configured feature
 can still be temporarily unavailable, and all API authorization, admission and
 rate limits remain authoritative. This endpoint is not a readiness probe. The
-browser uses it to show applicable account and room actions; older servers
-without the endpoint retain the client's compatibility behavior.
+browser requires a valid response before showing account or directory actions
+and enabling room entry. An unavailable, invalid or timed-out response shows a
+retry action, with one bounded request at a time; it never assumes features are
+available. Successful discovery enables guest room entry when `adHocRooms` is
+true, even without accounts or a directory.
 
 ## Media allocation
 

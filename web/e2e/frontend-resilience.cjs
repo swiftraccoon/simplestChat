@@ -90,6 +90,9 @@ async function run() {
     holdSocket = false,
     holdInvite = false,
     holdTicket = false,
+    holdFeatures = false,
+    holdRestore = false,
+    clock = false,
   } = {}) {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -117,6 +120,11 @@ async function run() {
         };
     }, storage);
     const sent = [];
+    const requests = [];
+    const featureRequests = [];
+    const featureSeen = Promise.withResolvers();
+    const refreshRequests = [];
+    const previews = [];
     const socketGate = Promise.withResolvers();
     const socketSeen = Promise.withResolvers();
     const ticketSeen = Promise.withResolvers();
@@ -190,6 +198,7 @@ async function run() {
       });
     await context.route('**/*', async (route) => {
       const url = new URL(route.request().url());
+      requests.push(url.pathname);
       assert.equal(url.origin, origin, 'No external requests');
       const asset = assets.get(url.pathname);
       if (asset)
@@ -197,7 +206,12 @@ async function run() {
       const json = (body, status = 200) =>
         route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
       if (url.pathname === '/favicon.ico') return route.fulfill({ status: 204 });
-      if (url.pathname === '/api/capabilities') return json(features);
+      if (url.pathname === '/api/capabilities') {
+        featureRequests.push(route);
+        featureSeen.resolve();
+        if (holdFeatures) return;
+        return json(features);
+      }
       if (url.pathname === '/api/auth/ws-ticket') {
         assert.equal(route.request().method(), 'POST');
         assert.deepEqual(route.request().postDataJSON(), {});
@@ -215,6 +229,7 @@ async function run() {
           bio: '',
         });
       if (url.pathname === '/api/rooms/invites/preview') {
+        previews.push(route);
         assert.equal(route.request().method(), 'POST');
         assert.deepEqual(route.request().postDataJSON(), { code: 'a'.repeat(32) });
         return confirmInvite(route);
@@ -239,11 +254,14 @@ async function run() {
         };
         return json({ token: 'replacement-fixture', user: account });
       }
-      if (url.pathname === '/api/auth/refresh')
+      if (url.pathname === '/api/auth/refresh') {
+        refreshRequests.push(route);
+        if (holdRestore) return;
         return json(
           account ? { token: 'owned-fixture', user: account } : { error: 'No saved session' },
           account ? 200 : 401,
         );
+      }
       if (url.pathname === '/api/rooms' && route.request().method() === 'POST') {
         creations.push(route);
         return;
@@ -261,17 +279,26 @@ async function run() {
     });
     const page = await context.newPage();
     page.setDefaultTimeout(5000);
+    if (clock) await page.clock.install();
     page.on('pageerror', () => {
       report.pageErrors++;
     });
     await page.goto(invite ? `${origin}/#invite=${'a'.repeat(32)}` : origin);
-    if (holdTicket) await ticketSeen.promise;
+    if (holdRestore) await featureSeen.promise;
+    else if (holdTicket) await ticketSeen.promise;
     else if (holdSocket) await socketSeen.promise;
     else await page.getByText('Connected', { exact: true }).waitFor();
     return {
       context,
       page,
       sent,
+      requests,
+      previews,
+      featureRequests,
+      finishFeatures: (index, body = features, status = 200) =>
+        featureRequests[index].fulfill({ status, json: body }),
+      finishRestore: () =>
+        refreshRequests[0].fulfill({ json: { token: 'owned-fixture', user: account } }),
       redemptions,
       inviteSeen: inviteSeen.promise,
       connections: () => connections,
@@ -307,6 +334,92 @@ async function run() {
   }
 
   async function scenarios() {
+    const discovering = await fixture({
+      signedIn: true,
+      holdFeatures: true,
+      invite: true,
+    });
+    await discovering.page.locator('#auth-display-name').waitFor({ state: 'visible' });
+    assert.equal(await discovering.page.locator('#join-btn').isDisabled(), true);
+    assert.equal(await discovering.page.locator('#community-actions').isVisible(), false);
+    assert.equal(discovering.requests.includes('/api/rooms'), false);
+    assert.equal(discovering.previews.length, 0);
+    await discovering.finishFeatures(0, { error: 'Temporary unavailability' }, 503);
+    await discovering.page.locator('#server-features-retry').waitFor({ state: 'visible' });
+    assert.equal(discovering.previews.length, 0);
+    const retryRequested = discovering.page.waitForRequest('**/api/capabilities');
+    await discovering.page.locator('#server-features-retry').click();
+    await retryRequested;
+    assert.equal(await discovering.page.locator('#server-features-retry').isDisabled(), true);
+    await discovering.finishFeatures(1);
+    await discovering.page.getByRole('dialog', { name: 'Review room invitation' }).waitFor();
+    await discovering.page.getByRole('button', { name: 'Accept invitation' }).waitFor();
+    assert.equal(discovering.previews.length, 1);
+    assert.equal(discovering.redemptions.length, 0);
+    assert.equal(
+      discovering.sent.some((message) => message.type === 'joinRoom'),
+      false,
+    );
+    assert.equal(discovering.featureRequests.length, 2);
+    report.checks.push(
+      'Failed discovery blocks directory and invitation calls; a bounded explicit retry resumes the restored-account invitation exactly once without accepting or joining',
+    );
+    await discovering.context.close();
+
+    const restoring = await fixture({ signedIn: true, holdRestore: true, invite: true });
+    await restoring.page.getByRole('dialog', { name: 'Room invitation', exact: true }).waitFor();
+    assert.equal(restoring.previews.length, 0);
+    await restoring.finishRestore();
+    await restoring.page.getByRole('dialog', { name: 'Review room invitation' }).waitFor();
+    await restoring.page.getByRole('button', { name: 'Accept invitation' }).waitFor();
+    assert.equal(restoring.previews.length, 1);
+    assert.equal(restoring.redemptions.length, 0);
+    assert.equal(
+      restoring.sent.some((message) => message.type === 'joinRoom'),
+      false,
+    );
+    report.checks.push(
+      'Discovery before session restoration previews the invitation once for the restored identity and never accepts or joins',
+    );
+    await restoring.context.close();
+
+    for (const failure of ['invalid', 'deadline']) {
+      const unavailable = await fixture({ holdFeatures: true, clock: true, room: true });
+      await unavailable.page.locator('#name-input').fill('Fixture guest');
+      await unavailable.page.locator('#room-input').fill('fixture-room');
+      assert.equal(await unavailable.page.locator('#join-btn').isDisabled(), true);
+      assert.equal(await unavailable.page.locator('#sign-in-btn').isVisible(), false);
+      assert.equal(await unavailable.page.locator('#room-browser').isVisible(), false);
+      if (failure === 'invalid')
+        await unavailable.finishFeatures(0, { ...capabilities, version: 2 });
+      else await unavailable.page.clock.fastForward(15_001);
+      await unavailable.page.locator('#server-features-retry').waitFor({ state: 'visible' });
+      assert.equal(await unavailable.page.locator('#join-btn').isDisabled(), true);
+      assert.equal(unavailable.requests.includes('/api/rooms'), false);
+      const retried = unavailable.page.waitForRequest('**/api/capabilities');
+      await unavailable.page.locator('#server-features-retry').click();
+      await retried;
+      await unavailable.finishFeatures(1, {
+        ...capabilities,
+        accounts: false,
+        passwordLogin: false,
+        passwordRegistration: 'disabled',
+        roomDirectory: false,
+        roomCreation: false,
+      });
+      await unavailable.page.locator('#server-features-retry').waitFor({ state: 'hidden' });
+      assert.equal(await unavailable.page.locator('#join-btn').isEnabled(), true);
+      assert.equal(await unavailable.page.locator('#sign-in-btn').isVisible(), false);
+      assert.equal(await unavailable.page.locator('#room-browser').isVisible(), false);
+      await unavailable.page.locator('#join-btn').click();
+      await unavailable.page.locator('#room-screen').waitFor({ state: 'visible' });
+      assert.equal(unavailable.sent.filter((message) => message.type === 'joinRoom').length, 1);
+      report.checks.push(
+        `A discovery ${failure} keeps features unavailable until explicit retry advertises guest rooms; one guest join then succeeds`,
+      );
+      await unavailable.context.close();
+    }
+
     const preparing = await fixture({ signedIn: true, holdTicket: true });
     assert.equal(preparing.connections(), 0);
     const aborted = preparing.page.waitForEvent('requestfailed', {

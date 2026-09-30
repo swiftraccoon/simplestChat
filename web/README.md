@@ -108,9 +108,12 @@ On startup the client reads the versioned `/api/capabilities` response and shows
 the account, registration and directory actions the server supports. Invite-only
 password registration explains the required code; passkey registration appears
 only when the server supports that separate flow. Capabilities are public UI
-hints, not authorization. If an older server does not implement the endpoint,
-the client preserves its existing entry points and displays endpoint errors when
-an unavailable action is attempted. Reload after changing server capabilities.
+hints, not authorization. Discovery is required before account actions, directory
+requests, invitation previews or room entry. A failed or invalid response keeps
+those actions unavailable and shows an explicit retry; each attempt has a
+15-second deadline and overlapping attempts are suppressed. After recovery,
+only the returned features are enabled, including guest rooms when advertised.
+Reload after changing server capabilities.
 
 The named APIs in `ui.ts` bound the complete response to 15 seconds, including
 JSON decoding, and propagate caller cancellation. Directory searches cancel the

@@ -1,6 +1,7 @@
 /** Owned loopback DOM tests with fully synthetic membership and control replies. */
 const assert = require('node:assert/strict');
 const { browserOptions } = require('./browser-options.cjs');
+const { capabilities } = require('./capabilities-fixture.cjs');
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const origin = new URL(process.env.BASE_URL || 'http://127.0.0.1:38179');
 if (
@@ -161,7 +162,8 @@ async function main() {
     });
     await context.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname;
-      if (path === '/api/auth/refresh')
+      if (path === '/api/capabilities') await route.fulfill({ json: capabilities });
+      else if (path === '/api/auth/refresh')
         await route.fulfill({ status: 401, json: { error: 'No session' } });
       else if (path === '/api/telemetry') await route.fulfill({ status: 204 });
       else await route.fulfill({ json: [] });

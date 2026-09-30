@@ -39,7 +39,7 @@
             aria-label="Help (opens in a new tab)"
             >Help</a
           >
-          <div id="community-actions"></div>
+          <div id="community-actions" hidden></div>
           <span id="quality-indicator" class="quality-dot" hidden title="Connection quality"></span>
           <span id="connection-status" class="status disconnected">Disconnected</span>
         </div>
@@ -105,7 +105,7 @@
             <div id="auth-bar-guest" class="auth-bar">
               <div class="join-brand">simplestChat</div>
               <div class="join-subtitle">Video chat, simplified</div>
-              <button id="sign-in-btn" class="auth-link-btn">Sign in</button>
+              <button id="sign-in-btn" class="auth-link-btn" hidden>Sign in</button>
             </div>
             <!-- Auth bar: shown when logged in -->
             <div id="auth-bar-user" class="auth-bar" hidden>
@@ -117,9 +117,12 @@
             </div>
 
             <p id="server-mode" class="field-hint" role="status" hidden></p>
+            <button id="server-features-retry" class="auth-link-btn" type="button" hidden>
+              Retry server features
+            </button>
 
             <!-- Public rooms are discoverable without signing in. -->
-            <div id="room-browser">
+            <div id="room-browser" hidden>
               <div class="room-browser-header">
                 <div class="room-search-row">
                   <label class="field-label" for="room-search-input">Search rooms</label>

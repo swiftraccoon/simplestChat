@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { capabilities } = require('./capabilities-fixture.cjs');
 const {
   closeOwnedBrowser,
   startFinalizationWatchdog,
@@ -266,18 +267,7 @@ async function run(env = process.env) {
                 });
               if (url.pathname === '/favicon.ico' && request.method() === 'GET')
                 return route.fulfill({ status: 204 });
-              if (url.pathname === '/api/capabilities')
-                return json(200, {
-                  version: 1,
-                  accounts: true,
-                  passwordLogin: true,
-                  passkeyLogin: false,
-                  passwordRegistration: 'open',
-                  passkeyRegistration: 'disabled',
-                  roomDirectory: true,
-                  roomCreation: true,
-                  adHocRooms: true,
-                });
+              if (url.pathname === '/api/capabilities') return json(200, capabilities);
               if (url.pathname === '/api/auth/refresh' && request.method() === 'POST')
                 return json(
                   signedIn ? 200 : 401,

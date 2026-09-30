@@ -41,6 +41,7 @@ async function fixture() {
       globals: {
         ...f.ui,
         room: null,
+        capabilities: { accounts: true },
         auth,
         navigation,
         loginModal: 'login',

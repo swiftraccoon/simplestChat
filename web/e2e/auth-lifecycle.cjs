@@ -2,6 +2,7 @@
  * dismissal/cookie behavior; this does not certify native passkey-manager UX. */
 const assert = require('node:assert/strict');
 const { browserOptions } = require('./browser-options.cjs');
+const { capabilities } = require('./capabilities-fixture.cjs');
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const origin = new URL(process.env.BASE_URL || 'http://127.0.0.1:38179');
 if (
@@ -70,6 +71,10 @@ async function run() {
     });
     await context.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname;
+      if (path === '/api/capabilities') {
+        await route.fulfill({ json: { ...capabilities, passkeyLogin: true } });
+        return;
+      }
       if (path === '/api/auth/ws-ticket') {
         assert.equal(route.request().method(), 'POST');
         assert.deepEqual(route.request().postDataJSON(), {});
