@@ -43,8 +43,8 @@ VALUES: JsonObject = {
     "scpub_caddy_cpus": 0.5,
     "scpub_turn_memory_mib": 512,
     "scpub_turn_cpus": 1,
-    "scpub_turn_bps_capacity": 500000000,
-    "scpub_turn_max_bps": 4000000,
+    "scpub_turn_bps_capacity": 62500000,
+    "scpub_turn_max_bps": 500000,
     "scpub_turn_user_quota": 4,
     "scpub_turn_total_quota": 525,
     "scpub_turn_relay_threads": 1,
@@ -304,7 +304,7 @@ class PublicTemplateTests(unittest.TestCase):
         )
         self.assertEqual(vps["scpub_postgres_shared_buffers_mib"], "373")
         self.assertEqual((vps["scpub_caddy_memory_mib"], vps["scpub_caddy_cpus"]), ("373", "0.5"))
-        self.assertEqual(vps["scpub_turn_bps_capacity"], "500000000")
+        self.assertEqual(vps["scpub_turn_bps_capacity"], "62500000")
         self.assertEqual(vps["scpub_turn_total_quota"], "525")
         self.assertEqual(vps["scpub_turn_relay_port_max"], "50209")
         large = derive_group_vars(
@@ -334,7 +334,7 @@ class PublicTemplateTests(unittest.TestCase):
         self.assertEqual((pinned["scpub_app_cpus"], pinned["scpub_media_workers"]), ("2", "2"))
         self.assertEqual(pinned["scpub_max_connections"], "350")
         self.assertEqual((pinned["scpub_postgres_cpus"], pinned["scpub_caddy_cpus"]), ("2", "1.0"))
-        self.assertEqual(pinned["scpub_turn_bps_capacity"], "50000000")
+        self.assertEqual(pinned["scpub_turn_bps_capacity"], "6250000")
         rendered = environment("public-app.env.j2", scpub_media_workers=2)
         self.assertEqual(rendered["RTC_PORT_END"], "40001")
         self.assertEqual(rendered["MEDIA_WORKERS"], "2")

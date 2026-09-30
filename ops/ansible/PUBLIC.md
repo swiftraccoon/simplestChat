@@ -50,9 +50,11 @@ grow with it: PostgreSQL half of the reserve within 1–4 GiB
 eighth within 256 MiB–2 GiB (`scpub_caddy_memory_mib`), each with the reserved
 CPUs. TURN's capacity follows `scpub_port_mbps` (1000; set the port the
 provider sells, since a virtio interface does not report its speed):
-`bps-capacity` is half the port because a relay carries every stream twice,
+Coturn interprets `bps-capacity` and `max-bps` as **bytes per second**.
+`bps-capacity` is half the port because a relay carries every stream twice
+(62,500,000 bytes/s, or 500 Mbit/s, on a 1-Gbit/s port),
 `total-quota` matches `MAX_CONNECTIONS`, the relay port range grows with it,
-and `max-bps` (4 Mbit/s) keeps a relayed viewer at the app's per-viewer cap.
+and `max-bps` defaults to 500,000 bytes/s (4 Mbit/s) per session per direction.
 `scpub_max_users` and `scpub_max_persisted_rooms` (100 each) are policy, not
 capacity.
 
@@ -182,9 +184,11 @@ starting point, not a measured guarantee: `build/capacity.py run` measures it.
 Set `scpub_turn_enabled: true` in the ignored inventory. The host must already
 serve trusted HTTPS and have a staged app-only release matching its running
 image. Allow inbound UDP/TCP 3478 and TCP 5349 at the provider firewall. The relay
-uses this VPS's public IPv4 address and accepts peer destinations only on that
-address. Its UDP allocation ports 49160–49959 communicate with the media server
-on the same host; they do not need public inbound firewall access.
+uses the configured public addresses and accepts peer destinations only on
+those addresses. Its UDP allocation range starts at 49160 and grows with
+`scpub_turn_total_quota`, ending at most at 65000. The rendered relay ports
+communicate with the media server on the same host; they do not need public
+inbound firewall access.
 
 Prepare and start the separate, checksum-pinned coturn 4.18.0 project:
 
@@ -218,9 +222,11 @@ release journal, readiness checks and bounded rollback, and retains evidence in
 systemd unit is not proof of success. Repeated activation of the same settings
 does not restart the app. Secret rotation is separate maintenance.
 
-The relay permits four allocations per credential and 400 total, with a
-2,000,000-byte/s per-session limit and 100,000,000-byte/s aggregate capacity
-(each direction). These limits bound relay use; they are not measured capacity.
+The relay permits four allocations per credential; its total allocation quota
+defaults to `MAX_CONNECTIONS`. The default per-session ceiling is 500,000
+bytes/s (4 Mbit/s) per direction, and the aggregate ceiling is 62,500,000
+bytes/s (500 Mbit/s) on a 1-Gbit/s port. Inventory can override both ceilings.
+These limits bound relay use; they are not measured capacity.
 Credentials expire after one day. Networks allowing only outbound TCP 443 still
 need a separate relay address on that port: this VPS uses it for HTTPS.
 

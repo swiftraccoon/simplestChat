@@ -59,8 +59,8 @@ class TurnTemplateTests(unittest.TestCase):
             "max-port=50209",
             "user-quota=4",
             "total-quota=525",
-            "max-bps=4000000",
-            "bps-capacity=500000000",
+            "max-bps=500000",
+            "bps-capacity=62500000",
             "log-min-level=warning",
         ):
             self.assertIn(required, lines)

@@ -78,8 +78,9 @@ scpub_caddy_cpus: "{{ [0.5, (scpub_reserved_cpus | int) / 2] | max }}"
 # the app's per-viewer cap (3 Mbit/s plus overhead).
 scpub_turn_memory_mib: 512
 scpub_turn_cpus: 1
-scpub_turn_bps_capacity: "{{ (scpub_port_mbps | int) * 500000 }}"
-scpub_turn_max_bps: 4000000
+# coturn's *bps names mean BYTES per second: Mbit/s * 1,000,000 / 8.
+scpub_turn_bps_capacity: "{{ ((scpub_port_mbps | float) * 62500) | int }}"
+scpub_turn_max_bps: 500000
 scpub_turn_user_quota: 4
 scpub_turn_total_quota: "{{ scpub_max_connections | int }}"
 scpub_turn_relay_threads: 1
