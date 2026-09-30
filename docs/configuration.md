@@ -7,12 +7,15 @@
 | `BIND_ADDR` | `127.0.0.1` | HTTP/WebSocket bind address; Compose overrides this inside its isolated network namespace |
 | `PORT` | `3000` | HTTP/WebSocket listen port for direct runs; the supplied Compose/Caddy path pins host and container port 3000 |
 | `DATABASE_URL` | (none) | PostgreSQL URL; remote hosts must use `sslmode=verify-full`; without it the server is anonymous-only |
+| `DATABASE_MAX_CONNECTIONS` | `20` | Maximum connections in this process's application pool (1–1000); budget these against PostgreSQL connection slots |
+| `DATABASE_MIN_CONNECTIONS` | `2` | Warm connection floor (0–1000, at most the configured maximum) |
+| `DATABASE_ACQUIRE_TIMEOUT_SECS` | `3` | Maximum wait to acquire a pool connection (1–60 seconds); independent of statement and request deadlines |
 | `RUN_MIGRATIONS` | `false` | Apply migrations from `./migrations` at startup; intended only for local development |
 | `JWT_SECRET` | (none) | HS256 secret of at least 32 bytes; **auth endpoints return 503 without it** |
 | `WEBAUTHN_RP_ID` | (none) | Passkey relying-party ID (domain); passkeys disabled without it |
 | `WEBAUTHN_ORIGIN` | (none) | Expected origin for passkey ceremonies (e.g. `https://chat.example.com`) |
 | `ALLOWED_ORIGINS` | same host only | Exact WebSocket origin allowlist; required for non-loopback binds, such as Compose |
-| `MAX_CONNECTIONS` | `10000` | Max concurrent WebSocket connections and retained reconnect-grace sessions |
+| `MAX_CONNECTIONS` | `10000` | Separate ceilings on concurrent WebSocket permits and retained reconnect-grace sessions; each can reach this count, so their combined retained state can approach twice the setting |
 | `MAX_CONNECTIONS_PER_IP` | `50` | Max concurrent WebSocket connections accepted from one client IP |
 | `JOIN_ATTEMPTS_PER_IP_PER_MINUTE` | `30` | Room joins one client IP may start per minute across all rooms (1–100000) |
 | `JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE` | `10` | Room joins one client IP may start per minute into one room (1–100000) |
@@ -40,7 +43,7 @@
 | `MEDIA_KEYFRAME_REQUEST_DELAY_MS` | `1000` | How often each video stream's sender may be asked for a keyframe, 0–10000 ms (0 forwards every request). Every viewer that starts watching asks for one and every viewer of the stream receives it, and Chrome answers a request on any simulcast layer with a keyframe on all three, up to one every 300 ms, so a join wave floods a large room: in a 545-viewer webinar, forwarding every request lost 7–18 consumers in each of three runs where 1000 ms lost none in two and 3 in the third, with 43 % fewer keyframes. Joiners then wait up to the delay for video (P99 0.8–1.0 s against 0.3 s; 5000 ms failed as often and took 4 s), and so does a viewer's request after loss it cannot repair ([performance results](performance-results.md)) |
 | `MAX_ROOMS` | `1000` | Maximum rooms held by one server process |
 | `MAX_PERSISTED_ROOMS` | `10000` | Global database-backed room cap enforced transactionally |
-| `MAX_PARTICIPANTS_PER_ROOM` | unset | Server-wide participant ceiling for every room (2–10000; unset or empty means none, and any other value fails startup rather than leaving rooms unlimited), applied beneath a room's own `max_participants` to joins and lobby admissions alike; a join past it is refused as "Room is full". Size it from measured capacity: on the deployed 2-CPU shape an all-publishing room is reliable to about 80 participants and a one-to-many room to about 500 viewers (see [performance results](performance-results.md)); on another host, [`build/capacity.py`](performance.md#sizing-a-host) measures it |
+| `MAX_PARTICIPANTS_PER_ROOM` | unset | Server-wide participant ceiling for every room (2–10000; unset or empty means none, and any other value fails startup rather than leaving rooms unlimited), applied beneath a room's own `max_participants` to joins and lobby admissions alike; a join past it is refused as "Room is full". Size it from the intended workload: the current 3 Mbit/s viewer policy measured 28 all-publishing participants (25 with the adviser's margin); larger historical trials used different policies. Webinar viewers scale differently (see [performance results](performance-results.md)); [`build/capacity.py`](performance.md#sizing-a-host) estimates or measures the host |
 | `MAX_BROADCASTERS_PER_ROOM` | unset | Server-wide ceiling on participants publishing media in one room (1–1000; unset or empty means none), applied beneath a room's own `max_broadcasters`. Past about thirty publishers the 3 Mbit/s per-viewer cap, not CPU, starves every tile ([performance results](performance-results.md)), while a one-to-many room keeps its hundreds of viewers; the public template sets 30 |
 | `ALLOW_AD_HOC_ROOMS` | `false` | Permit joins to create ephemeral rooms; must be explicitly enabled on every bind address |
 | `MAX_PASSWORD_WORKERS` | see note | Concurrent Argon2 verification cap (valid range 1–32) for both the room-password lane (default `2`) and the account-password lane (default `min(AUTH_MAX_CONCURRENCY, CPUs ÷ 2)`, at least 1, where CPUs honours a container quota); room-password hashing uses a separate single-worker lane |
@@ -64,6 +67,74 @@
 | `QUALITY_SAMPLE_INTERVAL_SECS` | `15` | Seconds between server-side media quality samples exported on `/metrics` (5–300) |
 | `QUALITY_SAMPLE_MAX_TRANSPORT_STATS` | `100` | Receive transports asked for statistics per sample, round-robin across samples (0–10000); consumer and producer scores cost no worker requests |
 | `TURN_TTL` | `86400` | TURN credential lifetime in seconds (60–86400). Relay allocations are refreshed with the credential they were created with and coturn rejects an expired one, so this bounds how long a relayed call can last; ICE restarts mint fresh credentials |
+
+## Offline configuration preflight
+
+Run the built binary with the candidate environment before starting a process:
+
+```sh
+MAX_CONNECTIONS=800 MEDIA_WORKERS=7 \
+  DATABASE_MAX_CONNECTIONS=20 DATABASE_MIN_CONNECTIONS=2 \
+  ./target/release/simplestChat --check-config
+```
+
+The command prints one JSON object containing public numeric limits, the worker
+count and whether TURN is configured. It exits nonzero for malformed core
+admission limits, invalid pool bounds, invalid media policy, saturation settings
+or TURN syntax. It does not start Tokio, open listeners, connect to PostgreSQL,
+run migrations, or start native media workers. Credentials and connection strings
+are excluded from the output. Use the exact binary and environment intended for
+deployment; an adviser's output is a proposal, not proof that a host can carry it.
+
+This is a partial configuration check, not readiness verification. It does not
+test database schema or credentials, origin/identity relationships, certificates,
+firewalls, relay connectivity, or available host resources. Start the candidate
+through the documented deployment workflow, then check readiness and browser
+media separately. A successful preflight cannot establish production reachability.
+
+For core integer admission limits and pool settings, only an absent variable
+selects the default. Explicit empty, malformed, negative and out-of-range values
+fail with the variable's name rather than silently selecting a larger limit.
+The optional room participant/broadcaster ceilings retain their documented
+empty-means-unset convention. Compose's `${NAME:-default}` interpolation can
+replace an empty value before the application sees it; inspect the private input
+file and use explicit positive values when a finite limit is intended.
+
+Core connection, room-count, concurrency and request-rate controls accept
+1–1,000,000; `MAX_USERS` accepts 1–10,000,000; producer and consumer caps accept
+1–10,000. These are syntax bounds, not recommended operating capacities. Media,
+room participant/broadcaster, password-worker and retention controls have the
+narrower ranges documented in the table.
+
+## Public feature discovery
+
+`GET /api/capabilities` returns an uncached, versioned description of the features
+this process is configured to expose. It requires no account and returns no
+deployment addresses, credentials, counts or dependency error details:
+
+```json
+{
+  "version": 1,
+  "accounts": true,
+  "passwordLogin": true,
+  "passkeyLogin": true,
+  "passwordRegistration": "invite",
+  "passkeyRegistration": "disabled",
+  "roomDirectory": true,
+  "roomCreation": true,
+  "adHocRooms": false
+}
+```
+
+Accounts require both the database and JWT configuration. Passkeys additionally
+require WebAuthn configuration. Password registration is `open`, `invite` or
+`disabled`; passkey registration is `open` or `disabled`. A configured feature
+can still be temporarily unavailable, and all API authorization, admission and
+rate limits remain authoritative. This endpoint is not a readiness probe. The
+browser uses it to show applicable account and room actions; older servers
+without the endpoint retain the client's compatibility behavior.
+
+## Media allocation
 
 Media allocation in `src/media/config.rs`:
 
@@ -105,7 +176,16 @@ recreation itself fails, capacity stays reduced until restart and the
 
 ## Authentication and database availability
 
-The application pool has 20 connections and a three-second acquisition timeout.
+The application pool defaults to 20 maximum connections, two warm connections and
+a three-second acquisition timeout; `DATABASE_MAX_CONNECTIONS`,
+`DATABASE_MIN_CONNECTIONS` and `DATABASE_ACQUIRE_TIMEOUT_SECS` configure these
+independently. Increasing the pool does not make slow SQL faster. Leave PostgreSQL
+connection slots for migrations, monitoring, backups and operator access, and use
+pool-acquisition latency plus query timings to decide whether more concurrency helps.
+The supplied managed PostgreSQL template sets `max_connections=50` and the
+application role's connection limit to 25. A larger application pool does not
+override either server-side limit; review those database controls as part of
+any managed deployment expansion.
 Runtime PostgreSQL statement, lock and idle-transaction limits are 10, 5 and 15
 seconds respectively; they are not an end-to-end request deadline.
 
