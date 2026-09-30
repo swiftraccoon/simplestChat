@@ -381,6 +381,15 @@ class PublicTemplateTests(unittest.TestCase):
                 self.assertEqual(int(managed["scpub_turn_bps_capacity"]) * 8, port * 500000)
                 self.assertEqual(int(managed["scpub_turn_max_bps"]) * 8, 4000000)
 
+    def test_ipv6_only_network_carries_the_primary_announced_address(self) -> None:
+        """An IPv6 primary needs a native Compose network even without a second address."""
+        compose = yaml_value(
+            render(
+                "public-compose.yml.j2", scpub_announce_ip="2001:db8::10", scpub_announce_ipv6=""
+            )
+        )
+        self.assertIs(at(compose, "networks", "default", "enable_ipv6"), expr2=True)
+
     def test_announced_addresses_follow_the_default_routes(self) -> None:
         """A dual-stack host announces both families, a single-stack host its one; overrides win."""
         facts = {"ansible_processor_vcpus": 4, "ansible_memtotal_mb": 11967}

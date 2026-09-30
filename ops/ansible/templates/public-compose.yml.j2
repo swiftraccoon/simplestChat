@@ -160,8 +160,8 @@ services:
     cpus: "1.0"
     stop_grace_period: 30s
     logging: *bounded-logging
-{% if scpub_announce_ipv6 %}
-# A dual-stack host: the project network carries IPv6 natively, so the media
+{% if scpub_announce_ipv6 or ':' in scpub_announce_ip %}
+# An IPv6-capable host: the project network carries IPv6 natively, so the media
 # ports published on [::] reach the workers without the userland proxy.
 networks:
   default:
