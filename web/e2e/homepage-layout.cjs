@@ -184,6 +184,8 @@ async function run(env = process.env) {
     pageErrors: 0,
     unexpectedRequests: 0,
     signalingMessages: 0,
+    signalingConnections: 0,
+    ticketRequests: 0,
   };
   const save = () =>
     fs.writeFileSync(
@@ -236,12 +238,16 @@ async function run(env = process.env) {
             for (const method of ['getUserMedia', 'webkitGetUserMedia', 'mozGetUserMedia'])
               Object.defineProperty(navigator, method, { value: deny, configurable: false });
           });
+          let signalingConnections = 0;
+          let ticketRequests = 0;
           await context.routeWebSocket(/.*/, (socket) => {
             if (socket.url() !== `${origin.replace('http:', 'ws:')}/ws`) {
               report.unexpectedRequests++;
               socket.close();
               return;
             }
+            signalingConnections++;
+            report.signalingConnections++;
             // Deliberately never connectToServer(): this is an in-process mock.
             socket.onMessage(() => {
               report.signalingMessages++;
@@ -268,6 +274,15 @@ async function run(env = process.env) {
               if (url.pathname === '/favicon.ico' && request.method() === 'GET')
                 return route.fulfill({ status: 204 });
               if (url.pathname === '/api/capabilities') return json(200, capabilities);
+              if (url.pathname === '/api/auth/ws-ticket') {
+                assert.equal(signedIn, true, 'Guests must not mint authenticated tickets');
+                assert.equal(request.method(), 'POST');
+                assert.deepEqual(request.postDataJSON(), {});
+                assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
+                ticketRequests++;
+                report.ticketRequests++;
+                return json(200, { ticket: 'A'.repeat(43), expires_in: 30 });
+              }
               if (url.pathname === '/api/auth/refresh' && request.method() === 'POST')
                 return json(
                   signedIn ? 200 : 401,
@@ -316,6 +331,10 @@ async function run(env = process.env) {
             .locator(signedIn ? '#auth-bar-user' : '#auth-bar-guest')
             .waitFor({ state: 'visible' });
           assert.equal(await page.locator('#create-room-btn').isVisible(), signedIn);
+          report.activeStep = `${name}-signaling-ready`;
+          await page.locator('#connection-status.connected').waitFor({ state: 'visible' });
+          assert.equal(signalingConnections, 1, 'Each layout context owns one mocked connection');
+          assert.equal(ticketRequests, signedIn ? 1 : 0, 'Only accounts mint one startup ticket');
           const inspect = async (state) => {
             report.activeStep = `${name}-${state}`;
             const result = await geometry(page);
