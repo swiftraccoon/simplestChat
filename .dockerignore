@@ -71,6 +71,7 @@ web/**
 !web/scripts/
 web/scripts/**
 !web/scripts/check-bundle.mjs
+!web/scripts/mediasoup-runtime.mjs
 !web/public/
 web/public/**
 !web/public/help.html

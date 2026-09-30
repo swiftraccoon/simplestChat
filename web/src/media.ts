@@ -1,5 +1,7 @@
 import type { TelemetryMediaSource } from './telemetry-types';
-import * as mediasoupClient from 'mediasoup-client';
+import type * as mediasoupClient from 'mediasoup-client';
+// The pinned package barrel also exports test fixtures; load only its shipped Device module.
+import { Device } from '../node_modules/mediasoup-client/lib/Device.js';
 import type { ClientMessage, RequestResponses } from './protocol';
 import { SignalingRequestTimeoutError, type SignalingClient } from './signaling';
 
@@ -494,7 +496,7 @@ export class MediaManager {
     assertCurrent();
 
     // 2. Load device
-    const device = await mediasoupClient.Device.factory();
+    const device = await Device.factory();
     assertCurrent();
     this.device = device;
     await device.load({ routerRtpCapabilities: capsResponse.rtpCapabilities });

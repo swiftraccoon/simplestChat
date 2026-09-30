@@ -86,6 +86,8 @@ test('all explicit local COPY inputs are admitted by the Docker context', () => 
   verifyLocalCopySources();
   assert.throws(() => verifyLocalCopySources(ignoreRules.filter(rule => rule !== '!build/security_elf.py')),
     /security_elf\.py is explicitly copied but excluded/);
+  assert.throws(() => verifyLocalCopySources(ignoreRules.filter(rule => rule !== '!web/scripts/mediasoup-runtime.mjs')),
+    /mediasoup-runtime\.mjs is explicitly copied but excluded/);
 });
 
 test('web-builder copies the complete production frontend input set', () => {
@@ -94,7 +96,7 @@ test('web-builder copies the complete production frontend input set', () => {
   const required = [
     'web/package.json', 'web/package-lock.json', 'web/tsconfig.json', ...projects,
     'web/vite.config.ts', 'web/index.html', 'web/src/main.ts',
-    'web/scripts/check-bundle.mjs', 'web/bundle-budget.json',
+    'web/scripts/check-bundle.mjs', 'web/scripts/mediasoup-runtime.mjs', 'web/bundle-budget.json',
     'web/public/help.html', 'web/public/help.css',
   ];
   for (const filename of required) {
@@ -118,6 +120,7 @@ test('container context explicitly admits build configs and help without broaden
     '!web/tsconfig.json', '!web/tsconfig.app.json', '!web/tsconfig.tools.json',
     '!web/vite.config.ts', '!web/index.html', '!web/bundle-budget.json',
     '!web/scripts/', 'web/scripts/**', '!web/scripts/check-bundle.mjs',
+    '!web/scripts/mediasoup-runtime.mjs',
     '!web/public/', 'web/public/**', '!web/public/help.html', '!web/public/help.css',
     '!web/src/', 'web/src/**', '!web/src/*.ts', '!web/src/*.css',
   ].toSorted());
@@ -159,6 +162,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'web/package.json', 'web/package-lock.json', 'web/tsconfig.json',
     'web/tsconfig.app.json', 'web/tsconfig.tools.json', 'web/vite.config.ts',
     'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs',
+    'web/scripts/mediasoup-runtime.mjs',
     'web/public/help.html', 'web/public/help.css', 'web/src/main.ts', 'web/src/style.css',
     'vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/abseil-cpp/meson.build',
   ]) assert.equal(excluded(filename), false, `${filename} must remain available to the build`);

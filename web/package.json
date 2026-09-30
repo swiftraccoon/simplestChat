@@ -27,6 +27,6 @@
     "vite": "^8.2.2"
   },
   "dependencies": {
-    "mediasoup-client": "^3.23.1"
+    "mediasoup-client": "3.23.1"
   }
 }

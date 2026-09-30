@@ -46,7 +46,10 @@ async function fixture(t) {
     setItem: (key, value) => stored.set(key, value),
   };
   const media = await loadTypeScript('src/media.ts', {
-    modules: { 'mediasoup-client': {}, './signaling': signalingModule },
+    modules: {
+      '../node_modules/mediasoup-client/lib/Device.js': {},
+      './signaling': signalingModule,
+    },
     globals: { localStorage: storage },
   });
   const state = {

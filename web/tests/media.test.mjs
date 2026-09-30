@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import ts from '@typescript/typescript6';
+import { Device as ShippedDevice } from '../node_modules/mediasoup-client/lib/Device.js';
 import { evaluateTypeScript, loadContractModules, loadTypeScript } from './source-loader.mjs';
 
 const signalingModule = await loadTypeScript('src/signaling.ts', {
@@ -83,7 +84,10 @@ async function fixture(t) {
     return track;
   };
   const { MediaManager } = await loadTypeScript('src/media.ts', {
-    modules: { 'mediasoup-client': {}, './signaling': signalingModule },
+    modules: {
+      '../node_modules/mediasoup-client/lib/Device.js': {},
+      './signaling': signalingModule,
+    },
     globals: {
       localStorage: {
         getItem() {
@@ -2178,6 +2182,79 @@ test('a tile-size cap bounds the requested layer and the manual choice stays the
   );
 });
 
+test('the shipped Device module is the same implementation as the public package class', async () => {
+  const { Device } = await import('mediasoup-client');
+  assert.equal(ShippedDevice, Device);
+});
+
+test('device setup uses normal handler selection and the server transport parameters', async (t) => {
+  const requests = [],
+    factoryArguments = [],
+    transportOptions = [],
+    loaded = [];
+  const capabilities = { codecs: [], headerExtensions: [] };
+  const replies = new Map([
+    ['getRouterRtpCapabilities', { rtpCapabilities: capabilities }],
+    ...['Send', 'Recv'].map((direction) => [
+      `create${direction}Transport`,
+      {
+        transportId: direction,
+        iceParameters: { fromServer: direction },
+        iceCandidates: [{ fromServer: direction }],
+        dtlsParameters: { fromServer: direction },
+        iceServers: [{ urls: 'stun:example.invalid' }],
+      },
+    ]),
+  ]);
+  class Device {
+    static async factory(...args) {
+      factoryArguments.push(args);
+      return new Device();
+    }
+    async load(options) {
+      loaded.push(options);
+    }
+    createSendTransport(options) {
+      return this.transport(options);
+    }
+    createRecvTransport(options) {
+      return this.transport(options);
+    }
+    transport(options) {
+      transportOptions.push(options);
+      return { id: options.id, on() {}, close() {} };
+    }
+  }
+  const { MediaManager } = await loadTypeScript('src/media.ts', {
+    modules: {
+      '../node_modules/mediasoup-client/lib/Device.js': { Device },
+      './signaling': signalingModule,
+    },
+    globals: {
+      localStorage: { getItem: () => null },
+      console: { log() {} },
+    },
+  });
+  const manager = new MediaManager({
+    async request(message) {
+      requests.push(message.type);
+      return replies.get(message.type);
+    },
+  });
+  t.after(() => manager.close());
+  await manager.setup();
+  assert.deepEqual(factoryArguments, [[]], 'no fake/custom handler is selected');
+  assert.deepEqual(loaded, [{ routerRtpCapabilities: capabilities }]);
+  assert.deepEqual(requests, [...replies.keys()]);
+  for (const [index, direction] of ['Send', 'Recv'].entries()) {
+    const response = replies.get(`create${direction}Transport`);
+    assert.equal(transportOptions[index].id, response.transportId);
+    for (const key of ['iceParameters', 'iceCandidates', 'dtlsParameters', 'iceServers']) {
+      assert.equal(transportOptions[index][key], response[key]);
+    }
+  }
+});
+
 for (const stage of [
   'capabilities',
   'device-factory',
@@ -2234,7 +2311,10 @@ for (const stage of [
       }
     }
     const { MediaManager } = await loadTypeScript('src/media.ts', {
-      modules: { 'mediasoup-client': { Device }, './signaling': signalingModule },
+      modules: {
+        '../node_modules/mediasoup-client/lib/Device.js': { Device },
+        './signaling': signalingModule,
+      },
       globals: {
         localStorage: {
           getItem() {

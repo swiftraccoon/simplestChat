@@ -4,6 +4,19 @@ TypeScript/Vite UI using mediasoup-client. Commands below run from the repositor
 root. The manifest specifies the minimum Node version; CI pins its exact Node
 release. Dependencies and development tools resolve through the lockfile.
 
+The runtime imports `Device` directly from the shipped
+`mediasoup-client/lib/Device.js` file; other mediasoup imports are type-only.
+Version 3.23.1 exposes no `Device` package subpath, so this is an explicit relative
+import into the exactly pinned dependency. Its CommonJS barrel also exports test
+helpers and embeds public fixture credentials even with a named import. The
+direct import keeps the same `Device.factory()` implementation and browser
+handler selection. The small Vite resolver also replaces the single barrel import
+in `RemoteSdp.js`, whose only use is the SDP origin's version string, with that
+same pinned version. It verifies the installed package version and complete
+`RemoteSdp.js` hash first; changed dependency bytes stop the build for review.
+No handler or transport implementation is replaced. Dependency updates must
+verify the shipped module/types, media tests, and production bundle contents.
+
 ## Build and develop
 
 ```sh

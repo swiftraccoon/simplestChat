@@ -9,7 +9,7 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY web/tsconfig.json web/tsconfig.app.json web/tsconfig.tools.json web/vite.config.ts web/index.html web/bundle-budget.json ./
-COPY web/scripts/check-bundle.mjs ./scripts/check-bundle.mjs
+COPY web/scripts/check-bundle.mjs web/scripts/mediasoup-runtime.mjs ./scripts/
 COPY web/public ./public
 COPY web/src ./src
 ARG SOURCE_REVISION=unknown
