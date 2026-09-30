@@ -137,6 +137,14 @@ SIX_ONLY: JsonObject = {
 class PublicTemplateTests(unittest.TestCase):
     """Verify the public templates contract offline."""
 
+    def test_database_logs_omit_bound_values_in_slow_and_error_paths(self) -> None:
+        """Both PostgreSQL parameter logging controls are explicit, independent of defaults."""
+        project = obj(yaml_value(render("public-compose.yml.j2")))
+        command = array(obj(obj(project, "services"), "postgres"), "command")
+        self.assertIn("log_min_duration_statement=500ms", command)
+        self.assertIn("log_parameter_max_length=0", command)
+        self.assertIn("log_parameter_max_length_on_error=0", command)
+
     def test_all_public_templates_render_without_missing_values(self) -> None:
         """Verify all public templates render without missing values."""
         for path in (ROOT / "templates").glob("public-*.j2"):

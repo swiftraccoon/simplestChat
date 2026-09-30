@@ -110,7 +110,11 @@ starts it.
 ## Query statistics and slow queries
 
 PostgreSQL runs with `pg_stat_statements` preloaded (`track=all`,
-`track_io_timing=on`) and logs statements slower than 500 ms. Read the heaviest
+`track_io_timing=on`) and logs statements slower than 500 ms. Both
+`log_parameter_max_length=0` and `log_parameter_max_length_on_error=0` explicitly
+suppress bound parameter values in ordinary and error logging. These settings
+do not redact literals embedded in SQL text or every server error message; keep
+database logs private. See the [PostgreSQL logging controls](https://www.postgresql.org/docs/18/runtime-config-logging.html#GUC-LOG-PARAMETER-MAX-LENGTH). Read the heaviest
 queries from the container as the operator (the app role has no access):
 
 ```sh
