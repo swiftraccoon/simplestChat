@@ -6,9 +6,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   artifact:
-    name: Verified Linux production image without deployment
+    name: Development image build without release authorization
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
@@ -23,7 +27,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: simplestchat-production-${{ github.sha }}
+          name: simplestchat-development-${{ github.sha }}
           path: ${{ runner.temp }}/simplestchat-release
           if-no-files-found: error
           compression-level: 0

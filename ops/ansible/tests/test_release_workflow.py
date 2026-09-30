@@ -96,7 +96,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(
             retention["with"],
             {
-                "name": "simplestchat-production-${{ github.sha }}",
+                "name": "simplestchat-development-${{ github.sha }}",
                 "path": "${{ runner.temp }}/simplestchat-release",
                 "if-no-files-found": "error",
                 "compression-level": "0",

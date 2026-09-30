@@ -55,7 +55,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
     def test_fresh_host_and_job_deadline_include_the_existing_build(self) -> None:
         """Verify fresh host and job deadline include the existing build."""
         self.assertEqual(self.job["runs-on"], "ubuntu-24.04")
-        self.assertEqual(self.job["timeout-minutes"], "75")
+        self.assertEqual(self.job["timeout-minutes"], "95")
         self.assertNotIn("container", self.job, "The fixture uses the runner's own Docker daemon")
         self.assertNotIn("services", self.job)
         self.assertEqual(at(self.job, "env", "PRODUCTION_IMAGE"), "simplestchat-ci:production")
@@ -123,7 +123,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         """Verify push export never rebuilds and publication waits for required checks."""
         self.assertEqual(at(self.workflow, "on", "push", "branches"), ["main"])
         export = self.step(EXPORT)
-        self.assertEqual(export["if"], "${{ success() && github.event_name == 'push' }}")
+        self.assertNotIn("if", export, "PR image policy must inspect the canonical export too")
         self.assertEqual(export["timeout-minutes"], "6")
         self.assertEqual(
             string(export, "run"),
@@ -144,7 +144,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertEqual(
             release["with"],
             {
-                "name": "simplestchat-production-${{ github.sha }}",
+                "name": "simplestchat-unsigned-${{ github.sha }}",
                 "path": "${{ runner.temp }}/simplestchat-release",
                 "if-no-files-found": "error",
                 "compression-level": "0",
@@ -153,6 +153,17 @@ class ReleaseContainerCiTests(unittest.TestCase):
         )
         self.assertLess(self.steps.index(export), self.steps.index(self.step(INTEGRATION)))
         self.assertLess(self.steps.index(self.step(INTEGRATION)), self.steps.index(release))
+        image_check = self.step("Scan the same exported production image")
+        self.assertNotIn("if", image_check)
+        self.assertNotIn("continue-on-error", image_check)
+        self.assertLess(self.steps.index(self.step(INTEGRATION)), self.steps.index(image_check))
+        self.assertLess(self.steps.index(image_check), self.steps.index(release))
+        self.assertIn(
+            'build/check-security.sh image "${PRODUCTION_IMAGE}"', string(image_check, "run")
+        )
+        self.assertIn(
+            '--artifact-dir "${RUNNER_TEMP}/simplestchat-release"', string(image_check, "run")
+        )
         self.assertNotIn("continue-on-error", release)
 
     def test_compose_is_verified_before_install_and_matches_both_execution_users(self) -> None:
@@ -274,6 +285,20 @@ class ReleaseContainerCiTests(unittest.TestCase):
                 "${{ runner.temp }}/container-smoke",
                 "${{ runner.temp }}/release-container/report.json",
                 "${{ runner.temp }}/simplestchat-release",
+                "\n".join(
+                    "${{ runner.temp }}/production-security/image/" + name
+                    for name in (
+                        "outcome.json",
+                        "checks.json",
+                        "elf.json",
+                        "native.json",
+                        "database-status.json",
+                        "secret-paths.json",
+                        "sbom/sbom.syft.json",
+                        "spdx/sbom.spdx.json",
+                    )
+                )
+                + "\n",
             },
             "Do not upload private release fixture directories or broad runner paths",
         )

@@ -1,0 +1,114 @@
+name: CodeQL
+
+on:
+  workflow_call:
+  schedule:
+    - cron: '41 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  source-analysis:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      security-events: write # Upload only this job's SARIF to code scanning.
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript, python, rust]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Initialize the pinned analyzer
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          tools: linked
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: ${{ github.event_name == 'schedule' && 'security-and-quality' || 'security-extended' }}
+      - name: Analyze and upload results
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          category: /language:${{ matrix.language }}/${{ github.event_name == 'schedule' && 'quality-advisory' || 'security' }}
+
+  native-analysis:
+    name: CodeQL (native C/C++)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write # Upload only this job's SARIF to code scanning.
+    env:
+      OPENSSL_DIR: ${{ github.workspace }}/target/codeql-openssl-3.5.8
+      PKG_CONFIG_PATH: ${{ github.workspace }}/target/codeql-openssl-3.5.8/lib/pkgconfig
+      OPENSSL_STATIC: '1'
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify source and install the real worker prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config python3-pip curl perl
+          python3 build/security_vendor.py verify --root "$PWD" \
+            --cache "$RUNNER_TEMP/vendor-cache" --output "$RUNNER_TEMP/vendor-integrity"
+          build/install-openssl.sh "$OPENSSL_DIR"
+      - name: Initialize native C/C++ extraction
+        id: init
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          tools: linked
+          languages: c-cpp
+          build-mode: manual
+          db-location: ${{ runner.temp }}/codeql-databases
+          queries: ${{ github.event_name == 'schedule' && 'security-and-quality' || 'security-extended' }}
+      - name: Compile the actual worker under CodeQL tracing
+        timeout-minutes: 25
+        env:
+          CC: /usr/bin/gcc
+          CXX: /usr/bin/g++
+          PIP_CONFIG_FILE: /dev/null
+          PIP_INDEX_URL: https://pypi.org/simple
+          PYTHONNOUSERSITE: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+          MEDIASOUP_BUILDTYPE: Release
+          MEDIASOUP_BUILD_JOBS: '2'
+        run: |
+          set -euo pipefail
+          umask 077
+          unset DOCS_RS MESON MESON_ARGS MESON_VERSION NINJA_VERSION PYTHONPATH
+          mkdir -p "$GITHUB_WORKSPACE/target"
+          worker_root="$(mktemp -d "$GITHUB_WORKSPACE/target/codeql-worker.XXXXXXXX")"
+          export MEDIASOUP_OUT_DIR="$worker_root/out"
+          export MEDIASOUP_INSTALL_DIR="$worker_root/install"
+          export BUILD_DIR="$worker_root/build"
+          export PYTHONPATH="$MEDIASOUP_OUT_DIR/pip_invoke"
+          python3 -m pip install --no-user --target "$PYTHONPATH" \
+            --require-hashes --only-binary=:all: \
+            --requirement vendor/mediasoup-sys-0.17.0/python-invoke-requirements.txt
+          python3 -m invoke --search-root vendor/mediasoup-sys-0.17.0 libmediasoup-worker
+          test -s "$MEDIASOUP_INSTALL_DIR/libmediasoup-worker.a"
+      - name: Analyze observed C/C++ translation units
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          category: /language:c-cpp/${{ github.event_name == 'schedule' && 'quality-advisory' || 'security' }}
+      - name: Require extraction of the real media protocol implementations
+        env:
+          CODEQL_BINARY: ${{ steps.init.outputs.codeql-path }}
+        run: |
+          "$CODEQL_BINARY" query run security/codeql/native-coverage/compilations.ql \
+            --database "$RUNNER_TEMP/codeql-databases/cpp" --output "$RUNNER_TEMP/native-coverage.bqrs"
+          "$CODEQL_BINARY" bqrs decode --format=json "$RUNNER_TEMP/native-coverage.bqrs" \
+            --output "$RUNNER_TEMP/native-coverage.json"
+          python3 build/security_codeql.py "$RUNNER_TEMP/native-coverage.json"

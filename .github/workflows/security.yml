@@ -1,0 +1,130 @@
+name: Security
+
+on:
+  workflow_call:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  security-fast:
+    name: Fast security gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+      - name: Install source-check prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv shellcheck
+          rustup toolchain install 1.98.1 --profile minimal
+      - name: Run the shared blocking gate
+        env:
+          SECURITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          args=()
+          if [[ -n "$SECURITY_BASE" && "$SECURITY_BASE" != 0000000000000000000000000000000000000000 ]]; then
+            args+=(--base "$SECURITY_BASE")
+          fi
+          build/check-security.sh fast --output "$RUNNER_TEMP/security-fast" "${args[@]}"
+      - name: Preserve the redacted check summary
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: security-fast-summary
+          path: ${{ runner.temp }}/security-fast/summary.json
+          if-no-files-found: error
+          retention-days: 14
+
+  dependency-review:
+    name: New dependency review
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: low
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0, Unicode-3.0, Zlib, CC0-1.0, 0BSD, Apache-2.0 WITH LLVM-exception
+          comment-summary-in-pr: never
+
+  native-security:
+    name: Native sanitizers and finite corpus replay
+    # Scheduled/manual runs execute these same checks inside the shared deep tier.
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify upstream source and native seed identities
+        run: |
+          python3 build/security_vendor.py verify --root "$PWD" \
+            --cache "$RUNNER_TEMP/vendor-cache" --output "$RUNNER_TEMP/vendor-integrity"
+          python3 build/native_security.py verify
+      - name: Prepare the pinned native checker
+        run: python3 build/native_security.py prepare --output "$RUNNER_TEMP/native-preparation"
+      - name: Run isolated sanitizer and finite replay suites
+        run: |
+          image_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["imageId"])' "$RUNNER_TEMP/native-preparation/report.json")"
+          for mode in asan ubsan replay; do
+            python3 build/native_security.py run --image "$image_id" --mode "$mode" \
+              --output "$RUNNER_TEMP/native-$mode"
+          done
+      - name: Preserve bounded native results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-security-results
+          path: |
+            ${{ runner.temp }}/vendor-integrity/report.json
+            ${{ runner.temp }}/native-*/report.json
+            ${{ runner.temp }}/native-*/failure.json
+          if-no-files-found: error
+          retention-days: 14
+
+  security-deep:
+    name: Scheduled complete security tier
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+      - name: Install shared gate prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv shellcheck
+          rustup toolchain install 1.98.1 --profile minimal
+      - name: Run the maintained complete tier
+        run: build/check-security.sh deep --output "$RUNNER_TEMP/security-deep"
+      - name: Preserve the redacted check summary
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: security-deep-summary
+          path: ${{ runner.temp }}/security-deep/summary.json
+          if-no-files-found: error
+          retention-days: 30

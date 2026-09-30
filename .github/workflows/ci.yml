@@ -17,6 +17,17 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  security:
+    name: Security
+    uses: ./.github/workflows/security.yml
+
+  codeql:
+    name: CodeQL
+    permissions:
+      contents: read
+      security-events: write # Passed only to the reusable SARIF upload jobs.
+    uses: ./.github/workflows/codeql.yml
+
   automation:
     name: Operations automation lint and safety checks
     runs-on: ubuntu-24.04
@@ -47,6 +58,7 @@ jobs:
         run: |
           build/check-python.sh
           ansible-lint --offline --strict ops/ansible
+          ansible-lint --offline --strict security/vm/stage.yml
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/site.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/public.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/release.yml --syntax-check
@@ -676,7 +688,7 @@ jobs:
   deployment:
     name: Production image + deployment config
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 95
     env:
       PRODUCTION_IMAGE: simplestchat-ci:production
       # Official Caddy image, pinned to the 2.11.4-alpine multi-architecture
@@ -853,7 +865,6 @@ jobs:
         run: build/test-container.sh
 
       - name: Export the tested immutable production image
-        if: ${{ success() && github.event_name == 'push' }}
         timeout-minutes: 6
         run: |
           python3 build/build-release.py --image-id "${PRODUCTION_IMAGE}" \
@@ -874,16 +885,40 @@ jobs:
             build/test-release-container.py --disposable-host \
             --image "${PRODUCTION_IMAGE}" --output "${RUNNER_TEMP}/release-container"
 
+      - name: Scan the same exported production image
+        timeout-minutes: 25
+        run: |
+          build/check-security.sh image "${PRODUCTION_IMAGE}" \
+            --artifact-dir "${RUNNER_TEMP}/simplestchat-release" \
+            --output "${RUNNER_TEMP}/production-security"
+
       - name: Retain the verified production release
         # Export precedes the root-owned fixture; publication requires every
         # deployment check above to pass. Fetching also requires whole-CI success.
         if: ${{ success() && github.event_name == 'push' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: simplestchat-production-${{ github.sha }}
+          name: simplestchat-unsigned-${{ github.sha }}
           path: ${{ runner.temp }}/simplestchat-release
           if-no-files-found: error
           compression-level: 0
+          retention-days: 14
+
+      - name: Preserve allowlisted production security evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-security-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/production-security/image/outcome.json
+            ${{ runner.temp }}/production-security/image/checks.json
+            ${{ runner.temp }}/production-security/image/elf.json
+            ${{ runner.temp }}/production-security/image/native.json
+            ${{ runner.temp }}/production-security/image/database-status.json
+            ${{ runner.temp }}/production-security/image/secret-paths.json
+            ${{ runner.temp }}/production-security/image/sbom/sbom.syft.json
+            ${{ runner.temp }}/production-security/image/spdx/sbom.spdx.json
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Preserve sanitized release-container report
@@ -904,3 +939,85 @@ jobs:
           path: ${{ runner.temp }}/container-smoke
           if-no-files-found: ignore
           retention-days: 7
+
+  required:
+    name: Required security and correctness checks
+    if: ${{ always() }}
+    needs: [automation, rust-lint, rust-test, native-dtls, browser, web, deployment, security, codeql]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every declared gate to finish successfully
+        env:
+          GATE_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYTHON'
+          import json
+          import os
+          results = json.loads(os.environ["GATE_RESULTS"])
+          expected = {"automation", "rust-lint", "rust-test", "native-dtls", "browser", "web", "deployment", "security", "codeql"}
+          if set(results) != expected or any(item["result"] != "success" for item in results.values()):
+              raise SystemExit("A required security or correctness gate failed or did not run")
+          PYTHON
+
+  release-security:
+    name: Attest the verified production release
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [required]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # Only the trusted main release signer can request an OIDC identity.
+      attestations: write # Publish the exact tested archive and SBOM attestation.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: simplestchat-unsigned-${{ github.sha }}
+          path: ${{ runner.temp }}/signed-release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: production-security-${{ github.sha }}
+          path: ${{ runner.temp }}/image-security
+      - name: Bind the successful image policy and exact archive bytes
+        run: |
+          python3 build/release_attestation.py prepare \
+            --artifact-dir "$RUNNER_TEMP/signed-release" \
+            --security-dir "$RUNNER_TEMP/image-security" \
+            --repository "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
+      - name: Sign the archive and SPDX evidence
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ runner.temp }}/signed-release/image.tar
+            ${{ runner.temp }}/signed-release/sbom.spdx.json
+          predicate-path: ${{ runner.temp }}/signed-release/release-predicate.json
+          predicate-type: https://github.com/swiftraccoon/simplestChat/attestations/release/v1
+          create-storage-record: false
+      - name: Retain the signed verification bundle
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          test -f "$ATTESTATION_BUNDLE"
+          cp -- "$ATTESTATION_BUNDLE" "$RUNNER_TEMP/signed-release/release-attestation.jsonl"
+      - name: Publish only the signed release contract
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: simplestchat-production-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/signed-release/image.tar
+            ${{ runner.temp }}/signed-release/release.json
+            ${{ runner.temp }}/signed-release/outcome.json
+            ${{ runner.temp }}/signed-release/source.json
+            ${{ runner.temp }}/signed-release/sbom.spdx.json
+            ${{ runner.temp }}/signed-release/image-security.json
+            ${{ runner.temp }}/signed-release/release-predicate.json
+            ${{ runner.temp }}/signed-release/release-attestation.jsonl
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

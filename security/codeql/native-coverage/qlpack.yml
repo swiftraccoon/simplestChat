@@ -1,0 +1,6 @@
+name: simplestchat/native-coverage
+version: 0.0.1
+# Resolve exclusively from the bundle attached to the pinned CodeQL action.
+# The workflow never invokes pack install or a mutable remote query pack.
+dependencies:
+  codeql/cpp-all: '*'
