@@ -8,7 +8,6 @@ Unknown licenses, missing inventories and stale databases fail closed.
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,6 +15,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
 import security_tools
+from security_license_identity import raw_license_identity
 from security_policy import permitted
 
 # isort: split
@@ -308,26 +308,22 @@ def license_verdict(
             package.get("purl")
             or (string_value(package["name"]) + "@" + string_value(package["version"]))
         )
-        # An unparsed declaration must bind its full raw record, including its
-        # evidence locations. It cannot borrow the fingerprint for an empty
-        # expression or disappear beside another recognized license record.
+        # Raw identity preserves every declaration and evidence path. Only a
+        # verified image-layer digest is separated from semantic review identity.
+        raw_identity = raw_license_identity(records) if not complete else None
         fingerprint = (
             "license:" + hashlib.sha256(expression.encode()).hexdigest()
-            if complete
-            else "license-raw:"
-            + hashlib.sha256(
-                json.dumps(
-                    records, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-                ).encode()
-            ).hexdigest()
+            if raw_identity is None
+            else raw_identity.fingerprint
         )
         finding: JsonObject = {
             "scope": scope,
             "expression": expression or "UNKNOWN",
             "fingerprint": fingerprint,
         }
-        if not complete:
+        if raw_identity is not None:
             finding["rawLicenseRecords"] = records
+            finding["rawLicenseRecordsSha256"] = raw_identity.records_sha256
         (waived if permitted(exceptions, "image-license", fingerprint, scope) else blocked).append(
             finding
         )

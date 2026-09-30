@@ -662,12 +662,13 @@
           ]
         }
       ],
-      "fingerprint": "license-raw:2fc048b97508ca11d98acff9164c553f8a6c78955bb90e9845e05be5b011c341",
+      "fingerprint": "license-raw-v2:8c418a4d88494973164ad4dd6197af44876baf83cfc69ecbb60c64e606f762aa",
       "primaryEvidence": {
         "url": "https://rpm.org/docs/latest/manual/tags",
         "tag": "Pubkeys (266) is used in gpg-pubkey special packages",
         "keyFingerprint": "36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6"
-      }
+      },
+      "rawLicenseRecordsSha256": "2fc048b97508ca11d98acff9164c553f8a6c78955bb90e9845e05be5b011c341"
     },
     {
       "name": "libtool-ltdl",
@@ -692,7 +693,7 @@
           ]
         }
       ],
-      "fingerprint": "license-raw:5022a5cf38402fc4b5eb58ee0fd85898d953b2201c5d4f8390ad2672ead4d75c",
+      "fingerprint": "license-raw-v2:a37d632812a30cba50e38e890c319d6a0ba027548fa0dca3b3d3a8e597af604b",
       "licenseFile": {
         "path": "/usr/share/licenses/libtool-ltdl/COPYING.LIB",
         "size": 26419,
@@ -710,7 +711,8 @@
           "allowed"
         ],
         "upstream": "https://www.gnu.org/s/libtool/manual/html_node/Using-libltdl.html"
-      }
+      },
+      "rawLicenseRecordsSha256": "5022a5cf38402fc4b5eb58ee0fd85898d953b2201c5d4f8390ad2672ead4d75c"
     }
   ]
 }

@@ -31,7 +31,7 @@ class RpmLicenseReviewTests(unittest.TestCase):
     """Policy success cannot discard declarations or substitute absent metadata."""
 
     def test_raw_reviews_bind_full_records_and_preserve_observations(self) -> None:
-        """The raw hash domain includes locations and never aliases the empty SPDX hash."""
+        """Review binds declarations and paths; complete layer provenance remains separate."""
         policy = image.load_policy(ROOT / "security/image-policy.json")
         current = reviews.read_exceptions(today=TODAY)
         for selected in observations():
@@ -43,17 +43,24 @@ class RpmLicenseReviewTests(unittest.TestCase):
                 self.assertEqual(selected, original)
                 finding = object_value(array_value(verdict["waived"])[0])
                 raw = array_value(selected["licenses"])
+                normalized = copy.deepcopy(raw)
+                for item in normalized:
+                    for location in array_value(object_value(item)["locations"]):
+                        object_value(location)["layerID"] = "sha256:<image-layer>"
                 expected = (
-                    "license-raw:"
+                    "license-raw-v2:"
                     + hashlib.sha256(
                         json.dumps(
-                            raw, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+                            normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True
                         ).encode()
                     ).hexdigest()
                 )
                 self.assertEqual(finding["fingerprint"], expected)
                 self.assertEqual(finding["fingerprint"], selected["fingerprint"])
                 self.assertEqual(finding["rawLicenseRecords"], raw)
+                self.assertEqual(
+                    finding["rawLicenseRecordsSha256"], selected["rawLicenseRecordsSha256"]
+                )
                 self.assertEqual(finding["expression"], "UNKNOWN")
 
     def test_changed_or_missing_raw_records_cannot_borrow_review(self) -> None:

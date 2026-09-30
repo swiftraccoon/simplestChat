@@ -49,19 +49,34 @@ The probe exposes two declared records whose `spdxExpression` is empty:
   recorded key fingerprint, version and PURL. It is not a general software
   exemption based on the package name.
 
-Both reviews expire on 2026-11-29. Their `license-raw:` fingerprint hashes the
-complete ordered raw license-record array, using compact JSON with sorted object
-keys and ASCII escapes. Values, declaration type, URLs and evidence locations
-all participate, including the observed RPM database layer. The checker retains
-these records in the finding and leaves the expression as `UNKNOWN` when no
-parsed expression exists. It reports approvals under `waived`; it does not
-rename the license, remove the package, or treat all unknowns as permitted.
+Both reviews expire on 2026-11-29. Their `license-raw-v2:` fingerprint hashes the
+ordered raw license-record array, using compact JSON with sorted object keys and
+ASCII escapes. Values, parsed expressions, declaration type, URLs, evidence
+paths, annotations, unknown fields and every array's order participate. Only a
+license location's `layerID` changes to the fixed `sha256:<image-layer>` marker,
+after its original value passes strict SHA-256 syntax validation. Missing or
+malformed layer fields cannot inherit that identity. This prevents a rebuild of
+the same package declaration from requiring a fresh legal review merely because
+the RPM database was written into a different image layer.
+
+The exact package PURL remains the exception scope. The checker retains the
+original records, including every layer ID, in `rawLicenseRecords`, and their
+independent full-record digest in `rawLicenseRecordsSha256`. Image and SBOM
+hashes continue binding that evidence to the scanned artifact. The expression
+remains `UNKNOWN` when no parsed expression exists; approvals appear under
+`waived`. This does not rename a license, remove a package or permit all unknowns.
+The earlier `license-raw:` identity is replaced without a compatibility path.
 
 A missing record, changed declaration, additional unparsed record or different
 evidence location cannot inherit the review. A recognized declaration alongside
 an unparsed declaration remains blocking until the complete set is reviewed.
-The two current records authorize only the actual ARM observation. A different
-image layer or x86_64 observation requires its own evidence and exact review.
+The reviews originate from the retained ARM observation. The `libtool-ltdl`
+PURL remains specific to its aarch64 version and source RPM. The public-key
+record remains specific to its exact key fingerprint and architecture-neutral
+PURL. Equivalent declarations at those exact scopes can reuse review after a
+layer rebuild; a different package architecture, version, source or key cannot.
+The canonical release SBOM must still establish the actual observed package
+identity and complete declarations before any exception applies.
 
 This policy controls review of declared metadata for this application. It does
 not establish fulfillment of license notices, source availability or other

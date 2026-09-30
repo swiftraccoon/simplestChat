@@ -228,6 +228,15 @@ operational policy, not a substitute for preserving required notices or
 satisfying distribution obligations. The exact Fedora static-runtime aggregate
 license and RPM scopes are documented in the [libstdc++ review](../security/fedora-libstdcxx-review.md).
 
+Unparsed license exceptions bind the exact package PURL and every ordered raw
+declaration field, including evidence paths. A verified location layer digest
+is represented by an explicit marker in the review fingerprint, so an otherwise
+equivalent layer rebuild can reuse the review. The original records and their
+separate SHA-256 remain in the image evidence. Missing or malformed layer IDs,
+changed declarations and changed package scopes cannot inherit an exception.
+See the [raw RPM metadata review](../security/fedora-rpm-license-review.md#unparsed-declared-metadata)
+for the current reviewed records and fingerprint contract.
+
 Gitleaks receives a printable-text projection of every retained regular file
 from every image layer, including files deleted later, plus the complete image
 configuration/history. The shared projector retains contiguous ASCII printable
