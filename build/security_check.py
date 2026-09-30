@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import security_findings as findings
+import security_openssl
 from security_context import MAX_REPORT, ROOT, Context, executable, json_object
 from security_policy import read_exceptions
 from security_secret_projection import project
@@ -322,6 +323,7 @@ def fast(context: Context, base: str | None) -> None:
     secret_checks(context, tools, reviews, base, snapshot)
     dependency_checks(context, tools, reviews)
     source_checks(context, tools)
+    security_openssl.check(context, snapshot)
     _ = context.snapshot("final-source")
     original = (context.output / "source-manifest.json").read_bytes()
     require(

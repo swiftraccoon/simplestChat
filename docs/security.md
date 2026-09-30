@@ -74,6 +74,7 @@ for detailed archive, scanner, database, license and ELF contracts.
 | Gitleaks | Redacted current-tree and change-range scans with exact public-fixture exceptions | Pattern detection cannot recognize every secret or encoding. |
 | Semgrep | Local tested rules; complete explicit target and rule inventories | Scope and limits are documented in the rule pack. |
 | Cargo audit | Current RustSec database and all reported advisories | Reviewed exact dependency-health warnings are counted. |
+| OpenSSL freshness | The pinned major/minor series must match the vendor's current stable patch | Complements advisory databases; does not establish coverage of other native libraries. |
 | Cargo deny | Approved licenses, crates.io origins, banned crates and dependency constraints | A separate exact duplicate budget covers the all-feature graph. |
 | Pip audit | All five hashed build, deployment, scanner and native Python requirement sets | Uses current package advisory service responses. |
 | Npm audit | Both web and browser-harness lockfiles | Lockfile audit remains necessary for bundled JavaScript. |
@@ -95,6 +96,19 @@ blocking substitute for the curated rules and their positive/negative fixtures.
 Migration lint uses a generated private configuration with no rule or path
 exclusions. New SQL cannot contain inline Squawk suppression directives, and
 both the process status and the structured findings must report success.
+
+The OpenSSL freshness check fetches the official current-release page over HTTPS
+without redirects or inherited credentials, under a 35-second process deadline,
+1 MiB response ceiling and 16 KiB error ceiling. It requires exactly one stable
+archive for the pinned major/minor series and exact equality with the native
+manifest's version. A newer patch, missing series, ambiguous page, network error
+or changed response layout fails the gate. Prereleases and other series cannot
+cause an automatic upgrade. The private receipt records the observed versions,
+timestamp and source-page/native-manifest hashes. Every fast run, including the
+daily scheduled source gate, refreshes this observation. Vendor releases can
+precede vulnerability-database affected-package mappings; this check closes that
+specific delay for OpenSSL without treating a current version as vulnerability
+clearance or changing any pinned source automatically.
 
 Scanner subprocesses have deadlines, byte ceilings and owned process-group
 cleanup. Their environment drops inherited credentials and scanner overrides.
