@@ -760,7 +760,7 @@ def recover(request: dict[str, object]) -> dict[str, object]:
                     "recovery_identity_changed",
                 )
                 _ = command([*DOCKER, "stop", "--time", "20", identity], timeout=30)
-                _ = command([*DOCKER, "rm", identity], timeout=30)
+                _ = command([*DOCKER, "rm", "--volumes", identity], timeout=30)
                 removed.append(identity)
             cleanup = residuals(directory, before)
             receipt.update(removed=removed, after=cleanup)

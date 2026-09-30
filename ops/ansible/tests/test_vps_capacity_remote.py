@@ -692,7 +692,7 @@ class RemoteTests(unittest.TestCase):
         self.assertEqual(result["removed"], [IDENTITY])
         self.assertEqual(self.command.call_count, 2)
         self.command.assert_any_call([*remote.DOCKER, "stop", "--time", "20", IDENTITY], timeout=30)
-        self.command.assert_any_call([*remote.DOCKER, "rm", IDENTITY], timeout=30)
+        self.command.assert_any_call([*remote.DOCKER, "rm", "--volumes", IDENTITY], timeout=30)
         self.assertEqual(remote.read_json(self.directory / "outcome.json"), failed)
         journal = remote.read_json(self.state / "current.json")
         self.assertTrue(journal["finalized"] is True and journal["passed"] is False)
@@ -796,9 +796,9 @@ class RemoteTests(unittest.TestCase):
             self.command.call_args_list,
             [
                 call([*remote.DOCKER, "stop", "--time", "20", IDENTITY], timeout=30),
-                call([*remote.DOCKER, "rm", IDENTITY], timeout=30),
+                call([*remote.DOCKER, "rm", "--volumes", IDENTITY], timeout=30),
                 call([*remote.DOCKER, "stop", "--time", "20", FOREIGN], timeout=30),
-                call([*remote.DOCKER, "rm", FOREIGN], timeout=30),
+                call([*remote.DOCKER, "rm", "--volumes", FOREIGN], timeout=30),
             ],
         )
 

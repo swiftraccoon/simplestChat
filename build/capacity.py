@@ -23,8 +23,8 @@ participant, so the server gets a quarter of it (two workers for the one-room
 workload); each figure is measured per core and projected to the cores the app
 will have.
 
-Nothing is published: media stays on the containers' loopback, and the only
-host port is the server's HTTP endpoint on 127.0.0.1. Needs Python 3.10 or
+Nothing is published: media and HTTP stay on the isolated containers' loopback.
+Control requests use bounded engine exec calls. Needs Python 3.10 or
 later and Docker or Podman on Linux (Podman's VM on macOS works for trials).
 
   python3 build/capacity.py run --server-image IMAGE --generator-image IMAGE \
@@ -43,13 +43,10 @@ import re
 import secrets
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import tarfile
 import time
-import urllib.error
-import urllib.request
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,7 +57,6 @@ import capacity_artifacts
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
-    from http.client import HTTPResponse
     from types import FrameType
 
     from _typeshed import DataclassInstance
@@ -1420,7 +1416,7 @@ class Engine:
         return state.strip() == "true"
 
     def logs(self, container: str) -> str:
-        """Read a bounded tail without buffering unbounded container output."""
+        """Read a bounded tail; Docker also limits retained log files at creation."""
         try:
             _, output, error = bounded_process.run(
                 [self.executable, "logs", "--tail", "1000", container],
@@ -1432,7 +1428,49 @@ class Engine:
 
     def remove(self, container: str) -> None:
         """Remove a container this tool started, if it exists."""
-        _ = self.run("rm", "--force", container, check=False, timeout=60)
+        _ = self.run("rm", "--force", "--volumes", container, check=False, timeout=60)
+
+    def http(self, container: str, path: str, token: str = "") -> str:
+        """Read bounded HTTP inside the isolated namespace; no host port or network is needed."""
+        if path not in ("/health", "/metrics") or not re.fullmatch(r"[a-f0-9]*", token):
+            message = "invalid capacity control request"
+            raise CapacityError(message)
+        request = (
+            f"GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
+            + (f"Authorization: Bearer {token}\r\n" if token else "")
+            + "\r\n"
+        ).encode()
+        try:
+            status, raw, _ = bounded_process.run(
+                [
+                    self.executable,
+                    "exec",
+                    "--interactive",
+                    container,
+                    "/bin/bash",
+                    "-c",
+                    f"exec 3<>/dev/tcp/127.0.0.1/{SERVER_PORT}; cat >&3; cat <&3",
+                ],
+                input_data=request,
+                limits=bounded_process.Limits(timeout=5, stdout=512 * 1024, stderr=65536),
+            )
+        except bounded_process.ProcessError as error:
+            raise CapacityError(str(error)) from error
+        headers, separator, body = raw.partition(b"\r\n\r\n")
+        fields = {
+            name.lower(): value.strip()
+            for line in headers.split(b"\r\n")[1:]
+            for name, _, value in [line.partition(b":")]
+        }
+        if (
+            status != 0
+            or not separator
+            or headers.split(b"\r\n")[0] != b"HTTP/1.1 200 OK"
+            or fields.get(b"content-length") != str(len(body)).encode()
+        ):
+            message = "capacity control response is incomplete or unsuccessful"
+            raise CapacityError(message)
+        return body.decode()
 
 
 def find_engine(preferred: str | None) -> Engine:
@@ -1445,38 +1483,23 @@ def find_engine(preferred: str | None) -> Engine:
     raise CapacityError(message)
 
 
-def free_port() -> int:
-    """Return a currently free TCP port on 127.0.0.1."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-        probe.bind(("127.0.0.1", 0))
-        return int(cast("tuple[str, int]", probe.getsockname())[1])
-
-
-def scrape(port: int, token: str) -> dict[str, float]:
+def scrape(engine: Engine, server: str, token: str) -> dict[str, float]:
     """Read the server's metrics (empty when unavailable)."""
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{port}/metrics", headers={"Authorization": f"Bearer {token}"}
-    )
     try:
-        # A fixed loopback http URL built above.
-        opened = cast("HTTPResponse", urllib.request.urlopen(request, timeout=5))  # noqa: S310
-        with opened as response:
-            return parse_prometheus(response.read().decode())
-    except (urllib.error.URLError, TimeoutError, ConnectionError):
+        return parse_prometheus(engine.http(server, "/metrics", token))
+    except (CapacityError, TimeoutError, OSError):
         return {}
 
 
-def wait_ready(port: int, deadline: float) -> None:
+def wait_ready(engine: Engine, server: str, deadline: float) -> None:
     """Wait for the server's health endpoint."""
     while time.monotonic() < deadline:
         try:
-            health = f"http://127.0.0.1:{port}/health"
-            opened = cast("HTTPResponse", urllib.request.urlopen(health, timeout=2))
-            with opened as response:
-                if response.status == HTTP_OK:
-                    return
-        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            _ = engine.http(server, "/health")
+        except (CapacityError, TimeoutError, OSError):
             pass
+        else:
+            return
         time.sleep(0.5)
     message = "the server did not become healthy"
     raise CapacityError(message)
@@ -1590,10 +1613,33 @@ def parse_server_env(values: Sequence[str]) -> tuple[tuple[str, str], ...]:
     return tuple(pairs)
 
 
-def server_command(context: Context, name: str, port: int, token: str) -> list[str]:
+def sandbox(engine: Engine) -> list[str]:
+    """Apply the common runtime sandbox to every capacity-owned container."""
+    log_options = ["--log-driver", "local", "--log-opt", "max-size=10m", "--log-opt", "max-file=3"]
+    if Path(engine.executable).name == "podman":
+        log_options = ["--log-driver", "k8s-file", "--log-opt", "max-size=10mb"]
+    return [
+        "--pull",
+        "never",
+        "--read-only",
+        "--user",
+        "10001:10001",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--ulimit",
+        "core=0:0",
+        "--tmpfs",
+        "/tmp:rw,nosuid,nodev,noexec,size=64m",  # noqa: S108 -- isolated container tmpfs.
+        *log_options,
+    ]
+
+
+def server_command(context: Context, name: str, token: str) -> list[str]:
     """`run` arguments for the owned server container."""
     environment = {
-        "BIND_ADDR": "0.0.0.0",  # noqa: S104 -- inside the container; published to 127.0.0.1 only.
+        "BIND_ADDR": "127.0.0.1",
         "PORT": str(SERVER_PORT),
         "ANNOUNCE_IP": "127.0.0.1",
         "MEDIA_WORKERS": str(context.shape.workers),
@@ -1606,13 +1652,11 @@ def server_command(context: Context, name: str, port: int, token: str) -> list[s
     environment.update(context.server_env)
     return [
         "run", "--detach", "--name", name,
+        *sandbox(context.engine), "--network", "none",
         "--label", f"simplestchat.capacity.run={context.run_id}",
         "--cpus", f"{context.shape.server_cpus:g}",
         "--memory", context.server_memory, "--memory-swap", context.server_memory,
-        "--pids-limit", "4096", "--read-only",
-        "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=64m",  # noqa: S108 -- container tmpfs.
-        "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-        "--publish", f"127.0.0.1:{port}:{SERVER_PORT}/tcp",
+        "--pids-limit", "4096",
         *(item for key, value in environment.items() for item in ("--env", f"{key}={value}")),
         context.server_image,
     ]  # fmt: skip
@@ -1625,7 +1669,6 @@ class Watch:
     engine: Engine
     server: str
     generator: str
-    port: int
     token: str
     window: tuple[float, float]
     result: StepResult
@@ -1692,7 +1735,7 @@ class Watch:
         if self.start_mark is None or self.end_mark is not None or now < self.next_scrape:
             return
         self.next_scrape = now + SCRAPE_SECONDS
-        self.record_scrape(scrape(self.port, self.token))
+        self.record_scrape(scrape(self.engine, self.server, self.token))
 
     def record_scrape(self, metrics: Mapping[str, float]) -> None:
         """Count a scrape that read every worker; note the server's own saturation."""
@@ -1734,7 +1777,7 @@ def monitor(
     context: Context,
     plan: StepPlan,
     names: tuple[str, str],
-    endpoint: tuple[int, str],
+    token: str,
     result: StepResult,
 ) -> Marks:
     """Watch a running step: memory, worker loads in the window, and the window's CPU marks."""
@@ -1742,8 +1785,7 @@ def monitor(
         engine=context.engine,
         server=names[0],
         generator=names[1],
-        port=endpoint[0],
-        token=endpoint[1],
+        token=token,
         window=step_window(time.monotonic(), plan),
         result=result,
         workers=context.shape.workers,
@@ -1793,7 +1835,7 @@ def run_step(context: Context, plan: StepPlan, index: int) -> StepResult:
     """Run one workload size and collect what the server and the kernel saw."""
     name = f"{context.run_id}-{index}"
     server, generator = f"capacity-server-{name}", f"capacity-gen-{name}"
-    port, token = free_port(), secrets.token_hex(24)
+    token = secrets.token_hex(24)
     engine = context.engine
     directory = context.output / f"{index:02d}-{plan.workload}-{plan.size}"
     directory.mkdir(parents=True, exist_ok=False)
@@ -1813,9 +1855,9 @@ def run_step(context: Context, plan: StepPlan, index: int) -> StepResult:
     marks: Marks = (None, None, None)
     try:
         remember_container(context.output, context.run_id, server, context.server_image)
-        server_id = engine.run(*server_command(context, server, port, token)).strip()
+        server_id = engine.run(*server_command(context, server, token)).strip()
         remember_container(context.output, context.run_id, server, context.server_image, server_id)
-        wait_ready(port, time.monotonic() + 90)
+        wait_ready(engine, server, time.monotonic() + 90)
         before = parse_udp(
             engine.read(server, "/proc/net/snmp"), engine.read(server, "/proc/net/udp"), ports
         )
@@ -1825,15 +1867,17 @@ def run_step(context: Context, plan: StepPlan, index: int) -> StepResult:
         remember_container(context.output, context.run_id, generator, context.generator_image)
         generator_id = engine.run(
             "run", "--detach", "--name", generator, "--network", f"container:{server}",
+            *sandbox(engine), "--volume", "/results",
             "--label", f"simplestchat.capacity.run={context.run_id}",
             "--cpus", f"{context.shape.generator_cpus:g}", "--memory", context.generator_memory,
+            "--memory-swap", context.generator_memory,
             "--pids-limit", "8192", "--env", "RUST_LOG=warn", context.generator_image,
             *plan.generator_args(context.browser, label, context.revisions),
         )  # fmt: skip
         remember_container(
             context.output, context.run_id, generator, context.generator_image, generator_id.strip()
         )
-        marks = monitor(context, plan, (server, generator), (port, token), result)
+        marks = monitor(context, plan, (server, generator), token, result)
         if engine.running(server):
             after = parse_udp(
                 engine.read(server, "/proc/net/snmp"), engine.read(server, "/proc/net/udp"), ports
@@ -1841,7 +1885,7 @@ def run_step(context: Context, plan: StepPlan, index: int) -> StepResult:
             result.namespace_datagrams = after.in_datagrams - before.in_datagrams
             result.socket_drops = after.socket_drops - before.socket_drops
             result.rcvbuf_errors = after.rcvbuf_errors - before.rcvbuf_errors
-            final = scrape(port, token)
+            final = scrape(engine, server, token)
             result.refused_joins = int(final.get("simplestchat_joins_refused_saturated_total", 0))
             _ = (directory / "metrics.txt").write_text(
                 "\n".join(f"{key} {value:g}" for key, value in sorted(final.items())),
@@ -2017,6 +2061,15 @@ def host_facts(
     output = engine.run(
         "run",
         "--rm",
+        *sandbox(engine),
+        "--cpus",
+        "0.25",
+        "--memory",
+        "128m",
+        "--memory-swap",
+        "128m",
+        "--pids-limit",
+        "64",
         *identity,
         "--network",
         "none",

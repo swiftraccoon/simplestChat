@@ -426,7 +426,7 @@ class FakeEngine(capacity.Engine):
 
 def watch(engine: capacity.Engine) -> capacity.Watch:
     """Return a watch over two workers' ten-second window starting at zero."""
-    return capacity.Watch(engine, "sfu", "gen", 0, "token", (0.0, 10.0), step(), workers=2)
+    return capacity.Watch(engine, "sfu", "gen", "token", (0.0, 10.0), step(), workers=2)
 
 
 class HostWarningTests(unittest.TestCase):
@@ -1099,14 +1099,14 @@ class ServerCommandTests(unittest.TestCase):
             output=Path(),
             log=print,
         )
-        command = capacity.server_command(context, "sfu", 4000, "token")
+        command = capacity.server_command(context, "sfu", "token")
         self.assertIn("CPU_SATURATION_WORKER_UTILIZATION=0.85", command)
         self.assertIn("MEDIA_WORKERS=2", command)
         # Experiment settings reach the server; the wiring stays the tool's.
         extra = replace(context, server_env=(("MEDIA_KEYFRAME_REQUEST_DELAY_MS", "1000"),))
         self.assertIn(
             "MEDIA_KEYFRAME_REQUEST_DELAY_MS=1000",
-            capacity.server_command(extra, "sfu", 4000, "token"),
+            capacity.server_command(extra, "sfu", "token"),
         )
 
     def test_server_settings_are_parsed_and_the_wiring_is_protected(self) -> None:

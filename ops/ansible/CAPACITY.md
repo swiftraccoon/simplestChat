@@ -99,8 +99,17 @@ explicit. No failed measurement is automatically restarted, and no earlier
 evidence directory is overwritten. A new code revision needs its own prepared
 checkout and verified images.
 
-The measured server publishes HTTP only on the host's loopback interface; the
-generator shares that server's network namespace. These guest-room tests use
+The measured server uses `--network none`; the generator shares its isolated
+network namespace. There are no host port mappings, bridge, default route or
+external network access. Bounded control requests run inside the server over
+loopback using the image's Bash TCP support. Both containers use UID/GID
+`10001:10001`, a read-only root, dropped capabilities, `no-new-privileges`, disabled
+core dumps, CPU/PID/memory limits and an equal memory/swap ceiling. Docker logs
+rotate at three 10 MiB files; Podman uses a size-bounded `k8s-file` log. The
+generator writes to an anonymous `/results` volume, removed with its owning
+container during normal cleanup and explicit recovery. This writable volume is
+not a disk quota; keep the documented free-space reserve on the dedicated host.
+These guest-room tests use
 neither PostgreSQL nor a public TLS/TURN path. They measure synthetic forwarding
 and signaling on the host, rather than browser speech decoding or Internet
 delivery. In particular, `--port-mbps 2000` does not verify a provider's 2 Gbit/s
@@ -206,3 +215,23 @@ available. Both commands create new local evidence directories. Do not combine
 them with `--prepare` or `--build-images`, and do not delete journals or locks to
 bypass a refusal. Host failure and reboot can erase `/run` state; retain the
 durable evidence and inspect ownership before performing another experiment.
+
+## Verify container integration locally
+
+The ordinary helper suite tests invalid archive metadata, output overflow,
+inventory mutation and lease loss with isolated fixtures. An additional opt-in
+check starts a real server and a tiny result-writing container using reviewed,
+already available immutable images. It verifies isolated HTTP, read-only roots,
+archive collection and anonymous-volume cleanup; it starts no media load and
+does not claim capacity or image provenance:
+
+```sh
+CAPACITY_CONTAINER_TEST=1 CAPACITY_ENGINE=docker \
+CAPACITY_SERVER_IMAGE=sha256:REPLACE_WITH_SERVER_IMAGE_ID \
+CAPACITY_GENERATOR_IMAGE=sha256:REPLACE_WITH_GENERATOR_IMAGE_ID \
+ops/ansible/.venv/bin/python -m unittest discover \
+  -s ops/ansible/tests -p 'test_capacity_container.py'
+```
+
+Use `CAPACITY_ENGINE=podman` for an existing local Podman VM. The check never
+pulls images or changes unrelated containers, networks or volumes.

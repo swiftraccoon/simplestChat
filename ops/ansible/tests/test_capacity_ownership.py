@@ -119,7 +119,6 @@ class OwnershipTests(unittest.TestCase):
             return SERVER_ID
 
         with (
-            patch.object(capacity, "free_port", return_value=31234),
             patch.object(capacity, "wait_ready"),
             patch.object(capacity.Engine, "run", side_effect=run),
             patch.object(capacity.Engine, "read", return_value="1024"),
