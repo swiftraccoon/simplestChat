@@ -41,11 +41,16 @@ For a focused local iteration, install the same tool and invoke the maintained
 helper directly with a **new** private output directory:
 
 ```sh
-python3 build/security_tools.py install --tools cargo-mutants
+python3 build/security_tools.py install --tools cargo-mutants \
+  --directory "$PWD/target/mutation-tools-local"
 python3 build/security_mutation.py \
+  --tools-directory "$PWD/target/mutation-tools-local" \
   --openssl-prefix "$PWD/target/openssl-3.5.8" \
   --output results/mutation-policy-local
 ```
+
+Use a separate tool directory from the fast or image scanners: each installed
+receipt binds one exact tool set and cannot be extended in place.
 
 The shared tool lock pins [cargo-mutants 27.1.0](https://github.com/sourcefrog/cargo-mutants/releases/tag/v27.1.0)
 and its official Linux x86-64 and macOS x86-64 release archives. Upstream does not
