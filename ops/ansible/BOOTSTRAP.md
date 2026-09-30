@@ -150,7 +150,18 @@ ops/ansible/.venv/bin/python build/bootstrap.py \
 
 Existing inventories must select one matching host and use the expected SSH
 identity/trust settings. They are validated and preserved byte-for-byte,
-including provider sizing fields. The old stored source pin is allowed: the
+including the `scpub_port_mbps` and `scpub_transfer_allowance_tb` planning inputs.
+The only supported structure is `benchmark_hosts.hosts.<name>` with scalar host
+fields. Accepted SSH fields are `ansible_host`, `ansible_user`, `ansible_port`,
+`ansible_connection` (`ssh`), `ansible_ssh_private_key_file` and the exact generated
+`ansible_ssh_common_args`. Additional fields are `scbench_ssh_known_hosts_file`,
+`scbench_revision`, the canonical `scbench_root`, disabled maintenance flags,
+and `scpub_enabled: false`. Executable sources, aliases, tags, duplicate keys,
+templates, extra groups and other variables fail before an inventory subprocess
+can run. The mode must be `0600`, owned by the caller, with a protected parent.
+Ansible receives a private validated JSON snapshot retained with the evidence,
+so it never reevaluates a changing operator inventory. The stored source pin may
+differ from the requested revision: the
 explicit CLI revision takes precedence for this invocation and is recorded in
 the evidence. Unexpected transport overrides, other groups or enabled stored
 maintenance flags are rejected rather than rewritten.

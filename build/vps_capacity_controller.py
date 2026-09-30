@@ -75,6 +75,7 @@ class Options(argparse.Namespace):
     generator_cpus: float | None = None
     app_cpus: float | None = None
     port_mbps: float = 1000
+    validated_inventory: dict[str, object] | None = None
 
 
 def workload_request(args: Options, run: str) -> dict[str, object]:
@@ -135,33 +136,14 @@ def options(argv: list[str] | None = None) -> Options:
         "recovery_cannot_start_work",
     )
     _ = workload_request(args, args.collect or args.recover or "0" * 32)
-    args.inventory = str(Path(args.inventory).expanduser().resolve(strict=True))
+    args.inventory = str(BOOTSTRAP.local_path(args.inventory))
     REMOTE.require(Path(args.inventory).is_file(), "invalid_inventory")
     return args
 
 
 def inventory_target(args: Options, root: Path) -> BOOTSTRAP.BootstrapTarget:
-    """Resolve one benchmark host privately; no inventory secrets enter evidence."""
-    tool = root / "ops/ansible/.venv/bin/ansible-inventory"
-    _, encoded = BUILD.Runner().run(
-        [str(tool), "-i", args.inventory, "--list"],
-        cwd=root,
-        env=BOOTSTRAP.ansible_environment(root),
-    )
-    inventory = REMOTE.obj(cast("object", json.loads(encoded)))
-
-    def hosts(group: str, seen: set[str]) -> set[str]:
-        REMOTE.require(group not in seen, "inventory_cycle")
-        value = REMOTE.obj(inventory.get(group))
-        found = {REMOTE.text(item) for item in REMOTE.array(value.get("hosts", []))}
-        for child in REMOTE.array(value.get("children", [])):
-            found.update(hosts(REMOTE.text(child), seen | {group}))
-        return found
-
-    REMOTE.require(args.limit in hosts("benchmark_hosts", set()), "inventory_target_not_found")
-    variables = REMOTE.obj(
-        REMOTE.obj(REMOTE.obj(inventory.get("_meta")).get("hostvars")).get(args.limit)
-    )
+    """Validate one protected static host; never invoke executable Ansible inventory."""
+    variables = BOOTSTRAP.inventory_host(Path(args.inventory), args.limit)
     allowed_transport = {
         "ansible_host",
         "ansible_user",
@@ -204,6 +186,7 @@ def inventory_target(args: Options, root: Path) -> BOOTSTRAP.BootstrapTarget:
         in ("", BOOTSTRAP.inventory_ssh_common_args(target)),
         "unsupported_inventory_ssh_args",
     )
+    args.validated_inventory = {"benchmark_hosts": {"hosts": {args.limit: variables}}}
     return target
 
 
@@ -427,8 +410,11 @@ def execute(args: Options, root: Path = ROOT) -> dict[str, object]:  # noqa: PLR
         if not args.collect and not args.recover:
             _ = transport.call(dict(request, action="preflight"))
             if args.prepare:
+                REMOTE.require(args.validated_inventory is not None, "inventory_not_validated")
+                inventory_snapshot = output / "inventory.snapshot.json"
+                REMOTE.save(inventory_snapshot, REMOTE.obj(args.validated_inventory))
                 with transport.reserve(request):
-                    argv = BOOTSTRAP.site_command(root, Path(args.inventory), args.limit, revision)
+                    argv = BOOTSTRAP.site_command(root, inventory_snapshot, args.limit, revision)
                     argv.extend(["--tags", "source,benchmark"])
                     argv.extend(
                         [

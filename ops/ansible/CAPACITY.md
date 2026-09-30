@@ -13,8 +13,15 @@ checkout's `HEAD`. The remote checkout must also be clean at that revision.
 For later collection or recovery, use a clean checkout of the run's original
 revision so the controller, host protocol and retained evidence agree.
 
-The inventory must identify a benchmark host with a private SSH key and trusted
-host keys. `--limit` selects one exact inventory alias. The controller uses
+The inventory must be a caller-owned, mode `0600` static YAML or JSON file
+with exactly one `benchmark_hosts.hosts` entry, a private SSH key and trusted
+host keys. `--limit` selects that exact inventory alias. Executable inventories,
+plugins, YAML aliases/tags/duplicate keys, templates, group variables and
+unsupported host fields are refused without invoking Ansible. The
+[bootstrap inventory contract](BOOTSTRAP.md#rerun-and-advance-the-source-revision)
+lists the accepted fields. Preparation uses one private validated JSON snapshot,
+so later changes to the operator's inventory cannot redirect the operation.
+The controller uses
 direct SSH with strict host-key checking and noninteractive sudo; password-based
 first access belongs to bootstrap. Private keys, inventory and generated
 evidence remain outside tracked source. The controller refuses a public host,

@@ -32,9 +32,11 @@ import release_build as BUILD  # noqa: N812 -- Shared bounded subprocess boundar
 import yaml
 from bootstrap_access import ENROLLED, BootstrapError, password_session, require
 from release_json import JsonObject, decode_json, object_value
+from yaml.nodes import MappingNode, Node, ScalarNode
+from yaml.tokens import AliasToken, AnchorToken, TagToken
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Iterable, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_PRIVATE_BYTES = 65536
@@ -47,6 +49,8 @@ DEFAULT_SSH_PORT = 22
 MAX_PORT = 65535
 MAX_MINIMUM_DISK_GIB = 1000
 HOST_KEY_FIELDS = 3
+MAX_INVENTORY_DEPTH = 4
+MAX_INVENTORY_SIZING = 1_000_000
 
 
 @dataclass(frozen=True)
@@ -577,7 +581,103 @@ def string_object(value: object) -> dict[str, object]:
     return result
 
 
-def prepare_inventory(path: Path, target: BootstrapTarget, args: BootstrapOptions) -> None:
+def inventory_host(path: Path, name: str) -> dict[str, object]:
+    """Parse the static inventory with fixed errors that cannot print its contents."""
+    try:
+        return parse_inventory_host(path, name)
+    except yaml.YAMLError:
+        raise BootstrapError("invalid_inventory_yaml") from None
+
+
+def parse_inventory_host(path: Path, name: str) -> dict[str, object]:
+    """Read one protected static host without executing inventory scripts or plugins.
+
+    Only a small scalar schema is supported. YAML aliases, duplicate keys, tags,
+    templates and transport hooks are refused before Ansible sees a snapshot.
+    """
+    private_parent(path)
+    contents = protected_file(path)
+    scan = cast("Callable[[bytes], Iterable[object]]", yaml.scan)
+    compose = cast("Callable[[bytes], Node | None]", yaml.compose)
+    require(
+        not any(isinstance(token, (AliasToken, AnchorToken, TagToken)) for token in scan(contents)),
+        "unsupported_inventory_yaml",
+    )
+
+    def unique(node: Node | None, depth: int = 0) -> None:
+        require(depth <= MAX_INVENTORY_DEPTH, "inventory_too_deep")
+        if isinstance(node, ScalarNode):
+            scalar = cast("object", node.value)
+            require(isinstance(scalar, str), "invalid_inventory_scalar")
+            require(
+                isinstance(scalar, str)
+                and all(marker not in scalar for marker in ("{{", "{%", "{#")),
+                "inventory_template_refused",
+            )
+            return
+        require(isinstance(node, MappingNode), "unsupported_inventory_value")
+        if not isinstance(node, MappingNode):
+            raise BootstrapError("unsupported_inventory_value")
+        keys: set[str] = set()
+        for key, value in cast("list[tuple[Node, Node]]", node.value):
+            require(
+                isinstance(key, ScalarNode) and key.tag == "tag:yaml.org,2002:str",
+                "invalid_inventory_key",
+            )
+            key_value = cast("object", key.value)
+            require(isinstance(key_value, str), "invalid_inventory_key")
+            if not isinstance(key_value, str):
+                raise BootstrapError("invalid_inventory_key")
+            require(key_value not in keys, "duplicate_inventory_key")
+            keys.add(key_value)
+            unique(value, depth + 1)
+
+    unique(compose(contents))
+    inventory = string_object(cast("object", yaml.safe_load(contents)))
+    require(set(inventory) == {"benchmark_hosts"}, "unsupported_inventory_groups")
+    group = string_object(inventory.get("benchmark_hosts"))
+    require(set(group) == {"hosts"}, "unsupported_inventory_group_variables")
+    hosts = string_object(group.get("hosts"))
+    require(set(hosts) == {name}, "inventory_must_select_one_host")
+    host = string_object(hosts[name])
+    allowed = {
+        "ansible_host",
+        "ansible_user",
+        "ansible_port",
+        "ansible_connection",
+        "ansible_ssh_private_key_file",
+        "ansible_ssh_common_args",
+        "scbench_ssh_known_hosts_file",
+        "scbench_revision",
+        "scbench_root",
+        "scbench_upgrade_packages",
+        "scbench_reboot",
+        "scpub_enabled",
+        "scpub_port_mbps",
+        "scpub_transfer_allowance_tb",
+    }
+    require(set(host) <= allowed, "unsupported_inventory_transport_override")
+    require(host.get("scpub_enabled", False) is False, "public_inventory_refused")
+    require(
+        host.get("scbench_upgrade_packages", False) is False
+        and host.get("scbench_reboot", False) is False,
+        "inventory_maintenance_flags_must_be_false",
+    )
+    for key in ("scpub_port_mbps", "scpub_transfer_allowance_tb"):
+        if key in host:
+            value = host[key]
+            require(
+                type(value) in (int, float)
+                and isinstance(value, (int, float))
+                and 0 <= value <= MAX_INVENTORY_SIZING,
+                "invalid_inventory_sizing",
+            )
+    return host
+
+
+def prepare_inventory(
+    path: Path, target: BootstrapTarget, args: BootstrapOptions
+) -> dict[str, object]:
     """Create an ignored inventory, or preserve an existing matching one verbatim."""
     require(
         path.parent == ROOT / "ops/ansible" and path.name.startswith("inventory.local."),
@@ -587,15 +687,7 @@ def prepare_inventory(path: Path, target: BootstrapTarget, args: BootstrapOption
     require(status == 0, "inventory_not_ignored")
     if not path.exists():
         write_record(path, inventory_value(target, args))
-        return
-    data = cast("object", yaml.safe_load(protected_file(path)))
-    inventory = string_object(data)
-    require(set(inventory) == {"benchmark_hosts"}, "unsupported_inventory_groups")
-    group = string_object(inventory.get("benchmark_hosts"))
-    require(set(group) == {"hosts"}, "unsupported_inventory_group_variables")
-    hosts = string_object(group.get("hosts"))
-    require(set(hosts) == {args.name}, "inventory_must_select_one_host")
-    host = string_object(hosts[args.name])
+    host = inventory_host(path, args.name)
     require(
         host.get("ansible_host") == target.host and host.get("ansible_user") == target.user,
         "inventory_identity_mismatch",
@@ -649,6 +741,7 @@ def prepare_inventory(path: Path, target: BootstrapTarget, args: BootstrapOption
         ),
         "unsupported_inventory_authentication",
     )
+    return host
 
 
 def provision(
@@ -659,8 +752,14 @@ def provision(
     output: Path,
 ) -> None:
     """Apply one-run revision/maintenance overrides, retaining no sudo credentials."""
+    host = prepare_inventory(inventory, target, args)
+    snapshot = output / "inventory.snapshot.json"
+    write_record(
+        snapshot,
+        object_value(decode_json(json.dumps({"benchmark_hosts": {"hosts": {args.name: host}}}))),
+    )
     command = site_command(
-        ROOT, inventory, args.name, args.revision, maintenance=args.initial_maintenance
+        ROOT, snapshot, args.name, args.revision, maintenance=args.initial_maintenance
     )
     command += [
         "--extra-vars",
@@ -772,14 +871,14 @@ def bootstrap(args: BootstrapOptions) -> Path:
     try:
         if inventory.exists():
             # Validate local selectors before any remote authentication changes.
-            prepare_inventory(inventory, target, args)
+            _ = prepare_inventory(inventory, target, args)
         trust = host_trust(target, args.host_fingerprint)
         public = ensure_identity(target, args.name)
         access = enroll(target, public, args)
         write_record(output / "access.json", {"mode": access, "hostTrust": trust})
         facts = preflight(target, args.minimum_free_gib)
         write_record(output / "host-before.json", facts)
-        prepare_inventory(inventory, target, args)
+        _ = prepare_inventory(inventory, target, args)
         if args.provision:
             provision(target, args, inventory, facts, output)
             write_record(output / "host-after.json", preflight(target, args.minimum_free_gib))

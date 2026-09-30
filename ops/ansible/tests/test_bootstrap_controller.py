@@ -347,7 +347,7 @@ class BootstrapTests(unittest.TestCase):
         """Source advancement is an extra var, never an inventory rewrite."""
         path = Path(self.args.inventory)
         with patch.object(BOOT, "run_command", return_value=(0, "")):
-            BOOT.prepare_inventory(path, self.target, self.args)
+            _ = BOOT.prepare_inventory(path, self.target, self.args)
             data = object_value(decode_json(path.read_text()))
             host = object_value(
                 object_value(object_value(data["benchmark_hosts"])["hosts"])[self.args.name]
@@ -357,7 +357,7 @@ class BootstrapTests(unittest.TestCase):
             host["scpub_transfer_allowance_tb"] = 0
             _ = path.write_text(json.dumps(data))
             previous = path.read_bytes()
-            BOOT.prepare_inventory(path, self.target, self.args)
+            _ = BOOT.prepare_inventory(path, self.target, self.args)
             self.assertEqual(path.read_bytes(), previous)
         command = BOOT.site_command(self.root, path, self.args.name, REVISION, maintenance=True)
         overrides = object_value(decode_json(command[-1]))
@@ -421,7 +421,7 @@ class BootstrapTests(unittest.TestCase):
                 patch.object(BOOT, "run_command", return_value=(0, "")),
                 self.assertRaises(ACCESS.BootstrapError),
             ):
-                BOOT.prepare_inventory(path, self.target, self.args)
+                _ = BOOT.prepare_inventory(path, self.target, self.args)
 
     def test_inventory_groups_and_group_variables_are_rejected(self) -> None:
         """Inherited group data cannot bypass the one-host transport boundary."""
@@ -438,7 +438,7 @@ class BootstrapTests(unittest.TestCase):
                 patch.object(BOOT, "run_command", return_value=(0, "")),
                 self.assertRaises(ACCESS.BootstrapError),
             ):
-                BOOT.prepare_inventory(path, self.target, self.args)
+                _ = BOOT.prepare_inventory(path, self.target, self.args)
 
     def test_preflight_ignores_banner_and_requires_one_metadata_record(self) -> None:
         """Public SSH banners may precede bounded allowlisted metadata."""
@@ -505,7 +505,10 @@ class BootstrapTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(secret_path.stat().st_mode), 0o600)
             return 0, ""
 
-        with patch.object(BUILD.Runner, "run", autospec=True, side_effect=capture):
+        with (
+            patch.object(BOOT, "run_command", return_value=(0, "")),
+            patch.object(BUILD.Runner, "run", autospec=True, side_effect=capture),
+        ):
             BOOT.provision(
                 self.target,
                 self.args,

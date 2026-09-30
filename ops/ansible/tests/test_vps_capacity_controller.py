@@ -90,7 +90,7 @@ class ControllerTests(unittest.TestCase):
             "test.example.invalid", "debian", 22, identity, known
         )
         inventory = self.root / "inventory.yml"
-        _ = inventory.write_text("fixture inventory")
+        bootstrap.write_new(inventory, json.dumps(self.inventory()).encode())
         self.args = controller.Options(
             inventory=str(inventory),
             limit="test_vps",
@@ -125,7 +125,7 @@ class ControllerTests(unittest.TestCase):
         ]
 
     def inventory(self, **overrides: object) -> dict[str, object]:
-        """Model Ansible's resolved one-host graph without running Ansible."""
+        """Model the sole accepted static one-host inventory without running Ansible."""
         variables: dict[str, object] = {
             "ansible_host": self.target.host,
             "ansible_user": self.target.user,
@@ -136,10 +136,7 @@ class ControllerTests(unittest.TestCase):
             "scpub_port_mbps": 2000,
             **overrides,
         }
-        return {
-            "benchmark_hosts": {"hosts": ["test_vps"]},
-            "_meta": {"hostvars": {"test_vps": variables}},
-        }
+        return {"benchmark_hosts": {"hosts": {"test_vps": variables}}}
 
     def action(
         self,
@@ -210,9 +207,6 @@ class ControllerTests(unittest.TestCase):
 
         with ExitStack() as stack:
             _ = stack.enter_context(patch.object(build, "clean_revision", return_value=REVISION))
-            _ = stack.enter_context(
-                patch.object(controller, "inventory_target", return_value=self.target)
-            )
             _ = stack.enter_context(patch.object(build, "validate_output", side_effect=output_path))
             _ = stack.enter_context(
                 patch.object(controller.Transport, "call", autospec=True, side_effect=self.action)
@@ -321,8 +315,9 @@ class ControllerTests(unittest.TestCase):
 
     def test_inventory_resolution_refuses_public_hosts_and_transport_overrides(self) -> None:
         """Only the explicit private SSH host may be used, even with an old source pin."""
-        with patch.object(build.Runner, "run", return_value=(0, json.dumps(self.inventory()))):
+        with patch.object(build.Runner, "run") as execute:
             self.assertEqual(controller.inventory_target(self.args, self.root), self.target)
+            execute.assert_not_called()
         for overrides in (
             {"scpub_enabled": True},
             {"ansible_ssh_extra_args": "untrusted"},
@@ -331,35 +326,66 @@ class ControllerTests(unittest.TestCase):
         ):
             with (
                 self.subTest(overrides=overrides),
-                patch.object(
-                    build.Runner, "run", return_value=(0, json.dumps(self.inventory(**overrides)))
-                ),
-                self.assertRaises(remote.CapacityControlError),
+                self.assertRaises((remote.CapacityControlError, BootstrapError)),
             ):
+                _ = Path(self.args.inventory).write_text(json.dumps(self.inventory(**overrides)))
                 _ = controller.inventory_target(self.args, self.root)
 
     def test_inventory_refuses_private_key_symlink_and_shared_permissions(self) -> None:
         """Transport consumes the same protected identity contract as bootstrap."""
         link = self.target.identity.with_name("key-link")
         link.symlink_to(self.target.identity)
-        with (
-            patch.object(
-                build.Runner,
-                "run",
-                return_value=(
-                    0,
-                    json.dumps(self.inventory(ansible_ssh_private_key_file=str(link))),
-                ),
-            ),
-            self.assertRaises(BootstrapError),
-        ):
+        _ = Path(self.args.inventory).write_text(
+            json.dumps(self.inventory(ansible_ssh_private_key_file=str(link)))
+        )
+        with self.assertRaises(BootstrapError):
             _ = controller.inventory_target(self.args, self.root)
+        _ = Path(self.args.inventory).write_text(json.dumps(self.inventory()))
         self.target.identity.chmod(0o640)
-        with (
-            patch.object(build.Runner, "run", return_value=(0, json.dumps(self.inventory()))),
-            self.assertRaises(BootstrapError),
-        ):
+        with self.assertRaises(BootstrapError):
             _ = controller.inventory_target(self.args, self.root)
+
+    def test_static_inventory_rejects_executable_aliases_duplicates_and_templates(self) -> None:
+        """No inventory program or templated value reaches a subprocess boundary."""
+        path = Path(self.args.inventory)
+        cases = (
+            (b"#!/bin/sh\nexit 0\n", 0o700),
+            (b"benchmark_hosts: &anchor {}\nother: *anchor\n", 0o600),
+            (b"benchmark_hosts: {}\nbenchmark_hosts: {}\n", 0o600),
+            (json.dumps(self.inventory(ansible_host="{{ fixture }}")).encode(), 0o600),
+            (b"benchmark_hosts: [", 0o600),
+        )
+        for data, mode in cases:
+            with self.subTest(data=data):
+                _ = path.write_bytes(data)
+                path.chmod(mode)
+                with (
+                    patch.object(build.Runner, "run") as execute,
+                    self.assertRaises(BootstrapError),
+                ):
+                    _ = controller.inventory_target(self.args, self.root)
+                execute.assert_not_called()
+
+    def test_preparation_uses_validated_snapshot_when_operator_inventory_changes(self) -> None:
+        """Every later Ansible operation uses the same bytes as endpoint validation."""
+        self.args.prepare = True
+        expected = self.inventory()
+        original_action = self.action
+
+        def change_inventory(
+            transport: controller.Transport, request: dict[str, object], *, timeout: int = 60
+        ) -> dict[str, object]:
+            _ = Path(self.args.inventory).write_text("changed after validation")
+            return original_action(transport, request, timeout=timeout)
+
+        with (
+            self.fake_host(),
+            patch.object(controller.Transport, "call", new=change_inventory),
+        ):
+            result = controller.execute(self.args, self.root)
+        self.assertTrue(result["passed"])
+        snapshot = Path(self.commands[0][self.commands[0].index("-i") + 1])
+        self.assertEqual(json.loads(snapshot.read_bytes()), expected)
 
     def test_transport_keeps_request_and_helper_out_of_ssh_arguments(self) -> None:
         """User-selected data travels in bounded JSON stdin, not remote shell text."""
@@ -385,6 +411,9 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(len(self.commands), 1)
         command = self.commands[0]
         self.assertIn("source,benchmark", command)
+        snapshot = Path(command[command.index("-i") + 1])
+        self.assertNotEqual(snapshot, Path(self.args.inventory))
+        self.assertEqual(json.loads(snapshot.read_bytes()), self.inventory())
         overrides: dict[str, object] = {}
         for index, value in enumerate(command):
             if value == "--extra-vars":
