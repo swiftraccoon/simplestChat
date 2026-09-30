@@ -89,6 +89,16 @@ an existing server or database.
 Native tests separately cover drain races, stalled cleanup and readiness probe
 failures. See [shutdown guarantees and limits](configuration.md#shutdown).
 
+The Rust filter `boundary_properties` runs finite property checks without services:
+2,048 seeded Unicode labels, 1,024 decorated ASCII identities, every signaling
+operation's canonical round trip, 512 escaped-text examples, integer/envelope
+boundaries, all 27 nullable-settings combinations, bounded limiter counters and
+448 combinations of ticket lifetime and independent clocks. Inputs and case
+budgets are fixed in the tests; ticket secrets still come from the real secure
+issuer and are never printed. These tests check wire types separately from
+handler authorization and message-size admission. They do not run a continuous
+fuzzer, publish media, or replace the database and real-browser tests.
+
 Mocked client checks cover restart versus permanent deletion, retained room/lobby
 intent, public-draft isolation, bounded jittered retries, explicit retry and leave,
 and stale or interrupted rejoins. With the UI built and

@@ -19,6 +19,10 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(test)]
+#[path = "ws_tickets_property_tests.rs"]
+mod property_tests;
+
 const MAX_PENDING: usize = 10_000;
 const TICKET_TTL_SECONDS: u64 = 30;
 

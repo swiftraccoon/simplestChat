@@ -7,6 +7,10 @@ use icu_casemap::CaseMapper;
 use icu_normalizer::ComposingNormalizer;
 use icu_properties::{CodePointSetData, props::DefaultIgnorableCodePoint};
 
+#[cfg(test)]
+#[path = "labels_property_tests.rs"]
+mod property_tests;
+
 /// Identity comparison only: preserve the original spelling for display.
 /// Compatibility normalization, full Unicode case folding and removal of
 /// default-ignorables prevent formatting from creating another identity with

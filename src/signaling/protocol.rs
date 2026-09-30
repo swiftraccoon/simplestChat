@@ -6,6 +6,10 @@ use crate::turn::IceServer;
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+#[path = "protocol_property_tests.rs"]
+mod property_tests;
+
 /// IDs are opaque correlation tokens, not credentials or idempotency keys.
 pub(crate) fn valid_correlation_id(value: &str) -> bool {
     !value.is_empty()

@@ -14,6 +14,10 @@ use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+#[cfg(test)]
+#[path = "limiter_property_tests.rs"]
+mod property_tests;
+
 const FREE_PAIR_FAILURES: u32 = 3;
 const MAX_PAIR_DELAY: Duration = Duration::from_secs(300);
 const FAILURE_MEMORY: Duration = Duration::from_secs(3600);
