@@ -414,6 +414,28 @@
           }
         }
       }
+    },
+    "cargo-mutants": {
+      "version": "27.1.0",
+      "executable": "cargo-mutants",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://github.com/sourcefrog/cargo-mutants/releases/download/v27.1.0/cargo-mutants-x86_64-unknown-linux-gnu.tar.gz",
+          "sha256": "dfe6dc37d0342c891d2829b5a695aa57c2d0edecef7e7d0399a30cc6e206411e",
+          "format": "tar.gz",
+          "files": {
+            "cargo-mutants": "cargo-mutants"
+          }
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/sourcefrog/cargo-mutants/releases/download/v27.1.0/cargo-mutants-x86_64-apple-darwin.tar.gz",
+          "sha256": "7109a9e9673fe0b977f622e6f32383b6d1cbbf3fbb63b7c30db3267462c74670",
+          "format": "tar.gz",
+          "files": {
+            "cargo-mutants": "cargo-mutants"
+          }
+        }
+      }
     }
   }
 }
