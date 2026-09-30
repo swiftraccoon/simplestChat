@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 1,
+  "exceptions": [
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "public-fixture:9a27e547f2e8f998ede820a40562fe28638ca4e48ea37186db93300fd7060e1c",
+      "scope": "src/auth/jwt.rs",
+      "owner": "swiftraccoon",
+      "rationale": "Exact public test, protocol or upstream documentation value; not an operational credential.",
+      "reachability": "Matches require both this file path and this complete known value. Other values and locations are scanned.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "public-fixture:7e100aa02822b73475c8dabe8f5c34e0375b108d9d0c483dc660f31b7d287508",
+      "scope": "src/signaling/connection_heartbeat_tests.rs",
+      "owner": "swiftraccoon",
+      "rationale": "Exact public test, protocol or upstream documentation value; not an operational credential.",
+      "reachability": "Matches require both this file path and this complete known value. Other values and locations are scanned.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "public-fixture:e4a562fef32e75dfc7cbd6529f9cd03390d2c2b2c5e12066fa4a02b6c217db4f",
+      "scope": "src/signaling/connection_authentication.rs",
+      "owner": "swiftraccoon",
+      "rationale": "Exact public test, protocol or upstream documentation value; not an operational credential.",
+      "reachability": "Matches require both this file path and this complete known value. Other values and locations are scanned.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "public-fixture:0e9cd148cc5d27569f50203a8e1075e251c09e30b04c31e96ad741c2294c235c",
+      "scope": "src/signaling/connection_authentication.rs",
+      "owner": "swiftraccoon",
+      "rationale": "Exact public test, protocol or upstream documentation value; not an operational credential.",
+      "reachability": "Matches require both this file path and this complete known value. Other values and locations are scanned.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "public-fixture:7b6cb7abe5a7110ca0cd3a01f7bfe1d3273f6a2514b99ba88b02518b44e8f4e2",
+      "scope": "src/signaling/mod.rs",
+      "owner": "swiftraccoon",
+      "rationale": "Exact public test, protocol or upstream documentation value; not an operational credential.",
+      "reachability": "Matches require both this file path and this complete known value. Other values and locations are scanned.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "public-fixture:2b5adf829cbb6965751f381725edf141dcea99486b20ac0f0252af7fb2b55cdc",
+      "scope": "vendor/mediasoup-0.27.0/src/scalability_modes.rs",
+      "owner": "swiftraccoon",
+      "rationale": "Exact public test, protocol or upstream documentation value; not an operational credential.",
+      "reachability": "Matches require both this file path and this complete known value. Other values and locations are scanned.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "public-fixture:e14f570426ca02ad5e3bb940430b06a9cdc9213b84a47af627ca0b17606ae2fc",
+      "scope": "vendor/mediasoup-0.27.0/src/scalability_modes.rs",
+      "owner": "swiftraccoon",
+      "rationale": "Exact public test, protocol or upstream documentation value; not an operational credential.",
+      "reachability": "Matches require both this file path and this complete known value. Other values and locations are scanned.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "public-fixture:1c4b2c6ab5cfb4687303f42ea3ef44dfeee78c0e6a0e6e55aca52031e16c0ca7",
+      "scope": "vendor/mediasoup-0.27.0/src/router/plain_transport.rs",
+      "owner": "swiftraccoon",
+      "rationale": "Exact public test, protocol or upstream documentation value; not an operational credential.",
+      "reachability": "Matches require both this file path and this complete known value. Other values and locations are scanned.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "public-fixture:52fe091694e92ff2de45a89d4da4260a8233ec1040cfd661cda1761815f4448f",
+      "scope": "vendor/mediasoup-sys-0.17.0/test/src/RTC/ICE/TestStunPacket.cpp",
+      "owner": "swiftraccoon",
+      "rationale": "Exact public test, protocol or upstream documentation value; not an operational credential.",
+      "reachability": "Matches require both this file path and this complete known value. Other values and locations are scanned.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:e2b9fc895ab19ccc4e010dfe81099d14a1a54d1170519db580416c80b3bd1580",
+      "scope": ".github/actions/native-toolchain/action.yml#runs/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The pinned toolchain action also bootstraps the maintained act container, whose runner tools differ from hosted GitHub runners.",
+      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:e2b9fc895ab19ccc4e010dfe81099d14a1a54d1170519db580416c80b3bd1580",
+      "scope": ".github/workflows/browser-compatibility.yml#jobs/browser/steps/3/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The pinned toolchain action also bootstraps the maintained act container, whose runner tools differ from hosted GitHub runners.",
+      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
+      "scope": ".github/workflows/ci.yml#jobs/rust-lint/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "act 0.2.89 only recognizes ./ local actions; immutable $/ syntax is unsupported by the maintained local runner.",
+      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
+      "scope": ".github/workflows/ci.yml#jobs/rust-test/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "act 0.2.89 only recognizes ./ local actions; immutable $/ syntax is unsupported by the maintained local runner.",
+      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
+      "scope": ".github/workflows/ci.yml#jobs/browser/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "act 0.2.89 only recognizes ./ local actions; immutable $/ syntax is unsupported by the maintained local runner.",
+      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
+      "scope": ".github/workflows/performance.yml#jobs/compare/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "act 0.2.89 only recognizes ./ local actions; immutable $/ syntax is unsupported by the maintained local runner.",
+      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
+      "scope": ".github/workflows/performance.yml#jobs/impaired/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "act 0.2.89 only recognizes ./ local actions; immutable $/ syntax is unsupported by the maintained local runner.",
+      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
+      "scope": ".github/workflows/performance.yml#jobs/soak/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "act 0.2.89 only recognizes ./ local actions; immutable $/ syntax is unsupported by the maintained local runner.",
+      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "cargo-audit",
+      "fingerprint": "RUSTSEC-2024-0375",
+      "scope": "atty@0.2.14",
+      "owner": "swiftraccoon",
+      "rationale": "Unmaintained terminal detection in the vendored native build dependency graph.",
+      "reachability": "Reviewed full dependency graph at 2bd6d38; advisory remains visible, exact version only, upstream replacement required on expiry.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "cargo-audit",
+      "fingerprint": "RUSTSEC-2021-0145",
+      "scope": "atty@0.2.14",
+      "owner": "swiftraccoon",
+      "rationale": "Windows handle-alignment unsoundness; production builds and runtime are Linux.",
+      "reachability": "Reviewed full dependency graph at 2bd6d38; advisory remains visible, exact version only, upstream replacement required on expiry.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "cargo-audit",
+      "fingerprint": "RUSTSEC-2024-0384",
+      "scope": "instant@0.1.13",
+      "owner": "swiftraccoon",
+      "rationale": "Unmaintained timing dependency for target-specific graph paths.",
+      "reachability": "Reviewed full dependency graph at 2bd6d38; advisory remains visible, exact version only, upstream replacement required on expiry.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "cargo-audit",
+      "fingerprint": "RUSTSEC-2024-0436",
+      "scope": "paste@0.1.18",
+      "owner": "swiftraccoon",
+      "rationale": "Unmaintained build-time macro expansion dependency.",
+      "reachability": "Reviewed full dependency graph at 2bd6d38; advisory remains visible, exact version only, upstream replacement required on expiry.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "cargo-audit",
+      "fingerprint": "RUSTSEC-2026-0097",
+      "scope": "rand@0.7.3",
+      "owner": "swiftraccoon",
+      "rationale": "Narrow custom logger/reseed interaction in a transitive older RNG; no affected production path identified in the supplied review.",
+      "reachability": "Reviewed full dependency graph at 2bd6d38; advisory remains visible, exact version only, upstream replacement required on expiry.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "self-repository:689cc4fe8ddf6cce1cd61b1d306e264b835b24f0988f7710c1bc76a78472d502",
+      "scope": ".github/workflows/ci.yml#jobs/security/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The supported act 0.2.89 parser recognizes ./ for repository-local workflows. The same-revision call has no external ref or inherited secrets.",
+      "reachability": "GitHub resolves this local workflow at the caller commit. Privileges are explicit and limited to SARIF in CodeQL; no PR job receives deployment or signing credentials.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "self-repository:eb39b26d9be618e13f8c17c6b6b81e5d325354a489417067e1e8102961d700ed",
+      "scope": ".github/workflows/ci.yml#jobs/codeql/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The supported act 0.2.89 parser recognizes ./ for repository-local workflows. The same-revision call has no external ref or inherited secrets.",
+      "reachability": "GitHub resolves this local workflow at the caller commit. Privileges are explicit and limited to SARIF in CodeQL; no PR job receives deployment or signing credentials.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    }
+  ]
+}
