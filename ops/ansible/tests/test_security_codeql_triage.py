@@ -107,6 +107,12 @@ def run_record(value: JsonObject) -> JsonObject:
     return object_value(array_value(value["runs"])[0])
 
 
+def physical_record(value: JsonObject) -> JsonObject:
+    """Access the inert fixture's primary location without weakening JSON types."""
+    result = object_value(array_value(run_record(value)["results"])[0])
+    return object_value(object_value(array_value(result["locations"])[0])["physicalLocation"])
+
+
 def review(finding: JsonObject) -> security_policy.ExceptionRecord:
     """Construct a complete exact record; this is not a path or query exclusion."""
     return security_policy.ExceptionRecord(
@@ -185,6 +191,104 @@ class CodeqlTriageTests(unittest.TestCase):
             self.assertFalse(triage.verdict([local], [])["passed"])
             self.assertTrue(triage.verdict([local], [review(api)])["passed"])
 
+    def test_codeql_omitted_defaults_preserve_api_identity(self) -> None:
+        """CodeQL omits same-line endLine and column-one startColumn per SARIF 2.1.0."""
+        for omitted in (("endLine",), ("startColumn",), ("endLine", "startColumn")):
+            candidate = sarif()
+            region = object_value(physical_record(candidate)["region"])
+            for key in omitted:
+                del region[key]
+            with (
+                self.subTest(omitted=omitted),
+                patch.object(triage, "source_hash", return_value=HASH),
+            ):
+                api = triage.api_finding(alert(), ROOT, REVISION, REFERENCE)
+                local = triage.sarif_findings(candidate, ROOT, REVISION)[0]
+                self.assertEqual(api["fingerprint"], local["fingerprint"])
+                self.assertEqual(api["scope"], local["scope"])
+                self.assertFalse(triage.verdict([local], [])["passed"])
+                self.assertTrue(triage.verdict([local], [review(api)])["passed"])
+
+    def test_explicit_sarif_range_values_are_not_replaced(self) -> None:
+        """A multiline range and a nondefault start column keep their exact identity."""
+        candidate = sarif()
+        region = object_value(physical_record(candidate)["region"])
+        region.update({"endLine": 2, "startColumn": 3})
+        api_alert = alert()
+        location = object_value(object_value(api_alert["most_recent_instance"])["location"])
+        location.update({"end_line": 2, "start_column": 3})
+        with patch.object(triage, "source_hash", return_value=HASH):
+            original = triage.api_finding(alert(), ROOT, REVISION, REFERENCE)
+            api = triage.api_finding(api_alert, ROOT, REVISION, REFERENCE)
+            local = triage.sarif_findings(candidate, ROOT, REVISION)[0]
+            self.assertEqual(api["fingerprint"], local["fingerprint"])
+            self.assertFalse(triage.verdict([local], [review(original)])["passed"])
+
+    def test_invalid_explicit_defaults_do_not_become_valid_ranges(self) -> None:
+        """Only absent properties use defaults; null, booleans and invalid numbers fail."""
+        for key in ("endLine", "startColumn"):
+            for value in (None, False, 0, -1, "1", 1.5):
+                candidate = sarif()
+                object_value(physical_record(candidate)["region"])[key] = value
+                with (
+                    self.subTest(key=key, value=value),
+                    self.assertRaisesRegex(ToolError, "^codeql_positive_integer$"),
+                ):
+                    _ = triage.sarif_findings(candidate, ROOT, REVISION)
+
+    def test_range_order_rejects_reversal_but_preserves_insertion_points(self) -> None:
+        """Same-line endpoints must be ordered; zero width and multiline ranges remain exact."""
+        with patch.object(triage, "source_hash", return_value=HASH):
+            for end_line, end_column, allowed in ((1, 2, False), (1, 3, True), (2, 1, True)):
+                candidate = sarif()
+                object_value(physical_record(candidate)["region"]).update(
+                    {"startColumn": 3, "endLine": end_line, "endColumn": end_column}
+                )
+                with self.subTest(end_line=end_line, end_column=end_column):
+                    if allowed:
+                        result = triage.sarif_findings(candidate, ROOT, REVISION)[0]
+                        self.assertEqual(
+                            result["region"],
+                            {
+                                "start_line": 1,
+                                "end_line": end_line,
+                                "start_column": 3,
+                                "end_column": end_column,
+                            },
+                        )
+                    else:
+                        with self.assertRaisesRegex(ToolError, "^codeql_region_order$"):
+                            _ = triage.sarif_findings(candidate, ROOT, REVISION)
+
+    def test_unsupported_or_missing_location_evidence_has_fixed_failure_codes(self) -> None:
+        """Required source/range evidence is rejected, never inferred from snippets or offsets."""
+        cases: list[tuple[JsonObject, str]] = [
+            ({}, "codeql_missing_location"),
+            ({"artifactLocation": {}, "region": {}}, "codeql_missing_source_uri"),
+            (
+                {"artifactLocation": {"uri": "fixture.py"}, "region": {"charOffset": 0}},
+                "codeql_missing_start_line",
+            ),
+            (
+                {"artifactLocation": {"uri": "fixture.py"}, "region": {"startLine": 1}},
+                "codeql_missing_end_column",
+            ),
+        ]
+        for physical, code in cases:
+            with self.subTest(code=code), self.assertRaisesRegex(ToolError, "^" + code + "$"):
+                _ = triage.sarif_location(physical)
+
+    def test_missing_execution_and_result_evidence_has_fixed_failure_codes(self) -> None:
+        """Converted GitHub SARIF without original invocations cannot become a passing run."""
+        for key, code in (
+            ("invocations", "codeql_missing_execution"),
+            ("results", "codeql_missing_results"),
+        ):
+            candidate = sarif()
+            del run_record(candidate)[key]
+            with self.subTest(key=key), self.assertRaisesRegex(ToolError, "^" + code + "$"):
+                _ = triage.sarif_findings(candidate, ROOT, REVISION)
+
     def test_source_query_location_message_and_tool_changes_require_review(self) -> None:
         """An exception cannot float to modified source or a similar result."""
         with patch.object(triage, "source_hash", return_value=HASH):
@@ -235,7 +339,7 @@ class CodeqlTriageTests(unittest.TestCase):
             cases.append(candidate)
         with patch.object(triage, "source_hash", return_value=HASH):
             for candidate in cases:
-                with self.subTest(candidate=candidate), self.assertRaises((ToolError, KeyError)):
+                with self.subTest(candidate=candidate), self.assertRaises(ToolError):
                     _ = triage.sarif_findings(candidate, ROOT, REVISION)
 
     def test_successful_empty_analysis_requires_real_rules_and_execution(self) -> None:

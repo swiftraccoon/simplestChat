@@ -110,6 +110,19 @@ Raw SARIF stays private on the runner. CI should upload only the explicit policy
 messages. Fixed validation codes identify rejected report shapes without exposing
 report content.
 
+For CodeQL line/column locations, the helper expands absent `endLine` to
+`startLine` and absent `startColumn` to 1, as required by
+[SARIF 2.1.0 sections 3.30.6–7](https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html).
+These are the omissions documented in
+[CodeQL's current output contract](https://docs.github.com/en/code-security/reference/code-scanning/codeql/codeql-cli/sarif-output).
+The expanded range must retain the same fingerprint as GitHub's explicit API
+location. Explicit malformed values still fail. This gate requires CodeQL's
+explicit `startLine` and `endColumn`; offset-only ranges and source-dependent
+end-column inference are unsupported and fail with fixed validation codes.
+GitHub's converted analysis SARIF is useful for comparing location identities,
+but lacks the original invocation evidence and cannot establish a passing local
+analysis. No invocation, suppression or result-completeness check is bypassed.
+
 ## Explicitly authorized dismissal
 
 Review the exact plan under the repository maintenance authorization before running:

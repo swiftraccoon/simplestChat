@@ -107,7 +107,14 @@ def finding(  # noqa: PLR0913 -- Independent source, query and location evidence
     """Use the same complete primary source/range identity for SARIF and API findings."""
     name = string_value(location["path"])
     region: JsonObject = {key: positive(location[key]) for key in REGION}
-    require(positive(region["end_line"]) >= positive(region["start_line"]), "codeql_region_order")
+    require(
+        positive(region["end_line"]) >= positive(region["start_line"])
+        and (
+            region["end_line"] != region["start_line"]
+            or positive(region["end_column"]) >= positive(region["start_column"])
+        ),
+        "codeql_region_order",
+    )
     # GitHub renders SARIF's numbered related-location links as plain labels.
     # No other Markdown or message normalization is performed.
     rendered = re.sub(r"\[([^\[\]\n]+)\]\([0-9]+\)", r"\1", message)
@@ -158,21 +165,48 @@ def sarif_score(rule: JsonObject) -> str:
     return "medium" if value >= MEDIUM_SCORE else "low"
 
 
+def sarif_location(physical: JsonObject) -> JsonObject:
+    """Expand CodeQL's omitted SARIF line/column defaults without changing the range."""
+    require(
+        "artifactLocation" in physical and "region" in physical,
+        "codeql_missing_location",
+    )
+    artifact = object_value(physical["artifactLocation"])
+    region = object_value(physical["region"])
+    require("uri" in artifact, "codeql_missing_source_uri")
+    require("startLine" in region, "codeql_missing_start_line")
+    # CodeQL emits an explicit endColumn for line/column regions. Its omission
+    # in general SARIF requires source/columnKind interpretation, not a guessed
+    # endpoint. Offset-only regions likewise require separate exact binding.
+    require("endColumn" in region, "codeql_missing_end_column")
+    return {
+        "path": unquote(string_value(artifact["uri"])),
+        "start_line": region["startLine"],
+        "end_line": region.get("endLine", region["startLine"]),
+        "start_column": region.get("startColumn", 1),
+        "end_column": region["endColumn"],
+    }
+
+
 def sarif_findings(
     raw: JsonObject, root: Path, revision: str, sources: NativeSources | None = None
 ) -> list[JsonObject]:
     """Require successful nonempty analysis metadata and reject suppressed/unknown report shapes."""
     require(raw.get("version") == "2.1.0", "codeql_sarif_version")
+    require("runs" in raw, "codeql_sarif_runs")
     runs = array_value(raw["runs"])
     require(bool(runs) and len(runs) <= len(LANGUAGES), "codeql_sarif_runs")
     result: list[JsonObject] = []
     deadline = time.monotonic() + MAX_SECONDS
     for value in runs:
         run = object_value(value)
+        require("tool" in run, "codeql_sarif_tool")
         tool = object_value(run["tool"])
+        require("driver" in tool, "codeql_sarif_tool")
         driver = object_value(tool["driver"])
-        require(driver["name"] == "CodeQL", "codeql_sarif_tool")
+        require(driver.get("name") == "CodeQL", "codeql_sarif_tool")
         version = string_value(driver.get("semanticVersion", driver.get("version")))
+        require("invocations" in run, "codeql_missing_execution")
         invocations = array_value(run["invocations"])
         require(bool(invocations), "codeql_missing_execution")
         for invocation in invocations:
@@ -193,10 +227,12 @@ def sarif_findings(
         ]:
             for item in array_value(component.get("rules", [])):
                 rule = object_value(item)
+                require("id" in rule, "codeql_missing_rule_id")
                 identifier = string_value(rule["id"])
                 require(identifier not in rules, "codeql_duplicate_rule")
                 rules[identifier] = rule
         require(bool(rules), "codeql_missing_rules")
+        require("results" in run, "codeql_missing_results")
         for entry in array_value(run["results"]):
             require(
                 len(result) < MAX_FINDINGS and time.monotonic() < deadline, "codeql_report_limit"
@@ -207,20 +243,18 @@ def sarif_findings(
                 "codeql_filtered_result",
             )
             require(item.get("baselineState") != "absent", "codeql_filtered_result")
+            require(
+                {"ruleId", "locations", "message"}.issubset(item), "codeql_missing_result_fields"
+            )
             identifier = string_value(item["ruleId"])
             require(identifier in rules, "codeql_unknown_rule")
             locations = array_value(item["locations"])
             require(len(locations) == 1, "codeql_primary_location")
-            physical = object_value(object_value(locations[0])["physicalLocation"])
-            artifact = object_value(physical["artifactLocation"])
-            region = object_value(physical["region"])
-            location: JsonObject = {
-                "path": unquote(string_value(artifact["uri"])),
-                "start_line": region["startLine"],
-                "end_line": region["endLine"],
-                "start_column": region["startColumn"],
-                "end_column": region["endColumn"],
-            }
+            primary = object_value(locations[0])
+            require("physicalLocation" in primary, "codeql_missing_location")
+            location = sarif_location(object_value(primary["physicalLocation"]))
+            message = object_value(item["message"])
+            require("text" in message, "codeql_missing_message")
             result.append(
                 {
                     **finding(
@@ -229,7 +263,7 @@ def sarif_findings(
                         identifier,
                         version,
                         location,
-                        message=string_value(object_value(item["message"])["text"]),
+                        message=string_value(message["text"]),
                         sources=sources,
                     ),
                     "severity": sarif_score(rules[identifier]),
