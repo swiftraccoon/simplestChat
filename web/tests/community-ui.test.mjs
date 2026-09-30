@@ -809,3 +809,57 @@ test('membership pages append unique rooms and keep the cursor on a failed read'
     ['page', 'first'],
   ]);
 });
+
+test('invitation links use only kind-specific fragments and discard the current query', async () => {
+  const f = await fixture();
+  const code = 'a'.repeat(32);
+  for (const [kind, fragment] of [
+    ['room', 'invite'],
+    ['registration', 'register-invite'],
+  ]) {
+    const link = new URL(f.inviteLink(code, kind));
+    assert.equal(link.search, '');
+    assert.equal(link.hash, `#${fragment}=${code}`);
+  }
+});
+
+test('issued invitation secrets appear only in a one-time share panel; lists revoke by metadata', async () => {
+  const f = await fixture();
+  f.Node.prototype.focus = function () {};
+  f.Node.prototype.select = function () {};
+  const view = f.ui.modal('Invitation test');
+  const code = 'a'.repeat(32);
+  f.community.showCreatedInvite(code, view, 'room');
+  const panel = view.body.querySelector('.created-invitation');
+  assert.equal(panel.querySelector('.invite-code').textContent, code);
+  action(panel, 'Copy link').click();
+  await flush();
+  assert.equal(new URL(f.state.copied).hash, `#invite=${code}`);
+  let revoked = 0;
+  const row = f.community.inviteRow(
+    {
+      id: '11111111-1111-4111-8111-111111111111',
+      uses_left: 1,
+      expires_at: '2026-10-05',
+      created_at: '2026-09-30',
+      role: 'member',
+    },
+    view,
+    async () => {},
+    async () => {
+      revoked++;
+    },
+  );
+  view.body.append(row);
+  assert.equal(row.querySelector('.invite-code'), null);
+  assert.equal(row.textContent.includes(code), false);
+  assert.equal(
+    row.querySelectorAll('button').some((node) => node.textContent === 'Copy link'),
+    false,
+  );
+  action(row, 'Revoke').click();
+  await flush();
+  assert.equal(revoked, 1);
+  view.close();
+  assert.equal(panel.isConnected, false);
+});

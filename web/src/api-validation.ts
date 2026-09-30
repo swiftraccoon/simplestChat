@@ -154,13 +154,19 @@ export const decodeRoomDirectory = list(decodeRoomListItem);
 
 /** Invitations (src/auth/invites.rs, src/room/invites.rs) and the rooms an account belongs to. */
 export interface RegistrationInvite {
-  code: string;
+  id: string;
   uses_left: number;
   expires_at: string;
   created_at: string;
 }
 export interface RoomInvite extends RegistrationInvite {
   role: string;
+}
+export interface CreatedRegistrationInvite extends RegistrationInvite {
+  code: string;
+}
+export interface CreatedRoomInvite extends RoomInvite {
+  code: string;
 }
 export interface InviteRedemption {
   room_id: string;
@@ -170,11 +176,20 @@ export interface InviteRedemption {
 export interface MembershipItem extends RoomListItem {
   role: string;
 }
-const inviteFields = { code: text, uses_left: integer(), expires_at: text, created_at: text };
+const inviteFields = { id: text, uses_left: integer(), expires_at: text, created_at: text };
 export const decodeRegistrationInvite = object<RegistrationInvite>(inviteFields);
 export const decodeRegistrationInvites = list(decodeRegistrationInvite);
 export const decodeRoomInvite = object<RoomInvite>({ ...inviteFields, role: text });
 export const decodeRoomInvites = list(decodeRoomInvite);
+export const decodeCreatedRegistrationInvite = object<CreatedRegistrationInvite>({
+  ...inviteFields,
+  code: text,
+});
+export const decodeCreatedRoomInvite = object<CreatedRoomInvite>({
+  ...inviteFields,
+  role: text,
+  code: text,
+});
 export const decodeInviteRedemption = object<InviteRedemption>({
   room_id: text,
   display_name: text,

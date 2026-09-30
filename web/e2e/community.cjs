@@ -2012,82 +2012,98 @@ async function setRole(owner, name, role) {
         true,
       );
     });
-    await step('a room invitation link grants its role to whoever opens it signed in', async () => {
-      const mine = await header(owner, 'My rooms');
-      await mine.getByRole('button', { name: 'Invites…', exact: true }).click();
-      const invites = owner.getByRole('dialog', {
-        name: 'Invitations for E2E Edited Room',
-        exact: true,
-      });
-      await invites.getByLabel('Uses', { exact: true }).fill('2');
-      await invites.getByRole('button', { name: 'Create invitation', exact: true }).click();
-      const code = (await invites.locator('.invite-code').first().textContent()).trim();
-      assert.match(code, /^[a-z0-9]{20}$/);
-      await invites
-        .locator('.management-entry')
-        .filter({ hasText: 'member · 2 uses left' })
-        .first()
-        .waitFor({ state: 'visible' });
-      await close(invites);
-      await close(mine);
-      const invitee = await client('invitee');
-      const authResponses = [];
-      invitee.on('response', (response) => {
-        if (response.url().includes('/api/auth/') || response.url().includes('/api/rooms/invites/'))
-          authResponses.push(
-            `${response.request().method()} ${new URL(response.url()).pathname} ${response.status()}`,
-          );
-      });
-      await register(invitee, inviteeEmail, 'E2E Invitee');
-      await paceJoins(invitee);
-      await invitee.goto(`${base}/?invite=${code}`);
-      recordJoin();
-      await connected(invitee);
-      await visible(
-        invitee,
-        'Invitation confirmed for E2E Edited Room. Joining with your current permissions.',
-      );
-      const manage = await header(owner, 'Manage room');
-      await visible(owner, 'E2E Invitee · member · online');
-      await close(manage);
-      await paceJoins(invitee);
-      await invitee.goto(`${base}/?invite=${code}`);
-      recordJoin();
-      try {
-        await connected(invitee);
-        await visible(
-          invitee,
-          'Invitation confirmed for E2E Edited Room. Joining with your current permissions.',
-        );
-        const manage = await header(owner, 'Manage room');
-        await visible(owner, 'E2E Invitee · member · online');
-        assert.equal(
-          await manage
-            .locator('.management-entry')
-            .filter({ hasText: 'E2E Invitee · member' })
-            .count(),
-          1,
-        );
-        await close(manage);
+    await step(
+      'a room invitation previews its role and requires acceptance before a separate join',
+      async () => {
         const mine = await header(owner, 'My rooms');
         await mine.getByRole('button', { name: 'Invites…', exact: true }).click();
         const invites = owner.getByRole('dialog', {
           name: 'Invitations for E2E Edited Room',
           exact: true,
         });
+        await invites.getByLabel('Uses', { exact: true }).fill('2');
+        await invites.getByRole('button', { name: 'Create invitation', exact: true }).click();
+        const code = (await invites.locator('.invite-code').first().textContent()).trim();
+        assert.match(code, /^[abcdefghjkmnpqrstuvwxyz023456789]{32}$/);
         await invites
           .locator('.management-entry')
-          .filter({ hasText: code })
-          .filter({ hasText: 'member · 1 use left' })
+          .filter({ hasText: 'member · 2 uses left' })
+          .first()
           .waitFor({ state: 'visible' });
         await close(invites);
         await close(mine);
-      } catch (error) {
-        console.log('invitee auth responses:', authResponses.join(' | '));
-        throw error;
-      }
-      await invitee.close();
-    });
+        const invitee = await client('invitee');
+        const authResponses = [];
+        invitee.on('response', (response) => {
+          if (
+            response.url().includes('/api/auth/') ||
+            response.url().includes('/api/rooms/invites/')
+          )
+            authResponses.push(
+              `${response.request().method()} ${new URL(response.url()).pathname} ${response.status()}`,
+            );
+        });
+        await register(invitee, inviteeEmail, 'E2E Invitee');
+        await paceJoins(invitee);
+        await invitee.goto(`${base}/#invite=${code}`);
+        const review = invitee.getByRole('dialog', { name: 'Review room invitation', exact: true });
+        await review
+          .getByText(`Room: E2E Edited Room (${runId}). Offered role: member.`, { exact: true })
+          .waitFor();
+        assert.equal(await invitee.locator('#join-screen').isVisible(), true);
+        await review.getByRole('button', { name: 'Accept invitation', exact: true }).click();
+        await visible(
+          invitee,
+          'Invitation confirmed for E2E Edited Room. Current permissions apply. Choose Join when ready.',
+        );
+        assert.equal(await invitee.locator('#join-screen').isVisible(), true);
+        await invitee.locator('#join-btn').click();
+        recordJoin();
+        await connected(invitee);
+        const manage = await header(owner, 'Manage room');
+        await visible(owner, 'E2E Invitee · member · online');
+        await close(manage);
+        await invitee.goto(`${base}/#invite=${code}`);
+        try {
+          const review = invitee.getByRole('dialog', {
+            name: 'Review room invitation',
+            exact: true,
+          });
+          await review.getByRole('button', { name: 'Accept invitation', exact: true }).click();
+          await visible(
+            invitee,
+            'Invitation confirmed for E2E Edited Room. Current permissions apply.',
+          );
+          await connected(invitee);
+          const manage = await header(owner, 'Manage room');
+          await visible(owner, 'E2E Invitee · member · online');
+          assert.equal(
+            await manage
+              .locator('.management-entry')
+              .filter({ hasText: 'E2E Invitee · member' })
+              .count(),
+            1,
+          );
+          await close(manage);
+          const mine = await header(owner, 'My rooms');
+          await mine.getByRole('button', { name: 'Invites…', exact: true }).click();
+          const invites = owner.getByRole('dialog', {
+            name: 'Invitations for E2E Edited Room',
+            exact: true,
+          });
+          await invites
+            .locator('.management-entry')
+            .filter({ hasText: 'member · 1 use left' })
+            .waitFor({ state: 'visible' });
+          await close(invites);
+          await close(mine);
+        } catch (error) {
+          console.log('invitee auth responses:', authResponses.join(' | '));
+          throw error;
+        }
+        await invitee.close();
+      },
+    );
     let recoveryKey;
     await step('save-once recovery key and password change signs out current room', async () => {
       const account = await header(owner, 'Account');

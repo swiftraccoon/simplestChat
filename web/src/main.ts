@@ -197,51 +197,127 @@ function updateAuthUI(): void {
   community.refresh();
 }
 
-// An invitation link (?invite=CODE) waits for a signed-in viewer and prefills
-// the account form meanwhile; a registration that spends the code takes it
-// with it, so only a room code is ever redeemed after sign-in.
+// Invitation secrets stay in the fragment and are removed before room navigation.
 let pendingInvite: string | null = null;
+let pendingInviteKind: 'room' | 'registration' = 'room';
 let inviteAccountEpoch = 0;
-function readInviteLink(): void {
+let inviteView: ReturnType<typeof modal> | null = null;
+function readInviteLink(returnRoom = ''): void {
   const url = new URL(window.location.href);
-  const code = url.searchParams.get('invite');
+  const fragment = new URLSearchParams(url.hash.slice(1));
+  const registration = fragment.get('register-invite');
+  const roomCode = fragment.get('invite');
+  const code = registration ?? roomCode;
   if (code === null) return;
-  url.searchParams.delete('invite');
+  url.hash = returnRoom;
   window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
   const normalized = code.trim().toLowerCase();
-  if (!/^[a-z0-9]{20}$/.test(normalized)) {
+  if (!/^[abcdefghjkmnpqrstuvwxyz023456789]{32}$/.test(normalized)) {
     showToast('This invitation link is not valid', 4000, 'error');
     return;
   }
   pendingInvite = normalized;
+  pendingInviteKind = registration !== null ? 'registration' : 'room';
   registerInvite.value = normalized;
 }
-async function acceptPendingInvite(): Promise<void> {
+
+/** Fragment links can arrive without reloading an already open application. */
+function consumeInviteLocation(selectedRoom: string): boolean {
+  const fragment = new URLSearchParams(window.location.hash.slice(1));
+  if (!fragment.has('invite') && !fragment.has('register-invite')) return false;
+  inviteView?.close();
+  inviteView = null;
+  pendingInvite = null;
+  navigation.cancelPendingJoin();
+  readInviteLink(selectedRoom);
+  observeUiTask(previewPendingInvite(), 'Invitation not reviewed');
+  return true;
+}
+
+/** A link can preview an offer; only its explicitly clicked acceptance mutates membership. */
+async function previewPendingInvite(): Promise<void> {
   const code = pendingInvite;
-  if (!code || !auth.isLoggedIn) return;
+  if (!code || inviteView?.dialog.open) return;
+  if (pendingInviteKind === 'registration') {
+    openAuthDialog(registerModal);
+    return;
+  }
+  if (!auth.isLoggedIn) {
+    const view = modal('Room invitation');
+    inviteView = view;
+    view.body.append(
+      el(
+        'p',
+        'Sign in to review the room and offered role. Opening this link does not accept it or join a room.',
+      ),
+      button('Sign in to review', () => {
+        view.close();
+        openAuthDialog(loginModal);
+      }),
+    );
+    return;
+  }
   pendingInvite = null;
   const epoch = inviteAccountEpoch;
   const userId = auth.userId;
   const revision = navigation.revision;
-  const ownsIntent = () =>
+  const view = modal('Review room invitation');
+  inviteView = view;
+  const ownsIntent = (): boolean =>
+    view.dialog.open &&
+    inviteView === view &&
     epoch === inviteAccountEpoch &&
     userId === auth.userId &&
     auth.isLoggedIn &&
     revision === navigation.revision;
+  const description = el('p', 'Loading invitation…');
+  view.body.append(description);
   try {
-    const accepted = await api.redeemInvite(auth.jwt, code);
+    const offer = await api.previewInvite(auth.jwt, code);
     if (!ownsIntent()) return;
-    showToast(
-      `Invitation confirmed for ${accepted.display_name}. Joining with your current permissions.`,
+    description.textContent = `Room: ${offer.display_name} (${offer.room_id}). Offered role: ${offer.role}.`;
+    view.body.append(
+      el(
+        'p',
+        'Accept only if you intended to receive this role. Acceptance never joins the room or starts your microphone or camera. Existing permissions may differ when reusing an invitation.',
+      ),
     );
-    openRoomFromDialog(accepted.room_id);
+    const accept = button(
+      'Accept invitation',
+      () => {
+        if (!ownsIntent() || accept.disabled) return;
+        accept.disabled = true;
+        observeUiTask(
+          (async () => {
+            try {
+              const accepted = await api.redeemInvite(auth.jwt, code);
+              if (!ownsIntent()) return;
+              view.close();
+              const alreadyJoined = room?.currentRoomId === accepted.room_id;
+              if (!alreadyJoined) navigation.selectRoom(accepted.room_id);
+              showToast(
+                `Invitation confirmed for ${accepted.display_name}. Current permissions apply.${alreadyJoined ? '' : ' Choose Join when ready.'}`,
+              );
+            } catch (error) {
+              if (!ownsIntent()) return;
+              view.error.textContent =
+                error instanceof Error ? error.message : 'The invitation could not be accepted';
+              view.error.hidden = false;
+              // Retrying remains a separate user action, never an automatic mutation.
+              accept.disabled = false;
+            }
+          })(),
+          'The invitation could not be accepted',
+        );
+      },
+      'btn-primary',
+    );
+    view.body.append(accept);
   } catch (error) {
     if (!ownsIntent()) return;
-    showToast(
-      error instanceof Error ? error.message : 'The invitation could not be accepted',
-      4000,
-      'error',
-    );
+    description.textContent = 'The invitation could not be reviewed.';
+    view.error.textContent = error instanceof Error ? error.message : 'Please try the link again.';
+    view.error.hidden = false;
   }
 }
 /** An account-room action keeps its explicit join intent until signaling is ready. */
@@ -262,6 +338,8 @@ auth.setOnChange((loggedIn, tokenRefresh) => {
   }
   // Identity changes leave the old membership before reconnecting.
   inviteAccountEpoch++;
+  inviteView?.close();
+  inviteView = null;
   navigation.cancelPendingJoin();
   dismissCreateRoom();
   createRoomMutation++;
@@ -270,7 +348,7 @@ auth.setOnChange((loggedIn, tokenRefresh) => {
   if (room) observeUiTask(leaveCurrentRoom(), 'Could not finish leaving the room');
   signaling.disconnect();
   signaling.connect(loggedIn ? (auth.jwt ?? undefined) : undefined);
-  if (loggedIn) observeUiTask(acceptPendingInvite(), 'Invitation not accepted');
+  if (loggedIn) observeUiTask(previewPendingInvite(), 'Invitation not reviewed');
 });
 
 // --- State ---
@@ -1353,9 +1431,14 @@ signaling.setOnStatusChange((status) => {
 });
 
 const navigation = new RoomNavigation({
+  interceptLocation: consumeInviteLocation,
   leave: leaveCurrentRoom,
   select: (id) => {
     roomSelectionVersion++;
+    if (inviteView?.dialog.open) {
+      inviteView.close();
+      pendingInvite = null;
+    }
     roomInput.value = id;
     updateJoinBtn();
     if (document.activeElement?.closest('.room-card')) {
@@ -1430,8 +1513,7 @@ observeUiTask(
     updateAuthUI();
     signaling.connect(auth.jwt ?? undefined);
     if (!pendingInvite) return;
-    if (auth.isLoggedIn) observeUiTask(acceptPendingInvite(), 'Invitation not accepted');
-    else openAuthDialog(registerModal);
+    observeUiTask(previewPendingInvite(), 'Invitation not reviewed');
   }),
   'Could not restore sign-in. Reload the page to retry.',
 );

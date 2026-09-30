@@ -16,7 +16,10 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-async function fixture(t, { hash = '', leave = async () => {}, ready = false, tryJoin } = {}) {
+async function fixture(
+  t,
+  { hash = '', leave = async () => {}, ready = false, tryJoin, interceptLocation } = {},
+) {
   const events = new Map();
   const selections = [];
   const pending = [];
@@ -54,6 +57,7 @@ async function fixture(t, { hash = '', leave = async () => {}, ready = false, tr
     },
   });
   const navigation = new RoomNavigation({
+    interceptLocation: (selected) => interceptLocation?.(selected, location) ?? false,
     leave: () => {
       leaves++;
       return leave();
@@ -408,4 +412,25 @@ test('a canceled readiness callback cannot resurrect the pending intent', async 
   await flush();
   f.ready();
   assert.deepEqual(f.attempts, ['invited-room']);
+});
+
+test('a supported external fragment can be consumed without leaving or selecting a room', async (t) => {
+  const consumed = [];
+  const f = await fixture(t, {
+    hash: '#room-a',
+    interceptLocation: (selected, location) => {
+      if (!location.hash.startsWith('#invite=')) return false;
+      consumed.push(selected);
+      location.hash = `#${selected}`;
+      return true;
+    },
+  });
+  f.navigation.join('room-a');
+  f.visit(`#invite=${'a'.repeat(32)}`);
+  await flush();
+  assert.deepEqual(consumed, ['room-a'], 'popstate and hashchange consume one offer');
+  assert.deepEqual(f.selections, ['room-a']);
+  assert.equal(f.leaves(), 0);
+  assert.deepEqual(f.errors, []);
+  assert.equal(f.location.hash, '#room-a');
 });

@@ -8,9 +8,9 @@ import {
   decodeMemberships,
   decodePublicProfile,
   decodeRecoveryKey,
-  decodeRegistrationInvite,
+  decodeCreatedRegistrationInvite,
   decodeRegistrationInvites,
-  decodeRoomInvite,
+  decodeCreatedRoomInvite,
   decodeRoomInvites,
   decodeRoomDirectory,
   decodeRoomListItem,
@@ -377,9 +377,9 @@ export const api = {
   registrationInvites: (token: string | null) =>
     apiJson(decodeRegistrationInvites, '/api/auth/invites', token),
   createRegistrationInvite: (token: string | null) =>
-    apiJson(decodeRegistrationInvite, '/api/auth/invites', token, 'POST'),
-  revokeRegistrationInvite: (token: string | null, code: string) =>
-    apiNoContent(`/api/auth/invites/${encodeURIComponent(code)}`, token, 'DELETE'),
+    apiJson(decodeCreatedRegistrationInvite, '/api/auth/invites', token, 'POST'),
+  revokeRegistrationInvite: (token: string | null, id: string) =>
+    apiNoContent(`/api/auth/invites/${encodeURIComponent(id)}`, token, 'DELETE'),
   memberships: (token: string | null, after?: string) =>
     apiJson(
       decodeMemberships,
@@ -393,20 +393,23 @@ export const api = {
     id: string,
     data: { role: number; uses: number; days: number },
   ) =>
-    apiJson(decodeRoomInvite, `/api/rooms/${encodeURIComponent(id)}/invites`, token, 'POST', data),
-  revokeRoomInvite: (token: string | null, id: string, code: string) =>
+    apiJson(
+      decodeCreatedRoomInvite,
+      `/api/rooms/${encodeURIComponent(id)}/invites`,
+      token,
+      'POST',
+      data,
+    ),
+  revokeRoomInvite: (token: string | null, id: string, inviteId: string) =>
     apiNoContent(
-      `/api/rooms/${encodeURIComponent(id)}/invites/${encodeURIComponent(code)}`,
+      `/api/rooms/${encodeURIComponent(id)}/invites/${encodeURIComponent(inviteId)}`,
       token,
       'DELETE',
     ),
+  previewInvite: (token: string | null, code: string) =>
+    apiJson(decodeInviteRedemption, '/api/rooms/invites/preview', token, 'POST', { code }),
   redeemInvite: (token: string | null, code: string) =>
-    apiJson(
-      decodeInviteRedemption,
-      `/api/rooms/invites/${encodeURIComponent(code)}`,
-      token,
-      'POST',
-    ),
+    apiJson(decodeInviteRedemption, '/api/rooms/invites/redeem', token, 'POST', { code }),
   updatePreferences: (token: string | null, data: ChatPreferences) =>
     apiJson(decodeChatPreferences, '/api/auth/preferences', token, 'PUT', data),
   recoveryKey: (token: string | null, data: { current_password: string }) =>

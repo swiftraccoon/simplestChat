@@ -37,7 +37,7 @@ const settings = {
   topic: null,
 };
 const invite = {
-  code: 'abcdefghjkmnpqrstuvw',
+  id: '11111111-1111-4111-8111-111111111111',
   uses_left: 1,
   expires_at: '2026-10-05T00:00:00Z',
   created_at: '2026-09-28T00:00:00Z',
@@ -122,7 +122,7 @@ const endpoints = [
     (api) => api.createRegistrationInvite('token'),
     '/api/auth/invites',
     'POST',
-    invite,
+    { ...invite, code: 'a'.repeat(32) },
   ],
   [
     'memberships',
@@ -143,12 +143,19 @@ const endpoints = [
     (api) => api.createRoomInvite('token', 'room', { role: 2, uses: 1, days: 7 }),
     '/api/rooms/room/invites',
     'POST',
-    roomInvite,
+    { ...roomInvite, code: 'a'.repeat(32) },
+  ],
+  [
+    'invite preview',
+    (api) => api.previewInvite('token', 'a'.repeat(32)),
+    '/api/rooms/invites/preview',
+    'POST',
+    redemption,
   ],
   [
     'invite redemption',
-    (api) => api.redeemInvite('token', 'abcdefghjkmnpqrstuvw'),
-    '/api/rooms/invites/abcdefghjkmnpqrstuvw',
+    (api) => api.redeemInvite('token', 'a'.repeat(32)),
+    '/api/rooms/invites/redeem',
     'POST',
     redemption,
   ],
@@ -448,4 +455,21 @@ test('capabilities and membership pagination own fixed decoded contracts', async
   assert.equal(state.requests.at(-1)[0], '/api/rooms/memberships?paginated=true');
   state.response = { ok: true, status: 200, json: async () => [{ ...room, role: 4 }] };
   await assert.rejects(ui.api.memberships('token'), /invalid data/);
+});
+
+test('invitation secrets travel only in JSON bodies; revocation uses nonsecret IDs', async () => {
+  const { ui, state } = await uiFixture();
+  const code = 'a'.repeat(32);
+  state.response = { ok: true, status: 200, json: async () => redemption };
+  for (const action of ['previewInvite', 'redeemInvite']) {
+    await ui.api[action]('token', code);
+    const [path, init] = state.requests.at(-1);
+    assert.equal(path.includes(code), false);
+    assert.deepEqual(JSON.parse(init.body), { code });
+  }
+  state.response = { ok: true, status: 204 };
+  await ui.api.revokeRoomInvite('token', 'room', invite.id);
+  assert.equal(state.requests.at(-1)[0], `/api/rooms/room/invites/${invite.id}`);
+  await ui.api.revokeRegistrationInvite('token', invite.id);
+  assert.equal(state.requests.at(-1)[0], `/api/auth/invites/${invite.id}`);
 });

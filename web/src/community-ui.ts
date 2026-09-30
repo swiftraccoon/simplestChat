@@ -437,7 +437,7 @@ export class CommunityUI {
         for (const code of codes)
           invites.append(
             this.inviteRow(code, view, refreshInvites, () =>
-              api.revokeRegistrationInvite(token, code.code),
+              api.revokeRegistrationInvite(token, code.id),
             ),
           );
       };
@@ -445,7 +445,10 @@ export class CommunityUI {
         'New invite code',
         () =>
           busy(mint, view.error, async () => {
-            await api.createRegistrationInvite(token);
+            if (!stillCurrent()) return;
+            const invite = await api.createRegistrationInvite(this.options.auth.jwt);
+            if (!stillCurrent()) return;
+            this.showCreatedInvite(invite.code, view, 'registration');
             await refreshInvites();
           }),
         (error) => this.showError(view.error, error),
@@ -625,7 +628,7 @@ export class CommunityUI {
           membershipList.append(
             el(
               'p',
-              'None yet. An invitation link from a room admin adds you here.',
+              'None yet. Accept an invitation from a room admin to add a room here.',
               'setting-hint',
             ),
           );
@@ -645,7 +648,12 @@ export class CommunityUI {
   /** Codes that grant a role in one of the account's rooms, made and revoked here. */
   private roomInvites(room: RoomListItem): void {
     const view = modal(`Invitations for ${room.display_name}`);
-    const token = this.options.auth.jwt;
+    const accountId = this.options.auth.userId;
+    const generation = this.accountGeneration;
+    const stillCurrent = (): boolean =>
+      view.dialog.open &&
+      generation === this.accountGeneration &&
+      this.options.auth.userId === accountId;
     const role = el('select');
     role.setAttribute('aria-label', 'Role granted');
     for (const option of INVITE_ROLES) {
@@ -661,8 +669,8 @@ export class CommunityUI {
     days.max = '30';
     const list = el('div');
     const refresh = async (): Promise<void> => {
-      const invites = await api.roomInvites(token, room.id);
-      if (!view.dialog.open) return;
+      const invites = await api.roomInvites(this.options.auth.jwt, room.id);
+      if (!stillCurrent()) return;
       list.replaceChildren();
       if (!invites.length) list.append(el('p', 'No unused invitations.', 'setting-hint'));
       for (const invite of invites)
@@ -671,7 +679,7 @@ export class CommunityUI {
             invite,
             view,
             () => refresh(),
-            () => api.revokeRoomInvite(token, room.id, invite.code),
+            () => api.revokeRoomInvite(this.options.auth.jwt, room.id, invite.id),
           ),
         );
     };
@@ -679,11 +687,14 @@ export class CommunityUI {
       'Create invitation',
       () =>
         busy(create, view.error, async () => {
-          await api.createRoomInvite(token, room.id, {
+          if (!stillCurrent()) return;
+          const invite = await api.createRoomInvite(this.options.auth.jwt, room.id, {
             role: Number(role.value),
             uses: Number(uses.value) || 1,
             days: Number(days.value) || 7,
           });
+          if (!stillCurrent()) return;
+          this.showCreatedInvite(invite.code, view, 'room');
           await refresh();
         }),
       (error) => this.showError(view.error, error),
@@ -692,7 +703,7 @@ export class CommunityUI {
     view.body.append(
       el(
         'p',
-        'Whoever opens an invitation link while signed in gets the role in this room; nobody is ever demoted by one. A room keeps at most 20 unused invitations.',
+        'Recipients review the room and offered role, then explicitly accept. Accepting never joins the room automatically and never lowers an existing role. A room keeps at most 20 unused invitations.',
         'setting-hint',
       ),
       field('Role granted', role),
@@ -703,6 +714,39 @@ export class CommunityUI {
       list,
     );
     refresh().catch((error) => this.showError(view.error, error));
+  }
+
+  /** Secrets are available only in this creation response, never in management lists. */
+  private showCreatedInvite(
+    code: string,
+    view: ReturnType<typeof modal>,
+    kind: 'room' | 'registration',
+  ): void {
+    const panel = el('div', undefined, 'created-invitation');
+    const link = input(inviteLink(code, kind));
+    link.readOnly = true;
+    panel.append(
+      el('h3', 'Save this invitation link'),
+      el(
+        'p',
+        'This secret is shown only now. Share it privately; anyone holding it can accept it.',
+        'setting-hint',
+      ),
+      el('code', code, 'invite-code'),
+      field('Invitation link', link),
+      asyncButton(
+        'Copy link',
+        () =>
+          navigator.clipboard.writeText(link.value).then(() => {
+            if (view.dialog.open) this.options.notify('Invitation link copied');
+          }),
+        (error) => this.showError(view.error, error),
+      ),
+    );
+    view.body.querySelector('.created-invitation')?.remove();
+    view.body.append(panel);
+    link.focus();
+    link.select();
   }
 
   /** One invitation with its link and revocation; `revoke` runs against the right endpoint. */
@@ -720,26 +764,19 @@ export class CommunityUI {
     ]
       .filter(Boolean)
       .join(' · ');
-    row.append(el('code', invite.code, 'invite-code'), el('p', summary));
-    const copy = asyncButton(
-      'Copy link',
-      () =>
-        navigator.clipboard.writeText(inviteLink(invite.code)).then(() => {
-          if (view.dialog.open) this.options.notify('Invitation link copied');
-        }),
-      (error) => this.showError(view.error, error),
-    );
+    row.append(el('span', `Invitation ${invite.id.slice(0, 8)}`), el('p', summary));
     const remove = asyncButton(
       'Revoke',
       () =>
         busy(remove, view.error, async () => {
+          if (!view.dialog.open) return;
           await revoke();
           await refresh();
         }),
       (error) => this.showError(view.error, error),
       'btn-secondary danger',
     );
-    row.append(copy, remove);
+    row.append(remove);
     return row;
   }
 
@@ -1129,10 +1166,10 @@ export function roomLink(id: string): string {
   return url.href;
 }
 
-/** The page with `?invite=CODE`: accepted once the viewer is signed in. */
-export function inviteLink(code: string): string {
+/** Keep invitation secrets in the fragment, which browsers never send in an HTTP request. */
+export function inviteLink(code: string, kind: 'room' | 'registration' = 'room'): string {
   const url = new URL(window.location.href);
-  url.hash = '';
-  url.search = `?invite=${encodeURIComponent(code)}`;
+  url.search = '';
+  url.hash = `${kind === 'registration' ? 'register-invite' : 'invite'}=${encodeURIComponent(code)}`;
   return url.href;
 }

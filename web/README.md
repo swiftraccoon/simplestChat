@@ -81,10 +81,15 @@ Viewer mute/volume/hide must not change what anybody else receives. Async media
 and account work can outlive a dialog or session; stale completion must not attach
 tracks or account data to a replacement session.
 
-Room links and browser history select a room; joining remains explicit. Redeeming
-an invitation or opening an account room requests a join that waits for signaling
-and any current departure to finish. A newer destination, edited room ID or
-account change retires that intent; a late invitation response cannot replace it.
+Room links and browser history select a room; joining remains explicit. Invitations
+use 32-symbol secrets in fragments (`#invite=` for rooms, `#register-invite=` for
+registration), scrubbed before room navigation. Room invitations require signed-in
+preview and explicit acceptance through JSON request bodies. Acceptance selects
+the room; joining is a separate action. Management lists and revocation use nonsecret
+invitation IDs; a newly created secret is shown only once. Account-room Join buttons
+retain their explicit join intent until signaling and any departure finish. A newer
+destination, edited room ID or account change retires asynchronous invitation work
+and pending joins.
 Home, Leave and lobby Cancel clear the selected room URL. No URL change starts capture.
 Room settings retain failed edits and offer an explicit retry after checking
 current server state. A connected lobby moderator is availability information,

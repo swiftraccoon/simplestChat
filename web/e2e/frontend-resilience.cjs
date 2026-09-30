@@ -200,8 +200,14 @@ async function run() {
           avatar_url: null,
           bio: '',
         });
-      if (url.pathname === '/api/rooms/invites/abcdefghijklmnopqrst') {
+      if (url.pathname === '/api/rooms/invites/preview') {
         assert.equal(route.request().method(), 'POST');
+        assert.deepEqual(route.request().postDataJSON(), { code: 'a'.repeat(32) });
+        return confirmInvite(route);
+      }
+      if (url.pathname === '/api/rooms/invites/redeem') {
+        assert.equal(route.request().method(), 'POST');
+        assert.deepEqual(route.request().postDataJSON(), { code: 'a'.repeat(32) });
         redemptions.push(route);
         inviteSeen.resolve();
         if (!holdInvite) return confirmInvite(route);
@@ -244,7 +250,7 @@ async function run() {
     page.on('pageerror', () => {
       report.pageErrors++;
     });
-    await page.goto(invite ? `${origin}/?invite=abcdefghijklmnopqrst` : origin);
+    await page.goto(invite ? `${origin}/#invite=${'a'.repeat(32)}` : origin);
     if (holdSocket) await socketSeen.promise;
     else await page.getByText('Connected', { exact: true }).waitFor();
     return {
@@ -268,17 +274,37 @@ async function run() {
 
   async function scenarios() {
     const invited = await fixture({ signedIn: true, room: true, invite: true, holdSocket: true });
-    await invited.page
-      .getByText('Invitation confirmed for Fixture room. Joining with your current permissions.', {
-        exact: true,
-      })
+    const review = invited.page.getByRole('dialog', {
+      name: 'Review room invitation',
+      exact: true,
+    });
+    await review
+      .getByText('Room: Fixture room (fixture-room). Offered role: user.', { exact: true })
       .waitFor();
-    await invited.page.waitForFunction(
-      () => document.querySelector('#room-input').value === 'fixture-room',
+    assert.equal(invited.redemptions.length, 0, 'a link may only preview');
+    assert.equal(
+      new URL(invited.page.url()).hash,
+      '',
+      'the secret is removed from browser history',
     );
-    assert.equal(await invited.page.getByText('Connecting', { exact: true }).isVisible(), true);
+    await review.getByRole('button', { name: 'Accept invitation', exact: true }).click();
+    await invited.page
+      .getByText(
+        'Invitation confirmed for Fixture room. Current permissions apply. Choose Join when ready.',
+        { exact: true },
+      )
+      .waitFor();
+    assert.equal(await invited.page.locator('#room-input').inputValue(), 'fixture-room');
     assert.equal(invited.sent.filter((message) => message.type === 'joinRoom').length, 0);
     invited.releaseSocket();
+    await invited.page.getByText('Connected', { exact: true }).waitFor();
+    assert.equal(
+      invited.sent.filter((message) => message.type === 'joinRoom').length,
+      0,
+      'readiness cannot turn acceptance into an automatic join',
+    );
+    assert.equal(await invited.page.locator('#join-screen').isVisible(), true);
+    await invited.page.locator('#join-btn').click();
     await invited.page.locator('#room-screen').waitFor({ state: 'visible' });
     assert.deepEqual(
       invited.sent
@@ -304,33 +330,50 @@ async function run() {
     );
     await invited.page.screenshot({ path: path.join(artifacts, 'identity-roster.png') });
     report.checks.push(
-      'An invitation redeemed before signaling connects joins exactly once when ready',
+      'An invitation requires explicit acceptance and a separate join even when signaling becomes ready later',
     );
     await invited.context.close();
 
-    for (const change of ['destination', 'account']) {
-      const stale = await fixture({ signedIn: true, invite: true, holdSocket: true });
-      await stale.page.waitForFunction(
-        () => document.querySelector('#room-input').value === 'fixture-room',
-      );
-      if (change === 'destination') await stale.page.locator('#room-input').fill('newer-choice');
-      else {
-        await stale.page.locator('#logout-btn').click();
-        await stale.page.locator('#sign-in-btn').waitFor({ state: 'visible' });
-      }
-      stale.releaseSocket();
-      await stale.page.getByText('Connected', { exact: true }).waitFor();
-      assert.equal(stale.sent.filter((message) => message.type === 'joinRoom').length, 0);
-      assert.equal(stale.redemptions.length, 1);
-      if (change === 'destination')
-        assert.equal(await stale.page.locator('#room-input').inputValue(), 'newer-choice');
-      report.checks.push(`A newer ${change} retires an invitation waiting for signaling`);
-      await stale.context.close();
-    }
+    const inPlace = await fixture({ signedIn: true });
+    await inPlace.page.locator('#room-input').fill('existing-choice');
+    await inPlace.page.goto(`${origin}/#invite=${'a'.repeat(32)}`);
+    await inPlace.page
+      .getByRole('dialog', { name: 'Review room invitation', exact: true })
+      .getByRole('button', { name: 'Accept invitation', exact: true })
+      .waitFor();
+    assert.equal(inPlace.redemptions.length, 0);
+    assert.equal(inPlace.sent.filter((message) => message.type === 'joinRoom').length, 0);
+    await inPlace.page.keyboard.press('Escape');
+    report.checks.push(
+      'A fragment link opened in the existing document previews without becoming a room navigation',
+    );
+    await inPlace.context.close();
+
+    const cancelled = await fixture({ signedIn: true, invite: true, holdSocket: true });
+    await cancelled.page
+      .getByRole('dialog', { name: 'Review room invitation', exact: true })
+      .getByRole('button', { name: 'Accept invitation', exact: true })
+      .waitFor();
+    await cancelled.page.keyboard.press('Escape');
+    cancelled.releaseSocket();
+    await cancelled.page.getByText('Connected', { exact: true }).waitFor();
+    assert.equal(cancelled.redemptions.length, 0);
+    assert.equal(cancelled.sent.filter((message) => message.type === 'joinRoom').length, 0);
+    report.checks.push('Dismissing an invitation neither redeems nor joins it');
+    await cancelled.context.close();
 
     const superseded = await fixture({ signedIn: true, invite: true, holdInvite: true });
+    await superseded.page
+      .getByRole('dialog', { name: 'Review room invitation', exact: true })
+      .getByRole('button', { name: 'Accept invitation', exact: true })
+      .click();
     await superseded.inviteSeen;
-    await superseded.page.locator('#room-input').fill('newer-choice');
+    await superseded.page.evaluate(() => {
+      window.location.hash = 'newer-choice';
+    });
+    await superseded.page.waitForFunction(
+      () => document.querySelector('#room-input').value === 'newer-choice',
+    );
     // Await application-side JSON consumption before checking that it ignored the
     // obsolete response. A completed route.fulfill alone is not such a barrier.
     await superseded.page.evaluate(() => {

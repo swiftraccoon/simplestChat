@@ -4,6 +4,8 @@ interface RoomNavigationOptions {
   pending: (pending: boolean) => void;
   error: (error: unknown) => void;
   tryJoin?: (id: string) => boolean;
+  /** Consume another supported fragment flow without selecting or joining a room. */
+  interceptLocation?: (selectedRoom: string) => boolean;
 }
 
 const invalidRoomIdCharacter = /[^A-Za-z0-9_-]/;
@@ -62,7 +64,7 @@ export class RoomNavigation {
     this.intent++;
   }
 
-  /** An explicit invitation or account-room action waits for signaling readiness. */
+  /** An explicit account-room action waits for signaling readiness. */
   requestJoin(id: string): void {
     if (this.disposed || !this.validate(id, false)) return;
     if (!this.selectRoom(id)) return;
@@ -146,6 +148,10 @@ export class RoomNavigation {
 
   private readonly onLocationChange = (): void => {
     if (this.disposed || window.location.hash === this.observedHash) return;
+    if (this.options.interceptLocation?.(this.destination)) {
+      this.observedHash = window.location.hash;
+      return;
+    }
     this.cancelPendingJoin();
     this.observedHash = window.location.hash;
     const id = this.readHash();
