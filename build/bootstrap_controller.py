@@ -147,6 +147,11 @@ def ansible_environment(root: Path) -> dict[str, str]:
     result = controller_environment()
     result["PATH"] = str(root / "ops/ansible/.venv/bin") + ":" + result["PATH"]
     result.update(
+        # Ansible rejects the ASCII C locale before loading a playbook. C.UTF-8
+        # is provided by the supported Linux and macOS controllers. Keep plain
+        # C for the generic SSH/password subprocess environment.
+        LC_ALL="C.UTF-8",
+        LANG="C.UTF-8",
         ANSIBLE_CONFIG=str(root / "ops/ansible/ansible.cfg"),
         ANSIBLE_HOST_KEY_CHECKING="True",
         ANSIBLE_RETRY_FILES_ENABLED="False",

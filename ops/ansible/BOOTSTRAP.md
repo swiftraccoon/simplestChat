@@ -78,6 +78,9 @@ fsynced before any forced change begins. SSH keys are likewise flushed before
 remote enrollment. The controller and password child disable core dumps and use
 absolute OpenSSH binaries with a small environment allowlist; inherited loader,
 Python, shell, Ansible and SSH-agent hooks do not reach child processes.
+Ansible uses the `C.UTF-8` locale on supported Linux and macOS controllers;
+its startup requires UTF-8. Generic SSH/password subprocesses keep the plain
+`C` locale, independent of the caller's language settings.
 The supported dialogue is the English OpenSSH/Debian password
 exchange, with bounded time, output and prompt counts and terminal echo checked
 before each secret write. Unsupported prompts fail with a fixed error code;

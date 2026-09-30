@@ -388,6 +388,8 @@ class BootstrapTests(unittest.TestCase):
                 "SSH_AUTH_SOCK": "fixture",
                 "ANSIBLE_INVENTORY_ENABLED": "script",
                 "BASH_ENV": "fixture",
+                "LANG": "fixture-invalid-locale",
+                "LC_ALL": "C",
             },
         ):
             environment = BOOT.ansible_environment(self.root)
@@ -400,6 +402,37 @@ class BootstrapTests(unittest.TestCase):
         ):
             self.assertNotIn(key, environment)
         self.assertEqual(BOOT.ssh_command(self.target, "true")[0], "/usr/bin/ssh")
+        self.assertEqual(
+            set(environment),
+            {
+                "PATH",
+                "HOME",
+                "LC_ALL",
+                "LANG",
+                "ANSIBLE_CONFIG",
+                "ANSIBLE_HOST_KEY_CHECKING",
+                "ANSIBLE_RETRY_FILES_ENABLED",
+            },
+        )
+        self.assertEqual(environment["LC_ALL"], "C.UTF-8")
+        self.assertEqual(environment["LANG"], "C.UTF-8")
+        generic = BOOT.controller_environment()
+        self.assertEqual(generic["LC_ALL"], "C")
+        self.assertEqual(generic["LANG"], "C")
+
+    def test_ansible_cli_imports_with_the_isolated_environment(self) -> None:
+        """Real pinned Ansible startup requires UTF-8 on both Linux and macOS."""
+        completed = subprocess.run(
+            [sys.executable, "-m", "ansible.cli.playbook", "--version"],
+            cwd=self.base,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=15,
+            env=BOOT.ansible_environment(ROOT),
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("ansible-playbook [core ", completed.stdout)
 
     def test_inventory_transport_override_and_wrong_host_rejected(self) -> None:
         """An existing inventory cannot redirect the selected target or SSH executable."""
