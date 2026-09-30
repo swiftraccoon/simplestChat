@@ -26,6 +26,7 @@ HTTP / WebSocket
 | Wire contract | `signaling/protocol.rs` and [web/src/protocol.ts](../web/src/protocol.ts) |
 | Password/passkey auth and JWT validation | `auth/routes.rs`, `auth/password.rs`, `auth/webauthn.rs`, `auth/jwt.rs`, `auth/limiter.rs` (sign-in failure delays, registration window) |
 | Profiles, recovery and refresh sessions | `auth/account.rs`, `auth/session.rs` |
+| One-use WebSocket authentication tickets | `auth/ws_tickets.rs` |
 | Membership, lobby, chat and reconnect state | `room/mod.rs`, `room/social.rs` |
 | Ordered persistence and uncertain-write handling | `room/control.rs` |
 | Persistent room/community API | `room/api.rs`, `room/community.rs`, `room/settings.rs` |
@@ -96,6 +97,19 @@ lookup budget. Failure delays are account-plus-address scoped, so a stream of
 failures at other addresses cannot continuously deny the owner's proof. All
 address-limiter tables use bounded LRU eviction, with no shared overflow penalty;
 resource admission remains a separate protection against distributed traffic.
+
+Authenticated HTTP mints a 256-bit one-use upgrade ticket, consumed from the
+`ticket.` WebSocket subprotocol. Pending records contain a digest, session-bound
+claims and a monotonic deadline of at most 30 seconds; at most 10,000 records are
+retained per process. Full capacity refuses issuance after reclaiming expired
+records. Consumption is atomic before database revalidation; logout, credential
+revocation and original access-token expiry are checked again before upgrade.
+Existing connection expiry/renewal/revocation handling then owns the session.
+Unknown or credential-bearing protocols are rejected instead of becoming guests.
+This removes reusable JWTs from handshake headers, but tickets remain secret
+until consumed/expired. A future load balancer must route ticket issuance and
+upgrade to the same application process or provide an equivalent shared atomic
+store; current deployment is a single application process.
 
 Invitation creation returns a random 160-bit secret only once. Listings expose
 metadata and an unrelated UUID used for revocation. `invites.code_hash` stores a

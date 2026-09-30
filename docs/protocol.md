@@ -19,6 +19,7 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `accountProfile` | `GET /api/auth/profile` | `AccountProfile` |
 | `updateProfile` | `PATCH /api/auth/profile` | `AccountProfile` |
 | `changePassword` | `POST /api/auth/password` | `204`, no body |
+| WebSocket ticket provider | `POST /api/auth/ws-ticket`, Bearer JWT and JSON `{}` | `{ ticket: string, expires_in: integer }` |
 | `accountPreferences` | `GET /api/auth/preferences` | `ChatPreferences` |
 | `updatePreferences` | `PUT /api/auth/preferences` | `ChatPreferences` |
 | `registrationInvites` | `GET /api/auth/invites` | `RegistrationInvite[]` |
@@ -152,12 +153,38 @@ The browser connects to `/ws` on the page's host, using `wss:` for HTTPS pages a
 `ws:` for local HTTP. Messages are JSON text objects with a camelCase `type`
 discriminant and camelCase fields.
 
-The client offers the `simplestchat` subprotocol. An authenticated connection also
-offers an `auth.`-prefixed JWT; the server selects only `simplestchat`, never the
-credential-bearing value. Query-string tokens are rejected. A supplied invalid
-token fails the upgrade instead of silently creating a guest connection. Without
-a token, the connection is a guest. Keep JWTs and reconnect credentials out of
-URLs, logs and saved examples.
+A signed-in browser first requests `POST /api/auth/ws-ticket` with its bearer
+JWT in the normal HTTP Authorization header and an empty JSON object. The
+no-store response contains a 43-character base64url `ticket` (256 random bits)
+and integer `expires_in` from 1 through 30 seconds, bounded by the original
+access token's remaining lifetime. The browser offers `simplestchat` and
+`ticket.<ticket>` as WebSocket subprotocols. The server selects only
+`simplestchat`, never the ticket. JWT subprotocols and all WebSocket query
+parameters are rejected; there is no alternate authenticated handshake format.
+A guest can offer just `simplestchat` or omit protocols, as native load clients do.
+An invalid supplied protocol or ticket never downgrades to a guest.
+
+A ticket belongs to the account and refresh-session claims validated at issuance.
+The server atomically removes it before database revalidation, then checks that
+the session still exists, the account version still matches, and both the
+monotonic ticket deadline and original access-token expiry remain in the future.
+A failed consumed attempt requires a newly minted ticket. A successful upgrade
+retains the usual ongoing expiry, renewal and session-revocation checks. Tickets
+do not create sessions or extend access-token lifetime.
+
+The process retains at most 10,000 pending ticket digests and bounded claim
+records. At capacity it removes expired entries, then refuses new issuance with
+503 if still full; it does not evict a live capability. Issuance uses the existing
+HTTP address and authenticated-account rate budgets plus operation admission.
+Tickets are process-local, disappear on restart, and require the mint and upgrade
+to reach the same process in any future multi-node deployment.
+
+Clients must mint a fresh ticket for every connection attempt and fence the
+asynchronous response against account changes, disconnects and superseded
+attempts. Tickets must never enter URLs, logs, persistent browser storage or
+saved examples. Their short lifetime and one-use semantics reduce replay from
+handshake-header exposure; they remain sensitive capabilities until consumed or
+expired and do not make header logging safe.
 
 Browser upgrades must satisfy the server's Origin policy. Use `ALLOWED_ORIGINS`
 for explicit deployment origins; its unset development behavior permits matching

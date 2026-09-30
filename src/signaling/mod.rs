@@ -69,7 +69,7 @@ const PRINCIPAL_SKETCH_WIDTH: usize = 65_536;
 const PRINCIPAL_SKETCH_WIDTH_U64: u64 = 65_536;
 const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const HTTP_BODY_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
-const WS_AUTH_PROTOCOL_PREFIX: &str = "auth.";
+const WS_AUTH_PROTOCOL_PREFIX: &str = "ticket.";
 
 fn rate_limit_ip(ip: IpAddr) -> IpAddr {
     match ip {
@@ -311,6 +311,7 @@ pub struct SignalingServer {
     telemetry_guard: AuthGuard,
     db_pool: Option<PgPool>,
     jwt_secret: Option<String>,
+    ws_tickets: Arc<crate::auth::ws_tickets::TicketStore>,
     metrics_token: Option<String>,
     media_diagnostics: Option<Arc<media_diagnostics::MediaDiagnostics>>,
     allowed_origins: Arc<Vec<String>>,
@@ -493,6 +494,7 @@ impl SignalingServer {
             ),
             db_pool,
             jwt_secret,
+            ws_tickets: Arc::new(crate::auth::ws_tickets::TicketStore::new()),
             metrics_token,
             media_diagnostics,
             allowed_origins,
@@ -565,6 +567,10 @@ impl SignalingServer {
 
     pub fn challenge_store(&self) -> Option<&ChallengeStore> {
         self.challenge_store.as_deref()
+    }
+
+    pub(crate) fn websocket_tickets(&self) -> &crate::auth::ws_tickets::TicketStore {
+        &self.ws_tickets
     }
 
     pub(crate) fn registration_enabled(&self) -> bool {
@@ -665,6 +671,7 @@ impl SignalingServer {
                     .layer(DefaultBodyLimit::max(32 * 1024)),
             )
             .route("/password", post(crate::auth::account::change_password))
+            .route("/ws-ticket", post(crate::auth::ws_tickets::issue))
             .route(
                 "/recovery/key",
                 post(crate::auth::account::create_recovery_key),
@@ -1017,13 +1024,12 @@ async fn metrics_handler(State(server): State<SignalingServer>, headers: HeaderM
 }
 
 #[derive(Deserialize)]
-struct WsParams {
-    token: Option<String>,
-}
+#[serde(deny_unknown_fields)]
+struct WsParams {}
 
 /// WebSocket upgrade handler
 async fn ws_handler(
-    Query(params): Query<WsParams>,
+    Query(_params): Query<WsParams>,
     mut ws: WebSocketUpgrade,
     headers: HeaderMap,
     axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<std::net::SocketAddr>,
@@ -1032,17 +1038,6 @@ async fn ws_handler(
     if server.room_manager.drain_signal().is_draining() {
         return (StatusCode::SERVICE_UNAVAILABLE, "Server shutting down").into_response();
     }
-    // Query strings are routinely captured by proxy and APM logs. Reject old
-    // clients explicitly so an authenticated user is never silently treated as
-    // a guest after bearer tokens move to the WebSocket subprotocol header.
-    if params.token.is_some() {
-        return (
-            StatusCode::BAD_REQUEST,
-            "WebSocket query tokens are no longer accepted",
-        )
-            .into_response();
-    }
-
     // Client IP for guest ban enforcement. X-Forwarded-For is client-supplied
     // and trivially spoofable, so it is honored only for a loopback peer when
     // no shared secret is configured, or for a proxy presenting that secret.
@@ -1088,39 +1083,26 @@ async fn ws_handler(
         }
     };
 
-    let auth_token = match websocket_auth_token(&headers) {
+    let auth_token = match websocket_auth_ticket(&headers) {
         Ok(token) => token,
         Err(message) => return (StatusCode::BAD_REQUEST, message).into_response(),
     };
 
-    // A supplied token must validate. Silently treating a bad token as a guest
-    // creates dangerous client/server authorization state confusion.
+    // Subscribe before revocation validation so a credential change racing the
+    // upgrade is still observed by the established connection handler.
     let auth_revocations = server.auth_revocations.subscribe();
     let authenticated_user = match auth_token.as_deref() {
         None => None,
-        Some(token) => {
-            let Some(secret) = server.jwt_secret() else {
+        Some(ticket) => {
+            let Some(pool) = server.db_pool() else {
                 return (StatusCode::UNAUTHORIZED, "Authentication unavailable").into_response();
             };
-            match crate::auth::jwt::validate_token(token, secret) {
-                Ok(claims) => {
-                    let Some(pool) = server.db_pool() else {
-                        return (StatusCode::UNAUTHORIZED, "Authentication unavailable")
-                            .into_response();
-                    };
-                    let Some(_auth_permit) = server.try_acquire_auth_request() else {
-                        return crate::auth::types::AuthError::ServiceBusy.into_response();
-                    };
-                    if let Err(error) =
-                        crate::auth::jwt::validate_current_claims(pool, &claims).await
-                    {
-                        return error.into_response();
-                    }
-                    Some(claims)
-                }
-                Err(_) => {
-                    return (StatusCode::UNAUTHORIZED, "Invalid or expired token").into_response();
-                }
+            let Some(_auth_permit) = server.try_acquire_auth_request() else {
+                return crate::auth::types::AuthError::ServiceBusy.into_response();
+            };
+            match server.websocket_tickets().redeem(pool, ticket).await {
+                Ok(claims) => Some(claims),
+                Err(error) => return error.into_response(),
             }
         }
     };
@@ -1332,29 +1314,26 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
         == 0
 }
 
-fn websocket_auth_token(headers: &HeaderMap) -> Result<Option<String>, &'static str> {
-    let mut token = None;
+fn websocket_auth_ticket(headers: &HeaderMap) -> Result<Option<String>, &'static str> {
+    let mut ticket = None;
     for value in headers.get_all(header::SEC_WEBSOCKET_PROTOCOL) {
         let value = value
             .to_str()
             .map_err(|_| "Invalid WebSocket subprotocol")?;
         for protocol in value.split(',').map(str::trim) {
-            let Some(candidate) = protocol.strip_prefix(WS_AUTH_PROTOCOL_PREFIX) else {
+            if protocol == "simplestchat" {
                 continue;
-            };
-            if candidate.is_empty() || candidate.len() > 4_096 || token.is_some() {
-                return Err("Invalid WebSocket authentication protocol");
             }
-            if !candidate
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-            {
-                return Err("Invalid WebSocket authentication protocol");
+            let candidate = protocol
+                .strip_prefix(WS_AUTH_PROTOCOL_PREFIX)
+                .ok_or("Unsupported WebSocket subprotocol")?;
+            if ticket.is_some() || !crate::auth::ws_tickets::valid_shape(candidate) {
+                return Err("Invalid WebSocket authentication ticket");
             }
-            token = Some(candidate.to_string());
+            ticket = Some(candidate.to_string());
         }
     }
-    Ok(token)
+    Ok(ticket)
 }
 
 fn origin_allowed(headers: &HeaderMap, allowlist: &[String]) -> bool {
@@ -2014,6 +1993,137 @@ mod security_tests {
             .unwrap();
     }
 
+    #[tokio::test]
+    #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+    async fn database_ticket_http_and_upgrade_enforce_single_use_and_logout() {
+        use crate::auth::{jwt, session};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let pool = PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+            .await
+            .unwrap();
+        let user = uuid::Uuid::new_v4();
+        sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Upgrade test')")
+            .bind(user)
+            .bind(format!("{user}@upgrade.invalid"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        let refresh = session::generate_refresh_token().unwrap();
+        let mut transaction = pool.begin().await.unwrap();
+        let sid = session::create_session_with(&mut transaction, &user, &refresh)
+            .await
+            .unwrap();
+        transaction.commit().await.unwrap();
+        let secret = "disposable-upgrade-test-secret-at-least-32-bytes";
+        let token =
+            jwt::create_session_token(&user.to_string(), "Upgrade test", secret, 0, sid).unwrap();
+        let mut media = crate::media::config::MediaConfig::default();
+        media.worker_config.num_workers = 1;
+        media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
+        let metrics = ServerMetrics::new();
+        let manager = Arc::new(
+            RoomManager::new(media, metrics.clone(), None)
+                .await
+                .unwrap(),
+        );
+        let mut server = SignalingServer::new(manager, None, metrics, Some(pool.clone())).unwrap();
+        server.jwt_secret = Some(secret.into());
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                server
+                    .router()
+                    .into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await
+            .unwrap();
+        });
+        let mint = |bearer: Option<String>| async move {
+            let mut connection = tokio::net::TcpStream::connect(address).await.unwrap();
+            let authorization = bearer.map_or(String::new(), |value| {
+                format!("Authorization: Bearer {value}\r\n")
+            });
+            connection.write_all(format!("POST /api/auth/ws-ticket HTTP/1.1\r\nHost: {address}\r\n{authorization}Content-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").as_bytes()).await.unwrap();
+            let mut response = String::new();
+            connection.read_to_string(&mut response).await.unwrap();
+            response
+        };
+        let upgrade = |protocol: String| async move {
+            let mut connection = tokio::net::TcpStream::connect(address).await.unwrap();
+            connection.write_all(format!("GET /ws HTTP/1.1\r\nHost: {address}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: {protocol}\r\n\r\n").as_bytes()).await.unwrap();
+            let mut response = Vec::new();
+            while response.len() < 16_384 && !response.ends_with(b"\r\n\r\n") {
+                response.push(connection.read_u8().await.unwrap());
+            }
+            String::from_utf8(response).unwrap()
+        };
+        let result = tokio::time::timeout(Duration::from_secs(10), async {
+            assert!(mint(None).await.starts_with("HTTP/1.1 401 "));
+            let response = mint(Some(token.clone())).await;
+            assert!(response.starts_with("HTTP/1.1 200 "));
+            assert!(
+                response
+                    .to_ascii_lowercase()
+                    .contains("cache-control: no-store")
+            );
+            let data: serde_json::Value =
+                serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
+            let ticket = data["ticket"].as_str().unwrap();
+            assert!(crate::auth::ws_tickets::valid_shape(ticket));
+            let response = upgrade(format!("simplestchat, ticket.{ticket}")).await;
+            assert!(response.starts_with("HTTP/1.1 101 "));
+            assert!(
+                response
+                    .to_ascii_lowercase()
+                    .contains("sec-websocket-protocol: simplestchat\r\n")
+            );
+            assert!(!response.contains(ticket));
+            assert!(
+                upgrade(format!("simplestchat, ticket.{ticket}"))
+                    .await
+                    .starts_with("HTTP/1.1 401 ")
+            );
+            assert!(
+                upgrade(format!("simplestchat, auth.{token}"))
+                    .await
+                    .starts_with("HTTP/1.1 400 ")
+            );
+            let response = mint(Some(token)).await;
+            let data: serde_json::Value =
+                serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
+            session::delete_session_by_token(&pool, &refresh.raw)
+                .await
+                .unwrap();
+            assert!(
+                upgrade(format!(
+                    "simplestchat, ticket.{}",
+                    data["ticket"].as_str().unwrap()
+                ))
+                .await
+                .starts_with("HTTP/1.1 401 ")
+            );
+            assert!(
+                upgrade("simplestchat".into())
+                    .await
+                    .starts_with("HTTP/1.1 101 "),
+                "guest connections remain available"
+            );
+        })
+        .await;
+        task.abort();
+        let _ = task.await;
+        sqlx::query("DELETE FROM users WHERE id=$1")
+            .bind(user)
+            .execute(&pool)
+            .await
+            .unwrap();
+        result.unwrap();
+    }
+
     #[test]
     fn account_rate_sketch_keeps_distinct_principals_usable() {
         let limiter = PrincipalRateLimiter::new(2);
@@ -2109,22 +2219,33 @@ mod security_tests {
     }
 
     #[test]
-    fn websocket_bearer_is_extracted_from_subprotocol_header() {
+    fn websocket_ticket_protocol_rejects_bearers_duplicates_and_malformed_values() {
         let mut headers = HeaderMap::new();
+        assert!(websocket_auth_ticket(&headers).unwrap().is_none());
+        let ticket = "A".repeat(43);
         headers.insert(
             header::SEC_WEBSOCKET_PROTOCOL,
-            HeaderValue::from_static("simplestchat, auth.header.payload.signature"),
+            HeaderValue::from_str(&format!("simplestchat, ticket.{ticket}")).unwrap(),
         );
         assert_eq!(
-            websocket_auth_token(&headers).unwrap().as_deref(),
-            Some("header.payload.signature")
+            websocket_auth_ticket(&headers).unwrap(),
+            Some(ticket.clone())
         );
-
-        headers.insert(
-            header::SEC_WEBSOCKET_PROTOCOL,
-            HeaderValue::from_static("auth.first, auth.second"),
-        );
-        assert!(websocket_auth_token(&headers).is_err());
+        for invalid in [
+            "auth.header.payload.signature".to_owned(),
+            "unexpected".into(),
+            "ticket.short".into(),
+            format!("ticket.{ticket}, ticket.{ticket}"),
+        ] {
+            headers.insert(
+                header::SEC_WEBSOCKET_PROTOCOL,
+                HeaderValue::from_str(&invalid).unwrap(),
+            );
+            assert!(websocket_auth_ticket(&headers).is_err());
+        }
+        assert!(Query::<WsParams>::try_from_uri(&"/ws".parse().unwrap()).is_ok());
+        assert!(Query::<WsParams>::try_from_uri(&"/ws?token=secret".parse().unwrap()).is_err());
+        assert!(Query::<WsParams>::try_from_uri(&"/ws?ticket=secret".parse().unwrap()).is_err());
     }
 
     #[test]
