@@ -383,6 +383,21 @@ whole-browser resource measurements or production-capacity budgets.
 
 ## Other checks
 
+`npm --prefix web/e2e run test:resilience` loads the current production assets
+with isolated HTTP and WebSocket fixtures; build `web/dist` first and do not
+rebuild it during the run. No server, database or capture device is used. The
+suite checks native dialog keyboard ownership, blocked/quota-exhausted storage,
+late room creation, capability-specific onboarding, stable roster focus and
+hidden roster removal, plus the chat composer at 320×568, 390×844 and 844×390
+with its emoji picker open. Unexpected page errors or any capture request fail.
+
+Set `E2E_ARTIFACTS` to an output directory, or allow a fresh temporary directory.
+The runner saves a JSON result, small-screen screenshots and owned Chromium
+cleanup evidence. Its 60-second work deadline and existing browser cleanup
+deadlines bound failures. These mocked backend and resized desktop Chromium
+checks complement the real community suite; they do not prove native mobile,
+screen-reader, backend or media behavior.
+
 See [testing](../../docs/testing.md) for unit, database and container checks.
 `community.cjs` is the maintained browser gate. The older non-CI `checklist.cjs` was
 removed in September 2026: it drove a deployed server through a tunnel and expected the

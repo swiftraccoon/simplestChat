@@ -485,6 +485,13 @@ jobs:
           E2E_ARTIFACTS: ${{ runner.temp }}/homepage-layout
         run: npm --prefix web/e2e run test:layout
 
+      - name: Frontend lifecycle and degraded-browser regressions
+        if: matrix.group == 'stress'
+        timeout-minutes: 3
+        env:
+          E2E_ARTIFACTS: ${{ runner.temp }}/frontend-resilience
+        run: npm --prefix web/e2e run test:resilience
+
       - name: Automatic room recovery after an owned server restart
         if: matrix.group == 'stress'
         timeout-minutes: 3
@@ -507,6 +514,15 @@ jobs:
         with:
           name: homepage-layout
           path: ${{ runner.temp }}/homepage-layout
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Preserve frontend lifecycle diagnostics
+        if: ${{ !cancelled() && matrix.group == 'stress' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-resilience
+          path: ${{ runner.temp }}/frontend-resilience
           if-no-files-found: ignore
           retention-days: 7
 

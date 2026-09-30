@@ -222,6 +222,22 @@ Add `SESSION_SOAK_PROFILE=smoke` for a 30-second harness check; it does **not** 
 refresh or expiry. Both profiles use desktop and 375px Chromium viewports, with
 capture denied. They do not establish physical mobile or media continuity.
 
+### Frontend lifecycle and degraded-browser regression checks
+
+After building the production UI, run `npm --prefix web/e2e run test:resilience`.
+This isolated Chromium suite routes HTTP and signaling fixtures into the actual
+production bundle. It checks native authentication/creation dialog focus and
+background isolation, blocked or full preference storage, stale room-creation
+responses, capability-aware onboarding, roster focus preservation and composer
+containment at short mobile viewport sizes. It uses no database or live backend
+and does not capture media. A separate temporary artifact directory records the
+checks and browser cleanup; `E2E_ARTIFACTS` selects an explicit output directory.
+
+Run `npm --prefix web/e2e run test:layout` for the broader responsive-layout matrix
+and the real-backend community/accessibility suites for integration behavior.
+Mocked UI success does not establish native-device, mobile-browser or backend
+correctness. CI runs both the layout and lifecycle suites against built assets.
+
 ### Automated accessibility smoke
 
 After installing the browser tooling and building the UI:

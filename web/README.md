@@ -94,6 +94,61 @@ completion or dialog departure. Device-list changes never request capture.
 Screen sharing distinguishes cancellation/permission failure from setup errors,
 and reports whether optional screen audio is included, unavailable or ended.
 
+## Availability, request ownership and large rooms
+
+On startup the client reads the versioned `/api/capabilities` response and shows
+the account, registration and directory actions the server supports. Invite-only
+password registration explains the required code; passkey registration appears
+only when the server supports that separate flow. Capabilities are public UI
+hints, not authorization. If an older server does not implement the endpoint,
+the client preserves its existing entry points and displays endpoint errors when
+an unavailable action is attempted. Reload after changing server capabilities.
+
+The named APIs in `ui.ts` bound the complete response to 15 seconds, including
+JSON decoding, and propagate caller cancellation. Directory searches cancel the
+previous request. Authentication and WebSocket operations retain their separate
+ownership and deadline policies. A cancelled, malformed or unconfirmed mutation
+may already have committed on the server: its submitting button stays disabled,
+and the message asks the user to reload and inspect the result before trying
+again. Definite HTTP rejections such as validation and permission failures permit
+a corrected retry. There is no automatic mutation replay. Closing room creation
+or selecting a newer destination prevents its late response from joining or
+replacing the selection; a successful detached creation remains in My rooms.
+
+Sign-in, registration and room creation use native modal dialogs so keyboard
+focus stays within the active dialog and returns when it closes. Local storage
+is optional for display name, layout and microphone preference: blocked access
+or quota failures fall back to tab memory. These fallbacks do not make browser
+storage durable and do not replace account/session security handling.
+
+The roster reconciles keyed rows only in the visible People panel, retaining
+unchanged controls and keyboard focus as membership changes. Profile reads share
+in-flight promises, run at most eight requests concurrently, and retain at most
+512 current members. Members beyond that bound keep their initials; explicitly
+opening a profile takes the next available read slot before queued avatar work.
+Leaving the room or changing identity retires
+the cache. My rooms loads memberships in cursor pages with an explicit Load more
+button; older servers' array responses remain accepted as a single page.
+
+Media subscription remains an explicit scaling limit. The browser requests each
+remote producer; offscreen tiles do not automatically release or pause their
+subscriptions. Tile size caps a camera's simulcast layer but does not remove its
+consumer. The viewer's Hide action pauses the relevant remote video locally and
+on the server, retaining its consumer slot for a quick resume. The default
+`MAX_CONSUMERS_PER_PARTICIPANT=64` therefore fits at most 32 remote publishers
+with microphone and camera, or 16 with microphone, camera, screen video and
+screen audio, before additional subscriptions can be refused. These are track
+counts, not tested capacity guarantees; mixed publication changes the totals.
+
+A webinar with a few publishers and many viewers has different browser and SFU
+costs from a call where everyone publishes. Increasing the consumer limit alone
+does not establish capacity. A future large-call policy should explicitly bound
+subscribed video, prioritize pinned/shared/active-speaker tracks, release unused
+consumers and coordinate audio choices with the server. Such a policy requires
+decoding, focus, recovery and bandwidth tests; it is not enabled by this client.
+Use the [capacity and performance guide](../docs/performance.md) for measured
+workloads and deployment limits.
+
 ## Tests
 
 `npm --prefix web test` runs Node source-level regressions with mocked browser
