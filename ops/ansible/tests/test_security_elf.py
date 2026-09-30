@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import struct
 import tempfile
@@ -12,11 +13,12 @@ from pathlib import Path
 from typing import cast
 from unittest.mock import patch
 
-from test_support import ROOT
+from test_support import ROOT, obj, objects, string
 
 # isort: split
 
 import security_elf as elf
+from release_json import decode_json, object_value
 
 FILE_SIZE = 4096
 BASE = 0x400000
@@ -48,7 +50,7 @@ def metadata() -> dict[str, object]:
     }
 
 
-def fixture(*, library: bool = False) -> bytes:
+def fixture(*, library: bool = False, needed: tuple[str, ...] | None = None) -> bytes:
     """Construct metadata-only ELF bytes; no executable program is present."""
     data = bytearray(FILE_SIZE)
     ident = b"\x7fELF\x02\x01\x01" + bytes(9)
@@ -68,14 +70,17 @@ def fixture(*, library: bool = False) -> bytes:
         SECTION_COUNT,
         1,
     )
-    strings = b"\0libc.so.6\0"
+    dependencies = needed if needed is not None else (() if library else ("libc.so.6",))
+    strings = b"\0" + b"".join(name.encode("ascii") + b"\0" for name in dependencies)
     entries = [
         (elf.DT_STRTAB, BASE + STRINGS_OFFSET),
         (elf.DT_STRSZ, len(strings)),
         (elf.DT_FLAGS_1, elf.DF_1_NOW | elf.DF_1_PIE),
     ]
-    if not library:
-        entries.append((elf.DT_NEEDED, 1))
+    offset = 1
+    for name in dependencies:
+        entries.append((elf.DT_NEEDED, offset))
+        offset += len(name) + 1
     entries.append((0, 0))
     dynamic = b"".join(elf.DYNAMIC_ENTRY.pack(*entry) for entry in entries)
     interpreter = b"/lib64/ld-linux-x86-64.so.2\0"
@@ -324,6 +329,70 @@ class ElfSecurityTests(unittest.TestCase):
         self.assertIn("security_tools.py install --tools cargo-auditable", dockerfile)
         self.assertIn("security_tools.py path cargo-auditable", dockerfile)
         self.assertNotIn("cargo build --locked --release --bin simplestChat", dockerfile)
+
+    def test_failed_library_policy_retains_bounded_identities_without_relaxing_policy(self) -> None:
+        """A failing real parser path names conventional SONAMEs in private evidence."""
+        needed = ("libc.so.6", "libstdc++.so.6", "ld-linux-x86-64.so.2")
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            rootfs(directory)
+            _ = (directory / "app/simplestChat").write_bytes(fixture(needed=needed))
+            output = directory / "report.json"
+            self.assertEqual(elf.main(["--rootfs", str(directory), "--output", str(output)]), 1)
+            report = object_value(decode_json(output.read_bytes()))
+            self.assertFalse(report["passed"])
+            self.assertEqual(report["reason"], "elf_hardening:approvedLibraries")
+            evidence = obj(report, "dynamicDependencies")
+            self.assertEqual(evidence["count"], len(needed))
+            self.assertEqual(evidence["omitted"], 0)
+            self.assertEqual(
+                {string(row, "name"): row["approved"] for row in objects(evidence, "identities")},
+                {"libc.so.6": True, "libstdc++.so.6": False, "ld-linux-x86-64.so.2": False},
+            )
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+
+    def test_dependency_diagnostics_hide_unusual_strings_and_bound_complete_identity(self) -> None:
+        """Only a small conventional SONAME set is printed; other bytes are hashed."""
+        private = "NeverPublishFixtureCredentialValue.so"
+        evidence = elf.dependency_diagnostics((private,))
+        self.assertNotIn(private, json.dumps(evidence))
+        self.assertEqual(
+            evidence["identities"],
+            [
+                {
+                    "name": None,
+                    "sha256": hashlib.sha256(private.encode()).hexdigest(),
+                    "approved": False,
+                }
+            ],
+        )
+        needed = tuple(
+            f"libfixture{index}.so.1" for index in range(elf.MAX_DIAGNOSTIC_DEPENDENCIES + 2)
+        )
+        evidence = elf.dependency_diagnostics(needed)
+        self.assertEqual(evidence["count"], len(needed))
+        self.assertEqual(evidence["omitted"], 2)
+        self.assertEqual(
+            len(cast("list[object]", evidence["identities"])), elf.MAX_DIAGNOSTIC_DEPENDENCIES
+        )
+        self.assertEqual(
+            evidence["sha256"],
+            hashlib.sha256(b"\0".join(name.encode() for name in needed)).hexdigest(),
+        )
+        self.assertLess(len(json.dumps(evidence)), 8192)
+
+    def test_invalid_dependency_strings_never_enter_failure_evidence(self) -> None:
+        """Parser rejection precedes diagnostics for paths or log-control characters."""
+        for name in ("../private-fixture.so", "libprivate\nfixture.so"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                rootfs(directory)
+                _ = (directory / "app/simplestChat").write_bytes(fixture(needed=(name,)))
+                output = directory / "report.json"
+                self.assertEqual(elf.main(["--rootfs", str(directory), "--output", str(output)]), 1)
+                self.assertEqual(
+                    json.loads(output.read_text()), {"passed": False, "reason": "elf_needed_name"}
+                )
 
     def test_image_paths_cannot_follow_host_files_or_special_resources(self) -> None:
         """Absolute symlinks are rooted in the image, and escapes/cycles fail closed."""

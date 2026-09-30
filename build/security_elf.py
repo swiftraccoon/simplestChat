@@ -29,6 +29,7 @@ MAX_PACKAGES = 16384
 MAX_TABLE = 8192
 MAX_LINKS = 40
 MAX_NAME = 256
+MAX_DIAGNOSTIC_DEPENDENCIES = 32
 ELF_HEADER = struct.Struct("<16sHHIQQQIHHHHHH")
 PROGRAM_HEADER = struct.Struct("<IIQQQQQQ")
 SECTION_HEADER = struct.Struct("<IIQQQQIIQQ")
@@ -67,6 +68,11 @@ RUNTIME_LIBRARIES = frozenset({"libc.so.6", "libm.so.6", "libgcc_s.so.1"})
 
 class ElfError(ValueError):
     """A fixed, safe-to-report ELF or artifact validation failure."""
+
+    def __init__(self, reason: str, *, dependencies: dict[str, object] | None = None) -> None:
+        """Keep bounded validated dependency facts separate from the fixed reason."""
+        super().__init__(reason)
+        self.dependencies: dict[str, object] | None = dependencies
 
 
 def require(condition: object, reason: str) -> None:
@@ -365,6 +371,33 @@ def dependency_metadata(section: bytes | None) -> dict[str, object]:
     }
 
 
+def dependency_diagnostics(needed: tuple[str, ...]) -> dict[str, object]:
+    """Identify rejected linkage without exposing arbitrary artifact strings."""
+    identities: list[dict[str, object]] = []
+    # Prioritize unapproved names so approved dependencies cannot crowd the
+    # useful diagnostic out of the bounded report. Hashes bind omitted names.
+    ordered = sorted(needed, key=lambda name: (name in RUNTIME_LIBRARIES, name))
+    for name in ordered[:MAX_DIAGNOSTIC_DEPENDENCIES]:
+        conventional = re.fullmatch(
+            r"(?:lib[a-z][a-z0-9_+.-]{0,47}\.so(?:\.[0-9]{1,8}){0,4}"
+            + r"|ld-linux-(?:x86-64|aarch64)\.so\.[0-9]{1,8})",
+            name,
+        )
+        identities.append(
+            {
+                "name": name if conventional else None,
+                "sha256": hashlib.sha256(name.encode("ascii")).hexdigest(),
+                "approved": name in RUNTIME_LIBRARIES,
+            }
+        )
+    return {
+        "count": len(needed),
+        "omitted": max(0, len(needed) - MAX_DIAGNOSTIC_DEPENDENCIES),
+        "sha256": hashlib.sha256(b"\0".join(name.encode("ascii") for name in needed)).hexdigest(),
+        "identities": identities,
+    }
+
+
 def hardening(elf: Elf, platform: str) -> dict[str, bool]:
     """Require all encoded executable hardening properties independently."""
     flags = elf.dynamic.get(DT_FLAGS, [0])[0]
@@ -385,10 +418,9 @@ def hardening(elf: Elf, platform: str) -> dict[str, bool]:
         "noRpath": DT_RPATH not in elf.dynamic and DT_RUNPATH not in elf.dynamic,
         "approvedLibraries": bool(elf.needed) and set(elf.needed) <= RUNTIME_LIBRARIES,
     }
-    require(
-        all(checks.values()),
-        "elf_hardening:" + ",".join(name for name, ok in checks.items() if not ok),
-    )
+    if not all(checks.values()):
+        reason = "elf_hardening:" + ",".join(name for name, ok in checks.items() if not ok)
+        raise ElfError(reason, dependencies=dependency_diagnostics(elf.needed))
     return checks
 
 
@@ -507,11 +539,14 @@ def main(argv: list[str] | None = None) -> int:
         cast("str", args.platform),
         cast("Path", args.output),
     )
+    report: dict[str, object]
     try:
         report = audit(root, platform)
     except (ElfError, OSError) as error:
         reason = str(error) if isinstance(error, ElfError) else "elf_filesystem_error"
         report = {"passed": False, "reason": reason}
+        if isinstance(error, ElfError) and error.dependencies is not None:
+            report["dynamicDependencies"] = error.dependencies
     descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as destination:
         _ = destination.write(json.dumps(report, indent=2) + "\n")

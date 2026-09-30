@@ -59,6 +59,14 @@ host libraries cannot satisfy a missing dependency. The report records resolved
 file paths, byte counts and SHA-256 hashes. Native/package provenance must
 associate these files with their build or RPM identities separately.
 
+A hardening failure also retains bounded dynamic-dependency evidence in
+`elf.json`. Up to 32 identities are reported, prioritizing unapproved dependencies;
+the complete count, ordered-name digest and omission count remain explicit.
+Only short conventional lowercase library SONAMEs and the supported loader
+SONAMEs are displayed. Unusual names retain only their SHA-256 and approval state;
+malformed names are rejected before this diagnostic is produced. This evidence
+does not expand the runtime allowlist or turn a failed check into a passing one.
+
 These checks establish encoded artifact properties. They do not prove deployed
 kernel ASLR/NX policy, every function's compiler protections, decoded media
 quality, or absence of vulnerabilities. The dynamic-linker rationale is covered
