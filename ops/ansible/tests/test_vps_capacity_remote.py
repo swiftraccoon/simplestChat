@@ -20,6 +20,7 @@ from test_support import ROOT
 
 # isort: split
 
+import bounded_process
 import vps_capacity_remote as remote
 
 REVISION = "a" * 40
@@ -510,13 +511,15 @@ class RemoteTests(unittest.TestCase):
         self.directory.rmdir()
         helper = (ROOT / "build/vps_capacity_remote.py").read_text()
         _ = (self.source / "build/vps_capacity_remote.py").write_text(helper)
+        process_helper = (ROOT / "build/bounded_process.py").read_text()
+        _ = (self.source / "build/bounded_process.py").write_text(process_helper)
         with (
             patch.object(remote, "workload_lock", return_value=nullcontext()),
             patch.object(remote, "preflight", return_value={}),
             patch.object(remote, "verify_source", return_value=self.source),
             patch.object(remote, "images_for", return_value=image_manifest()),
         ):
-            result = remote.start(request(), helper)
+            result = remote.start(request(), helper, process_helper)
         self.assertEqual(result["run"], RUN)
         recorded = remote.array(remote.read_json(self.directory / "unit-command.json")["argv"])
         for argument in (
@@ -559,6 +562,7 @@ class RemoteTests(unittest.TestCase):
                     patch.object(remote, "images_for", return_value=image_manifest()),
                     patch.object(remote, "residuals", return_value=cleanup),
                     patch.object(subprocess, "Popen", return_value=child) as launch,
+                    patch.object(bounded_process, "pump", return_value=exit_status) as pump,
                     patch.object(signal, "signal"),
                 ):
                     status = remote.run_worker(request())
@@ -571,16 +575,17 @@ class RemoteTests(unittest.TestCase):
                     remote.capacity_argv(request(), image_manifest()),
                     stdin=subprocess.DEVNULL,
                     stdout=ANY,
-                    stderr=subprocess.STDOUT,
+                    stderr=subprocess.PIPE,
                     env=dict(
                         remote.ENVIRONMENT,
                         DOCKER_HOST="unix:///var/run/docker.sock",
                         DOCKER_CONFIG=str(docker_config),
                     ),
+                    start_new_session=True,
                 )
                 self.assertEqual(docker_config.stat().st_mode & 0o777, 0o700)
                 self.assertEqual(list(docker_config.iterdir()), [])
-                wait.assert_called_once()
+                pump.assert_called_once()
 
     def test_image_checks_reject_mutable_refs_wrong_revision_and_root_runtime(self) -> None:
         """Runtime manifests must match both immutable images and their committed nonroot build."""

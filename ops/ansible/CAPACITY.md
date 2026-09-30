@@ -85,6 +85,9 @@ both OS-maintenance flags set to `false`. It holds the canonical workload lock
 through preparation. The controller supplies the selected SSH trust settings
 as one-run overrides, preserving the stored inventory. Initial OS maintenance
 belongs to bootstrap's explicit `--initial-maintenance` option.
+The controller continuously checks the SSH lease while Ansible runs. Lease loss,
+excess output or a deadline terminates and reaps the owned command group; an
+interrupted preparation remains a failure that requires inspection before retry.
 
 `--build-images` starts the canonical image-build service and observes its
 result. Successful builds retain immutable local image identities in
@@ -142,7 +145,12 @@ Missing reports, invalid generator observations, workload failures, timeouts and
 uncertain cleanup return nonzero. An adaptive search may retain useful passing
 lower bounds before a failing step; its nonzero result preserves that distinction.
 
-Docker log reads request only the last 1,000 lines and retain at most 200,000 characters.
+Subprocess stdout/stderr are drained concurrently and limited before bytes reach
+disk or a memory buffer. General controller commands have 2 MiB per-stream limits;
+remote JSON responses and worker logs have 8 MiB limits per stream. Archive
+downloads have a separate 512 MiB ceiling. A limit failure stops the owned process
+group, retains bounded evidence and cannot become a passing measurement. Docker
+log reads request only the last 1,000 lines and retain at most 200,000 characters.
 
 Audio coverage requires at least 95% of the expected packet count for every
 continuous audio consumer, alongside the existing connection, sustained-media,
@@ -183,7 +191,9 @@ Physical tar headers and extended metadata are bounded before general parsing.
 The host-generated collection manifest records the exact size and SHA-256 of
 each accepted file and the transferred archive. After successful publication,
 the redundant raw archive is removed; failed transfers retain bounded evidence.
-JSON reads independently refuse links and nonregular files.
+JSON reads independently refuse links and nonregular files. Download expansion
+counts all decompressed bytes, including metadata and padding, toward its 1 GiB
+limit, and rejects trailing or concatenated compressed streams.
 
 Diagnostic container inspections retain only identity and lifecycle fields.
 They exclude container environment variables and scoped metrics credentials.

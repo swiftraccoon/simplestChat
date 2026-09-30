@@ -27,6 +27,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+import bounded_process
+
 if TYPE_CHECKING:
     from collections.abc import Generator
     from types import FrameType
@@ -120,21 +122,16 @@ def save(path: Path, value: dict[str, object]) -> None:
 
 def command(argv: list[str], *, timeout: int = 30, allow_failure: bool = False) -> str:
     """Run fixed argv with an isolated environment and bounded captured output."""
-    with tempfile.TemporaryFile() as output:
-        result = subprocess.run(  # noqa: S603 -- validated explicit argv; no shell.
+    try:
+        status, output, error = bounded_process.run(
             argv,
-            stdin=subprocess.DEVNULL,
-            stdout=output,
-            stderr=output,
             env=ENVIRONMENT,
-            timeout=timeout,
-            check=False,
+            limits=bounded_process.Limits(timeout=timeout, stdout=MAX_JSON, stderr=MAX_JSON),
         )
-        _ = output.seek(0)
-        data = output.read(MAX_JSON + 1)
-    require(len(data) <= MAX_JSON, "command_output_too_large")
-    require(allow_failure or result.returncode == 0, "host_command_failed")
-    return data.decode("utf-8", errors="strict").strip()
+    except bounded_process.ProcessError as error:
+        raise CapacityControlError(str(error)) from error
+    require(allow_failure or status == 0, "host_command_failed")
+    return (output + error).decode("utf-8", errors="strict").strip()
 
 
 def unit_state(unit: str) -> dict[str, object]:
@@ -532,29 +529,50 @@ def run_worker(request: dict[str, object]) -> int:  # noqa: PLR0915 -- one journ
             child = subprocess.Popen(  # noqa: S603 -- validated explicit argv.
                 argv,
                 stdin=subprocess.DEVNULL,
-                stdout=log,
-                stderr=subprocess.STDOUT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 env=dict(
                     ENVIRONMENT,
                     DOCKER_HOST="unix:///var/run/docker.sock",
                     DOCKER_CONFIG=str(docker_config),
                 ),
+                start_new_session=True,
             )
 
             def terminate(_signal: int, _frame: FrameType | None) -> None:
-                if child.poll() is None:
-                    child.terminate()
+                if child.returncode is None:
+                    os.kill(child.pid, signal.SIGTERM)
 
             previous = signal.signal(signal.SIGTERM, terminate)
             try:
-                outcome["exitStatus"] = child.wait()
+                outcome["exitStatus"] = bounded_process.pump(
+                    child,
+                    log,
+                    log,
+                    bounded_process.Limits(
+                        timeout=number(request["runtimeSeconds"], 120, 21600) + 600,
+                        stdout=MAX_JSON,
+                        stderr=MAX_JSON,
+                    ),
+                )
             finally:
+                if child.returncode is None:
+                    bounded_process.stop(child)
+                for stream in (child.stdout, child.stderr):
+                    if stream is not None:
+                        stream.close()
                 _ = signal.signal(signal.SIGTERM, previous)
         report = read_json(directory / "workload/calibration.json")
         verdict = assess(report, request)
         outcome.update(verdict)
         outcome["passed"] = outcome["exitStatus"] == 0 and verdict["passed"] is True
-    except (CapacityControlError, OSError, ValueError, subprocess.SubprocessError) as error:
+    except (
+        CapacityControlError,
+        bounded_process.ProcessError,
+        OSError,
+        ValueError,
+        subprocess.SubprocessError,
+    ) as error:
         outcome["failureClass"] = (
             str(error) if isinstance(error, CapacityControlError) else type(error).__name__
         )
@@ -585,7 +603,7 @@ def run_worker(request: dict[str, object]) -> int:  # noqa: PLR0915 -- one journ
     return 0 if outcome["passed"] is True else 1
 
 
-def start(request: dict[str, object], helper: str) -> dict[str, object]:
+def start(request: dict[str, object], helper: str, process_helper: str) -> dict[str, object]:
     """Start one bounded unit with an exact private request file; never retry it."""
     request = validate_request(request)
     with workload_lock():
@@ -595,6 +613,10 @@ def start(request: dict[str, object], helper: str) -> dict[str, object]:
             (source / "build/vps_capacity_remote.py").read_text() == helper,
             "helper_revision_mismatch",
         )
+        require(
+            (source / "build/bounded_process.py").read_text() == process_helper,
+            "process_helper_revision_mismatch",
+        )
         _ = images_for(request)
         directory = evidence_path(request)
         directory.mkdir(mode=0o700)
@@ -602,6 +624,9 @@ def start(request: dict[str, object], helper: str) -> dict[str, object]:
         helper_path = directory / "worker.py"
         _ = helper_path.write_text(helper, encoding="utf-8")
         helper_path.chmod(0o600)
+        dependency_path = directory / "bounded_process.py"
+        _ = dependency_path.write_text(process_helper, encoding="utf-8")
+        dependency_path.chmod(0o600)
     unit = f"simplestchat-capacity-{request['run']}.service"
     argv = [
         "/usr/bin/systemd-run",
@@ -622,6 +647,11 @@ def start(request: dict[str, object], helper: str) -> dict[str, object]:
         str(STATE / "workload.lock"),
         "/usr/bin/python3",
         "-I",
+        "-c",
+        "import runpy,sys; directory,helper,request=sys.argv[1:]; "
+        + "sys.path.insert(0,directory); sys.argv=[helper,request]; "
+        + "runpy.run_path(helper,run_name='__main__')",
+        str(directory),
         str(helper_path),
         str(directory / "request.json"),
     ]
@@ -809,7 +839,7 @@ def stream_archive(request: dict[str, object]) -> None:
         _ = sys.stdout.buffer.flush()
 
 
-def serve(request: dict[str, object], helper: str) -> None:
+def serve(request: dict[str, object], helper: str, process_helper: str) -> None:
     """Dispatch the allowlisted transport operations; no remote CLI interpolation."""
     _ = os.umask(0o077)
     action = request.get("action")
@@ -827,7 +857,7 @@ def serve(request: dict[str, object], helper: str) -> None:
     elif action == "build":
         result = build_images(validate_request(request))
     elif action == "start":
-        result = start(request, helper)
+        result = start(request, helper, process_helper)
     elif action == "status":
         result = (
             unit_state(BUILD_UNIT)

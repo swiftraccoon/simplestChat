@@ -16,13 +16,14 @@ import hashlib
 import json
 import os
 import re
-import selectors
 import shlex
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 import uuid
+import zlib
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -30,22 +31,32 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, cast
 
 import bootstrap_controller as BOOTSTRAP  # noqa: N812 -- shared controller convention.
+import bounded_process
+import capacity_artifacts
 import release_build as BUILD  # noqa: N812 -- shared controller convention.
 import release_fetch_controller as FETCH  # noqa: N812 -- shared strict SSH environment.
 import vps_capacity_remote as REMOTE  # noqa: N812 -- shared validated protocol.
 from bootstrap_access import BootstrapError
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
+    from typing import BinaryIO
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_REQUEST = 512 * 1024
+MAX_LEASE_RESPONSE = 65536
+GZIP_HEADER_SIZE = 10
+GZIP_NAME_FLAG = 8
 LOADER = (
-    "import json,sys; "
+    "import json,sys,types; "
     + "envelope=json.loads(sys.stdin.buffer.readline(524289)); "
+    + "dependency=types.ModuleType('bounded_process'); "
+    + "sys.modules['bounded_process']=dependency; "
+    + "exec(compile(envelope['processHelper'],'committed-process-helper','exec'),"
+    + "dependency.__dict__); "
     + "scope={'__name__':'capacity_transport'}; "
     + "exec(compile(envelope['helper'],'committed-capacity-helper','exec'),scope); "
-    + "scope['serve'](envelope['request'],envelope['helper'])"
+    + "scope['serve'](envelope['request'],envelope['helper'],envelope['processHelper'])"
 )
 
 
@@ -191,6 +202,72 @@ def inventory_target(args: Options, root: Path) -> BOOTSTRAP.BootstrapTarget:
 
 
 @dataclass
+class PreparationLease:
+    """Continuously drain a held SSH lease while bounding output and observing liveness."""
+
+    child: subprocess.Popen[bytes]
+    error: BinaryIO
+    response: bytes = b""
+    error_bytes: int = 0
+    failed: bool = False
+
+    def send(self, payload: bytes) -> None:
+        """Send the bounded request while draining output; a stalled SSH cannot block forever."""
+        if self.child.stdin is None:
+            raise REMOTE.CapacityControlError("ssh_pipes_missing")
+        os.set_blocking(self.child.stdin.fileno(), False)
+        pending = memoryview(payload)
+        deadline = time.monotonic() + 60
+        while pending:
+            REMOTE.require(self.healthy(), "preparation_lease_lost")
+            REMOTE.require(time.monotonic() < deadline, "preparation_lease_timeout")
+            try:
+                sent = os.write(self.child.stdin.fileno(), pending[:4096])
+            except BlockingIOError:
+                time.sleep(bounded_process.POLL_SECONDS)
+            else:
+                pending = pending[sent:]
+
+    def healthy(self) -> bool:
+        """Poll both nonblocking pipes; false cancels the owning preparation command."""
+        for stream, is_error in ((self.child.stdout, False), (self.child.stderr, True)):
+            if stream is None:
+                return False
+            try:
+                chunk = os.read(stream.fileno(), 65536)
+            except BlockingIOError:
+                continue
+            if not chunk:
+                self.failed = True
+            elif is_error:
+                remaining = bounded_process.MAX_CAPTURE - self.error_bytes
+                _ = self.error.write(chunk[:remaining])
+                self.error_bytes += len(chunk)
+                self.failed |= self.error_bytes > bounded_process.MAX_CAPTURE
+            else:
+                self.response += chunk
+                self.failed |= (
+                    len(self.response) > MAX_LEASE_RESPONSE or self.response.count(b"\n") > 1
+                )
+        return not self.failed and not bounded_process.leader_exited(self.child.pid)
+
+    def ready(self) -> None:
+        """Require one complete handshake without blocking on a partial response line."""
+        deadline = time.monotonic() + 60
+        while self.healthy():
+            if self.response.endswith(b"\n"):
+                REMOTE.require(
+                    REMOTE.obj(cast("object", json.loads(self.response))).get("privateHost")
+                    is True,
+                    "invalid_preparation_lease",
+                )
+                return
+            REMOTE.require(time.monotonic() < deadline, "preparation_lease_timeout")
+            time.sleep(bounded_process.POLL_SECONDS)
+        raise REMOTE.CapacityControlError("preparation_lease_lost")
+
+
+@dataclass
 class Transport:
     """One strict SSH target carrying only committed helper code and JSON data."""
 
@@ -198,6 +275,7 @@ class Transport:
     helper: str
     evidence: Path
     sequence: int = 0
+    process_helper: str = ""
 
     def argv(self) -> list[str]:
         """Select the fixed remote loader; no request value enters this command."""
@@ -208,7 +286,12 @@ class Transport:
 
     def payload(self, request: dict[str, object]) -> bytes:
         """Bound the entire helper/request envelope before sending it."""
-        data = (json.dumps({"helper": self.helper, "request": request}) + "\n").encode()
+        data = (
+            json.dumps(
+                {"helper": self.helper, "processHelper": self.process_helper, "request": request}
+            )
+            + "\n"
+        ).encode()
         REMOTE.require(len(data) <= MAX_REQUEST, "remote_request_too_large")
         return data
 
@@ -220,33 +303,28 @@ class Transport:
             (self.evidence / f"{stem}.stdout").open("xb") as output,
             (self.evidence / f"{stem}.stderr").open("xb") as error,
         ):
-            child = subprocess.Popen(  # noqa: S603 -- fixed SSH loader and validated target.
+            status, _, _ = bounded_process.run(
                 self.argv(),
-                stdin=subprocess.PIPE,
-                stdout=output,
-                stderr=error,
+                output=output,
+                error=error,
+                input_data=self.payload(request),
                 env=FETCH.ssh_environment(),
-                start_new_session=True,
+                limits=bounded_process.Limits(timeout=timeout, stdout=REMOTE.MAX_JSON),
             )
-            try:
-                _ = child.communicate(self.payload(request), timeout=timeout)
-                REMOTE.require(child.returncode == 0, "remote_operation_failed")
-            finally:
-                if child.poll() is None:
-                    _ = BUILD.Runner.stop_process(child)
+            REMOTE.require(status == 0, "remote_operation_failed")
         path = self.evidence / f"{stem}.stdout"
         REMOTE.require(path.stat().st_size <= REMOTE.MAX_JSON, "remote_response_too_large")
         return REMOTE.obj(cast("object", json.loads(path.read_bytes())))
 
     @contextmanager
-    def reserve(self, request: dict[str, object]) -> Generator[None]:
+    def reserve(self, request: dict[str, object]) -> Generator[Callable[[], bool]]:
         """Hold the remote workload lock continuously across source preparation."""
         with (self.evidence / "preparation-lease.stderr").open("xb") as error:
             child: subprocess.Popen[bytes] = subprocess.Popen(  # noqa: S603 -- fixed SSH loader.
                 self.argv(),
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=error,
+                stderr=subprocess.PIPE,
                 env=FETCH.ssh_environment(),
                 start_new_session=True,
             )
@@ -254,31 +332,28 @@ class Transport:
                 REMOTE.require(
                     child.stdin is not None and child.stdout is not None, "ssh_pipes_missing"
                 )
-                if child.stdin is None or child.stdout is None:
+                if child.stdin is None or child.stdout is None or child.stderr is None:
                     raise REMOTE.CapacityControlError("ssh_pipes_missing")
-                _ = child.stdin.write(self.payload(dict(request, action="reserve")))
-                child.stdin.flush()
-                with selectors.DefaultSelector() as selector:
-                    _ = selector.register(child.stdout, selectors.EVENT_READ)
-                    REMOTE.require(selector.select(60), "preparation_lease_timeout")
-                    record = cast("bytes", child.stdout.readline(REMOTE.MAX_JSON + 1))
-                REMOTE.require(
-                    len(record) <= REMOTE.MAX_JSON
-                    and REMOTE.obj(cast("object", json.loads(record))).get("privateHost") is True,
-                    "invalid_preparation_lease",
-                )
-                yield
+                os.set_blocking(child.stdout.fileno(), False)
+                os.set_blocking(child.stderr.fileno(), False)
+                lease = PreparationLease(child, error)
+                lease.send(self.payload(dict(request, action="reserve")))
+                lease.ready()
+                yield lease.healthy
+                REMOTE.require(lease.healthy(), "preparation_lease_lost")
                 _ = child.stdin.write(b"release\n")
                 child.stdin.flush()
                 child.stdin.close()
                 REMOTE.require(child.wait(timeout=30) == 0, "preparation_lease_lost")
             finally:
-                if child.poll() is None:
+                if child.returncode is None:
                     _ = BUILD.Runner.stop_process(child)
                 if child.stdin is not None:
                     child.stdin.close()
                 if child.stdout is not None:
                     child.stdout.close()
+                if child.stderr is not None:
+                    child.stderr.close()
 
     def download(self, request: dict[str, object], destination: Path) -> None:
         """Stream a bounded private archive without buffering it in memory."""
@@ -286,40 +361,60 @@ class Transport:
             destination.open("xb") as output,
             (self.evidence / "archive.stderr").open("xb") as error,
         ):
-            child = subprocess.Popen(  # noqa: S603 -- fixed SSH loader.
+            status, _, _ = bounded_process.run(
                 self.argv(),
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=error,
+                output=output,
+                error=error,
+                input_data=self.payload(dict(request, action="archive")),
                 env=FETCH.ssh_environment(),
-                start_new_session=True,
+                limits=bounded_process.Limits(timeout=300, stdout=REMOTE.MAX_ARCHIVE),
             )
-            try:
-                if child.stdin is None or child.stdout is None:
-                    raise REMOTE.CapacityControlError("ssh_pipes_missing")
-                _ = child.stdin.write(self.payload(dict(request, action="archive")))
-                child.stdin.close()
-                deadline = time.monotonic() + 300
-                size = 0
-                with selectors.DefaultSelector() as selector:
-                    _ = selector.register(child.stdout, selectors.EVENT_READ)
-                    while True:
-                        remaining = deadline - time.monotonic()
-                        REMOTE.require(
-                            remaining > 0 and selector.select(remaining), "archive_download_timeout"
-                        )
-                        chunk = os.read(child.stdout.fileno(), 1024**2)
-                        if not chunk:
-                            break
-                        size += len(chunk)
-                        REMOTE.require(size <= REMOTE.MAX_ARCHIVE, "archive_too_large")
-                        _ = output.write(chunk)
-                REMOTE.require(child.wait(timeout=15) == 0, "archive_download_failed")
-            finally:
-                if child.poll() is None:
-                    _ = BUILD.Runner.stop_process(child)
-                if child.stdout is not None:
-                    child.stdout.close()
+            REMOTE.require(status == 0, "archive_download_failed")
+
+
+@contextmanager
+def expanded_archive(archive: Path) -> Generator[BinaryIO]:
+    """Bound decompressed bytes and tar metadata before the general tar parser runs."""
+    with archive.open("rb") as source, tempfile.TemporaryFile() as expanded:
+        header = source.read(GZIP_HEADER_SIZE)
+        REMOTE.require(
+            len(header) == GZIP_HEADER_SIZE
+            and header[:3] == b"\x1f\x8b\x08"
+            and header[3] in (0, GZIP_NAME_FLAG),
+            "unsupported_gzip_header",
+        )
+        if header[3] == GZIP_NAME_FLAG:
+            for _ in range(256):
+                if source.read(1) == b"\x00":
+                    break
+            else:
+                raise REMOTE.CapacityControlError("gzip_name_too_long")
+        _ = source.seek(0)
+        decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        total = 0
+        try:
+            while chunk := source.read(65536):
+                while chunk:
+                    decoded = decoder.decompress(chunk, 65536)
+                    chunk = decoder.unconsumed_tail
+                    total += len(decoded)
+                    REMOTE.require(total <= REMOTE.MAX_EXPANDED, "artifacts_too_large")
+                    _ = expanded.write(decoded)
+                    REMOTE.require(not decoder.unused_data, "trailing_gzip_data")
+            REMOTE.require(decoder.eof, "truncated_gzip_archive")
+        except zlib.error:
+            raise REMOTE.CapacityControlError("invalid_gzip_archive") from None
+        _ = expanded.seek(0)
+        try:
+            capacity_artifacts.check_headers(expanded, REMOTE.MAX_FILES * 2, REMOTE.MAX_FILE)
+        except capacity_artifacts.ArtifactError as error:
+            code = (
+                "artifact_too_large"
+                if str(error) == "oversized_tar_body"
+                else "unsafe_archive_entry"
+            )
+            raise REMOTE.CapacityControlError(code) from error
+        yield expanded
 
 
 def extract_archive(archive: Path, destination: Path) -> None:
@@ -328,7 +423,7 @@ def extract_archive(archive: Path, destination: Path) -> None:
     destination.mkdir(mode=0o700)
     seen: set[str] = set()
     total = 0
-    with tarfile.open(archive, mode="r:gz") as bundle:
+    with expanded_archive(archive) as expanded, tarfile.open(fileobj=expanded, mode="r:") as bundle:
         for member in bundle:
             name = PurePosixPath(member.name)
             REMOTE.require(
@@ -394,7 +489,12 @@ def execute(args: Options, root: Path = ROOT) -> dict[str, object]:  # noqa: PLR
     )
     output.mkdir(mode=0o700)
     helper = (root / "build/vps_capacity_remote.py").read_text(encoding="utf-8")
-    transport = Transport(target, helper, output)
+    transport = Transport(
+        target,
+        helper,
+        output,
+        process_helper=(root / "build/bounded_process.py").read_text(encoding="utf-8"),
+    )
     report: dict[str, object] = {
         "schemaVersion": 1,
         "passed": False,
@@ -413,7 +513,7 @@ def execute(args: Options, root: Path = ROOT) -> dict[str, object]:  # noqa: PLR
                 REMOTE.require(args.validated_inventory is not None, "inventory_not_validated")
                 inventory_snapshot = output / "inventory.snapshot.json"
                 REMOTE.save(inventory_snapshot, REMOTE.obj(args.validated_inventory))
-                with transport.reserve(request):
+                with transport.reserve(request) as healthy:
                     argv = BOOTSTRAP.site_command(root, inventory_snapshot, args.limit, revision)
                     argv.extend(["--tags", "source,benchmark"])
                     argv.extend(
@@ -428,7 +528,7 @@ def execute(args: Options, root: Path = ROOT) -> dict[str, object]:  # noqa: PLR
                             ),
                         ]
                     )
-                    _, _ = BUILD.Runner(output=output).run(
+                    _, _ = BUILD.Runner(output=output, healthy=healthy).run(
                         argv,
                         cwd=root,
                         env=BOOTSTRAP.ansible_environment(root),
@@ -469,6 +569,8 @@ def execute(args: Options, root: Path = ROOT) -> dict[str, object]:  # noqa: PLR
         ValueError,
         subprocess.SubprocessError,
         tarfile.TarError,
+        capacity_artifacts.ArtifactError,
+        bounded_process.ProcessError,
     ) as error:
         report["failureClass"] = (
             str(error) if isinstance(error, REMOTE.CapacityControlError) else type(error).__name__

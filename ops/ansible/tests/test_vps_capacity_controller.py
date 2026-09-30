@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gzip
 import io
 import json
 import os
@@ -80,6 +81,7 @@ class ControllerTests(unittest.TestCase):
         self.root = Path(temporary.name).resolve() / "checkout"
         (self.root / "build").mkdir(parents=True)
         _ = (self.root / "build/vps_capacity_remote.py").write_text("# committed fixture\n")
+        _ = (self.root / "build/bounded_process.py").write_text("# committed process fixture\n")
         private = self.root.parent / "private"
         private.mkdir(mode=0o700)
         identity, known = private / "key", private / "known_hosts"
@@ -387,6 +389,29 @@ class ControllerTests(unittest.TestCase):
         snapshot = Path(self.commands[0][self.commands[0].index("-i") + 1])
         self.assertEqual(json.loads(snapshot.read_bytes()), expected)
 
+    def test_lease_loss_cancels_a_quiet_preparation_before_its_deadline(self) -> None:
+        """The same health check used by preparation observes remote EOF during execution."""
+        with subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "import time; print('{\"privateHost\":true}',flush=True); time.sleep(.4)",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        ) as child:
+            if child.stdout is None or child.stderr is None:
+                self.fail("fixture pipes missing")
+            os.set_blocking(child.stdout.fileno(), False)
+            os.set_blocking(child.stderr.fileno(), False)
+            lease = controller.PreparationLease(child, io.BytesIO())
+            lease.ready()
+            with self.assertRaisesRegex(build.BuildError, "command_lease_lost"):
+                _ = build.Runner(healthy=lease.healthy).run(
+                    [sys.executable, "-c", "import time; time.sleep(30)"], cwd=self.root, timeout=5
+                )
+
     def test_transport_keeps_request_and_helper_out_of_ssh_arguments(self) -> None:
         """User-selected data travels in bounded JSON stdin, not remote shell text."""
         transport = controller.Transport(self.target, "# " + SECRET, self.root)
@@ -646,6 +671,19 @@ class ControllerTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             controller.extract_archive(archive, destination)
         self.assertEqual(original.read_text(), "preserve")
+
+    def test_archive_bounds_include_padding_and_reject_concatenated_gzip(self) -> None:
+        """Compressed metadata and trailing streams cannot bypass expanded byte accounting."""
+        archive = self.root / "padding.tar.gz"
+        _ = archive.write_bytes(gzip.compress(bytes(2048)))
+        with (
+            patch.object(remote, "MAX_EXPANDED", 1024),
+            self.assertRaisesRegex(remote.CapacityControlError, "artifacts_too_large"),
+        ):
+            controller.extract_archive(archive, self.root / "padding")
+        _ = archive.write_bytes(gzip.compress(bytes(1024)) + gzip.compress(bytes(1024)))
+        with self.assertRaisesRegex(remote.CapacityControlError, "trailing_gzip_data"):
+            controller.extract_archive(archive, self.root / "concatenated")
 
 
 if __name__ == "__main__":
