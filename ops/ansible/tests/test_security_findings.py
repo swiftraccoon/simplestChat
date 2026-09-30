@@ -144,6 +144,18 @@ class FindingTests(unittest.TestCase):
             )
             _ = (root / "migrations/002_next.sql").write_text("SELECT 1;\n")
             self.assertEqual(findings.new_migrations(root), ["migrations/002_next.sql"])
+            for directive in (
+                "-- squawk-ignore-file",
+                "-- squawk-ignore prefer-bigint-over-int",
+                "-- squawk-disable-assume-in-transaction",
+            ):
+                _ = (root / "migrations/002_next.sql").write_text(directive + "\nSELECT 1;\n")
+                with (
+                    self.subTest(directive=directive),
+                    self.assertRaisesRegex(ToolError, "migration_inline_suppression_forbidden"),
+                ):
+                    _ = findings.new_migrations(root)
+            _ = (root / "migrations/002_next.sql").write_text("SELECT 1;\n")
             _ = old.write_text("SELECT 2;\n")
             with self.assertRaisesRegex(ToolError, "reviewed_migration_modified"):
                 _ = findings.new_migrations(root)

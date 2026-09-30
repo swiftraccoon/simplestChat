@@ -194,4 +194,12 @@ def new_migrations(root: Path) -> list[str]:
             hashlib.sha256(bounded_file(root / name, MAX_POLICY)).hexdigest() == expected,
             "reviewed_migration_modified",
         )
-    return sorted(current - set(baseline))
+    added = sorted(current - set(baseline))
+    for name in added:
+        sql = bounded_file(root / name, MAX_POLICY).decode("utf-8")
+        require(
+            re.search(r"(?i)\bsquawk-(?:ignore(?:-file)?|disable-assume-in-transaction)\b", sql)
+            is None,
+            "migration_inline_suppression_forbidden",
+        )
+    return added

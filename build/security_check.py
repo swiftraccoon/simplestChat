@@ -18,7 +18,7 @@ import tempfile
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import security_findings as findings
 from security_context import ROOT, Context, executable, json_object
@@ -188,15 +188,29 @@ def source_checks(context: Context, tools: Path) -> None:
     )
     migrations = findings.new_migrations(context.root)
     if migrations:
-        _ = context.run(
+        config = context.output / "squawk.toml"
+        write_private(
+            config,
+            b"excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\n"
+            + b'assume_in_transaction = true\npg_version = "18.6"\n',
+            0o600,
+        )
+        _, output = context.run(
             "squawk",
             [
                 str(tool_path("squawk", tools)),
+                "--config",
+                str(config),
                 "--pg-version=18.6",
                 "--assume-in-transaction",
                 "--reporter=json",
-                *migrations,
+                *(str(context.root / name) for name in migrations),
             ],
+            cwd=context.output / "home",
+        )
+        require(
+            findings.list_value(cast("object", json.loads(output))) == [],
+            "migration_policy_findings",
         )
     context.checks.append(
         {"name": "migration-review", "newFiles": len(migrations), "exitStatus": 0}
