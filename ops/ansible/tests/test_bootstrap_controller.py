@@ -367,6 +367,40 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(host["scbench_upgrade_packages"] is False)
         self.assertTrue(host["scbench_reboot"] is False)
 
+    def test_recovery_file_data_and_directory_entry_are_synced_in_order(self) -> None:
+        """Local recovery material is durable before a later remote password change."""
+        kinds: list[bool] = []
+
+        def record_sync(descriptor: int) -> None:
+            kinds.append(stat.S_ISDIR(os.fstat(descriptor).st_mode))
+
+        with patch.object(os, "fsync", side_effect=record_sync):
+            BOOT.write_new(self.private / "recovery", b"fixture")
+        self.assertEqual(kinds, [False, True])
+
+    def test_controller_environment_excludes_inherited_code_and_agent_hooks(self) -> None:
+        """Automation uses a reviewed PATH and never inherits process/plugin injection hooks."""
+        with patch.dict(
+            os.environ,
+            {
+                "PYTHONPATH": "fixture",
+                "LD_PRELOAD": "fixture",
+                "SSH_AUTH_SOCK": "fixture",
+                "ANSIBLE_INVENTORY_ENABLED": "script",
+                "BASH_ENV": "fixture",
+            },
+        ):
+            environment = BOOT.ansible_environment(self.root)
+        for key in (
+            "PYTHONPATH",
+            "LD_PRELOAD",
+            "SSH_AUTH_SOCK",
+            "ANSIBLE_INVENTORY_ENABLED",
+            "BASH_ENV",
+        ):
+            self.assertNotIn(key, environment)
+        self.assertEqual(BOOT.ssh_command(self.target, "true")[0], "/usr/bin/ssh")
+
     def test_inventory_transport_override_and_wrong_host_rejected(self) -> None:
         """An existing inventory cannot redirect the selected target or SSH executable."""
         path = Path(self.args.inventory)

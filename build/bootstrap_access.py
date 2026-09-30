@@ -10,11 +10,13 @@ import errno
 import os
 import pty
 import re
+import resource
 import select
 import signal
 import termios
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
@@ -117,6 +119,17 @@ def stop_child(pid: int) -> None:
         _ = os.waitpid(pid, 0)
 
 
+def password_environment() -> dict[str, str]:
+    """Prevent inherited plugins or a core file from exposing the password dialogue."""
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    return {
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "HOME": str(Path.home()),
+        "LC_ALL": "C",
+        "LANG": "C",
+    }
+
+
 def password_session(  # noqa: C901, PLR0912 -- One bounded PTY lifetime owns every exit path.
     argv: Sequence[str], current: str, replacement: str, *, timeout: float = 120
 ) -> PasswordOutcome:
@@ -131,7 +144,7 @@ def password_session(  # noqa: C901, PLR0912 -- One bounded PTY lifetime owns ev
     pid, descriptor = pty.fork()
     if pid == 0:
         try:
-            environment = dict(os.environ, LC_ALL="C", LANG="C")
+            environment = password_environment()
             os.execvpe(argv[0], list(argv), environment)  # noqa: S606 -- Explicit reviewed OpenSSH argv, no shell or secret arguments.
         except OSError:
             os._exit(127)

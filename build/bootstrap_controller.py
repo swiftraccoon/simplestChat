@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import re
+import resource
 import secrets
 import shlex
 import stat
@@ -84,7 +85,12 @@ class BootstrapOptions(argparse.Namespace):
 def run_command(argv: Sequence[str], *, timeout: float = 30) -> tuple[int, str]:
     """Run public arguments with bounded, unlogged output and fixed errors."""
     try:
-        return BUILD.Runner().run(argv, cwd=ROOT, timeout=timeout, allow_failure=True)
+        command = list(argv)
+        if command[0] in ("ssh", "ssh-keygen", "ssh-keyscan", "git"):
+            command[0] = "/usr/bin/" + command[0]
+        return BUILD.Runner().run(
+            command, cwd=ROOT, timeout=timeout, allow_failure=True, env=controller_environment()
+        )
     except (BUILD.BuildError, OSError, UnicodeError):
         raise BootstrapError("controller_command_failed") from None
 
@@ -117,14 +123,25 @@ def ssh_command(
          "-o", "NumberOfPasswordPrompts=1"]
     )  # fmt: skip
     return [
-        "ssh", *ssh_options(target), *authentication, "-tt" if tty else "-T",
+        "/usr/bin/ssh", *ssh_options(target), *authentication, "-tt" if tty else "-T",
         f"{target.user}@{target.host}", command,
     ]  # fmt: skip
 
 
+def controller_environment() -> dict[str, str]:
+    """Exclude inherited interpreters, loaders, plugins, agents and shell hooks."""
+    return {
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "HOME": str(Path.home()),
+        "LC_ALL": "C",
+        "LANG": "C",
+    }
+
+
 def ansible_environment(root: Path) -> dict[str, str]:
     """Select the canonical configuration without inherited Ansible overrides."""
-    result = {key: value for key, value in os.environ.items() if not key.startswith("ANSIBLE_")}
+    result = controller_environment()
+    result["PATH"] = str(root / "ops/ansible/.venv/bin") + ":" + result["PATH"]
     result.update(
         ANSIBLE_CONFIG=str(root / "ops/ansible/ansible.cfg"),
         ANSIBLE_HOST_KEY_CHECKING="True",
@@ -205,6 +222,27 @@ def write_new(path: Path, data: bytes) -> None:
             os.fsync(descriptor)
     finally:
         os.close(descriptor)
+    sync_parent(path)
+
+
+def sync_parent(path: Path) -> None:
+    """Make a newly published recovery or key directory entry crash-durable."""
+    descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def sync_file(path: Path) -> None:
+    """Flush a validated key before its public half is enrolled remotely."""
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        require(stat.S_ISREG(os.fstat(descriptor).st_mode), "invalid_key_type")
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    sync_parent(path)
 
 
 def write_record(path: Path, value: JsonObject) -> None:
@@ -330,6 +368,11 @@ def ensure_identity(target: BootstrapTarget, name: str) -> str:
         )
         require(status == 0, "identity_generation_failed")
     _ = protected_file(target.identity)
+    sync_file(target.identity)
+    public_path = target.identity.with_suffix(target.identity.suffix + ".pub")
+    if public_path.exists() or public_path.is_symlink():
+        _ = protected_file(public_path, secret=False)
+        sync_file(public_path)
     status, public = run_command(["ssh-keygen", "-y", "-P", "", "-f", str(target.identity)])
     require(
         status == 0 and re.fullmatch(r"ssh-ed25519 [A-Za-z0-9+/=]+(?: [^\r\n]+)?", public),
@@ -753,6 +796,7 @@ def bootstrap(args: BootstrapOptions) -> Path:
 def main(argv: list[str] | None = None) -> int:
     """Run the controller, exposing only fixed failures and the evidence location."""
     try:
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         output = bootstrap(options(argv))
     except BootstrapError as error:
         print(f"bootstrap: {error}", file=sys.stderr)  # noqa: T201 -- Redacted CLI status.

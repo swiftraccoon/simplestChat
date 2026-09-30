@@ -73,8 +73,12 @@ prints the file.
 
 Before attempting password authentication, the controller creates the selected
 replacement-password file exclusively, mode `0600`, outside the checkout, or
-reuses an existing protected file. That recovery copy exists before any forced
-change begins. The supported dialogue is the English OpenSSH/Debian password
+reuses an existing protected file. Both its contents and parent directory are
+fsynced before any forced change begins. SSH keys are likewise flushed before
+remote enrollment. The controller and password child disable core dumps and use
+absolute OpenSSH binaries with a small environment allowlist; inherited loader,
+Python, shell, Ansible and SSH-agent hooks do not reach child processes.
+The supported dialogue is the English OpenSSH/Debian password
 exchange, with bounded time, output and prompt counts and terminal echo checked
 before each secret write. Unsupported prompts fail with a fixed error code;
 remote authentication transcripts are neither logged nor printed.
@@ -150,6 +154,11 @@ including provider sizing fields. The old stored source pin is allowed: the
 explicit CLI revision takes precedence for this invocation and is recorded in
 the evidence. Unexpected transport overrides, other groups or enabled stored
 maintenance flags are rejected rather than rewritten.
+
+Every subprocess has live byte and time limits, including provisioning when its
+output is retained only as a log. Standard output and standard error each have a
+2 MiB ceiling. Overflow terminates the owned process group and preserves a failed
+receipt; it does not truncate a failed operation into a successful one.
 
 Continue with [automated private capacity measurements](CAPACITY.md) to prepare
 the selected revision, build immutable images, run bounded measurements and
