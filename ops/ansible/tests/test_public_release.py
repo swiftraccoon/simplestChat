@@ -1238,7 +1238,7 @@ class PublicReleaseTests(unittest.TestCase):
             self.execute_quiet(30)
         report = self.report()
         self.assertTrue(report["passed"])
-        self.assertEqual(report["roomsActiveAtReplacement"], 0)
+        self.assertEqual(report["roomsActiveAtQuietCheck"], 0)
         self.assertEqual(report["quietWaitRequestedSeconds"], 30)
         self.assertEqual(sleep.call_count, 2)
         polls = [
@@ -1246,7 +1246,7 @@ class PublicReleaseTests(unittest.TestCase):
             for call in self.runner.calls
             if call[0] == "run" and call[1][-1].endswith("/metrics")
         ]
-        self.assertEqual(len(polls), 3)
+        self.assertEqual(len(polls), 4)
         stop = next(
             index
             for index, call in enumerate(self.runner.calls)
@@ -1264,6 +1264,17 @@ class PublicReleaseTests(unittest.TestCase):
             "the token never appears in a command line",
         )
 
+    def test_new_rooms_after_quiet_check_are_recorded_before_stop(self) -> None:
+        """A quiet sample cannot hide calls that arrived during backup preparation."""
+        _ = self.stage()
+        self.runner.metrics_rooms = [0, 2]
+        self.execute_quiet(30)
+        report = self.report()
+        self.assertEqual(report["roomsActiveAtQuietCheck"], 0)
+        self.assertEqual(report["roomsActiveBeforeStop"], 2)
+        self.assertNotIn("roomsActiveAtReplacement", report)
+        self.assertIn("roomsObservedBeforeStopAt", report)
+
     def test_replacement_proceeds_at_the_quiet_deadline_and_reports_active_rooms(self) -> None:
         """Rooms still active at the deadline are recorded, not treated as a failure."""
         _ = self.stage()
@@ -1276,7 +1287,7 @@ class PublicReleaseTests(unittest.TestCase):
             self.execute_quiet(2)
         report = self.report()
         self.assertTrue(report["passed"])
-        self.assertEqual(report["roomsActiveAtReplacement"], 3)
+        self.assertEqual(report["roomsActiveAtQuietCheck"], 3)
         self.assertEqual(self.runner.app_image, NEW_IMAGE)
 
     def test_replacement_proceeds_when_metrics_are_unavailable_or_no_token_is_set(self) -> None:
@@ -1287,7 +1298,7 @@ class PublicReleaseTests(unittest.TestCase):
             self.execute_quiet(30)
         report = self.report()
         self.assertTrue(report["passed"])
-        self.assertIsNone(report["roomsActiveAtReplacement"])
+        self.assertIsNone(report["roomsActiveAtQuietCheck"])
         self.assertEqual(sleep.call_count, 0)
         self.assertEqual(self.runner.app_image, NEW_IMAGE)
 
@@ -1305,7 +1316,7 @@ class PublicReleaseTests(unittest.TestCase):
         self.execute_quiet(30)
         report = self.report()
         self.assertTrue(report["passed"])
-        self.assertIsNone(report["roomsActiveAtReplacement"])
+        self.assertIsNone(report["roomsActiveAtQuietCheck"])
         self.assertEqual(report["quietWaitSeconds"], 0)
         polls = [
             call

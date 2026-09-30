@@ -677,7 +677,7 @@ def active_rooms(runner: RunnerProtocol, curl_config: Path) -> int | None:
 
 
 def quiet(runner: RunnerProtocol, report: JsonObject, seconds: int) -> None:
-    """Wait, bounded, for zero active rooms so the replacement interrupts no call.
+    """Observe a bounded quiet window; new calls may still arrive before replacement.
 
     The wait needs the metrics token from app.env; without it, or when the
     endpoint is unreadable, the release proceeds and records that it could
@@ -688,7 +688,7 @@ def quiet(runner: RunnerProtocol, report: JsonObject, seconds: int) -> None:
     token = metrics_token() if seconds > 0 else None
     if token is None:
         report["quietWaitSeconds"] = 0
-        report["roomsActiveAtReplacement"] = None
+        report["roomsActiveAtQuietCheck"] = None
         return
     curl_config = runner.attempt / "metrics-curl.config"
     _ = curl_config.write_text(f'header = "Authorization: Bearer {token}"\n')
@@ -700,7 +700,19 @@ def quiet(runner: RunnerProtocol, report: JsonObject, seconds: int) -> None:
         time.sleep(min(QUIET_POLL_SECONDS, max(0.0, deadline - time.monotonic())))
         rooms = active_rooms(runner, curl_config)
     report["quietWaitSeconds"] = round(time.monotonic() - started, 3)
-    report["roomsActiveAtReplacement"] = rooms
+    report["roomsActiveAtQuietCheck"] = rooms
+
+
+def observe_replacement_rooms(runner: RunnerProtocol, report: JsonObject) -> None:
+    """Sample immediately before stopping; this is an observation, not an admission lock."""
+    token = metrics_token()
+    rooms: int | None = None
+    if token is not None:
+        config = runner.attempt / "replacement-metrics-curl.config"
+        atomic(config, f'header = "Authorization: Bearer {token}"\n')
+        rooms = active_rooms(runner, config)
+    report["roomsActiveBeforeStop"] = rooms
+    report["roomsObservedBeforeStopAt"] = timestamp()
 
 
 def ready(runner: RunnerProtocol, *, origin: str | None = None, seconds: float = 30) -> None:
@@ -1053,6 +1065,7 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
     replaced = False
     try:
         report["phase"] = "replace_application"
+        observe_replacement_rooms(runner, report)
         report["interruptionStartedAt"] = timestamp()
         replaced = True
         _ = runner.compose("stop", "--timeout", "30", "simplestchat", timeout=45)
@@ -1267,6 +1280,7 @@ def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the st
         _ = shutil.copyfile(CONFIG / filename, runner.attempt / ("before-" + filename))
     journal(runner, finalized=False, phase="maintenance_stop")
     report["phase"] = "maintenance_stop"
+    observe_replacement_rooms(runner, report)
     report["interruptionStartedAt"] = timestamp()
     # The app first: Compose would stop the proxy first, and Caddy's grace period
     # then waits for the WebSockets the still-running app holds open.

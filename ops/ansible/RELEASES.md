@@ -56,12 +56,14 @@ Build and CI time are release latency, not service downtime. The interruption is
 limited to application replacement and startup; database and proxy stay running.
 Before taking the backup and replacing the app, the release waits up to
 `--quiet-seconds` (default 600, at most 600) for `simplestchat_rooms_active` to
-reach zero on the loopback metrics endpoint, so a routine release interrupts no
-call in progress. The report records `quietWaitSeconds` and
-`roomsActiveAtReplacement`; a deadline reached with rooms still active proceeds
-and records the count, and a missing `METRICS_TOKEN` or unreadable endpoint
-records `null` rather than blocking the release. Pass `--quiet-seconds 0` to
-replace immediately.
+reach zero on the loopback metrics endpoint. Admission remains open, so a new call
+may arrive during the backup and be interrupted; this is a quiet observation,
+not a zero-interruption guarantee. The report records `quietWaitSeconds` and
+`roomsActiveAtQuietCheck`, then samples again immediately before stopping the app
+as `roomsActiveBeforeStop` with `roomsObservedBeforeStopAt`. Even the final sample
+can race a join. A deadline reached with rooms still active proceeds. Missing
+`METRICS_TOKEN` or an unreadable endpoint records `null` rather than blocking the
+release. Pass `--quiet-seconds 0` to skip the wait; the final observation still runs.
 An unsuccessful deployment stops the command. Its existing bounded rollback and
 unfinished-operation checks remain authoritative; inspect evidence before retrying.
 A failed post-deployment smoke does not trigger another restart or rollback; the
