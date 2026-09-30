@@ -103,6 +103,16 @@ class RulesetTests(unittest.TestCase):
                 with self.assertRaises(ToolError):
                     rules.healthy_analyses(entries, REVISION)
 
+    def test_full_history_window_cannot_hide_missing_current_coverage(self) -> None:
+        """Old scans filling the page neither block complete coverage nor replace a language."""
+        current = self.analyses()
+        old = {**test_support.obj(current[0]), "commit_sha": OTHER}
+        window: list[JsonValue] = [*current, *[old] * (rules.PAGE_LIMIT - len(current))]
+        rules.healthy_analyses(window, REVISION)
+        window[0] = old
+        with self.assertRaisesRegex(ToolError, "ruleset_language_coverage"):
+            rules.healthy_analyses(window, REVISION)
+
     def test_maintained_policy_splits_review_from_mandatory_gates(self) -> None:
         """The sole-owner review exception never grants a security-check bypass."""
         repository, identifier, policies = rules.load_policy()

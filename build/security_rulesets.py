@@ -139,9 +139,9 @@ def healthy_checks(value: JsonObject, revision: str) -> None:
 
 
 def healthy_analyses(value: JsonValue, revision: str) -> None:
-    """Require complete non-advisory language results for the exact main revision."""
+    """Require current coverage within the bounded newest-first analysis window."""
     entries = array_value(value)
-    require(len(entries) < PAGE_LIMIT, "ruleset_analysis_pagination")
+    require(len(entries) <= PAGE_LIMIT, "ruleset_analysis_window")
     categories: set[str] = set()
     for raw in entries:
         entry = object_value(raw)
