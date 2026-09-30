@@ -35,6 +35,14 @@ RPM_FIELDS = 3
 MIN_DATABASE_HOURS = 1
 MAX_DATABASE_HOURS = 120
 TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+:-]*|[()]")
+# Exact declarations observed in authenticated, currently locked registry archives.
+# Keep SPDX parsing strict; this is an adapter for the identified Cargo input fields.
+CARGO_LICENSE_ALTERNATIVES = {
+    "MIT/Apache-2.0": "MIT OR Apache-2.0",
+    "Apache-2.0/MIT": "Apache-2.0 OR MIT",
+    "Apache-2.0 / MIT": "Apache-2.0 OR MIT",
+    "Unlicense/MIT": "Unlicense OR MIT",
+}
 
 
 def require(condition: object, reason: str) -> None:
@@ -374,6 +382,11 @@ def rust_license_join(packages: list[JsonObject], native: JsonObject, elf: JsonO
             "image_rust_license_coverage",
         )
         expression = object_value(license_record["license"])["expression"]
+        declared_expression = expression
+        if expression is not None:
+            expression = string_value(expression)
+            if source == "crates.io":
+                expression = CARGO_LICENSE_ALTERNATIVES.get(expression, expression)
         if license_record["first_party"] is True:
             require(
                 identity[0] == "simplestChat"
@@ -384,12 +397,13 @@ def rust_license_join(packages: list[JsonObject], native: JsonObject, elf: JsonO
             )
             # This describes publication policy; it does not grant a license.
             expression = "NOASSERTION"
+            declared_expression = expression
         package["licenses"] = (
             []
             if expression is None
             else [
                 {
-                    "value": expression,
+                    "value": declared_expression,
                     "spdxExpression": expression,
                     "type": "declared",
                     "urls": [],

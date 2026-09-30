@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -249,6 +250,105 @@ class RustEvidenceTests(unittest.TestCase):
         self.assertEqual(
             object_value(array_value(serde["licenses"])[0])["spdxExpression"], "MIT OR Apache-2.0"
         )
+
+    def test_reviewed_cargo_alternatives_preserve_original_declarations(self) -> None:
+        """Only the four observed Cargo inputs derive SPDX; source evidence stays byte-exact."""
+        for raw, expected in (
+            ("MIT/Apache-2.0", "MIT OR Apache-2.0"),
+            ("Apache-2.0/MIT", "Apache-2.0 OR MIT"),
+            ("Apache-2.0 / MIT", "Apache-2.0 OR MIT"),
+            ("Unlicense/MIT", "Unlicense OR MIT"),
+        ):
+            for compiled in (True, False):
+                with self.subTest(raw=raw, compiled=compiled):
+                    packages, native, elf = rust_evidence()
+                    record = object_value(array_value(native["rust_licenses"])[1])
+                    object_value(record["license"])["expression"] = raw
+                    object_value(record["evidence"])["compilerArtifact"] = compiled
+                    original = copy.deepcopy(native)
+                    policy.rust_license_join(packages, native, elf)
+                    joined = object_value(array_value(packages[1]["licenses"])[0])
+                    self.assertEqual(joined["value"], raw)
+                    self.assertEqual(joined["spdxExpression"], expected)
+                    self.assertEqual(native, original)
+                    # SPDX choice semantics allow MIT alone to satisfy the declared alternative.
+                    self.assertTrue(
+                        policy.LicenseExpression(expected, {"MIT"}).allowed_expression()
+                    )
+                    with self.assertRaisesRegex(ToolError, "image_license_grammar"):
+                        _ = policy.LicenseExpression(raw, {"MIT"}).allowed_expression()
+
+    def test_other_sources_and_unreviewed_cargo_forms_keep_strict_grammar(self) -> None:
+        """The Cargo adapter cannot normalize local/RPM licenses or mixed and path-like text."""
+        for raw in (
+            "MIT / Apache-2.0",
+            " MIT/Apache-2.0",
+            "MIT/Apache-2.0 ",
+            "MIT/Apache-2.0 AND Proprietary",
+            "MIT/Apache-2.0/BSD-3-Clause",
+            "../MIT",
+            "https://example.invalid/MIT",
+            "MIT//Apache-2.0",
+        ):
+            packages, native, elf = rust_evidence()
+            record = object_value(array_value(native["rust_licenses"])[1])
+            object_value(record["license"])["expression"] = raw
+            with self.subTest(raw=raw):
+                policy.rust_license_join(packages, native, elf)
+                joined = object_value(array_value(packages[1]["licenses"])[0])
+                self.assertEqual(joined["value"], raw)
+                self.assertEqual(joined["spdxExpression"], raw)
+                with self.assertRaisesRegex(ToolError, "image_license_grammar"):
+                    _ = policy.license_verdict(
+                        [packages[1]], {"allowedLicenses": ["MIT", "Apache-2.0"]}, []
+                    )
+        packages, native, elf = rust_evidence()
+        record = object_value(array_value(native["rust_licenses"])[2])
+        object_value(record["license"])["expression"] = "MIT/Apache-2.0"
+        policy.rust_license_join(packages, native, elf)
+        self.assertEqual(
+            object_value(array_value(packages[2]["licenses"])[0])["spdxExpression"],
+            "MIT/Apache-2.0",
+        )
+        unsupported_sources: tuple[JsonObject, ...] = (
+            packages[2],
+            {**rpm_package(), "licenses": [{"spdxExpression": "MIT/Apache-2.0"}]},
+        )
+        for package in unsupported_sources:
+            with (
+                self.subTest(source=package["type"]),
+                self.assertRaisesRegex(ToolError, "image_license_grammar"),
+            ):
+                _ = policy.license_verdict(
+                    [package], {"allowedLicenses": ["MIT", "Apache-2.0"]}, []
+                )
+
+    def test_reviewed_declaration_evidence_matches_current_lock(self) -> None:
+        """Pinned upstream metadata review cannot silently drift to a different crate release."""
+        evidence = object_value(
+            policy.report(ROOT / "security/license-evidence/cargo-declarations-2026-09-30.json")
+        )
+        locked = [
+            object_value(item)
+            for item in array_value(
+                object_value(
+                    decode_json(json.dumps(tomllib.loads((ROOT / "Cargo.lock").read_text())))
+                )["package"]
+            )
+        ]
+        seen: set[tuple[str, str]] = set()
+        for value in array_value(evidence["packages"]):
+            record = object_value(value)
+            identity = (string_value(record["name"]), string_value(record["version"]))
+            self.assertNotIn(identity, seen)
+            seen.add(identity)
+            matches = [row for row in locked if (row["name"], row["version"]) == identity]
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(matches[0]["checksum"], record["archiveSha256"])
+            self.assertEqual(matches[0]["source"], native_producer.SOURCE_REGISTRY)
+            raw = string_value(record["raw"])
+            self.assertEqual(policy.CARGO_LICENSE_ALTERNATIVES[raw], record["spdxExpression"])
+        self.assertEqual(len(seen), 35)
 
     def test_source_mismatch_missing_and_ambiguous_license_records_fail(self) -> None:
         """Equal names and versions cannot borrow a license from a different source."""

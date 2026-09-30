@@ -142,6 +142,27 @@ asserted license: its SPDX value is `NOASSERTION`, with an explicit policy for t
 unpublished first-party package and verified `publish = false`. This grants no
 license and does not waive requirements for shipped dependencies.
 
+Some currently locked crates publish slash-separated Cargo license declarations.
+At the authenticated crates.io join, the image adapter recognizes exactly the
+four reviewed values: `MIT/Apache-2.0`, `Apache-2.0/MIT`, `Apache-2.0 / MIT`, and
+`Unlicense/MIT`. It derives the corresponding SPDX `OR` expression while retaining
+the original declaration unchanged in the native receipt and SBOM license `value`;
+the separate `spdxExpression` field identifies the derived representation. This
+implements the meaning of these upstream inputs, not an alternate project
+receipt format. Local and RPM declarations do not use this adapter. Unrecognized
+slash forms, mixed expressions and path-like strings remain invalid under the
+unchanged strict SPDX parser.
+
+The [Cargo manifest documentation](https://doc.rust-lang.org/cargo/reference/manifest.html#the-license-and-license-file-fields)
+describes the deprecated slash notation and license choices. The retained
+[declaration review](../security/license-evidence/cargo-declarations-2026-09-30.json)
+binds all 35 observed declarations to `Cargo.lock` archive and manifest hashes,
+plus the packaged license-text hashes where present. Twelve occur in the observed
+runtime SBOM. For `asn1-rs-impl`, the crate manifest declares the terms but omits
+the license text; its recorded exact upstream revision explicitly offers either
+Apache-2.0 or MIT. This metadata interpretation does not waive notice obligations
+or establish that every package contributed linked machine code.
+
 Static archive identity establishes build inputs, not that every archive member
 survives linker garbage collection. Adapted libwebrtc sources are not silently
 treated as the entire upstream library for vulnerability applicability.
