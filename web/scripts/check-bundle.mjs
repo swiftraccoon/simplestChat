@@ -1,4 +1,5 @@
-import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, open, readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -71,6 +72,48 @@ function assetGroup(filename) {
 }
 
 /**
+ * Validate and read the same open file, with a one-byte growth probe. The build
+ * output belongs to the caller; concurrent asset writes invalidate measurement.
+ * @param {string} absolute
+ * @param {string} filename
+ * @returns {Promise<Buffer>}
+ */
+async function readAsset(absolute, filename) {
+  const file = await open(
+    absolute,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+  );
+  try {
+    const before = await file.stat({ bigint: true });
+    if (!before.isFile() || before.size > BigInt(MAX_FILE_BYTES)) {
+      throw new Error(`Bundle asset must be a regular file of at most 16 MiB: ${filename}`);
+    }
+    const expected = Number(before.size);
+    const contents = Buffer.alloc(expected + 1);
+    let total = 0;
+    while (total < contents.length) {
+      const { bytesRead } = await file.read(contents, total, contents.length - total, total);
+      if (bytesRead === 0) break;
+      total += bytesRead;
+    }
+    const after = await file.stat({ bigint: true });
+    if (
+      total !== expected ||
+      before.dev !== after.dev ||
+      before.ino !== after.ino ||
+      before.size !== after.size ||
+      before.mtimeNs !== after.mtimeNs ||
+      before.ctimeNs !== after.ctimeNs
+    ) {
+      throw new Error(`Bundle asset changed during measurement: ${filename}`);
+    }
+    return contents.subarray(0, total);
+  } finally {
+    await file.close();
+  }
+}
+
+/**
  * Count every emitted JS, CSS and HTML file, including lazy chunks and help.
  * Gzip level 6 is measured separately per file, then summed by asset group.
  * This is a deterministic size gate, not a network or runtime benchmark.
@@ -103,11 +146,7 @@ export async function measureBundle(directory) {
       const group = assetGroup(filename);
       if (!group) continue;
       const absolute = path.join(directory, filename);
-      const metadata = await lstat(absolute);
-      if (!metadata.isFile() || metadata.size > MAX_FILE_BYTES) {
-        throw new Error(`Bundle asset must be a regular file of at most 16 MiB: ${filename}`);
-      }
-      const contents = await readFile(absolute);
+      const contents = await readAsset(absolute, filename);
       if (required.has(filename) && contents.byteLength === 0) {
         throw new Error(`Bundle required page is empty: ${filename}`);
       }
