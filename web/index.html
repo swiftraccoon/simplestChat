@@ -457,16 +457,16 @@
       <div id="toast-container" role="status" aria-live="polite" aria-relevant="additions"></div>
 
       <!-- Login Modal -->
-      <div id="login-modal" class="modal-overlay" hidden>
+      <dialog id="login-modal" class="modal-overlay" aria-labelledby="login-title" hidden>
         <div class="modal-content modal-sm">
           <div class="modal-header">
-            <h2>Sign In</h2>
+            <h2 id="login-title">Sign In</h2>
             <button id="login-close" class="modal-close" type="button" aria-label="Close sign in">
               Close
             </button>
           </div>
           <div class="modal-body">
-            <div id="login-error" class="auth-error" hidden></div>
+            <div id="login-error" class="auth-error" role="alert" hidden></div>
             <div class="setting-group">
               <label for="login-email">Email</label>
               <input
@@ -498,13 +498,13 @@
             </p>
           </div>
         </div>
-      </div>
+      </dialog>
 
       <!-- Register Modal -->
-      <div id="register-modal" class="modal-overlay" hidden>
+      <dialog id="register-modal" class="modal-overlay" aria-labelledby="register-title" hidden>
         <div class="modal-content modal-sm">
           <div class="modal-header">
-            <h2>Create Account</h2>
+            <h2 id="register-title">Create Account</h2>
             <button
               id="register-close"
               class="modal-close"
@@ -515,7 +515,7 @@
             </button>
           </div>
           <div class="modal-body">
-            <div id="register-error" class="auth-error" hidden></div>
+            <div id="register-error" class="auth-error" role="alert" hidden></div>
             <div class="setting-group">
               <label for="register-email">Email</label>
               <input
@@ -580,13 +580,18 @@
             </p>
           </div>
         </div>
-      </div>
+      </dialog>
 
       <!-- Create Room Modal -->
-      <div id="create-room-modal" class="modal-overlay" hidden>
+      <dialog
+        id="create-room-modal"
+        class="modal-overlay"
+        aria-labelledby="create-room-title"
+        hidden
+      >
         <div class="modal-content">
           <div class="modal-header">
-            <h2>Create Room</h2>
+            <h2 id="create-room-title">Create Room</h2>
             <button
               id="create-room-close"
               class="modal-close"
@@ -597,7 +602,7 @@
             </button>
           </div>
           <div class="modal-body">
-            <div id="create-room-error" class="auth-error" hidden></div>
+            <div id="create-room-error" class="auth-error" role="alert" hidden></div>
             <div class="setting-group">
               <label for="cr-name">Room name</label>
               <input type="text" id="cr-name" placeholder="Design review" autocomplete="off" />
@@ -672,7 +677,7 @@
             <button id="create-room-submit" class="btn-primary btn-full">Create Room</button>
           </div>
         </div>
-      </div>
+      </dialog>
 
       <!-- Moved into the shared personal-settings dialog when it opens. -->
       <div id="personal-settings-controls" hidden>

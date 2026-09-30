@@ -1054,12 +1054,18 @@ header h1 {
 .modal-overlay {
   position: fixed;
   inset: 0;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: visible;
+  background: transparent;
+  color: var(--text);
+}
+
+.modal-overlay::backdrop {
   background: #000a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  animation: fadeIn 150ms ease;
 }
 
 .modal-content {
@@ -1069,7 +1075,7 @@ header h1 {
   box-shadow: 0 24px 80px #0009;
   width: 400px;
   max-width: calc(100vw - 2rem);
-  max-height: calc(100vh - 4rem);
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
   animation: fadeInUp 200ms ease;
 }

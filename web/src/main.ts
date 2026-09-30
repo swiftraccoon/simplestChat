@@ -86,7 +86,7 @@ const createRoomBtn = document.getElementById('create-room-btn')!;
 const joinFormDivider = document.getElementById('join-form-divider')!;
 
 // Login modal
-const loginModal = document.getElementById('login-modal')!;
+const loginModal = document.getElementById('login-modal') as HTMLDialogElement;
 const loginClose = document.getElementById('login-close')!;
 const loginEmail = document.getElementById('login-email') as HTMLInputElement;
 const loginPassword = document.getElementById('login-password') as HTMLInputElement;
@@ -96,7 +96,7 @@ const loginPasskeyBtn = document.getElementById('login-passkey-btn') as HTMLButt
 const loginToRegister = document.getElementById('login-to-register')!;
 
 // Register modal
-const registerModal = document.getElementById('register-modal')!;
+const registerModal = document.getElementById('register-modal') as HTMLDialogElement;
 const registerClose = document.getElementById('register-close')!;
 const registerEmail = document.getElementById('register-email') as HTMLInputElement;
 const registerName = document.getElementById('register-name') as HTMLInputElement;
@@ -109,7 +109,7 @@ const registerPasskeyBtn = document.getElementById('register-passkey-btn') as HT
 const registerToLogin = document.getElementById('register-to-login')!;
 
 // Create room modal
-const createRoomModal = document.getElementById('create-room-modal')!;
+const createRoomModal = document.getElementById('create-room-modal') as HTMLDialogElement;
 const createRoomClose = document.getElementById('create-room-close')!;
 const crId = document.getElementById('cr-id') as HTMLInputElement;
 const crName = document.getElementById('cr-name') as HTMLInputElement;
@@ -1334,7 +1334,7 @@ observeUiTask(
     signaling.connect(auth.jwt ?? undefined);
     if (!pendingInvite) return;
     if (auth.isLoggedIn) observeUiTask(acceptPendingInvite(), 'Invitation not accepted');
-    else if (dismissAuth()) registerModal.hidden = false;
+    else openAuthDialog(registerModal);
   }),
   'Could not restore sign-in. Reload the page to retry.',
 );
@@ -1561,6 +1561,22 @@ roomLoadMore.addEventListener('click', () => {
 });
 
 // --- Auth Events ---
+function openAuthDialog(dialog: HTMLDialogElement): void {
+  if (!dismissAuth()) return;
+  dialog.hidden = false;
+  dialog.showModal();
+  (dialog === loginModal ? loginEmail : registerEmail).focus();
+}
+for (const dialog of [loginModal, registerModal]) {
+  dialog.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    dismissAuth();
+  });
+}
+createRoomModal.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  dismissCreateRoom();
+});
 function clearAuthSecrets(): void {
   loginPassword.value = '';
   registerPassword.value = '';
@@ -1608,6 +1624,8 @@ function dismissAuth(): boolean {
   if (!authFlow.dismiss()) return false;
   loginModal.hidden = true;
   registerModal.hidden = true;
+  loginModal.close();
+  registerModal.close();
   clearAuthSecrets();
   loginError.hidden = true;
   loginError.textContent = '';
@@ -1626,7 +1644,7 @@ function dismissAuth(): boolean {
 }
 
 signInBtn.addEventListener('click', () => {
-  if (dismissAuth()) loginModal.hidden = false;
+  openAuthDialog(loginModal);
 });
 /** Clears everything this app kept in the browser: names, devices, layout, chat preferences. */
 function forgetThisDevice(): void {
@@ -1664,10 +1682,10 @@ registerModal.addEventListener('click', (event) => {
   if (event.target === registerModal) dismissAuth();
 });
 loginToRegister.addEventListener('click', () => {
-  if (dismissAuth()) registerModal.hidden = false;
+  openAuthDialog(registerModal);
 });
 registerToLogin.addEventListener('click', () => {
-  if (dismissAuth()) loginModal.hidden = false;
+  openAuthDialog(loginModal);
 });
 
 loginSubmit.addEventListener(
@@ -1872,6 +1890,7 @@ function passkeyErrorMessage(error: unknown, fallback: string): string {
 
 function dismissCreateRoom(): void {
   createRoomModal.hidden = true;
+  createRoomModal.close();
   crPassword.value = '';
   createRoomError.hidden = true;
   createRoomError.textContent = '';
@@ -1947,7 +1966,10 @@ async function joinRoomWithPassword(
 
 // --- Create Room ---
 createRoomBtn.addEventListener('click', () => {
-  if (auth.isLoggedIn) createRoomModal.hidden = false;
+  if (!auth.isLoggedIn) return;
+  createRoomModal.hidden = false;
+  createRoomModal.showModal();
+  crName.focus();
 });
 createRoomClose.addEventListener('click', dismissCreateRoom);
 createRoomModal.addEventListener('click', (e) => {
