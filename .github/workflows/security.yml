@@ -97,6 +97,12 @@ jobs:
             ${{ runner.temp }}/vendor-integrity/report.json
             ${{ runner.temp }}/native-*/report.json
             ${{ runner.temp }}/native-*/failure.json
+            ${{ runner.temp }}/native-asan/native.stdout.log
+            ${{ runner.temp }}/native-asan/native.stderr.log
+            ${{ runner.temp }}/native-ubsan/native.stdout.log
+            ${{ runner.temp }}/native-ubsan/native.stderr.log
+            ${{ runner.temp }}/native-replay/native.stdout.log
+            ${{ runner.temp }}/native-replay/native.stderr.log
           if-no-files-found: error
           retention-days: 14
 
@@ -128,3 +134,17 @@ jobs:
           path: ${{ runner.temp }}/security-deep/summary.json
           if-no-files-found: error
           retention-days: 30
+      - name: Preserve bounded offline native diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: security-deep-native-diagnostics
+          path: |
+            ${{ runner.temp }}/security-deep/native-asan/native.stdout.log
+            ${{ runner.temp }}/security-deep/native-asan/native.stderr.log
+            ${{ runner.temp }}/security-deep/native-ubsan/native.stdout.log
+            ${{ runner.temp }}/security-deep/native-ubsan/native.stderr.log
+            ${{ runner.temp }}/security-deep/native-replay/native.stdout.log
+            ${{ runner.temp }}/security-deep/native-replay/native.stderr.log
+          if-no-files-found: warn
+          retention-days: 14

@@ -141,6 +141,14 @@ time, image/input hashes and cleanup conclusion. Missing results or requested
 cases fail even when the container exits zero. Failed receipts never count as
 completed security coverage.
 
+CI retains the two bounded native diagnostic streams as explicit artifact
+members, including on failure. These streams come from the offline container:
+it receives only the reviewed public source, tools and synthetic corpus, with no
+host mounts, credentials or network. They can include compiler source excerpts
+and sanitizer diagnostics. This is a specific evidence policy for that fixture;
+it does not authorize uploading general scanner working directories. A failed
+host receipt also records the container exit status.
+
 `ops/ansible/tests/test_native_security.py` verifies corpus, immutable-image,
 environment, sandbox, timeout, exclusive-output and ownership guards offline.
 These tests prove orchestration behavior only. Real Linux sanitizer and corpus

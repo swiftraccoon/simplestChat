@@ -438,7 +438,7 @@ def run_native(options: Options, engine: Sequence[str], output: Path) -> dict[st
         status = capture(
             [*engine, "start", "--attach", identifier], output, "native", BUILD_SECONDS + 900
         )
-        require(status == 0, "native_failed")
+        require(status == 0, f"native_failed_exit_{status}")
         lines = read_regular(output / "native.stdout.log", MAX_LOG).decode("utf-8").splitlines()
         results = [line.removeprefix(EVENT) for line in lines if line.startswith(EVENT)]
         require(len(results) == 1, "missing_worker_result")
