@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
 import platform
+import selectors
 import shlex
 import sys
 import tempfile
@@ -93,12 +95,17 @@ class CleanupFailure:
     """Model an exact cleanup failure without starting or inspecting any real VM."""
 
     calls: int = 0
+    failure: str | None = None
 
     def close(self) -> None:
         """Count the single cleanup attempt and keep failure visible."""
         self.calls += 1
         message = "fixture_cleanup_failure"
         raise ToolError(message)
+
+    def diagnostics(self) -> dict[str, object]:
+        """Supply only modeled metadata when exact cleanup fails."""
+        return {"terminalBeforeCleanup": {"state": "running"}, "cleanupReturnCode": None}
 
 
 def manifest() -> Manifest:
@@ -336,6 +343,44 @@ class BoundaryTests(unittest.TestCase):
                 _ = vm.guest_action(host, Path("/owned"), 22345, RUN, "backup-restore")
 
 
+class StartupDiagnosticTests(unittest.TestCase):
+    """Recognize actionable emulator failures without publishing any arbitrary input words."""
+
+    def test_common_startup_errors_keep_only_fixed_classes_reasons_and_components(self) -> None:
+        """KVM, block, resource, GLib/thread and sandbox failures remain distinguishable."""
+        for line, expected in (
+            ("qemu: failed to initialize KVM: Permission denied", "kvm"),
+            ("qemu: backing file format not specified for rootdisk", "backing_format"),
+            ("qemu: seccomp sandbox: Operation not permitted", "sandbox"),
+            ("qemu: No bootable device for q35", "boot_device"),
+            ("qemu: cannot allocate memory for pc.ram", "memory"),
+            ("prlimit: failed to set RLIMIT_AS: Invalid argument", "resource_limit"),
+            (
+                "(process:123): GLib-ERROR **: creating thread 'gmain': "
+                + "Resource temporarily unavailable",
+                "thread_start",
+            ),
+            ("qemu: pthread_create failed: Resource temporarily unavailable", "thread_start"),
+        ):
+            with self.subTest(expected=expected):
+                result = vm.startup_errors((line + " private-path-fixture\n").encode())
+                encoded = json.dumps(result)
+                self.assertIn(expected, encoded)
+                self.assertNotIn("private-path-fixture", encoded)
+                self.assertNotIn("gmain", encoded)
+                self.assertEqual(result["withheldLines"], 0)
+        result = vm.startup_errors(
+            b"qemu: kvm \x1b[31mprivate-fixture\n"
+            + b"arbitrary-private-fixture\n"
+            + b"qemu: kvm "
+            + b"x" * vm.MAX_STARTUP_LINE
+            + b"\n"
+        )
+        self.assertEqual(result, {"messages": [], "withheldLines": 3})
+        result = vm.startup_errors(b"qemu: kvm\n" * (vm.MAX_STARTUP_LINES + 1))
+        self.assertEqual(result["withheldLines"], 1)
+
+
 class LifecycleTests(unittest.TestCase):
     """Use only tiny owned Python processes to check exact cleanup and stream limits."""
 
@@ -348,7 +393,7 @@ class LifecycleTests(unittest.TestCase):
                 guest.thread.join(timeout=5)
                 self.assertFalse(guest.thread.is_alive())
                 self.assertIsNone(guest.child.returncode)
-                with self.assertRaisesRegex(ToolError, "vm_exited_or_unhealthy"):
+                with self.assertRaisesRegex(ToolError, "vm_child_exited"):
                     guest.require_alive()
                 with patch.object(
                     bounded_process, "signal_group", wraps=bounded_process.signal_group
@@ -358,6 +403,10 @@ class LifecycleTests(unittest.TestCase):
                     self.assertEqual(arguments.args[0], guest.child.pid)
                 self.assertIsNotNone(guest.child.returncode)
                 self.assertEqual((host.output / "qemu.stdout").read_bytes(), b"fixture output\n")
+                self.assertEqual(
+                    guest.diagnostics()["terminalBeforeCleanup"],
+                    {"state": "exited", "exitCode": 0},
+                )
             finally:
                 guest.close()
 
@@ -372,8 +421,141 @@ class LifecycleTests(unittest.TestCase):
                 with self.assertRaises(ToolError):
                     guest.require_alive()
                 self.assertLessEqual((host.output / "qemu.stdout").stat().st_size, 16)
+                self.assertEqual(guest.failure, "vm_stdout_limit")
             finally:
                 guest.close()
+
+    def test_startup_stderr_is_bounded_and_never_exposes_private_strings(self) -> None:
+        """An actual child's nonzero exit and emulator error retain only fixed public words."""
+        content = (
+            b"qemu-system-x86_64: /private/fixture-key/guest.qcow2: backing format required\n"
+            + b"unknown fixture-secret-value\n"
+        )
+        with tempfile.TemporaryDirectory() as temporary, patch.object(vm, "MAX_STARTUP_STDERR", 80):
+            host = vm.Host(Path(temporary), time.monotonic() + 30)
+            guest = vm.Guest(
+                host,
+                [sys.executable, "-c", f"import os; os.write(2,{content!r}); raise SystemExit(7)"],
+            )
+            try:
+                guest.thread.join(timeout=5)
+                guest.close()
+                result = guest.diagnostics()
+                self.assertEqual(
+                    result["terminalBeforeCleanup"], {"state": "exited", "exitCode": 7}
+                )
+                self.assertEqual(result["cleanupReturnCode"], 7)
+                stderr = object_value(result["startupStderr"])
+                self.assertEqual(stderr["bytesObserved"], len(content))
+                self.assertEqual(stderr["sha256"], hashlib.sha256(content).hexdigest())
+                self.assertEqual(stderr["prefixBytes"], 80)
+                self.assertTrue(stderr["truncated"])
+                public = json.dumps(result)
+                self.assertIn("backing_format", public)
+                for private in ("/private", "fixture-key", "fixture-secret-value", "unknown"):
+                    self.assertNotIn(private, public)
+            finally:
+                guest.close()
+
+    def test_stderr_overflow_and_drainer_failures_have_distinct_fixed_codes(self) -> None:
+        """I/O and unexpected thread failures never serialize their private exception text."""
+        for failure, expected, error_number in (
+            (OSError(errno.ENOSPC, "private-fixture-key"), "vm_drainer_io_error", errno.ENOSPC),
+            (ValueError("private-fixture-key"), "vm_drainer_unexpected_error", None),
+        ):
+            with (
+                self.subTest(expected=expected),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                host = vm.Host(Path(temporary), time.monotonic() + 30)
+                with patch.object(selectors, "DefaultSelector", side_effect=failure):
+                    guest = vm.Guest(host, [sys.executable, "-c", "import time; time.sleep(30)"])
+                    guest.thread.join(timeout=5)
+                try:
+                    guest.close()
+                    result = guest.diagnostics()
+                    self.assertEqual(result["drainer"], expected)
+                    self.assertEqual(result["drainerErrno"], error_number)
+                    self.assertNotIn("private-fixture-key", json.dumps(result))
+                finally:
+                    guest.close()
+        with tempfile.TemporaryDirectory() as temporary, patch.object(vm, "MAX_STREAM", 16):
+            host = vm.Host(Path(temporary), time.monotonic() + 30)
+            guest = vm.Guest(host, [sys.executable, "-c", "import os; os.write(2,b'x'*100)"])
+            try:
+                guest.thread.join(timeout=5)
+                guest.close()
+                self.assertEqual(guest.failure, "vm_stderr_limit")
+            finally:
+                guest.close()
+
+    def test_authenticated_ssh_closes_startup_diagnostics_before_cloud_init(self) -> None:
+        """Even a subsequent initialization failure cannot publish authenticated guest output."""
+        with tempfile.TemporaryDirectory() as temporary:
+            host = vm.Host(Path(temporary), time.monotonic() + 30)
+            guest = vm.Guest(host, [sys.executable, "-c", "import time; time.sleep(30)"])
+            try:
+                guest.startup_capture(b"qemu: kvm fixture-private\n")
+                with (
+                    patch.object(vm, "executable", side_effect=fixture_executable),
+                    patch.object(
+                        vm.Host, "run", side_effect=[(0, b""), ToolError("cloud_fixture")]
+                    ),
+                    self.assertRaisesRegex(ToolError, "cloud_fixture"),
+                ):
+                    vm.boot(host, guest, Path(temporary), 22345)
+                guest.startup_capture(b"qemu: memory fixture-private-after-auth\n")
+                guest.close()
+                self.assertTrue(guest.authenticated.is_set())
+                self.assertEqual(guest.startup_buffer, b"")
+                self.assertNotIn("startupStderr", guest.diagnostics())
+            finally:
+                guest.close()
+
+    def test_late_output_during_cleanup_cannot_publish_success(self) -> None:
+        """A real owned child exceeds its stream budget only after the final liveness check."""
+        with tempfile.TemporaryDirectory() as temporary, patch.object(vm, "MAX_STREAM", 16):
+            root = Path(temporary).resolve()
+            ready = root / "ready"
+            script = (
+                "import os,signal,sys,time,pathlib\n"
+                "def stop(*args):\n    os.write(1,b'x'*100)\n    sys.exit(0)\n"
+                "signal.signal(signal.SIGTERM,stop)\n"
+                "pathlib.Path(sys.argv[1]).touch()\n"
+                "time.sleep(30)\n"
+            )
+
+            def boot_ready(_host: vm.Host, guest: vm.Guest, _work: Path, _port: int) -> None:
+                """Wait at most five seconds for the inert fixture's installed signal handler."""
+                for _ in range(500):
+                    if ready.exists():
+                        guest.require_alive()
+                        return
+                    time.sleep(0.01)
+                self.fail("owned fixture readiness timeout")
+
+            with (
+                patch.object(vm, "preflight"),
+                patch.object(vm, "artifact_input", return_value=manifest()),
+                patch.object(vm, "prepare_disk"),
+                patch.object(vm, "create_seed"),
+                patch.object(
+                    vm, "qemu_command", return_value=[sys.executable, "-c", script, str(ready)]
+                ),
+                patch.object(vm, "boot", side_effect=boot_ready),
+                patch.object(vm, "exercise", return_value={}),
+                self.assertRaisesRegex(ToolError, "vm_stdout_limit"),
+            ):
+                _ = vm.run(root / "artifact", root / "output")
+            result = object_json((root / "output/summary.json").read_bytes())
+            self.assertFalse(result["passed"])
+            self.assertTrue(result["cleanupPassed"])
+            self.assertEqual(result["failure"], "vm_stdout_limit")
+            lifecycle = object_value(result["vmLifecycle"])
+            self.assertEqual(lifecycle["drainer"], "vm_stdout_limit")
+            self.assertEqual(lifecycle["cleanupReturnCode"], 0)
+            self.assertEqual(lifecycle["terminalBeforeCleanup"], {"state": "running"})
+            self.assertFalse(list((root / "output").glob("vm-private-*")))
 
     def test_cancellation_or_cleanup_failure_cannot_publish_success(self) -> None:
         """Even completed modeled guest checks fail when owned cleanup cannot be confirmed."""

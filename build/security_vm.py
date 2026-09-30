@@ -48,6 +48,10 @@ if TYPE_CHECKING:
 GIB = 1024**3
 MAX_IMAGE = 2 * GIB
 MAX_STREAM = 2 * 1024**2
+MAX_STARTUP_STDERR = 8192
+MAX_STARTUP_LINES = 12
+MAX_STARTUP_LINE = 1024
+STARTUP_ASCII = frozenset(b"\t" + bytes(range(32, 127)))
 MAX_PROC_REPORT = 65536
 VM_SECONDS = 1800
 VM_MEMORY_MIB = 3072
@@ -65,6 +69,108 @@ RECAP = re.compile(
     + r"\s+failed=(\d+)\s+skipped=(\d+)\s+rescued=(\d+)\s+ignored=(\d+)\s*$",
     re.MULTILINE,
 )
+STARTUP_ERRORS = {
+    "kvm": r"\bkvm\b|accelerator|accel=|hardware virtualization",
+    "block_backend": r"backing|block node|blockdev|qcow2|image format|block driver",
+    "backing_format": r"backing.*format|format.*backing|image format.*specified"
+    + r"|auto-detect.*format",
+    "image_access": r"could not (?:open|read)|failed to (?:open|lock)|read-only|read only",
+    "sandbox": r"seccomp|sandbox|privilege|operation not permitted",
+    "boot_device": r"boot(?:able)? device|bootindex|boot order|bios|firmware|romfile",
+    "device": r"device|machine type|machine.*support|bus .*found|driver.*found",
+    "memory": r"memory|mmap|address.space|allocation|allocate|ram size|pc\.ram",
+    "resource_limit": r"rlimit|prlimit|resource limit|too many open files|file size limit",
+    "thread_start": r"gthread|pthread|creating thread|glib-error",
+    "network": r"network|netdev|host forwarding|hostfwd|address already in use|slirp",
+    "option": r"invalid (?:option|parameter|argument)|unknown option"
+    + r"|unrecognized option|expects|requires",
+    "execution": r"failed to (?:execute|run)|command not found|exec format",
+}
+STARTUP_REASONS = (
+    "permission denied",
+    "operation not permitted",
+    "cannot allocate memory",
+    "invalid argument",
+    "no such file or directory",
+    "no such device",
+    "not supported",
+    "address already in use",
+    "too many open files",
+    "resource temporarily unavailable",
+    "read-only",
+)
+STARTUP_COMPONENTS = (
+    "rootdisk",
+    "seed",
+    "guest.qcow2",
+    "base.qcow2",
+    "seed.img",
+    "pc.ram",
+    "virtio-blk-pci",
+    "virtio-net-pci",
+    "q35",
+    "kvm",
+    "qcow2",
+    "seccomp",
+    "prlimit",
+    "glib",
+    "gthread",
+    "pthread",
+)
+
+
+def startup_errors(content: bytes) -> dict[str, object]:
+    """Project only recognized emulator errors onto fixed public words, never raw stderr."""
+    messages: list[dict[str, object]] = []
+    withheld = 0
+    lines = content.splitlines()
+    for raw in lines[:MAX_STARTUP_LINES]:
+        if len(raw) > MAX_STARTUP_LINE or any(byte not in STARTUP_ASCII for byte in raw):
+            withheld += 1
+            continue
+        line = raw.decode("ascii").lower()
+        if not line.startswith(
+            (
+                "qemu-system-x86_64:",
+                "qemu:",
+                "prlimit:",
+                "timeout:",
+                "could not access kvm kernel module:",
+                "failed to initialize kvm:",
+            )
+        ) and not re.search(r"\b(?:glib-error|gthread|pthread_create)\b", line):
+            withheld += 1
+            continue
+        classes = [name for name, pattern in STARTUP_ERRORS.items() if re.search(pattern, line)]
+        if not classes:
+            withheld += 1
+            continue
+        messages.append(
+            {
+                "classes": classes,
+                "reasons": [reason for reason in STARTUP_REASONS if reason in line],
+                "components": [name for name in STARTUP_COMPONENTS if name in line],
+            }
+        )
+    return {
+        "messages": messages,
+        "withheldLines": withheld + max(0, len(lines) - MAX_STARTUP_LINES),
+    }
+
+
+def terminal_status(pid: int) -> dict[str, object]:
+    """Observe the exact owned leader without releasing its PID or process-group identity."""
+    result = os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+    if result is None:
+        return {"state": "running"}
+    if result.si_code == os.CLD_EXITED:
+        return {"state": "exited", "exitCode": result.si_status}
+    require(result.si_code in (os.CLD_KILLED, os.CLD_DUMPED), "vm_terminal_status_unknown")
+    return {
+        "state": "signaled",
+        "signal": result.si_status,
+        "coreDumped": result.si_code == os.CLD_DUMPED,
+    }
 
 
 @dataclass(frozen=True)
@@ -438,8 +544,16 @@ class Guest:
         """Start one owned process group and bounded pipe drainer without daemonization."""
         self.host = host
         self.failure: str | None = None
+        self.drainer_errno: int | None = None
+        self.drainer_status = "active"
+        self.observed_terminal: dict[str, object] = {"state": "not_observed"}
         self.closed = False
         self.stopping = threading.Event()
+        self.authenticated = threading.Event()
+        self.startup_lock = threading.Lock()
+        self.startup_buffer = bytearray()
+        self.startup_bytes = 0
+        self.startup_digest = hashlib.sha256()
         self.child = subprocess.Popen(  # noqa: S603 -- Fixed reviewed QEMU/prlimit argv; no shell.
             argv,
             stdin=subprocess.DEVNULL,
@@ -456,6 +570,42 @@ class Guest:
             bounded_process.stop(self.child)
             raise
 
+    def startup_capture(self, content: bytes) -> None:
+        """Retain a finite emulator-only prefix until SSH authenticates this exact guest."""
+        with self.startup_lock:
+            if not self.authenticated.is_set():
+                self.startup_bytes += len(content)
+                self.startup_digest.update(content)
+                self.startup_buffer.extend(
+                    content[: max(0, MAX_STARTUP_STDERR - len(self.startup_buffer))]
+                )
+
+    def authenticated_ssh(self) -> None:
+        """Close the public startup-diagnostic boundary before cloud-init or Ansible runs."""
+        with self.startup_lock:
+            self.authenticated.set()
+            self.startup_buffer.clear()
+
+    def diagnostics(self) -> dict[str, object]:
+        """Publish numeric lifecycle facts and a finite stderr vocabulary, never exception text."""
+        result: dict[str, object] = {
+            "terminalBeforeCleanup": self.observed_terminal,
+            "cleanupReturnCode": self.child.returncode,
+            "drainer": self.drainer_status,
+            "drainerErrno": self.drainer_errno,
+            "authenticatedSsh": self.authenticated.is_set(),
+        }
+        with self.startup_lock:
+            if not self.authenticated.is_set():
+                result["startupStderr"] = {
+                    "bytesObserved": self.startup_bytes,
+                    "sha256": self.startup_digest.hexdigest(),
+                    "prefixBytes": len(self.startup_buffer),
+                    "truncated": self.startup_bytes > len(self.startup_buffer),
+                    **startup_errors(bytes(self.startup_buffer)),
+                }
+        return result
+
     def drain(self) -> None:
         """Bound VM output while preserving the child PID for exact process-group cleanup."""
         try:
@@ -469,13 +619,14 @@ class Guest:
                     "vm_pipe_missing",
                 )
                 counts: dict[int, int] = {}
-                for stream, destination in (
-                    (self.child.stdout, stdout),
-                    (self.child.stderr, stderr),
+                destinations = {"stdout": stdout, "stderr": stderr}
+                for stream, name in (
+                    (self.child.stdout, "stdout"),
+                    (self.child.stderr, "stderr"),
                 ):
                     descriptor = cast("BinaryIO", stream).fileno()
                     os.set_blocking(descriptor, False)
-                    _ = selector.register(descriptor, selectors.EVENT_READ, destination)
+                    _ = selector.register(descriptor, selectors.EVENT_READ, name)
                     counts[descriptor] = 0
                 while selector.get_map() and not self.stopping.is_set():
                     require(time.monotonic() < self.host.deadline, "vm_deadline")
@@ -484,31 +635,49 @@ class Guest:
                         if not content:
                             _ = selector.unregister(key.fd)
                             continue
-                        require(counts[key.fd] + len(content) <= MAX_STREAM, "vm_output_limit")
+                        name = cast("str", key.data)
+                        if name == "stderr":
+                            self.startup_capture(content)
+                        require(
+                            counts[key.fd] + len(content) <= MAX_STREAM, "vm_" + name + "_limit"
+                        )
                         counts[key.fd] += len(content)
-                        _ = cast("BinaryIO", key.data).write(content)
+                        _ = destinations[name].write(content)
+                self.drainer_status = "stopped" if self.stopping.is_set() else "completed"
+        except ToolError as error:
+            known = {"vm_deadline", "vm_stdout_limit", "vm_stderr_limit", "vm_pipe_missing"}
+            self.failure = str(error) if str(error) in known else "vm_drainer_policy_error"
+            self.drainer_status = self.failure
+        except OSError as error:
+            self.failure = self.drainer_status = "vm_drainer_io_error"
+            self.drainer_errno = error.errno
         except BaseException:  # noqa: BLE001 -- Thread boundary must fail closed on any failure.
-            self.failure = "vm_output_or_lifecycle_failure"
+            self.failure = self.drainer_status = "vm_drainer_unexpected_error"
 
     def require_alive(self) -> None:
         """Observe exit without poll()/wait(), keeping the owned process group reserved."""
-        require(
-            self.failure is None and not bounded_process.leader_exited(self.child.pid),
-            "vm_exited_or_unhealthy",
-        )
+        self.observed_terminal = terminal_status(self.child.pid)
+        require(self.failure is None, self.failure or "vm_drainer_unhealthy")
+        require(self.observed_terminal["state"] == "running", "vm_child_exited")
 
     def close(self) -> None:
         """Stop only this unreaped child's group and close its private output pipes."""
         if self.closed:
             return
+        self.observed_terminal = terminal_status(self.child.pid)
         bounded_process.stop(self.child)
         self.closed = True
+        # Cleanup closes every owned producer. Let the drainer consume its final
+        # error bytes through EOF before requesting a bounded forced stop.
+        self.thread.join(timeout=1)
         self.stopping.set()
         self.thread.join(timeout=5)
         require(not self.thread.is_alive(), "vm_output_cleanup_incomplete")
         for stream in (self.child.stdout, self.child.stderr):
             if stream is not None:
                 stream.close()
+        if self.failure is None and self.drainer_status != "completed":
+            self.failure = self.drainer_status = "vm_output_incomplete"
 
 
 def recap(data: bytes, *, unchanged: bool) -> dict[str, int]:
@@ -692,6 +861,7 @@ def boot(host: Host, guest: Guest, work: Path, port: int) -> None:
             "ssh-ready", ssh_command(work, port, ["/usr/bin/true"]), timeout=8, accepted=(0, 255)
         )
         if status == 0:
+            guest.authenticated_ssh()
             break
         time.sleep(2)
     else:
@@ -766,6 +936,14 @@ def artifact_input(host: Host, path: Path) -> Manifest:
     return manifest
 
 
+def close_guest(guest: Guest, report: dict[str, object]) -> None:
+    """Retain exact lifecycle evidence even when owned-process cleanup itself fails."""
+    try:
+        guest.close()
+    finally:
+        report["vmLifecycle"] = guest.diagnostics()
+
+
 def run(artifact_dir: Path, output: Path) -> dict[str, object]:
     """Publish success only after guest assertions and exact owned-process cleanup succeed."""
     require(output.is_absolute() and output.resolve() == output, "invalid_vm_output")
@@ -817,7 +995,7 @@ def run(artifact_dir: Path, output: Path) -> dict[str, object]:
     finally:
         try:
             if guest is not None:
-                guest.close()
+                close_guest(guest, report)
             if work is not None:
                 shutil.rmtree(work)
             report["cleanupPassed"] = True
@@ -826,9 +1004,14 @@ def run(artifact_dir: Path, output: Path) -> dict[str, object]:
             report["cleanupFailure"] = "vm_owned_cleanup_failed"
             raise
         finally:
+            if guest is not None and guest.failure is not None:
+                report["passed"] = False
+                _ = report.setdefault("failure", guest.failure)
             write_private(
                 output / "summary.json", json.dumps(report, indent=2).encode() + b"\n", mode=0o600
             )
+    if guest is not None:
+        require(guest.failure is None, guest.failure or "vm_drainer_unhealthy")
     return report
 
 

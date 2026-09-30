@@ -120,7 +120,23 @@ host termination.
 
 Only `summary.json` is suitable for CI artifact upload. It contains source/image
 identities, command exit statuses, Ansible recap counts and allowlisted aggregate
-guest assertions. Raw SSH/Ansible/QEMU logs are bounded and private but may contain
+guest assertions. Its `vmLifecycle` distinguishes the exact owned leader's exit
+or signal observed before cleanup from the reaped cleanup return code, and records
+a fixed drainer failure class and numeric I/O errno. Output failures discovered
+during the final drain still fail validation even when resource cleanup succeeds;
+an incomplete drain cannot publish success.
+
+Before the first authenticated SSH connection only, lifecycle evidence includes
+stderr byte count, SHA-256 and a diagnostic projection of at most the first 8 KiB,
+12 lines and 1 KiB per line. The projection reconstructs only fixed error classes,
+OS reasons and emulator component names; it never copies input text. It covers
+KVM, block/backing formats, sandbox, boot/device, memory/resource limits and
+GLib/thread startup failures. Unknown, oversized or control-bearing lines are
+withheld, with truncation/count metadata retained. Guest serial stdout is never
+projected. SSH authentication clears this prefix and suppresses all startup
+stderr evidence before cloud-init or Ansible commands run.
+
+Raw SSH/Ansible/QEMU logs are bounded and private but may contain
 fixture-only secrets; do not upload the complete evidence directory. No
 production credential or SSH agent is forwarded into this run.
 
