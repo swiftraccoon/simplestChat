@@ -113,6 +113,132 @@ INSPECTION = (
     + '"user":{{json .Config.User}},"labels":{{json .Config.Labels}},'
     + '"host":{{json .HostConfig}},"state":{{json .State}}}'
 )
+FAILURE_PHASES = frozenset(
+    {
+        "guard",
+        "snapshot",
+        "snapshot_files",
+        "snapshot_units",
+        "snapshot_compose",
+        "database",
+        "backup-restore",
+        "report",
+        "unknown",
+    }
+)
+FAILURE_CONTEXTS = frozenset(
+    {
+        "unspecified",
+        "marker",
+        "selection",
+        "helper",
+        "docker_socket",
+        "fixture_directory",
+        "library_directory",
+        "simplestchat-public",
+        "results",
+        "backups",
+        "postgres",
+        "postgres-socket",
+        "caddy-data",
+        "caddy-config",
+        "secrets.json",
+        "compose.base.yml",
+        "Caddyfile",
+        "compose.public.yml",
+        "app.env",
+        "migration.env",
+        "proxy.env",
+        "postgres-admin-password",
+        "pg_hba.conf",
+        "init-database.sql",
+        "runtime-grants.sql",
+        "images.json",
+        "simplestchat-benchmark.service",
+        "simplestchat-image-build.service",
+        "simplestchat",
+        "migrate",
+        "caddy",
+    }
+)
+ASSERTION_CODES = {
+    "Fixture file ownership, type, size or mode differs": "file_metadata",
+    "Fixture file changed while reading": "file_changed",
+    "Fixture directory ownership or mode differs": "directory_metadata",
+    "Fixture selection schema or owner differs": "selection",
+    "Fixture revision is invalid": "revision",
+    "Fixture requires root": "root",
+    "Fixture requires Linux x86_64": "platform",
+    "Invalid fixture ownership token": "run_id",
+    "Fixture requires Debian 13": "distribution",
+    "Fixture requires QEMU": "hypervisor",
+    "Fixture marker differs": "marker",
+    "Fixture helper origin differs": "helper_origin",
+    "Fixture Docker socket differs": "docker_socket",
+    "Unexpected systemd property": "systemd_property",
+    "Incomplete systemd properties": "systemd_properties",
+    "Fixture unit identity differs": "unit_identity",
+    "Fixture workload unit is enabled or active": "unit_state",
+    "Fixture runtime directory differs": "runtime_directory",
+    "Unexpected image build runtime directory": "image_build_directory",
+    "Fixture Compose user differs": "compose_user",
+    "Fixture Compose isolation differs": "compose_isolation",
+    "Fixture Compose added capabilities differ": "compose_capabilities",
+    "Fixture Compose privilege boundary differs": "compose_privileges",
+    "Fixture Compose resource limits differ": "compose_resources",
+    "Fixture Compose CPU limit differs": "compose_cpus",
+    "Fixture isolated network differs": "compose_network",
+    "Fixture Compose init differs": "compose_init",
+    "Fixture HTTP publication is not loopback-only": "compose_http",
+    "Fixture Compose project differs": "compose_project",
+    "Fixture Compose services differ": "compose_services",
+    "Unexpected public configuration files": "configuration_files",
+    "Fixture deployment secret schema differs": "secret_schema",
+    "Fixture secrets are not independent": "secret_independence",
+    "Fixture application configuration differs": "application_environment",
+    "Fixture migration environment differs": "migration_environment",
+    "Fixture proxy environment differs": "proxy_environment",
+    "Fixture database secret differs": "database_secret",
+    "Fixture public project is already present": "project_present",
+    "Public playbook changed protected configuration": "configuration_changed",
+}
+FAILURE_CLASSES = (
+    (release.ReleaseError, "release_error"),
+    (OSError, "os_error"),
+    (ValueError, "value_error"),
+    (KeyError, "key_error"),
+    (subprocess.SubprocessError, "subprocess_error"),
+)
+
+
+class DiagnosticError(release.ReleaseError):
+    """Retain private exception semantics while exposing only explicitly reviewed labels."""
+
+    def __init__(self, phase: str, context: str, error: Exception) -> None:
+        """Keep arbitrary messages, class names, paths and values out of the receipt."""
+        super().__init__(str(error))
+        self.detail: dict[str, str] = {
+            "phase": phase if phase in FAILURE_PHASES else "unknown",
+            "context": context if context in FAILURE_CONTEXTS else "unspecified",
+            "code": ASSERTION_CODES.get(str(error), "unclassified")
+            if isinstance(error, release.ReleaseError)
+            else "unclassified",
+            "exceptionClass": next(
+                (label for kind, label in FAILURE_CLASSES if isinstance(error, kind)),
+                "unexpected_error",
+            ),
+        }
+
+
+@contextmanager
+def checking(phase: str, context: str = "unspecified") -> Generator[None]:
+    """Attach a fixed phase and optional reviewed slot without changing any assertion."""
+    try:
+        yield
+    except DiagnosticError:
+        raise
+    except Exception as error:  # noqa: BLE001 -- Preserve failure with a fixed public diagnostic.
+        raise DiagnosticError(phase, context, error) from None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -217,10 +343,14 @@ def guard(run_id: str) -> Selection:
     )
     with Path("/sys/class/dmi/id/sys_vendor").open("rb") as source:
         release.require(source.read(256).strip() == b"QEMU", "Fixture requires QEMU")
-    _ = directory(ROOT)
-    release.require(private_file(MARKER) == (run_id + "\n").encode(), "Fixture marker differs")
-    chosen = selection(private_file(ROOT / "selection.json"), run_id)
-    _ = directory(LIBRARY, mode=0o755)
+    with checking("guard", "fixture_directory"):
+        _ = directory(ROOT)
+    with checking("guard", "marker"):
+        release.require(private_file(MARKER) == (run_id + "\n").encode(), "Fixture marker differs")
+    with checking("guard", "selection"):
+        chosen = selection(private_file(ROOT / "selection.json"), run_id)
+    with checking("guard", "library_directory"):
+        _ = directory(LIBRARY, mode=0o755)
     for name in (
         "bounded_process",
         "runtime_profile",
@@ -230,18 +360,20 @@ def guard(run_id: str) -> Selection:
         "backup_public",
         "restore_verify",
     ):
-        module = sys.modules[name]
+        with checking("guard", "helper"):
+            module = sys.modules[name]
+            release.require(
+                module.__file__ == str(LIBRARY / (name + ".py")), "Fixture helper origin differs"
+            )
+            _ = private_file(LIBRARY / (name + ".py"), mode=0o644)
+    with checking("guard", "docker_socket"):
+        socket = Path("/run/docker.sock").lstat()
         release.require(
-            module.__file__ == str(LIBRARY / (name + ".py")), "Fixture helper origin differs"
+            stat.S_ISSOCK(socket.st_mode)
+            and socket.st_uid == 0
+            and stat.S_IMODE(socket.st_mode) == SOCKET_MODE,
+            "Fixture Docker socket differs",
         )
-        _ = private_file(LIBRARY / (name + ".py"), mode=0o644)
-    socket = Path("/run/docker.sock").lstat()
-    release.require(
-        stat.S_ISSOCK(socket.st_mode)
-        and socket.st_uid == 0
-        and stat.S_IMODE(socket.st_mode) == SOCKET_MODE,
-        "Fixture Docker socket differs",
-    )
     return chosen
 
 
@@ -369,7 +501,8 @@ def configuration(runner: release.RunnerProtocol) -> JsonObject:
     services = object_value(document["services"])
     release.require(set(services) == set(SERVICES), "Fixture Compose services differ")
     for name, service in services.items():
-        configured_service(object_value(service), name)
+        with checking("snapshot_compose", name):
+            configured_service(object_value(service), name)
     return {
         "sha256": hashlib.sha256(
             json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
@@ -391,13 +524,15 @@ def public_files() -> JsonObject:
         (release.ROOT / "caddy-data", 10001, 0o700),
         (release.ROOT / "caddy-config", 10001, 0o700),
     ):
-        result[str(path)] = directory(path, uid=uid, mode=mode)
+        with checking("snapshot_files", path.name):
+            result[str(path)] = directory(path, uid=uid, mode=mode)
     release.require(
         {path.name for path in release.CONFIG.iterdir()} == set(FILE_POLICIES),
         "Unexpected public configuration files",
     )
     for name, (uid, mode) in FILE_POLICIES.items():
-        data = private_file(release.CONFIG / name, uid=uid, mode=mode)
+        with checking("snapshot_files", name):
+            data = private_file(release.CONFIG / name, uid=uid, mode=mode)
         result[str(release.CONFIG / name)] = {
             "uid": uid,
             "gid": uid,
@@ -482,14 +617,16 @@ def public_files() -> JsonObject:
 
 def snapshot(runner: release.RunnerProtocol, chosen: Selection) -> JsonObject:
     """Compare two actual playbook applications without persisting resolved credentials."""
-    files = public_files()
+    with checking("snapshot_files"):
+        files = public_files()
     units: JsonObject = {}
     for name in ("benchmark", "image-build"):
         unit = "simplestchat-" + name + ".service"
-        value = properties(runner, unit, UNIT_PROPERTIES)
-        validate_unit(value, unit)
-        units[unit] = dict(value)
-        content = private_file(Path("/etc/systemd/system") / unit, mode=0o644)
+        with checking("snapshot_units", unit):
+            value = properties(runner, unit, UNIT_PROPERTIES)
+            validate_unit(value, unit)
+            units[unit] = dict(value)
+            content = private_file(Path("/etc/systemd/system") / unit, mode=0o644)
         files[unit] = {
             "sha256": hashlib.sha256(content).hexdigest(),
             "uid": 0,
@@ -501,12 +638,14 @@ def snapshot(runner: release.RunnerProtocol, chosen: Selection) -> JsonObject:
         not runner.compose("ps", "--all", "--quiet").strip(),
         "Fixture public project is already present",
     )
+    with checking("snapshot_compose"):
+        compose = configuration(runner)
     record: JsonObject = {
         "schemaVersion": 1,
         "runId": chosen.run_id,
         "files": files,
         "units": units,
-        "compose": configuration(runner),
+        "compose": compose,
     }
     path = ROOT / "snapshot.json"
     if path.exists() or path.is_symlink():
@@ -922,13 +1061,10 @@ def backup_restore(runner: GuestRunner, chosen: Selection) -> JsonObject:
     }
 
 
-def main() -> None:
+def main(arguments: Arguments) -> None:
     """Keep successful public evidence small and failures free of private command output."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    _ = parser.add_argument("action", choices=("snapshot", "database", "backup-restore"))
-    _ = parser.add_argument("--run-id", required=True)
-    arguments = parser.parse_args(namespace=Arguments())
-    chosen = guard(arguments.run_id)
+    with checking("guard"):
+        chosen = guard(arguments.run_id)
     _ = os.umask(0o077)
 
     def interrupted(_signum: int, _frame: FrameType | None) -> NoReturn:
@@ -940,7 +1076,8 @@ def main() -> None:
     attempt = Path(tempfile.mkdtemp(prefix=arguments.action + ".", dir=ROOT))
     runner = GuestRunner(attempt)
     actions = {"snapshot": snapshot, "database": database, "backup-restore": backup_restore}
-    result = actions[arguments.action](runner, chosen)
+    with checking(arguments.action):
+        result = actions[arguments.action](runner, chosen)
     report: JsonObject = {
         "schemaVersion": 1,
         "runId": chosen.run_id,
@@ -948,16 +1085,36 @@ def main() -> None:
         "passed": True,
         **result,
     }
-    release.atomic(attempt / "outcome.json", report)
+    with checking("report"):
+        release.atomic(attempt / "outcome.json", report)
     _ = sys.stdout.write(json.dumps(report, sort_keys=True) + "\n")
 
 
 def cli() -> int:
-    """Return a fixed failure category; private evidence remains inside the disposable guest."""
+    """Bind fixed failure metadata to validated request fields without accepting failure."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    _ = parser.add_argument("action", choices=("snapshot", "database", "backup-restore"))
+    _ = parser.add_argument("--run-id", required=True)
+    arguments = parser.parse_args(namespace=Arguments())
+    if re.fullmatch(r"[a-f0-9]{32}", arguments.run_id) is None:
+        _ = sys.stderr.write("Invalid disposable VM ownership token.\n")
+        return 1
     try:
-        main()
-    except (OSError, ValueError, KeyError, release.ReleaseError, subprocess.SubprocessError):
-        _ = sys.stderr.write("Disposable VM assertion failed; inspect private guest evidence.\n")
+        main(arguments)
+    except Exception as error:  # noqa: BLE001 -- Every caught failure still exits nonzero.
+        detail = (
+            error.detail
+            if isinstance(error, DiagnosticError)
+            else DiagnosticError("unknown", "unspecified", error).detail
+        )
+        report = {
+            "schemaVersion": 1,
+            "runId": arguments.run_id,
+            "action": arguments.action,
+            "passed": False,
+            **detail,
+        }
+        _ = sys.stdout.write(json.dumps(report, sort_keys=True) + "\n")
         return 1
     return 0
 

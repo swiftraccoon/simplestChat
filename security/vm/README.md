@@ -178,6 +178,16 @@ a fixed drainer failure class and numeric I/O errno. Output failures discovered
 during the final drain still fail validation even when resource cleanup succeeds;
 an incomplete drain cannot publish success.
 
+Failed guest actions return a separate failure receipt bound to the requested
+action and run identity. The controller accepts at most 16 KiB of duplicate-free
+JSON with exact fields and fixed phase, context, assertion-code and exception-class
+labels. Guard and snapshot checks identify reviewed file/service slots; unmapped
+errors expose only a fixed class. Exception text, paths, configuration values and
+command transcripts remain private. Valid failure metadata is retained under the
+command's `guestFailure` field before the action is rejected; malformed receipts
+and contradictory exit/status combinations also fail. Failure evidence never
+certifies deployment or bypasses owned cleanup.
+
 After SSH authentication, the controller requests `cloud-init status --wait
 --format=json`. The pinned CLI emits clean JSON in this mode. Exit codes 0, 1 and
 2 are captured before validation; success still requires exit 0, completed

@@ -38,7 +38,7 @@ from security_vm_qmp import Observer
 # security_context installs the canonical standalone operations-helper directory.
 import bounded_process
 from release_artifact import validate_manifest, verify_archive
-from release_json import decode_json
+from release_json import decode_json, object_value
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -60,6 +60,109 @@ VM_MEMORY_MIB = 3072
 VM_DISK_GIB = 16
 MAX_COMMANDS = 64
 MAX_CONFIGURATION_FILES = 64
+MAX_GUEST_RECEIPT = 16384
+GUEST_FAILURE_PHASES = frozenset(
+    {
+        "guard",
+        "snapshot",
+        "snapshot_files",
+        "snapshot_units",
+        "snapshot_compose",
+        "database",
+        "backup-restore",
+        "report",
+        "unknown",
+    }
+)
+GUEST_FAILURE_CONTEXTS = frozenset(
+    {
+        "unspecified",
+        "marker",
+        "selection",
+        "helper",
+        "docker_socket",
+        "fixture_directory",
+        "library_directory",
+        "simplestchat-public",
+        "results",
+        "backups",
+        "postgres",
+        "postgres-socket",
+        "caddy-data",
+        "caddy-config",
+        "secrets.json",
+        "compose.base.yml",
+        "Caddyfile",
+        "compose.public.yml",
+        "app.env",
+        "migration.env",
+        "proxy.env",
+        "postgres-admin-password",
+        "pg_hba.conf",
+        "init-database.sql",
+        "runtime-grants.sql",
+        "images.json",
+        "simplestchat-benchmark.service",
+        "simplestchat-image-build.service",
+        "simplestchat",
+        "migrate",
+        "caddy",
+    }
+)
+GUEST_FAILURE_CODES = frozenset(
+    {
+        "unclassified",
+        "file_metadata",
+        "file_changed",
+        "directory_metadata",
+        "selection",
+        "revision",
+        "root",
+        "platform",
+        "run_id",
+        "distribution",
+        "hypervisor",
+        "marker",
+        "helper_origin",
+        "docker_socket",
+        "systemd_property",
+        "systemd_properties",
+        "unit_identity",
+        "unit_state",
+        "runtime_directory",
+        "image_build_directory",
+        "compose_user",
+        "compose_isolation",
+        "compose_capabilities",
+        "compose_privileges",
+        "compose_resources",
+        "compose_cpus",
+        "compose_network",
+        "compose_init",
+        "compose_http",
+        "compose_project",
+        "compose_services",
+        "configuration_files",
+        "secret_schema",
+        "secret_independence",
+        "application_environment",
+        "migration_environment",
+        "proxy_environment",
+        "database_secret",
+        "project_present",
+        "configuration_changed",
+    }
+)
+GUEST_FAILURE_CLASSES = frozenset(
+    {
+        "release_error",
+        "os_error",
+        "value_error",
+        "key_error",
+        "subprocess_error",
+        "unexpected_error",
+    }
+)
 MAX_FIXTURE_ROWS = 16
 MAX_MIGRATIONS = 10000
 MIN_PORT = 1024
@@ -902,9 +1005,9 @@ def playbook(host: Host, inventory: Path, name: str, *, second: bool = False) ->
 
 
 def guest_action(host: Host, work: Path, port: int, run_id: str, action: str) -> dict[str, object]:
-    """Accept a narrow success receipt, never arbitrary remote command output."""
+    """Retain validated fixed failure evidence before rejecting an unsuccessful guest action."""
     require(action in ("snapshot", "database", "backup-restore"), "unknown_vm_action")
-    _, output = host.run(
+    status, output = host.run(
         action,
         ssh_command(
             work,
@@ -921,17 +1024,38 @@ def guest_action(host: Host, work: Path, port: int, run_id: str, action: str) ->
             ],
         ),
         timeout=400,
+        accepted=(0, 1),
     )
-    value = json_object(output)
+    require(len(output) <= MAX_GUEST_RECEIPT, "vm_guest_receipt_size")
+    value = object_value(decode_json(output))
     require(
         type(value.get("schemaVersion")) is int
         and value.get("schemaVersion") == 1
         and value.get("runId") == run_id
-        and value.get("action") == action
-        and value.get("passed") is True,
+        and value.get("action") == action,
         "invalid_vm_guest_receipt",
     )
     common = {"schemaVersion", "runId", "action", "passed"}
+    if status == 1:
+        choices = {
+            "phase": GUEST_FAILURE_PHASES,
+            "context": GUEST_FAILURE_CONTEXTS,
+            "code": GUEST_FAILURE_CODES,
+            "exceptionClass": GUEST_FAILURE_CLASSES,
+        }
+        require(
+            value.get("passed") is False
+            and set(value) == common | set(choices)
+            and all(
+                isinstance(value.get(key), str) and value[key] in allowed
+                for key, allowed in choices.items()
+            ),
+            "invalid_vm_guest_failure_receipt",
+        )
+        host.checks[-1]["guestFailure"] = {key: value[key] for key in choices}
+        message = "vm_guest_assertion_failed"
+        raise ToolError(message)
+    require(status == 0 and value.get("passed") is True, "invalid_vm_guest_receipt")
     extras: dict[str, set[str]] = {
         "snapshot": {"configurationFiles", "idempotent"},
         "database": {"migrations", "ready", "counts"},

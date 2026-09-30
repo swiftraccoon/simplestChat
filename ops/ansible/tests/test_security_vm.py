@@ -369,6 +369,80 @@ class BoundaryTests(unittest.TestCase):
                 _ = vm.guest_action(host, Path("/owned"), 22345, RUN, "backup-restore")
 
 
+class GuestFailureReceiptTests(unittest.TestCase):
+    """Nonzero guest evidence remains failure and can publish only fixed reviewed labels."""
+
+    def receipt(self) -> dict[str, object]:
+        """Construct the current exact failure schema with no real guest or private fields."""
+        return {
+            "schemaVersion": 1,
+            "runId": RUN,
+            "action": "snapshot",
+            "passed": False,
+            "phase": "snapshot_compose",
+            "context": "postgres",
+            "code": "compose_resources",
+            "exceptionClass": "release_error",
+        }
+
+    def invoke(self, status: int, content: bytes) -> RecordedHost:
+        """Model the canonical host command receipt without connecting to any SSH endpoint."""
+        host = RecordedHost(Path("/unused"), time.monotonic() + 30)
+        host.checks.append({"name": "snapshot", "exitStatus": status})
+        with (
+            patch.object(RecordedHost, "run", return_value=(status, content)) as run,
+            self.assertRaises((ToolError, ValueError)),
+        ):
+            _ = vm.guest_action(host, Path("/owned"), 22345, RUN, "snapshot")
+        self.assertEqual(run.call_args.kwargs["accepted"], (0, 1))
+        return host
+
+    def test_fixed_failure_is_retained_but_never_passes(self) -> None:
+        """The parent summary keeps actionable fixed metadata before raising the failure."""
+        value = self.receipt()
+        host = self.invoke(1, json.dumps(value).encode())
+        self.assertEqual(
+            host.checks[-1]["guestFailure"],
+            {key: value[key] for key in ("phase", "context", "code", "exceptionClass")},
+        )
+
+    def test_malformed_ambiguous_or_unbound_failures_are_never_retained(self) -> None:
+        """Neither arbitrary strings nor contradictory status/schema can enter public metadata."""
+        changes: tuple[dict[str, object], ...] = (
+            {"schemaVersion": True},
+            {"runId": "b" * 32},
+            {"action": "database"},
+            {"passed": True},
+            {"phase": "private-canary"},
+            {"context": "private-canary"},
+            {"code": "private-canary"},
+            {"exceptionClass": "private-canary"},
+            {"private-canary": "private-canary"},
+            {"code": []},
+        )
+        value = self.receipt()
+        samples = [json.dumps({**value, **change}).encode() for change in changes]
+        samples.extend(
+            (
+                b"",
+                b"[]",
+                b"{",
+                b" " * (vm.MAX_GUEST_RECEIPT + 1),
+                json.dumps(value)
+                .encode()
+                .replace(b'"passed": false', b'"passed": false, "passed": false'),
+            )
+        )
+        for content in samples:
+            with self.subTest(content=content[:100]):
+                self.assertNotIn("guestFailure", self.invoke(1, content).checks[-1])
+        for status in (0, 2):
+            with self.subTest(status=status):
+                self.assertNotIn(
+                    "guestFailure", self.invoke(status, json.dumps(value).encode()).checks[-1]
+                )
+
+
 class AnsibleStartupTests(unittest.TestCase):
     """Exercise pinned Ansible callback initialization using only an inert local action."""
 

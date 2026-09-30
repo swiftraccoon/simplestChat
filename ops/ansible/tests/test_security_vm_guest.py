@@ -7,6 +7,7 @@ import json
 import os
 import platform
 import shutil
+import signal
 import sys
 import tempfile
 import time
@@ -21,6 +22,7 @@ from test_support import ROOT, objects, strings, yaml_value
 # isort: split
 import bounded_process
 import release_public as release
+import security_vm as controller
 import security_vm_guest as guest
 import test_public_templates as templates
 from release_json import decode_json, object_value, string_value
@@ -362,6 +364,114 @@ class GuestGuardTests(unittest.TestCase):
             with self.assertRaisesRegex(release.ReleaseError, "deadline exceeded"):
                 _ = runner.run(["/usr/bin/true"])
             run.assert_not_called()
+
+
+class GuestDiagnosticTests(unittest.TestCase):
+    """Only fixed failure metadata leaves real guard/action wrappers, never private values."""
+
+    def invoke(self, action: str = "snapshot") -> tuple[int, JsonObject]:
+        """Capture the guest CLI receipt without an external process, guest or SSH connection."""
+        output = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["security_vm_guest.py", action, "--run-id", RUN_ID]),
+            patch.object(sys, "stdout", output),
+        ):
+            status = guest.cli()
+        encoded = output.getvalue()
+        self.assertLessEqual(len(encoded.encode()), controller.MAX_GUEST_RECEIPT)
+        self.assertNotIn("private-canary", encoded)
+        value = object_value(decode_json(encoded))
+        self.assertEqual(value["runId"], RUN_ID)
+        self.assertEqual(value["action"], action)
+        self.assertTrue(value["passed"] is False)
+        return status, value
+
+    def test_guard_failure_is_bound_and_does_not_start_an_action(self) -> None:
+        """Even a guard denial returns safe diagnostics before any mutable guest operation."""
+        with (
+            patch.object(os, "geteuid", return_value=123),
+            patch.object(guest, "snapshot") as action,
+        ):
+            status, value = self.invoke()
+        action.assert_not_called()
+        self.assertEqual(status, 1)
+        self.assertEqual(value["phase"], "guard")
+        self.assertEqual(value["code"], "root")
+        self.assertEqual(value["exceptionClass"], "release_error")
+
+    def test_snapshot_assertion_and_later_unmapped_errors_keep_failure(self) -> None:
+        """Action wrappers retain exact known categories and only fixed classes for other errors."""
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(guest, "ROOT", Path(temporary)),
+            patch.object(
+                guest, "guard", return_value=guest.Selection(run_id=RUN_ID, revision=REVISION)
+            ),
+            patch.object(signal, "signal"),
+            patch.object(os, "umask"),
+            patch.object(
+                guest,
+                "public_files",
+                side_effect=release.ReleaseError("Fixture deployment secret schema differs"),
+            ),
+        ):
+            status, value = self.invoke()
+            self.assertEqual(
+                (status, value["phase"], value["code"]), (1, "snapshot_files", "secret_schema")
+            )
+            for error, expected in (
+                (OSError("private-canary"), "os_error"),
+                (ValueError("private-canary"), "value_error"),
+                (KeyError("private-canary"), "key_error"),
+                (release.ReleaseError("private-canary"), "release_error"),
+                (RuntimeError("private-canary"), "unexpected_error"),
+            ):
+                with (
+                    self.subTest(expected=expected),
+                    patch.object(guest, "backup_restore", side_effect=error),
+                ):
+                    status, value = self.invoke("backup-restore")
+                    self.assertEqual(status, 1)
+                    self.assertEqual(value["phase"], "backup-restore")
+                    self.assertEqual(value["code"], "unclassified")
+                    self.assertEqual(value["exceptionClass"], expected)
+
+    def test_context_is_fixed_and_nested_checks_keep_the_innermost_slot(self) -> None:
+        """Known file slots remain useful; arbitrary contexts and exception text stay private."""
+        message = "Fixture file ownership, type, size or mode differs"
+        with (
+            self.assertRaises(guest.DiagnosticError) as caught,
+            guest.checking("snapshot"),
+            guest.checking("snapshot_files", "app.env"),
+        ):
+            raise release.ReleaseError(message)
+        self.assertEqual(
+            caught.exception.detail,
+            {
+                "phase": "snapshot_files",
+                "context": "app.env",
+                "code": "file_metadata",
+                "exceptionClass": "release_error",
+            },
+        )
+        unknown = guest.DiagnosticError(
+            "private-canary", "private-canary", ValueError("private-canary")
+        )
+        self.assertEqual(unknown.detail["phase"], "unknown")
+        self.assertEqual(unknown.detail["context"], "unspecified")
+        self.assertNotIn("private-canary", json.dumps(unknown.detail))
+
+    def test_producer_and_consumer_share_only_the_current_fixed_vocabulary(self) -> None:
+        """A producer label change must update the exact consuming wire contract."""
+        self.assertEqual(guest.FAILURE_PHASES, controller.GUEST_FAILURE_PHASES)
+        self.assertEqual(guest.FAILURE_CONTEXTS, controller.GUEST_FAILURE_CONTEXTS)
+        self.assertEqual(
+            set(guest.ASSERTION_CODES.values()) | {"unclassified"}, controller.GUEST_FAILURE_CODES
+        )
+        self.assertEqual(
+            {label for _kind, label in guest.FAILURE_CLASSES} | {"unexpected_error"},
+            controller.GUEST_FAILURE_CLASSES,
+        )
 
 
 class GuestAssertionTests(unittest.TestCase):
