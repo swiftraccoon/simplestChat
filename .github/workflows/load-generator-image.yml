@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   image:
     name: Linux/amd64 load-test image for owned measurements
@@ -24,8 +28,8 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/buildx-cache
-          key: buildx-${{ runner.os }}-${{ hashFiles('Dockerfile', 'Cargo.toml', 'Cargo.lock', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'vendor/**') }}
-          restore-keys: buildx-${{ runner.os }}-
+          key: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', 'Cargo.toml', 'Cargo.lock', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'vendor/**') }}
+          restore-keys: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build the load-test image
         shell: bash

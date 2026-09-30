@@ -39,6 +39,14 @@ on:
 permissions:
   contents: read
 
+env:
+  OPENSSL_DIR: ${{ github.workspace }}/target/openssl-3.5.8
+  PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-3.5.8/lib/pkgconfig
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.only }}-${{ inputs.workers }}-${{ inputs.clients }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   compare:
     name: Baseline versus candidate on one hosted runner

@@ -74,11 +74,22 @@ state="${project_root}/target/act"
 mkdir -p "${state}/artifacts" "${state}/cache"
 
 cd "${project_root}"
+case "$(uname -m)" in
+  arm64|aarch64)
+    runner_arch=arm64
+    runner_image=docker.io/catthehacker/ubuntu@sha256:84e94c96278dd26b8feb71226a521d259f8160cf6b1dd08e51fd42be43a82e56
+    ;;
+  x86_64)
+    runner_arch=amd64
+    runner_image=docker.io/catthehacker/ubuntu@sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b
+    ;;
+  *) echo 'Unsupported local runner architecture.' >&2; exit 2 ;;
+esac
 exec act push \
   --workflows .github/workflows/ci.yml \
   --job "${job}" \
-  --platform ubuntu-24.04=docker.io/catthehacker/ubuntu:act-24.04 \
-  --container-architecture "linux/$(uname -m | sed 's/^x86_64$/amd64/; s/^aarch64$/arm64/')" \
+  --platform "ubuntu-24.04=${runner_image}" \
+  --container-architecture "linux/${runner_arch}" \
   --pull=false \
   --container-daemon-socket - \
   --artifact-server-path "${state}/artifacts" \

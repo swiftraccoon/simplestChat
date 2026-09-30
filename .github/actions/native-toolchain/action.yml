@@ -70,7 +70,7 @@ runs:
       with:
         # Bump the prefix whenever the retention policy changes: an existing
         # key is reused as is and never re-saved.
-        prefix-key: v1-rust
+        prefix-key: v2-rust-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.arch }}
         shared-key: ${{ inputs.cache-key }}
         key: vendor-${{ hashFiles('vendor/**') }}
 
@@ -90,13 +90,7 @@ runs:
           target/release/build/mediasoup-*
           target/release/deps/*mediasoup*
           target/release/.fingerprint/mediasoup-*
-        key: vendored-${{ runner.os }}-${{ inputs.cache-key }}-${{ hashFiles('vendor/**', 'Cargo.lock', 'rust-toolchain.toml', 'build/pip-constraints.txt', 'build/install-openssl.sh') }}
-
-    - name: Configure native dependency paths
-      shell: bash
-      run: |
-        echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-3.5.8" >> "${GITHUB_ENV}"
-        echo "PKG_CONFIG_PATH=${RUNNER_TEMP}/simplestchat-openssl-3.5.8/lib/pkgconfig" >> "${GITHUB_ENV}"
+        key: vendored-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-key }}-${{ hashFiles('vendor/**', 'Cargo.lock', 'rust-toolchain.toml', 'build/pip-constraints.txt', 'build/install-openssl.sh') }}
 
     # The installer verifies the archive checksum before building; the prefix
     # is a pure function of the script, so cache it by the script's hash.
@@ -104,8 +98,8 @@ runs:
       id: openssl
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ${{ runner.temp }}/simplestchat-openssl-3.5.8
-        key: openssl-${{ runner.os }}-${{ hashFiles('build/install-openssl.sh') }}
+        path: ${{ env.OPENSSL_DIR }}
+        key: openssl-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build/install-openssl.sh') }}
 
     - name: Build checksum-pinned OpenSSL
       if: steps.openssl.outputs.cache-hit != 'true'

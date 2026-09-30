@@ -8,6 +8,14 @@ on:
 permissions:
   contents: read
 
+env:
+  OPENSSL_DIR: ${{ github.workspace }}/target/openssl-3.5.8
+  PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-3.5.8/lib/pkgconfig
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   automation:
     name: Operations automation lint and safety checks
@@ -284,7 +292,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/native-dtls-verified
-          key: native-dtls-${{ runner.os }}-${{ hashFiles('vendor/**', 'build/check-native-dtls.sh', 'build/install-openssl.sh', 'build/pip-constraints.txt') }}
+          key: native-dtls-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vendor/**', 'build/check-native-dtls.sh', 'build/install-openssl.sh', 'build/pip-constraints.txt') }}
           lookup-only: true
 
       - name: Install native build dependencies
@@ -300,7 +308,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/simplestchat-openssl-3.5.8
-          key: openssl-${{ runner.os }}-${{ hashFiles('build/install-openssl.sh') }}
+          key: openssl-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build/install-openssl.sh') }}
 
       - name: Build checksum-pinned OpenSSL
         if: steps.verified.outputs.cache-hit != 'true' && steps.openssl.outputs.cache-hit != 'true'
@@ -757,8 +765,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/buildx-cache
-          key: buildx-${{ runner.os }}-${{ hashFiles('Dockerfile', 'Cargo.toml', 'Cargo.lock', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'vendor/**') }}
-          restore-keys: buildx-${{ runner.os }}-
+          key: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', 'Cargo.toml', 'Cargo.lock', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'vendor/**') }}
+          restore-keys: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build production container
         shell: bash
