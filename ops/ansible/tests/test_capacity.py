@@ -169,6 +169,20 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(options["--source-addresses"], str(capacity.SOURCE_ADDRESSES))
         self.assertEqual(options["--layout"], "classic")
         self.assertEqual(options["--pixel-ratio"], "2")
+        self.assertNotIn("--audio-only", args)
+        self.assertNotIn("--chat-interval-ms", args)
+
+    def test_audio_and_chat_are_explicit_generator_options(self) -> None:
+        """Thirty publishers keep all microphones active and share a bounded chat cadence."""
+        plan = capacity.StepPlan("meetings", 60, 30, 30, 60)
+        browser = capacity.Browser(audio_only=True, speakers=30, chat_interval_ms=30_000)
+        args = plan.generator_args(browser, "audio-30", ("server", "generator"))
+        self.assertEqual(args[-1], "--audio-only")
+        options = dict(zip(args[:-1:2], args[1:-1:2], strict=True))
+        self.assertEqual(options["--rooms"], "2")
+        self.assertEqual(options["--clients"], "60")
+        self.assertEqual(options["--speakers"], "30")
+        self.assertEqual(options["--chat-interval-ms"], "30000")
 
     def test_a_webinar_has_exactly_one_presenter(self) -> None:
         """The audience plus one presenter, whatever the audience size."""
@@ -190,6 +204,17 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(capacity.forwarded_streams("large-meeting", 10, 5), 180.0)
         self.assertEqual(capacity.forwarded_streams("large-meeting", 40, 5), 2560.0)
         self.assertEqual(capacity.forwarded_streams("webinar", 100, 5), 200.0)
+
+    def test_audio_uses_the_whole_consumer_budget_without_video(self) -> None:
+        """Thirty talkers forward 29 audio streams each, and audio caps at 64 peers."""
+        self.assertEqual(capacity.forwarded_streams("meetings", 60, 30, audio_only=True), 1740.0)
+        self.assertEqual(
+            capacity.forwarded_streams("large-meeting", 40, 30, audio_only=True), 1560.0
+        )
+        self.assertEqual(
+            capacity.forwarded_streams("large-meeting", 80, 30, audio_only=True), 5120.0
+        )
+        self.assertEqual(capacity.forwarded_streams("webinar", 100, 30, audio_only=True), 100.0)
 
 
 class JudgeTests(unittest.TestCase):
@@ -265,6 +290,20 @@ class JudgeTests(unittest.TestCase):
             viewers_at_cap=196,
         )
         self.assertEqual(capacity.judge(meeting, LIMITS).reasons, ("1 consumers lost media",))
+
+    def test_an_audio_room_never_gets_a_video_tile_explanation(self) -> None:
+        """The audio workload does not inherit the full-media grid's ceiling."""
+        audio = step(
+            workload="large-meeting",
+            size=58,
+            clients=58,
+            rooms=1,
+            audio_only=True,
+            failed_consumers=2,
+            viewers_at_cap=58,
+        )
+        self.assertEqual(capacity.video_tiles(audio), 0)
+        self.assertEqual(capacity.judge(audio, LIMITS).reasons, ("2 consumers lost media",))
 
     def test_an_exhausted_or_saturated_server_fails_the_step(self) -> None:
         """Quota throttling stalls every worker at once, whatever each worker's load."""
@@ -977,10 +1016,18 @@ class CeilingAndCostTests(unittest.TestCase):
 
 
 def report(
-    label: str, monthly: float | None, meetings: int | None, bound: capacity.Bound = "measured"
+    label: str,
+    monthly: float | None,
+    meetings: int | None,
+    bound: capacity.Bound = "measured",
+    *,
+    profile: capacity.WorkloadProfile | None = None,
 ) -> dict[str, object]:
     """Return a report as `build_report` writes it for a synthetic calibration."""
-    options = capacity.Options(label=label, monthly_price=monthly)
+    profile = profile or capacity.WorkloadProfile()
+    options = capacity.Options(
+        label=label, monthly_price=monthly, meeting_size=profile.meeting_size
+    )
     context = capacity.Context(
         engine=capacity.Engine("/nonexistent/docker"),
         run_id="test",
@@ -991,7 +1038,7 @@ def report(
         worker_threshold=0.7,
         server_memory="2048m",
         generator_memory="1024m",
-        browser=capacity.Browser(),
+        browser=profile.browser,
         output=Path(),
         log=lambda _message: None,
     )
@@ -1009,7 +1056,15 @@ def report(
         deployment=capacity.Deployment(app_cpus=3.0, memory_mib=6144),
         shapes=dict.fromkeys(capacity.WORKLOADS, capacity.Shape(2.0, 2, 1.8)),
     )
-    passing = step(size=meetings or 0, received_packets=0, measurement_seconds=0.0)
+    passing = step(
+        size=meetings or 0,
+        received_packets=0,
+        measurement_seconds=0.0,
+        meeting_size=profile.meeting_size,
+        audio_only=profile.browser.audio_only,
+        speakers=profile.browser.speakers,
+        chat_interval_ms=profile.browser.chat_interval_ms,
+    )
     ceilings: dict[capacity.Workload, capacity.Ceiling] = {
         workload: capacity.Ceiling(workload, None, "not-run", 0.0, 0.0, 0)
         for workload in capacity.WORKLOADS
@@ -1099,6 +1154,112 @@ class ReportTests(unittest.TestCase):
         exact = capacity.as_object(report("exact", 10.0, 100)["projection"], "projection")
         self.assertTrue(exact["lowerBound"] is False)
 
+    def test_audio_report_keeps_its_shape_and_does_not_claim_a_video_ceiling(self) -> None:
+        """The report retains room size, media, speakers and chat in machine and human output."""
+        profile = capacity.WorkloadProfile(
+            30, capacity.Browser(audio_only=True, speakers=30, chat_interval_ms=30_000)
+        )
+        built = report("audio", 10.0, 60, profile=profile)
+        self.assertEqual(capacity.workload_profile(built), profile)
+        measurement = capacity.as_object(built["measurement"], "measurement")
+        self.assertEqual(measurement["meetingSize"], 30)
+        browser = capacity.as_object(measurement["browser"], "browser")
+        self.assertTrue(browser["audioOnly"] is True)
+        self.assertEqual((browser["speakers"], browser["chatIntervalMs"]), (30, 30_000))
+        first_step = capacity.as_object(capacity.as_list(built["steps"], "steps")[0], "step")
+        self.assertEqual(first_step["meetingSize"], 30)
+        self.assertTrue(first_step["audioOnly"] is True)
+        self.assertEqual((first_step["speakers"], first_step["chatIntervalMs"]), (30, 30_000))
+        lines = "\n".join(capacity.summary_lines(built))
+        self.assertIn("meetings of 30: 60 participants", lines)
+        self.assertIn("audio only, up to 30 concurrent speakers", lines)
+        self.assertIn("chat message per participant every 30 s", lines)
+        self.assertNotIn("beyond 33 publishers", lines)
+        self.assertNotIn("32 peers", lines)
+
+    def test_suggest_rejects_nonreference_shapes_before_printing_settings(self) -> None:
+        """A measured audio ceiling cannot become the adviser's five-person video promise."""
+        profiles = [
+            capacity.WorkloadProfile(30, capacity.Browser(audio_only=True, speakers=30)),
+            capacity.WorkloadProfile(30),
+            capacity.WorkloadProfile(browser=capacity.Browser(speakers=5)),
+            capacity.WorkloadProfile(browser=capacity.Browser(chat_interval_ms=30_000)),
+            capacity.WorkloadProfile(browser=capacity.Browser(layout="modern")),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "calibration.json"
+            for profile in profiles:
+                _ = path.write_text(
+                    json.dumps(report("changed", 10.0, 60, profile=profile)), encoding="utf-8"
+                )
+                output, errors = io.StringIO(), io.StringIO()
+                with (
+                    self.subTest(profile=profile),
+                    redirect_stdout(output),
+                    redirect_stderr(errors),
+                ):
+                    status = capacity.main(
+                        [
+                            "suggest",
+                            "--vcpus",
+                            "6",
+                            "--memory-gib",
+                            "12",
+                            "--calibration",
+                            str(path),
+                            "--env",
+                        ]
+                    )
+                    self.assertEqual(status, 1)
+                    self.assertEqual(output.getvalue(), "")
+                    self.assertIn("this report measured", errors.getvalue())
+
+    def test_legacy_default_calibration_remains_usable(self) -> None:
+        """Absent opt-in fields in an older report retain their original disabled values."""
+        built = report("legacy", 10.0, 100)
+        measurement = capacity.as_object(built["measurement"], "measurement")
+        browser = capacity.as_object(measurement["browser"], "browser")
+        del browser["audioOnly"]
+        del browser["chatIntervalMs"]
+        self.assertEqual(capacity.workload_profile(built), capacity.WorkloadProfile())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "legacy.json"
+            _ = path.write_text(json.dumps(built), encoding="utf-8")
+            output = io.StringIO()
+            with redirect_stdout(output):
+                status = capacity.main(
+                    [
+                        "suggest",
+                        "--vcpus",
+                        "4",
+                        "--memory-gib",
+                        "12",
+                        "--calibration",
+                        str(path),
+                    ]
+                )
+        self.assertEqual(status, 0)
+        self.assertIn("Meetings of five", output.getvalue())
+
+    def test_compare_refuses_to_rank_different_workloads_as_equivalent(self) -> None:
+        """Cost rankings compare the same media, room size, speech and chat workload."""
+        with tempfile.TemporaryDirectory() as directory:
+            paths: list[str] = []
+            for label, profile in (
+                ("video", capacity.WorkloadProfile()),
+                (
+                    "audio",
+                    capacity.WorkloadProfile(30, capacity.Browser(audio_only=True, speakers=30)),
+                ),
+            ):
+                path = Path(directory) / f"{label}.json"
+                _ = path.write_text(
+                    json.dumps(report(label, 10.0, 60, profile=profile)), encoding="utf-8"
+                )
+                paths.append(str(path))
+            with self.assertRaisesRegex(capacity.CapacityError, "different workload shapes"):
+                _ = capacity.compare(paths)
+
     def test_a_run_without_meetings_projects_nothing(self) -> None:
         """A webinar-only run says it cannot size the deployment instead of projecting 0."""
         built = report("webinar-only", 10.0, None, bound="not-run")
@@ -1127,6 +1288,7 @@ class ReportTests(unittest.TestCase):
         # A workload that was not run shows as a dash, not as Python's None.
         self.assertNotIn("None", output.getvalue())
         self.assertEqual(rows[1].split()[-3], "-")
+        self.assertIn("Workload: meetings of 5, audio and video", rows[-1])
 
 
 class CommandLineTests(unittest.TestCase):
@@ -1144,6 +1306,8 @@ class CommandLineTests(unittest.TestCase):
         self.assertFalse(options.quick)
         self.assertEqual((options.capture, options.layout), ("720p", "classic"))
         self.assertIsNone(options.monthly_price)
+        self.assertFalse(options.audio_only)
+        self.assertEqual(options.chat_interval_ms, 0)
         chosen = capacity.parser().parse_args(
             [
                 "run",
@@ -1162,6 +1326,44 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(
             (chosen.workloads, chosen.quick, chosen.monthly_price), (["webinar"], True, 6.8)
         )
+
+    def test_audio_chat_run_can_use_explicit_six_cpu_host_budgets(self) -> None:
+        """A dedicated host can separate one/two server CPUs from its generator quota."""
+        options = capacity.parser().parse_args(
+            [
+                "run",
+                "--server-image",
+                "s",
+                "--generator-image",
+                "g",
+                "--workloads",
+                "meetings",
+                "--meeting-size",
+                "30",
+                "--audio-only",
+                "--speakers",
+                "30",
+                "--chat-interval-ms",
+                "30000",
+                "--server-cpus",
+                "1",
+                "--generator-cpus",
+                "4.8",
+            ],
+            namespace=capacity.Options(),
+        )
+        self.assertEqual((options.meeting_size, options.speakers), (30, 30))
+        self.assertTrue(options.audio_only)
+        self.assertEqual(options.chat_interval_ms, 30_000)
+        for server_cpus, generator_cpus in ((1.0, 4.8), (2.0, 3.8)):
+            shape = capacity.shape_for(
+                "meetings",
+                6,
+                deployment_workers=5,
+                server_cpus=server_cpus,
+                generator_cpus=generator_cpus,
+            )
+            self.assertEqual(shape, capacity.Shape(server_cpus, int(server_cpus), generator_cpus))
 
     def test_a_single_size_can_be_repeated(self) -> None:
         """`--first-size` and `--steps` rerun one size with the same instrumentation."""

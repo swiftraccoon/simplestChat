@@ -320,6 +320,43 @@ python3 build/capacity.py suggest --vcpus 8 --memory-gib 16 [--port-mbps 1000] \
   [--calibration results/capacity.<time>/calibration.json]
 ```
 
+The default remains five-person audio/video meetings with one active speaker
+per room and no chat traffic. To measure thirty continuously active microphones
+per room, select `--audio-only --meeting-size 30 --speakers 30`. The speaker
+count is the maximum talking at once; setting it to the room's publisher count
+keeps every microphone active. Optional `--chat-interval-ms 30000` adds one
+message per participant every thirty seconds, staggered across the room (one
+message per second in a thirty-person room). Chat is disabled when omitted.
+
+On a dedicated six-vCPU test host, an initial single-room measurement can give
+the server one CPU and one worker, leaving 4.8 CPUs to the generator:
+
+```sh
+python3 build/capacity.py run --server-image localhost/simplestchat-production:dev \
+  --generator-image localhost/simplestchat-loadtest:dev \
+  --workloads meetings --meeting-size 30 --first-size 30 --steps 1 \
+  --audio-only --speakers 30 --chat-interval-ms 30000 \
+  --server-cpus 1 --generator-cpus 4.8 --label audio30-one-worker
+```
+
+Repeat with `--server-cpus 2 --generator-cpus 3.8` to measure two workers.
+`--steps 1` repeats only the chosen population; a passing result establishes a
+lower bound, not the maximum capacity. Removing it enables the search in whole
+thirty-person rooms. Generator throttling still invalidates a measurement.
+The JSON report records `measurement.meetingSize` and
+`measurement.browser.audioOnly`, `speakers`, and `chatIntervalMs`; its human
+summary labels the same workload. CPU, memory and egress projections apply
+only to that recorded workload. These owned containers use loopback traffic;
+the run does not measure an Internet link, TURN relay, database-backed accounts,
+or browser audio decoding.
+
+`compare` requires matching room size, media, concurrent speakers, browser
+settings and chat cadence. `suggest --calibration` accepts only the default
+five-person audio/video profile: it rejects an audio-only, different room-size,
+different speaker-count, or chat-enabled report instead of relabeling its
+capacity. Use that run's explicitly labeled summary and projection. The
+historical 85-participant-per-worker reference is not an audio-thirty estimate.
+
 `suggest` sizes a host without measuring it: from its vCPUs, memory and port
 (a gigabit port unless told otherwise) it prints the settings the managed
 deployment would derive using the same calculation (all but one CPU, one worker

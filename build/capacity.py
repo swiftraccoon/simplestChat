@@ -336,6 +336,51 @@ class Browser:
     viewport_width: int = 1440
     pixel_ratio: float = 2.0
     layout: str = "classic"
+    audio_only: bool = False
+    chat_interval_ms: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class WorkloadProfile:
+    """The workload a measured ceiling describes; resource quotas are separate."""
+
+    meeting_size: int = 5
+    browser: Browser = Browser()
+
+    def describe(self) -> str:
+        """Label media, concurrent talkers and chat without implying a reference shape."""
+        media = "audio only" if self.browser.audio_only else "audio and video"
+        chat = (
+            f"one chat message per participant every {self.browser.chat_interval_ms / 1000:g} s"
+            if self.browser.chat_interval_ms
+            else "chat disabled"
+        )
+        return (
+            f"meetings of {self.meeting_size}, {media}, up to {self.browser.speakers} concurrent "
+            + f"speakers per room, {chat}"
+        )
+
+
+def workload_profile(report: Mapping[str, object]) -> WorkloadProfile:
+    """Read workload provenance, accepting old reports that predate opt-in audio/chat."""
+    measurement = as_object(report.get("measurement"), "measurement")
+    browser = as_object(measurement.get("browser"), "measurement.browser")
+    audio_only = browser.get("audioOnly", False)
+    if not isinstance(audio_only, bool):
+        message = "measurement.browser.audioOnly must be a boolean"
+        raise CapacityError(message)
+    return WorkloadProfile(
+        meeting_size=int(as_number(measurement.get("meetingSize"), "meetingSize")),
+        browser=Browser(
+            capture=str(browser.get("capture", "")),
+            speakers=int(as_number(browser.get("speakers"), "speakers")),
+            viewport_width=int(as_number(browser.get("viewportWidth"), "viewportWidth")),
+            pixel_ratio=as_number(browser.get("pixelRatio"), "pixelRatio"),
+            layout=str(browser.get("layout", "")),
+            audio_only=audio_only,
+            chat_interval_ms=int(as_number(browser.get("chatIntervalMs", 0), "chatIntervalMs")),
+        ),
+    )
 
 
 # Joins cost handshakes on the worker that takes them, so a ceiling holds for a
@@ -413,17 +458,25 @@ class StepPlan:
             "--server-revision": revisions[0],
             "--generator-revision": revisions[1],
         }
-        return [item for pair in options.items() for item in pair]
+        if browser.chat_interval_ms:
+            options["--chat-interval-ms"] = str(browser.chat_interval_ms)
+        arguments = [item for pair in options.items() for item in pair]
+        if browser.audio_only:
+            arguments.append("--audio-only")
+        return arguments
 
 
-def forwarded_streams(workload: Workload, size: int, meeting_size: int) -> float:
+def forwarded_streams(
+    workload: Workload, size: int, meeting_size: int, *, audio_only: bool = False
+) -> float:
     """Consumers the server forwards to at a size: the load model for projections."""
+    kinds = 1 if audio_only else 2
     if workload == "meetings":
-        return size * 2.0 * (meeting_size - 1)
+        return size * float(min(kinds * (meeting_size - 1), 64))
     if workload == "large-meeting":
         # Browsers consume every peer's audio and video, up to 64 consumers.
-        return size * float(min(2 * (size - 1), 64))
-    return size * 2.0
+        return size * float(min(kinds * (size - 1), 64))
+    return float(size * kinds)
 
 
 # --- Judging a step -----------------------------------------------------------
@@ -497,6 +550,10 @@ class StepResult:
     video_start_p99_ms: float = 0.0
     server_exit: str = ""
     error: str = ""
+    meeting_size: int = 5
+    audio_only: bool = False
+    speakers: int = 1
+    chat_interval_ms: int = 0
 
     @property
     def busiest_worker(self) -> float:
@@ -542,6 +599,8 @@ MOST_VIDEO_TILES: Final = 32
 
 def video_tiles(step: StepResult) -> int:
     """Remote video tiles each participant of a step's workload shows."""
+    if step.audio_only:
+        return 0
     if step.workload == "meetings":
         return max(0, step.clients // max(1, step.rooms) - 1)
     if step.workload == "large-meeting":
@@ -650,6 +709,7 @@ class Search:
     granularity: int
     max_steps: int
     minimum: int
+    audio_only: bool = False
 
     @property
     def spreads(self) -> bool:
@@ -672,7 +732,9 @@ def projected_size(search: Search, trial: Trial, limits: Limits, generator_quota
     """Return the size where the trial's load reaches the guard, within the generator's quota."""
 
     def streams(size: int) -> float:
-        return forwarded_streams(search.workload, size, search.meeting_size)
+        return forwarded_streams(
+            search.workload, size, search.meeting_size, audio_only=search.audio_only
+        )
 
     load = trial.mean_worker * SPREAD_IMBALANCE if search.spreads else trial.busiest_worker
     target = streams(trial.size) * limits.worker_load * PROJECTION_MARGIN / max(load, 0.01)
@@ -1210,7 +1272,17 @@ def suggest(options: Options) -> int:
         raise CapacityError(message)
     port_mbps = options.port_mbps or DEFAULT_PORT_MBPS
     if options.calibration:
-        ceilings = ceilings_from_report(read_json(Path(options.calibration)))
+        report = read_json(Path(options.calibration))
+        profile = workload_profile(report)
+        if profile != WorkloadProfile():
+            message = (
+                "suggest supports only the default five-person audio/video workload with one "
+                + "speaker and no chat; this report measured "
+                + profile.describe()
+                + ". Use its measured summary and projection for that workload."
+            )
+            raise CapacityError(message)
+        ceilings = ceilings_from_report(report)
         source = f"ceilings from {options.calibration}"
     else:
         ceilings = REFERENCE_CEILINGS
@@ -1691,7 +1763,17 @@ def run_step(context: Context, plan: StepPlan, index: int) -> StepResult:
     directory.mkdir(parents=True, exist_ok=False)
     ports = [WORKER_PORT_BASE + worker for worker in range(context.shape.workers)]
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
-    result = StepResult(plan.workload, plan.size, plan.clients, plan.rooms, started_at)
+    result = StepResult(
+        plan.workload,
+        plan.size,
+        plan.clients,
+        plan.rooms,
+        started_at,
+        meeting_size=plan.meeting_size,
+        audio_only=context.browser.audio_only,
+        speakers=context.browser.speakers,
+        chat_interval_ms=context.browser.chat_interval_ms,
+    )
     marks: Marks = (None, None, None)
     try:
         _ = engine.run(*server_command(context, server, port, token))
@@ -1956,6 +2038,8 @@ class Options(argparse.Namespace):
     viewport_width: int = 1440
     pixel_ratio: float = 2.0
     layout: str = "classic"
+    audio_only: bool = False
+    chat_interval_ms: int = 0
     monthly_price: float | None = None
     egress_price_per_gb: float = 0.0
     included_egress_tb: float = 0.0
@@ -2062,6 +2146,8 @@ def calibrate(options: Options) -> int:
             options.viewport_width,
             options.pixel_ratio,
             options.layout,
+            options.audio_only,
+            options.chat_interval_ms,
         ),
         output=output,
         log=log,
@@ -2084,7 +2170,10 @@ def calibrate(options: Options) -> int:
                 + f"generator {shape.generator_cpus:g} CPUs"
             )
             scoped = replace(context, shape=shape)
-            plan = search_for(workload, shape, options.meeting_size, steps, options.first_size)
+            plan = replace(
+                search_for(workload, shape, options.meeting_size, steps, options.first_size),
+                audio_only=options.audio_only,
+            )
             results[workload] = search_workload(scoped, plan, limits, timing, index)
             index += len(results[workload])
     ceilings: dict[Workload, Ceiling] = {
@@ -2225,6 +2314,7 @@ def summary_lines(report: Mapping[str, object]) -> list[str]:
     projection = as_object(report["projection"], "projection")
     measurement = as_object(report["measurement"], "measurement")
     host = as_object(report["host"], "host")
+    profile = workload_profile(report)
 
     def ceiling(workload: str, people: str) -> str:
         entry = as_object(ceilings[workload], workload)
@@ -2255,6 +2345,7 @@ def summary_lines(report: Mapping[str, object]) -> list[str]:
         "",
         f"Host {report['label']}: {host['logicalCpus']} CPUs, {host['cpuModel']}, "
         + f"{host['memoryMib']} MiB{platform}",
+        f"Workload: {profile.describe()}",
         f"  meetings of {measurement['meetingSize']}: {ceiling('meetings', 'participants')}",
         *bounded("meetings"),
         f"  largest meeting: {ceiling('large-meeting', 'participants')}",
@@ -2266,7 +2357,7 @@ def summary_lines(report: Mapping[str, object]) -> list[str]:
         *(f"  {line}" for line in as_list(report["recommendations"], "recommendations")),
     ]
     large = as_object(ceilings["large-meeting"], "large-meeting").get("ceiling")
-    if isinstance(large, int) and large > FULL_MEDIA_ROOM_LIMIT:
+    if not profile.browser.audio_only and isinstance(large, int) and large > FULL_MEDIA_ROOM_LIMIT:
         lines.append(
             f"  note: beyond {FULL_MEDIA_ROOM_LIMIT} publishers each browser shows only 32 peers "
             + "(MAX_CONSUMERS_PER_PARTICIPANT=64)"
@@ -2324,10 +2415,20 @@ COMPARISON_HEADER: Final = (
 
 def compare(paths: Sequence[str]) -> int:
     """Rank hosts by cost per 1,000 participant-hours (the `compare` command)."""
-    rows = sorted(comparison_row(read_json(Path(path))) for path in paths)
+    reports = [read_json(Path(path)) for path in paths]
+    profiles = {workload_profile(report) for report in reports}
+    if len(profiles) > 1:
+        message = (
+            "cannot compare costs across different workload shapes; use reports with the same "
+            + "meeting size, media, speakers, browser settings and chat interval"
+        )
+        raise CapacityError(message)
+    rows = sorted(comparison_row(report) for report in reports)
     print(COMPARISON_HEADER)  # noqa: T201 -- intentional report output.
     for _, row in rows:
         print(row)  # noqa: T201 -- intentional report output.
+    for profile in profiles:
+        print(f"Workload: {profile.describe()}")  # noqa: T201 -- intentional report output.
     return 0
 
 
@@ -2380,6 +2481,14 @@ def parser() -> argparse.ArgumentParser:
     )
     _ = run.add_argument("--capture", choices=("720p", "1080p"), help="browsers' camera (720p)")
     _ = run.add_argument("--speakers", type=int, help="people talking at once per room (1)")
+    _ = run.add_argument(
+        "--audio-only", action="store_true", help="publish and receive audio without video"
+    )
+    _ = run.add_argument(
+        "--chat-interval-ms",
+        type=int,
+        help="optional per-participant chat interval, 1000..600000 ms (disabled by default)",
+    )
     _ = run.add_argument("--viewport-width", type=int, help="browser width in CSS px (1440)")
     _ = run.add_argument("--pixel-ratio", type=float, help="browser device pixel ratio (2)")
     _ = run.add_argument("--layout", choices=("classic", "modern"), help="web client layout")
