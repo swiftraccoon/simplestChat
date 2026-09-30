@@ -1,4 +1,5 @@
 name: Canary
+run-name: "SimplestChat canary: ${{ vars.CANARY_ORIGIN }}"
 
 # Two owned headless Chromium clients join a dedicated canary room on the
 # public deployment: one publishes a fake camera and microphone, the other

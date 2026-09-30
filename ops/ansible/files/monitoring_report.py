@@ -65,6 +65,7 @@ def importer_state() -> JsonObject:
         "lastPollEpoch": state.get("lastPollAt"),
         "spoolSnapshots": len(list((STATE / "external-spool").glob("*.json"))),
         "discardedSnapshots": integer_value(state.get("dropped", 0)),
+        "deployment": state.get("deployment"),
         "scope": "Local spool health; a discarded snapshot means historical coverage was lost.",
     }
 

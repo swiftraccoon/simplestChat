@@ -24,6 +24,9 @@ if TYPE_CHECKING:
     from urllib.request import Request
 
 
+DEPLOYMENT = external.Deployment("example/simplestchat", "https://chat.example.test")
+
+
 def fixture_run(workflow: str = "canary", identity: int = 1) -> JsonObject:
     """Construct only a normalized fixed-repository run identity."""
     return {
@@ -62,9 +65,49 @@ def fixture_jobs(workflow: str = "canary", identity: int = 1) -> JsonObject:
 class ExternalMonitoringTests(unittest.TestCase):
     """Keep import completeness, request budgets and durable replay independently honest."""
 
+    def test_external_evidence_requires_explicit_stable_deployment_attribution(self) -> None:
+        """A deployment cannot inherit another site's or an unbound legacy history."""
+        state: JsonObject = {}
+        external.bind_deployment(state, DEPLOYMENT)
+        external.bind_deployment(state, DEPLOYMENT)
+        self.assertEqual(state["deployment"], DEPLOYMENT.identity())
+        other = external.Deployment("elsewhere/chat", "https://different.example.test")
+        histories: list[JsonObject] = [state, {"lastPollAt": 1}]
+        for previous in histories:
+            with self.subTest(previous=previous), self.assertRaises(ReleaseError):
+                external.bind_deployment(previous, other)
+        for repository in ("", "https://github.com/a/b", "../other", "a/b/c"):
+            with self.subTest(repository=repository), self.assertRaises(ReleaseError):
+                _ = external.Deployment(repository, DEPLOYMENT.origin)
+
+    def test_run_target_must_match_the_configured_origin(self) -> None:
+        """Matching repository/job names alone cannot certify a different public site."""
+        run: JsonObject = {
+            "id": 1,
+            "run_attempt": 1,
+            "head_sha": "a" * 40,
+            "created_at": "2026-09-23T01:00:00Z",
+            "updated_at": "2026-09-23T01:01:00Z",
+            "head_branch": "main",
+            "event": "schedule",
+            "status": "completed",
+            "path": ".github/workflows/canary.yml",
+            "repository": {"full_name": DEPLOYMENT.repository},
+            "head_repository": {"full_name": DEPLOYMENT.repository},
+        }
+        github = external.Github({}, DEPLOYMENT)
+        for origin in (DEPLOYMENT.origin, "https://another.example.test", ""):
+            run["display_title"] = f"SimplestChat canary: {origin}"
+            with patch.object(
+                github, "get", return_value={"total_count": 1, "workflow_runs": [run]}
+            ):
+                found, truncated = external.runs(github, "canary", "2026-09-23T00:00:00Z")
+            self.assertFalse(truncated)
+            self.assertEqual(len(found), int(origin == DEPLOYMENT.origin))
+
     def test_only_real_required_steps_can_pass(self) -> None:
         """A green outer workflow cannot hide absent, skipped or failing media checks."""
-        github = external.Github({})
+        github = external.Github({}, DEPLOYMENT)
         for outcome, expected in (
             ("success", "success"),
             ("skipped", "incomplete"),
@@ -90,6 +133,9 @@ class ExternalMonitoringTests(unittest.TestCase):
             config = yaml_value(
                 (ROOT / f".github/workflows/{workflow}.yml").read_text(), scalars_as_strings=True
             )
+            self.assertEqual(
+                obj(config)["run-name"], f"SimplestChat {workflow}: ${{{{ vars.CANARY_ORIGIN }}}}"
+            )
             jobs = obj(obj(config)["jobs"])
             self.assertEqual(len(jobs), 1)
             job = obj(next(iter(jobs.values())))
@@ -107,7 +153,7 @@ class ExternalMonitoringTests(unittest.TestCase):
                 external.Github, "get", return_value={"total_count": 0, "workflow_runs": []}
             ),
         ):
-            value = external.collect({}, "a" * 40)
+            value = external.collect({}, "a" * 40, DEPLOYMENT)
             self.assertTrue(
                 all(obj(batch)["complete"] is False for batch in array(value, "workflows"))
             )
@@ -126,7 +172,7 @@ class ExternalMonitoringTests(unittest.TestCase):
         for field, value in (("head_sha", "b" * 40), ("run_id", 2), ("run_attempt", 2)):
             jobs = fixture_jobs()
             object_value(array_value(jobs["jobs"])[0])[field] = value
-            github = external.Github({})
+            github = external.Github({}, DEPLOYMENT)
             with (
                 self.subTest(field=field),
                 patch.object(github, "get", return_value=jobs),
@@ -147,7 +193,7 @@ class ExternalMonitoringTests(unittest.TestCase):
         response.__exit__ = Mock(return_value=False)
         opened = Mock(return_value=response)
         opener = Mock(open=opened)
-        github = external.Github({})
+        github = external.Github({}, DEPLOYMENT)
         with patch.object(external, "build_opener", return_value=opener):
             for _ in range(external.MAX_REQUESTS):
                 self.assertEqual(github.get("runs/1/attempts/1/jobs?per_page=100"), {})
@@ -159,7 +205,7 @@ class ExternalMonitoringTests(unittest.TestCase):
         self.assertNotIn("Authorization", request.headers)
         read.assert_called_with(external.MAX_RESPONSE + 1)
         with self.assertRaises(ReleaseError):
-            _ = external.Github({}).get("https://elsewhere.example/runs")
+            _ = external.Github({}, DEPLOYMENT).get("https://elsewhere.example/runs")
         self.assertIsNone(external.NoRedirect().redirect_request())
         headers = Message()
         headers["Retry-After"] = "999999"
@@ -170,7 +216,7 @@ class ExternalMonitoringTests(unittest.TestCase):
             patch("time.time", return_value=10000),
             self.assertRaises(HTTPError),
         ):
-            _ = external.Github(state).get("runs/1/attempts/1/jobs?per_page=100")
+            _ = external.Github(state, DEPLOYMENT).get("runs/1/attempts/1/jobs?per_page=100")
         self.assertEqual(state["notBefore"], 13600)
 
     def test_attempts_budget_completeness_and_backward_clock(self) -> None:
@@ -203,8 +249,9 @@ class ExternalMonitoringTests(unittest.TestCase):
                                 "event": "schedule",
                                 "status": "completed",
                                 "path": f".github/workflows/{workflow}.yml",
-                                "repository": {"full_name": external.REPOSITORY},
-                                "head_repository": {"full_name": external.REPOSITORY},
+                                "display_title": f"SimplestChat {workflow}: {DEPLOYMENT.origin}",
+                                "repository": {"full_name": DEPLOYMENT.repository},
+                                "head_repository": {"full_name": DEPLOYMENT.repository},
                             }
                         ],
                     }
@@ -212,7 +259,7 @@ class ExternalMonitoringTests(unittest.TestCase):
                 return fixture_jobs("availability" if identity == 1 else "canary", identity)
 
             with patch.object(external.Github, "get", new=fetched):
-                value = external.collect(state, "b" * 40)
+                value = external.collect(state, "b" * 40, DEPLOYMENT)
             self.assertEqual(calls, external.MAX_REQUESTS)
             self.assertGreater(string_value(value["observedAt"]), "2030-01-01T00:00:00+00:00")
             batches = [object_value(item) for item in array_value(value["workflows"])]

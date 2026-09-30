@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from pathlib import Path
@@ -24,14 +25,13 @@ from release_json import (
     object_value,
     string_value,
 )
-from release_public import ReleaseError, atomic, require
+from release_public import ReleaseError, atomic, protected, require
 
 if TYPE_CHECKING:
     from http.client import HTTPResponse
 
 STATE = Path("/var/lib/simplestchat-monitoring")
-REPOSITORY = "swiftraccoon/simplestChat"
-API = "https://api.github.com/repos/" + REPOSITORY + "/actions/"
+SETTINGS = Path("/etc/simplestchat-monitoring/settings.json")
 MAX_REQUESTS = 8
 MAX_RESPONSE = 4 * 1024 * 1024
 MAX_SPOOL = 144
@@ -44,6 +44,7 @@ MAX_RUNS = 2 * PAGE_SIZE
 MAX_JOBS = 4
 MAX_STEPS = 40
 MAX_SEEN = 2 * MAX_RUNS * MAX_ATTEMPTS
+MAX_ORIGIN_LENGTH = 261
 CONCLUSIONS = frozenset(
     {
         "success",
@@ -74,6 +75,52 @@ WORKFLOWS = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class Deployment:
+    """Explicit public evidence source, bound to the configured deployment origin."""
+
+    repository: str
+    origin: str
+
+    def __post_init__(self) -> None:
+        """Keep GitHub paths and public origins finite and free of credentials."""
+        require(
+            re.fullmatch(r"[A-Za-z0-9-]{1,39}/[A-Za-z0-9_.-]{1,100}", self.repository),
+            "Configure an explicit public GitHub repository for external monitoring",
+        )
+        require(
+            len(self.origin) <= MAX_ORIGIN_LENGTH
+            and re.fullmatch(
+                r"https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", self.origin
+            ),
+            "Invalid external monitoring origin",
+        )
+
+    def identity(self) -> JsonObject:
+        """Persist attribution beside polling state; never silently reassign old evidence."""
+        return {"repository": self.repository, "origin": self.origin}
+
+
+def configured_deployment() -> Deployment:
+    """Read only the root-owned monitoring settings; there is no upstream-site default."""
+    protected(SETTINGS, limit=16384)
+    settings = object_value(decode_json(SETTINGS.read_bytes()))
+    return Deployment(
+        repository=string_value(settings.get("external_repository", "")),
+        origin="https://" + string_value(settings["domain"]),
+    )
+
+
+def bind_deployment(state: JsonObject, deployment: Deployment) -> None:
+    """Refuse changing provenance or adopting legacy histories without a reviewed migration."""
+    expected = deployment.identity()
+    require(
+        state.get("deployment") == expected or not state,
+        "External evidence is unattributed or belongs to another deployment; review migration",
+    )
+    state["deployment"] = expected
+
+
 class NoRedirect(HTTPRedirectHandler):
     """Never follow a response to another host, scheme or API path."""
 
@@ -85,8 +132,9 @@ class NoRedirect(HTTPRedirectHandler):
 class Github:
     """Enforce a total request budget, bounded JSON and the fixed unauthenticated API."""
 
-    def __init__(self, state: JsonObject) -> None:
-        """Share only retry timing with the private durable state."""
+    def __init__(self, state: JsonObject, deployment: Deployment) -> None:
+        """Share retry timing while retaining the explicitly selected evidence source."""
+        self.deployment: Deployment = deployment
         self.state: JsonObject = state
         self.requests: int = 0
 
@@ -103,8 +151,8 @@ class Github:
         )
         require(time.time() >= float(str(self.state.get("notBefore", 0))), "GitHub retry deferred")
         self.requests += 1
-        request = Request(  # noqa: S310 - fixed HTTPS origin and strictly allowlisted relative paths.
-            API + path,
+        request = Request(
+            "https://api.github.com/repos/" + self.deployment.repository + "/actions/" + path,
             headers={
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": "2026-03-10",
@@ -171,8 +219,9 @@ def runs(github: Github, workflow: str, since: str) -> tuple[list[JsonObject], b
             run = object_value(raw)
             require(
                 run.get("path") == f".github/workflows/{workflow}.yml"
-                and object_value(run["repository"]).get("full_name") == REPOSITORY
-                and object_value(run["head_repository"]).get("full_name") == REPOSITORY,
+                and object_value(run["repository"]).get("full_name") == github.deployment.repository
+                and object_value(run["head_repository"]).get("full_name")
+                == github.deployment.repository,
                 "Workflow repository identity differs",
             )
             identity = integer_value(run["id"])
@@ -193,6 +242,11 @@ def runs(github: Github, workflow: str, since: str) -> tuple[list[JsonObject], b
             _ = instant(run["created_at"])
             _ = instant(run["updated_at"])
             if run.get("status") != "completed":
+                continue
+            # The maintained workflow uses the same CANARY_ORIGIN in run-name
+            # and its checks. Other targets and legacy unbound runs are unknown.
+            title = f"SimplestChat {workflow}: {github.deployment.origin}"
+            if run.get("display_title") != title:
                 continue
             result[identity] = {
                 "runId": identity,
@@ -303,7 +357,7 @@ def discover(
     return batches, ordered
 
 
-def collect(state: JsonObject, revision: str) -> JsonObject:
+def collect(state: JsonObject, revision: str, deployment: Deployment) -> JsonObject:
     """Prefer current results while retaining explicit pending historical work."""
     now = datetime.now(UTC)
     previous = datetime.fromisoformat(string_value(state.get("observedAt", now.isoformat())))
@@ -321,7 +375,7 @@ def collect(state: JsonObject, revision: str) -> JsonObject:
     for key in list(seen):
         if string_value(object_value(seen[key])["createdAt"]) < since:
             del seen[key]
-    github = Github(state)
+    github = Github(state, deployment)
     batches, pending = discover(github, seen, since)
     for run, attempt, key in pending:
         batch = batches[string_value(run["workflow"])]
@@ -347,6 +401,7 @@ def collect(state: JsonObject, revision: str) -> JsonObject:
         "observedAt": observed,
         "windowStart": since,
         "revision": revision,
+        "deployment": deployment.identity(),
         "workflows": list(batches.values()),
     }
 
@@ -425,6 +480,8 @@ def main() -> int:
         now = time.time()
         if now < float(str(state.get("lastPollAt", 0))) + INTERVAL:
             return 0
+        deployment = configured_deployment()
+        bind_deployment(state, deployment)
         state["lastPollAt"] = now
         atomic(path, state)
         selected = object_value(
@@ -432,7 +489,7 @@ def main() -> int:
         )
         revision = string_value(selected["revision"])
         require(re.fullmatch("[a-f0-9]{40}", revision), "Invalid deployed revision")
-        value = collect(state, revision)
+        value = collect(state, revision, deployment)
         state["dropped"] = integer_value(state.get("dropped", 0)) + spool(value)
         atomic(path, state)
         healthy, pending = replay()
