@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 import security_archive
 import security_elf
 import security_image_policy as policy
+import security_secret_projection as projection
 import security_tools
 from native_security import engine_prefix
 from security_policy import read_exceptions
@@ -42,6 +43,9 @@ TOOLS = ("syft", "grype", "gitleaks")
 MAX_OUTPUT = 768 * 1024 * 1024
 MAX_DB = 4 * 1024**3
 MAX_FILES = 20000
+MAX_SECRET_FILES = security_archive.MAX_MEMBERS + 1
+MAX_SECRET_BYTES = 4 * 1024**3
+SECRET_DISK_RESERVE = 256 * 1024**2
 SCAN_SECONDS = 900
 FINDINGS_EXIT = 10
 LABEL = "simplestchat.security.image"
@@ -453,14 +457,16 @@ def secret_arguments() -> list[str]:
         "--report-format=json",
         "--report-path=/output/gitleaks.json",
         "--exit-code=10",
-        "--max-target-megabytes=256",
+        "--max-target-megabytes=0",
     ]
 
 
 def secret_selftest(sandbox: Sandbox) -> None:
     """Require the actual pinned detector to find a never-issued inert credential-shaped canary."""
-    source = sandbox.output / "secret-canary-source"
-    source.mkdir(mode=0o700)
+    work = sandbox.output / "secret-canary"
+    work.mkdir(mode=0o700)
+    originals = work / "originals"
+    originals.mkdir(mode=0o700)
     canary = (
         "ghp_"
         + base64.b64encode(hashlib.sha512(b"inert scanner coverage only").digest())
@@ -468,12 +474,17 @@ def secret_selftest(sandbox: Sandbox) -> None:
         .replace("+", "x")
         .replace("/", "y")[:36]
     )
-    security_archive.new_file(
-        source / "content-000000", ("TOKEN=" + canary + " # gitleaks:allow\n").encode()
-    )
-    identity: JsonObject = {
-        "content-000000": {"path": "canary", "sha256": digest(source / "content-000000")}
+    payload = ("TOKEN=" + canary + " # gitleaks:allow\n").encode()
+    prefixes = {
+        "canary-elf": b"\x7fELF" + bytes(64) + b"\n",
+        "canary-iso": bytes(32769) + b"CD001\n",
+        "canary-pdf": b"%PDF-1.7\n",
+        "canary-text": b"",
     }
+    for name, prefix in prefixes.items():
+        security_archive.new_file(originals / name, prefix + payload)
+    source = secret_bundle(originals, work)
+    identity = object_value(policy.report(work / "secret-paths.json"))
     readable_tree(source)
     output = sandbox.output / "secret-canary-output"
     status, _ = sandbox.run(
@@ -483,8 +494,9 @@ def secret_selftest(sandbox: Sandbox) -> None:
     findings = array_value(verdict["blocked"])
     policy.require(
         status == FINDINGS_EXIT
-        and len(findings) == 1
-        and object_value(findings[0])["rule"] == "github-pat",
+        and len(findings) == len(prefixes)
+        and all(object_value(item)["rule"] == "github-pat" for item in findings)
+        and {string_value(object_value(item)["path"]) for item in findings} == set(prefixes),
         "image_secret_detector_selftest",
     )
     write(
@@ -492,24 +504,53 @@ def secret_selftest(sandbox: Sandbox) -> None:
         {
             "passed": True,
             "rule": "github-pat",
+            "formats": list(prefixes),
+            "projectionFormat": projection.FORMAT,
             "toolLockSha256": digest(ROOT / "build/security-tools.lock.json"),
         },
     )
 
 
+def secret_inventory(layers: Path, output: Path) -> list[tuple[Path, int]]:
+    """Budget every regular input and fixed prefix before writing any projection."""
+    sources: list[tuple[Path, int]] = []
+    total = 0
+    for source in layers.rglob("*"):
+        metadata = source.lstat()
+        if stat.S_ISDIR(metadata.st_mode):
+            continue
+        policy.require(stat.S_ISREG(metadata.st_mode), "image_secret_input_kind")
+        policy.require(metadata.st_size <= security_archive.MAX_FILE, "image_secret_input_size")
+        sources.append((source, metadata.st_size))
+        total += metadata.st_size + len(projection.PREFIX)
+        policy.require(len(sources) <= MAX_SECRET_FILES, "image_secret_input_count")
+        policy.require(total <= MAX_SECRET_BYTES, "image_secret_projection_budget")
+    policy.require(bool(sources), "image_secret_input_empty")
+    policy.require(
+        shutil.disk_usage(output).free >= total + SECRET_DISK_RESERVE,
+        "image_secret_projection_disk",
+    )
+    return sorted(sources)
+
+
 def secret_bundle(layers: Path, output: Path) -> Path:
-    """Scan every regular file under neutral names, bypassing default path exclusions."""
+    """Scan bounded printable projections under neutral names, retaining original identity."""
+    sources = secret_inventory(layers, output)
     inputs = output / "secret-input"
     inputs.mkdir(mode=0o700)
     paths: JsonObject = {}
-    for index, source in enumerate(sorted(layers.rglob("*"))):
-        policy.require(not source.is_symlink(), "image_secret_input_link")
-        if source.is_dir():
-            continue
-        policy.require(source.is_file(), "image_secret_input_kind")
+    for index, (source, expected_bytes) in enumerate(sources):
         name = f"content-{index:06d}"
-        os.link(source, inputs / name, follow_symlinks=False)
-        paths[name] = {"path": source.relative_to(layers).as_posix(), "sha256": digest(source)}
+        view = projection.project(source, inputs / name, max_bytes=security_archive.MAX_FILE)
+        policy.require(view.source_bytes == expected_bytes, "image_secret_input_changed")
+        paths[name] = {
+            "path": source.relative_to(layers).as_posix(),
+            "sha256": view.source_sha256,
+            "sourceBytes": view.source_bytes,
+            "projectionSha256": view.projection_sha256,
+            "projectionBytes": view.projection_bytes,
+            "projectionFormat": view.format,
+        }
     policy.require(bool(paths), "image_secret_input_empty")
     write(output / "secret-paths.json", paths)
     readable_tree(inputs)
@@ -600,6 +641,15 @@ def execute(args: Options) -> bool:
         outcome["selectedImage"] = selected_image(sandbox, args, tree)
         secret_selftest(sandbox)
         outcome["secretDetectorSelfTest"] = True
+        outcome["secretCoverage"] = {
+            "format": projection.FORMAT,
+            "limitations": list(projection.LIMITATIONS),
+            "maximumSourceFileBytes": security_archive.MAX_FILE,
+            "maximumProjectionBytes": MAX_SECRET_BYTES,
+            "maximumRegularFiles": MAX_SECRET_FILES,
+            "diskReserveBytes": SECRET_DISK_RESERVE,
+            "projectionPrefixBytes": len(projection.PREFIX),
+        }
         sbom_dir, grype_dir, secret_dir, db_status = scan_reports(sandbox, args, tree, native, elf)
         policy.database_status(db_status, image_policy)
         packages = policy.inventory(

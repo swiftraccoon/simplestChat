@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -14,7 +16,7 @@ from test_support import ROOT
 # isort: split
 import release_build
 import security_image as image
-from release_json import decode_json, object_value, string_value
+from release_json import decode_json, integer_value, object_value, string_value
 from security_tools import ToolError
 
 if TYPE_CHECKING:
@@ -233,10 +235,41 @@ class ImageRunnerTests(unittest.TestCase):
                 {string_value(object_value(value)["path"]) for value in paths.values()}, set(files)
             )
             self.assertEqual(len(list(inputs.iterdir())), len(files))
+            for name, raw in paths.items():
+                value = object_value(raw)
+                self.assertEqual(value["projectionSha256"], image.digest(inputs / name))
+                self.assertEqual(
+                    value["sha256"], image.digest(layers / string_value(value["path"]))
+                )
+                self.assertGreater(
+                    integer_value(value["projectionBytes"]), integer_value(value["sourceBytes"])
+                )
+            self.assertIn("--max-target-megabytes=0", image.secret_arguments())
             self.assertTrue(all(path.name.startswith("content-") for path in inputs.iterdir()))
             self.assertTrue(
                 all(path.stat().st_mode & 0o777 == READ_ONLY for path in inputs.iterdir())
             )
+
+    def test_secret_projection_limits_refuse_before_writing_any_input(self) -> None:
+        """Count, aggregate prefix bytes and free space are admission requirements."""
+        for boundary in ("count", "bytes", "disk"):
+            with self.subTest(boundary=boundary), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                layers = root / "layers"
+                layers.mkdir()
+                for name in ("one", "two"):
+                    _ = (layers / name).write_bytes(b"inert")
+                target = (
+                    patch.object(image, "MAX_SECRET_FILES", 1)
+                    if boundary == "count"
+                    else patch.object(image, "MAX_SECRET_BYTES", 10)
+                    if boundary == "bytes"
+                    else patch.object(shutil, "disk_usage", return_value=SimpleNamespace(free=0))
+                )
+                with target, self.assertRaises(ToolError):
+                    _ = image.secret_bundle(layers, root)
+                self.assertFalse((root / "secret-input").exists())
+                self.assertFalse((root / "secret-paths.json").exists())
 
     def test_secret_detector_canary_requires_exact_real_finding(self) -> None:
         """Empty, missing and unrelated reports cannot claim the configured detector works."""
@@ -245,8 +278,12 @@ class ImageRunnerTests(unittest.TestCase):
             "RuleID": "github-pat",
             "StartLine": 1,
         }
+        findings: list[JsonObject] = [
+            {**finding, "File": f"/layers/content-{index:06d}"} for index in range(4)
+        ]
         cases: tuple[tuple[int, list[JsonObject] | None, bool], ...] = (
-            (image.FINDINGS_EXIT, [finding], True),
+            (image.FINDINGS_EXIT, findings, True),
+            (image.FINDINGS_EXIT, [finding], False),
             (0, [], False),
             (image.FINDINGS_EXIT, [], False),
             (image.FINDINGS_EXIT, [{**finding, "RuleID": "unrelated"}], False),

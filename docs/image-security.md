@@ -207,21 +207,39 @@ sensitivity, while user-defined references retain their identity. Every required
 conjunct must be approved; an approved alternative may satisfy an `OR` choice.
 Missing and unreviewed expressions fail. The maintained allowlist is an
 operational policy, not a substitute for preserving required notices or
-satisfying distribution obligations.
+satisfying distribution obligations. The exact Fedora static-runtime aggregate
+license and RPM scopes are documented in the [libstdc++ review](../security/fedora-libstdcxx-review.md).
 
-Gitleaks scans every retained regular file from every image layer, including
-files deleted later, plus the complete image configuration/history. Inputs use
-neutral numbered names so built-in path exclusions cannot skip lockfiles,
-vendored directories, binaries or detector configuration files. A digest-bound
-map restores the original layer/path in findings. Image-provided configuration,
-ignore files and inline allow comments cannot suppress the scan. Public finding
-records contain rule, path, line and file hash, never candidate secret values;
-a changed file cannot inherit an old exact-finding exception. Detection remains
-pattern-based, with no claim to recognize every secret or opaque encoding.
-A never-issued, inert credential-shaped canary must first produce the expected
-finding with the identical pinned executable and detector arguments, including
-an inline allow comment that must not suppress it. Empty, missing or unrelated
-canary reports fail before the artifact can be declared clean.
+Gitleaks receives a printable-text projection of every retained regular file
+from every image layer, including files deleted later, plus the complete image
+configuration/history. The shared projector retains contiguous ASCII printable
+bytes, tabs and line endings; other bytes become newline delimiters. A fixed
+plain-text prefix covers every application-format sniff offset in the pinned
+scanner, including ISO signatures. Neutral numbered filenames prevent built-in
+path exclusions from skipping lockfiles, vendored files or detector settings.
+
+Before writing projections, the controller checks every file's size, a maximum
+of 200,001 regular files (layer members plus config), a four GiB aggregate
+projection budget, and enough free space for the complete projected bytes plus
+256 MiB reserve. Each projection adds the recorded fixed prefix to its bounded
+source size. The scanner's decimal-MB skip threshold is disabled because these
+byte limits already reject oversized input. No file is silently omitted to fit
+a budget. Original and projected SHA-256 hashes, sizes and format bind every
+neutral path to its complete original file.
+
+Image-provided configuration, ignore files and inline allow comments cannot
+suppress the scan. Public findings contain rule, original path, projected line
+and original-file hash, never candidate secret values. A changed file cannot
+inherit an old exact-finding exception. Detection covers printable strings and
+scanner-supported encodings; it does not decode UTF-16, compressed/encrypted
+content or strings split by nonprintable bytes. A passing result is not proof
+that arbitrary hidden data contains no secrets.
+
+Before scanning the artifact, the identical pinned executable and arguments
+must detect a never-issued inert credential-shaped canary in each text, ELF,
+PDF and ISO-shaped input, through the same projector. Inline allow comments
+must not suppress them. Empty, missing, partial or unrelated canary reports fail
+before the artifact can be declared clean.
 
 All per-finding waivers use `security/exceptions.json`: an exact scanner,
 fingerprint and scope, named owner, rationale, reachability assessment, review
