@@ -470,7 +470,7 @@ export class CommunityUI {
         el('h3', 'This device'),
         el(
           'p',
-          'Signing out this way also removes the name, devices, layout and chat preferences this browser remembers.',
+          'Signing out removes the saved name, devices, layout and chat preferences from this browser. Your account preferences remain on the server.',
           'setting-hint',
         ),
         button('Sign out and forget this device', () => {

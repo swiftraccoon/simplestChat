@@ -259,6 +259,22 @@ async function run() {
       sent,
       redemptions,
       inviteSeen: inviteSeen.promise,
+      replaceAccount: async () => {
+        account = {
+          id: 'replacement-account',
+          email: 'replacement@example.test',
+          display_name: 'Replacement owner',
+        };
+        await page.evaluate(() => {
+          const channel = new BroadcastChannel('simplestchat-account-change-v1');
+          channel.postMessage({ version: 1, revision: 'a'.repeat(32) });
+          channel.close();
+        });
+        await page
+          .locator('#auth-display-name')
+          .filter({ hasText: 'Replacement owner' })
+          .waitFor({ state: 'visible' });
+      },
       releaseSocket: () => socketGate.resolve(),
       finishInvite: () => confirmInvite(redemptions[0]),
       send: (message) => socket.send(JSON.stringify(message)),
@@ -394,6 +410,37 @@ async function run() {
     report.checks.push('A late invitation response preserves newer navigation');
     await superseded.context.close();
 
+    const signedOut = await fixture({ signedIn: true });
+    await signedOut.page.evaluate(() => {
+      for (const [key, value] of [
+        ['displayName', 'Private label'],
+        ['simplestchat.capturePreferences', '{"microphoneId":"private-device"}'],
+        ['simplestchat.chat.v1.fixture-account', '{"ignored":["private-contact"]}'],
+        ['unrelated-app', 'keep'],
+      ])
+        localStorage.setItem(key, value);
+    });
+    await signedOut.page.locator('#logout-btn').click();
+    await signedOut.page.locator('#sign-in-btn').waitFor({ state: 'visible' });
+    await signedOut.page.waitForFunction(
+      () =>
+        document.querySelector('#name-input').value === '' &&
+        localStorage.getItem('displayName') === null,
+    );
+    assert.deepEqual(await signedOut.page.evaluate(() => Object.keys(localStorage).sort()), [
+      'simplestchat-account-change-v1',
+      'unrelated-app',
+    ]);
+    assert.match(
+      await signedOut.page.evaluate(() => localStorage.getItem('simplestchat-account-change-v1')),
+      /^[a-f0-9]{32}$/,
+      'A credential-free revision lets suspended tabs observe sign-out',
+    );
+    report.checks.push(
+      'Ordinary sign-out clears browser identity, device and chat data while preserving unrelated app storage',
+    );
+    await signedOut.context.close();
+
     const f = await fixture();
     await f.page.locator('#sign-in-btn').click();
     const dialog = f.page.getByRole('dialog', { name: 'Sign In', exact: true });
@@ -479,12 +526,7 @@ async function run() {
     await switching.page.locator('#create-room-submit').click();
     await switching.page.getByRole('button', { name: 'Creating...', exact: true }).waitFor();
     await switching.page.locator('#create-room-close').click();
-    await switching.page.locator('#logout-btn').click();
-    await switching.page.locator('#sign-in-btn').click();
-    await switching.page.locator('#login-email').fill('replacement@example.test');
-    await switching.page.locator('#login-password').fill('Owned fixture password');
-    await switching.page.locator('#login-submit').click();
-    await switching.page.locator('#login-modal').waitFor({ state: 'hidden' });
+    await switching.replaceAccount();
     await switching.page.locator('#create-room-btn').click();
     assert.equal(await switching.page.locator('#create-room-submit').isEnabled(), true);
     await switching.page.locator('#cr-name').fill('Second account room');

@@ -660,3 +660,49 @@ test('blocked storage keeps optional preferences in memory without interrupting 
     assert.equal(api.readLocalPreference('layout'), 'modern');
   }
 });
+
+for (const outcome of ['success', 'failure', 'replacement', 'blocked-storage']) {
+  test(`ordinary sign-out clears saved identity only after owned success: ${outcome}`, async () => {
+    const task = Promise.withResolvers();
+    const auth = { isLoggedIn: true, logout: () => task.promise };
+    const memoryPreferences = new Map([['displayName', 'Before']]);
+    const nameInput = { value: 'Before' };
+    let forgotten = 0,
+      reloaded = 0;
+    const api = evaluateTypeScript(
+      `let inviteAccountEpoch = 0; ${await functionSource('signOutAndForget')} export {signOutAndForget}; export function next() {inviteAccountEpoch++;}`,
+      {
+        globals: {
+          auth,
+          memoryPreferences,
+          nameInput,
+          forgetThisDevice: () => {
+            if (outcome === 'blocked-storage') throw new Error('Blocked');
+            forgotten++;
+          },
+          location: { reload: () => reloaded++ },
+        },
+      },
+    );
+    const pending = api.signOutAndForget();
+    assert.equal(forgotten, 0);
+    assert.equal(nameInput.value, 'Before');
+    if (outcome === 'failure') {
+      task.reject(new Error('Revoke failed'));
+      await assert.rejects(pending, /Revoke failed/);
+    } else {
+      api.next();
+      auth.isLoggedIn = outcome === 'replacement';
+      task.resolve();
+      if (outcome === 'blocked-storage')
+        await assert.rejects(pending, /Signed out.*clear.*site data/i);
+      else await pending;
+    }
+    assert.equal(forgotten, outcome === 'success' ? 1 : 0);
+    assert.equal(reloaded, outcome === 'success' ? 1 : 0);
+    assert.equal(memoryPreferences.size, ['success', 'blocked-storage'].includes(outcome) ? 0 : 1);
+    assert.equal(nameInput.value, ['success', 'blocked-storage'].includes(outcome) ? '' : 'Before');
+    const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+    assert.match(source, /logoutBtn.addEventListener\('click', \(\) => \{\s*signOutAndForget\(\)/);
+  });
+}

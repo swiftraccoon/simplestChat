@@ -1833,7 +1833,7 @@ function dismissAuth(): boolean {
 signInBtn.addEventListener('click', () => {
   openAuthDialog(loginModal);
 });
-/** Clears everything this app kept in the browser: names, devices, layout, chat preferences. */
+/** Clears names, devices, layout and chat preferences; preserves the credential-free cross-tab change marker. */
 function forgetThisDevice(): void {
   const keys: string[] = [];
   for (let index = 0; index < localStorage.length; index++) {
@@ -1850,13 +1850,24 @@ function forgetThisDevice(): void {
 
 /** For a shared computer: sign out, clear this browser's memory of the app, start fresh. */
 async function signOutAndForget(): Promise<void> {
+  const epoch = inviteAccountEpoch;
   await auth.logout();
-  forgetThisDevice();
+  // A replacement identity owns its own data, even if this continuation runs late.
+  if (auth.isLoggedIn || inviteAccountEpoch !== epoch + 1) return;
+  memoryPreferences.clear();
+  nameInput.value = '';
+  try {
+    forgetThisDevice();
+  } catch {
+    throw new Error(
+      'Signed out, but this browser prevented clearing saved app data. Clear site data in your browser settings.',
+    );
+  }
   location.reload();
 }
 
 logoutBtn.addEventListener('click', () => {
-  auth.logout().catch((error) => {
+  signOutAndForget().catch((error) => {
     showToast(error instanceof Error ? error.message : 'Sign out failed');
   });
 });
