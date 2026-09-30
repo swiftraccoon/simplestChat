@@ -998,8 +998,10 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
     )
     ready(runner, seconds=3)
     database_id = string_value(database["id"])
+    applied = ledger(runner, database_id)
+    report["backupMigrations"] = dict(applied)
     require(
-        ledger(runner, database_id) == manifest["migrations"],
+        applied == manifest["migrations"],
         "Schema changes require the explicit maintenance deployment",
     )
     require(
@@ -1209,6 +1211,7 @@ def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the st
     ready(runner, seconds=3)
     database_id = string_value(database["id"])
     applied = ledger(runner, database_id)
+    report["backupMigrations"] = dict(applied)
     packaged = manifest["migrations"]
     require(
         all(packaged.get(version) == checksum for version, checksum in applied.items()),

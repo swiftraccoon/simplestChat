@@ -847,6 +847,8 @@ class PublicReleaseTests(unittest.TestCase):
         self.assertEqual(report["phase"], "complete")
         self.assertTrue(report["launcherPassed"])
         self.assertIn("backupSha256", report)
+        self.assertEqual(report["backupMigrations"], MIGRATIONS)
+        self.assertNotEqual(report["backupMigrations"], self.manifest["migrations"])
         self.assertIn("interruptionStartedAt", report)
         self.assertIn("interruptionFinishedAt", report)
         self.assertNotIn("rollbackAttempted", report)

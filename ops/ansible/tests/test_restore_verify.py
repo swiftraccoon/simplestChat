@@ -16,7 +16,7 @@ from test_support import ROOT
 # isort: split
 import release_public as release
 import restore_verify as restore
-from release_json import decode_json, object_value
+from release_json import JsonObject, decode_json, object_value
 
 
 class RestoreTests(unittest.TestCase):
@@ -46,6 +46,19 @@ class RestoreTests(unittest.TestCase):
             link.symlink_to(source)
             with self.assertRaises(OSError):
                 restore.snapshot(link, root / "symlink", digest)
+
+    def test_pre_upgrade_backup_uses_its_recorded_ledger(self) -> None:
+        """A maintenance archive binds to schema N even when its target adds N+1."""
+        packaged = {"1": "b" * 96, "2": "c" * 96}
+        outcome: JsonObject = {"action": "maintain", "backupMigrations": {"1": "b" * 96}}
+        self.assertEqual(restore.backup_migrations(outcome, packaged), {"1": "b" * 96})
+        for ledger in ({"1": "d" * 96}, {"3": "b" * 96}, {}):
+            outcome["backupMigrations"] = dict(ledger)
+            with self.subTest(ledger=ledger), self.assertRaises(release.ReleaseError):
+                _ = restore.backup_migrations(outcome, packaged)
+        with self.assertRaisesRegex(release.ReleaseError, "Legacy maintenance"):
+            _ = restore.backup_migrations({"action": "maintain"}, packaged)
+        self.assertEqual(restore.backup_migrations({"action": "deploy"}, packaged), packaged)
 
     def test_container_has_no_live_mounts_ports_or_network(self) -> None:
         """The only writable storage is capped tmpfs and Docker may never pull an image."""
@@ -101,6 +114,10 @@ class RestoreTests(unittest.TestCase):
                 return b""
 
             ledger = b"1|t|" + b"b" * 96 if failure != "ledger" else b"1|f|wrong"
+            expected = restore.backup_migrations(
+                {"action": "maintain", "backupMigrations": {"1": "b" * 96}},
+                {"1": "b" * 96, "2": "c" * 96},
+            )
             with (
                 patch.object(runner, "docker", side_effect=docker),
                 patch.object(restore, "sql", side_effect=[b"", ledger, b'{"activeIncidents":1}']),
@@ -108,15 +125,13 @@ class RestoreTests(unittest.TestCase):
             ):
                 if failure == "none":
                     report = restore.verify(
-                        runner, "sha256:" + "c" * 64, root / "archive", {"1": "b" * 96}
+                        runner, "sha256:" + "c" * 64, root / "archive", expected
                     )
                     self.assertTrue(report["verified"])
                     self.assertTrue(report["cleanupPassed"])
                 else:
                     with self.assertRaises(release.ReleaseError):
-                        _ = restore.verify(
-                            runner, "sha256:" + "c" * 64, root / "archive", {"1": "b" * 96}
-                        )
+                        _ = restore.verify(runner, "sha256:" + "c" * 64, root / "archive", expected)
             evidence = object_value(decode_json((root / "restore.json").read_text()))
             self.assertEqual(evidence["cleanupPassed"], failure != "cleanup")
             self.assertEqual(present, failure == "cleanup")

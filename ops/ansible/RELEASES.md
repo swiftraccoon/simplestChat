@@ -293,7 +293,9 @@ change the original failed release outcome.
 
 A settings-only maintenance can reuse the selected image when the candidate
 environment has validated changes. An identical image and unchanged configuration
-are refused before backup or interruption.
+are refused before backup or interruption. `backupMigrations` in the release
+outcome records the applied ledger before migration separately from the target
+revision; restore verification checks the archive against that older ledger.
 
 Pass `--install-helpers` whenever `release_public.py` changed, as for any release.
 

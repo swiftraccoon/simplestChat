@@ -294,5 +294,6 @@ ansible -i ops/ansible/inventory.local.yml public_vps -b -m fetch \
 ```
 
 Application SQL migrations run only during explicit deployment. PostgreSQL
-major-version upgrades, database rollback, secret rotation, and backup scheduling
-are not automated; review and plan them separately.
+major-version upgrades, database rollback, secret rotation and off-host backup
+replication are not automated; review and plan them separately. Nightly local
+scheduling is provided by the opt-in backup playbook above.

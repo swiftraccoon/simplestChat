@@ -270,6 +270,31 @@ def verify(
     return report
 
 
+def backup_migrations(outcome: JsonObject, packaged: dict[str, str]) -> dict[str, str]:
+    """Bind the archive to its pre-upgrade ledger while checking candidate checksums."""
+    recorded = outcome.get("backupMigrations")
+    if recorded is None:
+        release.require(
+            outcome.get("action") != "maintain",
+            "Legacy maintenance backup lacks its pre-upgrade migration ledger",
+        )
+        return dict(packaged)
+    migrations = {
+        version: string_value(checksum) for version, checksum in object_value(recorded).items()
+    }
+    release.require(
+        bool(migrations)
+        and all(
+            re.fullmatch(r"[1-9][0-9]*", version)
+            and re.fullmatch(r"[a-f0-9]{96}", checksum)
+            and packaged.get(version) == checksum
+            for version, checksum in migrations.items()
+        ),
+        "Backup migration ledger differs from the reviewed release",
+    )
+    return migrations
+
+
 def main() -> None:
     """Accept only recorded owned release backups and publish success after cleanup."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -308,6 +333,7 @@ def main() -> None:
         release.protected(manifest_dir / "release.json", limit=1024 * 1024)
         manifest = validate_manifest(manifest_dir / "release.json")
         release.require(manifest["revision"] == revision, "Backup release identity differs")
+        migrations = backup_migrations(outcome, manifest["migrations"])
         attempts = STATE / "restores"
         attempts.mkdir(mode=0o700, exist_ok=True)
         release.protected(attempts, directory=True, modes=(0o700,))
@@ -322,7 +348,7 @@ def main() -> None:
                 .strip()
             )
             release.require(release.ID.fullmatch(image), "Invalid production PostgreSQL image")
-            report = verify(runner, image, backup, manifest["migrations"])
+            report = verify(runner, image, backup, migrations)
         finally:
             backup.unlink(missing_ok=True)
         release.require(
