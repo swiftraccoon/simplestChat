@@ -29,6 +29,7 @@ from security_secrets import neutral_snapshot
 from security_tools import (
     ToolError,
     bounded_file,
+    current_platform,
     install,
     require,
     string,
@@ -339,9 +340,9 @@ def fast(context: Context, base: str | None) -> None:
     )
 
 
-def deep(context: Context, engine: str, base: str | None) -> None:
-    """Add authenticated vendor comparison and finite, isolated native sanitizer checks."""
-    fast(context, base)
+def deep(context: Context, args: Options) -> None:
+    """Run the requested native and test-quality checks after the complete source gate."""
+    fast(context, args.base)
     _ = context.run(
         "vendor-integrity",
         [
@@ -357,6 +358,14 @@ def deep(context: Context, engine: str, base: str | None) -> None:
         ],
         timeout=900,
     )
+    if args.deep_check in ("all", "native"):
+        native_checks(context, args.engine)
+    if args.deep_check in ("all", "mutation"):
+        mutation_checks(context, args)
+
+
+def native_checks(context: Context, engine: str) -> None:
+    """Compile and execute the finite suites in the owned offline native sandbox."""
     preparation = context.output / "native-preparation"
     _ = context.run(
         "native-prepare",
@@ -393,6 +402,31 @@ def deep(context: Context, engine: str, base: str | None) -> None:
         )
 
 
+def mutation_checks(context: Context, args: Options) -> None:
+    """Use authenticated tooling and a private full-source copy for pure policy mutations."""
+    platform = args.mutation_tool_platform or current_platform()
+    tools = install(["cargo-mutants"], context.output / "mutation-tools", target_platform=platform)
+    prefix = args.openssl_prefix or Path(
+        os.environ.get("OPENSSL_DIR", str(context.root / "target/openssl-3.5.8"))
+    )
+    _ = context.run(
+        "mutation-policy",
+        [
+            sys.executable,
+            "build/security_mutation.py",
+            "--tools-directory",
+            str(tools),
+            "--tool-platform",
+            platform,
+            "--openssl-prefix",
+            str(prefix.resolve(strict=True)),
+            "--output",
+            str(context.output / "mutation"),
+        ],
+        timeout=3660,
+    )
+
+
 @dataclass
 class Options(argparse.Namespace):
     """Declare the supported security tiers and explicit execution inputs."""
@@ -403,6 +437,9 @@ class Options(argparse.Namespace):
     output: Path | None = None
     engine: str = "docker"
     artifact_dir: Path | None = None
+    deep_check: str = "all"
+    openssl_prefix: Path | None = None
+    mutation_tool_platform: str | None = None
 
 
 def image(context: Context, args: Options) -> None:
@@ -456,6 +493,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ = parser.add_argument("--output", type=Path)
     _ = parser.add_argument("--engine", choices=("docker", "podman"), default="docker")
     _ = parser.add_argument("--artifact-dir", type=Path)
+    _ = parser.add_argument("--deep-check", choices=("all", "native", "mutation"), default="all")
+    _ = parser.add_argument("--openssl-prefix", type=Path)
+    _ = parser.add_argument("--mutation-tool-platform", choices=("linux-x86_64", "darwin-x86_64"))
     args = parser.parse_args(argv, namespace=Options())
     _ = os.umask(0o077)
     (ROOT / "results").mkdir(exist_ok=True)
@@ -471,10 +511,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     failure: str | None = None
     try:
         require((args.tier == "image") == (args.image is not None), "security_image_argument")
+        require(
+            args.tier == "deep"
+            or (
+                args.deep_check == "all"
+                and args.openssl_prefix is None
+                and args.mutation_tool_platform is None
+            ),
+            "security_deep_arguments",
+        )
         if args.tier == "fast":
             fast(context, args.base)
         elif args.tier == "deep":
-            deep(context, args.engine, args.base)
+            deep(context, args)
         else:
             image(context, args)
         passed = True
@@ -488,6 +537,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     {
                         "schemaVersion": 1,
                         "tier": args.tier,
+                        "deepCheck": args.deep_check if args.tier == "deep" else None,
                         "passed": passed,
                         "failure": failure,
                         "checks": context.checks,

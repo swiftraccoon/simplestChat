@@ -38,12 +38,24 @@ Concurrent source changes fail that run; rerun after edits settle. Ignored build
 outputs, local credentials and operator files are outside the source inventory.
 Do not store maintained source or scanner policy under an ignored path.
 
-The deep tier also needs an explicitly owned Docker engine. For local Podman,
-use `build/check-security.sh deep --engine podman`. It verifies vendored source,
-builds the pinned native checker, runs ASan and UBSan, then replays the finite
-reviewed parser corpus. See [native security](native-security.md) for resource
-limits, synthetic input provenance and sanitized evidence. It does not initiate
-a continuous fuzzing campaign or contact a deployment.
+The deep tier runs the source gate, verifies vendored source, then runs both
+native and policy mutation checks. Native checks need an explicitly owned Docker
+engine; `--engine podman` selects a local Podman engine. They build the pinned
+checker, run ASan and UBSan, then replay the finite reviewed parser corpus. See
+[native security](native-security.md) for resource limits and input provenance.
+They do not initiate a continuous fuzzing campaign or contact a deployment.
+
+Mutation checks require the documented native compiler, locked Cargo cache and
+checksum-pinned static OpenSSL prefix. `--openssl-prefix` defaults to `OPENSSL_DIR`
+or the checkout's `target/openssl-3.5.8`. The runner builds a private source copy
+and measures assertions over selected pure role, label and password policies.
+See [mutation checks](../security/mutation/README.md) for platform support, limits
+and failure interpretation. Unsupported tool platforms fail explicitly.
+
+Use `--deep-check native` or `--deep-check mutation` to run one component while
+retaining source and vendor verification. The default is `--deep-check all`.
+Scheduled CI runs the two components in separate bounded jobs. A component-only
+summary identifies its scope and does not establish a complete deep-tier pass.
 
 The image tier needs the selected immutable production image on a Linux amd64
 Docker host and a clean source checkout. It exports that exact image once. When

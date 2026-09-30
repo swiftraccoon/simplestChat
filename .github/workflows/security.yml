@@ -125,7 +125,7 @@ jobs:
           sudo apt-get install -y python3-venv shellcheck
           rustup toolchain install 1.98.1 --profile minimal
       - name: Run the maintained complete tier
-        run: build/check-security.sh deep --output "$RUNNER_TEMP/security-deep"
+        run: build/check-security.sh deep --deep-check native --output "$RUNNER_TEMP/security-deep"
       - name: Preserve the redacted check summary
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -148,3 +148,46 @@ jobs:
             ${{ runner.temp }}/security-deep/native-replay/native.stderr.log
           if-no-files-found: warn
           retention-days: 14
+
+  security-mutation:
+    name: Scheduled policy mutation checks
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      OPENSSL_DIR: ${{ github.workspace }}/target/openssl-3.5.8
+      PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-3.5.8/lib/pkgconfig
+      OPENSSL_STATIC: '1'
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/native-toolchain
+        with:
+          cache-key: policy-mutation
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+      - name: Prepare the locked source dependency cache
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv
+          cargo fetch --locked
+      - name: Check selected policy assertions in an isolated source copy
+        run: |
+          build/check-security.sh deep --deep-check mutation \
+            --openssl-prefix "$OPENSSL_DIR" --output "$RUNNER_TEMP/security-mutation"
+      - name: Preserve compact test-quality evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: security-mutation-summary
+          path: |
+            ${{ runner.temp }}/security-mutation/summary.json
+            ${{ runner.temp }}/security-mutation/mutation/outcome.json
+            ${{ runner.temp }}/security-mutation/mutation/summary.json
+            ${{ runner.temp }}/security-mutation/mutation/inventory.json
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "toolVersion": "27.1.0",
+  "maximumMutants": 64,
+  "minimumTests": 14,
+  "buildTimeoutSeconds": 900,
+  "testTimeoutSeconds": 30,
+  "totalTimeoutSeconds": 3600,
+  "sourceFiles": {
+    "src/room/roles.rs": [
+      "Role::can_moderate",
+      "Role::can_set_role",
+      "Role::can_broadcast",
+      "Role::can_chat",
+      "Role::can_change_settings",
+      "Role::can_admit_lobby"
+    ],
+    "src/labels.rs": [
+      "comparison_key",
+      "is_hidden_format",
+      "is_plain",
+      "is_reserved_name"
+    ],
+    "src/auth/common_passwords.rs": [
+      "is_common"
+    ]
+  },
+  "testFilters": [
+    "room::roles::tests::",
+    "labels::",
+    "auth::common_passwords::tests::",
+    "signaling::authorization_tests::authorization_role_policy_matches_independent_expected_matrix"
+  ]
+}

@@ -156,6 +156,37 @@ class SecurityWorkflowTests(unittest.TestCase):
                                 uses, r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[a-f0-9]{40}$"
                             )
 
+    def test_scheduled_mutations_use_shared_gate_and_never_publish_build_outputs(self) -> None:
+        """Test-quality jobs have bounded scope and cannot promote mutated binaries."""
+        jobs = obj(workflow("security.yml"), "jobs")
+        mutation = obj(jobs, "security-mutation")
+        self.assertEqual(mutation["timeout-minutes"], "75")
+        self.assertEqual(
+            mutation["if"],
+            "${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}",
+        )
+        self.assertNotIn("permissions", mutation)
+        self.assertNotIn("services", mutation)
+        steps = objects(mutation, "steps")
+        command = "\n".join(string(step.get("run", "")) for step in steps)
+        self.assertIn("cargo fetch --locked", command)
+        self.assertIn("build/check-security.sh deep --deep-check mutation", command)
+        uploads = [step for step in steps if "upload-artifact@" in string(step.get("uses", ""))]
+        self.assertEqual(len(uploads), 1)
+        self.assertEqual(
+            set(string(uploads[0], "with", "path").splitlines()),
+            {
+                "${{ runner.temp }}/security-mutation/summary.json",
+                "${{ runner.temp }}/security-mutation/mutation/outcome.json",
+                "${{ runner.temp }}/security-mutation/mutation/summary.json",
+                "${{ runner.temp }}/security-mutation/mutation/inventory.json",
+            },
+        )
+        native = "\n".join(
+            string(step.get("run", "")) for step in objects(jobs, "security-deep", "steps")
+        )
+        self.assertIn("build/check-security.sh deep --deep-check native", native)
+
     def test_build_caches_cannot_fall_back_across_trust_or_architecture(self) -> None:
         """PR build artifacts remain outside the main compiler/layer cache namespace."""
         composite = obj(
