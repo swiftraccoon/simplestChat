@@ -258,6 +258,7 @@ class OwnershipTests(unittest.TestCase):
     def test_five_requests_omit_credentials_and_require_ownership_afterward(self) -> None:
         """Successful HTTP results cannot mask an ownership change during the check."""
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         with (
             patch.object(policy, "owned_fixture") as owned,
             patch.object(policy, "tls_context", return_value=context),
@@ -370,6 +371,7 @@ class TransportAndHarnessTests(unittest.TestCase):
         response = FakeResponse(endpoint)
         connection = FakeConnection(response)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         with (
             patch.object(socket, "create_connection") as connect,
             patch.object(context, "wrap_socket") as wrap,
@@ -405,6 +407,7 @@ class TransportAndHarnessTests(unittest.TestCase):
         )
         connection = FakeConnection(response)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         with (
             patch.object(socket, "create_connection"),
             patch.object(context, "wrap_socket"),
