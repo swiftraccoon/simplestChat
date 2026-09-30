@@ -563,8 +563,9 @@ struct ReplySender<'a> {
 }
 
 impl ReplySender<'_> {
-    /// Legacy closure/layer commands have no reply. Modern clients explicitly
-    /// request acknowledgement so a lost socket cannot hide an unapplied control.
+    /// Closure/layer commands without an ID are fire-and-forget: the native
+    /// generator and late browser teardown use this form. Correlated browser
+    /// controls request acknowledgement to detect an unapplied change.
     fn acknowledge_control(&self) -> anyhow::Result<()> {
         if self.request_id.is_some() {
             self.send(&ServerMessage::MediaControlApplied)?;
@@ -3127,7 +3128,7 @@ mod security_tests {
     }
 
     #[test]
-    fn control_acknowledgement_preserves_legacy_silence_and_echoes_modern_ids() {
+    fn control_acknowledgement_preserves_fire_and_forget_and_echoes_request_ids() {
         let metrics = ServerMetrics::new();
         let (sender, mut receiver) = mpsc::channel(2);
         for request_id in [None, Some("control-1")] {

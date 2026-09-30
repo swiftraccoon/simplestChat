@@ -128,15 +128,15 @@ async fn correlated_media_replies_keep_notifications_outside_the_request_envelop
         .await
         .unwrap();
     assert_eq!(closed["requestId"], "close-producer");
-    // Existing native/load clients omit the optional envelope and still work.
-    let legacy = fixture
+    // The current native generator intentionally omits the optional envelope.
+    let uncorrelated = fixture
         .request(
             json!({"type": "getRouterRtpCapabilities"}),
             "routerRtpCapabilities",
         )
         .await
         .unwrap();
-    assert!(legacy.get("requestId").is_none());
+    assert!(uncorrelated.get("requestId").is_none());
     fixture.finish().await;
 }
 
@@ -179,14 +179,14 @@ async fn correlated_dispatch_and_decode_errors_echo_only_valid_request_ids() {
         assert!(rejected.get("requestId").is_none());
         assert_eq!(rejected["message"], "Invalid message format");
     }
-    let legacy = fixture
+    let uncorrelated = fixture
         .request(
             json!({"type": "resumeConsumer", "consumerId": "missing"}),
             "error",
         )
         .await
         .unwrap();
-    assert!(legacy.get("requestId").is_none());
+    assert!(uncorrelated.get("requestId").is_none());
     fixture.finish().await;
 }
 

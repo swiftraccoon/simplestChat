@@ -62,8 +62,9 @@ function message<K extends ServerMessage['type']>(
   };
 }
 
-// Absent IDs support unsolicited events and legacy peers. Present IDs must be
-// bounded ASCII tokens; null must not downgrade a response into an event.
+// The wire envelope permits uncorrelated replies and unsolicited events. The
+// signaling dispatcher separately enforces browser request correlation. Present
+// IDs must be bounded ASCII tokens; null cannot downgrade a reply into an event.
 function requestId(value: unknown): string {
   const id = text(value);
   return /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : invalid();

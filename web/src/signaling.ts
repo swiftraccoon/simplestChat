@@ -329,8 +329,8 @@ export class SignalingClient {
           return;
         }
 
-        // These are exclusively request replies. An ID-less reply from a legacy
-        // server must not satisfy a modern request or reach room/join handlers.
+        // These are exclusively request replies. A missing correlation ID must
+        // not satisfy a browser request or reach room/join handlers.
         if (
           msg.type === 'routerRtpCapabilities' ||
           msg.type === 'transportCreated' ||

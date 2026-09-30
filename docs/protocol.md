@@ -283,8 +283,8 @@ reconnect grace. It runs before any disconnect-time database credential check.
 | Chat send | `clientMessageId` reconciles the optimistic entry with an acknowledgement; 12 seconds before marking delivery unconfirmed |
 
 An `error` carries a human-readable `message`. An error with a `requestId` rejects
-only that pending request. Errors without IDs are connection or legacy command
-notifications and cannot settle a pending media/reconnect request; they can reach
+only that pending request. Errors without IDs are connection or uncorrelated
+command notifications and cannot settle a pending media/reconnect request; they can reach
 the join handler. `roomPasswordRequired` is a distinct retry/prompt result, while
 `roomClosed` is terminal room state. `serverRestarting` is a separate temporary
 process-shutdown event with a human-readable `reason`; it is not room deletion.
@@ -294,8 +294,10 @@ The browser assigns each acknowledged media/reconnect command a fresh `requestId
 and retains its sequence across room changes and reconnects. IDs contain 1–64
 ASCII letters, digits, hyphens or underscores. The server echoes the ID on direct
 success and error replies, including malformed-command and rate-limit errors
-when the envelope contains a valid ID. Missing IDs remain supported for legacy
-clients; present invalid IDs are rejected before dispatch. The browser requires
+when the envelope contains a valid ID. The envelope is optional: the current native
+load generator sends ID-less setup commands, waits for their typed replies in
+sequence, and associates subscription replies with resource identities. Present
+invalid IDs are rejected before dispatch. The browser requires
 both the ID and the command's expected response type and never falls back to
 matching only the type. Concurrent requests for the same response type can
 therefore settle independently, in either order. Authentication and social
@@ -312,9 +314,8 @@ work, roll back a timed-out mutation or make a retry idempotent.
 Unsolicited events update membership, moderation, chat or media state. Malformed
 messages cannot resolve requests. Socket close/disconnect rejects pending
 requests and clears their timers; callbacks from a replaced socket are ignored.
-`send` does not queue messages while disconnected. Deploy the server support
-with the browser: the new browser never matches requests to ID-less replies
-from older servers.
+`send` does not queue messages while disconnected. An ID-less reply cannot
+satisfy a browser request, regardless of its response type.
 
 The media manager retains each control until its correlated acknowledgement:
 producer/consumer pause or resume, closure, layer selection and ICE restart.
@@ -336,7 +337,10 @@ Late results from a retired socket or resource cannot acknowledge a newer attemp
 
 `closeConsumer`, `closeProducer` and `setConsumerPreferredLayers` reply with
 `mediaControlApplied` and the request ID after successful processing. This reply
-is emitted only for commands carrying an ID; legacy no-ID commands remain silent.
+is emitted only for commands carrying an ID. Current fire-and-forget callers
+include native generator layer updates and browser cleanup of a publication or
+consumer that finishes after local media teardown. Those calls retain no pending
+acknowledgement and receive no `mediaControlApplied` response.
 Layer acknowledgement means the server accepted the preference, not that the
 selected layer has become available or been decoded.
 

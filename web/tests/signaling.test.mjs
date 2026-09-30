@@ -812,7 +812,7 @@ test('missing or unknown IDs and mismatched response types cannot consume a requ
   client.setOnMessage((message) => events.push(message));
   const pending = client.request({ type: 'createRecvTransport' }, 'transportCreated');
   const requestId = socket.sent[0].requestId;
-  socket.receive(transportReply('legacy'));
+  socket.receive(transportReply('missing-id'));
   socket.receive(transportReply('unknown', 'unknown'));
   socket.receive({ type: 'producerCreated', requestId, producerId: 'wrong-type' });
   socket.receive({ type: 'error', requestId: 'unknown', message: 'Unrelated error' });

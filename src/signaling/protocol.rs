@@ -949,11 +949,11 @@ mod tests {
         assert!(
             matches!(join, ClientMessage::JoinRoom { chat_style: Some(ref s), .. } if s.color.as_deref() == Some("teal"))
         );
-        let legacy: ClientMessage =
+        let default_style: ClientMessage =
             serde_json::from_value(json!({"type":"joinRoom","roomId":"r","participantName":"Bob"}))
                 .unwrap();
         assert!(matches!(
-            legacy,
+            default_style,
             ClientMessage::JoinRoom {
                 chat_style: None,
                 ..
@@ -985,9 +985,9 @@ mod tests {
             assert_eq!(header.request_id.as_deref(), Some(request_id));
             assert!(serde_json::from_str::<ClientMessage>(&wire).is_err());
         }
-        let legacy: RequestHeader =
+        let uncorrelated: RequestHeader =
             serde_json::from_str(r#"{"type":"createSendTransport"}"#).unwrap();
-        assert!(legacy.request_id.is_none());
+        assert!(uncorrelated.request_id.is_none());
         for invalid in [
             Value::Null,
             json!(""),
