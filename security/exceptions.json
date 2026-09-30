@@ -930,6 +930,16 @@
       "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 d8004af40f70d760e0055d69dbed50c2ff4e50b0731682d826217469137dac80. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-69"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
+      "scope": ".github/workflows/security.yml#jobs/security-mutation/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The current maintained act parser supports ./ local actions; this invocation uses the same reviewed native-toolchain action as ordinary CI.",
+      "reachability": "Exact same-revision checkout without persisted credentials, no intervening checkout replacement, scheduled/manual execution and a separate mutation cache namespace.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
     }
   ]
 }

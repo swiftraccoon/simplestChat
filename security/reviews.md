@@ -46,6 +46,12 @@ step requires review. The two high-severity `GITHUB_ENV` findings were corrected
 by declaring the OpenSSL paths in workflow environment mappings. Missing
 concurrency controls were also corrected; neither category is exempted.
 
+The scheduled mutation job adds one exact `self-repository` review for its
+native-toolchain invocation. It uses the same checked-out action and has no
+intervening source replacement. Its separate mutation cache namespace and
+private compiler outputs do not supply production release artifacts. The
+existing local-action syntax rationale applies to this additional call site.
+
 ## Rust dependency health
 
 The audit distinguishes these health warnings from vulnerability-class results:
