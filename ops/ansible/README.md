@@ -26,6 +26,12 @@ and custom Docker API listeners require review instead of automatic removal.
 
 ## Prepare a host
 
+For a fresh VPS, use the [bootstrap controller](BOOTSTRAP.md) to verify host
+trust, enroll a dedicated SSH key (including a provider's forced password
+change), retain preflight evidence and invoke this playbook. Continue with the
+[capacity controller](CAPACITY.md) for automated source advancement, image
+builds, bounded measurements and result collection.
+
 On your controller, install Python 3.12+ and create an isolated environment:
 
 ```sh
@@ -40,17 +46,20 @@ never commit private keys, runtime secrets or real host details. Verify the
 host's SSH fingerprint and establish trusted SSH access first. Host-key checking
 stays enabled and the controller's SSH agent is not forwarded.
 
-For a fresh VPS, explicitly enable `scbench_upgrade_packages` and
-`scbench_reboot` for the initial maintenance run. Both default off. Reset them
-afterward; reapplication should not unexpectedly perform OS maintenance.
+For a fresh VPS, request OS updates and the conditional reboot for one invocation
+using extra variables. Keep both maintenance flags `false` in the inventory;
+ordinary reapplication then does not unexpectedly repeat OS maintenance.
 
 Run from the project root:
 
 ```sh
 ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
   ops/ansible/.venv/bin/ansible-playbook \
-  -i ops/ansible/inventory.local.yml ops/ansible/site.yml
+  -i ops/ansible/inventory.local.yml ops/ansible/site.yml \
+  -e '{"scbench_upgrade_packages":true,"scbench_reboot":true}'
 ```
+
+Omit the `-e` maintenance flags for subsequent ordinary provisioning runs.
 
 Provisioning does not build images or run benchmarks. Services are disabled at
 boot. Reapply after reviewing configuration changes. Active workloads and
