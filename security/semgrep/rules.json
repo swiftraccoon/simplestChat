@@ -1,0 +1,548 @@
+{
+  "rules": [
+    {
+      "id": "simplestchat.python-credential-url",
+      "languages": [
+        "python"
+      ],
+      "message": "Pass credentials separately from request URLs.",
+      "severity": "ERROR",
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern": "urllib.request.urlopen($URL, ...)"
+            },
+            {
+              "pattern": "requests.get($URL, ...)"
+            },
+            {
+              "pattern": "requests.post($URL, ...)"
+            }
+          ]
+        },
+        {
+          "metavariable-regex": {
+            "metavariable": "$URL",
+            "regex": "^[\\\"\\'](?:https?|postgres(?:ql)?|redis)://[^\\s/\\\"\\':@]+:[^\\s/\\\"\\'@]+@"
+          }
+        }
+      ]
+    },
+    {
+      "id": "simplestchat.javascript-credential-url",
+      "languages": [
+        "typescript"
+      ],
+      "message": "Pass credentials separately from request URLs.",
+      "severity": "ERROR",
+      "patterns": [
+        {
+          "pattern": "fetch($URL, ...)"
+        },
+        {
+          "metavariable-regex": {
+            "metavariable": "$URL",
+            "regex": "^[\\\"\\'](?:https?|postgres(?:ql)?|redis)://[^\\s/\\\"\\':@]+:[^\\s/\\\"\\'@]+@"
+          }
+        }
+      ]
+    },
+    {
+      "id": "simplestchat.python-secret-log",
+      "languages": [
+        "python"
+      ],
+      "message": "Keep credential values out of logs.",
+      "severity": "ERROR",
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern": "$LOG.debug(..., $VALUE, ...)"
+            },
+            {
+              "pattern": "$LOG.info(..., $VALUE, ...)"
+            },
+            {
+              "pattern": "$LOG.warning(..., $VALUE, ...)"
+            },
+            {
+              "pattern": "$LOG.error(..., $VALUE, ...)"
+            },
+            {
+              "pattern": "$LOG.critical(..., $VALUE, ...)"
+            },
+            {
+              "pattern": "$LOG.exception(..., $VALUE, ...)"
+            }
+          ]
+        },
+        {
+          "metavariable-regex": {
+            "metavariable": "$VALUE",
+            "regex": "^(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url|(?:[a-z_][a-z_0-9]*\\.)+(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url))$"
+          }
+        }
+      ]
+    },
+    {
+      "id": "simplestchat.javascript-secret-log",
+      "languages": [
+        "typescript"
+      ],
+      "message": "Keep credential values out of logs.",
+      "severity": "ERROR",
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern": "console.debug(..., $VALUE, ...)"
+            },
+            {
+              "pattern": "console.log(..., $VALUE, ...)"
+            },
+            {
+              "pattern": "console.info(..., $VALUE, ...)"
+            },
+            {
+              "pattern": "console.warn(..., $VALUE, ...)"
+            },
+            {
+              "pattern": "console.error(..., $VALUE, ...)"
+            }
+          ]
+        },
+        {
+          "metavariable-regex": {
+            "metavariable": "$VALUE",
+            "regex": "^(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url|(?:[a-z_][a-z_0-9]*\\.)+(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url))$"
+          }
+        }
+      ]
+    },
+    {
+      "id": "simplestchat.python-network-timeout",
+      "languages": [
+        "python"
+      ],
+      "message": "Use an explicit network timeout.",
+      "severity": "ERROR",
+      "pattern-either": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern": "urllib.request.urlopen(...)"
+                },
+                {
+                  "pattern": "requests.get(...)"
+                },
+                {
+                  "pattern": "requests.post(...)"
+                },
+                {
+                  "pattern": "requests.put(...)"
+                },
+                {
+                  "pattern": "requests.delete(...)"
+                },
+                {
+                  "pattern": "requests.patch(...)"
+                },
+                {
+                  "pattern": "requests.head(...)"
+                },
+                {
+                  "pattern": "requests.request(...)"
+                }
+              ]
+            },
+            {
+              "pattern-not": "urllib.request.urlopen(..., timeout=$TIMEOUT, ...)"
+            },
+            {
+              "pattern-not": "requests.get(..., timeout=$TIMEOUT, ...)"
+            },
+            {
+              "pattern-not": "requests.post(..., timeout=$TIMEOUT, ...)"
+            },
+            {
+              "pattern-not": "requests.put(..., timeout=$TIMEOUT, ...)"
+            },
+            {
+              "pattern-not": "requests.delete(..., timeout=$TIMEOUT, ...)"
+            },
+            {
+              "pattern-not": "requests.patch(..., timeout=$TIMEOUT, ...)"
+            },
+            {
+              "pattern-not": "requests.head(..., timeout=$TIMEOUT, ...)"
+            },
+            {
+              "pattern-not": "requests.request(..., timeout=$TIMEOUT, ...)"
+            }
+          ]
+        },
+        {
+          "pattern": "urllib.request.urlopen(..., timeout=None, ...)"
+        },
+        {
+          "pattern": "requests.get(..., timeout=None, ...)"
+        },
+        {
+          "pattern": "requests.post(..., timeout=None, ...)"
+        },
+        {
+          "pattern": "requests.put(..., timeout=None, ...)"
+        },
+        {
+          "pattern": "requests.delete(..., timeout=None, ...)"
+        },
+        {
+          "pattern": "requests.patch(..., timeout=None, ...)"
+        },
+        {
+          "pattern": "requests.head(..., timeout=None, ...)"
+        },
+        {
+          "pattern": "requests.request(..., timeout=None, ...)"
+        }
+      ]
+    },
+    {
+      "id": "simplestchat.python-process-timeout",
+      "languages": [
+        "python"
+      ],
+      "message": "Use an explicit subprocess timeout or the bounded process boundary.",
+      "severity": "ERROR",
+      "pattern-either": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern": "subprocess.run(...)"
+                },
+                {
+                  "pattern": "subprocess.check_call(...)"
+                },
+                {
+                  "pattern": "subprocess.check_output(...)"
+                }
+              ]
+            },
+            {
+              "pattern-not": "subprocess.run(..., timeout=$TIMEOUT, ...)"
+            },
+            {
+              "pattern-not": "subprocess.check_call(..., timeout=$TIMEOUT, ...)"
+            },
+            {
+              "pattern-not": "subprocess.check_output(..., timeout=$TIMEOUT, ...)"
+            }
+          ]
+        },
+        {
+          "pattern": "subprocess.run(..., timeout=None, ...)"
+        },
+        {
+          "pattern": "subprocess.check_call(..., timeout=None, ...)"
+        },
+        {
+          "pattern": "subprocess.check_output(..., timeout=None, ...)"
+        }
+      ]
+    },
+    {
+      "id": "simplestchat.python-request-to-process",
+      "languages": [
+        "python"
+      ],
+      "message": "Do not pass request fields to process execution.",
+      "severity": "ERROR",
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "request.args.get(...)"
+        },
+        {
+          "pattern": "request.form.get(...)"
+        },
+        {
+          "pattern": "request.json[...]"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "pattern": "subprocess.run($VALUE, ...)"
+        },
+        {
+          "pattern": "subprocess.Popen($VALUE, ...)"
+        },
+        {
+          "pattern": "os.system($VALUE)"
+        }
+      ]
+    },
+    {
+      "id": "simplestchat.python-request-to-file",
+      "languages": [
+        "python"
+      ],
+      "message": "Validate request-selected paths before filesystem access.",
+      "severity": "ERROR",
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "request.args.get(...)"
+        },
+        {
+          "pattern": "request.form.get(...)"
+        },
+        {
+          "pattern": "request.json[...]"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "open($VALUE, ...)"
+            },
+            {
+              "focus-metavariable": "$VALUE"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "pathlib.Path($VALUE).read_text(...)"
+            },
+            {
+              "focus-metavariable": "$VALUE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "simplestchat.python-archive-extractall",
+      "languages": [
+        "python"
+      ],
+      "message": "Use the reviewed bounded archive reader instead of bulk extraction.",
+      "severity": "ERROR",
+      "pattern-either": [
+        {
+          "pattern": "$ARCHIVE.extractall(...)"
+        }
+      ]
+    },
+    {
+      "id": "simplestchat.javascript-location-to-html",
+      "languages": [
+        "typescript"
+      ],
+      "message": "Render URL-controlled values as text.",
+      "severity": "ERROR",
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "location.search"
+        },
+        {
+          "pattern": "location.hash"
+        },
+        {
+          "pattern": "window.location.search"
+        },
+        {
+          "pattern": "window.location.hash"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "pattern": "$ELEMENT.innerHTML = $VALUE"
+        },
+        {
+          "pattern": "document.write($VALUE)"
+        }
+      ]
+    },
+    {
+      "id": "simplestchat.rust-assert-sql-safe",
+      "languages": [
+        "rust"
+      ],
+      "message": "Keep dynamic SQL assertions inside the two reviewed functions.",
+      "severity": "ERROR",
+      "pattern": "sqlx::AssertSqlSafe(...)",
+      "paths": {
+        "exclude": [
+          "/src/db.rs",
+          "/src/room/settings.rs"
+        ]
+      }
+    },
+    {
+      "id": "simplestchat.rust-assert-sql-safe-db",
+      "languages": [
+        "rust"
+      ],
+      "message": "Keep dynamic SQL assertions inside the reviewed function.",
+      "severity": "ERROR",
+      "patterns": [
+        {
+          "pattern": "sqlx::AssertSqlSafe(...)"
+        },
+        {
+          "pattern-not-inside": "fn verify_schema(...) { ... }"
+        }
+      ],
+      "paths": {
+        "include": [
+          "/src/db.rs"
+        ]
+      }
+    },
+    {
+      "id": "simplestchat.rust-assert-sql-safe-room-settings",
+      "languages": [
+        "rust"
+      ],
+      "message": "Keep dynamic SQL assertions inside the reviewed function.",
+      "severity": "ERROR",
+      "patterns": [
+        {
+          "pattern": "sqlx::AssertSqlSafe(...)"
+        },
+        {
+          "pattern-not-inside": "fn update_room_settings(...) { ... }"
+        }
+      ],
+      "paths": {
+        "include": [
+          "/src/room/settings.rs"
+        ]
+      }
+    },
+    {
+      "id": "simplestchat.rust-secret-log",
+      "languages": [
+        "rust"
+      ],
+      "message": "Keep credential values out of logs.",
+      "severity": "ERROR",
+      "pattern-either": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern": "trace!(..., $VALUE, ...)"
+                },
+                {
+                  "pattern": "debug!(..., $VALUE, ...)"
+                },
+                {
+                  "pattern": "info!(..., $VALUE, ...)"
+                },
+                {
+                  "pattern": "warn!(..., $VALUE, ...)"
+                },
+                {
+                  "pattern": "error!(..., $VALUE, ...)"
+                },
+                {
+                  "pattern": "tracing::trace!(..., $VALUE, ...)"
+                },
+                {
+                  "pattern": "tracing::debug!(..., $VALUE, ...)"
+                },
+                {
+                  "pattern": "tracing::info!(..., $VALUE, ...)"
+                },
+                {
+                  "pattern": "tracing::warn!(..., $VALUE, ...)"
+                },
+                {
+                  "pattern": "tracing::error!(..., $VALUE, ...)"
+                }
+              ]
+            },
+            {
+              "metavariable-regex": {
+                "metavariable": "$VALUE",
+                "regex": "^(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url|(?:[a-z_][a-z_0-9]*\\.)+(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url))$"
+              }
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern": "trace!(...)"
+                },
+                {
+                  "pattern": "debug!(...)"
+                },
+                {
+                  "pattern": "info!(...)"
+                },
+                {
+                  "pattern": "warn!(...)"
+                },
+                {
+                  "pattern": "error!(...)"
+                },
+                {
+                  "pattern": "tracing::trace!(...)"
+                },
+                {
+                  "pattern": "tracing::debug!(...)"
+                },
+                {
+                  "pattern": "tracing::info!(...)"
+                },
+                {
+                  "pattern": "tracing::warn!(...)"
+                },
+                {
+                  "pattern": "tracing::error!(...)"
+                }
+              ]
+            },
+            {
+              "pattern-regex": "\\b(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url)\\s*=\\s*[%?]?[A-Za-z_][A-Za-z_0-9.]*"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "simplestchat.rust-credential-url",
+      "languages": [
+        "rust"
+      ],
+      "message": "Pass credentials separately from request URLs.",
+      "severity": "ERROR",
+      "patterns": [
+        {
+          "pattern": "reqwest::get($URL)"
+        },
+        {
+          "metavariable-regex": {
+            "metavariable": "$URL",
+            "regex": "^[\\\"\\']https?://[^\\s/\\\"\\':@]+:[^\\s/\\\"\\'@]+@"
+          }
+        }
+      ]
+    }
+  ]
+}

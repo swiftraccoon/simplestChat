@@ -1,0 +1,58 @@
+import logging
+import pathlib
+import subprocess
+import urllib.request
+import requests
+
+
+def examples(request, archive, password, database_url, safe_path):
+    # ruleid: simplestchat.python-credential-url
+    urllib.request.urlopen("https://fixture:public@example.invalid/", timeout=2)
+    # ok: simplestchat.python-credential-url
+    urllib.request.urlopen("https://example.invalid/", timeout=2)
+    # ruleid: simplestchat.python-secret-log
+    logging.info("password=%s", password)
+    # ruleid: simplestchat.python-secret-log
+    logging.error("database=%s", database_url)
+    # ok: simplestchat.python-secret-log
+    logging.info("authentication rejected")
+    # ruleid: simplestchat.python-network-timeout
+    requests.get("https://example.invalid/")
+    # ruleid: simplestchat.python-network-timeout
+    urllib.request.urlopen("https://example.invalid/", timeout=None)
+    # ok: simplestchat.python-network-timeout
+    requests.get("https://example.invalid/", timeout=5)
+    # ruleid: simplestchat.python-process-timeout
+    subprocess.run(["fixture"])
+    # ruleid: simplestchat.python-process-timeout
+    subprocess.check_output(["fixture"], timeout=None)
+    # ok: simplestchat.python-process-timeout
+    subprocess.run(["fixture"], timeout=5)
+    requested_command = request.args.get("command")
+    # ruleid: simplestchat.python-request-to-process
+    subprocess.run(requested_command, timeout=5)
+    # ok: simplestchat.python-request-to-process
+    subprocess.run(["fixed-fixture"], timeout=5)
+    requested_path = request.args.get("name")
+    # ruleid: simplestchat.python-request-to-file
+    open(requested_path)
+    # ok: simplestchat.python-request-to-file
+    pathlib.Path(safe_path).read_text()
+    # ruleid: simplestchat.python-archive-extractall
+    archive.extractall("destination")
+    # ok: simplestchat.python-archive-extractall
+    archive.read("reviewed-member")
+
+
+def alias_and_safe_reassignment(request, password):
+    from urllib.request import urlopen as fetch_url
+    # ruleid: simplestchat.python-network-timeout
+    fetch_url("https://example.invalid/")
+    # ok: simplestchat.python-network-timeout
+    fetch_url("https://example.invalid/", timeout=5)
+    command = request.form.get("command")
+    command = ["fixed-fixture"]
+    # ok: simplestchat.python-request-to-process
+    subprocess.run(command, timeout=5)
+    # ok: simplestchat.python-secret-log
+    logging.warning("password")

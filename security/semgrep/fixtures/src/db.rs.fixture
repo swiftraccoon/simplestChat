@@ -1,0 +1,8 @@
+async fn verify_schema(value: String) {
+    // ok: simplestchat.rust-assert-sql-safe-db
+    let query = sqlx::AssertSqlSafe(value);
+}
+fn unrelated(value: String) {
+    // ruleid: simplestchat.rust-assert-sql-safe-db
+    let query = sqlx::AssertSqlSafe(value);
+}

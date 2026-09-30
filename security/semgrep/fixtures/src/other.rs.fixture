@@ -1,0 +1,20 @@
+fn verify_schema(value: String) {
+    // ruleid: simplestchat.rust-assert-sql-safe
+    let query = sqlx::AssertSqlSafe(value);
+    // ok: simplestchat.rust-assert-sql-safe
+    let query = sqlx::query("SELECT 1");
+}
+fn secrets(password: String) {
+    // ruleid: simplestchat.rust-secret-log
+    info!("password: {}", password);
+    // ruleid: simplestchat.rust-secret-log
+    tracing::warn!(password = %password, "rejected");
+    // ruleid: simplestchat.rust-secret-log
+    tracing::error!(user_id = 42, password = ?password, "rejected");
+    // ok: simplestchat.rust-secret-log
+    tracing::info!("authentication rejected");
+    // ruleid: simplestchat.rust-credential-url
+    let request = reqwest::get("https://fixture:public@example.invalid/");
+    // ok: simplestchat.rust-credential-url
+    let request = reqwest::get("https://example.invalid/");
+}

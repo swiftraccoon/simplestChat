@@ -1,0 +1,8 @@
+pub async fn update_room_settings(value: String) {
+    // ok: simplestchat.rust-assert-sql-safe-room-settings
+    let query = sqlx::AssertSqlSafe(value);
+}
+fn unrelated(value: String) {
+    // ruleid: simplestchat.rust-assert-sql-safe-room-settings
+    let query = sqlx::AssertSqlSafe(value);
+}

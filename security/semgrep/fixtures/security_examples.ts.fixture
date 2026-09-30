@@ -1,0 +1,17 @@
+function examples(password: string, database_url: string, element: HTMLElement) {
+  // ruleid: simplestchat.javascript-credential-url
+  fetch("https://fixture:public@example.invalid/");
+  // ok: simplestchat.javascript-credential-url
+  fetch("https://example.invalid/");
+  // ruleid: simplestchat.javascript-secret-log
+  console.log(password);
+  // ruleid: simplestchat.javascript-secret-log
+  console.error("database", database_url);
+  // ok: simplestchat.javascript-secret-log
+  console.info("authentication rejected");
+  const input = location.hash;
+  // ruleid: simplestchat.javascript-location-to-html
+  element.innerHTML = input;
+  // ok: simplestchat.javascript-location-to-html
+  element.textContent = input;
+}
