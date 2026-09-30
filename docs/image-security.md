@@ -187,6 +187,24 @@ additional swap, a 128-process limit and a bounded temporary filesystem. Artifac
 scans have no network. Writable outputs have file-count and byte limits in the
 controller as well as a 900-second process deadline.
 
+Syft's archive catalog operation has a one-GiB `/tmp` tmpfs because its image
+reader decompresses and caches layer data there. Other scanner operations,
+including Syft format conversion, retain the 256-MiB tmpfs. Both remain inside
+the same two-GiB container memory limit with no additional swap: temporary
+storage is a ceiling, not reserved memory. The archive parser's four-GiB
+expanded-input limit is independent and does not promise that every accepted
+archive fits Syft's smaller working storage. Exhaustion, OOM, timeout or partial
+scanner output fails the check; there is no automatic larger or unbounded retry.
+This follows Syft's documented [archive source caching](https://github.com/anchore/syft/wiki/supported-sources).
+
+Each of at most eight scanner invocations retains `scanner-result-NN.json`.
+These small public-safe receipts contain the fixed tool/failure classification,
+command and container exit statuses, OOM/time/output-limit flags, cleanup
+verification, declared resource limits, and the byte count/SHA-256 of the bounded
+private command log. They contain no log excerpts, environment, command arguments
+or artifact-derived paths. A diagnostic identifies the observed failure; it does
+not replace a successful complete scanner report. Full command logs remain private.
+
 Grype database preparation is a separate online container. It mounts only the
 verified tools and a new empty database directory. The expanded database budget
 is four GiB; the current database is approximately three GiB. The subsequent

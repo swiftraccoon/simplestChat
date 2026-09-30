@@ -47,6 +47,11 @@ MAX_SECRET_FILES = security_archive.MAX_MEMBERS + 1
 MAX_SECRET_BYTES = 4 * 1024**3
 SECRET_DISK_RESERVE = 256 * 1024**2
 SCAN_SECONDS = 900
+DEFAULT_SCRATCH_BYTES = 256 * 1024**2
+SYFT_SCAN_SCRATCH_BYTES = 1024**3
+MAX_SCANNERS = 8
+MAX_COMMAND_LOG = 4 * 1024**2
+MAX_EXIT_STATUS = 255
 FINDINGS_EXIT = 10
 LABEL = "simplestchat.security.image"
 PLATFORMS = {"linux/amd64": "linux-x86_64", "linux/arm64": "linux-aarch64"}
@@ -97,6 +102,98 @@ def readable_tree(path: Path) -> None:
     path.chmod(0o555)
 
 
+def scanner_diagnostic(  # noqa: PLR0913 -- Explicit bounded lifecycle evidence inputs.
+    tool: str,
+    result: tuple[int, str] | None,
+    owned: JsonObject | None,
+    *,
+    cleanup_verified: bool,
+    scratch_bytes: int,
+    command_log: Path | None,
+) -> JsonObject:
+    """Summarize fixed failure classes and private log hashes, never scanner text."""
+    log: bytes | None = None
+    outcome: JsonObject = {}
+    if command_log is not None and command_log.exists():
+        descriptor = os.open(command_log, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as source:
+            metadata = os.fstat(source.fileno())
+            policy.require(
+                stat.S_ISREG(metadata.st_mode) and metadata.st_size <= MAX_COMMAND_LOG,
+                "image_scanner_diagnostic_log",
+            )
+            log = source.read(MAX_COMMAND_LOG + 1)
+            policy.require(len(log) == metadata.st_size, "image_scanner_diagnostic_log")
+        outcome = object_value(policy.report(command_log.with_suffix(".outcome.json"), limit=65536))
+    exit_status = result[0] if result is not None else outcome.get("exitStatus")
+    if type(exit_status) is not int:
+        exit_status = None
+    container_exit = owned.get("exitStatus") if owned else None
+    oom = owned.get("oomKilled") if owned else None
+    valid_state = (
+        type(container_exit) is int
+        and 0 <= container_exit <= MAX_EXIT_STATUS
+        and type(oom) is bool
+        and (
+            result is None
+            or (
+                owned is not None
+                and owned.get("state") == "exited"
+                and container_exit == exit_status
+                and not (oom and exit_status == 0)
+            )
+        )
+    )
+    timed_out = outcome.get("timedOut") is True
+    output_limited = outcome.get("outputLimited") is True
+    storage_exhausted = log is not None and b"no space left on device" in log.lower()
+    classification = (
+        "timed_out"
+        if timed_out
+        else "output_limit"
+        if output_limited
+        else "out_of_memory"
+        if oom is True
+        else "storage_exhausted"
+        if storage_exhausted
+        else "controller_failed"
+        if result is None
+        else "container_state_invalid"
+        if not valid_state
+        else "cleanup_unverified"
+        if not cleanup_verified
+        else "completed"
+        if exit_status == 0
+        else "findings"
+        if tool in {"grype", "gitleaks"} and exit_status == FINDINGS_EXIT
+        else "scanner_failed"
+    )
+    return {
+        "schemaVersion": 1,
+        "tool": tool,
+        "classification": classification,
+        "exitStatus": exit_status,
+        "containerExitStatus": container_exit if type(container_exit) is int else None,
+        "oomKilled": oom if type(oom) is bool else None,
+        "containerStateValid": valid_state,
+        "cleanupVerified": cleanup_verified,
+        "timedOut": timed_out,
+        "outputLimited": output_limited,
+        "storageExhausted": storage_exhausted,
+        "logBytes": len(log) if log is not None else None,
+        "logSha256": hashlib.sha256(log).hexdigest() if log is not None else None,
+        "limits": {
+            "temporaryBytes": scratch_bytes,
+            "memoryBytes": 2 * 1024**3,
+            "swapAdditionalBytes": 0,
+            "cpus": 2,
+            "pids": 128,
+            "seconds": SCAN_SECONDS,
+            "logBytes": MAX_COMMAND_LOG,
+        },
+    }
+
+
 @dataclass
 class Sandbox:
     """One isolated local engine and exact-owned ephemeral scanner transaction."""
@@ -135,7 +232,8 @@ class Sandbox:
                 + '}},"image":{{json .Image}},"owner":'
                 + '{{json (index .Config.Labels "'
                 + LABEL
-                + '")}},"state":{{json .State.Status}}}',
+                + '")}},"state":{{json .State.Status}},'
+                + '"exitStatus":{{json .State.ExitCode}},"oomKilled":{{json .State.OOMKilled}}}',
                 name,
             ],
             allow_failure=True,
@@ -167,6 +265,7 @@ class Sandbox:
             not online or (tool == "grype" and list(arguments) == ["db", "update"] and not mounts),
             "image_online_artifact_mount",
         )
+        policy.require(self.sequence < MAX_SCANNERS, "image_scanner_count")
         self.sequence += 1
         owner = uuid.uuid4().hex
         name = "simplestchat-security-" + owner
@@ -175,6 +274,11 @@ class Sandbox:
         if os.getuid() == 0:
             os.chown(destination, uid, gid)
         limit = MAX_DB if online else MAX_OUTPUT
+        scratch_bytes = (
+            SYFT_SCAN_SCRATCH_BYTES
+            if tool == "syft" and list(arguments[:2]) == ["scan", "docker-archive:/input/image.tar"]
+            else DEFAULT_SCRATCH_BYTES
+        )
         args = [
             "run",
             "--name",
@@ -198,7 +302,7 @@ class Sandbox:
             "--ulimit",
             "nofile=1024:1024",
             "--tmpfs",
-            "/tmp:rw,noexec,nosuid,nodev,size=268435456,mode=1777",  # noqa: S108 -- Private container tmpfs.
+            f"/tmp:rw,noexec,nosuid,nodev,size={scratch_bytes},mode=1777",  # noqa: S108 -- Private container tmpfs.
             "--env",
             "HOME=/tmp",
             "--env",
@@ -233,15 +337,21 @@ class Sandbox:
             args += ["--mount", f"type=bind,src={source},dst={target},readonly"]
         args += ["--entrypoint", "/tools/" + tool, self.base, *arguments]
         self.runner.healthy = lambda: directory_size(destination, limit)
-        launched = False
+        command_log = (
+            self.runner.output / f"{self.runner.sequence + 1:02d}-{Path(self.engine[0]).name}.log"
+            if self.runner.output is not None
+            else None
+        )
+        result = None
+        owned = None
+        cleanup_verified = False
         try:
-            launched = True
-            return self.command(args, timeout=SCAN_SECONDS, allow_failure=True)
+            result = self.command(args, timeout=SCAN_SECONDS, allow_failure=True)
+            return result
         finally:
             self.runner.healthy = None
-            if launched:
+            try:
                 owned = self.inspect_owned(name, owner)
-                write(self.output / f"container-{self.sequence:02d}.json", owned)
                 _ = self.command(["container", "rm", "--force", string_value(owned["id"])])
                 _, remaining = self.command(
                     [
@@ -254,6 +364,19 @@ class Sandbox:
                     ]
                 )
                 policy.require(not remaining, "image_container_cleanup_failed")
+                cleanup_verified = True
+                write(self.output / f"container-{self.sequence:02d}.json", owned)
+            finally:
+                diagnostic = scanner_diagnostic(
+                    tool,
+                    result,
+                    owned,
+                    cleanup_verified=cleanup_verified,
+                    scratch_bytes=scratch_bytes,
+                    command_log=command_log,
+                )
+                write(self.output / f"scanner-result-{self.sequence:02d}.json", diagnostic)
+            policy.require(diagnostic["containerStateValid"], "image_scanner_container_state")
             policy.require(directory_size(destination, limit), "image_scanner_output_limit")
 
 

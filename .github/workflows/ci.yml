@@ -915,6 +915,7 @@ jobs:
             ${{ runner.temp }}/production-security/image/elf.json
             ${{ runner.temp }}/production-security/image/native.json
             ${{ runner.temp }}/production-security/image/database-status.json
+            ${{ runner.temp }}/production-security/image/scanner-result-*.json
             ${{ runner.temp }}/production-security/image/secret-paths.json
             ${{ runner.temp }}/production-security/image/sbom/sbom.syft.json
             ${{ runner.temp }}/production-security/image/spdx/sbom.spdx.json

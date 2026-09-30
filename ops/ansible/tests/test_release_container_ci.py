@@ -293,6 +293,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
                         "elf.json",
                         "native.json",
                         "database-status.json",
+                        "scanner-result-*.json",
                         "secret-paths.json",
                         "sbom/sbom.syft.json",
                         "spdx/sbom.spdx.json",

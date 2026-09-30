@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import tempfile
@@ -16,6 +17,7 @@ from test_support import ROOT
 # isort: split
 import release_build
 import security_image as image
+import security_image_policy as policy
 from release_json import decode_json, integer_value, object_value, string_value
 from security_tools import ToolError
 
@@ -33,12 +35,15 @@ IDENTIFIER = "b" * 64
 class Engine:
     """Record only allowed scanner lifecycle operations, never emulate an application."""
 
-    def __init__(self, *, fail: bool = False, changed: bool = False) -> None:
+    def __init__(
+        self, *, fail: bool = False, changed: bool = False, state: JsonObject | None = None
+    ) -> None:
         """Select a timeout or foreign-resource regression explicitly."""
         self.calls: list[list[str]] = []
         self.owner: str = ""
         self.fail: bool = fail
         self.changed: bool = changed
+        self.state: JsonObject = state or {}
 
     def command(
         self, argv: Sequence[str], *, timeout: int = 30, allow_failure: bool = False
@@ -60,6 +65,9 @@ class Engine:
                     "image": BASE,
                     "owner": "foreign" if self.changed else self.owner,
                     "state": "exited",
+                    "exitStatus": 0,
+                    "oomKilled": False,
+                    **self.state,
                 }
             )
         if call[:3] == ["container", "rm", "--force"]:
@@ -101,10 +109,190 @@ class ImageRunnerTests(unittest.TestCase):
             self.assertIn("--memory=2g", argv)
             self.assertIn("--memory-swap=2g", argv)
             self.assertIn("--cpus=2", argv)
+            self.assertIn(
+                "/tmp:rw,noexec,nosuid,nodev,size=1073741824,mode=1777",  # noqa: S108 -- Assert private container tmpfs.
+                argv,
+            )
             self.assertEqual(argv[argv.index("--entrypoint") + 1], "/tools/syft")
             self.assertNotIn("docker.sock", " ".join(argv))
             self.assertNotIn("/root", " ".join(argv))
             self.assertIn(["container", "rm", "--force", IDENTIFIER], engine.calls)
+            diagnostic = object_value(policy.report(root / "scanner-result-01.json"))
+            self.assertEqual(diagnostic["classification"], "completed")
+            self.assertTrue(diagnostic["cleanupVerified"])
+            self.assertEqual(object_value(diagnostic["limits"])["temporaryBytes"], 1024**3)
+
+    def test_larger_scratch_is_only_for_syft_archive_catalog(self) -> None:
+        """Conversion, other scanners and non-archive calls keep the smaller hard limit."""
+        for tool, arguments in (
+            ("syft", ["convert", "/input/sbom.json"]),
+            ("syft", ["--help"]),
+            ("syft", ["scan", "dir:/input"]),
+            ("grype", ["db", "status"]),
+            ("gitleaks", ["dir", "/layers"]),
+        ):
+            with (
+                self.subTest(tool=tool, arguments=arguments),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                sandbox = image.Sandbox(
+                    ["/usr/bin/docker"], {}, root, root / "tools", BASE, "linux/amd64"
+                )
+                engine = Engine()
+                with patch.object(sandbox, "command", side_effect=engine.command):
+                    _ = sandbox.run(tool, arguments, destination=root / "out")
+                self.assertIn(
+                    "/tmp:rw,noexec,nosuid,nodev,size=268435456,mode=1777",  # noqa: S108 -- Assert private container tmpfs.
+                    engine.calls[0],
+                )
+
+    def test_scanner_diagnostic_never_exports_log_content(self) -> None:
+        """Fixed classification uses retained bounded bytes without leaking embedded names."""
+        cases: tuple[tuple[bytes, JsonObject, bool, str], ...] = (
+            (b"private-marker no space left on device", {}, False, "storage_exhausted"),
+            (b"private-marker", {"timedOut": True}, False, "timed_out"),
+            (b"private-marker", {"outputLimited": True}, False, "output_limit"),
+            (b"private-marker", {}, True, "out_of_memory"),
+            (b"private-marker", {}, False, "scanner_failed"),
+        )
+        for content, flags, oom, expected in cases:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "01-docker.log"
+                _ = path.write_bytes(content)
+                image.write(path.with_suffix(".outcome.json"), {"exitStatus": 1, **flags})
+                result = image.scanner_diagnostic(
+                    "syft",
+                    (1, "private-marker"),
+                    {"exitStatus": 1, "oomKilled": oom, "state": "exited"},
+                    cleanup_verified=True,
+                    scratch_bytes=image.SYFT_SCAN_SCRATCH_BYTES,
+                    command_log=path,
+                )
+                self.assertEqual(result["classification"], expected)
+                self.assertEqual(result["logBytes"], len(content))
+                self.assertEqual(result["logSha256"], hashlib.sha256(content).hexdigest())
+                self.assertNotIn("private-marker", json.dumps(result))
+
+    def test_malformed_or_inconsistent_state_fails_after_owned_cleanup(self) -> None:
+        """Diagnostic fields cannot hide a failed scan or prevent removal of a proven ID."""
+        cases: tuple[JsonObject, ...] = (
+            {"exitStatus": True},
+            {"exitStatus": -1},
+            {"exitStatus": 1},
+            {"oomKilled": "false"},
+            {"oomKilled": True},
+            {"state": "running"},
+        )
+        for fields in cases:
+            with self.subTest(fields=fields), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                sandbox = image.Sandbox(
+                    ["/usr/bin/docker"], {}, root, root / "tools", BASE, "linux/amd64"
+                )
+                engine = Engine(state=fields)
+                with (
+                    patch.object(sandbox, "command", side_effect=engine.command),
+                    self.assertRaisesRegex(ToolError, "container_state"),
+                ):
+                    _ = sandbox.run("syft", ["--help"], destination=root / "out")
+                self.assertIn(["container", "rm", "--force", IDENTIFIER], engine.calls)
+                result = object_value(policy.report(root / "scanner-result-01.json"))
+                self.assertFalse(result["containerStateValid"])
+                self.assertTrue(result["cleanupVerified"])
+
+    def test_diagnostic_log_reader_rejects_links_and_excess_bytes(self) -> None:
+        """Diagnostic collection cannot follow a replaced log or read an unbounded file."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "private.log"
+            _ = target.write_bytes(b"inert fixture")
+            link = root / "linked.log"
+            link.symlink_to(target)
+            for path in (link, target):
+                with (
+                    self.subTest(path=path.name),
+                    patch.object(image, "MAX_COMMAND_LOG", 1),
+                    self.assertRaises((OSError, ToolError)),
+                ):
+                    _ = image.scanner_diagnostic(
+                        "syft",
+                        None,
+                        None,
+                        cleanup_verified=True,
+                        scratch_bytes=image.SYFT_SCAN_SCRATCH_BYTES,
+                        command_log=path,
+                    )
+
+    def test_scanner_count_is_bounded_before_start(self) -> None:
+        """The public per-invocation diagnostic allowlist cannot grow without limit."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sandbox = image.Sandbox(
+                ["/usr/bin/docker"],
+                {},
+                root,
+                root / "tools",
+                BASE,
+                "linux/amd64",
+                sequence=image.MAX_SCANNERS,
+            )
+            with (
+                patch.object(sandbox, "command") as command,
+                self.assertRaisesRegex(ToolError, "scanner_count"),
+            ):
+                _ = sandbox.run("syft", ["--help"], destination=root / "out")
+            command.assert_not_called()
+
+    def test_lifecycle_evidence_write_failure_cannot_skip_owned_cleanup(self) -> None:
+        """An unavailable evidence filesystem remains a failure after exact-ID removal."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sandbox = image.Sandbox(
+                ["/usr/bin/docker"], {}, root, root / "tools", BASE, "linux/amd64"
+            )
+            engine = Engine()
+            with (
+                patch.object(sandbox, "command", side_effect=engine.command),
+                patch.object(image, "write", side_effect=OSError("fixture evidence unavailable")),
+                self.assertRaises(OSError),
+            ):
+                _ = sandbox.run("syft", ["--help"], destination=root / "out")
+            self.assertIn(["container", "rm", "--force", IDENTIFIER], engine.calls)
+            self.assertEqual(
+                engine.calls[-1],
+                ["ps", "--all", "--quiet", "--no-trunc", "--filter", "id=" + IDENTIFIER],
+            )
+
+    def test_failed_catalog_cannot_publish_partial_sbom(self) -> None:
+        """Even present partial Syft data cannot proceed to enrichment after a nonzero exit."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sandbox = image.Sandbox(
+                ["/usr/bin/docker"], {}, root, root / "tools", BASE, "linux/amd64"
+            )
+            database = root / "database/cache/6"
+            database.mkdir(parents=True)
+            for name in ("vulnerability.db", "import.json"):
+                _ = (database / name).write_text("inert fixture")
+            artifact = root / "artifact"
+            artifact.mkdir()
+            _ = (artifact / "image.tar").write_bytes(b"inert fixture archive")
+            raw = root / "sbom-raw"
+            raw.mkdir()
+            image.write(raw / "sbom.syft.json", {"partial": True})
+            with (
+                patch.object(sandbox, "run", side_effect=[(0, ""), (0, "{}"), (1, "")]) as run,
+                patch.object(policy, "database_status"),
+                patch.object(policy, "enrich_sbom") as enrich,
+                self.assertRaisesRegex(ToolError, "image_sbom_failed"),
+            ):
+                _ = image.scan_reports(
+                    sandbox, image.Options(artifact_dir=artifact), root / "tree", {}, {}
+                )
+            self.assertEqual(run.call_count, 3)
+            enrich.assert_not_called()
+            self.assertFalse((root / "sbom").exists())
 
     def test_online_database_preparation_mounts_no_image(self) -> None:
         """Online preparation has only verified tools and its fresh empty output directory."""
