@@ -290,12 +290,14 @@ def verify_tls(domain: str, *, seconds: float = 10) -> None:
     certificate = (CONFIG / "tls/current/certificate.pem").read_text()
     leaf = certificate.partition("-----END CERTIFICATE-----")[0] + "-----END CERTIFICATE-----\n"
     expected = ssl.PEM_cert_to_DER_cert(leaf)
+    context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     deadline = time.monotonic() + seconds
     while True:
         try:
             with (
                 socket.create_connection((domain, 5349), timeout=3) as connection,
-                ssl.create_default_context().wrap_socket(connection, server_hostname=domain) as tls,
+                context.wrap_socket(connection, server_hostname=domain) as tls,
             ):
                 release.require(
                     tls.getpeercert(binary_form=True) == expected, "Relay certificate differs"

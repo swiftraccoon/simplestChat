@@ -151,9 +151,11 @@ def readiness_and_tls(lines: list[str], domain: str) -> None:
         ready = False
     gauge(lines, "public_ready", float(ready))
     try:
+        context = ssl.create_default_context()
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         with (
             socket.create_connection((domain, 5349), timeout=3) as connection,
-            ssl.create_default_context().wrap_socket(connection, server_hostname=domain) as tls,
+            context.wrap_socket(connection, server_hostname=domain) as tls,
         ):
             expiry = (tls.getpeercert() or {}).get("notAfter")
             require(isinstance(expiry, str), "Missing certificate expiry")

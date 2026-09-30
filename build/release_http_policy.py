@@ -164,6 +164,7 @@ def tls_context(fixture: Fixture) -> ssl.SSLContext:
         "fixture_ca_digest",
     )
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_verify_locations(cadata=data.decode("ascii"))
     require(context.check_hostname and context.verify_mode == ssl.CERT_REQUIRED, "fixture_tls")
     return context
