@@ -17,7 +17,7 @@ import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './
 import { MediaControls } from './media-controls';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
-import { api, ApiError, button, el, modal, safeRasterUrl } from './ui';
+import { api, ApiError, ApiOutcomeUnknownError, button, el, modal, safeRasterUrl } from './ui';
 import { configureSettingsDialog } from './settings-dialog';
 import { avatarColors, chatColor } from './avatar-colors';
 import { spatialLayerForRenderedWidth } from './layer-cap';
@@ -110,6 +110,8 @@ const registerToLogin = document.getElementById('register-to-login')!;
 
 // Create room modal
 const createRoomModal = document.getElementById('create-room-modal') as HTMLDialogElement;
+let createRoomAttempt = 0;
+let createRoomMutation = 0;
 const createRoomClose = document.getElementById('create-room-close')!;
 const crId = document.getElementById('cr-id') as HTMLInputElement;
 const crName = document.getElementById('cr-name') as HTMLInputElement;
@@ -245,6 +247,10 @@ auth.setOnChange((loggedIn, tokenRefresh) => {
     return;
   }
   // Identity changes leave the old membership before reconnecting.
+  dismissCreateRoom();
+  createRoomMutation++;
+  createRoomSubmit.disabled = false;
+  createRoomSubmit.textContent = 'Create Room';
   if (room) observeUiTask(leaveCurrentRoom(), 'Could not finish leaving the room');
   signaling.disconnect();
   signaling.connect(loggedIn ? (auth.jwt ?? undefined) : undefined);
@@ -297,6 +303,7 @@ const lobbyActions = new Map<string, { pending: boolean; error?: string }>();
 let roomSettingsPending = false;
 let roomSettingsAttempt = 0;
 let navigationPending = false;
+let roomSelectionVersion = 0;
 let departureInProgress: Promise<void> | null = null;
 
 // Active speaker / audio level tracking — avoids querySelectorAll on every event
@@ -1301,6 +1308,7 @@ signaling.setOnStatusChange((status) => {
 const navigation = new RoomNavigation({
   leave: leaveCurrentRoom,
   select: (id) => {
+    roomSelectionVersion++;
     roomInput.value = id;
     updateJoinBtn();
     if (document.activeElement?.closest('.room-card')) {
@@ -1351,7 +1359,10 @@ function updateJoinBtn(): void {
 }
 
 nameInput.addEventListener('input', updateJoinBtn);
-roomInput.addEventListener('input', updateJoinBtn);
+roomInput.addEventListener('input', () => {
+  roomSelectionVersion++;
+  updateJoinBtn();
+});
 
 nameInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') joinBtn.click();
@@ -1889,6 +1900,7 @@ function passkeyErrorMessage(error: unknown, fallback: string): string {
 }
 
 function dismissCreateRoom(): void {
+  createRoomAttempt++;
   createRoomModal.hidden = true;
   createRoomModal.close();
   crPassword.value = '';
@@ -1967,6 +1979,7 @@ async function joinRoomWithPassword(
 // --- Create Room ---
 createRoomBtn.addEventListener('click', () => {
   if (!auth.isLoggedIn) return;
+  createRoomAttempt++;
   createRoomModal.hidden = false;
   createRoomModal.showModal();
   crName.focus();
@@ -2013,6 +2026,17 @@ createRoomSubmit.addEventListener(
       createRoomError.hidden = false;
       return;
     }
+    if (createRoomSubmit.disabled) return;
+    const attempt = ++createRoomAttempt;
+    const mutation = ++createRoomMutation;
+    const account = auth.userId;
+    const selection = roomSelectionVersion;
+    const current = (): boolean =>
+      attempt === createRoomAttempt &&
+      createRoomModal.open &&
+      auth.userId === account &&
+      selection === roomSelectionVersion;
+    let uncertain = false;
     createRoomSubmit.disabled = true;
     createRoomSubmit.textContent = 'Creating...';
     try {
@@ -2028,7 +2052,10 @@ createRoomSubmit.addEventListener(
       if (!crGuests.checked) body.guests_allowed = false;
 
       await api.createRoom(auth.jwt, body);
-
+      if (!current()) {
+        if (auth.userId === account) showToast('Room created. Open it from My rooms when ready.');
+        return;
+      }
       dismissCreateRoom();
       // Auto-join the created room
       roomInput.value = id;
@@ -2048,11 +2075,19 @@ createRoomSubmit.addEventListener(
       crGuests.checked = true;
       roomIdEdited = false;
     } catch (e) {
+      uncertain = e instanceof ApiOutcomeUnknownError;
+      if (!current()) {
+        if (e instanceof ApiOutcomeUnknownError && auth.userId === account)
+          showToast(e.message, 8000, 'error');
+        return;
+      }
       createRoomError.textContent = e instanceof Error ? e.message : 'Failed to create room';
       createRoomError.hidden = false;
     } finally {
-      createRoomSubmit.disabled = false;
-      createRoomSubmit.textContent = 'Create Room';
+      if (mutation === createRoomMutation) {
+        createRoomSubmit.disabled = uncertain;
+        createRoomSubmit.textContent = uncertain ? 'Response not confirmed' : 'Create Room';
+      }
     }
   }, 'Could not complete room creation'),
 );
