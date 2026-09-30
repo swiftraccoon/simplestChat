@@ -17,7 +17,16 @@ import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './
 import { MediaControls } from './media-controls';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
-import { api, ApiError, ApiOutcomeUnknownError, button, el, modal, safeRasterUrl } from './ui';
+import {
+  api,
+  ApiError,
+  ApiOutcomeUnknownError,
+  button,
+  el,
+  modal,
+  safeRasterUrl,
+  validatePassword,
+} from './ui';
 import { configureSettingsDialog } from './settings-dialog';
 import { avatarColors, chatColor } from './avatar-colors';
 import { spatialLayerForRenderedWidth } from './layer-cap';
@@ -1831,11 +1840,11 @@ registerSubmit.addEventListener(
   'click',
   asyncUiAction(async () => {
     registerError.hidden = true;
-    if (registerPassword.value !== registerConfirm.value || registerPassword.value.length < 8) {
+    try {
+      validatePassword(registerPassword.value, registerConfirm.value);
+    } catch (error) {
       registerError.textContent =
-        registerPassword.value !== registerConfirm.value
-          ? 'Passwords do not match'
-          : 'Password must be at least 8 characters';
+        error instanceof Error ? error.message : 'Choose a valid password';
       registerError.hidden = false;
       return;
     }

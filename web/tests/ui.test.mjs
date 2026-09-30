@@ -269,3 +269,13 @@ for (const failure of ['decode', 'dimensions', 'context', 'output size']) {
     assert.deepEqual(state.revoked, ['blob:test-upload']);
   });
 }
+
+test('new passwords count normalized Unicode scalars and enforce raw UTF-8 bounds', async () => {
+  const { ui } = await uiFixture();
+  for (const password of ['a'.repeat(15), '😀'.repeat(128), 'é'.repeat(128)])
+    assert.doesNotThrow(() => ui.validatePassword(password, password));
+  assert.doesNotThrow(() => ui.validatePassword('e\u0301'.repeat(15), 'é'.repeat(15)));
+  for (const password of ['a'.repeat(14), '😀'.repeat(129), '\u1100\u1161\u11a8'.repeat(128)])
+    assert.throws(() => ui.validatePassword(password, password), /15 and 128 characters/);
+  assert.throws(() => ui.validatePassword('a'.repeat(15), 'b'.repeat(15)), /do not match/);
+});

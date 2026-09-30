@@ -14,6 +14,7 @@ import {
   modal,
   rasterUpload,
   safeRasterUrl,
+  validatePassword,
 } from './ui';
 
 interface Options {
@@ -379,11 +380,11 @@ export class CommunityUI {
       if (!stillCurrent() || !security.settings?.password_enabled) return;
       view.body.append(el('h3', 'Change password'));
       view.body.append(el('p', 'Changing your password signs out all sessions.', 'setting-hint'));
-      const current = input('', 'password', 128);
+      const current = input('', 'password', 512);
       current.autocomplete = 'current-password';
-      const password = input('', 'password', 128);
+      const password = input('', 'password', 512);
       password.autocomplete = 'new-password';
-      const confirm = input('', 'password', 128);
+      const confirm = input('', 'password', 512);
       confirm.autocomplete = 'new-password';
       passwordFields.push(current, password, confirm);
       view.body.append(
@@ -483,11 +484,11 @@ export class CommunityUI {
     const view = modal('Recover account');
     const email = input('', 'email', 254);
     email.autocomplete = 'username';
-    const key = input('', 'password', 128);
+    const key = input('', 'password', 512);
     key.autocomplete = 'off';
-    const password = input('', 'password', 128);
+    const password = input('', 'password', 512);
     password.autocomplete = 'new-password';
-    const confirm = input('', 'password', 128);
+    const confirm = input('', 'password', 512);
     confirm.autocomplete = 'new-password';
     view.body.append(
       el(
@@ -1119,16 +1120,6 @@ export class CommunityUI {
     node.textContent = error instanceof Error ? error.message : 'Unable to complete action';
     node.hidden = false;
   }
-}
-
-function validatePassword(password: string, confirmation: string): void {
-  const length = new TextEncoder().encode(password).length;
-  if (length < 8 || length > 128) throw new Error('Use a password between 8 and 128 bytes');
-  // The credential policy intentionally rejects C0/C1 control characters.
-  // eslint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f\u007f-\u009f]/.test(password))
-    throw new Error('Passwords cannot contain control characters');
-  if (password !== confirmation) throw new Error('New passwords do not match');
 }
 
 export function roomLink(id: string): string {

@@ -178,3 +178,6 @@ Manual checks remain necessary for branded Safari/Firefox, real permissions/devi
 screen sharing, keyboard/screen-reader access, mobile browsers, and picture-in-
 picture/fullscreen support. See [testing](../docs/testing.md) and
 [performance](../docs/performance.md).
+
+Account password selection counts 15–128 Unicode scalar characters after NFC
+normalization, with a 512-byte raw UTF-8 limit; confirmation uses the same normalization.

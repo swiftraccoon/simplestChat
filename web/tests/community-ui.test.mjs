@@ -241,7 +241,7 @@ test('a late ban result retires only its old dialog and cannot dismiss a newer p
   assert.equal(currentView.isConnected, false);
 });
 
-test('recovery validates UTF-8 byte boundaries, confirmation, and control characters before sending', async () => {
+test('recovery validates normalized character and byte bounds before sending', async () => {
   const f = await fixture();
   f.community.openRecovery();
   const view = dialog(f, 'Recover account');
@@ -249,12 +249,12 @@ test('recovery validates UTF-8 byte boundaries, confirmation, and control charac
   const confirm = control(view, 'Confirm new password');
   const submit = action(view, 'Reset password with key');
   for (const [value, confirmation, error] of [
-    ['1234567', '1234567', /8 and 128 bytes/],
-    ['a'.repeat(129), 'a'.repeat(129), /8 and 128 bytes/],
-    ['é'.repeat(65), 'é'.repeat(65), /8 and 128 bytes/],
-    ['password1', 'password2', /do not match/],
-    ['password\t', 'password\t', /control characters/],
-    ['password\u0085', 'password\u0085', /control characters/],
+    ['1234567', '1234567', /15 and 128 characters/],
+    ['a'.repeat(129), 'a'.repeat(129), /15 and 128 characters/],
+    ['😀'.repeat(129), '😀'.repeat(129), /15 and 128 characters/],
+    ['long-password-one', 'long-password-two', /do not match/],
+    ['long-password-123\t', 'long-password-123\t', /control characters/],
+    ['long-password-123\u0085', 'long-password-123\u0085', /control characters/],
   ]) {
     password.value = value;
     confirm.value = confirmation;
@@ -285,14 +285,15 @@ test('recovery validates UTF-8 byte boundaries, confirmation, and control charac
   assert.match(f.state.notifications[0], /Password reset/);
 });
 
-test('recovery accepts an eight-byte multibyte password without altering its characters', async () => {
+test('recovery accepts normalized equivalent confirmation without altering the request', async () => {
   const f = await fixture();
   f.community.openRecovery();
   const view = dialog(f, 'Recover account');
-  control(view, 'New password').value = control(view, 'Confirm new password').value = 'éééé';
+  control(view, 'New password').value = 'e\u0301'.repeat(15);
+  control(view, 'Confirm new password').value = 'é'.repeat(15);
   action(view, 'Reset password with key').click();
   await flush();
-  assert.equal(f.state.requests[0][3].new_password, 'éééé');
+  assert.equal(f.state.requests[0][3].new_password, 'e\u0301'.repeat(15));
 });
 
 test('profile text remains text and remote avatar URLs are not rendered', async () => {
@@ -530,7 +531,7 @@ for (const changedIdentity of [false, true]) {
     const view = dialog(f, 'Account');
     control(view, 'Current password').value = 'current-password';
     control(view, 'New password').value = control(view, 'Confirm new password').value =
-      'new-password';
+      'new-long-password';
     const pending = deferred();
     f.state.handle = () => pending.promise;
     action(view, 'Change password').click();
@@ -563,7 +564,7 @@ test('password, profile and passkey changes share ownership and stale controls c
   const change = action(account, 'Change password');
   control(account, 'Current password').value = 'old-password';
   control(account, 'New password').value = control(account, 'Confirm new password').value =
-    'new-password';
+    'new-long-password';
   const pending = deferred();
   f.state.handle = () => pending.promise;
   change.click();

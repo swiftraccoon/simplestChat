@@ -21,6 +21,18 @@ import {
 import { decodeRoomSettings } from './protocol-validation';
 import { type Decoder, isRecord } from './validation';
 
+/** Account password selection mirrors the server's NFC and Unicode-scalar policy. */
+export function validatePassword(password: string, confirmation: string): void {
+  const normalized = password.normalize('NFC');
+  const length = Array.from(normalized).length;
+  if (new TextEncoder().encode(password).length > 512 || length < 15 || length > 128)
+    throw new Error('Use a password between 15 and 128 characters (maximum 512 UTF-8 bytes)');
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(normalized))
+    throw new Error('Passwords cannot contain control characters');
+  if (normalized !== confirmation.normalize('NFC')) throw new Error('New passwords do not match');
+}
+
 /** Small, text-safe controls shared by the community screens. */
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
