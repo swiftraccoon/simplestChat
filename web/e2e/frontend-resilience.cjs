@@ -288,6 +288,21 @@ async function run() {
     );
     assert.equal(invited.redemptions.length, 1);
     assert.equal(await invited.page.evaluate(() => window.__captureRequests), 0);
+    await invited.page
+      .locator('#room-screen')
+      .evaluate((node) => node.style.setProperty('--roster-width', '160px'));
+    const marker = invited.page.locator('#classic-users-panel .identity-badge').first();
+    await marker.waitFor({ state: 'visible' });
+    assert.equal(
+      await marker.evaluate((node) => {
+        const markerBounds = node.getBoundingClientRect();
+        const rowBounds = node.closest('li').getBoundingClientRect();
+        return markerBounds.left >= rowBounds.left && markerBounds.right <= rowBounds.right + 1;
+      }),
+      true,
+      'identity marker remains visible in the minimum-width roster',
+    );
+    await invited.page.screenshot({ path: path.join(artifacts, 'identity-roster.png') });
     report.checks.push(
       'An invitation redeemed before signaling connects joins exactly once when ready',
     );

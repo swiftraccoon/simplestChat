@@ -1095,9 +1095,17 @@ async function setRole(owner, name, role) {
             (o) => o.text.includes('E2E Owner') && o.text.includes('(1)'),
           ),
         );
-        await member
-          .getByRole('combobox', { name: 'Conversation', exact: true })
-          .selectOption({ label: 'E2E Owner (1)' });
+        const ownerId = await member
+          .locator('[data-participant-id]')
+          .filter({
+            has: member.getByRole('button', { name: 'Actions for E2E Owner', exact: true }),
+          })
+          .getAttribute('data-participant-id');
+        assert.ok(ownerId);
+        const conversations = member.getByRole('combobox', { name: 'Conversation', exact: true });
+        await conversations.selectOption(ownerId);
+        const label = await conversations.locator(`option[value="${ownerId}"]`).textContent();
+        assert.match(label, /^#[0-9a-f]{8} · account · E2E Owner$/);
         await visible(member, 'Private owner hello');
         await visible(owner, 'Private owner hello');
         assert.equal(

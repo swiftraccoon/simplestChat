@@ -180,7 +180,7 @@ async function check(sender, receiver, name, dropSend, privateMessage = false) {
     const choice = await receiver
       .getByRole('combobox', { name: 'Conversation', exact: true })
       .locator('option')
-      .evaluateAll((nodes) => nodes.find((node) => node.textContent.startsWith('Sender'))?.value);
+      .evaluateAll((nodes) => nodes.find((node) => node.textContent.includes(' · Sender'))?.value);
     assert.equal(typeof choice, 'string');
     await receiver
       .getByRole('combobox', { name: 'Conversation', exact: true })

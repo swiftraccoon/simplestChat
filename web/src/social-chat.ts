@@ -2,7 +2,17 @@ import type { TelemetryHandler, TelemetryOutcome } from './telemetry-types';
 import type { RoomClient } from './room';
 import type { ChatEntry, ChatStyle, ChatStyleKind, ServerMessage } from './protocol';
 import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
-import { api, asyncButton, button, busy, el, field, modal } from './ui';
+import {
+  api,
+  asyncButton,
+  button,
+  busy,
+  el,
+  field,
+  identityBadge,
+  identityLabel,
+  modal,
+} from './ui';
 import { CHAT_PALETTE, chatColor } from './avatar-colors';
 
 /** How a viewer sees message times: on hover, or always in one format. */
@@ -997,6 +1007,7 @@ export class SocialChat {
       status,
       error,
       local,
+      this.identityStatus(participantId),
       mentioned,
       !!message.retry,
       this.preferences.timestamps,
@@ -1022,18 +1033,22 @@ export class SocialChat {
         },
         'sender chat-sender-button',
       );
-      node.append(sender);
+      sender.setAttribute(
+        'aria-label',
+        `${local ? 'You' : participantName}. Participant ID: ${participantId}`,
+      );
+      node.append(sender, identityBadge(participantId, this.identityStatus(participantId)));
     }
     if (message.replyTo) {
       const reply = message.replyTo;
       const quote = button(
         this.isIgnored(reply.participantId)
           ? 'Reply to a message you have hidden'
-          : `${reply.participantId === this.store.localId ? 'You' : reply.participantName}: ${reply.excerpt}`,
+          : `${reply.participantId === this.store.localId ? 'You' : reply.participantName} (${identityLabel(reply.participantId, this.identityStatus(reply.participantId))}): ${reply.excerpt}`,
         () => this.showMessage(reply.messageId),
         'msg-reply',
       );
-      quote.title = 'Show the message this answers';
+      quote.title = `Show the message this answers. Participant ID: ${reply.participantId}`;
       node.append(quote);
     }
     const text = el('div', undefined, 'msg-text');
@@ -1161,7 +1176,7 @@ export class SocialChat {
     this.replyBar.replaceChildren(
       el(
         'span',
-        `Replying to ${message.participantId === this.store.localId ? 'yourself' : message.participantName}`,
+        `Replying to ${message.participantId === this.store.localId ? 'yourself' : message.participantName} (${identityLabel(message.participantId, this.identityStatus(message.participantId))})`,
         'reply-bar-label',
       ),
       el('span', excerpt(message.content), 'reply-bar-excerpt'),
@@ -1200,6 +1215,11 @@ export class SocialChat {
     return message.chatStyle ?? current ?? AUTOMATIC_LOOK;
   }
 
+  private identityStatus(id: string): boolean | undefined {
+    if (id === this.store.localId) return Boolean(this.options.getToken?.());
+    return this.options.getRoom()?.getParticipants().get(id)?.authenticated;
+  }
+
   private updateBadges(): void {
     const total = [...this.store.unread.values()].reduce((sum, count) => sum + count, 0);
     document.title = total ? `(${Math.min(total, 999)}) simplestChat` : 'simplestChat';
@@ -1222,8 +1242,12 @@ export class SocialChat {
       const name =
         option.value === 'public'
           ? 'Public chat'
-          : `${this.store.names.get(option.value) ?? 'Conversation'}${this.options.getRoom()?.getParticipants().has(option.value) ? '' : ' · offline'}`;
+          : `${identityLabel(option.value, this.identityStatus(option.value))} · ${this.store.names.get(option.value) ?? 'Conversation'}${this.options.getRoom()?.getParticipants().has(option.value) ? '' : ' · offline'}`;
       option.textContent = `${name}${unread ? ` (${unread})` : ''}`;
+      if (option.value !== 'public') {
+        option.title = `Participant ID: ${option.value}`;
+        option.setAttribute('aria-label', `${name}. Participant ID: ${option.value}`);
+      }
     }
   }
 

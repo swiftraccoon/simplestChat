@@ -1426,14 +1426,17 @@ test('a reply quotes what it answers, travels with the send, and a quote finds t
       .find((node) => node.getAttribute('aria-label') === 'Reply');
   replyButton().click();
   assert.equal(f.chat.replyBar.hidden, false);
-  assert.match(f.chat.replyBar.textContent, /^Replying to AliceWhere are the slides\?/);
+  assert.match(
+    f.chat.replyBar.textContent,
+    /^Replying to Alice \(#alice · ID\)Where are the slides\?/,
+  );
   f.chat.input.value = 'Linked above';
   f.chat.send();
   assert.equal(f.state.sent.at(-1)[0], 'public');
   assert.equal(f.state.sent.at(-1).at(-1), 'server-1', 'the send names the message it answers');
   assert.equal(
     rows(f).at(-1).querySelector('.msg-reply').textContent,
-    'Alice: Where are the slides?',
+    'Alice (#alice · ID): Where are the slides?',
   );
   assert.equal(f.chat.replyBar.hidden, true, 'sending clears the reply');
   replyButton().click();
@@ -1484,7 +1487,7 @@ test('a reply quotes what it answers, travels with the send, and a quote finds t
     rows(f)
       .find((node) => node.querySelector('.msg-text').textContent === 'yes you')
       .querySelector('.msg-reply').textContent,
-    'You: q',
+    'You (#local · guest): q',
     'a quote of your own message says You, like the rest of the chat',
   );
 });
@@ -1657,4 +1660,37 @@ test("a peer's typing shows in its own conversation only and expires on its own"
   } finally {
     Date.now = realNow;
   }
+});
+
+test('same-looking display names retain distinct sender and PM identities', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const first = '11111111-1111-4111-8111-111111111111';
+  const second = '22222222-2222-4222-8222-222222222222';
+  f.participants.set(first, { id: first, name: 'Sam', authenticated: true });
+  f.participants.set(second, { id: second, name: 'Sam', authenticated: false });
+  f.chat.receive(entry('one', { participantId: first, participantName: 'Sam' }));
+  f.chat.receive(entry('two', { participantId: second, participantName: 'Sam' }));
+  const messages = rows(f);
+  assert.equal(messages[0].querySelector('.identity-badge').textContent, '#11111111 · account');
+  assert.equal(messages[1].querySelector('.identity-badge').textContent, '#22222222 · guest');
+  assert.match(
+    messages[0].querySelector('.chat-sender-button').getAttribute('aria-label'),
+    new RegExp(first),
+  );
+  f.chat.openPrivate(first, 'Sam');
+  f.chat.openPrivate(second, 'Sam');
+  assert.match(
+    f.chat.select.options.find((option) => option.value === first).textContent,
+    /^#11111111 · account/,
+  );
+  assert.match(
+    f.chat.select.options.find((option) => option.value === second).textContent,
+    /#22222222 · guest/,
+  );
+  f.participants.delete(first);
+  f.chat.render();
+  const offline = f.chat.select.options.find((option) => option.value === first);
+  assert.match(offline.textContent, /#11111111 · ID.*offline/);
+  assert.equal(offline.title, `Participant ID: ${first}`);
 });

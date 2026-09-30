@@ -632,3 +632,34 @@ textarea:focus-visible {
     gap: 0.5rem;
   }
 }
+
+/* Separate trusted identity markers from mutable display names. */
+.identity-badge {
+  display: inline-block;
+  margin-inline-start: 0.4em;
+  padding: 0 0.25em;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: normal;
+  font-family: monospace;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
+.chat-msg.grouped .identity-badge {
+  display: none;
+}
+
+/* Keep the trusted marker visible even when a long name is truncated in a narrow roster. */
+#classic-users-panel .classic-user-list li,
+#participant-list li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 30px;
+  row-gap: 0.15rem;
+}
+#classic-users-panel li > .identity-badge,
+#participant-list li > .identity-badge {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-inline-start: 0;
+}

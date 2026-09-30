@@ -179,5 +179,12 @@ screen sharing, keyboard/screen-reader access, mobile browsers, and picture-in-
 picture/fullscreen support. See [testing](../docs/testing.md) and
 [performance](../docs/performance.md).
 
+Display names are mutable labels, not proof of identity. Rosters, message senders,
+replies and PM targets show a discriminator derived from the server-issued participant
+UUID; full IDs are available through accessible sender labels and hover details.
+An account badge indicates the current participant authenticated to this server,
+not a verified real-world identity. Guests keep their ID through reconnect, while
+account IDs are stable. Offline message identities remain distinguishable by ID.
+
 Account password selection counts 15–128 Unicode scalar characters after NFC
 normalization, with a 512-byte raw UTF-8 limit; confirmation uses the same normalization.
