@@ -1169,7 +1169,6 @@ def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the st
     )
     _ = image_identity(runner, old_image, old_revision)
     new_image = image_identity(runner, string_value(staged["serverImage"]), manifest["revision"])
-    require(old["serverImage"] != new_image, "This image is already selected")
     source = SOURCES / manifest["revision"]
     require(
         (source / ".git").is_dir(),
@@ -1205,6 +1204,10 @@ def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the st
     require(packaged_migrations(runner, new_image) == packaged, "Candidate migration mismatch")
     reviewed_environment = (
         None if candidate_env is None else reviewed_candidate_environment(candidate_env, report)
+    )
+    require(
+        old["serverImage"] != new_image or bool(report.get("environmentChanges")),
+        "This image is already selected and no reviewed configuration changes were supplied",
     )
     preview, preview_env = candidate_selection(
         runner, new_image, old, reviewed_environment=reviewed_environment

@@ -278,7 +278,21 @@ image to be running on the same database container with the candidate's
 ledger, and records `interruptionStartedAt`/`FinishedAt` in its `outcome.json`
 (about 10 s on 2026-09-28). A failed launcher keeps the new selection and the
 stopped containers for inspection: the schema may already have moved, so there
-is no automatic rollback; fix the cause and run the maintenance release again.
+is no automatic rollback. Do not rerun `maintain` against stopped services: its
+preflight expects a live application. Inspect the failed release and launcher
+`outcome.json`, selected configuration, migration ledger and retained migration
+container. After resolving the recorded cause and establishing that no migration
+is still running, use the explicit bounded launcher command in
+[PUBLIC.md](PUBLIC.md#deploy-explicitly) to finish the selected deployment. The
+launcher refuses a retained migration container until its state has been reviewed
+and recovered. Preserve its evidence; deleting the journal or blindly removing
+containers does not establish a safe retry. A later successful launcher does not
+change the original failed release outcome.
+
+A settings-only maintenance can reuse the selected image when the candidate
+environment has validated changes. An identical image and unchanged configuration
+are refused before backup or interruption.
+
 Pass `--install-helpers` whenever `release_public.py` changed, as for any release.
 
 ## Reboots and user recovery

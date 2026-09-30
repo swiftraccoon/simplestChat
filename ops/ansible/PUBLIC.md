@@ -262,7 +262,9 @@ needed, and run the explicit deployment command again. This is a maintenance
 deployment, not a rolling upgrade. Sizing and other `app.env` changes that keep
 the secret and identity lines need no `public.yml` run: a maintenance release
 (`build/deploy.py --maintenance`, [RELEASES.md](RELEASES.md)) re-renders the
-file from the host's facts and installs it with the image.
+file from the host's facts and installs it with the image. A validated settings
+change can reuse the selected image; unchanged image and settings are rejected
+before interruption.
 
 Persistent data lives under `/srv/simplestchat-public`: `postgres` contains the
 database, and `caddy-data`/`caddy-config` retain certificate and proxy state.

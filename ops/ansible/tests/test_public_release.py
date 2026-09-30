@@ -913,6 +913,38 @@ class PublicReleaseTests(unittest.TestCase):
         self.assertFalse(candidate.exists(), "the candidate is consumed by its installation")
         self.assertEqual(self.runner.app_image, NEW_IMAGE)
 
+    def test_maintenance_accepts_same_image_only_with_reviewed_setting_changes(self) -> None:
+        """A resize need not rebuild the app; identical selections stop before interruption."""
+        staged = self.stage()
+        (self.root / "sources" / REVISION / ".git").mkdir(parents=True)
+        for filename in ("compose.public.yml", "app.env"):
+            path = self.config / filename
+            _ = path.write_text(path.read_text().replace(OLD_IMAGE, NEW_IMAGE))
+        _ = (self.config / "images.json").write_text(
+            json.dumps({"revision": REVISION, "serverImage": NEW_IMAGE})
+        )
+        self.runner.app_image = NEW_IMAGE
+        candidate = self.config / "app.env.candidate"
+        _ = candidate.write_text((self.config / "app.env").read_text())
+        report: JsonObject = {}
+        with patch.object(public, "SOURCES", self.root / "sources"):
+            with self.assertRaisesRegex(public.ReleaseError, "no reviewed configuration changes"):
+                _ = public.prepare_maintenance(
+                    self.runner, self.manifest, staged, report, candidate_env=candidate
+                )
+            self.assertEqual(self.maintenance_calls(), [])
+            _ = candidate.write_text(candidate.read_text() + "MEDIA_WORKERS=3\n")
+            plan = public.prepare_maintenance(
+                self.runner, self.manifest, staged, report, candidate_env=candidate
+            )
+        public.launch_maintenance(self.runner, report)
+        public.finish_maintenance(self.runner, plan, report)
+        self.assertEqual(self.runner.app_image, NEW_IMAGE)
+        self.assertEqual(report["environmentChanges"], ["MEDIA_WORKERS"])
+        self.assertEqual(report["phase"], "complete")
+        self.assertIn("MEDIA_WORKERS=3\n", (self.config / "app.env").read_text())
+        self.assertFalse(candidate.exists())
+
     def test_maintenance_refuses_a_candidate_env_that_changes_identity_before_any_stop(
         self,
     ) -> None:
