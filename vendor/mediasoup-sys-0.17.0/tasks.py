@@ -41,6 +41,14 @@ PIP_RUFF_DIR = f"{MEDIASOUP_OUT_DIR}/pip_ruff"
 NUM_CORES = (
     len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
 )
+# Container CPU quotas are not reflected by sched_getaffinity. The maintained
+# security runner supplies a finite compilation budget without changing normal
+# production builds. Reject malformed overrides instead of guessing.
+if os.getenv("MEDIASOUP_BUILD_JOBS") is not None:
+    build_jobs = os.environ["MEDIASOUP_BUILD_JOBS"]
+    if not build_jobs.isascii() or not build_jobs.isdecimal() or not 1 <= int(build_jobs) <= 64:
+        raise RuntimeError("MEDIASOUP_BUILD_JOBS must be an integer from 1 to 64")
+    NUM_CORES = min(NUM_CORES or 1, int(build_jobs))
 PYTHON = os.getenv("PYTHON") or sys.executable
 MESON = os.getenv("MESON") or f"{PIP_MESON_NINJA_DIR}/bin/meson"
 MESON_VERSION = os.getenv("MESON_VERSION") or "1.12.0"
@@ -544,10 +552,9 @@ def test_asan_undefined(ctx):
             pty=PTY_SUPPORTED,
             shell=SHELL,
             # Exit with error if there are issues.
-            # NOTE: Ignore well known UBSan errors in OpenSSL.
             env={
                 **os.environ,
-                "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1:suppressions=ubsan_suppressions.txt",
+                "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1",
             },
         )
 
@@ -588,17 +595,8 @@ def fuzzer(ctx):
 
 @task
 def fuzzer_run_all(ctx):
-    """
-    Run all fuzzer cases
-    """
-
-    with cd_worker():
-        ctx.run(
-            f'LSAN_OPTIONS=verbosity=1:log_threads=1 "{BUILD_DIR}/mediasoup-worker-fuzzer" -artifact_prefix=fuzzer/reports/ -max_len=1400 fuzzer/new-corpus deps/webrtc-fuzzer-corpora/corpora/stun-corpus deps/webrtc-fuzzer-corpora/corpora/rtp-corpus deps/webrtc-fuzzer-corpora/corpora/rtcp-corpus',
-            echo=True,
-            pty=PTY_SUPPORTED,
-            shell=SHELL,
-        )
+    """Reject the upstream unbounded task and its absent external corpora."""
+    raise RuntimeError("Use build/native_security.py with reviewed corpus and finite limits")
 
 
 # The upstream container Dockerfiles are absent from this crate snapshot. Keep

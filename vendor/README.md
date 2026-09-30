@@ -299,3 +299,13 @@ Remove each patch as soon as an official compatible release contains its fix.
 When updating either archive, re-verify its crates.io checksum, review the
 complete source diff, update this document and `Cargo.lock`, and run the full
 mediasoup and application test suites.
+
+## Maintained native security tasks
+
+Three narrow `tasks.py` changes support the native security runner:
+`MEDIASOUP_BUILD_JOBS` accepts 1–64 and bounds compiler concurrency in test
+containers; UBSan stops on findings without referencing the absent upstream
+suppression file; and `fuzzer-run-all` refuses its absent external corpora and
+unbounded workload. Existing sanitizer and fuzzer build targets remain in use.
+See the [native security guide](../docs/native-security.md) for reviewed inputs,
+pinned tooling, sandbox limits and coverage boundaries.

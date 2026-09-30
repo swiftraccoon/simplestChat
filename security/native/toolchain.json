@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "llvmVersion": "23.1.2",
+  "release": "https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.2",
+  "verifiedAt": "2026-09-30",
+  "baseImage": "docker.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80",
+  "platforms": {
+    "linux-aarch64": {
+      "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.2/LLVM-23.1.2-Linux-ARM64.tar.zst",
+      "sha256": "143308c82f8e21707be7fdc135d5e0ddd9a46a377ca9f38befc716fd842cb59b",
+      "bytes": 1095389618,
+      "format": "tar.zst",
+      "directory": "LLVM-23.1.2-Linux-ARM64"
+    },
+    "linux-x86_64": {
+      "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.2/LLVM-23.1.2-Linux-X64.tar.zst",
+      "sha256": "6382de1c1a210ce5a5cc49d18bc8444d137742e7cbf9b19f4ae602bb1ab52534",
+      "bytes": 1183587483,
+      "format": "tar.zst",
+      "directory": "LLVM-23.1.2-Linux-X64"
+    }
+  }
+}

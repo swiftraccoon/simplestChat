@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "description": "Original synthetic format fixtures for finite local native parser replay. No captured user traffic or known exploit inputs. Each family runs independently.",
+  "cases": [
+    {
+      "id": "stun-binding-empty",
+      "family": "stun",
+      "path": "corpus/stun/binding-empty.hex",
+      "sha256": "e9edc0c9df1431ebcdc91bc0b9ee98b90fc3e68a8f706f6cb05ae44648935e91",
+      "bytes": 20,
+      "provenance": "RFC 8489 section 5, synthetic Binding request header with no attributes."
+    },
+    {
+      "id": "stun-header-short",
+      "family": "stun",
+      "path": "corpus/stun/header-short.hex",
+      "sha256": "bf5e8ffa51a9e748985800c1d3d7f1a2a6ae7435136593ca8d9637e3f87c699c",
+      "bytes": 4,
+      "provenance": "Synthetic incomplete header rejection; no exploit or captured traffic."
+    },
+    {
+      "id": "dtls-handshake-empty",
+      "family": "dtls",
+      "path": "corpus/dtls/handshake-empty.hex",
+      "sha256": "d5f49713c935a348e0ad02220652ad96c9f553003519183e5d3e36a463fe1787",
+      "bytes": 13,
+      "provenance": "RFC 6347 section 4.1, synthetic DTLS record with empty handshake body."
+    },
+    {
+      "id": "dtls-alert-close",
+      "family": "dtls",
+      "path": "corpus/dtls/alert-close.hex",
+      "sha256": "e083202581a86d5fd2bb227e592854b23f5189b73f7a98d084c346cfef445ed9",
+      "bytes": 15,
+      "provenance": "Synthetic warning close_notify record; no authenticated peer or captured key material."
+    },
+    {
+      "id": "sctp-common-header",
+      "family": "sctp",
+      "path": "corpus/sctp/common-header.hex",
+      "sha256": "021097515f056bfd37a0c4736201ca69f0518cdbc3417e8e2fd46db2b6577e9d",
+      "bytes": 12,
+      "provenance": "RFC 9260 section 3.1, synthetic common header with no chunks."
+    },
+    {
+      "id": "sctp-init-header",
+      "family": "sctp",
+      "path": "corpus/sctp/init-header.hex",
+      "sha256": "c6402e0317a6d08d8bbd008e5eed6ef12e72d8c864d7b8b64def315749e1538f",
+      "bytes": 32,
+      "provenance": "RFC 9260 section 3.3.2, synthetic INIT fields and zero checksum."
+    },
+    {
+      "id": "rtp-audio-minimal",
+      "family": "rtp",
+      "path": "corpus/rtp/audio-minimal.hex",
+      "sha256": "d06ae8cb1e489562201949735a2c08139d658b808fa448aba3cbb8aef942f0eb",
+      "bytes": 15,
+      "provenance": "RFC 3550 section 5.1, synthetic RTP audio header and small Opus payload."
+    },
+    {
+      "id": "rtp-header-short",
+      "family": "rtp",
+      "path": "corpus/rtp/header-short.hex",
+      "sha256": "e040fa3c848fcd882180c9953d4fda7c8e232239dfd72dec603b3269a23cb08a",
+      "bytes": 4,
+      "provenance": "Synthetic incomplete RTP header rejection."
+    },
+    {
+      "id": "rtcp-receiver-empty",
+      "family": "rtcp",
+      "path": "corpus/rtcp/receiver-empty.hex",
+      "sha256": "40f7f5c8da154df0afaf50aa6b86702e60af67c09fbd7c544c88922cca3162c2",
+      "bytes": 8,
+      "provenance": "RFC 3550 section 6.4.2, synthetic receiver report with zero report blocks."
+    },
+    {
+      "id": "rtcp-sender-empty",
+      "family": "rtcp",
+      "path": "corpus/rtcp/sender-empty.hex",
+      "sha256": "37a7588b75b18816dda79e250be357d313e98aebf7eb2b0932c16825102b732a",
+      "bytes": 28,
+      "provenance": "RFC 3550 section 6.4.1, synthetic sender report with zero report blocks."
+    },
+    {
+      "id": "codecs-opus-silence",
+      "family": "codecs",
+      "path": "corpus/codecs/opus-silence.hex",
+      "sha256": "e472bbfc3250acf87bfacdc4b112e39e9c7d863b6e8806baca718f57d17a5bb6",
+      "bytes": 3,
+      "provenance": "Synthetic common Opus silence packet; each existing codec parser may accept or reject its own interpretation."
+    },
+    {
+      "id": "codecs-descriptor-zero",
+      "family": "codecs",
+      "path": "corpus/codecs/descriptor-zero.hex",
+      "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "bytes": 4,
+      "provenance": "Synthetic zero descriptor boundary across existing codec parsers."
+    },
+    {
+      "id": "utils-ascending-bytes",
+      "family": "utils",
+      "path": "corpus/utils/ascending-bytes.hex",
+      "sha256": "be45cb2605bf36bebde684841a28f0fd43c69850a3dce5fedba69928ee3a8991",
+      "bytes": 16,
+      "provenance": "Original synthetic bounded integer and byte utility fixture."
+    },
+    {
+      "id": "utils-ascii-token",
+      "family": "utils",
+      "path": "corpus/utils/ascii-token.hex",
+      "sha256": "9f3dca2d0148268b0a2756b379263f35c1d3069c3b218a7293080f7cd1448c95",
+      "bytes": 11,
+      "provenance": "Original synthetic ASCII test-canary value, never a credential."
+    },
+    {
+      "id": "rtp-unit-packet1",
+      "family": "rtp",
+      "path": "corpus/rtp/unit-packet1.hex",
+      "sha256": "6b18db5b86ed63ff821ac3596dead67acecc9d7ae20123f72b7f46e19814c7ab",
+      "bytes": 53,
+      "provenance": "Original synthetic replacement for missing packet1.raw, matching the unchanged header, extension, payload-size and padding assertions in worker/test/src/RTC/RTP/TestPacket.cpp. Payload bytes are zero, not captured media."
+    },
+    {
+      "id": "rtp-unit-packet2",
+      "family": "rtp",
+      "path": "corpus/rtp/unit-packet2.hex",
+      "sha256": "89a9fd28e7a7dba7b3601f77aa6c2cc4c8d2ef3d93e7b823c92c8a478145bbfb",
+      "bytes": 239,
+      "provenance": "Original synthetic replacement for missing packet2.raw, matching the unchanged header, extension, payload-size and padding assertions in worker/test/src/RTC/RTP/TestPacket.cpp. Payload bytes are zero, not captured media."
+    },
+    {
+      "id": "rtp-unit-packet3",
+      "family": "rtp",
+      "path": "corpus/rtp/unit-packet3.hex",
+      "sha256": "001a4543ae3112011db98f3637c766213cfa64501f29deb120a387e1c278e602",
+      "bytes": 101,
+      "provenance": "Original synthetic replacement for missing packet3.raw, matching the unchanged header, extension, payload-size and padding assertions in worker/test/src/RTC/RTP/TestPacket.cpp. Payload bytes are zero, not captured media."
+    }
+  ]
+}
