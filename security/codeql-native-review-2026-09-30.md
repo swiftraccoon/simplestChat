@@ -13,6 +13,27 @@ against the maintained manifest at the separately recorded
 worker source tree. This is source review evidence, not another runtime test or
 a claim that the dependencies contain no defects.
 
+The OpenSSL 3.5.9 update required a second source revalidation at committed main
+revision `163f80876c76b859a41d5fe0d0fb39ef6879a7b7`. The complete vendor manifest
+changed only the maintained hashes for the worker's `build.rs` and `meson.build`:
+their OpenSSL minimum and explanatory comments changed, while compilation options
+and the Abseil, FlatBuffers and libuv inputs remained unchanged. The manifest hash
+changed from `1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b`
+to `612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8`.
+
+The offline source reader authenticated six complete archives and their declared
+patch/overlay inputs again. All 32 primary locations retained identical complete
+file, archive, wrap, patch and overlay digests; the 24 supporting files also remain
+unchanged. The JSON revalidation record retains the two changed maintained hashes
+and every supporting-file digest. The arithmetic bounds, internal tagged layouts,
+and intended filesystem operations explained individually below do not depend on
+OpenSSL. Their rationales, source ranges, query/message identities, severity,
+owners and expiry therefore remain unchanged. Only the full-manifest binding and
+derived fingerprints were replaced in the reviews and their 32 scoped exceptions;
+old fingerprints are no longer accepted. This is authenticated source review,
+not a claim that a new CodeQL analysis has run. A new result must still match every
+recorded identity field before the repository gate permits it.
+
 ## Source verification
 
 The native report uses generated Meson paths that are intentionally absent from

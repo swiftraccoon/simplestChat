@@ -9,6 +9,7 @@ import json
 import tarfile
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, override
 from unittest.mock import patch
@@ -19,6 +20,7 @@ from test_support import ROOT
 import bounded_process
 import security_codeql_sources as sources
 import security_codeql_triage as triage
+import security_policy
 import security_vendor as vendor
 from release_json import JsonObject, array_value, decode_json, object_value
 from security_tools import ToolError
@@ -227,9 +229,40 @@ class NativeSourceTests(unittest.TestCase):
         )
         entries = [object_value(value) for value in array_value(raw["alerts"])]
         self.assertEqual({triage.positive(item["number"]) for item in entries}, set(range(70, 102)))
+        manifest_sha = vendor.sha256((ROOT / sources.MANIFEST).read_bytes())
+        previous_sha = object_value(raw["manifestRevalidation"])["previousManifestSha256"]
+        reviews = security_policy.read_exceptions(today=date.fromisoformat(str(raw["reviewed"])))
+        identity_fields = {
+            "rule",
+            "toolVersion",
+            "path",
+            "region",
+            "messageSha256",
+            "sourceSha256",
+            "sourceArchiveSha256",
+            "sourceManifestSha256",
+            "sourceWrapSha256",
+            "sourcePatchSha256",
+            "sourceOverlaySha256",
+            "sourceMember",
+        }
         for item in entries:
             with self.subTest(number=item["number"]):
                 self.assertTrue(triage.false_positive(item, "swiftraccoon/simplestChat"))
+                self.assertEqual(item["sourceManifestSha256"], manifest_sha)
+                identity = {key: value for key, value in item.items() if key in identity_fields}
+                self.assertEqual(item["fingerprint"], "codeql:" + triage.digest(identity))
+                self.assertTrue(
+                    security_policy.permitted(
+                        reviews, "codeql", str(item["fingerprint"]), str(item["scope"])
+                    )
+                )
+                identity["sourceManifestSha256"] = previous_sha
+                self.assertFalse(
+                    security_policy.permitted(
+                        reviews, "codeql", "codeql:" + triage.digest(identity), str(item["scope"])
+                    )
+                )
                 for field in (
                     "sourceSha256",
                     "sourceArchiveSha256",

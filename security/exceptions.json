@@ -943,7 +943,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:4d2152c58c24c39283ca0ae31e451af31fca2d181cf4bdde1c1294374dd84e7d",
+      "fingerprint": "codeql:a39318b2695485564932ddadca6b5915364636eedb329f8919606e5b2aa1bdce",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:657:657:27:73",
       "owner": "swiftraccoon",
       "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
@@ -953,7 +953,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:ad0d23018a17cd3b4fe4a2f86bc19d6f586f8d9a745f4e1e26ec41aca9e0c2c5",
+      "fingerprint": "codeql:b9b8eb5eaa804d8ed7cd3f0fba328aea4a82853172899e1eca2c0e74ebf47916",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:664:664:50:76",
       "owner": "swiftraccoon",
       "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
@@ -963,7 +963,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:9c4bded8ec7908cd3f829487c2fb67dfaa94cdded31f9da50f5ffa4a2d414482",
+      "fingerprint": "codeql:27cc3310fd6e1aaffbc8ce2abf59bc37d196bc1d965bfb8e540cd38e83201185",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:598:598:27:73",
       "owner": "swiftraccoon",
       "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
@@ -973,7 +973,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:c8438d7e4e4a2cd3ffbd5d4188b767636ff727db90ceac637e023002963e1483",
+      "fingerprint": "codeql:7ebd5336f691b0bf133d19d19cb4a20f42a0c40240d78f45817359e6d49d6b2f",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:606:606:50:76",
       "owner": "swiftraccoon",
       "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
@@ -983,7 +983,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:1a323afb3fba0051db03ef74721eedd66f78a087be67efc43b24afe393ca71a2",
+      "fingerprint": "codeql:2d7570aea78266f123436ebed58847642e8574a854d79b4d0db0116c1e61d819",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/time/internal/cctz/src/time_zone_posix.cc:91:91:13:63",
       "owner": "swiftraccoon",
       "rationale": "ParseInt checks decimal accumulation and enforces every supplied bound. All ParseOffset callers supply hours in 0..24 or -167..167, minutes and seconds in 0..59, and sign +/-1. The absolute intermediate/result bound is 604799 seconds, safely within int. The multiplication-to-int_fast32_t warning misses these caller/parser bounds.",
@@ -993,7 +993,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:2ed1e2cb71f8bb738b0596c81e8c7c3d8da061084d93a1d0a56780f2511e4cb7",
+      "fingerprint": "codeql:9e2b7b8f0d7b58d617a37ad168dc4239b118ba0f212227ba9358893a366be744",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/str_format/float_conversion.cc:1205:1205:9:60",
       "owner": "swiftraccoon",
       "rationale": "The checked exp is not an arbitrary integer: the only FloatToBufferImpl calls pass Decomposed.exponent, produced by frexp(finite_float) minus numeric_limits<Float>::digits. Nonfinite values are handled before decomposition. Consequently digits + exp reconstructs the bounded binary floating-point exponent, far below INT_MAX on the analyzed double/long-double targets; this is a mantissa-fit comparison, not an unsafe signed-overflow detector.",
@@ -1003,7 +1003,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:25855688f8d15d5e902b23d98110dc23de53a27afbf5334740ede01e236c927d",
+      "fingerprint": "codeql:f6c7940ad417816d5fa1f095c1dc4bb79cf5f75292e79bff2d25a087f502b14e",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/inet.c:133:133:11:19",
       "owner": "swiftraccoon",
       "rationale": "inet_ntop6 constructs exactly eight 16-bit words from a 16-byte address. Each fixed %x conversion emits at most four ASCII characters; the longest uncompressed hexadecimal result is 39 characters plus NUL in the 46-byte local buffer. Zero compression shortens it. The embedded IPv4 branch checks inet_ntop4 success before strlen. Therefore the accumulated snprintf count cannot be a truncated length in this routine, and the caller buffer is separately size-checked before copying.",
@@ -1013,7 +1013,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:cab63f504eeb9683048271183a0be89206ac8dba895e79167101ad59a6390a8b",
+      "fingerprint": "codeql:1854fe2222f88fd31f88e9fa10163b80f2f594aa825a13111aef7b9fb7ae4e89",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/substitute.cc:113:113:37:50",
       "owner": "swiftraccoon",
       "rationale": "Arg(const void*) deliberately formats the pointer address as hexadecimal. Its static_assert reserves two hexadecimal digits per pointer byte plus the 0x prefix, so sizeof(value) intentionally measures the pointer type rather than the pointed-to object.",
@@ -1023,7 +1023,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:593fdd30c46bdedf577038c3158a0f7f399cff902293c0527b8b02f1fa8e2c0a",
+      "fingerprint": "codeql:84895992651bad02a1116a0fd592cec90ba33c46afe394d407f2bdf01244c20e",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:364:364:13:18",
       "owner": "swiftraccoon",
       "rationale": "Every path reaching calculate_version initialized all three outputs: the Ubuntu and Debian paths jump only when sscanf returns exactly 3, and the uname-release path returns early unless sscanf returns 3. UNAME26 adjustment only modifies already initialized fields. The warning does not preserve the checked conversion count through the shared label.",
@@ -1033,7 +1033,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:e85c9e314f8057f474cefdc4462d83d8ef5c00766839d2bf2f8bf51bb9a400cb",
+      "fingerprint": "codeql:ecc369d0122ca512bef779675ad41153b3d66ce61dff8961c7a62bfd036d5f9f",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:364:364:29:34",
       "owner": "swiftraccoon",
       "rationale": "Every path reaching calculate_version initialized all three outputs: the Ubuntu and Debian paths jump only when sscanf returns exactly 3, and the uname-release path returns early unless sscanf returns 3. UNAME26 adjustment only modifies already initialized fields. The warning does not preserve the checked conversion count through the shared label.",
@@ -1043,7 +1043,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:bd58410b8d08aa86635c2d0aac4b203b374e1a7e1e65aeaed2a506d0aa00fe83",
+      "fingerprint": "codeql:99f20f1dcba0a026e6ad1500f2b9e3b1cee86fee180a414314d559497881972a",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:364:364:43:48",
       "owner": "swiftraccoon",
       "rationale": "Every path reaching calculate_version initialized all three outputs: the Ubuntu and Debian paths jump only when sscanf returns exactly 3, and the uname-release path returns early unless sscanf returns 3. UNAME26 adjustment only modifies already initialized fields. The warning does not preserve the checked conversion count through the shared label.",
@@ -1053,7 +1053,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:0978d4d5dfb67c11cdb4e8c585f80b5b6e310395f98a93f8f96b72414341be42",
+      "fingerprint": "codeql:194e8833e5510f830f2effd491ea4efe316baaeaed7a3c1e698f3bb5b9ed7f91",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/time/internal/cctz/src/time_zone_info.cc:454:454:24:29",
       "owner": "swiftraccoon",
       "rationale": "The reported source is the process TZDIR environment variable, intentionally selecting the operator-controlled timezone database directory, and the sink is a read-only zoneinfo open. This application does not expose process-environment mutation or a request-supplied TZDIR to participants. There is no lower-trust request-to-filesystem authority transition in this deployment. Re-review if runtime timezone configuration becomes participant-controlled.",
@@ -1063,7 +1063,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:f374f6371528d58475c63fd39c34563ca07a4d4dfa2972c10a991906df2ea3b3",
+      "fingerprint": "codeql:d387393173ff7eb24da4aa395bdb8f9ba45a59970467008e1ddb142c770d836f",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/flatbuffers-24.3.25/src/annotated_binary_text_gen.cpp:445:445:37:42",
       "owner": "swiftraccoon",
       "rationale": "This is flatc compiler annotation output, intentionally derived from the invoking user's command-line input filename. Meson lists annotated_binary_text_gen.cpp only in the flatc executable sources, not the worker runtime library. The repository invokes flatc with fixed --cpp flags over its tracked .fbs schema list and no annotation mode. No participant input reaches this build-only path.",
@@ -1073,7 +1073,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:59dcc4705505941bd98bf1e55489e88b020e4dcf9b22e6c8f6a1774a7afb0971",
+      "fingerprint": "codeql:0dd2fc4ae05d8a5b7c11c565d1fe1c921ce06194465c87267d76d64607b110c9",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2408:2408:17:21",
       "owner": "swiftraccoon",
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
@@ -1083,7 +1083,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:20b6d52966417098c610267db7bf4b5ed4317091f15194ccff349753b0763a72",
+      "fingerprint": "codeql:55cc8f8a26ca496ffbad817108a67cf33960c6da1f3e5f59f195a651129b3941",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2419:2419:17:21",
       "owner": "swiftraccoon",
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
@@ -1093,7 +1093,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:aa5a6246ac16bd0831630c9b77d1a51dfa5d2663277dfe4f123d177efc8fc3ec",
+      "fingerprint": "codeql:4bf1e288ad1efe9bc5947fbbf0950bc8a1ea115da5127914a303d4e72852645b",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2317:2317:17:21",
       "owner": "swiftraccoon",
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
@@ -1103,7 +1103,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:a4edfac51b026e005d4c3d89b34bc97328dfed48dfe7d425544327086f5643e3",
+      "fingerprint": "codeql:69bdf767f7179c2096113b4ffc4468931a70aa73a6193f3bb4e9e0c394a1f2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2340:2340:19:28",
       "owner": "swiftraccoon",
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
@@ -1113,7 +1113,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:91a145483b259a134828385aec1568dcf1544ee342fbe00d1372b7c79629eedc",
+      "fingerprint": "codeql:348d5792117ce62857b7b469233b428523802280edb5888d2ddcf9934194eddb",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2256:2256:26:34",
       "owner": "swiftraccoon",
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
@@ -1123,7 +1123,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:3cceabe73b086e6bd50a277045634416a3e000b733d7499c4167d4653a2615ba",
+      "fingerprint": "codeql:33a145538ace7eb4cccecf14a925f0e15a179b70f1b978a8ed2418a68856294d",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2232:2232:31:39",
       "owner": "swiftraccoon",
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
@@ -1133,7 +1133,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:cb2d7df3e13bae7d13d2a9845717c4421ceefc939eb8139a90c166e10f315d0f",
+      "fingerprint": "codeql:66a1dbed04c7bc005451cadd33dc361bfe1be34ede85496383eca2cce13906bb",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2181:2181:26:34",
       "owner": "swiftraccoon",
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
@@ -1143,7 +1143,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:52fd97095345bea59e98039fb731f145d17fcc50df32b341ee6e7221c0e30f4e",
+      "fingerprint": "codeql:45caeab8d787ad071aa411c5cb6e2402fd6b7fd0064c16413c20cdbcc8eaf4f7",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2183:2183:27:35",
       "owner": "swiftraccoon",
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
@@ -1153,7 +1153,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:9011260ca8840a4cc1af39cbc001b13b034a796a44b278d41161ce20680d38f6",
+      "fingerprint": "codeql:e96c816cb3cda636c51584eeb6bb3327792750cc51622a5c767902324db805b5",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2141:2141:29:37",
       "owner": "swiftraccoon",
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
@@ -1163,7 +1163,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:77ac2e1f18815195b9fa30cd09d235757fb18378fa79c328fe68a7ff0cbac51d",
+      "fingerprint": "codeql:972e2f6cebcc01c21ccda0877cbbb332a306031cbbecb8c3bf0377e3fb6c0673",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2145:2145:28:36",
       "owner": "swiftraccoon",
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
@@ -1173,7 +1173,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:3aecfcddab1655b60b42170e213bdf026172327955c18634979f54e9f35c0617",
+      "fingerprint": "codeql:eaf01afc4d245f28194aeddc04aa0d8c602482cdd5ad9f7f4b79f4d9eb77446e",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/container/internal/raw_hash_set.h:1393:1393:50:57",
       "owner": "swiftraccoon",
       "rationale": "The allocation layout intentionally places one GrowthInfo object immediately before the control-byte array. ControlOffset adds sizeof(GrowthInfo), and static_asserts establish its size and alignment; RawHashSetLayout reserves this header. Casting the control address and subtracting one GrowthInfo locates that header. It is not mistaken byte arithmetic or double scaling.",
@@ -1183,7 +1183,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:ab31e65e70891b08c0f68bb4da94fb76d9acb8d04f423ad2c3c2dd296bc2006f",
+      "fingerprint": "codeql:e957508ce11dd35b7f6b9ec2cf140bf7ec98dde4984e90fa022684b012a761c8",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/flatbuffers-24.3.25/include/flatbuffers/flexbuffers.h:1193:1193:15:19",
       "owner": "swiftraccoon",
       "rationale": "EndMap deliberately sorts alternating key/value Value elements as TwoValue pairs. MapElementCount returns (stack_.size() - start) / 2, so dict + len advances by pairs across exactly the original Value span. The queried type-size change is intentional, not double-scaled indexing. The upstream strict-aliasing TODO is a separate portability concern; this review does not declare that concern resolved. No first-party worker source uses FlexBuffers.",
@@ -1193,7 +1193,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:914a57cdd58ae71b28406f0d31fdea365e057bb9e7c07942f30ae4c62395d231",
+      "fingerprint": "codeql:cec5c6aa234e49084e2023c38c2e4bacc3354b117478ddf47b7f0922f8249819",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_internal.h:436:436:24:58",
       "owner": "swiftraccoon",
       "rationale": "Cord nodes use a constructor-maintained discriminator: CordRepBtree::InitInstance sets BTREE, while external nodes use EXTERNAL. CordRep::Destroy dispatches EXTERNAL separately and returns from the BTREE branch. Btree leaf deletion operates only on data edges and selects EXTERNAL after the flat case. CordRepExternal::Delete also asserts IsExternal. The reported Btree-to-External conversion joins mutually exclusive tagged-node flows; no external serialized tag is being trusted.",
@@ -1203,7 +1203,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:201c27ff039d8302c7469859f546c79c14b848bd28a0d81386439d5bed739156",
+      "fingerprint": "codeql:21a23156c2a9fcc3cefdb1f227153e2223aba342c6bd2c8d69f3667cf700f9af",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_internal.h:864:864:10:52",
       "owner": "swiftraccoon",
       "rationale": "CordRep::substring is a tagged-node downcast. Substring constructors set SUBSTRING, Btree constructors set BTREE, and the reviewed destroy, dump, and substring paths test SUBSTRING or operate on the documented data-edge subset before this cast. The accessors assert IsSubstring as well. A Btree and a Substring are distinct valid allocations; the alert merges their mutually exclusive discriminator paths rather than demonstrating a Btree reaching the cast.",
@@ -1213,7 +1213,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:4c43eb6b94aa8f82590ff64e12fe7182ebefaa413f3c2c85553d8c8dd9c928b9",
+      "fingerprint": "codeql:28d079faaab422f1061ce3c6853653e4d886e443209ea5bf63c5638a327b6672",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_internal.h:859:859:10:46",
       "owner": "swiftraccoon",
       "rationale": "CordRep::substring is a tagged-node downcast. Substring constructors set SUBSTRING, Btree constructors set BTREE, and the reviewed destroy, dump, and substring paths test SUBSTRING or operate on the documented data-edge subset before this cast. The accessors assert IsSubstring as well. A Btree and a Substring are distinct valid allocations; the alert merges their mutually exclusive discriminator paths rather than demonstrating a Btree reaching the cast.",
@@ -1223,7 +1223,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:a423a7ac5a291e32bcd26951ae7545dc463b2532e223742e732baf12595af351",
+      "fingerprint": "codeql:304c5a92bb36c64ee86f847f8c8c5921728e8f3da683e897cedf7721576b79a0",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_rep_crc.h:91:91:10:40",
       "owner": "swiftraccoon",
       "rationale": "CordRepCrc::New allocates CordRepCrc and sets its CRC discriminator; a Btree retains BTREE. CRC access is guarded by IsCrc in New, RemoveCrcNode, and SkipCrcNode, or the CRC branch in CordRep::Destroy. The accessor additionally asserts IsCrc. The alert merges distinct tagged-node paths; it does not establish conversion of a Btree allocation after the CRC guard.",
@@ -1233,7 +1233,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:149e5077a2cc9981443730bc27e5072096e339480a97174a1250b379f9b12acc",
+      "fingerprint": "codeql:21bdfbce5fcbc2195fbbc66ec721fed3f8b0d546308ebfa11c41092c78c90574",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/core.c:199:199:21:40",
       "owner": "swiftraccoon",
       "rationale": "uv_close switches on the initialized handle->type before each cast. uv_timer_init, uv_poll_init, and uv_signal_init set their matching UV_TIMER/UV_POLL/UV_SIGNAL tags through uv__handle_init; TCP and UDP are handled by separate switch cases. The reported TCP/UDP-to-other-handle conversions cross mutually exclusive cases. Handle discriminators are internal object state, not remotely supplied serialized values.",
@@ -1243,7 +1243,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:8491fc5bc8793879baccd54019e4297ec271d59d81bf7c273fada48d83cd8ea4",
+      "fingerprint": "codeql:a10eb76518d4a9b0fc26a1532860c9e4a6d5339de8179493438c3781fb770d75",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/core.c:220:220:20:38",
       "owner": "swiftraccoon",
       "rationale": "uv_close switches on the initialized handle->type before each cast. uv_timer_init, uv_poll_init, and uv_signal_init set their matching UV_TIMER/UV_POLL/UV_SIGNAL tags through uv__handle_init; TCP and UDP are handled by separate switch cases. The reported TCP/UDP-to-other-handle conversions cross mutually exclusive cases. Handle discriminators are internal object state, not remotely supplied serialized values.",
@@ -1253,7 +1253,7 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:b32f58a5d9e3b8b13bfab7dd5a99855f405ab7493dfc945bee3958ba69082166",
+      "fingerprint": "codeql:041dcc4926ce754166ce5dce0ec441ebdde8e5007ee749df17b2386e2a03ad13",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/core.c:230:230:22:43",
       "owner": "swiftraccoon",
       "rationale": "uv_close switches on the initialized handle->type before each cast. uv_timer_init, uv_poll_init, and uv_signal_init set their matching UV_TIMER/UV_POLL/UV_SIGNAL tags through uv__handle_init; TCP and UDP are handled by separate switch cases. The reported TCP/UDP-to-other-handle conversions cross mutually exclusive cases. Handle discriminators are internal object state, not remotely supplied serialized values.",

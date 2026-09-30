@@ -4,7 +4,7 @@
   "runId": 36709013559,
   "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
   "reviewed": "2026-09-30",
-  "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f",
+  "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7",
   "alerts": [
     {
       "rule": "cpp/integer-multiplication-cast-to-long",
@@ -19,12 +19,12 @@
       "messageSha256": "e111152d05058a2adefecf6928349b9c7b871c3d9d0c2a78d9ef4afddbbf2616",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/debugging/symbolize_elf.inc",
       "sourceSha256": "92be60a5ed7ea08b23cc0c5935963373e5163b64b67436e8716376e06c890ae2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:657:657:27:73",
-      "fingerprint": "codeql:4d2152c58c24c39283ca0ae31e451af31fca2d181cf4bdde1c1294374dd84e7d",
+      "fingerprint": "codeql:a39318b2695485564932ddadca6b5915364636eedb329f8919606e5b2aa1bdce",
       "number": 70,
       "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
       "supportingSource": [
@@ -36,7 +36,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/integer-multiplication-cast-to-long",
@@ -51,12 +51,12 @@
       "messageSha256": "e111152d05058a2adefecf6928349b9c7b871c3d9d0c2a78d9ef4afddbbf2616",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/debugging/symbolize_elf.inc",
       "sourceSha256": "92be60a5ed7ea08b23cc0c5935963373e5163b64b67436e8716376e06c890ae2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:664:664:50:76",
-      "fingerprint": "codeql:ad0d23018a17cd3b4fe4a2f86bc19d6f586f8d9a745f4e1e26ec41aca9e0c2c5",
+      "fingerprint": "codeql:b9b8eb5eaa804d8ed7cd3f0fba328aea4a82853172899e1eca2c0e74ebf47916",
       "number": 71,
       "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
       "supportingSource": [
@@ -68,7 +68,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/integer-multiplication-cast-to-long",
@@ -83,12 +83,12 @@
       "messageSha256": "e111152d05058a2adefecf6928349b9c7b871c3d9d0c2a78d9ef4afddbbf2616",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/debugging/symbolize_elf.inc",
       "sourceSha256": "92be60a5ed7ea08b23cc0c5935963373e5163b64b67436e8716376e06c890ae2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:598:598:27:73",
-      "fingerprint": "codeql:9c4bded8ec7908cd3f829487c2fb67dfaa94cdded31f9da50f5ffa4a2d414482",
+      "fingerprint": "codeql:27cc3310fd6e1aaffbc8ce2abf59bc37d196bc1d965bfb8e540cd38e83201185",
       "number": 72,
       "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
       "supportingSource": [
@@ -100,7 +100,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/integer-multiplication-cast-to-long",
@@ -115,12 +115,12 @@
       "messageSha256": "e111152d05058a2adefecf6928349b9c7b871c3d9d0c2a78d9ef4afddbbf2616",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/debugging/symbolize_elf.inc",
       "sourceSha256": "92be60a5ed7ea08b23cc0c5935963373e5163b64b67436e8716376e06c890ae2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:606:606:50:76",
-      "fingerprint": "codeql:c8438d7e4e4a2cd3ffbd5d4188b767636ff727db90ceac637e023002963e1483",
+      "fingerprint": "codeql:7ebd5336f691b0bf133d19d19cb4a20f42a0c40240d78f45817359e6d49d6b2f",
       "number": 73,
       "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
       "supportingSource": [
@@ -132,7 +132,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/integer-multiplication-cast-to-long",
@@ -147,12 +147,12 @@
       "messageSha256": "dcb42be0c93cb50a41f6be79727231171794b6ccef31fa878020e0d25a65dda7",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/time/internal/cctz/src/time_zone_posix.cc",
       "sourceSha256": "e3aea59e85beeea4dba4e3efe63b9d5ea5a0b9ed7e5f8d690a19318b828ebd51",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/time/internal/cctz/src/time_zone_posix.cc:91:91:13:63",
-      "fingerprint": "codeql:1a323afb3fba0051db03ef74721eedd66f78a087be67efc43b24afe393ca71a2",
+      "fingerprint": "codeql:2d7570aea78266f123436ebed58847642e8574a854d79b4d0db0116c1e61d819",
       "number": 74,
       "rationale": "ParseInt checks decimal accumulation and enforces every supplied bound. All ParseOffset callers supply hours in 0..24 or -167..167, minutes and seconds in 0..59, and sign +/-1. The absolute intermediate/result bound is 604799 seconds, safely within int. The multiplication-to-int_fast32_t warning misses these caller/parser bounds.",
       "supportingSource": [
@@ -165,7 +165,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/signed-overflow-check",
@@ -180,12 +180,12 @@
       "messageSha256": "fb449e360b572ea7b9d9b5ab70e7737b05e053b9dcbb4166826a6d62f0447f26",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/strings/internal/str_format/float_conversion.cc",
       "sourceSha256": "2575c28b169f347e32fb35cd51991afa0af2c1d93d4c284b3d6ae8501e9f13f9",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/str_format/float_conversion.cc:1205:1205:9:60",
-      "fingerprint": "codeql:2ed1e2cb71f8bb738b0596c81e8c7c3d8da061084d93a1d0a56780f2511e4cb7",
+      "fingerprint": "codeql:9e2b7b8f0d7b58d617a37ad168dc4239b118ba0f212227ba9358893a366be744",
       "number": 75,
       "rationale": "The checked exp is not an arbitrary integer: the only FloatToBufferImpl calls pass Decomposed.exponent, produced by frexp(finite_float) minus numeric_limits<Float>::digits. Nonfinite values are handled before decomposition. Consequently digits + exp reconstructs the bounded binary floating-point exponent, far below INT_MAX on the analyzed double/long-double targets; this is a mantissa-fit comparison, not an unsafe signed-overflow detector.",
       "supportingSource": [
@@ -198,7 +198,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/overflowing-snprintf",
@@ -213,12 +213,12 @@
       "messageSha256": "90a7a03e52ee020d85b48e07940b809a67e4cfbffa7ff3ce7db86f4bc1d7f5fb",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/inet.c",
       "sourceSha256": "5fedd5da664c70aa539ae0f0fa10b28ea092c892f9516e95cf1bb782016d52f2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/inet.c:133:133:11:19",
-      "fingerprint": "codeql:25855688f8d15d5e902b23d98110dc23de53a27afbf5334740ede01e236c927d",
+      "fingerprint": "codeql:f6c7940ad417816d5fa1f095c1dc4bb79cf5f75292e79bff2d25a087f502b14e",
       "number": 76,
       "rationale": "inet_ntop6 constructs exactly eight 16-bit words from a 16-byte address. Each fixed %x conversion emits at most four ASCII characters; the longest uncompressed hexadecimal result is 39 characters plus NUL in the 46-byte local buffer. Zero compression shortens it. The embedded IPv4 branch checks inet_ntop4 success before strlen. Therefore the accumulated snprintf count cannot be a truncated length in this routine, and the caller buffer is separately size-checked before copying.",
       "supportingSource": [
@@ -230,7 +230,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/suspicious-sizeof",
@@ -245,12 +245,12 @@
       "messageSha256": "ed78020b1d3c1b4eb41f8ba063b31e196b73b46a0c97335a9cee3b6a188bbec8",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/strings/substitute.cc",
       "sourceSha256": "8e2103a71ff7b8620dfb0f28a12eeb451f29426238092bb417ed54750ba7fbf9",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/substitute.cc:113:113:37:50",
-      "fingerprint": "codeql:cab63f504eeb9683048271183a0be89206ac8dba895e79167101ad59a6390a8b",
+      "fingerprint": "codeql:1854fe2222f88fd31f88e9fa10163b80f2f594aa825a13111aef7b9fb7ae4e89",
       "number": 77,
       "rationale": "Arg(const void*) deliberately formats the pointer address as hexadecimal. Its static_assert reserves two hexadecimal digits per pointer byte plus the 0x prefix, so sizeof(value) intentionally measures the pointer type rather than the pointed-to object.",
       "supportingSource": [
@@ -261,7 +261,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/missing-check-scanf",
@@ -276,12 +276,12 @@
       "messageSha256": "798f10e8602b4b11cbbce20cb4f189efe818a29e0ea1c033c2da02f9bb33c2cc",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:364:364:13:18",
-      "fingerprint": "codeql:593fdd30c46bdedf577038c3158a0f7f399cff902293c0527b8b02f1fa8e2c0a",
+      "fingerprint": "codeql:84895992651bad02a1116a0fd592cec90ba33c46afe394d407f2bdf01244c20e",
       "number": 78,
       "rationale": "Every path reaching calculate_version initialized all three outputs: the Ubuntu and Debian paths jump only when sscanf returns exactly 3, and the uname-release path returns early unless sscanf returns 3. UNAME26 adjustment only modifies already initialized fields. The warning does not preserve the checked conversion count through the shared label.",
       "supportingSource": [
@@ -292,7 +292,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/missing-check-scanf",
@@ -307,12 +307,12 @@
       "messageSha256": "0d766bc0455a0e8d2f1f3bc4c8bcbfda8578a3bd657da26d17f0ea7bd2812276",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:364:364:29:34",
-      "fingerprint": "codeql:e85c9e314f8057f474cefdc4462d83d8ef5c00766839d2bf2f8bf51bb9a400cb",
+      "fingerprint": "codeql:ecc369d0122ca512bef779675ad41153b3d66ce61dff8961c7a62bfd036d5f9f",
       "number": 79,
       "rationale": "Every path reaching calculate_version initialized all three outputs: the Ubuntu and Debian paths jump only when sscanf returns exactly 3, and the uname-release path returns early unless sscanf returns 3. UNAME26 adjustment only modifies already initialized fields. The warning does not preserve the checked conversion count through the shared label.",
       "supportingSource": [
@@ -323,7 +323,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/missing-check-scanf",
@@ -338,12 +338,12 @@
       "messageSha256": "3eef0ea2803e47c6b6a05105039ec776bd9cbb6b1910fa4f58f9a1aff421281a",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:364:364:43:48",
-      "fingerprint": "codeql:bd58410b8d08aa86635c2d0aac4b203b374e1a7e1e65aeaed2a506d0aa00fe83",
+      "fingerprint": "codeql:99f20f1dcba0a026e6ad1500f2b9e3b1cee86fee180a414314d559497881972a",
       "number": 80,
       "rationale": "Every path reaching calculate_version initialized all three outputs: the Ubuntu and Debian paths jump only when sscanf returns exactly 3, and the uname-release path returns early unless sscanf returns 3. UNAME26 adjustment only modifies already initialized fields. The warning does not preserve the checked conversion count through the shared label.",
       "supportingSource": [
@@ -354,7 +354,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -369,12 +369,12 @@
       "messageSha256": "29d1bca672500ba44a7bb7e6cfa471644ce08df3c0b03c822b90782bd24805aa",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/time/internal/cctz/src/time_zone_info.cc",
       "sourceSha256": "59d424606a32818621390d8eae39b4a6c43fbcc2a2f0591ba615066596cb2f42",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/time/internal/cctz/src/time_zone_info.cc:454:454:24:29",
-      "fingerprint": "codeql:0978d4d5dfb67c11cdb4e8c585f80b5b6e310395f98a93f8f96b72414341be42",
+      "fingerprint": "codeql:194e8833e5510f830f2effd491ea4efe316baaeaed7a3c1e698f3bb5b9ed7f91",
       "number": 81,
       "rationale": "The reported source is the process TZDIR environment variable, intentionally selecting the operator-controlled timezone database directory, and the sink is a read-only zoneinfo open. This application does not expose process-environment mutation or a request-supplied TZDIR to participants. There is no lower-trust request-to-filesystem authority transition in this deployment. Re-review if runtime timezone configuration becomes participant-controlled.",
       "supportingSource": [
@@ -385,7 +385,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -400,12 +400,12 @@
       "messageSha256": "00054e3f1cdc0ef2d31962612a409901adbd7bf3197acd152c390de6e9d5dfac",
       "sourceArchiveSha256": "4157c5cacdb59737c5d627e47ac26b140e9ee28b1102f812b36068aab728c1ed",
       "sourceWrapSha256": "d1c5017efe825ccdf523829548a56a8a0637b2d0fd7d3682856902cf0beb1666",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourcePatchSha256": "9be75a2053a19e5a59175f2fbbf6e9d40f4243d2786f2661a131d3502ddfa457",
       "sourceMember": "src/annotated_binary_text_gen.cpp",
       "sourceSha256": "21f5591d119ae89d6883f0f84fcc1d442ad13a16d50acccbf8e23e5258879194",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/flatbuffers-24.3.25/src/annotated_binary_text_gen.cpp:445:445:37:42",
-      "fingerprint": "codeql:f374f6371528d58475c63fd39c34563ca07a4d4dfa2972c10a991906df2ea3b3",
+      "fingerprint": "codeql:d387393173ff7eb24da4aa395bdb8f9ba45a59970467008e1ddb142c770d836f",
       "number": 82,
       "rationale": "This is flatc compiler annotation output, intentionally derived from the invoking user's command-line input filename. Meson lists annotated_binary_text_gen.cpp only in the flatc executable sources, not the worker runtime library. The repository invokes flatc with fixed --cpp flags over its tracked .fbs schema list and no annotation mode. No participant input reaches this build-only path.",
       "supportingSource": [
@@ -419,7 +419,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -434,12 +434,12 @@
       "messageSha256": "d8bfa4f13850c0a3089edb04c9271521a18293e867f3464d13dbe7aef3872c64",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2408:2408:17:21",
-      "fingerprint": "codeql:59dcc4705505941bd98bf1e55489e88b020e4dcf9b22e6c8f6a1774a7afb0971",
+      "fingerprint": "codeql:0dd2fc4ae05d8a5b7c11c565d1fe1c921ce06194465c87267d76d64607b110c9",
       "number": 83,
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
       "supportingSource": [
@@ -452,7 +452,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -467,12 +467,12 @@
       "messageSha256": "d8bfa4f13850c0a3089edb04c9271521a18293e867f3464d13dbe7aef3872c64",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2419:2419:17:21",
-      "fingerprint": "codeql:20b6d52966417098c610267db7bf4b5ed4317091f15194ccff349753b0763a72",
+      "fingerprint": "codeql:55cc8f8a26ca496ffbad817108a67cf33960c6da1f3e5f59f195a651129b3941",
       "number": 84,
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
       "supportingSource": [
@@ -485,7 +485,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -500,12 +500,12 @@
       "messageSha256": "d8bfa4f13850c0a3089edb04c9271521a18293e867f3464d13dbe7aef3872c64",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2317:2317:17:21",
-      "fingerprint": "codeql:aa5a6246ac16bd0831630c9b77d1a51dfa5d2663277dfe4f123d177efc8fc3ec",
+      "fingerprint": "codeql:4bf1e288ad1efe9bc5947fbbf0950bc8a1ea115da5127914a303d4e72852645b",
       "number": 85,
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
       "supportingSource": [
@@ -518,7 +518,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -533,12 +533,12 @@
       "messageSha256": "d8bfa4f13850c0a3089edb04c9271521a18293e867f3464d13dbe7aef3872c64",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2340:2340:19:28",
-      "fingerprint": "codeql:a4edfac51b026e005d4c3d89b34bc97328dfed48dfe7d425544327086f5643e3",
+      "fingerprint": "codeql:69bdf767f7179c2096113b4ffc4468931a70aa73a6193f3bb4e9e0c394a1f2d2",
       "number": 86,
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
       "supportingSource": [
@@ -551,7 +551,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -566,12 +566,12 @@
       "messageSha256": "8dff9928b9e5bcd9e891128908dfa7f7e559b91c6f63735ee77a173251e77db9",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2256:2256:26:34",
-      "fingerprint": "codeql:91a145483b259a134828385aec1568dcf1544ee342fbe00d1372b7c79629eedc",
+      "fingerprint": "codeql:348d5792117ce62857b7b469233b428523802280edb5888d2ddcf9934194eddb",
       "number": 87,
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
       "supportingSource": [
@@ -584,7 +584,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -599,12 +599,12 @@
       "messageSha256": "8dff9928b9e5bcd9e891128908dfa7f7e559b91c6f63735ee77a173251e77db9",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2232:2232:31:39",
-      "fingerprint": "codeql:3cceabe73b086e6bd50a277045634416a3e000b733d7499c4167d4653a2615ba",
+      "fingerprint": "codeql:33a145538ace7eb4cccecf14a925f0e15a179b70f1b978a8ed2418a68856294d",
       "number": 88,
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
       "supportingSource": [
@@ -617,7 +617,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -632,12 +632,12 @@
       "messageSha256": "8dff9928b9e5bcd9e891128908dfa7f7e559b91c6f63735ee77a173251e77db9",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2181:2181:26:34",
-      "fingerprint": "codeql:cb2d7df3e13bae7d13d2a9845717c4421ceefc939eb8139a90c166e10f315d0f",
+      "fingerprint": "codeql:66a1dbed04c7bc005451cadd33dc361bfe1be34ede85496383eca2cce13906bb",
       "number": 89,
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
       "supportingSource": [
@@ -650,7 +650,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -665,12 +665,12 @@
       "messageSha256": "8dff9928b9e5bcd9e891128908dfa7f7e559b91c6f63735ee77a173251e77db9",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2183:2183:27:35",
-      "fingerprint": "codeql:52fd97095345bea59e98039fb731f145d17fcc50df32b341ee6e7221c0e30f4e",
+      "fingerprint": "codeql:45caeab8d787ad071aa411c5cb6e2402fd6b7fd0064c16413c20cdbcc8eaf4f7",
       "number": 90,
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
       "supportingSource": [
@@ -683,7 +683,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -698,12 +698,12 @@
       "messageSha256": "8dff9928b9e5bcd9e891128908dfa7f7e559b91c6f63735ee77a173251e77db9",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2141:2141:29:37",
-      "fingerprint": "codeql:9011260ca8840a4cc1af39cbc001b13b034a796a44b278d41161ce20680d38f6",
+      "fingerprint": "codeql:e96c816cb3cda636c51584eeb6bb3327792750cc51622a5c767902324db805b5",
       "number": 91,
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
       "supportingSource": [
@@ -716,7 +716,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/path-injection",
@@ -731,12 +731,12 @@
       "messageSha256": "8dff9928b9e5bcd9e891128908dfa7f7e559b91c6f63735ee77a173251e77db9",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/linux.c",
       "sourceSha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2145:2145:28:36",
-      "fingerprint": "codeql:77ac2e1f18815195b9fa30cd09d235757fb18378fa79c328fe68a7ff0cbac51d",
+      "fingerprint": "codeql:972e2f6cebcc01c21ccda0877cbbb332a306031cbbecb8c3bf0377e3fb6c0673",
       "number": 92,
       "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
       "supportingSource": [
@@ -749,7 +749,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/suspicious-pointer-scaling",
@@ -764,12 +764,12 @@
       "messageSha256": "0ba4b30e5fafd3d4fec36b6e6fa2fe5929b3eb39478be883cc108c65829939cb",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/container/internal/raw_hash_set.h",
       "sourceSha256": "bf52c88f9f1e342dfe06068ad1e77d208ecb8a2187360c76c4c4c3dda2b252f0",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/container/internal/raw_hash_set.h:1393:1393:50:57",
-      "fingerprint": "codeql:3aecfcddab1655b60b42170e213bdf026172327955c18634979f54e9f35c0617",
+      "fingerprint": "codeql:eaf01afc4d245f28194aeddc04aa0d8c602482cdd5ad9f7f4b79f4d9eb77446e",
       "number": 93,
       "rationale": "The allocation layout intentionally places one GrowthInfo object immediately before the control-byte array. ControlOffset adds sizeof(GrowthInfo), and static_asserts establish its size and alignment; RawHashSetLayout reserves this header. Casting the control address and subtracting one GrowthInfo locates that header. It is not mistaken byte arithmetic or double scaling.",
       "supportingSource": [
@@ -781,7 +781,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/suspicious-pointer-scaling",
@@ -796,12 +796,12 @@
       "messageSha256": "de616a2ddc57935f312c5601d871edd68de636424e9b37b2814fcceea2cbd187",
       "sourceArchiveSha256": "4157c5cacdb59737c5d627e47ac26b140e9ee28b1102f812b36068aab728c1ed",
       "sourceWrapSha256": "d1c5017efe825ccdf523829548a56a8a0637b2d0fd7d3682856902cf0beb1666",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourcePatchSha256": "9be75a2053a19e5a59175f2fbbf6e9d40f4243d2786f2661a131d3502ddfa457",
       "sourceMember": "include/flatbuffers/flexbuffers.h",
       "sourceSha256": "f06d546f71d57a3f2ab4f4f1f44731d4cbe65d86bbab326443a939b0c785921e",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/flatbuffers-24.3.25/include/flatbuffers/flexbuffers.h:1193:1193:15:19",
-      "fingerprint": "codeql:ab31e65e70891b08c0f68bb4da94fb76d9acb8d04f423ad2c3c2dd296bc2006f",
+      "fingerprint": "codeql:e957508ce11dd35b7f6b9ec2cf140bf7ec98dde4984e90fa022684b012a761c8",
       "number": 94,
       "rationale": "EndMap deliberately sorts alternating key/value Value elements as TwoValue pairs. MapElementCount returns (stack_.size() - start) / 2, so dict + len advances by pairs across exactly the original Value span. The queried type-size change is intentional, not double-scaled indexing. The upstream strict-aliasing TODO is a separate portability concern; this review does not declare that concern resolved. No first-party worker source uses FlexBuffers.",
       "supportingSource": [
@@ -813,7 +813,7 @@
       "severity": "high",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/type-confusion",
@@ -828,12 +828,12 @@
       "messageSha256": "77178fb8cbac1f41dbba53629ca9b00239ea7397c19b14f270ec788ba7cb0d62",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/strings/internal/cord_internal.h",
       "sourceSha256": "9198b429e7a7a083e6fa8395b36d3747d5a4fb0ed65ff5c458472f0d92c0ecb8",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_internal.h:436:436:24:58",
-      "fingerprint": "codeql:914a57cdd58ae71b28406f0d31fdea365e057bb9e7c07942f30ae4c62395d231",
+      "fingerprint": "codeql:cec5c6aa234e49084e2023c38c2e4bacc3354b117478ddf47b7f0922f8249819",
       "number": 95,
       "rationale": "Cord nodes use a constructor-maintained discriminator: CordRepBtree::InitInstance sets BTREE, while external nodes use EXTERNAL. CordRep::Destroy dispatches EXTERNAL separately and returns from the BTREE branch. Btree leaf deletion operates only on data edges and selects EXTERNAL after the flat case. CordRepExternal::Delete also asserts IsExternal. The reported Btree-to-External conversion joins mutually exclusive tagged-node flows; no external serialized tag is being trusted.",
       "supportingSource": [
@@ -847,7 +847,7 @@
       "severity": "critical",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/type-confusion",
@@ -862,12 +862,12 @@
       "messageSha256": "c343542b387f60d3540e825dc687a4db115ba2d0374edaec6ceea1052b17150c",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/strings/internal/cord_internal.h",
       "sourceSha256": "9198b429e7a7a083e6fa8395b36d3747d5a4fb0ed65ff5c458472f0d92c0ecb8",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_internal.h:864:864:10:52",
-      "fingerprint": "codeql:201c27ff039d8302c7469859f546c79c14b848bd28a0d81386439d5bed739156",
+      "fingerprint": "codeql:21a23156c2a9fcc3cefdb1f227153e2223aba342c6bd2c8d69f3667cf700f9af",
       "number": 96,
       "rationale": "CordRep::substring is a tagged-node downcast. Substring constructors set SUBSTRING, Btree constructors set BTREE, and the reviewed destroy, dump, and substring paths test SUBSTRING or operate on the documented data-edge subset before this cast. The accessors assert IsSubstring as well. A Btree and a Substring are distinct valid allocations; the alert merges their mutually exclusive discriminator paths rather than demonstrating a Btree reaching the cast.",
       "supportingSource": [
@@ -882,7 +882,7 @@
       "severity": "critical",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/type-confusion",
@@ -897,12 +897,12 @@
       "messageSha256": "c343542b387f60d3540e825dc687a4db115ba2d0374edaec6ceea1052b17150c",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/strings/internal/cord_internal.h",
       "sourceSha256": "9198b429e7a7a083e6fa8395b36d3747d5a4fb0ed65ff5c458472f0d92c0ecb8",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_internal.h:859:859:10:46",
-      "fingerprint": "codeql:4c43eb6b94aa8f82590ff64e12fe7182ebefaa413f3c2c85553d8c8dd9c928b9",
+      "fingerprint": "codeql:28d079faaab422f1061ce3c6853653e4d886e443209ea5bf63c5638a327b6672",
       "number": 97,
       "rationale": "CordRep::substring is a tagged-node downcast. Substring constructors set SUBSTRING, Btree constructors set BTREE, and the reviewed destroy, dump, and substring paths test SUBSTRING or operate on the documented data-edge subset before this cast. The accessors assert IsSubstring as well. A Btree and a Substring are distinct valid allocations; the alert merges their mutually exclusive discriminator paths rather than demonstrating a Btree reaching the cast.",
       "supportingSource": [
@@ -917,7 +917,7 @@
       "severity": "critical",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/type-confusion",
@@ -932,12 +932,12 @@
       "messageSha256": "98985b4e0e1a0c3d3cd1928ea196497665c7a84033a392cc626d4948944a2912",
       "sourceArchiveSha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
       "sourceWrapSha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "2578a8327fdccf446fc95af66e59801f70410599243a03133c9251508d043120",
       "sourceMember": "absl/strings/internal/cord_rep_crc.h",
       "sourceSha256": "abf52010f2e23ca0ba2451a52587c9c7782f56c8cfcb6bc47cca78e7379632eb",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_rep_crc.h:91:91:10:40",
-      "fingerprint": "codeql:a423a7ac5a291e32bcd26951ae7545dc463b2532e223742e732baf12595af351",
+      "fingerprint": "codeql:304c5a92bb36c64ee86f847f8c8c5921728e8f3da683e897cedf7721576b79a0",
       "number": 98,
       "rationale": "CordRepCrc::New allocates CordRepCrc and sets its CRC discriminator; a Btree retains BTREE. CRC access is guarded by IsCrc in New, RemoveCrcNode, and SkipCrcNode, or the CRC branch in CordRep::Destroy. The accessor additionally asserts IsCrc. The alert merges distinct tagged-node paths; it does not establish conversion of a Btree allocation after the CRC guard.",
       "supportingSource": [
@@ -950,7 +950,7 @@
       "severity": "critical",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/type-confusion",
@@ -965,12 +965,12 @@
       "messageSha256": "f79dfadf5366c9033a5dd12cc25c8f5a39cf919387585419a7239b3c7da5efac",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/core.c",
       "sourceSha256": "18bfd5f2045417f8ace5d76e222bf7441b31ead5fc2cbaf6225965e0afea8767",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/core.c:199:199:21:40",
-      "fingerprint": "codeql:149e5077a2cc9981443730bc27e5072096e339480a97174a1250b379f9b12acc",
+      "fingerprint": "codeql:21bdfbce5fcbc2195fbbc66ec721fed3f8b0d546308ebfa11c41092c78c90574",
       "number": 99,
       "rationale": "uv_close switches on the initialized handle->type before each cast. uv_timer_init, uv_poll_init, and uv_signal_init set their matching UV_TIMER/UV_POLL/UV_SIGNAL tags through uv__handle_init; TCP and UDP are handled by separate switch cases. The reported TCP/UDP-to-other-handle conversions cross mutually exclusive cases. Handle discriminators are internal object state, not remotely supplied serialized values.",
       "supportingSource": [
@@ -985,7 +985,7 @@
       "severity": "critical",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/type-confusion",
@@ -1000,12 +1000,12 @@
       "messageSha256": "a0ee13dc2f18993aded6518120de2a6f004125b295d50b4a7d444755fe61e5cc",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/core.c",
       "sourceSha256": "18bfd5f2045417f8ace5d76e222bf7441b31ead5fc2cbaf6225965e0afea8767",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/core.c:220:220:20:38",
-      "fingerprint": "codeql:8491fc5bc8793879baccd54019e4297ec271d59d81bf7c273fada48d83cd8ea4",
+      "fingerprint": "codeql:a10eb76518d4a9b0fc26a1532860c9e4a6d5339de8179493438c3781fb770d75",
       "number": 100,
       "rationale": "uv_close switches on the initialized handle->type before each cast. uv_timer_init, uv_poll_init, and uv_signal_init set their matching UV_TIMER/UV_POLL/UV_SIGNAL tags through uv__handle_init; TCP and UDP are handled by separate switch cases. The reported TCP/UDP-to-other-handle conversions cross mutually exclusive cases. Handle discriminators are internal object state, not remotely supplied serialized values.",
       "supportingSource": [
@@ -1020,7 +1020,7 @@
       "severity": "critical",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     },
     {
       "rule": "cpp/type-confusion",
@@ -1035,12 +1035,12 @@
       "messageSha256": "7271a7b27e80f077b7f890908195cc02524b4dfdb96890b7e8b7e68b6127113f",
       "sourceArchiveSha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
       "sourceWrapSha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c",
-      "sourceManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+      "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
       "sourceOverlaySha256": "5e53a839b094599a3d909363a71891efe3c0261645f52bc15283a3c7d01d07ba",
       "sourceMember": "src/unix/core.c",
       "sourceSha256": "18bfd5f2045417f8ace5d76e222bf7441b31ead5fc2cbaf6225965e0afea8767",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/core.c:230:230:22:43",
-      "fingerprint": "codeql:b32f58a5d9e3b8b13bfab7dd5a99855f405ab7493dfc945bee3958ba69082166",
+      "fingerprint": "codeql:041dcc4926ce754166ce5dce0ec441ebdde8e5007ee749df17b2386e2a03ad13",
       "number": 101,
       "rationale": "uv_close switches on the initialized handle->type before each cast. uv_timer_init, uv_poll_init, and uv_signal_init set their matching UV_TIMER/UV_POLL/UV_SIGNAL tags through uv__handle_init; TCP and UDP are handled by separate switch cases. The reported TCP/UDP-to-other-handle conversions cross mutually exclusive cases. Handle discriminators are internal object state, not remotely supplied serialized values.",
       "supportingSource": [
@@ -1055,7 +1055,123 @@
       "severity": "critical",
       "state": "open",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "sourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f"
+      "sourceProvenanceRevision": "163f80876c76b859a41d5fe0d0fb39ef6879a7b7"
     }
-  ]
+  ],
+  "manifestRevalidation": {
+    "previousSourceProvenanceRevision": "0544a5da0c4cfdd9907adb5a230122e1411afa4f",
+    "previousManifestSha256": "1a3402e8a55517c63ea028d34e214858bdaf6bda292edbedb76588d211df5a5b",
+    "sourceManifestSha256": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
+    "changedMaintainedFiles": [
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/build.rs",
+        "previousSha256": "b090621e380b9c8cf9aef3d4ed51d8d5dd36bd56317727542be3b4d5558f43fe",
+        "currentSha256": "5f847b66d66f24a184d83473eb4c817f16e7b812031975b0151faad635d8c716"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/meson.build",
+        "previousSha256": "71c087a4d9799c80bcb62131fce89a7862ee9ef80ec6cd9b8ff497b867848a06",
+        "currentSha256": "46250d6321d85cf521faae08bc33440ac5d2a29961a2ef2dc5cf545d155bc172"
+      }
+    ],
+    "authenticatedSupportingFiles": [
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/container/internal/raw_hash_set.h",
+        "sha256": "bf52c88f9f1e342dfe06068ad1e77d208ecb8a2187360c76c4c4c3dda2b252f0"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc",
+        "sha256": "92be60a5ed7ea08b23cc0c5935963373e5163b64b67436e8716376e06c890ae2"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_internal.cc",
+        "sha256": "9975a6550cbba09a0a6183be25d7afa3442e835fe851a7084104e262e227738d"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_internal.h",
+        "sha256": "9198b429e7a7a083e6fa8395b36d3747d5a4fb0ed65ff5c458472f0d92c0ecb8"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_rep_btree.cc",
+        "sha256": "4f93aa69c2851b8bd78883269019d48341b550dad999ca1aebe34cf804edf862"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_rep_btree.h",
+        "sha256": "8fedd566a009ca2c0f37ad3de24066db8a8c7173e945387322b0a328662d1b07"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_rep_crc.cc",
+        "sha256": "8172c9cf2609dd2dfbeefdee52e688223d0bc85ae1a77bdf4ba6bdd898de6716"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_rep_crc.h",
+        "sha256": "abf52010f2e23ca0ba2451a52587c9c7782f56c8cfcb6bc47cca78e7379632eb"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/str_format/float_conversion.cc",
+        "sha256": "2575c28b169f347e32fb35cd51991afa0af2c1d93d4c284b3d6ae8501e9f13f9"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/substitute.cc",
+        "sha256": "8e2103a71ff7b8620dfb0f28a12eeb451f29426238092bb417ed54750ba7fbf9"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/time/internal/cctz/src/time_zone_info.cc",
+        "sha256": "59d424606a32818621390d8eae39b4a6c43fbcc2a2f0591ba615066596cb2f42"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/time/internal/cctz/src/time_zone_posix.cc",
+        "sha256": "e3aea59e85beeea4dba4e3efe63b9d5ea5a0b9ed7e5f8d690a19318b828ebd51"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/flatbuffers-24.3.25/include/flatbuffers/flexbuffers.h",
+        "sha256": "f06d546f71d57a3f2ab4f4f1f44731d4cbe65d86bbab326443a939b0c785921e"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/flatbuffers-24.3.25/meson.build",
+        "sha256": "00404323ea2c542eee0ea0669e352e8306ebbfe78d792c69a76c6a011f4a10c8"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/flatbuffers-24.3.25/src/annotated_binary_text_gen.cpp",
+        "sha256": "21f5591d119ae89d6883f0f84fcc1d442ad13a16d50acccbf8e23e5258879194"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/flatbuffers-24.3.25/src/flatc.cpp",
+        "sha256": "e70ca3025429ddaa654214b891dc1e4dbf7cbe1fa28a5d15b1103bed867adff9"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/inet.c",
+        "sha256": "5fedd5da664c70aa539ae0f0fa10b28ea092c892f9516e95cf1bb782016d52f2"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/timer.c",
+        "sha256": "5a2326203a3ac21b16093e0928db393e00caf919c1ede5316ac7174b72daf217"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/core.c",
+        "sha256": "18bfd5f2045417f8ace5d76e222bf7441b31ead5fc2cbaf6225965e0afea8767"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c",
+        "sha256": "215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/poll.c",
+        "sha256": "1251826732affd254647829bb43bcdf5bc251915dac601b9eadea13f237b7c79"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/signal.c",
+        "sha256": "d6e74aa544ea4adfd57a6fbbf452f831a0fb3030873dd37e65205610174fbc94"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/uv-common.h",
+        "sha256": "6ddce7ca203fe0dd293d1eec658745ca6a2d24386b3a02edaf2a15cf94732ee6"
+      },
+      {
+        "path": "vendor/mediasoup-sys-0.17.0/fbs/meson.build",
+        "sha256": "7ba9d98fdd1040b44cdd7aae61a751928f3edd9ad58b83fb3be561712200dca6"
+      }
+    ],
+    "reason": "The complete vendor manifest changed only the maintained build.rs and meson.build hashes for the OpenSSL 3.5.9 minimum. All upstream source pins, wraps, remote patch archives, local overlays, complete primary members and supporting files remain unchanged. These 32 reviewed Abseil/FlatBuffers/libuv invariants do not depend on OpenSSL; analyzer/query/message/range and original observation remain exact. This is source revalidation, not a new analyzer execution."
+  }
 }
