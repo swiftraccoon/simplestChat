@@ -375,7 +375,7 @@ def validate_zip_directory(path: Path) -> None:
 
 
 def selected_members(archive: zipfile.ZipFile) -> dict[str, zipfile.ZipInfo]:
-    """Select eight canonical regular files after bounding every archive member."""
+    """Select the canonical regular files after bounding every archive member."""
     members = archive.infolist()
     require(0 < len(members) <= MAX_ZIP_MEMBERS, "zip_shape_rejected")
     require(
