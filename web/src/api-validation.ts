@@ -1,5 +1,4 @@
 import type { AccountProfile, PublicProfile, RoomListItem } from './protocol';
-import type { Decoder } from './validation';
 import {
   boolean,
   integer,
@@ -200,15 +199,10 @@ export interface MembershipPage {
   next_cursor: string | null;
 }
 const decodeMembershipItems = list(object<MembershipItem>({ ...roomListItemFields, role: text }));
-const decodeMembershipPage = object<MembershipPage>({
+export const decodeMemberships = object<MembershipPage>({
   items: decodeMembershipItems,
   next_cursor: nullable(text),
 });
-/** Older servers ignore the pagination query and return their first page as an array. */
-export const decodeMemberships: Decoder<MembershipPage> = (value) =>
-  Array.isArray(value)
-    ? { items: decodeMembershipItems(value), next_cursor: null }
-    : decodeMembershipPage(value);
 
 /** A single-use WebSocket upgrade credential, never a reusable access token. */
 export const decodeWebSocketTicket = object<{ ticket: string; expires_in: number }>({

@@ -136,7 +136,8 @@ in-flight promises, run at most eight requests concurrently, and retain at most
 opening a profile takes the next available read slot before queued avatar work.
 Leaving the room or changing identity retires
 the cache. My rooms loads memberships in cursor pages with an explicit Load more
-button; older servers' array responses remain accepted as a single page.
+button. `GET /api/rooms/memberships` always returns `{items, next_cursor}`;
+subsequent pages supply the returned cursor as `?after=...`.
 
 Media subscription remains an explicit scaling limit. The browser requests each
 remote producer; offscreen tiles do not automatically release or pause their

@@ -386,7 +386,7 @@ export const api = {
   memberships: (token: string | null, after?: string) =>
     apiJson(
       decodeMemberships,
-      `/api/rooms/memberships?paginated=true${after ? `&after=${encodeURIComponent(after)}` : ''}`,
+      `/api/rooms/memberships${after ? `?after=${encodeURIComponent(after)}` : ''}`,
       token,
     ),
   roomInvites: (token: string | null, id: string) =>

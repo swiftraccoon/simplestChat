@@ -127,7 +127,7 @@ const endpoints = [
   [
     'memberships',
     (api) => api.memberships('token'),
-    '/api/rooms/memberships?paginated=true',
+    '/api/rooms/memberships',
     'GET',
     { items: [{ ...room, role: 'member' }], next_cursor: null },
   ],
@@ -266,7 +266,7 @@ for (const [name, request, path, method, valid] of endpoints) {
       false,
       'private server fragment',
       { internal: 'private' },
-      Array.isArray(valid) || name === 'memberships' ? [{}] : [],
+      Array.isArray(valid) ? [{}] : [],
     ]) {
       state.response = { ok: true, status: 200, json: async () => payload };
       await assert.rejects(request(ui.api), {
@@ -443,18 +443,24 @@ test('capabilities and membership pagination own fixed decoded contracts', async
   }
   state.response = { ok: true, status: 200, json: async () => ({ items: [], next_cursor: null }) };
   assert.deepEqual(await ui.api.memberships('token', 'after /?'), { items: [], next_cursor: null });
-  assert.equal(
-    state.requests.at(-1)[0],
-    '/api/rooms/memberships?paginated=true&after=after%20%2F%3F',
-  );
-  state.response = { ok: true, status: 200, json: async () => [{ ...room, role: 'member' }] };
-  assert.deepEqual(await ui.api.memberships('token'), {
+  assert.equal(state.requests.at(-1)[0], '/api/rooms/memberships?after=after%20%2F%3F');
+  const page = {
     items: [{ ...room, role: 'member' }],
-    next_cursor: null,
-  });
-  assert.equal(state.requests.at(-1)[0], '/api/rooms/memberships?paginated=true');
-  state.response = { ok: true, status: 200, json: async () => [{ ...room, role: 4 }] };
-  await assert.rejects(ui.api.memberships('token'), /invalid data/);
+    next_cursor: 'next-room',
+  };
+  state.response = { ok: true, status: 200, json: async () => page };
+  assert.deepEqual(await ui.api.memberships('token'), page);
+  assert.equal(state.requests.at(-1)[0], '/api/rooms/memberships');
+  for (const invalid of [
+    [],
+    page.items,
+    { ...page, next_cursor: 4 },
+    { items: [{ ...room, role: 4 }], next_cursor: null },
+    { items: [] },
+  ]) {
+    state.response = { ok: true, status: 200, json: async () => invalid };
+    await assert.rejects(ui.api.memberships('token'), /invalid data/);
+  }
 });
 
 test('invitation secrets travel only in JSON bodies; revocation uses nonsecret IDs', async () => {
