@@ -106,6 +106,7 @@ def prepare(artifact: Path, security: Path, selection: JsonObject) -> JsonObject
         ("databaseEvidenceSha256", "database-status.json"),
         ("runtimeProofSha256", "runtime-proof.json"),
         ("vexSha256", "vex.openvex.json"),
+        ("runtimeLicenseEvidenceSha256", "runtime-license-evidence.json"),
     ):
         trust.require(
             result.get(field) == sha256_file(security / name), "attestation_security_file"

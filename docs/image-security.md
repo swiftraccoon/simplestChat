@@ -459,6 +459,23 @@ fixed RPM. A zero-match scanner result cannot override it.
 
 ## Evidence handling
 
+The image gate retains `runtime-license-evidence.json` before evaluating license
+policy. It binds the exact archive, image, revision, platform and SPDX SBOM to
+each runtime RPM's package URL, source RPM and ordered license declarations.
+For package-owned license files and named documentation notices it records paths,
+sizes and SHA-256 hashes from the authenticated image filesystem, including the
+resolved path of permitted notice symlinks. File contents are never included.
+Package, metadata, file-count and byte limits are enforced; a regular notice
+whose bytes disagree with RPM metadata fails the image gate. Empty notice sets
+remain explicit, and static build inputs are identified separately.
+
+This report grants no license approval or automatic exception. A reviewer can
+compare its exact hashes with reviewed upstream notice evidence even when the
+license gate fails and the release archive is not published. The image outcome
+binds the report hash, and signing verifies those bytes before attesting the
+outcome. Missing or unfamiliar notices still require review; the report is not
+a claim that every applicable notice obligation has been fulfilled.
+
 A passing `outcome.json` binds the archive, selected image, revision, platform,
 SPDX SBOM, native and ELF reports, database evidence, secret-path map, tool lock,
 policy and exceptions by SHA-256. `checks.json` separates vulnerabilities,
@@ -471,6 +488,7 @@ raw configuration, raw scanner reports, writable-mount evidence and database
 files. Publish only the explicit reviewed evidence set: `outcome.json`,
 `checks.json`, `elf.json`, `native.json`, `database-status.json`,
 `secret-paths.json`, `runtime-proof.json`, `vex.openvex.json`,
+`runtime-license-evidence.json`,
 `sbom/sbom.syft.json` and `spdx/sbom.spdx.json`. Trusted
 release attestation must bind those successful results to the original archive
 bytes; a broad upload of the working directory is unsafe.

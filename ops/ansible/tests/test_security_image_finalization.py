@@ -14,6 +14,7 @@ from test_support import ROOT
 import release_build
 import security_image as image
 import security_image_policy as image_policy
+import security_rpm_notices
 from release_json import decode_json, object_value
 from test_security_image_advisories import empty_grype, openssl
 
@@ -23,6 +24,9 @@ IMAGE = "sha256:" + "a" * 64
 
 def passing_scans(stack: ExitStack, output: Path) -> None:
     """Replace scanner boundaries while exercising the real final outcome and file writes."""
+    _ = stack.enter_context(
+        patch.object(security_rpm_notices, "collect", return_value={"passed": True})
+    )
     fixed: dict[str, object] = {
         "bind_archive": {
             "revision": "b" * 40,
@@ -57,7 +61,7 @@ class ImageFinalizationTests(unittest.TestCase):
     """A successful set of checks cannot conceal a late evidence read failure."""
 
     def test_complete_evidence_publishes_pass(self) -> None:
-        """The successful path still records all five evidence bindings and check results."""
+        """The successful path records every required evidence binding and check result."""
         with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             output = Path(temporary).resolve() / "out"
             passing_scans(stack, output)
@@ -74,6 +78,7 @@ class ImageFinalizationTests(unittest.TestCase):
                 "elf",
                 "runtimeProof",
                 "vex",
+                "runtimeLicenseEvidence",
             ):
                 self.assertEqual(outcome[name + "Sha256"], "e" * 64)
 
@@ -102,7 +107,7 @@ class ImageFinalizationTests(unittest.TestCase):
             self.assertFalse(object_value(vulnerabilities["reviewedAdvisories"])["passed"])
 
     def test_final_evidence_failure_keeps_successful_checks_but_fails_outcome(self) -> None:
-        """A missing SPDX report after policy evaluation must fail both receipt and exit."""
+        """A missing native report after policy evaluation must fail both receipt and exit."""
         errors = (FileNotFoundError, OSError, ValueError, KeyError)
         for error_type in errors:
             with (
@@ -115,7 +120,7 @@ class ImageFinalizationTests(unittest.TestCase):
 
                 def final_digest(
                     path: Path,
-                    target: Path = output / "spdx/sbom.spdx.json",
+                    target: Path = output / "native.json",
                     error_class: type[Exception] = error_type,
                 ) -> str:
                     if path == target:
@@ -128,7 +133,7 @@ class ImageFinalizationTests(unittest.TestCase):
                 outcome = object_value(decode_json((output / "outcome.json").read_text()))
                 self.assertFalse(outcome["passed"])
                 self.assertEqual(outcome["error"], error_type.__name__)
-                self.assertNotIn("sbomSha256", outcome)
+                self.assertNotIn("nativeSha256", outcome)
                 checks = object_value(decode_json((output / "checks.json").read_text()))
                 self.assertTrue(
                     all(
@@ -136,3 +141,21 @@ class ImageFinalizationTests(unittest.TestCase):
                         for name in ("vulnerabilities", "licenses", "secrets")
                     )
                 )
+
+    def test_changed_rpm_notice_is_retained_and_blocks_image_success(self) -> None:
+        """Failed RPM notice integrity remains inspectable without authorizing a release."""
+        with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
+            output = Path(temporary).resolve() / "out"
+            passing_scans(stack, output)
+            _ = stack.enter_context(patch.object(image, "digest", return_value="e" * 64))
+            _ = stack.enter_context(
+                patch.object(security_rpm_notices, "collect", return_value={"passed": False})
+            )
+            self.assertFalse(image.execute(image.Options(image_id=IMAGE, output=output)))
+            outcome = object_value(decode_json((output / "outcome.json").read_text()))
+            self.assertFalse(outcome["passed"])
+            self.assertEqual(outcome["runtimeLicenseEvidenceSha256"], "e" * 64)
+            self.assertEqual(
+                decode_json((output / "runtime-license-evidence.json").read_text()),
+                {"passed": False},
+            )

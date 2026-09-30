@@ -915,6 +915,7 @@ jobs:
             ${{ runner.temp }}/production-security/image/elf.json
             ${{ runner.temp }}/production-security/image/runtime-proof.json
             ${{ runner.temp }}/production-security/image/vex.openvex.json
+            ${{ runner.temp }}/production-security/image/runtime-license-evidence.json
             ${{ runner.temp }}/production-security/image/native.json
             ${{ runner.temp }}/production-security/image/database-status.json
             ${{ runner.temp }}/production-security/image/scanner-result-*.json

@@ -156,6 +156,7 @@ class ReleaseAttestationTests(unittest.TestCase):
                 ("elfSha256", "elf.json"),
                 ("secretPathMapSha256", "secret-paths.json"),
                 ("databaseEvidenceSha256", "database-status.json"),
+                ("runtimeLicenseEvidenceSha256", "runtime-license-evidence.json"),
             ):
                 _ = (security / name).write_bytes(b"{}")
                 result[field] = hashlib.sha256(b"{}").hexdigest()

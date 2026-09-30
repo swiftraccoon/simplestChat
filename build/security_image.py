@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 import security_archive
 import security_elf
 import security_image_policy as policy
+import security_rpm_notices
 import security_runtime
 import security_secret_projection as projection
 import security_tools
@@ -824,6 +825,18 @@ def execute(args: Options) -> bool:
         packages = policy.inventory(
             object_value(policy.report(sbom_dir / "sbom.syft.json")), image_policy
         )
+        notices = security_rpm_notices.collect(
+            tree / "rootfs",
+            packages,
+            image_id=args.image_id,
+            archive_sha256=string_value(manifest["archiveSha256"]),
+            sbom_sha256=digest(output / "spdx/sbom.spdx.json"),
+            revision=string_value(manifest["revision"]),
+            platform=args.platform,
+        )
+        write(output / "runtime-license-evidence.json", notices)
+        outcome["runtimeLicenseEvidenceSha256"] = digest(output / "runtime-license-evidence.json")
+        policy.require(notices.get("passed") is True, "image_runtime_notice_integrity")
         grype = object_value(policy.report(grype_dir / "grype.json"))
         policy.vulnerability_database_binding(grype, db_status)
         outcome["runtimeRpms"] = policy.runtime_rpm_bindings(packages, elf)
