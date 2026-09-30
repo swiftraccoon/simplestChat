@@ -1,6 +1,6 @@
-# Official multi-architecture image digests verified 2026-09-09. Refresh the
-# digest pins and this package-cache epoch together on the documented cadence.
-ARG FEDORA_REFRESH_EPOCH=2026-09-09
+# Official multi-architecture image digests verified 2026-09-09. The package
+# refresh epoch also advances for security updates between base-digest reviews.
+ARG FEDORA_REFRESH_EPOCH=2026-09-30
 
 # Node is only a frontend build tool, never part of the deployed Rust image.
 # Pin the latest stable Current release and its verified multi-arch manifest.
@@ -47,10 +47,10 @@ RUN test -n "${FEDORA_REFRESH_EPOCH}" \
 # worker and Rust OpenSSL bindings use one version and the runtime cannot load
 # an older libssl with the same SONAME.
 COPY build/install-openssl.sh /usr/local/bin/install-simplestchat-openssl
-RUN /usr/local/bin/install-simplestchat-openssl /opt/openssl-3.5.8
-ENV OPENSSL_DIR=/opt/openssl-3.5.8 \
+RUN /usr/local/bin/install-simplestchat-openssl /opt/openssl-3.5.9
+ENV OPENSSL_DIR=/opt/openssl-3.5.9 \
     OPENSSL_STATIC=1 \
-    PKG_CONFIG_PATH=/opt/openssl-3.5.8/lib/pkgconfig
+    PKG_CONFIG_PATH=/opt/openssl-3.5.9/lib/pkgconfig
 
 # Verify rustup before executing it. TARGETARCH is supplied by Docker/BuildKit;
 # the uname fallback also supports direct Podman builds.
@@ -110,14 +110,14 @@ COPY migrations/*.sql ./migrations/
 RUN python3 build/security_tools.py path cargo-auditable --directory /opt/security-tools \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
         --message-format=json > /app/cargo-build.json \
-    && strings target/release/simplestChat | grep -Fq 'OpenSSL 3.5.8 25 Aug 2026' \
+    && strings target/release/simplestChat | grep -Fq 'OpenSSL 3.5.9 29 Sep 2026' \
     && ! strings target/release/simplestChat | grep -Fq 'OpenSSL 3.0.8' \
     && ! ldd target/release/simplestChat | grep -Eq 'lib(ssl|crypto)\.so'
 COPY build/security_native.py build/security_elf.py build/install-openssl.sh ./build/
 RUN python3 build/security_native.py --root /app \
     --vendor-report /app/vendor-evidence/report.json \
     --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
-    --openssl-prefix /opt/openssl-3.5.8 --output /app/native-components.build.json
+    --openssl-prefix /opt/openssl-3.5.9 --output /app/native-components.build.json
 
 # The load tester has a separate target so its WebRTC client dependencies and
 # executable are absent from the default production image.

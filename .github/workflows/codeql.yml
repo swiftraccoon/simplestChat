@@ -71,8 +71,8 @@ jobs:
       contents: read
       security-events: write # Upload only this job's SARIF to code scanning.
     env:
-      OPENSSL_DIR: ${{ github.workspace }}/target/codeql-openssl-3.5.8
-      PKG_CONFIG_PATH: ${{ github.workspace }}/target/codeql-openssl-3.5.8/lib/pkgconfig
+      OPENSSL_DIR: ${{ github.workspace }}/target/codeql-openssl-3.5.9
+      PKG_CONFIG_PATH: ${{ github.workspace }}/target/codeql-openssl-3.5.9/lib/pkgconfig
       OPENSSL_STATIC: '1'
       PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
     steps:

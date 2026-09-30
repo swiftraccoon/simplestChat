@@ -71,7 +71,7 @@ if (command === 'rustup') {
   else if (args.at(-1) === 'en0') console.log('192.0.2.20');
   else process.exit(1);
 } else if (command === 'pkg-config') {
-  if (args.includes('--modversion')) console.log('3.5.8');
+  if (args.includes('--modversion')) console.log('3.5.9');
   fail('pkg-config');
 } else if (command === 'node') {
   // The inline availability preflight is covered separately. Never open ports
@@ -79,7 +79,7 @@ if (command === 'rustup') {
   if (args.includes('--version') || args.includes('-v')) console.log('v26.8.1');
 }
 else if (command === 'python3') console.log('Python 3.14.0');
-else if (command === 'openssl') console.log('OpenSSL 3.5.8 fixture');
+else if (command === 'openssl') console.log('OpenSSL 3.5.9 fixture');
 else if (['cc', 'c++', 'clang', 'clang++', 'cmake', 'make', 'xcrun'].includes(command)) {
   if (args.includes('--version')) console.log(command + ' fixture');
 } else {
@@ -129,7 +129,7 @@ async function fixture(t, { channel = '1.98.1', installedOpenSsl = true, install
     executable(path.join(root, 'toolchain/bin/rustc'), 'pinned-rustc'),
     executable(path.join(root, 'toolchain/bin/rustdoc'), 'pinned-rustdoc'),
   ]);
-  const prefix = path.join(root, 'target/openssl-3.5.8');
+  const prefix = path.join(root, 'target/openssl-3.5.9');
   if (installedOpenSsl) {
     for (const file of ['lib/libssl.a', 'lib/libcrypto.a', 'include/openssl/ssl.h', 'lib/pkgconfig/openssl.pc']) {
       await mkdir(path.dirname(path.join(prefix, file)), { recursive: true });

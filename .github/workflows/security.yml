@@ -155,8 +155,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     env:
-      OPENSSL_DIR: ${{ github.workspace }}/target/openssl-3.5.8
-      PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-3.5.8/lib/pkgconfig
+      OPENSSL_DIR: ${{ github.workspace }}/target/openssl-3.5.9
+      PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-3.5.9/lib/pkgconfig
       OPENSSL_STATIC: '1'
       PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
     steps:

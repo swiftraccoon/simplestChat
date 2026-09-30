@@ -481,11 +481,11 @@ fn main() {
     // dependency order on linkers that still process archives left-to-right.
     println!("cargo:rustc-link-lib=static=mediasoup-worker");
     pkg_config::Config::new()
-        // Do not use a plain >=3.5.8 check: CVE-2026-54874 is still present in
-        // OpenSSL 3.6.0-3.6.3 and 4.0.0-4.0.1. Stay on the fixed 3.5 LTS line.
-        .range_version("3.5.8".."3.6.0")
+        // Do not use a plain >=3.5.9 check: CVE-2026-84782 also affects
+        // OpenSSL 3.6.0-3.6.4 and 4.0.0-4.0.2. Stay on the fixed 3.5 LTS line.
+        .range_version("3.5.9".."3.6.0")
         .statik(true)
         .probe("openssl")
-        .expect("static OpenSSL >= 3.5.8 and < 3.6.0 is required");
+        .expect("static OpenSSL >= 3.5.9 and < 3.6.0 is required");
     println!("cargo:rustc-link-search=native={out_dir}");
 }

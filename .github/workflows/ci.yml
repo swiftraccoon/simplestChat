@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 env:
-  OPENSSL_DIR: ${{ github.workspace }}/target/openssl-3.5.8
-  PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-3.5.8/lib/pkgconfig
+  OPENSSL_DIR: ${{ github.workspace }}/target/openssl-3.5.9
+  PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-3.5.9/lib/pkgconfig
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -242,7 +242,7 @@ jobs:
             | sha256sum --check --strict
           echo '8f535a2932f7074ed3c52c01de988b8e2881d94a3e2a169945c42d64ac0f3e77  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/ankerl-unordered-dense/meson.build' \
             | sha256sum --check --strict
-          strings target/debug/simplestChat | grep -Fq 'OpenSSL 3.5.8 25 Aug 2026'
+          strings target/debug/simplestChat | grep -Fq 'OpenSSL 3.5.9 29 Sep 2026'
           if strings target/debug/simplestChat | grep -Fq 'OpenSSL 3.0.8'; then
             echo 'vulnerable bundled OpenSSL 3.0.8 found in server binary' >&2
             exit 1
@@ -312,14 +312,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config
-          echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-3.5.8" >> "${GITHUB_ENV}"
+          echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-3.5.9" >> "${GITHUB_ENV}"
 
       - name: Restore checksum-pinned OpenSSL
         if: steps.verified.outputs.cache-hit != 'true'
         id: openssl
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/simplestchat-openssl-3.5.8
+          path: ${{ runner.temp }}/simplestchat-openssl-3.5.9
           key: openssl-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build/install-openssl.sh') }}
 
       - name: Build checksum-pinned OpenSSL

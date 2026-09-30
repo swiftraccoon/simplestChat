@@ -407,7 +407,7 @@ def mutation_checks(context: Context, args: Options) -> None:
     platform = args.mutation_tool_platform or current_platform()
     tools = install(["cargo-mutants"], context.output / "mutation-tools", target_platform=platform)
     prefix = args.openssl_prefix or Path(
-        os.environ.get("OPENSSL_DIR", str(context.root / "target/openssl-3.5.8"))
+        os.environ.get("OPENSSL_DIR", str(context.root / "target/openssl-3.5.9"))
     )
     _ = context.run(
         "mutation-policy",

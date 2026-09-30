@@ -27,7 +27,7 @@ component and installs the checksum-verified mutation tool:
 
 ```sh
 build/check-security.sh deep --deep-check mutation \
-  --openssl-prefix "$PWD/target/openssl-3.5.8"
+  --openssl-prefix "$PWD/target/openssl-3.5.9"
 ```
 
 `deep` defaults to `--deep-check all`, which requires both the native sandbox
@@ -35,7 +35,7 @@ prerequisites and the mutation compiler/OpenSSL prerequisites. Select
 `--deep-check native` for native checks alone or `--deep-check mutation` for
 mutation checks alone; both retain the shared fast/vendor checks.
 The shared OpenSSL argument defaults to `OPENSSL_DIR` when set, otherwise
-`target/openssl-3.5.8` in the checkout.
+`target/openssl-3.5.9` in the checkout.
 
 For a focused local iteration, install the same tool and invoke the maintained
 helper directly with a **new** private output directory:
@@ -45,7 +45,7 @@ python3 build/security_tools.py install --tools cargo-mutants \
   --directory "$PWD/target/mutation-tools-local"
 python3 build/security_mutation.py \
   --tools-directory "$PWD/target/mutation-tools-local" \
-  --openssl-prefix "$PWD/target/openssl-3.5.8" \
+  --openssl-prefix "$PWD/target/openssl-3.5.9" \
   --output results/mutation-policy-local
 ```
 

@@ -26,7 +26,7 @@ Install the pinned Rust/native dependencies from the
 [development setup](../docs/development.md), then run from the repository root:
 
 ```bash
-export OPENSSL_DIR="$PWD/target/openssl-3.5.8"
+export OPENSSL_DIR="$PWD/target/openssl-3.5.9"
 export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
 export OPENSSL_STATIC=1
 export PIP_CONSTRAINT="$PWD/build/pip-constraints.txt"

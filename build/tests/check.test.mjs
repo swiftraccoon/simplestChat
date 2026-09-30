@@ -95,7 +95,7 @@ async function fixture(t, { installedWeb = true, installedOpenSsl = true, omitte
     writeFile(path.join(root, 'load_tests/benchmark-local.test.mjs'), 'throw new Error("must never execute");\n'),
   ]);
   if (installedWeb) await mkdir(path.join(root, 'web/node_modules'));
-  const prefix = path.join(root, 'target/openssl-3.5.8');
+  const prefix = path.join(root, 'target/openssl-3.5.9');
   async function installFixtureOpenSsl(directory) {
     await mkdir(path.join(directory, 'lib'), { recursive: true });
     await Promise.all(['libssl.a', 'libcrypto.a'].map(name => writeFile(path.join(directory, 'lib', name), 'fixture only\n')));

@@ -40,8 +40,8 @@ permissions:
   contents: read
 
 env:
-  OPENSSL_DIR: ${{ github.workspace }}/target/openssl-3.5.8
-  PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-3.5.8/lib/pkgconfig
+  OPENSSL_DIR: ${{ github.workspace }}/target/openssl-3.5.9
+  PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-3.5.9/lib/pkgconfig
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.only }}-${{ inputs.workers }}-${{ inputs.clients }}

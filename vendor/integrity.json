@@ -126,7 +126,7 @@
         {
           "path": "build.rs",
           "upstream_sha256": "8e776fe8ae227a3fa5a5df485967b19ce40d434a7249fdc70f4796395a06da9a",
-          "vendored_sha256": "b090621e380b9c8cf9aef3d4ed51d8d5dd36bd56317727542be3b4d5558f43fe"
+          "vendored_sha256": "5f847b66d66f24a184d83473eb4c817f16e7b812031975b0151faad635d8c716"
         },
         {
           "path": "deps/libwebrtc/libwebrtc/modules/congestion_controller/rtp/transport_feedback_adapter.cc",
@@ -171,7 +171,7 @@
         {
           "path": "meson.build",
           "upstream_sha256": "3b3550eb51bc5e2ab9fd74731ab6f8f84df34d19f4c19409861306b86d95c229",
-          "vendored_sha256": "71c087a4d9799c80bcb62131fce89a7862ee9ef80ec6cd9b8ff497b867848a06"
+          "vendored_sha256": "46250d6321d85cf521faae08bc33440ac5d2a29961a2ef2dc5cf545d155bc172"
         },
         {
           "path": "python-invoke-requirements.txt",

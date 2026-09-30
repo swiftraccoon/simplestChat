@@ -142,7 +142,7 @@ def native_inventory() -> JsonObject:
             "version": "m77",
             "license": "BSD-3-Clause",
         },
-        "openssl": {"version": "3.5.8", "license": "Apache-2.0"},
+        "openssl": {"version": "3.5.9", "license": "Apache-2.0"},
         "registry_component": {"name": "AWS-LC", "version": "5.7.0", "license": "ISC AND MIT"},
         "toolchain": {
             "static_cxx_owner": "libstdc++-static\t0:16.2.1-2.fc44.aarch64\t"

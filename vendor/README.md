@@ -95,7 +95,7 @@ invocation with `--message-format=json`. After building, it runs:
 python3 build/security_native.py --root /app \
   --vendor-report /app/vendor-evidence/report.json \
   --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
-  --openssl-prefix /opt/openssl-3.5.8 --output /app/native-components.build.json
+  --openssl-prefix /opt/openssl-3.5.9 --output /app/native-components.build.json
 ```
 
 The helper rechecks the vendor receipt against current files, selects the actual
@@ -275,11 +275,21 @@ Cargo ignores a dependency's
 nested lockfile, so removing that generated package artifact does not change
 workspace resolution. The replacement build:
 
-- requires pkg-config to find OpenSSL 3.5.8 or newer on the 3.5 LTS line
+- requires pkg-config to find OpenSSL 3.5.9 or newer on the 3.5 LTS line
   (versions before 3.6.0);
 - forbids Meson fallback to a bundled copy;
 - requires static `libssl` and `libcrypto`; and
 - makes libsrtp use the same resolved dependency.
+
+The pinned source is OpenSSL 3.5.9, released 29 September 2026. The update follows
+the [OpenSSL security advisory](https://openssl-library.org/news/secadv/20260929.txt),
+including the High-severity DTLS issue CVE-2026-84782. The official source archive
+SHA-256 is `603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a`;
+the installer verifies it before unpacking, and `native-components.json` binds
+both the source and installer hashes. Cargo and Meson reject earlier 3.5 releases
+and other release lines. Updating the source pin requires rebuilding the worker,
+Rust executables, native test image and production/load-generator images;
+previous binaries and historical scan receipts do not acquire the fix.
 
 The build script copies the crate's allowlisted package inputs into a fresh
 Cargo `OUT_DIR` snapshot and runs Meson there. It tracks the complete immutable

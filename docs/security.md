@@ -47,7 +47,7 @@ They do not initiate a continuous fuzzing campaign or contact a deployment.
 
 Mutation checks require the documented native compiler, locked Cargo cache and
 checksum-pinned static OpenSSL prefix. `--openssl-prefix` defaults to `OPENSSL_DIR`
-or the checkout's `target/openssl-3.5.8`. The runner builds a private source copy
+or the checkout's `target/openssl-3.5.9`. The runner builds a private source copy
 and measures assertions over selected pure role, label and password policies.
 See [mutation checks](../security/mutation/README.md) for platform support, limits
 and failure interpretation. Unsupported tool platforms fail explicitly.

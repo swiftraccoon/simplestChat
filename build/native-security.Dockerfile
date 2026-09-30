@@ -69,10 +69,10 @@ FROM native-base
 COPY --from=llvm-toolchain /opt/llvm /opt/llvm
 COPY security/native/toolchain.json /opt/check/security/native/toolchain.json
 COPY build/install-openssl.sh /opt/check/build/install-openssl.sh
-RUN /opt/check/build/install-openssl.sh /opt/openssl-3.5.8
+RUN /opt/check/build/install-openssl.sh /opt/openssl-3.5.9
 ENV PATH=/opt/llvm/bin:/usr/bin:/bin \
-    OPENSSL_DIR=/opt/openssl-3.5.8 OPENSSL_STATIC=1 \
-    PKG_CONFIG_PATH=/opt/openssl-3.5.8/lib/pkgconfig \
+    OPENSSL_DIR=/opt/openssl-3.5.9 OPENSSL_STATIC=1 \
+    PKG_CONFIG_PATH=/opt/openssl-3.5.9/lib/pkgconfig \
     CC=/opt/llvm/bin/clang CXX=/opt/llvm/bin/clang++ \
     PYTHON=/usr/bin/python3 PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
     PIP_CONFIG_FILE=/dev/null PIP_INDEX_URL=https://pypi.org/simple \
