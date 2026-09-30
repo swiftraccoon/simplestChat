@@ -331,6 +331,41 @@ The scanner behaviors are documented upstream in the
 [pinned Gitleaks configuration](https://github.com/gitleaks/gitleaks/blob/v8.30.1/config/gitleaks.toml)
 and [SPDX expression specification](https://spdx.github.io/spdx-spec/v2.2.2/SPDX-license-expressions/).
 
+## Native advisory coverage
+
+Authenticated source and license records establish which native inputs were
+compiled. They do not establish advisory coverage. The supplemental binary
+entries currently have no PURL or CPE, and Grype's automatic CPE inference is
+disabled. A zero-match result therefore does not establish NVD coverage for
+OpenSSL, AWS-LC, Abseil, FlatBuffers, libuv, unordered_dense, libsrtp or libwebrtc.
+The separately identified Fedora static C++ runtime retains RPM matching.
+
+Reviewed identities must preserve component boundaries. NVD has verified product
+families for OpenSSL, libuv, Abseil C++ and non-FIPS AWS-LC; that does not mean every
+pinned version has an exact dictionary entry. The current nondeprecated
+FlatBuffers dictionary records found in the September 2026 review describe the
+Rust crate, not the native C++ entry. No confirmed identity was found for
+unordered_dense. The Versatica libsrtp fork and adapted libwebrtc subset require
+source-specific applicability review; neither inherits the whole upstream
+product's CPE or version ranges. A Rust wrapper's advisory coverage also does not
+establish complete coverage for its bundled native library.
+
+Fresh databases can lack affected-product mappings for a newly published CVE.
+On 2026-09-30, the retained Grype database contained CVE-2026-84782 in NVD with
+status `analyzing`, no affected-CPE/package mappings and no Fedora record. The
+[official OpenSSL CNA record](https://openssl-library.org/news/secjson/cve-2026-84782.json)
+already identified the High-severity issue and the affected 3.5.0–3.5.8 range,
+fixed in 3.5.9. Adding an OpenSSL CPE alone would not close that ingestion gap.
+
+The fast source gate separately requires the pinned OpenSSL patch to match the
+single current stable archive in its supported major/minor series on the
+[official source page](https://openssl-library.org/source/). Missing, ambiguous,
+unavailable or stale evidence fails; the check never updates the pin or changes
+the supported series. Its receipt binds the observed page and native manifest
+hashes. This release-freshness check complements advisory matching; it is not a
+vulnerability-free or application-reachability verdict. Empty advisory API
+responses likewise do not establish indexing or complete native coverage.
+
 ## Evidence handling
 
 A passing `outcome.json` binds the archive, selected image, revision, platform,
