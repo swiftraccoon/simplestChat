@@ -1,0 +1,55 @@
+name: Disposable infrastructure security
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read # Resolve and download only the exact signed main CI release.
+
+concurrency:
+  group: infrastructure-security-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  infrastructure:
+    name: Debian VM deployment and restore policy
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install owned-guest prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils openssh-client curl acl python3-venv
+          test -c /dev/kvm
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          python3 -m venv "$RUNNER_TEMP/vm-controller"
+          "$RUNNER_TEMP/vm-controller/bin/python" -m pip --isolated install \
+            --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
+      - name: Acquire and verify the exact signed main release
+        timeout-minutes: 20
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          "$RUNNER_TEMP/vm-controller/bin/python" build/security_vm_release.py \
+            --repository "$GITHUB_REPOSITORY" --output "$RUNNER_TEMP/vm-release"
+      - name: Apply twice and verify host policy and isolated restore
+        timeout-minutes: 35
+        run: |
+          "$RUNNER_TEMP/vm-controller/bin/python" build/security_vm.py \
+            --artifact-dir "$RUNNER_TEMP/vm-release/artifact" \
+            --output "$RUNNER_TEMP/security-vm"
+      - name: Preserve only the sanitized VM summary
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: infrastructure-security-summary
+          path: ${{ runner.temp }}/security-vm/summary.json
+          if-no-files-found: warn
+          retention-days: 14
