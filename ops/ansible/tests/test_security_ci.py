@@ -187,6 +187,37 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertIn("build/check-security.sh deep --deep-check native", native)
 
+    def test_codeql_success_requires_original_report_policy_enforcement(self) -> None:
+        """An analyzer success or remote dismissal cannot substitute for the local verdict."""
+        for name, job in obj(workflow("codeql.yml"), "jobs").items():
+            steps = objects(job, "steps")
+            analyze = next(
+                step for step in steps if "codeql-action/analyze@" in string(step.get("uses", ""))
+            )
+            gate = next(
+                step
+                for step in steps
+                if "build/security_codeql_triage.py sarif" in string(step.get("run", ""))
+            )
+            self.assertLess(steps.index(analyze), steps.index(gate))
+            self.assertEqual(at(analyze, "with", "output"), "${{ runner.temp }}/codeql-sarif")
+            self.assertEqual(gate["if"], "${{ github.event_name != 'schedule' }}")
+            self.assertNotIn("continue-on-error", gate)
+            command = string(gate, "run")
+            self.assertIn("${#reports[@]} != 1", command)
+            self.assertIn('--revision "$GITHUB_SHA"', command)
+            if name == "native-analysis":
+                self.assertIn('--source-cache "$RUNNER_TEMP/vendor-cache"', command)
+            uploads = [step for step in steps if "upload-artifact@" in string(step.get("uses", ""))]
+            self.assertEqual(len(uploads), 1)
+            self.assertEqual(
+                set(string(uploads[0], "with", "path").splitlines()),
+                {
+                    "${{ runner.temp }}/codeql-policy-evidence/report.json",
+                    "${{ runner.temp }}/codeql-policy-evidence/failure.json",
+                },
+            )
+
     def test_build_caches_cannot_fall_back_across_trust_or_architecture(self) -> None:
         """PR build artifacts remain outside the main compiler/layer cache namespace."""
         composite = obj(

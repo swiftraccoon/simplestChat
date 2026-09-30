@@ -39,7 +39,29 @@ jobs:
       - name: Analyze and upload results
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
+          output: ${{ runner.temp }}/codeql-sarif
           category: /language:${{ matrix.language }}/${{ github.event_name == 'schedule' && 'quality-advisory' || 'security' }}
+      - name: Enforce exact reviews for High and Critical findings
+        if: ${{ github.event_name != 'schedule' }}
+        run: |
+          shopt -s nullglob
+          reports=("$RUNNER_TEMP/codeql-sarif/"*.sarif)
+          if ((${#reports[@]} != 1)); then
+            echo 'Exactly one original CodeQL report is required.' >&2
+            exit 1
+          fi
+          python3 build/security_codeql_triage.py sarif --revision "$GITHUB_SHA" \
+            --input "${reports[0]}" --output "$RUNNER_TEMP/codeql-policy-evidence"
+      - name: Preserve CodeQL policy evidence
+        if: ${{ always() && github.event_name != 'schedule' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codeql-policy-${{ matrix.language }}
+          path: |
+            ${{ runner.temp }}/codeql-policy-evidence/report.json
+            ${{ runner.temp }}/codeql-policy-evidence/failure.json
+          if-no-files-found: warn
+          retention-days: 14
 
   native-analysis:
     name: CodeQL (native C/C++)
@@ -102,6 +124,7 @@ jobs:
       - name: Analyze observed C/C++ translation units
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
+          output: ${{ runner.temp }}/codeql-sarif
           category: /language:c-cpp/${{ github.event_name == 'schedule' && 'quality-advisory' || 'security' }}
       - name: Require extraction of the real media protocol implementations
         env:
@@ -112,3 +135,25 @@ jobs:
           "$CODEQL_BINARY" bqrs decode --format=json "$RUNNER_TEMP/native-coverage.bqrs" \
             --output "$RUNNER_TEMP/native-coverage.json"
           python3 build/security_codeql.py "$RUNNER_TEMP/native-coverage.json"
+      - name: Enforce exact reviews for native High and Critical findings
+        if: ${{ github.event_name != 'schedule' }}
+        run: |
+          shopt -s nullglob
+          reports=("$RUNNER_TEMP/codeql-sarif/"*.sarif)
+          if ((${#reports[@]} != 1)); then
+            echo 'Exactly one original CodeQL report is required.' >&2
+            exit 1
+          fi
+          python3 build/security_codeql_triage.py sarif --revision "$GITHUB_SHA" \
+            --input "${reports[0]}" --source-cache "$RUNNER_TEMP/vendor-cache" \
+            --output "$RUNNER_TEMP/codeql-policy-evidence"
+      - name: Preserve native CodeQL policy evidence
+        if: ${{ always() && github.event_name != 'schedule' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codeql-policy-c-cpp
+          path: |
+            ${{ runner.temp }}/codeql-policy-evidence/report.json
+            ${{ runner.temp }}/codeql-policy-evidence/failure.json
+          if-no-files-found: warn
+          retention-days: 14

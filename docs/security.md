@@ -117,7 +117,7 @@ browser and production-image suites. A trusted release is eligible only after
 all required jobs succeed; a skipped or failed dependency is not release approval.
 
 Daily security runs refresh advisory results even when source has not changed.
-The daily deep tier runs the same finite native checks. CodeQL runs
+The daily deep jobs run finite native checks and selected pure-policy mutations. CodeQL runs
 `security-extended` for ordinary CI and `security-and-quality` in its separately
 categorized scheduled analysis. The broader scheduled category is initially
 advisory; findings still need triage.
@@ -129,6 +129,19 @@ A query then requires observed compilation of the DTLS, STUN, SCTP and RTP
 implementations. An empty database or a source-only native scan cannot pass that
 coverage check. This job starts a fresh native build and does not restore a
 previous worker compilation.
+
+After ordinary analysis, every language job validates its original SARIF through
+`build/security_codeql_triage.py`. Unreviewed High and Critical findings fail the
+job even when the scanner process itself succeeds. Each exception binds the
+query, analyzer version, primary range, rendered-message digest and complete
+source identity. Generated native files require authenticated upstream archive
+and maintained-overlay evidence. Missing or incomplete analysis fails the gate.
+
+The [exact review procedure](../security/codeql-review-2026-09-30.md) separates
+local enforcement, read-only GitHub plans and authorized false-positive dismissal.
+Remote dismissal alone never exempts a finding from the repository gate. CI
+retains only the compact policy report or fixed failure code; complete SARIF and
+scanner working data remain private. Scheduled quality analysis stays advisory.
 
 Only SARIF jobs receive `security-events: write`. PR jobs receive no deployment
 credentials or signing permission. Native, Rust and image caches include explicit
