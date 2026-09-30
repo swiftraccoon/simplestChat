@@ -290,6 +290,646 @@
       "reachability": "The complete fingerprint and exact evidence path must both match; other values and paths remain scanned.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-license-review.md"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:7053ee0ff50d1ef8f59ea7f335f55bbdb1e18ca519e35390f8195ed23f087430",
+      "scope": "web/e2e/ui-stress.cjs:119:119:26:33",
+      "owner": "swiftraccoon",
+      "rationale": "GuestPeer.request stores a caller-supplied predicate in waiter.match; message handling calls that function. Reviewed join/chat callsites pass fixed equality/type predicates. This is not String.match or RegExp construction.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 007f48d94f1889db7aab36cd5b67e7303b1a26f9a24edbe85769e255e306e181. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-1"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:c26823883a8a6d8a3e2a931a340525f2ec4533078d363bb74eeb8376e11b6775",
+      "scope": "build/tests/canary-correlation.test.mjs:306:306:16:53",
+      "owner": "swiftraccoon",
+      "rationale": "Read/assert operations in a private mkdtemp test fixture deliberately check 0600 permissions and then read synthetic report bytes, or re-read after asserting exclusive creation refused overwrite. This does not authorize a production file operation from a path check.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 579119d84dcedd18e90fa915103a54183484cfece96f1e48141e6ba7bdc32bca. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-2"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:381c61d6cd3d854d9c852a5fabedff72110a7fcdd6995e6126d404088935de45",
+      "scope": "build/tests/canary-correlation.test.mjs:311:311:5:42",
+      "owner": "swiftraccoon",
+      "rationale": "Read/assert operations in a private mkdtemp test fixture deliberately check 0600 permissions and then read synthetic report bytes, or re-read after asserting exclusive creation refused overwrite. This does not authorize a production file operation from a path check.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 579119d84dcedd18e90fa915103a54183484cfece96f1e48141e6ba7bdc32bca. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-3"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:71fab9bdbd8d045d87878be6225c1f0fd9e780b19ca66a0fad6d9f8866dab9f7",
+      "scope": "build/tests/test-server.test.mjs:62:62:35:57",
+      "owner": "swiftraccoon",
+      "rationale": "Read/assert operations in a private mkdtemp test fixture deliberately check 0600 permissions and then read synthetic report bytes, or re-read after asserting exclusive creation refused overwrite. This does not authorize a production file operation from a path check.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 f2b14e05e0907a52b1e1e44bb00d755e946d9f97ed3ad2bdd4716c2fe7561b8a. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-4"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:26d87b0993a1ae166467ebb6f2b925771f088450eae79ea1ca9ef335b7dec45b",
+      "scope": "web/tests/performance-report.test.mjs:25:25:31:58",
+      "owner": "swiftraccoon",
+      "rationale": "Read/assert operations in a private mkdtemp test fixture deliberately check 0600 permissions and then read synthetic report bytes, or re-read after asserting exclusive creation refused overwrite. This does not authorize a production file operation from a path check.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 f71752be0ed70e30935a5ad13df197f2fcbe5776cdd11388f78a028c2554e1eb. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-6"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:82a6d2d3dfad9ff8034b6a92a5e9750546a8b25c4a179eb20ca015add7eeacde",
+      "scope": "web/tests/performance-report.test.mjs:57:57:31:61",
+      "owner": "swiftraccoon",
+      "rationale": "Read/assert operations in a private mkdtemp test fixture deliberately check 0600 permissions and then read synthetic report bytes, or re-read after asserting exclusive creation refused overwrite. This does not authorize a production file operation from a path check.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 f71752be0ed70e30935a5ad13df197f2fcbe5776cdd11388f78a028c2554e1eb. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-7"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:f208ab7f530b4c239153e040e566f462c8b481cd471a31f0b17a209e56068c64",
+      "scope": "load_tests/benchmark-podman.mjs:26:26:47:84",
+      "owner": "swiftraccoon",
+      "rationale": "The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c2b9c274fb04f2537790b0af1d4dd238bcd343a68604aed0018feda694456811. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-9"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:41b3db40bbca0e5b686e74b914834c233c56d85a7071c3606d67e26125312036",
+      "scope": "load_tests/benchmark-local.mjs:23:23:47:84",
+      "owner": "swiftraccoon",
+      "rationale": "The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 5b6f618087c9a14ffa8b18ad9d7574b5260900fdb745566d94b4ee8c79d86ae3. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-10"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:89a999d10dd18dd177e34f7ed8f70f96a8286742787d026b4262c3fc3acc137e",
+      "scope": "load_tests/benchmark-podman.mjs:375:375:105:115",
+      "owner": "swiftraccoon",
+      "rationale": "The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c2b9c274fb04f2537790b0af1d4dd238bcd343a68604aed0018feda694456811. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-11"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:e99cc3424327bc2199a9044f0050cd182193e2e3d1009e4ce5ee7441a41150ca",
+      "scope": "load_tests/benchmark-podman.mjs:425:425:64:74",
+      "owner": "swiftraccoon",
+      "rationale": "The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c2b9c274fb04f2537790b0af1d4dd238bcd343a68604aed0018feda694456811. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-12"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:1703fa694485d1da55993c5a9b7e6a7392a360ba9d07bba78e5ea32491b604ea",
+      "scope": "load_tests/benchmark-podman.mjs:448:448:105:115",
+      "owner": "swiftraccoon",
+      "rationale": "The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c2b9c274fb04f2537790b0af1d4dd238bcd343a68604aed0018feda694456811. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-13"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:272d7d7010b4b07b82d8db7d532ada4c75f8634342562a8fb0af35782a41a8bd",
+      "scope": "load_tests/benchmark-podman.mjs:457:457:61:70",
+      "owner": "swiftraccoon",
+      "rationale": "The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c2b9c274fb04f2537790b0af1d4dd238bcd343a68604aed0018feda694456811. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-14"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:d3dc83e4c0a2b51d3779809cf04836e5afc8446d98d9febec30c68ee070b834c",
+      "scope": "load_tests/benchmark-local.mjs:528:528:105:115",
+      "owner": "swiftraccoon",
+      "rationale": "The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 5b6f618087c9a14ffa8b18ad9d7574b5260900fdb745566d94b4ee8c79d86ae3. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-15"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:49389e72ea85d80f5db8cbc6024ebaac3bf2896df220add614205ec1915ee50e",
+      "scope": "load_tests/benchmark-local.mjs:587:587:105:115",
+      "owner": "swiftraccoon",
+      "rationale": "The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 5b6f618087c9a14ffa8b18ad9d7574b5260900fdb745566d94b4ee8c79d86ae3. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-16"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:856e616effb5928b547dd5823a051d1a93beaae4b66dda809eb66efe9aa2ac0e",
+      "scope": "load_tests/benchmark-local.mjs:599:599:61:70",
+      "owner": "swiftraccoon",
+      "rationale": "The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 5b6f618087c9a14ffa8b18ad9d7574b5260900fdb745566d94b4ee8c79d86ae3. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-17"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:c4fc902da4e2a8f67ef03e41a5fa4af1364dbc81c624f3b1bcdd31d435104590",
+      "scope": "load_tests/benchmark-local.mjs:635:635:64:72",
+      "owner": "swiftraccoon",
+      "rationale": "The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 5b6f618087c9a14ffa8b18ad9d7574b5260900fdb745566d94b4ee8c79d86ae3. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-18"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:c4ce8dc45faac2c6e55dc9c40952bc45a7e4fe20c22d20c8baea56a08eea613a",
+      "scope": "ops/ansible/tests/test_turn_public.py:112:112:48:54",
+      "owner": "swiftraccoon",
+      "rationale": "The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 ccd57287b97b59e5a7fb089201af29597eae8e7749d1b10c6047e0aaea941c56. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-19"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:a92f0244cfb68ca96844e42b112db72c6a1cd2a29ce332bcd7698db21acd1f4a",
+      "scope": "ops/ansible/tests/test_turn_public.py:119:119:57:61",
+      "owner": "swiftraccoon",
+      "rationale": "The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 ccd57287b97b59e5a7fb089201af29597eae8e7749d1b10c6047e0aaea941c56. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-20"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:b73019172908cd5b3b5bc6bfd3cf4cdcb837caa36705895e6e77771b6be2f26b",
+      "scope": "ops/ansible/tests/test_turn_public.py:123:123:61:84",
+      "owner": "swiftraccoon",
+      "rationale": "The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 ccd57287b97b59e5a7fb089201af29597eae8e7749d1b10c6047e0aaea941c56. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-21"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:9cd80f5da419efd3b838e1d77cfa0ae740f9d5684dd9b15a9dd283d84428c051",
+      "scope": "ops/ansible/tests/test_turn_public.py:126:126:61:65",
+      "owner": "swiftraccoon",
+      "rationale": "The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 ccd57287b97b59e5a7fb089201af29597eae8e7749d1b10c6047e0aaea941c56. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-22"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:7654d5c2c4db84292be74982636e7c5400ba5bae223ff9a438e0d64da1da4101",
+      "scope": "ops/ansible/tests/test_turn_public.py:140:140:17:77",
+      "owner": "swiftraccoon",
+      "rationale": "The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 ccd57287b97b59e5a7fb089201af29597eae8e7749d1b10c6047e0aaea941c56. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-23"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:c4b7ab6b5946d915d75c3ea645644a21b24fab774419d84ccdb4a4b00f2e494d",
+      "scope": "build/release_container_fixture.py:163:167:19:6",
+      "owner": "swiftraccoon",
+      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 872273a5c7940e95987d967cfe591c39270f7c776e3c854b16527d0e5621d80d. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-27"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:d87b4004878e74701ba8def0eee101fca8d2cd2ac0b77089d297761adec181de",
+      "scope": "ops/ansible/tests/test_automation.py:39:39:9:65",
+      "owner": "swiftraccoon",
+      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 afd1355fe845e5c051d92c165fc40d6f316268d391d7447cb857ad470743f086. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-28"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:6f04daf9943839b54e28bb25644fefae080c4b21ae012f2ad17891845d999700",
+      "scope": "ops/ansible/tests/test_automation.py:395:395:23:79",
+      "owner": "swiftraccoon",
+      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 afd1355fe845e5c051d92c165fc40d6f316268d391d7447cb857ad470743f086. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-29"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:f1c5d0f83d8419a0693936120afd2c2023cc4972f3138ebceea7870b86429307",
+      "scope": "ops/ansible/tests/test_public_templates.py:82:82:9:65",
+      "owner": "swiftraccoon",
+      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c9812f1d39fbf073c580220868ba692b93acb440a5ca2428d41c3d0887465619. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-30"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:6f6a8d01062df540ddbda70909439f0e3add0c40b7620c479809bff10593dcc1",
+      "scope": "ops/ansible/tests/test_release_playbook.py:76:76:23:79",
+      "owner": "swiftraccoon",
+      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 11fcd936687e12bbfb93ca10d6118914692918938a867692aa28732641399f46. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-31"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:b0ed7fddcf11b71bf2b5af49ac26a72d5f1f4f266d9ca22061f4959dad971a61",
+      "scope": "build/release_container_harness.py:136:136:18:75",
+      "owner": "swiftraccoon",
+      "rationale": "write_new defaults to mode0600 with O_CREAT|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 05deaeb4565baa51e86758ed9a16a3b46394668656f960e549cfc946d3eee9e0. Changes require a fresh review; no general test, template or path exclusion.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-32"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:068a3902451d2bf9a380790fbfecc9c76b7c57d86e2df92c9a9adf094ee9af1b",
+      "scope": "src/metrics.rs:1153:1153:13:21",
+      "owner": "swiftraccoon",
+      "rationale": "The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 48abe4ec1b68ca9b3b5a4e47f72ede19c23e4663989d95def0ec3d089bd5fdf5. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-33"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:a7367e88865c33e2d9ded1804bb52f032cd2259ceaae7b4ddb4e66900b794594",
+      "scope": "src/metrics.rs:1157:1157:13:21",
+      "owner": "swiftraccoon",
+      "rationale": "The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 48abe4ec1b68ca9b3b5a4e47f72ede19c23e4663989d95def0ec3d089bd5fdf5. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-34"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:5a4cd442ac154d7cb6675be6916c1fcad3306f3c315577db1189ce91780169f5",
+      "scope": "src/signaling/mod.rs:1667:1667:153:165",
+      "owner": "swiftraccoon",
+      "rationale": "The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 d8004af40f70d760e0055d69dbed50c2ff4e50b0731682d826217469137dac80. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-35"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:6550030265c403d3308b7c42c85d6362e78182b8c7c434bb7145bf290165de47",
+      "scope": "src/signaling/connection_authorization_tests.rs:247:247:21:62",
+      "owner": "swiftraccoon",
+      "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 726a5d24666106dca787589a24acec542e45a26ec8c3259b82e33ac4b8e0493c. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-36"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:c61504e29181881d53dcb7eb7fde5de64f82d7122f2f577cb12ca8ab8611dc4e",
+      "scope": "src/signaling/connection_authorization_tests.rs:295:295:17:51",
+      "owner": "swiftraccoon",
+      "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 726a5d24666106dca787589a24acec542e45a26ec8c3259b82e33ac4b8e0493c. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-37"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:47ccedc222cfcc37480d48e1213d3a9ca8e90ab56db1482196594d8bffec9c11",
+      "scope": "src/auth/common_passwords.rs:266:266:27:40",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c608e1f40ddc4c4eb53c84cfb12850faf012f7cdb0cd40e76a9af6b037da5fa0. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-38"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:26921d4d7658a6d81ec0cbdda029b6b2353675020b6cf7421cfc166ece0b7517",
+      "scope": "src/auth/common_passwords.rs:267:267:27:42",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c608e1f40ddc4c4eb53c84cfb12850faf012f7cdb0cd40e76a9af6b037da5fa0. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-39"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:8aad59e7c0b157d5d9b8389d27e2a44fe88b6659e20080b726dda772c00dff8e",
+      "scope": "src/auth/common_passwords.rs:268:268:28:58",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c608e1f40ddc4c4eb53c84cfb12850faf012f7cdb0cd40e76a9af6b037da5fa0. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-40"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:b94241e364a9e277a34785b47f107eb41442db552a6e889b4dd8faa969ea1c9e",
+      "scope": "src/auth/common_passwords.rs:269:269:28:51",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c608e1f40ddc4c4eb53c84cfb12850faf012f7cdb0cd40e76a9af6b037da5fa0. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-41"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:f0caf267cd3ca114e731177bad80224c35f5e8661c0b43f7703280f8e19ac813",
+      "scope": "src/auth/password.rs:50:50:26:51",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-42"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:e203de883adea5d48443080c9ff4a47375bd1a9e24bc8eda09275b28aa78c0f9",
+      "scope": "src/auth/password.rs:51:51:24:43",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-43"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:3822ac48761922b192a18f076eeee79fd7db68cbe872a6acb2aa89b154bd1a7b",
+      "scope": "src/auth/password.rs:56:56:42:62",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-44"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:763a5b5d5a676a145e6ed4c8c69fa7892ca433bb50883ae673f795d1c791ed50",
+      "scope": "src/auth/password.rs:57:57:35:60",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-45"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:335895e19aebc2207694f647f1e7cc2e608f5a544c2fc57efa137747e4b8d0fc",
+      "scope": "src/auth/password.rs:58:58:41:66",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-46"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:6a48772e56824f0f84ca9382897c99447cc52cf5bc997e02c1b0f2fb08c617b5",
+      "scope": "src/auth/password.rs:68:68:33:43",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-47"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:9289a03bd1cf6a70a0bde1787a232517afe81b140124b707a5e82b280b4f3e01",
+      "scope": "src/auth/password.rs:69:69:34:50",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-48"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:7e511517d11e0debaac087a23ec7c5a502bd2961a259eabf0de8c7b038971f93",
+      "scope": "src/auth/password.rs:74:74:24:54",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-49"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:627a55e3aa2f8d62d1544464e41a44595c0156d73cd7971cbde34b4ad2ead1de",
+      "scope": "src/auth/password.rs:77:77:34:50",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-50"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:3982183c23e08d652ea0397973f50f2f9758146052e0b7bec8935fdb75637c36",
+      "scope": "src/auth/password.rs:82:82:35:46",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-51"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:c80514baa2d531cecf807899338c71853ac493a93c3fd423928cfd5cf7018894",
+      "scope": "src/auth/password.rs:83:83:35:46",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-52"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:31501ddc9eb0fc923716121aa24bc059b4113753a548f43f5ccc6c70995f933c",
+      "scope": "src/auth/password.rs:98:98:33:44",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-53"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:0ed7d03b4b36ad134d3cf799fb9de7d9fe19f25802816ef4fe78d8a493010320",
+      "scope": "src/auth/password.rs:99:99:33:44",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-54"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:c8cbbb3dc27aee99b6b2b8666e2f35f61c1a64af3923357ad5fc23e9d4f2f629",
+      "scope": "src/auth/password.rs:104:104:34:36",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-55"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:37d6ecaf0846db803a91cc4db20a5971ef86d15cf5d9d4fd6ee1965f2576f990",
+      "scope": "src/auth/password.rs:105:105:33:35",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-56"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:3819e4ef89635ac6f2dee605a7dcfdbb77bb8fa8ae0ec9332c6845b1bbcb7c00",
+      "scope": "src/auth/password.rs:106:106:34:45",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 3dbed0caaf7b26e286a686bc6c43bfd8550c0b19dfe7691f627017b5af824631. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-57"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:64468503a7fbd7857d849a0d2fc24f2e4f6bf1d24cdcc58b793fb13b414fbbcc",
+      "scope": "src/auth/routes.rs:930:930:44:68",
+      "owner": "swiftraccoon",
+      "rationale": "This cfg(test) assertion verifies the timing-equalization dummy password hash does not match an arbitrary public input. It provisions no account and is outside runtime credential selection.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 29ef5d352817a161a68239826a64820945e3803c2e9bcbcdf511be87dbf573f6. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-58"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:e1d0f3a96e61e05aeed310944c06ba22caad60c42c81788703d95b9c089d8dc0",
+      "scope": "src/room/settings.rs:598:598:33:42",
+      "owner": "swiftraccoon",
+      "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 0d2fd66e20b10a82ec16d43aef5a18050c4dd0fa75b131d7925d48cf128cfa26. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-59"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:e7ba45802b4bcdb62575428dbda95f26141379df5fdeebeec0e79ea123647318",
+      "scope": "src/room/settings.rs:603:603:33:43",
+      "owner": "swiftraccoon",
+      "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 0d2fd66e20b10a82ec16d43aef5a18050c4dd0fa75b131d7925d48cf128cfa26. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-60"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:0e6e5891c141319d142b4cd4ec2c89baa990f3759c47edc5600d39e5d0d08c9f",
+      "scope": "src/room/settings.rs:605:605:33:43",
+      "owner": "swiftraccoon",
+      "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 0d2fd66e20b10a82ec16d43aef5a18050c4dd0fa75b131d7925d48cf128cfa26. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-61"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:eb628408b88e29eade79fcf82316a3183fd5d1b652dc12c440a2645479756b50",
+      "scope": "src/room/settings.rs:608:608:33:45",
+      "owner": "swiftraccoon",
+      "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 0d2fd66e20b10a82ec16d43aef5a18050c4dd0fa75b131d7925d48cf128cfa26. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-62"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:80e77ef8d3e80018242fde0b65a5ab4d30b2e53b9398e2d5f520479fb7798006",
+      "scope": "src/signaling/mod.rs:2032:2032:31:56",
+      "owner": "swiftraccoon",
+      "rationale": "This fixed passphrase is inside the cfg(test) disposable-database registration enumeration-limiter test. It is used only with a unique fixture account and test-owned state, never a production identity.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 d8004af40f70d760e0055d69dbed50c2ff4e50b0731682d826217469137dac80. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-63"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:f45046e0b0ddb63b9068adb51528348438c53bf2e200281bffc44d1ad78a23b8",
+      "scope": "src/turn.rs:155:155:21:59",
+      "owner": "swiftraccoon",
+      "rationale": "This fixed TURN secret belongs only to cfg(test) credential-generation and non-disclosure fixtures, with a fictional turn.example endpoint. Runtime TURN credentials use configured secrets; this test value cannot be issued by the production path.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 a1b2beaa4fbaefc2b578379d27dc9d6c50a38f94bf57973190218cd676478afd. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-64"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:dde9e5d410beb03ed3d370138074848cca88cbff1c58f6ff1728ab008a3a5c3a",
+      "scope": "src/turn.rs:187:187:21:59",
+      "owner": "swiftraccoon",
+      "rationale": "This fixed TURN secret belongs only to cfg(test) credential-generation and non-disclosure fixtures, with a fictional turn.example endpoint. Runtime TURN credentials use configured secrets; this test value cannot be issued by the production path.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 a1b2beaa4fbaefc2b578379d27dc9d6c50a38f94bf57973190218cd676478afd. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-65"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:372efd2f7ef092704c29fa41a8d0dd2e50d224ea7cdedb82afab43c24715b2f9",
+      "scope": "src/turn.rs:138:138:49:59",
+      "owner": "swiftraccoon",
+      "rationale": "This key is the public RFC2202 HMAC-SHA1 known-answer vector inside the cfg(test) module. The exact expected digest verifies protocol interoperability; it is not a deployed TURN key.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 a1b2beaa4fbaefc2b578379d27dc9d6c50a38f94bf57973190218cd676478afd. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-66"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:f5d4631fe25447f97657e4a3f4076fd23c0a0b186d9ee50a4274b4e550b67658",
+      "scope": "src/auth/common_passwords.rs:234:239:22:10",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c608e1f40ddc4c4eb53c84cfb12850faf012f7cdb0cd40e76a9af6b037da5fa0. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-67"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:7372167d0c6221e2d05d5abe634ff47c886bd4c6482a9095eeb50093a8f7039b",
+      "scope": "src/auth/common_passwords.rs:243:248:22:10",
+      "owner": "swiftraccoon",
+      "rationale": "All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c608e1f40ddc4c4eb53c84cfb12850faf012f7cdb0cd40e76a9af6b037da5fa0. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-68"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:30c145d1f2dad4775e198f34b00c17080fabec4f767b5fc521f00b10830b900b",
+      "scope": "src/signaling/mod.rs:1658:1658:79:91",
+      "owner": "swiftraccoon",
+      "rationale": "The sink is a cfg(test) assertion diagnostic for a response from the test-owned loopback HTTP server. The route returns fixed status/body bytes to test timeout and admission metrics; no external input or production logging path is used.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 d8004af40f70d760e0055d69dbed50c2ff4e50b0731682d826217469137dac80. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-69"
     }
   ]
 }
