@@ -52,19 +52,12 @@ Update after pushing to `main` ([releases](ops/ansible/RELEASES.md); add `--main
 ops/ansible/.venv/bin/python build/deploy.py --inventory ops/ansible/inventory.local.yml --repository OWNER/REPO --origin https://chat.example.com
 ```
 
-Preview what a host carries before buying it, or size a plain Compose deployment
-([deployment guide](docs/deployment.md) for the proxy, database and TLS):
+Preview host sizing before provisioning. For a plain Compose deployment, follow
+the [deployment guide](docs/deployment.md#production-setup), which covers the private
+configuration file, database or guest-room policy, and HTTPS proxy.
 
 ```sh
 python3 build/capacity.py suggest --vcpus 4 --memory-gib 8 --included-egress-tb 5
-sudo install -d -m 700 /etc/simplestchat
-python3 build/capacity.py suggest --vcpus 4 --memory-gib 8 --env | sudo tee /etc/simplestchat/runtime.env
-printf 'ANNOUNCE_IP=203.0.113.10\nALLOWED_ORIGINS=https://chat.example.com\nJWT_SECRET=%s\nMETRICS_TOKEN=%s\nTRUSTED_PROXY_SECRET=%s\n' \
-  "$(openssl rand -base64 48)" "$(openssl rand -base64 48)" "$(openssl rand -base64 48)" | sudo tee -a /etc/simplestchat/runtime.env
-printf 'services:\n  simplestchat:\n    env_file:\n      - /etc/simplestchat/runtime.env\n' | sudo tee /etc/simplestchat/compose.runtime.yml
-sudo sysctl -w net.core.rmem_max=2097152 net.core.wmem_max=2097152
-docker compose --env-file /etc/simplestchat/runtime.env -f docker-compose.yml -f /etc/simplestchat/compose.runtime.yml up --build -d
-CADDY_DOMAIN=chat.example.com TRUSTED_PROXY_SECRET=$(sed -n 's/^TRUSTED_PROXY_SECRET=//p' /etc/simplestchat/runtime.env) caddy run --config Caddyfile
 ```
 
 ## Project guide
