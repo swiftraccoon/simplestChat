@@ -72,7 +72,10 @@ The addresses follow the host's default routes: `scpub_announce_ip` is the
 IPv4 default (the IPv6 one on an IPv6-only host) and `scpub_announce_ipv6` the
 IPv6 default beside it, so a dual-stack host announces both, the project
 network carries IPv6 natively (`scpub_ipv6_network`, a private range Docker
-translates to the host's address) and TURN listens on both. The inventory
+translates to the host's address). The managed TURN playbook requires a public
+IPv4 primary address and can add an IPv6 listener; IPv6-only TURN is rejected
+before preparation or activation. Direct application media supports an IPv6-only
+host independently of that relay limitation. The inventory
 overrides either; an empty `scpub_announce_ipv6` keeps a host IPv4-only. Adding
 or changing an announced address is an identity change: the maintenance
 release refuses such a candidate, so apply it with `public.yml`.

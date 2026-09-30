@@ -17,9 +17,12 @@
           - scpub_config == '/etc/simplestchat-public'
           - scpub_root == '/srv/simplestchat-public'
           - scpub_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
-          - scpub_announce_ip is match('^(?:[0-9]{1,3}(?:\.[0-9]{1,3}){3}|[0-9a-f:]{3,39})$')
+          - scpub_announce_ip is match('^[0-9]{1,3}(?:\.[0-9]{1,3}){3}$')
           - scpub_announce_ipv6 == '' or scpub_announce_ipv6 is match('^[0-9a-f:]{3,39}$')
           - scpub_turn_image is match('^docker.io/coturn/coturn:4.18.0@sha256:[a-f0-9]{64}$')
+        fail_msg: >-
+          The managed relay requires a public IPv4 primary address; an additional IPv6
+          listener is supported, but IPv6-only TURN preparation and activation are not.
 
     - name: Verify the public host without importing installed helpers
       tags: [always]

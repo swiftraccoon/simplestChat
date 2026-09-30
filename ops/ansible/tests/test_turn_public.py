@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import ssl
@@ -27,6 +28,22 @@ if TYPE_CHECKING:
 
 class TurnTemplateTests(unittest.TestCase):
     """Verify the relay's destination, credential and filesystem boundaries."""
+
+    def test_ipv6_only_relay_is_refused_before_preparation_or_activation(self) -> None:
+        """The first assertion agrees with the helper's IPv4 relay and listener contract."""
+        source = Path(__file__).resolve().parents[1] / "turn.yml"
+        play = obj(array(yaml_value(source.read_text()))[0])
+        task = obj(array(play, "pre_tasks")[0])
+        assertion = obj(task, "ansible.builtin.assert")
+        expression = next(
+            str(value)
+            for value in array(assertion, "that")
+            if str(value).startswith("scpub_announce_ip is match")
+        )
+        pattern = expression.split("'", 2)[1]
+        self.assertIsNotNone(re.fullmatch(pattern, "203.0.113.5"))
+        self.assertIsNone(re.fullmatch(pattern, "2001:db8::5"))
+        self.assertIn("IPv6-only", str(assertion["fail_msg"]))
 
     def test_relay_is_separate_and_has_no_privileged_network_or_filesystem_access(self) -> None:
         """Only the pinned coturn executable and its private inputs are installed."""
