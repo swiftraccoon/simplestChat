@@ -24,6 +24,7 @@ from test_support import ROOT
 
 # Bootstrap flat checkout imports before loading helpers.
 # isort: split
+import bounded_process
 import release_artifact as ARTIFACT  # noqa: N812 -- Keep established helper aliases.
 import release_build as BUILD  # noqa: N812 -- Keep established helper aliases.
 import release_fetch_receiver as RECEIVER  # noqa: N812 -- Keep established helper aliases.
@@ -917,30 +918,58 @@ class ReleaseBuildTests(unittest.TestCase):
             ):
                 self.fail("Unprotected release records are not authoritative")
 
-    def test_cleanup_does_not_probe_groups_and_falls_back_only_to_owned_child(self) -> None:
-        """Verify cleanup does not probe groups and falls back only to owned child."""
+    def test_uncaptured_commands_still_enforce_live_output_budget(self) -> None:
+        """Long Ansible/build commands cannot bypass limits by declining a return capture."""
+        self.output.mkdir()
+        runner = BUILD.Runner(self.output)
+        with self.assertRaisesRegex(BUILD.BuildError, "limit_exceeded"):
+            _ = runner.run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import sys,time; sys.stdout.buffer.write(b'x' * 3000000); "
+                    + "sys.stdout.flush(); time.sleep(30)",
+                ],
+                cwd=self.root,
+                capture=False,
+            )
+        self.assertLessEqual(next(self.output.glob("*.log")).stat().st_size, 2 * 1024**2)
+        outcome = object_value(decode_json(next(self.output.glob("*.outcome.json")).read_text()))
+        self.assertTrue(outcome["outputLimited"])
+        self.assertIsNotNone(outcome["exitStatus"])
+
+    def test_cleanup_refuses_uncertain_group_permissions_without_reaping(self) -> None:
+        """A denied group signal cannot be treated as cleanup of all descendants."""
         process = FakeProcess()
-        with patch.object(
-            os, "killpg", side_effect=PermissionError("fixture group permission")
-        ) as group:
-            outcome = BUILD.Runner.stop_process(process)
-        group.assert_called_once_with(12345, signal.SIGTERM)
-        self.assertEqual(process.signals, [signal.SIGTERM])
-        self.assertEqual(process.deadlines, [15])
-        self.assertTrue(outcome["groupSignalDenied"])
-        self.assertFalse(outcome["forcedKill"])
+        with (
+            patch.object(
+                bounded_process,
+                "signal_group",
+                side_effect=PermissionError("fixture group permission"),
+            ) as group,
+            self.assertRaises(PermissionError),
+        ):
+            _ = BUILD.Runner.stop_process(process)
+        self.assertEqual(
+            [call.args for call in group.call_args_list],
+            [(12345, signal.SIGTERM)],
+        )
+        self.assertEqual(process.signals, [])
+        self.assertEqual(process.deadlines, [])
 
     def test_cleanup_escalates_once_when_owned_child_ignores_term(self) -> None:
         """Verify cleanup escalates once when owned child ignores term."""
         process = FakeProcess()
-        process.failures = [subprocess.TimeoutExpired("fixture", 15)]
-        with patch.object(os, "killpg") as group:
+        with (
+            patch.object(os, "killpg") as group,
+            patch.object(bounded_process, "wait_exited", return_value=False),
+        ):
             outcome = BUILD.Runner.stop_process(process)
         self.assertEqual(
             [call.args for call in group.call_args_list],
             [(12345, signal.SIGTERM), (12345, signal.SIGKILL)],
         )
-        self.assertEqual(process.deadlines, [15, 5])
+        self.assertEqual(process.deadlines, [5])
         self.assertTrue(outcome["forcedKill"])
 
     def test_duplicate_cli_option_fails_before_any_output(self) -> None:

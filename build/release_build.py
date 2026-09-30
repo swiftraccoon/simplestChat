@@ -24,7 +24,7 @@ import sys
 import tarfile
 import tempfile
 import time
-from collections.abc import Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -32,6 +32,7 @@ from pathlib import Path, PurePosixPath
 from types import FrameType
 from typing import Protocol, override
 
+import bounded_process
 import release_artifact as ARTIFACT  # noqa: N812 -- Keep established helper aliases.
 from release_json import JsonObject, JsonValue, decode_json, object_value, string_value
 
@@ -93,10 +94,6 @@ class OwnedProcess(Protocol):
         """Wait for this owned child to exit."""
         ...
 
-    def send_signal(self, signal: int, /) -> None:
-        """Signal only this owned child."""
-        ...
-
 
 @dataclass
 class Runner:
@@ -104,8 +101,9 @@ class Runner:
 
     output: Path | None = None
     sequence: int = 0
+    healthy: Callable[[], bool] | None = None
 
-    def run(  # noqa: C901, PLR0913, PLR0912 -- Keep ordered transaction checks together.
+    def run(  # noqa: C901, PLR0913, PLR0912, PLR0915 -- Keep owned process creation, evidence and cleanup in one boundary.
         self,
         argv: Sequence[str],
         *,
@@ -132,6 +130,7 @@ class Runner:
             started = time.monotonic()
             process: subprocess.Popen[bytes] | None = None
             timed_out = False
+            output_limited = False
             cleanup = None
             cleanup_error = None
             try:
@@ -141,12 +140,24 @@ class Runner:
                         cwd=cwd,
                         env=env,
                         stdin=subprocess.DEVNULL,
-                        stdout=log,
-                        stderr=subprocess.STDOUT,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
                         start_new_session=True,
                     )
                     try:
-                        returncode = process.wait(timeout=timeout)
+                        returncode = bounded_process.pump(
+                            process,
+                            log,
+                            log,
+                            bounded_process.Limits(timeout=timeout, healthy=self.healthy),
+                        )
+                        log.flush()
+                    except bounded_process.ProcessError as error:
+                        timed_out = str(error) == "command_timed_out"
+                        output_limited = "limit_exceeded" in str(error)
+                        if timed_out:
+                            raise BuildError(f"Command timed out: {name}") from None
+                        raise BuildError(f"Command stopped: {name}: {error}") from None
                     except subprocess.TimeoutExpired:
                         timed_out = True
                         raise BuildError(f"Command timed out: {name}") from None
@@ -165,11 +176,15 @@ class Runner:
                         raise BuildError(f"Command inspection output too large: {name}")
                     return returncode, data.decode("utf-8", errors="strict").strip()
             finally:
-                if process is not None and process.poll() is None:
+                if process is not None and process.returncode is None:
                     try:
                         cleanup = self.stop_process(process)
                     except (OSError, subprocess.TimeoutExpired) as error:
                         cleanup_error = f"{type(error).__name__}: {error}"
+                if process is not None:
+                    for stream in (process.stdout, process.stderr):
+                        if stream is not None:
+                            stream.close()
                 if self.output:
                     write_json(
                         self.output / f"{name}.outcome.json",
@@ -177,6 +192,7 @@ class Runner:
                             "pid": process.pid if process else None,
                             "exitStatus": process.returncode if process else None,
                             "timedOut": timed_out,
+                            "outputLimited": output_limited,
                             "elapsedSeconds": round(time.monotonic() - started, 3),
                             "cleanup": cleanup,
                             "cleanupError": cleanup_error,
@@ -194,24 +210,17 @@ class Runner:
 
         def send(signum: signal.Signals) -> None:
             try:
-                os.killpg(process.pid, signum)
-            except ProcessLookupError:
-                # The group may have exited between poll and signal. Popen
-                # owns this exact child and rechecks its status before signaling.
-                process.send_signal(signum)
+                bounded_process.signal_group(process.pid, signum)
             except PermissionError:
                 result["groupSignalDenied"] = True
-                process.send_signal(signum)
+                raise
 
-        # Do not use killpg(pid, 0) as a liveness probe: macOS can deny that
-        # probe even when terminating/reaping our direct child is permitted.
+        # Preserve the leader PID until every group signal is complete. Reaping
+        # it before escalation could target a reused group and lose descendants.
         send(signal.SIGTERM)
-        try:
-            _ = process.wait(timeout=15)
-        except subprocess.TimeoutExpired:
-            result["forcedKill"] = True
-            send(signal.SIGKILL)
-            _ = process.wait(timeout=5)
+        result["forcedKill"] = not bounded_process.wait_exited(process.pid, 15)
+        send(signal.SIGKILL)
+        _ = process.wait(timeout=5)
         return result
 
 
