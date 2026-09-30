@@ -14,6 +14,16 @@ SELECT incident_key,rule,severity,resource,first_seen,last_seen,resolved_at,
        release_revision,observations FROM operations.alerts LIMIT 0;
 SELECT singleton,observed_at FROM operations.alert_cursor LIMIT 0;
 DO $$ BEGIN
+    -- A pre-upgrade safety backup is verified against its own recorded ledger.
+    -- Once migration 22 is present, the required session-family column must
+    -- survive restoration with the same invariant enforced at app startup.
+    IF EXISTS (SELECT FROM public._sqlx_migrations WHERE version=22 AND success)
+       AND NOT EXISTS (SELECT FROM pg_attribute
+                       WHERE attrelid='public.sessions'::regclass
+                         AND attname='refresh_token_family_hash'
+                         AND NOT attisdropped AND attnotnull) THEN
+        RAISE EXCEPTION 'Restored session-family requirement differs';
+    END IF;
     IF (SELECT count(*) FROM operations.schema_version) != 1 OR
        (SELECT version FROM operations.schema_version) != 1 THEN
         RAISE EXCEPTION 'Unsupported operational schema';

@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import uuid
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 from urllib.parse import urlsplit, urlunsplit
 
@@ -22,6 +23,7 @@ POSTGRES_IMAGE = (
     "docker.io/library/postgres:18.6-bookworm@sha256:"
     "1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af"
 )
+SESSION_FAMILY_MIGRATION = 22
 
 
 def diagnostic_tail(evidence: Path) -> str:
@@ -156,11 +158,87 @@ class RestoreDatabaseTests(unittest.TestCase):
         _ = self.sql(target, "REVOKE SELECT ON operations.external_runs FROM simplestchat_app;")
         _ = self.sql(target, verification)
 
+    def apply_migration(self, database: str, migration: Path, migrations: dict[str, str]) -> None:
+        """Apply one actual packaged migration and record its exact checksum."""
+        checksum = hashlib.sha384(migration.read_bytes()).hexdigest()
+        version = int(migration.name.split("_")[0])
+        _ = self.sql(
+            database,
+            "SET ROLE simplestchat_migrate;\n"
+            + migration.read_text()
+            + f"\nINSERT INTO public._sqlx_migrations VALUES ({version},true,"
+            + f"decode('{checksum}','hex'));",
+        )
+        migrations[str(version)] = checksum
+
+    def verify_pre_upgrade_backup(
+        self,
+        source: str,
+        target: str,
+        archive: Path,
+        migrations: dict[str, str],
+    ) -> None:
+        """Restore a real pre-022 safety archive against its recorded schema."""
+        self.assertNotIn(str(SESSION_FAMILY_MIGRATION), migrations)
+        _ = self.command("pg_dump", "--format=custom", "--file", str(archive), source)
+        _ = self.command(
+            "pg_restore",
+            "--exit-on-error",
+            "--single-transaction",
+            "--dbname",
+            target,
+            str(archive),
+        )
+        expected = "\n".join(
+            f"{version}|t|{checksum}"
+            for version, checksum in sorted(migrations.items(), key=lambda item: int(item[0]))
+        )
+        self.assertEqual(self.sql(target, release.LEDGER_QUERY).decode().strip(), expected)
+        counts = object_value(
+            decode_json(
+                self.sql(target, (ROOT / "ops/ansible/files/restore-verify.sql").read_text())
+            )
+        )
+        self.assertEqual(counts["users"], 1)
+        self.assertEqual(counts["sessions"], 1)
+        self.assertEqual(
+            self.sql(
+                target,
+                """SELECT attnotnull FROM pg_attribute
+                WHERE attrelid='public.sessions'::regclass
+                  AND attname='refresh_token_family_hash';""",
+            ).strip(),
+            b"f",
+        )
+
+    def verify_current_session_schema(self, target: str, verification: str) -> None:
+        """Reject missing or nullable session families once migration 022 is recorded."""
+        for change, repair in (
+            (
+                "ALTER COLUMN refresh_token_family_hash DROP NOT NULL",
+                "ALTER COLUMN refresh_token_family_hash SET NOT NULL",
+            ),
+            (
+                "RENAME COLUMN refresh_token_family_hash TO fixture_missing_family",
+                "RENAME COLUMN fixture_missing_family TO refresh_token_family_hash",
+            ),
+        ):
+            with self.subTest(session_schema=change):
+                _ = self.sql(target, "ALTER TABLE public.sessions " + change + ";")
+                with self.assertRaises(subprocess.CalledProcessError) as failure:
+                    _ = self.sql(target, verification)
+                self.assertIn(
+                    b"Restored session-family requirement differs",
+                    cast("bytes", failure.exception.stderr),
+                )
+                _ = self.sql(target, "ALTER TABLE public.sessions " + repair + ";")
+                _ = self.sql(target, verification)
+
     def test_restore_preserves_incidents_privacy_and_rejects_truncated_archives(self) -> None:
         """Full restoration retains active/resolved rows and rejects privacy/schema drift."""
         original = urlsplit(os.environ["TEST_DATABASE_URL"])
         base = os.environ["TEST_DATABASE_URL"]
-        names = ["restore_" + uuid.uuid4().hex for _ in range(3)]
+        names = ["restore_" + uuid.uuid4().hex for _ in range(4)]
         urls = [urlunsplit(original._replace(path="/" + name)) for name in names]
         _ = self.sql(
             base,
@@ -177,7 +255,7 @@ class RestoreDatabaseTests(unittest.TestCase):
         try:
             for name in names:
                 _ = self.sql(base, f"CREATE DATABASE {name} OWNER postgres;")
-            source, target, corrupt = urls
+            source, target, corrupt, pre_upgrade = urls
             _ = self.sql(
                 source,
                 """SET ROLE postgres;
@@ -190,17 +268,11 @@ class RestoreDatabaseTests(unittest.TestCase):
                   success BOOLEAN NOT NULL, checksum BYTEA NOT NULL);""",
             )
             migrations: dict[str, str] = {}
-            for migration in sorted((ROOT / "migrations").glob("*.sql")):
-                checksum = hashlib.sha384(migration.read_bytes()).hexdigest()
-                version = int(migration.name.split("_")[0])
-                migrations[str(version)] = checksum
-                _ = self.sql(
-                    source,
-                    "SET ROLE simplestchat_migrate;\n"
-                    + migration.read_text()
-                    + f"\nINSERT INTO public._sqlx_migrations VALUES ({version},true,"
-                    + f"decode('{checksum}','hex'));",
-                )
+            migration_paths = sorted((ROOT / "migrations").glob("*.sql"))
+            for migration in migration_paths:
+                if int(migration.name.split("_")[0]) >= SESSION_FAMILY_MIGRATION:
+                    break
+                self.apply_migration(source, migration, migrations)
             _ = self.sql(
                 source, (ROOT / "ops/ansible/templates/public-runtime-grants.sql.j2").read_text()
             )
@@ -215,6 +287,9 @@ class RestoreDatabaseTests(unittest.TestCase):
                 VALUES ('00000000-0000-0000-0000-000000000001','fixture@example.test','Fixture');
                 INSERT INTO public.rooms(id,owner_id,display_name)
                 VALUES ('fixture','00000000-0000-0000-0000-000000000001','Fixture');
+                INSERT INTO public.sessions(user_id,refresh_token_hash,expires_at)
+                VALUES ('00000000-0000-0000-0000-000000000001',
+                        repeat('c',64),now()+interval '1 day');
                 INSERT INTO operations.alerts(incident_key,rule,severity,resource,
                     first_seen,last_seen,resolved_at)
                 VALUES (repeat('a',64),'DatabaseUnavailable','critical','{}',now(),now(),NULL),
@@ -222,6 +297,12 @@ class RestoreDatabaseTests(unittest.TestCase):
                 INSERT INTO operations.alert_cursor VALUES (true,now());""",
             )
             with tempfile.TemporaryDirectory() as directory:
+                self.verify_pre_upgrade_backup(
+                    source, pre_upgrade, Path(directory) / "pre-upgrade.dump", migrations
+                )
+                for migration in migration_paths:
+                    if int(migration.name.split("_")[0]) >= SESSION_FAMILY_MIGRATION:
+                        self.apply_migration(source, migration, migrations)
                 archive = Path(directory) / "owned.dump"
                 _ = self.command("pg_dump", "--format=custom", "--file", str(archive), source)
                 if os.environ.get("RESTORE_CONTAINER_E2E") == "1":
@@ -239,6 +320,7 @@ class RestoreDatabaseTests(unittest.TestCase):
                 self.assertEqual(counts["users"], 1)
                 self.assertEqual(counts["activeIncidents"], 1)
                 self.assertEqual(counts["resolvedIncidents"], 1)
+                self.verify_current_session_schema(target, verification)
                 self.verify_external_schema(target, verification)
                 _ = self.command(
                     "pg_amcheck",

@@ -93,6 +93,13 @@ ledger, checks table/constraint/role invariants and runs `pg_amcheck`. It delete
 only its uniquely labeled container and downloaded plaintext copies. It advances
 `restore-verified.timestamp` only after successful validation and cleanup.
 
+Schema checks follow the archive's recorded migration ledger. An archive that
+includes successful migration 022 must restore `sessions.refresh_token_family_hash`
+as a nonnullable column; a missing or nullable column fails verification. A
+pre-upgrade safety backup taken before migration 022 remains valid with its
+recorded schema and sessions. Restoring that backup does not make it ready for
+the newer application: the reviewed maintenance migration must run before serving it.
+
 The default archive download limit is 64 MiB. It is configurable from 1–4096 MiB;
 this is an archive-size limit, not a claim about the uncompressed database size.
 The disposable database uses tmpfs with a 256 MiB data ceiling and 512 MiB memory
