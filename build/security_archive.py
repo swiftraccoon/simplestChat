@@ -358,6 +358,16 @@ def extract(archive: Path, manifest_path: Path, output: Path) -> dict[str, objec
     return report
 
 
+def image_identity(archive: Path) -> str:
+    """Hash the selected raw config bytes, which define the Docker image identity."""
+    with tarfile.open(archive, "r:") as bundle:
+        reader = release_artifact.ArchiveReader.indexed(bundle)
+        images = array_value(reader.read_json("manifest.json"))
+        require(len(images) == 1, "image_config_selection")
+        config = reader.read_bytes(object_value(images[0])["Config"])
+    return "sha256:" + hashlib.sha256(config).hexdigest()
+
+
 def materialize_layers(archive: Path, config: JsonObject, output: Path) -> dict[str, object]:
     """Materialize authenticated Docker-save layers; caller binds config/image identity.
 
@@ -373,10 +383,13 @@ def materialize_layers(archive: Path, config: JsonObject, output: Path) -> dict[
     expanded = 0
     members = 0
     records: list[dict[str, object]] = []
-    new_file(layers / "image-config.json", (json.dumps(config, indent=2) + "\n").encode())
     with tarfile.open(archive, "r:") as bundle:
         reader = release_artifact.ArchiveReader.indexed(bundle)
         image = object_value(array_value(reader.read_json("manifest.json"))[0])
+        raw_config = reader.read_bytes(image["Config"])
+        require(reader.read_json(image["Config"]) == config, "image_config_changed")
+        config_sha256 = hashlib.sha256(raw_config).hexdigest()
+        new_file(layers / "image-config.json", raw_config)
         names = array_value(image["Layers"])
         require(len(names) == len(diff_ids), "image_layer_count_mismatch")
         for index, (name_value, expected_value) in enumerate(zip(names, diff_ids, strict=True)):
@@ -408,6 +421,8 @@ def materialize_layers(archive: Path, config: JsonObject, output: Path) -> dict[
         "layers": records,
         "regularLayerFilesPreserved": True,
         "configIncluded": True,
+        "configSha256": config_sha256,
+        "imageId": "sha256:" + config_sha256,
     }
 
 

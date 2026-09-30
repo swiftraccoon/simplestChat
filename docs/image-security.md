@@ -64,6 +64,11 @@ kernel ASLR/NX policy, every function's compiler protections, decoded media
 quality, or absence of vulnerabilities. The dynamic-linker rationale is covered
 in the [glibc hardening guide](https://sourceware.org/glibc/manual/2.40/html_node/Dynamic-Linker-Hardening.html).
 
+The scanner binds the raw Docker config digest, layer diff IDs and architecture
+to the exact selected image ID. Matching layers alone do not establish image
+identity because configuration bytes can differ. Signer preparation independently
+rehashes the selected archive config before issuing its predicate.
+
 ## Validation
 
 The ELF fixtures are inert byte arrays, never executed. They cover independent

@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ops/ansible/files"
 import bounded_process
 import release_fetch_receiver as receiver
 import release_trust as trust
+import security_archive
 from release_artifact import sha256_file, validate_manifest, verify_archive
 from release_json import (
     JsonObject,
@@ -83,6 +84,13 @@ def prepare(artifact: Path, security: Path, selection: JsonObject) -> JsonObject
         and result.get("revision") == selection["revision"]
         and result.get("archiveSha256") == manifest["archiveSha256"],
         "attestation_security_failed",
+    )
+    archive_id = security_archive.image_identity(artifact / "image.tar")
+    trust.require(
+        archive_id == result.get("imageId")
+        and object_value(result.get("selectedImage")).get("archiveConfigSha256")
+        == archive_id.removeprefix("sha256:"),
+        "attestation_config_identity",
     )
     checks = object_value(result.get("checks"))
     trust.require(

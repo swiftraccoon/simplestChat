@@ -336,16 +336,16 @@ def selected_image(sandbox: Sandbox, args: Options, tree: Path) -> JsonObject:
     )
     value = object_value(decode_json(encoded))
     canonical_id = "sha256:" + string_value(value["id"]).removeprefix("sha256:")
-    layers = [
-        object_value(item)["diffId"]
-        for item in array_value(object_value(policy.report(tree / "report.json"))["layers"])
-    ]
+    report = object_value(policy.report(tree / "report.json"))
+    layers = [object_value(item)["diffId"] for item in array_value(report["layers"])]
     policy.require(
-        canonical_id == args.image_id
+        canonical_id == args.image_id == report["imageId"]
+        and "sha256:" + string_value(report["configSha256"]) == args.image_id
         and value["layers"] == layers
         and "linux/" + string_value(value["architecture"]) == args.platform,
         "image_selected_archive_mismatch",
     )
+    value["archiveConfigSha256"] = report["configSha256"]
     return value
 
 

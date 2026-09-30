@@ -105,6 +105,17 @@ class SecurityArchiveTests(unittest.TestCase):
             output = directory / "evidence"
             report = archive.extract(image, manifest, output)
             self.assertTrue(report["passed"])
+            with tarfile.open(image, "r:") as bundle:
+                source = bundle.extractfile("config.json")
+                self.assertIsNotNone(source)
+                assert source is not None  # noqa: S101 -- Fixture narrowing after assertion.
+                with source:
+                    config_bytes = source.read()
+            expected = hashlib.sha256(config_bytes).hexdigest()
+            self.assertEqual(report["configSha256"], expected)
+            self.assertEqual(report["imageId"], "sha256:" + expected)
+            self.assertEqual(archive.image_identity(image), report["imageId"])
+            self.assertEqual((output / "layers/image-config.json").read_bytes(), config_bytes)
             self.assertEqual((output / "rootfs/app/current").read_bytes(), b"new")
             self.assertFalse((output / "rootfs/app/removed.env").exists())
             self.assertEqual(

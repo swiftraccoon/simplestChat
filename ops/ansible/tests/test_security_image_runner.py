@@ -176,6 +176,33 @@ class ImageRunnerTests(unittest.TestCase):
             with self.assertRaises(ToolError):
                 _ = image.bind_archive(args)
 
+    def test_selected_image_binds_raw_config_even_when_layers_match(self) -> None:
+        """Matching layer content cannot stand in for the selected configuration identity."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sandbox = image.Sandbox(
+                ["/usr/bin/docker"], {}, root, root / "tools", BASE, "linux/amd64"
+            )
+            args = image.Options(image_id=BASE)
+            observed = {"id": BASE, "layers": ["sha256:" + "c" * 64], "architecture": "amd64"}
+            for config_hash in ("a" * 64, "d" * 64):
+                with self.subTest(config_hash=config_hash):
+                    report = {
+                        "layers": [{"diffId": observed["layers"][0]}],
+                        "imageId": "sha256:" + config_hash,
+                        "configSha256": config_hash,
+                    }
+                    _ = (root / "report.json").write_text(json.dumps(report))
+                    with patch.object(sandbox, "command", return_value=(0, json.dumps(observed))):
+                        if config_hash == "a" * 64:
+                            self.assertEqual(
+                                image.selected_image(sandbox, args, root)["archiveConfigSha256"],
+                                config_hash,
+                            )
+                        else:
+                            with self.assertRaisesRegex(ToolError, "archive_mismatch"):
+                                _ = image.selected_image(sandbox, args, root)
+
     def test_native_binding_rejects_mismatched_executable(self) -> None:
         """Build-time evidence must bind the actual file inspected by ELF, not just its path."""
         with tempfile.TemporaryDirectory() as temporary:

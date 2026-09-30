@@ -20,6 +20,7 @@ import bounded_process
 import release_attestation as attest
 import release_fetch_receiver as receiver
 import release_trust as trust
+import security_archive
 from release_json import JsonObject, JsonValue, decode_json, object_value
 
 if TYPE_CHECKING:
@@ -98,8 +99,14 @@ class ReleaseAttestationTests(unittest.TestCase):
             for name in ("image.tar", "release.json", "outcome.json", "source.json"):
                 _ = (artifact / name).write_bytes(files[name])
             _ = (security / "spdx/sbom.spdx.json").write_bytes(files["sbom.spdx.json"])
+            image_id = security_archive.image_identity(artifact / "image.tar")
+            build = object_value(decode_json(files["outcome.json"]))
+            build["exportedImageId"] = image_id
+            _ = (artifact / "outcome.json").write_text(json.dumps(build))
             result = object_value(decode_json(files["image-security.json"]))
             result.update(
+                imageId=image_id,
+                selectedImage={"archiveConfigSha256": image_id.removeprefix("sha256:")},
                 secretDetectorSelfTest=True,
                 checks={
                     name: {"passed": True} for name in ("vulnerabilities", "licenses", "secrets")
@@ -113,6 +120,21 @@ class ReleaseAttestationTests(unittest.TestCase):
             ):
                 _ = (security / name).write_bytes(b"{}")
                 result[field] = hashlib.sha256(b"{}").hexdigest()
+            _ = (security / "outcome.json").write_text(json.dumps(result))
+            for changed in ("imageId", "selectedImage"):
+                invalid = copy.deepcopy(result)
+                invalid[changed] = (
+                    "sha256:" + "f" * 64
+                    if changed == "imageId"
+                    else {"archiveConfigSha256": "f" * 64}
+                )
+                _ = (security / "outcome.json").write_text(json.dumps(invalid))
+                with (
+                    self.subTest(changed=changed),
+                    self.assertRaisesRegex(trust.TrustError, "config_identity"),
+                ):
+                    _ = attest.prepare(artifact, security, envelope())
+                self.assertFalse((artifact / trust.PREDICATE).exists())
             _ = (security / "outcome.json").write_text(json.dumps(result))
             claim = attest.prepare(artifact, security, envelope())
             self.assertEqual(set(object_value(claim["fileDigests"])), set(trust.BOUND_FILES))

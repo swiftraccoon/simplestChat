@@ -1,7 +1,7 @@
 """Receive one verified GitHub artifact URL over stdin; never log its signature.
 
 The controller sends a public envelope, waits for the ready receipt, then obtains
-and sends the expiring URL. Only four selected artifact files are extracted into
+and sends the expiring URL. Only eight selected artifact files are extracted into
 private evidence. Docker, services, credentials and deployment state are untouched.
 """
 
@@ -375,7 +375,7 @@ def validate_zip_directory(path: Path) -> None:
 
 
 def selected_members(archive: zipfile.ZipFile) -> dict[str, zipfile.ZipInfo]:
-    """Select four canonical regular files after bounding every archive member."""
+    """Select eight canonical regular files after bounding every archive member."""
     members = archive.infolist()
     require(0 < len(members) <= MAX_ZIP_MEMBERS, "zip_shape_rejected")
     require(
