@@ -24,7 +24,11 @@ IMAGE = "sha256:" + "a" * 64
 def passing_scans(stack: ExitStack, output: Path) -> None:
     """Replace scanner boundaries while exercising the real final outcome and file writes."""
     fixed: dict[str, object] = {
-        "bind_archive": {"revision": "b" * 40, "archiveSha256": "c" * 64},
+        "bind_archive": {
+            "revision": "b" * 40,
+            "archiveSha256": "c" * 64,
+            "platform": "linux/amd64",
+        },
         "native_binding": {"binary": {"sha256": "d" * 64}},
         "prepare_sandbox": None,
         "selected_image": {"id": IMAGE},
@@ -35,12 +39,12 @@ def passing_scans(stack: ExitStack, output: Path) -> None:
         _ = stack.enter_context(patch.object(image, name, return_value=value))
     policy: dict[str, object] = {
         "load_policy": {},
-        "report": {},
+        "report": {"binarySha256": "d" * 64},
         "database_status": None,
         "inventory": [],
         "vulnerability_database_binding": None,
         "runtime_rpm_bindings": [],
-        "vulnerability_verdict": {"passed": True},
+        "vulnerability_verdict": image_policy.vulnerability_verdict(empty_grype(), [], []),
         "license_verdict": {"passed": True},
         "secret_verdict": {"passed": True},
     }
@@ -62,7 +66,15 @@ class ImageFinalizationTests(unittest.TestCase):
             outcome = object_value(decode_json((output / "outcome.json").read_text()))
             self.assertTrue(outcome["passed"])
             self.assertNotIn("error", outcome)
-            for name in ("secretPathMap", "databaseEvidence", "sbom", "native", "elf"):
+            for name in (
+                "secretPathMap",
+                "databaseEvidence",
+                "sbom",
+                "native",
+                "elf",
+                "runtimeProof",
+                "vex",
+            ):
                 self.assertEqual(outcome[name + "Sha256"], "e" * 64)
 
     def test_known_advisory_blocks_final_outcome_and_preserves_other_evidence(self) -> None:
@@ -82,12 +94,9 @@ class ImageFinalizationTests(unittest.TestCase):
             self.assertFalse(image.execute(image.Options(image_id=IMAGE, output=output)))
             outcome = object_value(decode_json((output / "outcome.json").read_text()))
             self.assertFalse(outcome["passed"])
-            self.assertNotIn("error", outcome)
-            self.assertEqual(outcome["sbomSha256"], "e" * 64)
-            checks = object_value(decode_json((output / "checks.json").read_text()))
-            self.assertTrue(object_value(checks["licenses"])["passed"])
-            self.assertTrue(object_value(checks["secrets"])["passed"])
-            vulnerabilities = object_value(checks["vulnerabilities"])
+            self.assertIn("error", outcome)
+            self.assertFalse((output / "vex.openvex.json").exists())
+            vulnerabilities = object_value(outcome["vulnerabilityFindings"])
             self.assertFalse(vulnerabilities["passed"])
             self.assertEqual(vulnerabilities["matches"], 0)
             self.assertFalse(object_value(vulnerabilities["reviewedAdvisories"])["passed"])
@@ -121,7 +130,9 @@ class ImageFinalizationTests(unittest.TestCase):
                 self.assertEqual(outcome["error"], error_type.__name__)
                 self.assertNotIn("sbomSha256", outcome)
                 checks = object_value(decode_json((output / "checks.json").read_text()))
-                self.assertEqual(
-                    checks,
-                    {name: {"passed": True} for name in ("vulnerabilities", "licenses", "secrets")},
+                self.assertTrue(
+                    all(
+                        object_value(checks[name])["passed"] is True
+                        for name in ("vulnerabilities", "licenses", "secrets")
+                    )
                 )

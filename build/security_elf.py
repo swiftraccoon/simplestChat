@@ -48,6 +48,11 @@ DT_BIND_NOW = 24
 DT_RUNPATH = 29
 DT_FLAGS = 30
 DT_FLAGS_1 = 0x6FFFFFFB
+DT_DEPAUDIT = 0x6FFFFEFB
+DT_AUDIT = 0x6FFFFEFC
+DT_AUXILIARY = 0x7FFFFFFD
+DT_FILTER = 0x7FFFFFFF
+LOADER_HOOKS = frozenset({DT_DEPAUDIT, DT_AUDIT, DT_AUXILIARY, DT_FILTER})
 DF_TEXTREL = 4
 DF_BIND_NOW = 8
 DF_1_NOW = 1
@@ -422,6 +427,7 @@ def hardening(elf: Elf, platform: str) -> dict[str, bool]:
         ),
         "noTextRelocations": DT_TEXTREL not in elf.dynamic and not bool(flags & DF_TEXTREL),
         "noRpath": DT_RPATH not in elf.dynamic and DT_RUNPATH not in elf.dynamic,
+        "noLoaderHooks": not LOADER_HOOKS.intersection(elf.dynamic),
         "approvedLibraries": bool(elf.needed) and set(elf.needed) <= runtime_libraries(platform),
     }
     if not all(checks.values()):
@@ -478,12 +484,24 @@ def read_binary(path: Path) -> bytes:
 
 
 def library_path(root: Path, name: str) -> Path:
-    """Resolve an approved soname using only the image's standard library paths."""
+    """Require all present standard-directory candidates to contain identical bytes.
+
+    The managed runtime separately requires no cache, preload, hwcaps or path
+    overrides. This is deliberately a restricted profile, not a general emulator
+    of glibc's dynamic loader or a claim about arbitrary container commands.
+    """
+    candidates: list[Path] = []
     for directory in LIBRARY_DIRECTORIES:
         try:
-            return image_path(root, directory + "/" + name)
+            candidate = image_path(root, directory + "/" + name)
         except FileNotFoundError:
             continue
+        if candidate not in candidates:
+            candidates.append(candidate)
+    if candidates:
+        hashes = {hashlib.sha256(read_binary(path)).digest() for path in candidates}
+        require(len(hashes) == 1, "elf_dependency_ambiguous")
+        return candidates[0]
     reason = "elf_dependency_missing"
     raise ElfError(reason)
 
@@ -512,6 +530,7 @@ def audit(root: Path, platform: str = "linux/amd64") -> dict[str, object]:
         elf = parse(content, platform)
         require(set(elf.needed) <= allowed, "elf_transitive_dependency_forbidden")
         require(DT_RPATH not in elf.dynamic and DT_RUNPATH not in elf.dynamic, "elf_library_rpath")
+        require(not LOADER_HOOKS.intersection(elf.dynamic), "elf_library_loader_hook")
         libraries.append(
             {
                 "path": "/" + path.relative_to(root).as_posix(),
@@ -530,6 +549,8 @@ def audit(root: Path, platform: str = "linux/amd64") -> dict[str, object]:
         "checks": checks,
         "auditable": metadata,
         "libraries": libraries,
+        "standardDirectoryCandidatesEqual": True,
+        "noLibraryLoaderHooks": True,
     }
 
 

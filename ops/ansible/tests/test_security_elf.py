@@ -10,10 +10,13 @@ import unittest
 import zlib
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from unittest.mock import patch
 
 from test_support import ROOT, obj, objects, string
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # isort: split
 
@@ -165,6 +168,44 @@ def rootfs(directory: Path) -> None:
 class ElfSecurityTests(unittest.TestCase):
     """Unsupported, malformed and incomplete inputs never count as hardened."""
 
+    def test_alternate_standard_directory_dependency_requires_identical_bytes(self) -> None:
+        """Candidate order cannot hide a different library behind a passing first path."""
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            rootfs(directory)
+            (directory / "usr/lib").mkdir()
+            alternate = directory / "usr/lib/libc.so.6"
+            _ = alternate.write_bytes(fixture(library=True))
+            self.assertTrue(elf.audit(directory)["passed"])
+            _ = alternate.write_bytes(fixture(library=True) + b"changed")
+            with self.assertRaisesRegex(elf.ElfError, "elf_dependency_ambiguous"):
+                _ = elf.audit(directory)
+
+    def test_transitive_loader_hook_is_rejected(self) -> None:
+        """A safe application cannot conceal a library audit/filter redirect."""
+        for tag in elf.LOADER_HOOKS:
+            with self.subTest(tag=tag), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                rootfs(directory)
+                real = elf.parse
+
+                def parsed(
+                    data: bytes,
+                    platform: str,
+                    selected_tag: int = tag,
+                    original: Callable[[bytes, str], elf.Elf] = real,
+                ) -> elf.Elf:
+                    value = original(data, platform)
+                    if value.interpreter is None:
+                        value.dynamic[selected_tag] = [0]
+                    return value
+
+                with (
+                    patch.object(elf, "parse", side_effect=parsed),
+                    self.assertRaisesRegex(elf.ElfError, "elf_library_loader_hook"),
+                ):
+                    _ = elf.audit(directory)
+
     def test_exact_binary_and_image_libraries_are_bound_to_hashes(self) -> None:
         """Successful evidence includes independent hardening and actual dependency bytes."""
         with tempfile.TemporaryDirectory() as temporary:
@@ -186,6 +227,10 @@ class ElfSecurityTests(unittest.TestCase):
             (elf.DT_FLAGS_1, [elf.DF_1_PIE], "bindNow"),
             (elf.DT_RPATH, [0], "noRpath"),
             (elf.DT_RUNPATH, [0], "noRpath"),
+            (elf.DT_AUDIT, [0], "noLoaderHooks"),
+            (elf.DT_DEPAUDIT, [0], "noLoaderHooks"),
+            (elf.DT_FILTER, [0], "noLoaderHooks"),
+            (elf.DT_AUXILIARY, [0], "noLoaderHooks"),
             (elf.DT_TEXTREL, [0], "noTextRelocations"),
             (elf.DT_FLAGS, [elf.DF_TEXTREL], "noTextRelocations"),
         ):

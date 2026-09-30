@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "reviewedOn": "2026-09-30",
+  "expires": "2026-11-29",
+  "scope": "managed-default-server-dtls",
+  "assessment": "Agent-performed source review under user authorization. The production server has no configured external worker, subprocess or dynamic-library execution path; mediasoup starts an in-process thread and calls mediasoup_worker_run, whose DTLS transport uses the authenticated static OpenSSL archive. The reviewed server does not invoke iconv/gconv or locale-module conversion APIs. Built-in files/dns NSS and the restricted loader profile remove the configured optional plugin routes. This assessment concerns the intended server DTLS path, not unused libc/libuv APIs, engine-provided init, administrator-selected programs or arbitrary post-deployment mutation. Changed source trees, dependency/native manifests or profile bytes require explicit re-review; no automatic renewal.",
+  "trees": {
+    "src": "d04457098724b7f326d3e6416c19e250fb98f60f",
+    "vendor/mediasoup-0.27.0/src": "b2c4f2468779fbf6cb57ec218aed569528071a98",
+    "vendor/mediasoup-sys-0.17.0/src": "b1ba1a7aff3b1e95b16c70d3bbf1fc4f4ea6c8dd",
+    "vendor/mediasoup-sys-0.17.0/include": "d96c2c5f08dc630fe13c22a29f8e6e2fee35c9b0",
+    "vendor/mediasoup-sys-0.17.0/deps": "36bfec6c2a8365e2be9ca5a839af41b478ca0b70"
+  },
+  "files": {
+    "Cargo.toml": "ce13864478643b6fea30e91b3a304081b32ea26493e5cae88f9399c4dcf75a5f",
+    "Cargo.lock": "bbb0a2ee470fe936915482aa326dec2914fce7a08e09a73d74453fe76f740560",
+    "vendor/integrity.json": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
+    "vendor/native-components.json": "ef0a879b5baa680bd64af9bb0a13e4fe309e75145565888f31bced54b01f30ea"
+  },
+  "profileFiles": {
+    "ops/ansible/files/runtime_profile.py": "22f9b098a6b19be111291c467e2a34a5c7c0f53a6aa3691f71390ddf8bd85965",
+    "security/runtime/nsswitch.conf": "f3e67fe7d4103f8ef0c6e84bce54b935197bf88fbe0c5502c2e30aa291ea403a"
+  }
+}

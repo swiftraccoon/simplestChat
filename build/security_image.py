@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 import security_archive
 import security_elf
 import security_image_policy as policy
+import security_runtime
 import security_secret_projection as projection
 import security_tools
 from native_security import engine_prefix
@@ -711,6 +712,44 @@ def native_binding(tree: Path, elf: JsonObject) -> JsonObject:
     return native
 
 
+def runtime_disposition(  # noqa: PLR0913 -- Explicit artifact and output bindings.
+    *,
+    tree: Path,
+    elf: JsonObject,
+    native: JsonObject,
+    manifest: JsonObject,
+    vulnerabilities: JsonObject,
+    output: Path,
+    outcome: JsonObject,
+) -> JsonObject:
+    """Publish the exact conditional disposition before any final passing verdict."""
+    outcome["vulnerabilityFindings"] = vulnerabilities
+    if security_runtime.affected_scopes(vulnerabilities):
+        runtime = security_runtime.proof(
+            tree=tree,
+            elf=elf,
+            native=native,
+            manifest=manifest,
+            root=ROOT,
+            sbom_sha256=digest(output / "spdx/sbom.spdx.json"),
+        )
+        vex: JsonObject = {}
+    else:
+        runtime, vex = security_runtime.not_required(
+            manifest, string_value(outcome["imageId"]), vulnerabilities
+        )
+    write(output / "runtime-proof.json", runtime)
+    if runtime["required"] is True:
+        vulnerabilities, vex = security_runtime.apply(
+            vulnerabilities, runtime, output / "runtime-proof.json"
+        )
+    write(output / "vex.openvex.json", vex)
+    outcome["vexRequired"] = runtime["required"]
+    outcome["runtimeProofSha256"] = digest(output / "runtime-proof.json")
+    outcome["vexSha256"] = digest(output / "vex.openvex.json")
+    return vulnerabilities
+
+
 def execute(args: Options) -> bool:
     """Persist separate evidence and one honest final verdict, including failed checks."""
     manifest = bind_archive(args)
@@ -766,6 +805,7 @@ def execute(args: Options) -> bool:
         elf = object_value(policy.report(elf_path))
         native = native_binding(tree, elf)
         write(output / "native.json", native)
+        outcome["binarySha256"] = elf["binarySha256"]
         sandbox = prepare_sandbox(args, output, image_policy)
         outcome["selectedImage"] = selected_image(sandbox, args, tree)
         secret_selftest(sandbox)
@@ -787,8 +827,18 @@ def execute(args: Options) -> bool:
         grype = object_value(policy.report(grype_dir / "grype.json"))
         policy.vulnerability_database_binding(grype, db_status)
         outcome["runtimeRpms"] = policy.runtime_rpm_bindings(packages, elf)
+        vulnerabilities = policy.vulnerability_verdict(grype, exceptions, packages)
+        vulnerabilities = runtime_disposition(
+            tree=tree,
+            elf=elf,
+            native=native,
+            manifest=manifest,
+            vulnerabilities=vulnerabilities,
+            output=output,
+            outcome=outcome,
+        )
         checks: JsonObject = {
-            "vulnerabilities": policy.vulnerability_verdict(grype, exceptions, packages),
+            "vulnerabilities": vulnerabilities,
             "licenses": policy.license_verdict(packages, image_policy, exceptions),
             "secrets": policy.secret_verdict(
                 policy.report(secret_dir / "gitleaks.json"),

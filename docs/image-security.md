@@ -87,6 +87,48 @@ to the exact selected image ID. Matching layers alone do not establish image
 identity because configuration bytes can differ. Signer preparation independently
 rehashes the selected archive config before issuing its predicate.
 
+## Conditional OpenSSL runtime disposition
+
+The Fedora OpenSSL RPM remains affected by CVE-2026-84782 until its upstream
+version is fixed. The image gate preserves that observation and every Grype
+finding. It may separately classify the exact shipped server as not affected
+only after `build/security_runtime.py` proves the reviewed managed execution
+profile. This is not a package-wide exception and does not suppress other CVEs
+or findings for another package.
+
+The proof binds the archive and image configuration, source revision, application
+binary, actual ELF/native evidence files and SPDX SBOM. It requires authenticated
+static OpenSSL 3.5.9 with shared libraries, DSO, modules and engines disabled;
+no loader cache, preload or hwcaps paths; no ELF audit/filter or RPATH/RUNPATH
+hooks; identical bytes for every present standard-directory candidate of each
+approved dependency; and the exact files/DNS NSS configuration. Image defaults
+and managed deployment settings use the same `runtime_profile.py` validator.
+The source review in `security/runtime-source-review.json` pins complete source
+trees, dependency/native manifests and profile bytes, expires on a fixed date,
+and requires explicit re-review after changes. The gate does not regenerate or
+renew it.
+
+`runtime-proof.json` records these prerequisites. `vex.openvex.json` identifies
+the exact managed-server product, archive hash and affected RPM PURLs using
+OpenVEX's `vulnerable_code_not_in_execute_path` justification. The product identity
+binds the proof, advisory policy and package identities; it does not mislabel a
+Docker image configuration hash as an OCI manifest digest. `affectedFindings`
+and `reviewedAdvisories` retain the original affected observations, while
+`notAffectedForManagedServer` records the separate disposition. Missing or stale
+proof fails the gate and leaves pre-disposition findings in the outcome. When
+no affected reviewed RPM is installed, both evidence files still exist, the
+proof says `required: false`, and the VEX contains no statements.
+
+This assessment covers the reviewed server's DTLS execution path under the
+shipped command and managed profile. It does not claim that unused libc/libuv
+APIs cannot load code, that every installed program is safe, or that arbitrary
+operator-selected commands and mounts satisfy the profile. The container
+engine's existing init process is part of the trusted deployment runtime, not
+an executable attested by the image ELF closure. No old ARM preview qualifies:
+a fresh fixed, hardened image must satisfy every prerequisite. The conditional
+statement and its proof are release evidence; signature and expiry enforcement
+are described below.
+
 ## Managed runtime profile
 
 The runtime layer removes `/etc/ld.so.cache` after its last package installation
