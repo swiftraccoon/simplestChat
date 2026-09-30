@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 from security_tools import bounded_file, record, require, string
 
@@ -65,6 +65,38 @@ class ExceptionRecord:
     review: str
 
 
+def qualified_package_scope(value: str, scanner: str) -> bool:
+    """Permit a literal package-URL query delimiter, never a wildcard or ambiguous qualifier."""
+    if scanner not in {"image-license", "grype"}:
+        return False
+    if not re.fullmatch(
+        r"pkg:[a-z][a-z0-9.+-]*/[A-Za-z0-9._~%/+-]+@[A-Za-z0-9._~%+:-]+\?[^?#\s]+",
+        value,
+    ) or re.search(r"%(?![a-fA-F0-9]{2})", value):
+        return False
+    parsed = urlsplit(value)
+    decoded = unquote(parsed.path)
+    if any(character in decoded for character in "*?\n\r\x00") or any(
+        component in {".", ".."} for component in decoded.split("/")
+    ):
+        return False
+    try:
+        pairs = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
+    except ValueError:
+        return False
+    return (
+        bool(pairs)
+        and len(pairs) == len({key for key, _ in pairs})
+        and all(
+            re.fullmatch(r"[a-z][a-z0-9_]*", key)
+            and item
+            and not any(character in item for character in "*?\n\r\x00")
+            and item == item.strip()
+            for key, item in pairs
+        )
+    )
+
+
 def parse_exception(value: object, today: date) -> ExceptionRecord:
     """Reject incomplete, wildcarded, unowned or expired exception records."""
     raw = record(value, FIELDS)
@@ -73,7 +105,11 @@ def parse_exception(value: object, today: date) -> ExceptionRecord:
     for key in ("fingerprint", "scope", "owner"):
         require(
             values[key] == values[key].strip()
-            and not any(character in values[key] for character in "*?\n\r\x00")
+            and not any(character in values[key] for character in "*\n\r\x00")
+            and (
+                "?" not in values[key]
+                or (key == "scope" and qualified_package_scope(values[key], values["scanner"]))
+            )
             and values[key].lower() not in {"all", "any", "unknown", "todo"},
             "ambiguous_exception_scope",
         )

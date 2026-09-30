@@ -240,6 +240,26 @@
       "reachability": "GitHub resolves this local workflow at the caller commit. Privileges are explicit and limited to SARIF in CodeQL; no PR job receives deployment or signing credentials.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c",
+      "scope": "pkg:rpm/fedora/libstdc%2B%2B-static@16.2.1-2.fc44?arch=aarch64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Exact Fedora GCC 16.2.1-2.fc44 source-spec aggregate inherited by libstdc++-static; upstream libstdc++ code documents GPLv3 with GCC Runtime Library Exception 3.1. Preserve the complete observed expression; this review does not license arbitrary GCC or newlib components.",
+      "reachability": "Observed aarch64 archive owner and complete aggregate are bound to the retained native receipt. Only this package/version/source-RPM/architecture and exact expression match; unknown terms elsewhere remain blocked.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-libstdcxx-review.md"
+    },
+    {
+      "scanner": "image-license",
+      "fingerprint": "license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c",
+      "scope": "pkg:rpm/fedora/libstdc%2B%2B-static@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Exact Fedora GCC 16.2.1-2.fc44 source-spec aggregate inherited by libstdc++-static; upstream libstdc++ code documents GPLv3 with GCC Runtime Library Exception 3.1. Preserve the complete observed expression; this review does not license arbitrary GCC or newlib components.",
+      "reachability": "Explicit x86_64 policy inference from the same Fedora source RPM and unchanged inherited aggregate; no x86_64 binary observation is claimed. Only this package/version/source-RPM/architecture and exact expression match; unknown terms elsewhere remain blocked.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-libstdcxx-review.md"
     }
   ]
 }

@@ -63,6 +63,44 @@ class ReviewTests(unittest.TestCase):
                 with self.assertRaises(ToolError):
                     _ = policy.parse_exception(raw, TODAY)
 
+    def test_qualified_package_scope_is_literal_and_unambiguous(self) -> None:
+        """RPM architecture/source qualifiers are exact identity, not wildcard syntax."""
+        raw = review()
+        raw["scanner"] = "image-license"
+        raw["scope"] = (
+            "pkg:rpm/fedora/libstdc%2B%2B-static@16.2.1-2.fc44"
+            + "?arch=aarch64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm"
+        )
+        entry = policy.parse_exception(raw, TODAY)
+        self.assertTrue(policy.permitted([entry], entry.scanner, entry.fingerprint, entry.scope))
+        self.assertFalse(
+            policy.permitted(
+                [entry], entry.scanner, entry.fingerprint, entry.scope.replace("aarch64", "x86_64")
+            )
+        )
+        for scope in (
+            "package?",
+            "pkg:rpm/fedora/library@1?arch=*",
+            "pkg:rpm/fedora/library@1?arch=%2A",
+            "pkg:rpm/fedora/library@1?arch=%3F",
+            "pkg:rpm/fedora/library@1?arch=%00",
+            "pkg:rpm/fedora/library@1?arch=%GG",
+            "pkg:rpm/fedora/library@1?arch=x86_64&arch=aarch64",
+            "pkg:rpm/fedora/library@1?arch=x86_64&%61rch=aarch64",
+            "pkg:rpm/fedora/library@1?arch=",
+            "pkg:rpm/fedora/library@1?arch",
+            "pkg:rpm/fedora/library@1?arch=x86_64?other=1",
+            "pkg:rpm/fedora/%2A@1?arch=x86_64",
+            "pkg:rpm/fedora/../library@1?arch=x86_64",
+        ):
+            with self.subTest(scope=scope), self.assertRaises(ToolError):
+                _ = policy.parse_exception({**raw, "scope": scope}, TODAY)
+        for field in ("owner", "fingerprint"):
+            with self.subTest(field=field), self.assertRaises(ToolError):
+                _ = policy.parse_exception({**raw, field: raw["scope"]}, TODAY)
+        with self.assertRaises(ToolError):
+            _ = policy.parse_exception({**raw, "scanner": "gitleaks"}, TODAY)
+
     def test_complete_policy_rejects_duplicate_and_unknown_fields(self) -> None:
         """Neither a later duplicate nor a misspelled scope field is ignored."""
         with tempfile.TemporaryDirectory() as temporary:

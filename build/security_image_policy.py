@@ -395,7 +395,14 @@ def static_rpm(package: JsonObject, owner: list[str]) -> JsonObject:
         + "@"
         + quote(version_release, safe="")
         + "?"
-        + urlencode({"arch": architecture, "distro": "fedora-44", "upstream": owner[2]})
+        + urlencode(
+            {
+                "arch": architecture,
+                "distro": "fedora-44",
+                "upstream": owner[2],
+                **({"epoch": epoch} if int(epoch) else {}),
+            }
+        )
     )
     package["metadataType"] = "rpm-db-entry"
     package["metadata"] = {
