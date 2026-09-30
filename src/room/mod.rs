@@ -1479,6 +1479,11 @@ impl RoomManager {
         })
     }
 
+    /// Whether this process permits creation of non-persisted rooms.
+    pub fn allow_ad_hoc_rooms(&self) -> bool {
+        self.allow_ad_hoc_rooms
+    }
+
     /// Gets the media server for direct access (e.g., find_producer_paused)
     pub fn media_server(&self) -> &MediaServer {
         &self.media_server

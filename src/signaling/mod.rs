@@ -773,6 +773,7 @@ impl SignalingServer {
             .merge(telemetry_routes)
             .route("/ws", get(ws_handler))
             .route("/health", get(health_handler))
+            .route("/api/capabilities", get(capabilities_handler))
             .route("/ready", get(readiness_handler))
             .route("/metrics", get(metrics_handler))
             .route("/diagnostics/media", get(media_diagnostics::handler))
@@ -841,6 +842,44 @@ fn with_static_fallback_and_security(router: Router) -> Router {
         .fallback_service(ServeDir::new("web/dist"))
         .layer(DefaultBodyLimit::max(64 * 1024))
         .layer(middleware::from_fn(security_headers))
+}
+
+/// Public feature availability, independent of the caller's authorization.
+/// It contains no deployment addresses, secrets or internal dependency errors.
+async fn capabilities_handler(State(server): State<SignalingServer>) -> Response {
+    let accounts = server.db_pool.is_some() && server.jwt_secret.is_some();
+    let passkeys = accounts && server.webauthn.is_some();
+    (
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(capabilities(
+            accounts,
+            passkeys,
+            server.registration_enabled,
+            server.db_pool.is_some(),
+            server.room_manager.allow_ad_hoc_rooms(),
+        )),
+    )
+        .into_response()
+}
+
+fn capabilities(
+    accounts: bool,
+    passkeys: bool,
+    registration: bool,
+    directory: bool,
+    ad_hoc: bool,
+) -> serde_json::Value {
+    serde_json::json!({
+        "version": 1,
+        "accounts": accounts,
+        "passwordLogin": accounts,
+        "passkeyLogin": accounts && passkeys,
+        "passwordRegistration": if !accounts { "disabled" } else if registration { "open" } else { "invite" },
+        "passkeyRegistration": if accounts && passkeys && registration { "open" } else { "disabled" },
+        "roomDirectory": directory,
+        "roomCreation": accounts,
+        "adHocRooms": ad_hoc,
+    })
 }
 
 /// Process liveness only; dependency availability belongs to `/ready`.
@@ -1485,6 +1524,21 @@ fn tuned_listener(
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    #[test]
+    fn public_capabilities_distinguish_guest_invited_and_open_enrollment() {
+        let guest = capabilities(false, false, false, false, true);
+        assert_eq!(guest["version"], 1);
+        assert_eq!(guest["passwordRegistration"], "disabled");
+        assert_eq!(guest["adHocRooms"], true);
+        let invited = capabilities(true, true, false, true, false);
+        assert_eq!(invited["passwordRegistration"], "invite");
+        assert_eq!(invited["passkeyRegistration"], "disabled");
+        assert_eq!(invited["passkeyLogin"], true);
+        let open = capabilities(true, true, true, true, false);
+        assert_eq!(open["passkeyRegistration"], "open");
+        assert_eq!(open["roomCreation"], true);
+    }
 
     #[test]
     fn ip_capacity_preserves_live_buckets_and_bounds_overflow() {
