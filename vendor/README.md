@@ -19,23 +19,61 @@ The VCS revisions above are the values embedded by crates.io in each
 `.cargo_vcs_info.json`.  The original license and third-party license files
 from both archives are retained in place.
 
-To independently reproduce an import, download to a temporary directory,
-verify the archive before extraction, and compare it with the corresponding
-directory while excluding the maintained files listed below:
+### Automated integrity verification
+
+[`integrity.json`](integrity.json) is the machine-checked provenance contract.
+Run the verifier before compiling downloaded or vendored native code:
 
 ```bash
-curl --fail --show-error --location --proto '=https' --tlsv1.2 \
-  https://crates.io/api/v1/crates/mediasoup/0.27.0/download \
-  --output mediasoup-0.27.0.crate
-echo 'c79e3ce92e845fb431052e2bf0083a2c9c3772367588874a891826b50dda4c33  mediasoup-0.27.0.crate' \
-  | shasum -a 256 --check
-
-curl --fail --show-error --location --proto '=https' --tlsv1.2 \
-  https://crates.io/api/v1/crates/mediasoup-sys/0.17.0/download \
-  --output mediasoup-sys-0.17.0.crate
-echo 'b4193421652913559e68e6640d5fbe862241f313fa00cc446561e0d3f69ec684  mediasoup-sys-0.17.0.crate' \
-  | shasum -a 256 --check
+vendor_check="$(mktemp -d "${TMPDIR:-/tmp}/simplestchat-vendor.XXXXXXXX")"
+python3 build/security_vendor.py verify \
+  --cache "$vendor_check/cache" --output "$vendor_check/evidence"
 ```
+
+The helper requires Python 3.12 or newer and uses only the standard library and
+the repository's bounded-process helper. Both cache and evidence directories
+must belong to the caller and be private (`0700`). The evidence directory must
+be new. Reuse a private cache on later runs and pass `--offline` to prohibit
+network access; missing or corrupt cached bytes then fail verification. Cache
+filenames are the complete source SHA-256, and every use checks the bytes again.
+
+Each `sources` record identifies one HTTPS URL, SHA-256 and format. The verifier
+authenticates every source before parsing an archive. It never extracts archives
+or executes imported code. Downloads have a 120-second process deadline and a
+128 MiB compressed-size limit; archive members, total expansion, file counts and
+retained diffs have separate limits. Redirects must remain on HTTPS. Tar/ZIP
+links, special files, duplicate names, ambiguous paths and directory collisions
+are rejected. These checks authenticate previously reviewed bytes; they do not
+establish publisher identity or prove that imported source is safe.
+
+For each `trees` entry, every upstream and maintained file is compared, including
+hidden files. An unchanged file must be byte-for-byte identical. Every added,
+modified or deleted file must have exactly one `changes` entry containing its
+upstream and maintained SHA-256; `null` means that the file is absent on that
+side. A stale entry fails as well as an unlisted change. The two local WrapDB
+overlays also have independent archive comparisons, preserving their provenance
+alongside their inclusion in the worker's maintained patch. The SecLists data
+and license use exact raw-file sources. Explicitly listed repository-authored
+README files and the integrity manifest itself are the only metadata exceptions.
+
+The complete discovered set of Meson `.wrap` files must match `wraps`. Every wrap
+must use `wrap-file` with the recorded HTTPS source URL and SHA-256. Remote patches
+require their own source record and hash; local overlays must exist inside the
+checked vendor tree. Source fallback URLs must be explicitly recorded and remain
+bound to the same hash. VCS wraps, missing hashes, additional download fields and
+unlisted dependencies fail verification. This source inventory includes native
+test and platform-specific dependencies; it does not claim that every entry is
+linked into the production binary.
+
+A successful run writes deterministic `report.json` and `vendor.diff`. The report
+binds the manifest, upstream sources, complete per-file comparisons and diff by
+SHA-256. The diff retains every textual deviation; binary deviations retain both
+complete byte sequences as base64. Completed comparisons that detect file drift retain the diff and a
+`failure.json` but never a success report. Keep these artifacts with the security
+run for review. For an intentional update, authenticate the new upstream source,
+review the complete changes, amend each affected source/deviation record and the
+explanation below, then rerun verification and relevant native/application tests.
+There is no command that automatically approves the current working tree.
 
 ## Maintained changes
 
