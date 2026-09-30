@@ -4,6 +4,7 @@ import {
   decodeAccountProfile,
   decodeServerCapabilities,
   decodeChatPreferences,
+  decodeWebSocketTicket,
   decodeInviteRedemption,
   decodeMemberships,
   decodePublicProfile,
@@ -316,6 +317,8 @@ async function apiNoContent(
 
 /** Endpoint-owned contracts: callers cannot select an arbitrary response type or decoder. */
 export const api = {
+  websocketTicket: (token: string, signal: AbortSignal) =>
+    apiJson(decodeWebSocketTicket, '/api/auth/ws-ticket', token, 'POST', {}, signal),
   capabilities: () =>
     apiJson(
       decodeServerCapabilities,

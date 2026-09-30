@@ -70,6 +70,12 @@ async function run() {
     });
     await context.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname;
+      if (path === '/api/auth/ws-ticket') {
+        assert.equal(route.request().method(), 'POST');
+        assert.deepEqual(route.request().postDataJSON(), {});
+        await route.fulfill({ json: { ticket: 'a'.repeat(43), expires_in: 30 } });
+        return;
+      }
       if (path === '/api/auth/login') {
         logins++;
         pendingLogin = route;

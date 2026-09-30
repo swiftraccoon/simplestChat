@@ -209,3 +209,12 @@ export const decodeMemberships: Decoder<MembershipPage> = (value) =>
   Array.isArray(value)
     ? { items: decodeMembershipItems(value), next_cursor: null }
     : decodeMembershipPage(value);
+
+/** A single-use WebSocket upgrade credential, never a reusable access token. */
+export const decodeWebSocketTicket = object<{ ticket: string; expires_in: number }>({
+  ticket: (value) => {
+    const result = text(value);
+    return /^[A-Za-z0-9_-]{43}$/.test(result) ? result : invalid();
+  },
+  expires_in: integer(30, 1),
+});

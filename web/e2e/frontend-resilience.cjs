@@ -89,6 +89,7 @@ async function run() {
     invite = false,
     holdSocket = false,
     holdInvite = false,
+    holdTicket = false,
   } = {}) {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -118,6 +119,9 @@ async function run() {
     const sent = [];
     const socketGate = Promise.withResolvers();
     const socketSeen = Promise.withResolvers();
+    const ticketSeen = Promise.withResolvers();
+    const tickets = [];
+    let connections = 0;
     const inviteSeen = Promise.withResolvers();
     const redemptions = [];
     context.on('close', () => socketGate.resolve());
@@ -127,6 +131,7 @@ async function run() {
       ? { id: 'fixture-account', email: 'fixture@example.test', display_name: 'Fixture owner' }
       : null;
     await context.routeWebSocket('**/ws', async (owned) => {
+      connections++;
       socket = owned;
       const send = (message) => owned.send(JSON.stringify(message));
       owned.onMessage((wire) => {
@@ -193,6 +198,15 @@ async function run() {
         route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
       if (url.pathname === '/favicon.ico') return route.fulfill({ status: 204 });
       if (url.pathname === '/api/capabilities') return json(features);
+      if (url.pathname === '/api/auth/ws-ticket') {
+        assert.equal(route.request().method(), 'POST');
+        assert.deepEqual(route.request().postDataJSON(), {});
+        assert.match(route.request().headers().authorization, /^Bearer /);
+        tickets.push(route);
+        ticketSeen.resolve();
+        if (holdTicket) return;
+        return json({ ticket: 'a'.repeat(43), expires_in: 30 });
+      }
       if (url.pathname === '/api/auth/profiles/local-fixture')
         return json({
           id: 'local-fixture',
@@ -251,7 +265,8 @@ async function run() {
       report.pageErrors++;
     });
     await page.goto(invite ? `${origin}/#invite=${'a'.repeat(32)}` : origin);
-    if (holdSocket) await socketSeen.promise;
+    if (holdTicket) await ticketSeen.promise;
+    else if (holdSocket) await socketSeen.promise;
     else await page.getByText('Connected', { exact: true }).waitFor();
     return {
       context,
@@ -259,6 +274,9 @@ async function run() {
       sent,
       redemptions,
       inviteSeen: inviteSeen.promise,
+      connections: () => connections,
+      finishTicket: (index) =>
+        tickets[index].fulfill({ json: { ticket: 'b'.repeat(43), expires_in: 30 } }),
       replaceAccount: async () => {
         account = {
           id: 'replacement-account',
@@ -289,6 +307,26 @@ async function run() {
   }
 
   async function scenarios() {
+    const preparing = await fixture({ signedIn: true, holdTicket: true });
+    assert.equal(preparing.connections(), 0);
+    const aborted = preparing.page.waitForEvent('requestfailed', {
+      predicate: (request) => new URL(request.url()).pathname === '/api/auth/ws-ticket',
+    });
+    const nextTicket = preparing.page.waitForRequest(
+      (request) => new URL(request.url()).pathname === '/api/auth/ws-ticket',
+    );
+    await preparing.replaceAccount();
+    await aborted;
+    await nextTicket;
+    assert.equal(preparing.connections(), 0, 'changing account cannot reuse a pending ticket');
+    await preparing.finishTicket(1);
+    await preparing.page.getByText('Connected', { exact: true }).waitFor();
+    assert.equal(preparing.connections(), 1);
+    report.checks.push(
+      'Account replacement cancels an in-flight ticket mint and waits for its own ticket before opening a socket',
+    );
+    await preparing.context.close();
+
     const invited = await fixture({ signedIn: true, room: true, invite: true, holdSocket: true });
     const review = invited.page.getByRole('dialog', {
       name: 'Review room invitation',

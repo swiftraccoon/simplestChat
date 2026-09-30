@@ -199,3 +199,13 @@ require a separate local preference and can expose content on the OS lock screen
 Room/account teardown closes outstanding notices and retires their click handlers.
 Account password selection counts 15–128 Unicode scalar characters after NFC
 normalization, with a 512-byte raw UTF-8 limit; confirmation uses the same normalization.
+
+Authenticated WebSocket connections first mint a one-use upgrade ticket through
+`POST /api/auth/ws-ticket` with the access token in the ordinary HTTP Authorization
+header. The handshake carries only `simplestchat` and `ticket.<ticket>` protocols;
+it never carries the reusable JWT. Tickets expire within 30 seconds, and every
+reconnect mints a fresh one. Client preparation has a 15-second deadline within the
+existing reconnect budget. Replacing the account/token, disconnecting or exhausting
+recovery cancels the owned preparation; late responses cannot open another identity's
+socket. Guests connect without a ticket. Authentication renewal on an established
+socket remains a correlated WebSocket frame, with its existing bounded retry policy.

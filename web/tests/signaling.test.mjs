@@ -4,6 +4,9 @@ import { loadContractModules, loadTypeScript } from './source-loader.mjs';
 
 const validation = (await loadContractModules())['./protocol-validation'];
 const CLOCK_EPOCH_MS = 1_800_000_000_000;
+const flushTickets = async () => {
+  for (let index = 0; index < 12; index++) await Promise.resolve();
+};
 
 function transportReply(transportId, requestId) {
   return {
@@ -66,6 +69,7 @@ async function connectedClient(t, random = 0.5, token) {
     static OPEN = 1;
     static CONNECTING = 0;
     static instances = [];
+    static tickets = new Map();
     readyState = FakeWebSocket.CONNECTING;
     sent = [];
 
@@ -112,12 +116,25 @@ async function connectedClient(t, random = 0.5, token) {
       },
     },
   });
-  const client = new SignalingClient('ws://localhost/ws');
+  let issued = 0;
+  const ticketRequests = [];
+  const ticketProvider = {
+    issue: async (token, signal) => {
+      const ticket = (++issued).toString(16).padStart(43, 'a');
+      ticketRequests.push({ token, signal, ticket });
+      FakeWebSocket.tickets.set(token, ticket);
+      return { ticket, expiresIn: 30 };
+    },
+  };
+  const client = new SignalingClient('ws://localhost/ws', (token, signal) =>
+    ticketProvider.issue(token, signal),
+  );
   client.connect(token);
+  await flushTickets();
   const socket = FakeWebSocket.instances.at(-1);
   socket.open();
   t.after(() => client.disconnect());
-  return { client, socket, timers, FakeWebSocket, errors };
+  return { client, socket, timers, FakeWebSocket, errors, ticketRequests, ticketProvider };
 }
 
 function deferRenewal(socket, expiresAt = CLOCK_EPOCH_MS / 1000 + 60, retryAfterMs = 3000) {
@@ -201,12 +218,15 @@ test('deferred renewal retries on the same socket without disturbing membership 
   deferRenewal(socket);
   assert.deepEqual(timers.delays, [20000, 3125]);
   timers.tick(1000);
+  await flushTickets();
   deferRenewal(socket);
   assert.deepEqual(timers.delays, [19000, 2125], 'duplicate response cannot postpone the retry');
   staleTimeout();
   timers.tick(2124);
+  await flushTickets();
   assert.equal(socket.sent.length, 2);
   timers.tick(1);
+  await flushTickets();
   const retry = socket.sent.at(-1);
   assert.equal(retry.token, 'refreshed');
   assert.notEqual(retry.requestId, original.requestId);
@@ -230,11 +250,13 @@ test('token updates retain the delay and use only the latest pending credential 
   client.setToken('second');
   deferRenewal(socket);
   timers.tick(1000);
+  await flushTickets();
   client.setToken('third');
   client.setToken('fourth');
   assert.equal(socket.sent.length, 1);
   assert.deepEqual(timers.delays, [2125]);
   timers.tick(2125);
+  await flushTickets();
   assert.equal(socket.sent[1].token, 'fourth');
   client.setToken('fifth');
   deferRenewal(socket);
@@ -242,6 +264,7 @@ test('token updates retain the delay and use only the latest pending credential 
   assert.equal(socket.sent.length, 2);
   assert.deepEqual(timers.delays, [3125]);
   timers.tick(3125);
+  await flushTickets();
   assert.deepEqual(
     socket.sent.map((message) => message.token),
     ['second', 'fourth', 'latest'],
@@ -265,8 +288,10 @@ for (const [random, delay] of [
     deferRenewal(socket);
     assert.deepEqual(timers.delays, [delay]);
     timers.tick(delay - 1);
+    await flushTickets();
     assert.equal(socket.sent.length, 1);
     timers.tick(1);
+    await flushTickets();
     assert.equal(socket.sent.length, 2);
     assert.deepEqual(timers.delays, [5000]);
   });
@@ -278,6 +303,7 @@ test('the third deferral exhausts the attempt limit and reconnects using the lat
   for (let attempt = 0; attempt < 2; attempt++) {
     deferRenewal(socket);
     timers.tick(3125);
+    await flushTickets();
   }
   assert.equal(socket.sent.length, 3);
   client.setToken('latest');
@@ -286,8 +312,12 @@ test('the third deferral exhausts the attempt limit and reconnects using the lat
   assert.equal(socket.sent.length, 3);
   assert.deepEqual(timers.delays, [120000, 1500]);
   timers.tick(1500);
+  await flushTickets();
   const replacement = FakeWebSocket.instances.at(-1);
-  assert.deepEqual(replacement.protocols, ['simplestchat', 'auth.latest']);
+  assert.deepEqual(replacement.protocols, [
+    'simplestchat',
+    `ticket.${FakeWebSocket.tickets.get('latest')}`,
+  ]);
   replacement.open();
   assert.equal(timers.pendingCount, 0);
 });
@@ -296,16 +326,21 @@ test('late deferrals and token updates cannot extend the original fifteen-second
   const { client, socket, timers } = await connectedClient(t, 0.5, 'initial');
   client.setToken('second');
   timers.tick(4900);
+  await flushTickets();
   deferRenewal(socket, CLOCK_EPOCH_MS / 1000 + 60, 5000);
   timers.tick(5125);
+  await flushTickets();
   assert.equal(socket.sent.length, 2);
   timers.tick(4900);
+  await flushTickets();
   deferRenewal(socket, CLOCK_EPOCH_MS / 1000 + 120, 5000);
   client.setToken('latest');
   assert.deepEqual(timers.delays, [75]);
   timers.tick(74);
+  await flushTickets();
   assert.equal(client.connected, true);
   timers.tick(1);
+  await flushTickets();
   assert.equal(timers.now, 15000);
   assert.equal(client.connected, false);
   assert.equal(socket.sent.length, 2, 'deadline cannot start another request');
@@ -316,14 +351,19 @@ test('a retry request timeout is shortened to the remaining overall budget', asy
   client.setToken('refreshed');
   deferRenewal(socket);
   timers.tick(3125);
+  await flushTickets();
   timers.tick(4000);
+  await flushTickets();
   deferRenewal(socket);
   timers.tick(3125);
+  await flushTickets();
   assert.equal(socket.sent.length, 3);
   assert.deepEqual(timers.delays, [4750]);
   timers.tick(4749);
+  await flushTickets();
   assert.equal(client.connected, true);
   timers.tick(1);
+  await flushTickets();
   assert.equal(timers.now, 15000);
   assert.equal(client.connected, false);
 });
@@ -335,8 +375,10 @@ for (const expirySeconds of [0, 2, 5]) {
     deferRenewal(socket, CLOCK_EPOCH_MS / 1000 + expirySeconds);
     if (expirySeconds > 0) {
       timers.tick(expirySeconds * 1000 - 1);
+      await flushTickets();
       assert.equal(client.connected, true);
       timers.tick(1);
+      await flushTickets();
     }
     assert.equal(client.connected, false);
     assert.equal(socket.sent.length, expirySeconds > 3 ? 2 : 1);
@@ -349,12 +391,16 @@ test('later deferrals cannot extend the previously accepted expiry cap', async (
   client.setToken('refreshed');
   deferRenewal(socket, CLOCK_EPOCH_MS / 1000 + 10);
   timers.tick(3125);
+  await flushTickets();
   deferRenewal(socket, CLOCK_EPOCH_MS / 1000 + 60);
   timers.tick(3125);
+  await flushTickets();
   assert.deepEqual(timers.delays, [3750]);
   timers.tick(3749);
+  await flushTickets();
   assert.equal(client.connected, true);
   timers.tick(1);
+  await flushTickets();
   assert.equal(timers.now, 10000);
   assert.equal(client.connected, false);
 });
@@ -364,6 +410,7 @@ test('successful renewal retires its deadline and starts a fresh budget for the 
   client.setToken('second');
   deferRenewal(socket);
   timers.tick(3125);
+  await flushTickets();
   socket.receive({
     type: 'authenticationRenewed',
     requestId: socket.sent.at(-1).requestId,
@@ -371,9 +418,11 @@ test('successful renewal retires its deadline and starts a fresh budget for the 
   });
   assert.equal(timers.pendingCount, 0);
   timers.tick(13000);
+  await flushTickets();
   client.setToken('third');
   assert.deepEqual(timers.delays, [5000]);
   timers.tick(4000);
+  await flushTickets();
   socket.receive({
     type: 'authenticationRenewed',
     requestId: socket.sent.at(-1).requestId,
@@ -392,6 +441,7 @@ test('disconnect and replacement retire deferred callbacks and stale replies', a
   client.disconnect();
   assert.equal(timers.pendingCount, 0);
   client.connect('other-account');
+  await flushTickets();
   const replacement = FakeWebSocket.instances.at(-1);
   replacement.open();
   client.setToken('other-refresh');
@@ -422,14 +472,19 @@ test('a network close during deferred renewal cancels its retry before ordinary 
   socket.close();
   assert.deepEqual(timers.delays, [120000, 1500]);
   timers.tick(1500);
+  await flushTickets();
   const replacement = FakeWebSocket.instances.at(-1);
   replacement.open();
   staleRetry();
   timers.tick(16000);
+  await flushTickets();
   assert.equal(client.connected, true);
   assert.equal(socket.sent.length, 1);
   assert.equal(replacement.sent.length, 0);
-  assert.deepEqual(replacement.protocols, ['simplestchat', 'auth.refreshed']);
+  assert.deepEqual(replacement.protocols, [
+    'simplestchat',
+    `ticket.${FakeWebSocket.tickets.get('refreshed')}`,
+  ]);
   assert.equal(timers.pendingCount, 0);
 });
 
@@ -441,6 +496,7 @@ test('clearing credentials cancels deferred retries and guest deferrals are igno
   client.setToken(undefined);
   staleRetry();
   timers.tick(16000);
+  await flushTickets();
   assert.equal(socket.sent.length, 1);
   assert.equal(timers.pendingCount, 0);
   assert.equal(client.connected, true);
@@ -487,7 +543,9 @@ for (const failure of ['timeout', 'rejected', 'send']) {
         throw new Error('secret-token');
       };
     timers.tick(3125);
+    await flushTickets();
     if (failure === 'timeout') timers.tick(5000);
+    await flushTickets();
     if (failure === 'rejected')
       socket.receive({
         type: 'authenticationRenewalFailed',
@@ -504,8 +562,12 @@ test('refresh during a pending handshake renews on open and disconnected refresh
   socket.close();
   client.setToken('second');
   timers.tick(1500);
+  await flushTickets();
   const replacement = FakeWebSocket.instances.at(-1);
-  assert.deepEqual(replacement.protocols, ['simplestchat', 'auth.second']);
+  assert.deepEqual(replacement.protocols, [
+    'simplestchat',
+    `ticket.${FakeWebSocket.tickets.get('second')}`,
+  ]);
   client.setToken('third');
   assert.equal(replacement.sent.length, 0);
   replacement.open();
@@ -527,6 +589,7 @@ test('a renewal send failure during open cannot announce a usable replacement so
   client.setOnReconnected(() => reconnects.push('connected'));
   socket.close();
   timers.tick(1500);
+  await flushTickets();
   const replacement = FakeWebSocket.instances.at(-1);
   client.setToken('refreshed');
   replacement.send = () => {
@@ -562,7 +625,11 @@ test('overlapping refreshes serialize and stale acknowledgements cannot overwrit
   assert.equal(timers.pendingCount, 0);
   socket.close();
   timers.tick(1500);
-  assert.deepEqual(FakeWebSocket.instances.at(-1).protocols, ['simplestchat', 'auth.third']);
+  await flushTickets();
+  assert.deepEqual(FakeWebSocket.instances.at(-1).protocols, [
+    'simplestchat',
+    `ticket.${FakeWebSocket.tickets.get('third')}`,
+  ]);
 });
 
 for (const failure of ['timeout', 'rejected', 'send']) {
@@ -578,14 +645,19 @@ for (const failure of ['timeout', 'rejected', 'send']) {
       };
     client.setToken('secret-token');
     if (failure === 'timeout') timers.tick(5000);
+    await flushTickets();
     if (failure === 'rejected')
       socket.receive({ type: 'authenticationRenewalFailed', requestId: socket.sent[0].requestId });
     assert.equal(client.connected, false);
     assert.deepEqual(timers.delays, [120000, 1500]);
     assert.equal(JSON.stringify(errors).includes('secret-token'), false);
     timers.tick(1500);
+    await flushTickets();
     const replacement = FakeWebSocket.instances.at(-1);
-    assert.deepEqual(replacement.protocols, ['simplestchat', 'auth.secret-token']);
+    assert.deepEqual(replacement.protocols, [
+      'simplestchat',
+      `ticket.${FakeWebSocket.tickets.get('secret-token')}`,
+    ]);
     replacement.open();
     assert.equal(replacement.sent.length, 0, 'new handshake already uses the refreshed credential');
     assert.equal(timers.pendingCount, 0);
@@ -599,12 +671,17 @@ test('logout and replacement sockets retire renewal timers and late results', as
   client.disconnect();
   assert.equal(timers.pendingCount, 0);
   client.connect('other-account');
+  await flushTickets();
   const replacement = FakeWebSocket.instances.at(-1);
   replacement.open();
   socket.receive({ type: 'authenticationRenewed', requestId, expiresAt: 1800000000 });
   timers.tick(6000);
+  await flushTickets();
   assert.equal(client.connected, true);
-  assert.deepEqual(replacement.protocols, ['simplestchat', 'auth.other-account']);
+  assert.deepEqual(replacement.protocols, [
+    'simplestchat',
+    `ticket.${FakeWebSocket.tickets.get('other-account')}`,
+  ]);
   assert.equal(replacement.sent.length, 0);
 });
 
@@ -652,6 +729,7 @@ test('late success and error replies cannot settle a retry or become application
   const originalId = socket.sent[0].requestId;
   const originalTimeout = timers.callbacks[0];
   timers.tick(10);
+  await flushTickets();
   await expired;
 
   const retry = client.request({ type: 'createSendTransport' }, 'transportCreated', 10);
@@ -689,6 +767,7 @@ test('server errors reject the request and leave the next response available', a
   const reply = transportReply('replacement', socket.sent.at(-1).requestId);
   socket.receive(reply);
   timers.tick(10);
+  await flushTickets();
   assert.deepEqual(await retry, reply);
 });
 
@@ -803,6 +882,7 @@ test('a synchronous send failure removes the pending media request before a retr
   const reply = transportReply('replacement', socket.sent.at(-1).requestId);
   socket.receive(reply);
   timers.tick(10);
+  await flushTickets();
   assert.deepEqual(await retry, reply);
 });
 
@@ -844,6 +924,7 @@ test('disconnect rejects all requests, cancels their timers, and permits a fresh
   const reply = transportReply('new-connection', replacement.sent.at(-1).requestId);
   replacement.receive(reply);
   timers.tick(10);
+  await flushTickets();
   assert.deepEqual(await request, reply);
 });
 
@@ -857,6 +938,7 @@ test('a replaced socket closing late cannot disconnect the current connection or
   };
   client.disconnect();
   client.connect('replacement-token');
+  await flushTickets();
   const replacement = FakeWebSocket.instances.at(-1);
   replacement.open();
   const request = client.request({ type: 'createSendTransport' }, 'transportCreated', 100);
@@ -913,6 +995,7 @@ test('the current socket closing still rejects requests and reconnects once', as
   assert.equal(client.connected, false);
   assert.equal(timers.pendingCount, 2, 'one retry and one overall recovery deadline');
   timers.tick(2000);
+  await flushTickets();
   const replacement = FakeWebSocket.instances.at(-1);
   assert.notEqual(replacement, socket);
   replacement.open();
@@ -930,6 +1013,7 @@ test('restart recovery keeps its deadline across socket open until room recovery
   assert.deepEqual(timers.delays, [120000]);
   socket.close();
   timers.tick(1500);
+  await flushTickets();
   FakeWebSocket.instances.at(-1).open();
   assert.equal(timers.pendingCount, 1, 'room rejoin remains under the original deadline');
   client.completeRestartRecovery();
@@ -944,6 +1028,7 @@ test('restart deadline rejects unacknowledged work after socket open and preserv
   socket.receive({ type: 'serverRestarting', reason: 'Server shutting down' });
   socket.close();
   timers.tick(1500);
+  await flushTickets();
   const stalled = FakeWebSocket.instances.at(-1);
   stalled.open();
   const pending = assert.rejects(
@@ -951,17 +1036,23 @@ test('restart deadline rejects unacknowledged work after socket open and preserv
     /Reconnection timed out/,
   );
   timers.tick(118500);
+  await flushTickets();
   await pending;
   assert.deepEqual(failures, ['expired']);
   assert.equal(stalled.readyState, 3);
   assert.equal(timers.pendingCount, 0);
   const attempts = FakeWebSocket.instances.length;
   timers.tick(600000);
+  await flushTickets();
   assert.equal(FakeWebSocket.instances.length, attempts, 'no unlimited background retries');
   client.retryConnection();
+  await flushTickets();
   const retry = FakeWebSocket.instances.at(-1);
   assert.notEqual(retry, stalled);
-  assert.deepEqual(retry.protocols, ['simplestchat', 'auth.fixture-current-token']);
+  assert.deepEqual(retry.protocols, [
+    'simplestchat',
+    `ticket.${FakeWebSocket.tickets.get('fixture-current-token')}`,
+  ]);
   retry.open();
   client.completeRestartRecovery();
   assert.equal(client.connected, true);
@@ -974,10 +1065,12 @@ test('repeated restart notices do not extend the deadline and disconnect cancels
   client.setOnReconnectFailed(() => failures++);
   socket.receive({ type: 'serverRestarting', reason: 'Server shutting down' });
   timers.tick(60000);
+  await flushTickets();
   socket.receive({ type: 'serverRestarting', reason: 'Server shutting down' });
   assert.deepEqual(timers.delays, [60000]);
   client.disconnect();
   timers.tick(120000);
+  await flushTickets();
   assert.equal(failures, 0);
   assert.equal(timers.pendingCount, 0);
 });
@@ -988,9 +1081,11 @@ test('an initial connection outage also exposes an explicit retry after its dead
   client.connect();
   FakeWebSocket.instances.at(-1).close();
   timers.tick(120000);
+  await flushTickets();
   assert.equal(client.reconnectExhausted, true);
   assert.equal(timers.pendingCount, 0);
   client.retryConnection();
+  await flushTickets();
   assert.equal(client.reconnectExhausted, false);
   FakeWebSocket.instances.at(-1).open();
   client.completeRestartRecovery();
@@ -1006,6 +1101,7 @@ for (const random of [0, 0.5, 0.999999]) {
       assert.equal(delay, Math.floor(ceiling / 2 + (random * ceiling) / 2));
       assert.ok(delay >= ceiling / 2 && delay < ceiling);
       timers.tick(delay);
+      await flushTickets();
       FakeWebSocket.instances.at(-1).close();
     }
   });
@@ -1021,6 +1117,7 @@ test('a close outside a room while the page is hidden waits for visibility befor
   assert.equal(client.connected, false);
   assert.equal(FakeWebSocket.instances.length, 1, 'no reconnect while the gate is closed');
   timers.tick(60_000);
+  await flushTickets();
   assert.equal(FakeWebSocket.instances.length, 1, 'no timer-driven reconnect either');
   assert.deepEqual(timers.callbacks, [], 'no reconnect deadline runs while deferred');
 
@@ -1041,8 +1138,165 @@ test('a close reconnects on the usual schedule while the gate is open', async (t
 
   assert.equal(FakeWebSocket.instances.length, 1);
   timers.tick(2_000);
+  await flushTickets();
   assert.equal(FakeWebSocket.instances.length, 2, 'the backoff timer reconnects as before');
   assert.equal(client.connected, false);
   FakeWebSocket.instances.at(-1).open();
   assert.equal(client.connected, true);
+});
+
+test('authenticated connections mint fresh one-use tickets and never send the bearer in protocols', async (t) => {
+  const token = 'reusable-secret-bearer';
+  const f = await connectedClient(t, 0.5, token);
+  assert.deepEqual(f.socket.protocols, ['simplestchat', `ticket.${f.ticketRequests[0].ticket}`]);
+  assert.equal(JSON.stringify(f.socket.protocols).includes(token), false);
+  f.socket.close();
+  f.timers.tick(1500);
+  await flushTickets();
+  assert.equal(f.ticketRequests.length, 2);
+  assert.notEqual(f.ticketRequests[0].ticket, f.ticketRequests[1].ticket);
+  assert.equal(f.ticketRequests[1].token, token);
+  assert.deepEqual(f.FakeWebSocket.instances.at(-1).protocols, [
+    'simplestchat',
+    `ticket.${f.ticketRequests[1].ticket}`,
+  ]);
+});
+
+test('a guest connects without preparing any authenticated ticket', async (t) => {
+  const f = await connectedClient(t);
+  assert.deepEqual(f.socket.protocols, ['simplestchat']);
+  assert.deepEqual(f.ticketRequests, []);
+});
+
+test('repeated connect coalesces the owned preparation and cannot open a socket early', async (t) => {
+  const f = await connectedClient(t);
+  f.client.disconnect();
+  const pending = Promise.withResolvers();
+  let calls = 0;
+  f.ticketProvider.issue = () => {
+    calls++;
+    return pending.promise;
+  };
+  f.client.connect('private-token');
+  f.client.connect('private-token');
+  await flushTickets();
+  assert.equal(calls, 1);
+  assert.equal(f.FakeWebSocket.instances.length, 1);
+  pending.resolve({ ticket: 'a'.repeat(43), expiresIn: 30 });
+  await flushTickets();
+  assert.equal(f.FakeWebSocket.instances.length, 2);
+});
+
+test('disconnect before the preparation microtask prevents even the HTTP mint', async (t) => {
+  const f = await connectedClient(t);
+  f.client.disconnect();
+  f.client.connect('private-token');
+  f.client.disconnect();
+  await flushTickets();
+  assert.equal(f.ticketRequests.length, 0);
+  assert.equal(f.FakeWebSocket.instances.length, 1);
+  assert.equal(f.timers.pendingCount, 0);
+});
+
+for (const change of ['disconnect', 'replacement', 'refresh']) {
+  for (const response of ['resolve', 'reject']) {
+    test(`${change} fences a late ticket ${response} without logging credentials or joining the wrong account`, async (t) => {
+      const f = await connectedClient(t);
+      f.client.disconnect();
+      const pending = Promise.withResolvers();
+      const replacement = Promise.withResolvers();
+      const requests = [];
+      f.ticketProvider.issue = (token, signal) => {
+        requests.push({ token, signal });
+        return requests.length === 1 ? pending.promise : replacement.promise;
+      };
+      f.client.connect('private-old-token');
+      await flushTickets();
+      const statuses = [];
+      f.client.setOnStatusChange((status) => statuses.push(status));
+      if (change === 'refresh') f.client.setToken('private-new-token');
+      else {
+        f.client.disconnect();
+        if (change === 'replacement') f.client.connect('private-new-token');
+      }
+      await flushTickets();
+      assert.equal(requests[0].signal.aborted, true);
+      const before = f.FakeWebSocket.instances.length;
+      if (response === 'resolve') pending.resolve({ ticket: 'a'.repeat(43), expiresIn: 30 });
+      else pending.reject(new Error('private-old-token'));
+      await flushTickets();
+      assert.equal(
+        f.FakeWebSocket.instances.length,
+        before,
+        'a retired response cannot open any socket',
+      );
+      if (change !== 'disconnect') {
+        replacement.resolve({ ticket: 'b'.repeat(43), expiresIn: 30 });
+        await flushTickets();
+        assert.equal(f.FakeWebSocket.instances.length, before + 1);
+        assert.deepEqual(f.FakeWebSocket.instances.at(-1).protocols, [
+          'simplestchat',
+          `ticket.${'b'.repeat(43)}`,
+        ]);
+      }
+      assert.equal(JSON.stringify(f.errors).includes('private-old-token'), false);
+      if (change !== 'disconnect') assert.equal(requests.at(-1).token, 'private-new-token');
+    });
+  }
+}
+
+test('an unresponsive ticket provider is bounded and never downgrades to a guest socket', async (t) => {
+  const f = await connectedClient(t);
+  f.client.disconnect();
+  let signal;
+  f.ticketProvider.issue = (_token, ownedSignal) => {
+    signal = ownedSignal;
+    return new Promise(() => {});
+  };
+  f.client.connect('private-token');
+  await flushTickets();
+  f.timers.tick(15000);
+  await flushTickets();
+  assert.equal(signal.aborted, true);
+  assert.equal(f.FakeWebSocket.instances.length, 1);
+  assert.deepEqual(f.timers.delays, [105000, 1500]);
+  f.timers.tick(105000);
+  await flushTickets();
+  assert.equal(f.client.reconnectExhausted, true);
+  assert.equal(f.timers.pendingCount, 0);
+  assert.equal(f.FakeWebSocket.instances.length, 1);
+});
+
+for (const [expiresIn, elapsed] of [
+  [1, 1000],
+  [30, 15000],
+]) {
+  test(`late ticket settlement is rejected at ${elapsed}ms even when timer callbacks were suspended`, async (t) => {
+    const f = await connectedClient(t);
+    f.client.disconnect();
+    const pending = Promise.withResolvers();
+    f.ticketProvider.issue = () => pending.promise;
+    f.client.connect('private-token');
+    await flushTickets();
+    f.timers.advanceWithoutTimers(elapsed);
+    pending.resolve({ ticket: 'a'.repeat(43), expiresIn });
+    await flushTickets();
+    assert.equal(f.FakeWebSocket.instances.length, 1);
+    assert.equal(f.client.connected, false);
+  });
+}
+
+test('a connection observer can cancel a failed mint without leaving a retry timer', async (t) => {
+  const f = await connectedClient(t);
+  f.client.disconnect();
+  f.ticketProvider.issue = async () => {
+    throw new Error('private-token');
+  };
+  f.client.setOnStatusChange((status) => {
+    if (status === 'disconnected') f.client.disconnect();
+  });
+  f.client.connect('private-token');
+  await flushTickets();
+  assert.equal(f.timers.pendingCount, 0);
+  assert.equal(f.FakeWebSocket.instances.length, 1);
 });

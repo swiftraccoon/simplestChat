@@ -107,7 +107,11 @@ async function scenario(browser, storageOnly) {
     await context.route('**/api/**', async (route) => {
       const request = route.request();
       const pathname = new URL(request.url()).pathname;
-      if (pathname === '/api/auth/login') {
+      if (pathname === '/api/auth/ws-ticket') {
+        assert.equal(request.method(), 'POST');
+        assert.deepEqual(request.postDataJSON(), {});
+        await route.fulfill({ json: { ticket: 'a'.repeat(43), expires_in: 30 } });
+      } else if (pathname === '/api/auth/login') {
         const name = request.postDataJSON().email.split('@')[0];
         assert.equal(name, 'First');
         await route.fulfill({

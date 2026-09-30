@@ -1328,7 +1328,10 @@ scrollBottomBtn.appendChild(unreadBadge);
 // --- Signaling setup ---
 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
-const signaling = new SignalingClient(wsUrl);
+const signaling = new SignalingClient(wsUrl, async (token, signal) => {
+  const reply = await api.websocketTicket(token, signal);
+  return { ticket: reply.ticket, expiresIn: reply.expires_in };
+});
 signaling.setTelemetryHandler(telemetry.record);
 const callTelemetry = new CallOutcomeTelemetry(
   () =>

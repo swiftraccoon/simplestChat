@@ -3,6 +3,12 @@ import type { ClientMessage, RequestResponses, ServerMessage } from './protocol'
 import { decodeServerMessage } from './protocol-validation';
 
 export type MessageHandler = (msg: ServerMessage) => void;
+export interface ConnectionTicket {
+  ticket: string;
+  expiresIn: number;
+}
+type TicketProvider = (token: string, signal: AbortSignal) => Promise<ConnectionTicket>;
+const TICKET_DEADLINE_MS = 15_000;
 
 /** Missing acknowledgement does not prove that a command was rejected. */
 export class SignalingRequestTimeoutError extends Error {
@@ -50,6 +56,10 @@ export class SignalingClient {
   private wasConnected = false;
   private currentToken: string | undefined;
   private socketToken: string | undefined;
+  private ticketRequest: {
+    controller: AbortController;
+    timer: ReturnType<typeof setTimeout>;
+  } | null = null;
   private renewalSequence = 0;
   private renewal: {
     requestId: string;
@@ -77,7 +87,10 @@ export class SignalingClient {
     }
   >();
 
-  constructor(url: string) {
+  constructor(
+    url: string,
+    private readonly ticketProvider: TicketProvider,
+  ) {
     this.url = url;
   }
 
@@ -136,6 +149,10 @@ export class SignalingClient {
   }
 
   connect(token?: string): void {
+    if (this.ticketRequest) {
+      if (token === undefined || token === this.currentToken) return;
+      this.cancelTicketRequest();
+    }
     if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING)
       return;
 
@@ -151,15 +168,78 @@ export class SignalingClient {
     this.telemetry?.({ name: 'connection', outcome: 'started' });
     this.onStatusChange?.('connecting');
 
-    // Keep bearer credentials out of the request URL, where proxies and APM
-    // products commonly record them. The server selects only `simplestchat`;
-    // the auth-prefixed protocol is transport for the handshake credential.
-    const protocols = this.currentToken
-      ? ['simplestchat', `auth.${this.currentToken}`]
-      : ['simplestchat'];
+    const credential = this.currentToken;
+    if (credential) {
+      this.startReconnectDeadline();
+      this.prepareSocket(credential).catch(() => {
+        console.error('[ws] connection preparation failed');
+      });
+    } else this.openSocket(['simplestchat']);
+  }
+
+  /** Every authenticated connection receives a fresh, short-lived, single-use handshake ticket. */
+  private async prepareSocket(token: string): Promise<void> {
+    const controller = new AbortController();
+    const request = { controller, timer: setTimeout(() => controller.abort(), TICKET_DEADLINE_MS) };
+    this.ticketRequest = request;
+    const started = performance.now();
+    const wallStarted = Date.now();
+    const owns = (): boolean =>
+      this.ticketRequest === request && this.shouldReconnect && this.currentToken === token;
+    let abort: () => void = () => {};
+    try {
+      const stopped = new Promise<never>((_, reject) => {
+        abort = () => reject(new DOMException('Connection preparation cancelled', 'AbortError'));
+        controller.signal.addEventListener('abort', abort, { once: true });
+      });
+      const work = Promise.resolve().then(() => {
+        // A synchronous account replacement can retire this intent before HTTP starts.
+        if (!owns() || controller.signal.aborted) throw new Error('Retired connection');
+        return this.ticketProvider(token, controller.signal);
+      });
+      const ticket = await Promise.race([work, stopped]);
+      if (!owns()) return;
+      const lifetime = Math.min(TICKET_DEADLINE_MS, ticket.expiresIn * 1000);
+      if (
+        controller.signal.aborted ||
+        performance.now() >= started + lifetime ||
+        Date.now() >= wallStarted + lifetime
+      )
+        throw new Error('Connection preparation expired');
+      this.openSocket(['simplestchat', `ticket.${ticket.ticket}`], token);
+      this.ticketRequest = null;
+    } catch {
+      if (!owns()) return;
+      this.ticketRequest = null;
+      // Never log provider errors: an HTTP implementation could include credentials.
+      console.error('[ws] connection authorization failed');
+      this.telemetry?.({ name: 'connection', outcome: 'error' });
+      this.onStatusChange?.('disconnected');
+      this.rejectAllPending('Connection authorization failed');
+      if (!this.shouldReconnect || this.currentToken !== token || this.ticketRequest || this.ws)
+        return;
+      if (this.reconnectGate && !this.reconnectGate()) this.reconnectDeferred = true;
+      else this.scheduleReconnect();
+    } finally {
+      clearTimeout(request.timer);
+      controller.signal.removeEventListener('abort', abort);
+      controller.abort();
+    }
+  }
+
+  private cancelTicketRequest(): void {
+    const request = this.ticketRequest;
+    this.ticketRequest = null;
+    if (request) {
+      clearTimeout(request.timer);
+      request.controller.abort();
+    }
+  }
+
+  private openSocket(protocols: string[], token?: string): void {
     const socket = new WebSocket(this.url, protocols);
     this.clearRenewal();
-    this.socketToken = this.currentToken;
+    this.socketToken = token;
     this.ws = socket;
 
     socket.onopen = () => {
@@ -324,6 +404,8 @@ export class SignalingClient {
   }
 
   disconnect(): void {
+    const preparing = this.ticketRequest !== null;
+    this.cancelTicketRequest();
     this.shouldReconnect = false;
     this.reconnectDeferred = false;
     this.wasConnected = false;
@@ -342,7 +424,7 @@ export class SignalingClient {
     this.ws = null;
     socket?.close();
     this.rejectAllPending('Disconnected');
-    if (socket) this.onStatusChange?.('disconnected');
+    if (socket || preparing) this.onStatusChange?.('disconnected');
   }
 
   send(msg: ClientMessage): void {
@@ -403,6 +485,14 @@ export class SignalingClient {
 
   /** Renew an authenticated socket in place; disconnected refresh updates its next handshake. */
   setToken(token: string | undefined): void {
+    if (this.ticketRequest) {
+      if (token === this.currentToken) return;
+      this.cancelTicketRequest();
+      this.currentToken = token;
+      if (token) this.connect(token);
+      else this.onStatusChange?.('disconnected');
+      return;
+    }
     this.currentToken = token;
     if (!token) this.clearRenewal();
     else this.renewAuthentication();
@@ -528,6 +618,7 @@ export class SignalingClient {
     this.reconnectDeadline = setTimeout(() => {
       this.reconnectDeadline = null;
       this.shouldReconnect = false;
+      this.cancelTicketRequest();
       this.restarting = false;
       this.recoveryFailed = true;
       if (this.reconnectTimer) clearTimeout(this.reconnectTimer);

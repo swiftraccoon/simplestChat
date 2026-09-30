@@ -473,3 +473,35 @@ test('invitation secrets travel only in JSON bodies; revocation uses nonsecret I
   await ui.api.revokeRegistrationInvite('token', invite.id);
   assert.equal(state.requests.at(-1)[0], `/api/auth/invites/${invite.id}`);
 });
+
+test('WebSocket ticket minting validates its short-lived credential and preserves cancellation', async () => {
+  const { ui, state } = await uiFixture();
+  const controller = new AbortController();
+  const valid = { ticket: 'a'.repeat(43), expires_in: 30 };
+  state.response = { ok: true, status: 200, json: async () => valid };
+  assert.deepEqual(await ui.api.websocketTicket('private-token', controller.signal), valid);
+  const [path, init] = state.requests[0];
+  assert.equal(path, '/api/auth/ws-ticket');
+  assert.equal(init.method, 'POST');
+  assert.equal(init.headers.Authorization, 'Bearer private-token');
+  assert.deepEqual(JSON.parse(init.body), {});
+  for (const value of [
+    { ...valid, ticket: 'a'.repeat(42) },
+    { ...valid, ticket: 'a'.repeat(44) },
+    { ...valid, ticket: '/'.repeat(43) },
+    { ...valid, expires_in: 0 },
+    { ...valid, expires_in: 31 },
+    { ...valid, expires_in: 1.5 },
+    { ...valid, expires_in: '30' },
+  ]) {
+    state.response.json = async () => value;
+    await assert.rejects(
+      ui.api.websocketTicket('private-token', controller.signal),
+      ui.ApiOutcomeUnknownError,
+    );
+  }
+  controller.abort();
+  const before = state.requests.length;
+  await assert.rejects(ui.api.websocketTicket('private-token', controller.signal));
+  assert.equal(state.requests.length, before);
+});
