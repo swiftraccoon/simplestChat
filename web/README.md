@@ -81,8 +81,11 @@ Viewer mute/volume/hide must not change what anybody else receives. Async media
 and account work can outlive a dialog or session; stale completion must not attach
 tracks or account data to a replacement session.
 
-Room links and browser history select a room; joining remains explicit. Home,
-Leave and lobby Cancel clear the selected room URL. No URL change starts capture.
+Room links and browser history select a room; joining remains explicit. Redeeming
+an invitation or opening an account room requests a join that waits for signaling
+and any current departure to finish. A newer destination, edited room ID or
+account change retires that intent; a late invitation response cannot replace it.
+Home, Leave and lobby Cancel clear the selected room URL. No URL change starts capture.
 Room settings retain failed edits and offer an explicit retry after checking
 current server state. A connected lobby moderator is availability information,
 not a promise of admission.

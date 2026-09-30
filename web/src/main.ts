@@ -191,6 +191,7 @@ function updateAuthUI(): void {
 // the account form meanwhile; a registration that spends the code takes it
 // with it, so only a room code is ever redeemed after sign-in.
 let pendingInvite: string | null = null;
+let inviteAccountEpoch = 0;
 function readInviteLink(): void {
   const url = new URL(window.location.href);
   const code = url.searchParams.get('invite');
@@ -209,13 +210,23 @@ async function acceptPendingInvite(): Promise<void> {
   const code = pendingInvite;
   if (!code || !auth.isLoggedIn) return;
   pendingInvite = null;
+  const epoch = inviteAccountEpoch;
+  const userId = auth.userId;
+  const revision = navigation.revision;
+  const ownsIntent = () =>
+    epoch === inviteAccountEpoch &&
+    userId === auth.userId &&
+    auth.isLoggedIn &&
+    revision === navigation.revision;
   try {
     const accepted = await api.redeemInvite(auth.jwt, code);
+    if (!ownsIntent()) return;
     showToast(
       `Invitation confirmed for ${accepted.display_name}. Joining with your current permissions.`,
     );
     openRoomFromDialog(accepted.room_id);
   } catch (error) {
+    if (!ownsIntent()) return;
     showToast(
       error instanceof Error ? error.message : 'The invitation could not be accepted',
       4000,
@@ -223,25 +234,16 @@ async function acceptPendingInvite(): Promise<void> {
     );
   }
 }
-/** Leaves any current room and joins `id` as the account, the way Create Room does. */
+/** An account-room action keeps its explicit join intent until signaling is ready. */
 function openRoomFromDialog(id: string): void {
-  observeUiTask(
-    (async () => {
-      if (room?.currentRoomId === id) return;
-      if (room) await leaveCurrentRoom();
-      roomInput.value = id;
-      if (auth.displayName && !nameInput.value.trim()) nameInput.value = auth.displayName;
-      updateJoinBtn();
-      if (!joinBtn.disabled) joinBtn.click();
-    })(),
-    'Could not open the room',
-  );
+  if (!auth.isLoggedIn || room?.currentRoomId === id) return;
+  if (auth.displayName && !nameInput.value.trim()) nameInput.value = auth.displayName;
+  navigation.requestJoin(id);
 }
 readInviteLink();
 
 auth.setOnChange((loggedIn, tokenRefresh) => {
   updateAuthUI();
-  if (loggedIn && !tokenRefresh) observeUiTask(acceptPendingInvite(), 'Invitation not accepted');
   if (loggedIn && tokenRefresh) {
     // Renew the existing socket as well as the next handshake, preserving room
     // membership and media across the original token's expiry.
@@ -249,6 +251,8 @@ auth.setOnChange((loggedIn, tokenRefresh) => {
     return;
   }
   // Identity changes leave the old membership before reconnecting.
+  inviteAccountEpoch++;
+  navigation.cancelPendingJoin();
   dismissCreateRoom();
   createRoomMutation++;
   createRoomSubmit.disabled = false;
@@ -256,6 +260,7 @@ auth.setOnChange((loggedIn, tokenRefresh) => {
   if (room) observeUiTask(leaveCurrentRoom(), 'Could not finish leaving the room');
   signaling.disconnect();
   signaling.connect(loggedIn ? (auth.jwt ?? undefined) : undefined);
+  if (loggedIn) observeUiTask(acceptPendingInvite(), 'Invitation not accepted');
 });
 
 // --- State ---
@@ -1324,6 +1329,9 @@ signaling.setOnStatusChange((status) => {
   updateJoinBtn();
   document.getElementById('connection-retry-notice')?.remove();
   if (status === 'connected' && !room?.currentRoomId) signaling.completeRestartRecovery();
+  // Let the socket finish notifying its existing recovery owner before a new
+  // room registers callbacks. The navigation rechecks ownership and readiness.
+  if (status === 'connected') queueMicrotask(() => navigation.resumePendingJoin());
   if (status === 'disconnected' && signaling.reconnectExhausted && !room?.currentRoomId) {
     const notice = showActionToast(
       'The server is still unavailable. Retry when ready.',
@@ -1351,6 +1359,12 @@ const navigation = new RoomNavigation({
     updateJoinBtn();
   },
   error: (error) => showToast(error instanceof Error ? error.message : 'Could not change rooms'),
+  tryJoin: (id) => {
+    updateJoinBtn();
+    if (joinBtn.disabled || roomInput.value.trim() !== id) return false;
+    joinBtn.click();
+    return true;
+  },
 });
 
 const accountSync = new AccountSessionSync({
@@ -1424,8 +1438,12 @@ function updateJoinBtn(): void {
     !/^[A-Za-z0-9_-]{1,128}$/.test(roomInput.value.trim());
 }
 
-nameInput.addEventListener('input', updateJoinBtn);
+nameInput.addEventListener('input', () => {
+  updateJoinBtn();
+  navigation.resumePendingJoin();
+});
 roomInput.addEventListener('input', () => {
+  navigation.cancelPendingJoin();
   roomSelectionVersion++;
   updateJoinBtn();
 });
@@ -2590,6 +2608,7 @@ function leaveCurrentRoom(): Promise<void> {
   departureInProgress ??= leaveRoomAndShowHome().finally(() => {
     departureInProgress = null;
     updateJoinBtn();
+    navigation.resumePendingJoin();
   });
   updateJoinBtn();
   return departureInProgress;

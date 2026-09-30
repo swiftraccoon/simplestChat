@@ -3,6 +3,7 @@ interface RoomNavigationOptions {
   select: (id: string) => void;
   pending: (pending: boolean) => void;
   error: (error: unknown) => void;
+  tryJoin?: (id: string) => boolean;
 }
 
 const invalidRoomIdCharacter = /[^A-Za-z0-9_-]/;
@@ -16,6 +17,7 @@ export class RoomNavigation {
   private leaving = false;
   private disposed = false;
   private intent = 0;
+  private pendingJoin: string | null = null;
 
   constructor(private readonly options: RoomNavigationOptions) {
     const initial = this.readHash();
@@ -31,7 +33,7 @@ export class RoomNavigation {
   join(id: string): boolean {
     if (this.disposed || this.leaving || !this.validate(id, false)) return false;
     if (!this.writeHash(id, true)) return false;
-    this.intent++;
+    this.cancelPendingJoin();
     this.selected = this.destination = id;
     this.joined = true;
     return true;
@@ -41,16 +43,55 @@ export class RoomNavigation {
     this.selectRoom('');
   }
 
-  selectRoom(id: string): void {
-    if (this.disposed || !this.validate(id, true)) return;
-    if (!this.writeHash(id, true)) return;
+  selectRoom(id: string): boolean {
+    this.cancelPendingJoin();
+    if (this.disposed || !this.validate(id, true)) return false;
+    if (!this.writeHash(id, true)) return false;
     this.requestSelection(id);
+    return true;
+  }
+
+  /** Identifies the navigation that owns an asynchronous account action. */
+  get revision(): number {
+    return this.intent;
+  }
+
+  /** Retire both a queued join and asynchronous work for the previous destination. */
+  cancelPendingJoin(): void {
+    this.pendingJoin = null;
+    this.intent++;
+  }
+
+  /** An explicit invitation or account-room action waits for signaling readiness. */
+  requestJoin(id: string): void {
+    if (this.disposed || !this.validate(id, false)) return;
+    if (!this.selectRoom(id)) return;
+    this.pendingJoin = id;
+    this.resumePendingJoin();
+  }
+
+  resumePendingJoin(): void {
+    const id = this.pendingJoin;
+    if (
+      id === null ||
+      this.disposed ||
+      this.leaving ||
+      this.joined ||
+      id !== this.selected ||
+      id !== this.destination
+    )
+      return;
+    const intent = this.intent;
+    // Clear before calling application code: it may synchronously join or navigate.
+    this.pendingJoin = null;
+    if (!this.options.tryJoin?.(id) && !this.disposed && this.intent === intent)
+      this.pendingJoin = id;
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.intent++;
+    this.cancelPendingJoin();
     window.removeEventListener('hashchange', this.onLocationChange);
     window.removeEventListener('popstate', this.onLocationChange);
     if (this.leaving) this.options.pending(false);
@@ -105,6 +146,7 @@ export class RoomNavigation {
 
   private readonly onLocationChange = (): void => {
     if (this.disposed || window.location.hash === this.observedHash) return;
+    this.cancelPendingJoin();
     this.observedHash = window.location.hash;
     const id = this.readHash();
     if (id === null) {
@@ -137,6 +179,7 @@ export class RoomNavigation {
       await this.options.leave();
     } catch (error: unknown) {
       if (this.disposed) return;
+      this.cancelPendingJoin();
       this.destination = this.selected;
       this.writeHash(this.selected, false);
       this.leaving = false;
@@ -151,6 +194,9 @@ export class RoomNavigation {
     this.joined = false;
     this.leaving = false;
     this.options.pending(false);
-    if (!this.disposed && this.intent === intent) this.options.select(id);
+    if (!this.disposed && this.intent === intent) {
+      this.options.select(id);
+      this.resumePendingJoin();
+    }
   }
 }

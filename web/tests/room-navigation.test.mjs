@@ -16,13 +16,15 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-async function fixture(t, { hash = '', leave = async () => {} } = {}) {
+async function fixture(t, { hash = '', leave = async () => {}, ready = false, tryJoin } = {}) {
   const events = new Map();
   const selections = [];
   const pending = [];
   const errors = [];
   const pushes = [];
   const replacements = [];
+  const attempts = [];
+  const joins = [];
   let leaves = 0;
   let formValue = '';
   let historyBlocked = false;
@@ -62,6 +64,15 @@ async function fixture(t, { hash = '', leave = async () => {} } = {}) {
     },
     pending: (value) => pending.push(value),
     error: (error) => errors.push(error),
+    tryJoin: (id) => {
+      assert.equal(formValue, id, 'the selected form must be ready before attempting a join');
+      attempts.push(id);
+      if (tryJoin) return tryJoin(id, navigation);
+      if (!ready) return false;
+      if (!navigation.join(id)) return false;
+      joins.push(id);
+      return true;
+    },
   });
   t.after(() => navigation.dispose());
   return {
@@ -73,6 +84,12 @@ async function fixture(t, { hash = '', leave = async () => {} } = {}) {
     replacements,
     location,
     events,
+    attempts,
+    joins,
+    ready: () => {
+      ready = true;
+      navigation.resumePendingJoin();
+    },
     leaves: () => leaves,
     formValue: () => formValue,
     editForm: (value) => {
@@ -254,4 +271,141 @@ test('disposing during leave removes listeners and suppresses every late navigat
   assert.deepEqual(f.selections, ['']);
   assert.deepEqual(f.errors, []);
   assert.deepEqual(f.pending, [true, false]);
+});
+
+test('an explicit join waits for signaling and consumes its intent exactly once', async (t) => {
+  const f = await fixture(t);
+  f.navigation.requestJoin('invited-room');
+  await flush();
+  assert.equal(f.formValue(), 'invited-room');
+  assert.deepEqual(f.attempts, ['invited-room']);
+  assert.deepEqual(f.joins, []);
+  f.ready();
+  f.navigation.resumePendingJoin();
+  f.navigation.resumePendingJoin();
+  assert.deepEqual(f.joins, ['invited-room']);
+  assert.equal(f.location.hash, '#invited-room');
+});
+
+test('readiness before departure finishes joins only after selecting the destination', async (t) => {
+  const leaving = deferred();
+  const f = await fixture(t, { leave: () => leaving.promise });
+  f.navigation.join('previous-room');
+  f.navigation.requestJoin('invited-room');
+  f.ready();
+  assert.deepEqual(f.attempts, []);
+  leaving.resolve();
+  await flush();
+  assert.deepEqual(f.joins, ['invited-room']);
+  assert.equal(f.leaves(), 1);
+});
+
+test('an explicit join can retry a room after an application-owned departure or failed join', async (t) => {
+  const f = await fixture(t, { ready: true });
+  f.navigation.join('same-room');
+  // Auth changes, room closure and failed admission may leave outside navigation.
+  f.navigation.requestJoin('same-room');
+  await flush();
+  assert.deepEqual(f.joins, ['same-room']);
+});
+
+test('ordinary links, initial hashes and room selections never acquire a join intent', async (t) => {
+  const f = await fixture(t, { hash: '#initial-room', ready: true });
+  f.navigation.resumePendingJoin();
+  f.navigation.selectRoom('directory-room');
+  await flush();
+  f.visit('#history-room');
+  await flush();
+  f.navigation.resumePendingJoin();
+  assert.deepEqual(f.joins, []);
+  assert.deepEqual(f.attempts, []);
+  f.navigation.requestJoin('history-room');
+  assert.deepEqual(f.joins, ['history-room']);
+});
+
+for (const action of ['edit-or-account', 'select', 'home', 'history', 'join', 'dispose']) {
+  test(`a newer ${action} retires the queued explicit join`, async (t) => {
+    const f = await fixture(t);
+    f.navigation.requestJoin('invited-room');
+    await flush();
+    const revision = f.navigation.revision;
+    if (action === 'edit-or-account') f.navigation.cancelPendingJoin();
+    if (action === 'select') f.navigation.selectRoom('invited-room');
+    if (action === 'home') f.navigation.home();
+    if (action === 'history') f.visit('#different-room');
+    if (action === 'join') f.navigation.join('different-room');
+    if (action === 'dispose') f.navigation.dispose();
+    assert.ok(f.navigation.revision > revision);
+    await flush();
+    f.ready();
+    assert.deepEqual(f.joins, []);
+    assert.deepEqual(f.attempts, ['invited-room']);
+  });
+}
+
+test('a newer destination during departure replaces the original explicit join', async (t) => {
+  const leaving = deferred();
+  const f = await fixture(t, { leave: () => leaving.promise, ready: true });
+  f.navigation.requestJoin('old-invite');
+  f.navigation.requestJoin('new-invite');
+  leaving.resolve();
+  await flush();
+  assert.deepEqual(f.joins, ['new-invite']);
+  assert.equal(f.leaves(), 1);
+});
+
+test('history navigation during departure retires an invitation without autojoining the new room', async (t) => {
+  const leaving = deferred();
+  const f = await fixture(t, { leave: () => leaving.promise, ready: true });
+  f.navigation.requestJoin('old-invite');
+  f.visit('#new-room');
+  leaving.resolve();
+  await flush();
+  assert.deepEqual(f.joins, []);
+  assert.deepEqual(f.attempts, []);
+  assert.equal(f.formValue(), 'new-room');
+});
+
+test('failed departure retires the invitation and permits a later explicit retry', async (t) => {
+  let failure = true;
+  const f = await fixture(t, {
+    leave: async () => {
+      if (failure) throw new Error('Departure failed');
+    },
+  });
+  f.navigation.requestJoin('invited-room');
+  await flush();
+  f.ready();
+  assert.deepEqual(f.joins, []);
+  assert.equal(f.errors.length, 1);
+  failure = false;
+  f.navigation.requestJoin('invited-room');
+  await flush();
+  assert.deepEqual(f.joins, ['invited-room']);
+});
+
+test('blocked history and disposal cannot retain an invitation for later readiness', async (t) => {
+  for (const action of ['history', 'dispose']) {
+    const f = await fixture(t);
+    if (action === 'history') f.blockHistory();
+    else f.navigation.dispose();
+    f.navigation.requestJoin('invited-room');
+    await flush();
+    f.ready();
+    assert.deepEqual(f.attempts, []);
+    assert.deepEqual(f.joins, []);
+  }
+});
+
+test('a canceled readiness callback cannot resurrect the pending intent', async (t) => {
+  const f = await fixture(t, {
+    tryJoin: (_id, navigation) => {
+      navigation.cancelPendingJoin();
+      return false;
+    },
+  });
+  f.navigation.requestJoin('invited-room');
+  await flush();
+  f.ready();
+  assert.deepEqual(f.attempts, ['invited-room']);
 });

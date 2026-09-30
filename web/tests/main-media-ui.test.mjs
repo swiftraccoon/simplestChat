@@ -54,6 +54,7 @@ test('concurrent home and leave actions share cleanup until it finishes', async 
     {
       globals: {
         updateJoinBtn() {},
+        navigation: { resumePendingJoin() {} },
         leaveRoomAndShowHome() {
           departures++;
           return cleanup.promise;

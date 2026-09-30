@@ -86,6 +86,9 @@ async function run() {
     storage,
     features = capabilities,
     room = false,
+    invite = false,
+    holdSocket = false,
+    holdInvite = false,
   } = {}) {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -113,12 +116,17 @@ async function run() {
         };
     }, storage);
     const sent = [];
+    const socketGate = Promise.withResolvers();
+    const socketSeen = Promise.withResolvers();
+    const inviteSeen = Promise.withResolvers();
+    const redemptions = [];
+    context.on('close', () => socketGate.resolve());
     let socket;
     const creations = [];
     let account = signedIn
       ? { id: 'fixture-account', email: 'fixture@example.test', display_name: 'Fixture owner' }
       : null;
-    await context.routeWebSocket('**/ws', (owned) => {
+    await context.routeWebSocket('**/ws', async (owned) => {
       socket = owned;
       const send = (message) => owned.send(JSON.stringify(message));
       owned.onMessage((wire) => {
@@ -161,7 +169,20 @@ async function run() {
             },
           });
       });
+      socketSeen.resolve();
+      // The mocked handshake stays CONNECTING until this handler returns.
+      if (holdSocket) await socketGate.promise;
     });
+    const confirmInvite = (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          room_id: 'fixture-room',
+          display_name: 'Fixture room',
+          role: 'user',
+        }),
+      });
     await context.route('**/*', async (route) => {
       const url = new URL(route.request().url());
       assert.equal(url.origin, origin, 'No external requests');
@@ -172,6 +193,20 @@ async function run() {
         route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
       if (url.pathname === '/favicon.ico') return route.fulfill({ status: 204 });
       if (url.pathname === '/api/capabilities') return json(features);
+      if (url.pathname === '/api/auth/profiles/local-fixture')
+        return json({
+          id: 'local-fixture',
+          display_name: 'Fixture owner',
+          avatar_url: null,
+          bio: '',
+        });
+      if (url.pathname === '/api/rooms/invites/abcdefghijklmnopqrst') {
+        assert.equal(route.request().method(), 'POST');
+        redemptions.push(route);
+        inviteSeen.resolve();
+        if (!holdInvite) return confirmInvite(route);
+        return;
+      }
       if (url.pathname === '/api/auth/logout') {
         account = null;
         return json({});
@@ -209,12 +244,17 @@ async function run() {
     page.on('pageerror', () => {
       report.pageErrors++;
     });
-    await page.goto(origin);
-    await page.getByText('Connected', { exact: true }).waitFor();
+    await page.goto(invite ? `${origin}/?invite=abcdefghijklmnopqrst` : origin);
+    if (holdSocket) await socketSeen.promise;
+    else await page.getByText('Connected', { exact: true }).waitFor();
     return {
       context,
       page,
       sent,
+      redemptions,
+      inviteSeen: inviteSeen.promise,
+      releaseSocket: () => socketGate.resolve(),
+      finishInvite: () => confirmInvite(redemptions[0]),
       send: (message) => socket.send(JSON.stringify(message)),
       failCreate: () => creations.shift().abort('failed'),
       finishCreate: () =>
@@ -227,6 +267,75 @@ async function run() {
   }
 
   async function scenarios() {
+    const invited = await fixture({ signedIn: true, room: true, invite: true, holdSocket: true });
+    await invited.page
+      .getByText('Invitation confirmed for Fixture room. Joining with your current permissions.', {
+        exact: true,
+      })
+      .waitFor();
+    await invited.page.waitForFunction(
+      () => document.querySelector('#room-input').value === 'fixture-room',
+    );
+    assert.equal(await invited.page.getByText('Connecting', { exact: true }).isVisible(), true);
+    assert.equal(invited.sent.filter((message) => message.type === 'joinRoom').length, 0);
+    invited.releaseSocket();
+    await invited.page.locator('#room-screen').waitFor({ state: 'visible' });
+    assert.deepEqual(
+      invited.sent
+        .filter((message) => message.type === 'joinRoom')
+        .map((message) => message.roomId),
+      ['fixture-room'],
+    );
+    assert.equal(invited.redemptions.length, 1);
+    assert.equal(await invited.page.evaluate(() => window.__captureRequests), 0);
+    report.checks.push(
+      'An invitation redeemed before signaling connects joins exactly once when ready',
+    );
+    await invited.context.close();
+
+    for (const change of ['destination', 'account']) {
+      const stale = await fixture({ signedIn: true, invite: true, holdSocket: true });
+      await stale.page.waitForFunction(
+        () => document.querySelector('#room-input').value === 'fixture-room',
+      );
+      if (change === 'destination') await stale.page.locator('#room-input').fill('newer-choice');
+      else {
+        await stale.page.locator('#logout-btn').click();
+        await stale.page.locator('#sign-in-btn').waitFor({ state: 'visible' });
+      }
+      stale.releaseSocket();
+      await stale.page.getByText('Connected', { exact: true }).waitFor();
+      assert.equal(stale.sent.filter((message) => message.type === 'joinRoom').length, 0);
+      assert.equal(stale.redemptions.length, 1);
+      if (change === 'destination')
+        assert.equal(await stale.page.locator('#room-input').inputValue(), 'newer-choice');
+      report.checks.push(`A newer ${change} retires an invitation waiting for signaling`);
+      await stale.context.close();
+    }
+
+    const superseded = await fixture({ signedIn: true, invite: true, holdInvite: true });
+    await superseded.inviteSeen;
+    await superseded.page.locator('#room-input').fill('newer-choice');
+    // Await application-side JSON consumption before checking that it ignored the
+    // obsolete response. A completed route.fulfill alone is not such a barrier.
+    await superseded.page.evaluate(() => {
+      const parse = Response.prototype.json;
+      window.__inviteResponseRead = false;
+      Response.prototype.json = async function () {
+        const value = await parse.call(this);
+        if (this.url.includes('/api/rooms/invites/'))
+          setTimeout(() => (window.__inviteResponseRead = true), 0);
+        return value;
+      };
+    });
+    await superseded.finishInvite();
+    await superseded.page.waitForFunction(() => window.__inviteResponseRead);
+    assert.equal(await superseded.page.locator('#room-input').inputValue(), 'newer-choice');
+    assert.equal(superseded.sent.filter((message) => message.type === 'joinRoom').length, 0);
+    assert.equal(superseded.redemptions.length, 1);
+    report.checks.push('A late invitation response preserves newer navigation');
+    await superseded.context.close();
+
     const f = await fixture();
     await f.page.locator('#sign-in-btn').click();
     const dialog = f.page.getByRole('dialog', { name: 'Sign In', exact: true });
