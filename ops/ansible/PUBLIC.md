@@ -329,3 +329,27 @@ Application SQL migrations run only during explicit deployment. PostgreSQL
 major-version upgrades, database rollback and secret rotation remain explicit
 maintenance operations. Local and encrypted offsite scheduling are separate
 opt-ins; neither restores data into the running application database.
+
+## Host security updates and network assumptions
+
+Host package updates remain explicit: `site.yml` accepts one-run
+`-e scbench_upgrade_packages=true -e scbench_reboot=true` only after its public
+service and workload preconditions pass. Do not leave these flags enabled in
+inventory. An unattended package transaction can restart dependencies outside
+the release lock, so this project does not enable unattended installation or
+reboots. The operator should review security advisories daily, apply exploitable
+critical fixes within 48 hours and other security fixes within seven days, and
+record the reviewed package/image versions and maintenance evidence. These are
+operating targets, not an enforced patch SLA or a claim that pinned packages
+remain vulnerability-free. The image/runtime version pins need deliberate updates.
+
+The host's Debian package repositories are signed but not snapshot-pinned;
+`state: present` host prerequisites and explicitly requested upgrades can change
+between provisioning dates. Container digests and source revisions pin selected
+inputs, not a bit-for-bit rebuild of every operating-system package.
+
+When IPv6 forwarding is enabled, the managed uplink uses `accept_ra=2` to keep
+its provider-supplied default route. This assumes the provider isolates neighbor
+router advertisements on that interface. On a shared or untrusted layer-2
+network, supply a reviewed static route or enforce router-advertisement filtering
+before enabling that behavior.
