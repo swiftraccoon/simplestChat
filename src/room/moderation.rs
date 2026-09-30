@@ -291,6 +291,8 @@ const DEFAULT_HISTORY_RETENTION_DAYS: u32 = 365;
 const MAX_RETENTION_DAYS: u32 = 3650;
 const RETENTION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
 const RETENTION_FIRST_DELAY: std::time::Duration = std::time::Duration::from_secs(60);
+const RETENTION_BATCH_SIZE: i64 = 1000;
+const RETENTION_MAX_BATCHES: usize = 16;
 const RETENTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// A whole number of days from 1 to 3650; unset or empty means the default.
@@ -344,13 +346,14 @@ impl RetentionConfig {
     }
 }
 
-/// What one sweep removed.
+/// Rows changed by one bounded batch or an aggregate sweep.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct RetentionReport {
     pub addresses_cleared: u64,
     pub sanctions_removed: u64,
     pub entries_removed: u64,
     pub reports_removed: u64,
+    pub invites_removed: u64,
 }
 
 impl RetentionReport {
@@ -359,46 +362,88 @@ impl RetentionReport {
             + self.sanctions_removed
             + self.entries_removed
             + self.reports_removed
+            + self.invites_removed
     }
 }
 
 /// Age moderation data out: a target's address goes after `address_days`, an
 /// expired sanction's row, a whole history entry and a closed report after
 /// `history_days`. Open reports and live sanctions stay whatever their age.
+/// Expired invitations and redemption receipts stay for seven additional days.
+/// Each statement selects at most 1,000 parent rows and skips locked rows;
+/// earlier statements remain committed if a later statement fails or is cancelled.
 pub async fn retire_old(
     pool: &PgPool,
     config: RetentionConfig,
+) -> Result<RetentionReport, sqlx::Error> {
+    retire_old_batch(pool, config, RETENTION_BATCH_SIZE).await
+}
+
+async fn retire_old_batch(
+    pool: &PgPool,
+    config: RetentionConfig,
+    batch_size: i64,
 ) -> Result<RetentionReport, sqlx::Error> {
     let address_days = i32::try_from(config.address_days).unwrap_or(i32::MAX);
     let history_days = i32::try_from(config.history_days).unwrap_or(i32::MAX);
     let addresses_cleared = sqlx::query(
         "UPDATE moderation_events SET target_ip = NULL
-         WHERE target_ip IS NOT NULL AND created_at < now() - make_interval(days => $1)",
+         WHERE id IN (
+             SELECT id FROM moderation_events
+             WHERE target_ip IS NOT NULL AND created_at < now() - make_interval(days => $1)
+             ORDER BY created_at, id LIMIT $2 FOR UPDATE SKIP LOCKED
+         )",
     )
     .bind(address_days)
+    .bind(batch_size)
     .execute(pool)
     .await?
     .rows_affected();
     let sanctions_removed = sqlx::query(
         "DELETE FROM room_states
-         WHERE expires_at IS NOT NULL AND expires_at < now() - make_interval(days => $1)",
+         WHERE id IN (
+             SELECT id FROM room_states
+             WHERE expires_at IS NOT NULL AND expires_at < now() - make_interval(days => $1)
+             ORDER BY expires_at, id LIMIT $2 FOR UPDATE SKIP LOCKED
+         )",
     )
     .bind(history_days)
+    .bind(batch_size)
     .execute(pool)
     .await?
     .rows_affected();
     let entries_removed = sqlx::query(
-        "DELETE FROM moderation_events WHERE created_at < now() - make_interval(days => $1)",
+        "DELETE FROM moderation_events WHERE id IN (
+             SELECT id FROM moderation_events WHERE created_at < now() - make_interval(days => $1)
+             ORDER BY created_at, id LIMIT $2 FOR UPDATE SKIP LOCKED
+         )",
     )
     .bind(history_days)
+    .bind(batch_size)
     .execute(pool)
     .await?
     .rows_affected();
     let reports_removed = sqlx::query(
         "DELETE FROM room_reports
-         WHERE status <> 'open' AND resolved_at < now() - make_interval(days => $1)",
+         WHERE id IN (
+             SELECT id FROM room_reports
+             WHERE status <> 'open' AND resolved_at < now() - make_interval(days => $1)
+             ORDER BY resolved_at, id LIMIT $2 FOR UPDATE SKIP LOCKED
+         )",
     )
     .bind(history_days)
+    .bind(batch_size)
+    .execute(pool)
+    .await?
+    .rows_affected();
+    let invites_removed = sqlx::query(
+        "DELETE FROM invites WHERE code IN (
+             SELECT code FROM invites WHERE expires_at < now() - make_interval(days => $1)
+             ORDER BY expires_at, code LIMIT $2 FOR UPDATE SKIP LOCKED
+         )",
+    )
+    .bind(super::invites::INVITE_RECEIPT_RETENTION_DAYS)
+    .bind(batch_size)
     .execute(pool)
     .await?
     .rows_affected();
@@ -407,11 +452,42 @@ pub async fn retire_old(
         sanctions_removed,
         entries_removed,
         reports_removed,
+        invites_removed,
     })
 }
 
+async fn retention_sweep(
+    pool: &PgPool,
+    config: RetentionConfig,
+) -> Result<RetentionReport, sqlx::Error> {
+    let mut total = RetentionReport::default();
+    for _ in 0..RETENTION_MAX_BATCHES {
+        let batch = retire_old(pool, config).await?;
+        total.addresses_cleared += batch.addresses_cleared;
+        total.sanctions_removed += batch.sanctions_removed;
+        total.entries_removed += batch.entries_removed;
+        total.reports_removed += batch.reports_removed;
+        total.invites_removed += batch.invites_removed;
+        if [
+            batch.addresses_cleared,
+            batch.sanctions_removed,
+            batch.entries_removed,
+            batch.reports_removed,
+            batch.invites_removed,
+        ]
+        .into_iter()
+        .all(|rows| rows < RETENTION_BATCH_SIZE as u64)
+        {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    Ok(total)
+}
+
 /// Sweep every six hours, a minute after startup, each sweep bounded; a failed
-/// sweep is retried by the next one.
+/// sweep is retried by the next one. At most 16 batches per table run within
+/// the 30-second sweep budget, allowing incremental progress on a large backlog.
 pub fn spawn_retention(pool: PgPool, config: RetentionConfig) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         tokio::time::sleep(RETENTION_FIRST_DELAY).await;
@@ -419,15 +495,17 @@ pub fn spawn_retention(pool: PgPool, config: RetentionConfig) -> tokio::task::Jo
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             interval.tick().await;
-            match tokio::time::timeout(RETENTION_TIMEOUT, retire_old(&pool, config)).await {
+            match tokio::time::timeout(RETENTION_TIMEOUT, retention_sweep(&pool, config)).await {
                 Ok(Ok(report)) if report.total() > 0 => {
-                    tracing::info!(?report, "Moderation retention sweep");
+                    tracing::info!(?report, "Moderation and invitation retention sweep");
                 }
                 Ok(Ok(_)) => {}
                 Ok(Err(error)) => {
-                    tracing::debug!(%error, "Moderation retention sweep failed; the next retries");
+                    tracing::warn!(%error, "Moderation and invitation retention sweep failed; the next retries");
                 }
-                Err(_) => tracing::warn!("Moderation retention sweep exceeded its time budget"),
+                Err(_) => tracing::warn!(
+                    "Moderation and invitation retention sweep exceeded its time budget"
+                ),
             }
         }
     })
@@ -1106,6 +1184,56 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(open, 1);
+
+        // A small batch makes bounded progress past locked invitation rows, and
+        // cascades receipts only once their seven-day replay window has ended.
+        let codes: Vec<String> = (0..5)
+            .map(|_| Uuid::new_v4().simple().to_string())
+            .collect();
+        for (index, code) in codes.iter().enumerate() {
+            sqlx::query("INSERT INTO invites(code,kind,room_id,role,created_by,uses_left,expires_at) VALUES($1,'room',$2,1,$3,0,now()-make_interval(days=>$4))")
+                .bind(code).bind(&room_id).bind(owner).bind(if index == 4 {1_i32} else {8_i32})
+                .execute(&pool).await.unwrap();
+            sqlx::query(
+                "INSERT INTO invite_redemptions(code,user_id,granted_role) VALUES($1,$2,2)",
+            )
+            .bind(code)
+            .bind(member)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let mut lock = pool.begin().await.unwrap();
+        sqlx::query("SELECT code FROM invites WHERE code=$1 FOR UPDATE")
+            .bind(&codes[0])
+            .execute(&mut *lock)
+            .await
+            .unwrap();
+        let first = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            retire_old_batch(&pool, config, 2),
+        )
+        .await
+        .expect("retention must skip locked rows")
+        .unwrap();
+        assert_eq!(first.invites_removed, 2);
+        lock.rollback().await.unwrap();
+        let second = retire_old_batch(&pool, config, 2).await.unwrap();
+        assert_eq!(second.invites_removed, 2);
+        let retained: Vec<String> =
+            sqlx::query_scalar("SELECT code FROM invites WHERE code=ANY($1)")
+                .bind(&codes)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(retained, vec![codes[4].clone()]);
+        let receipts: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM invite_redemptions WHERE code=ANY($1)")
+                .bind(&codes)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(receipts, 1);
 
         for id in [&room_id, &other_room_id] {
             sqlx::query("DELETE FROM rooms WHERE id=$1")
