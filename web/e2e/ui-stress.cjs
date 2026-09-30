@@ -430,24 +430,35 @@ async function run(env = process.env) {
     validState(await state(client));
   }
   async function roster(client, expected) {
-    await client.page.waitForFunction(
-      (count) =>
-        document.querySelectorAll('#participant-list > li[data-participant-id]').length === count,
-      expected,
-    );
-    const lists = await client.page.evaluate(() =>
-      ['#participant-list', '#classic-users-panel .classic-user-list'].map((selector) =>
-        [...document.querySelectorAll(`${selector} > li[data-participant-id]`)].map(
-          (element) => element.dataset.participantId,
-        ),
-      ),
-    );
-    for (const ids of lists)
+    const page = client.page;
+    const classic = '#classic-users-panel .classic-user-list';
+    const tabbed = !(await page.locator(classic).isVisible());
+    const selector = tabbed ? '#participant-list' : classic;
+    const hidden = tabbed ? classic : '#participant-list';
+    if (tabbed) await page.locator('#sidebar-tabs [data-tab="users"]').click();
+    try {
+      await page.locator(selector).waitFor({ state: 'visible' });
+      await page.waitForFunction(
+        ({ selector, count }) =>
+          document.querySelectorAll(`${selector} > li[data-participant-id]`).length === count,
+        { selector, count: expected },
+      );
+      const ids = await page
+        .locator(`${selector} > li[data-participant-id]`)
+        .evaluateAll((elements) => elements.map((element) => element.dataset.participantId));
       check(
-        ids.length === expected && new Set(ids).size === expected,
+        ids.length === expected && new Set(ids).size === expected && ids.every(identity),
         'incorrect_or_duplicate_roster',
       );
-    assert.deepEqual([...lists[0]].sort(), [...lists[1]].sort(), 'Roster identities differ');
+      assert.equal(
+        await page.locator(`${hidden} > li[data-participant-id]`).count(),
+        0,
+        'Hidden roster retains rows',
+      );
+      return ids.sort();
+    } finally {
+      if (tabbed) await page.locator('#sidebar-tabs [data-tab="chat"]').click();
+    }
   }
   async function makeClient(label, viewport) {
     const context = await browser.newContext({ viewport, permissions: [] });
@@ -650,14 +661,20 @@ async function run(env = process.env) {
       senders: guests.slice(0, Math.min(8, guests.length)).map((guest) => guest.participantId),
     };
     for (const guest of guests) guest.workload = expectedWorkload;
+    const cohortRosters = [];
     for (const client of clients) {
       await client.page.evaluate(
         (workload) => window.__uiStress.expectWorkload(workload),
         expectedWorkload,
       );
       await connected(client);
-      await roster(client, config.guests + 2);
+      cohortRosters.push(await roster(client, config.guests + 2));
     }
+    assert.deepEqual(
+      cohortRosters[0],
+      cohortRosters[1],
+      'Desktop and mobile roster identities differ',
+    );
     await poll(
       'cohort_server_counts',
       counts,

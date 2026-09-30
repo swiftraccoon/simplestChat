@@ -804,6 +804,17 @@ function getLayout(): 'modern' | 'classic' {
   return readLocalPreference('layout') === 'modern' ? 'modern' : 'classic';
 }
 
+/** Landscape phone CSS always shows the sidebar, even after a portrait collapse. */
+function isLandscapePhoneLayout(): boolean {
+  return window.matchMedia(
+    '(max-width: 900px) and (max-height: 500px) and (orientation: landscape)',
+  ).matches;
+}
+
+function isMobilePanelCollapsed(): boolean {
+  return !isDesktopLayout() && panelPreferences.mobilePanelCollapsed && !isLandscapePhoneLayout();
+}
+
 function setLayout(layout: 'modern' | 'classic'): void {
   writeLocalPreference('layout', layout);
   roomScreen.classList.remove('layout-modern', 'layout-classic');
@@ -838,11 +849,13 @@ sidebarTabs.forEach((tab) => {
     sidebarTabs.forEach((t) => t.classList.toggle('active', t === tab));
     tabContents.forEach((c) => c.classList.toggle('active', c.id === `${target}-panel`));
     expandMobilePanel();
+    if (room) renderParticipants(room.getParticipants());
   });
 });
 sidebarCollapseBtn.addEventListener('click', () => {
   panelPreferences.mobilePanelCollapsed = !panelPreferences.mobilePanelCollapsed;
   savePanelPreferences();
+  if (room) renderParticipants(room.getParticipants());
 });
 
 // Wire lobby tab — queried at load time so hidden tabs may not be in sidebarTabs NodeList
@@ -854,6 +867,7 @@ lobbyTab.addEventListener('click', () => {
     .querySelectorAll<HTMLDivElement>('#sidebar-content .tab-content')
     .forEach((c) => c.classList.toggle('active', c.id === 'lobby-panel'));
   expandMobilePanel();
+  if (room) renderParticipants(room.getParticipants());
 });
 
 // Set tab content with icons (these are static SVG literals from our icons module)
@@ -933,7 +947,7 @@ function applyPanelPreferences(): void {
   document.getElementById('sidebar')!.inert = chatCollapsed;
   if (usersTab) usersTab.hidden = desktop && getLayout() === 'classic';
   if (usersTab?.hidden && usersTab.classList.contains('active')) selectSidebarTab('chat');
-  const mobileCollapsed = !desktop && panelPreferences.mobilePanelCollapsed;
+  const mobileCollapsed = isMobilePanelCollapsed();
   roomScreen.classList.toggle('mobile-panel-collapsed', mobileCollapsed);
   sidebarCollapseBtn.setAttribute('aria-expanded', String(!mobileCollapsed));
   sidebarCollapseBtn.setAttribute(
@@ -1010,16 +1024,29 @@ rosterToggleBtn.addEventListener('click', () => {
   } else {
     panelPreferences.chatCollapsed = false;
     selectSidebarTab('users');
+    expandMobilePanel();
   }
   savePanelPreferences();
+  if (room) renderParticipants(room.getParticipants());
 });
 chatToggleBtn.addEventListener('click', () => {
   if (isDesktopLayout()) panelPreferences.chatCollapsed = !panelPreferences.chatCollapsed;
   selectSidebarTab('chat');
   savePanelPreferences();
+  if (room) renderParticipants(room.getParticipants());
 });
 attachPanelResize(document.getElementById('sidebar')!, 'chat');
-window.addEventListener('resize', applyPanelPreferences);
+let rosterOnDesktop = isDesktopLayout();
+let rosterInLandscapePhone = isLandscapePhoneLayout();
+window.addEventListener('resize', () => {
+  applyPanelPreferences();
+  const desktop = isDesktopLayout();
+  const landscape = isLandscapePhoneLayout();
+  if ((desktop !== rosterOnDesktop || landscape !== rosterInLandscapePhone) && room)
+    renderParticipants(room.getParticipants());
+  rosterOnDesktop = desktop;
+  rosterInLandscapePhone = landscape;
+});
 document.getElementById('mic-setup-btn')!.addEventListener(
   'click',
   asyncUiAction(() => mediaControls.openSetup('microphone'), 'Could not open microphone settings'),
@@ -2124,10 +2151,10 @@ joinBtn.addEventListener(
         },
         onBackgroundError: (message) => showToast(message),
         onParticipantsChanged: (participants) => {
+          community.refresh();
           observeUiTask(socialChat.activate(), 'Could not refresh room conversations');
           renderParticipants(participants);
           socialChat.participantsChanged();
-          community.refresh();
         },
         onLocalStream: () => {}, // Unused — local tile managed by updateLocalTile on user action
         onLocalMediaChanged: () => {
@@ -3353,199 +3380,130 @@ function updateVideoGridCount(): void {
 }
 
 // --- Rendering ---
+/** Reconcile only the visible roster; unchanged rows retain focus and their avatars. */
 function renderParticipants(participants: Map<string, Participant>): void {
-  clearChildren(participantList);
-
-  // Build a full list including the local user (server only sends remote participants)
-  const allParticipants: Participant[] = [];
-  if (room?.localParticipantId) {
-    // Build local producers map from actual media state
-    const localProducers = new Map<string, { kind: 'audio' | 'video'; source?: string }>();
-    if (room.audioEnabled)
-      localProducers.set('local-audio', { kind: 'audio', source: 'microphone' });
-    if (room.videoEnabled) localProducers.set('local-video', { kind: 'video', source: 'camera' });
-    allParticipants.push({
-      id: room.localParticipantId,
+  const all = Array.from(participants.values());
+  const localId = room?.localParticipantId;
+  if (localId && room) {
+    const producers = new Map<string, { kind: 'audio' | 'video'; source?: string }>();
+    if (room.audioEnabled) producers.set('local-audio', { kind: 'audio' });
+    if (room.videoEnabled) producers.set('local-video', { kind: 'video' });
+    all.push({
+      id: localId,
       name: room.nickname || nameInput.value.trim(),
       role: room.role,
+      authenticated: auth.isLoggedIn,
       ...(room.chatStyle && { chatStyle: room.chatStyle }),
-      producers: localProducers,
+      producers,
     });
   }
-  for (const p of participants.values()) {
-    allParticipants.push(p);
-  }
-  sortParticipantRoster(allParticipants);
-
-  for (const p of allParticipants) {
-    const li = document.createElement('li');
-    li.dataset['participantId'] = p.id;
-    li.style.setProperty('--person-color', chatColor(p.name, p.chatStyle?.color));
-
-    // Context menu for moderation (only on remote participants)
-    if (p.id !== room?.localParticipantId) {
-      li.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        showModerationMenu(p.id, p.name, e.clientX, e.clientY);
-      });
-    }
-
-    // Avatar
-    const avatar = document.createElement('div');
-    avatar.className = 'participant-avatar';
-    Object.assign(avatar.style, avatarColors(p.name, p.chatStyle?.color));
-    avatar.textContent = p.name.charAt(0).toUpperCase();
-    community.decorateAvatar(
-      avatar,
-      p.id,
-      p.id === room?.localParticipantId ? auth.isLoggedIn : p.authenticated === true,
-    );
-
-    // Info
-    const info = document.createElement('div');
-    info.className = 'participant-info';
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'participant-name';
-
-    // Role badge
-    const badge = getRoleBadgeSpan(p.role);
-    if (badge) nameSpan.appendChild(badge);
-
-    nameSpan.appendChild(document.createTextNode(p.name));
-    if (p.id === room?.localParticipantId) {
-      const youTag = document.createElement('span');
-      youTag.className = 'you-tag';
-      youTag.textContent = '(you)';
-      nameSpan.appendChild(youTag);
-    }
-    info.appendChild(nameSpan);
-
-    // Media icons — built with DOM API using safe SVG from our icons module
-    const mediaIcons = document.createElement('div');
-    mediaIcons.className = 'participant-media-icons';
-
-    const hasAudio = [...p.producers.values()].some((v) => v.kind === 'audio');
-    const hasVideo = [...p.producers.values()].some((v) => v.kind === 'video');
-
-    // The same icons as the control bar, so a state reads identically in both places.
-    const micIcon = document.createElement('span');
-    micIcon.className = `media-icon ${hasAudio ? 'active' : 'muted'}`;
-    micIcon.title = hasAudio ? 'Microphone on' : 'Microphone off';
-    micIcon.setAttribute('role', 'img');
-    micIcon.setAttribute('aria-label', micIcon.title);
-    micIcon.insertAdjacentHTML('afterbegin', hasAudio ? icons.micOn() : icons.micOff());
-    mediaIcons.appendChild(micIcon);
-
-    const camIcon = document.createElement('span');
-    camIcon.className = `media-icon ${hasVideo ? 'active' : 'muted'}`;
-    camIcon.title = hasVideo ? 'Camera on' : 'Camera off';
-    camIcon.setAttribute('role', 'img');
-    camIcon.setAttribute('aria-label', camIcon.title);
-    camIcon.insertAdjacentHTML('afterbegin', hasVideo ? icons.camOn() : icons.camOff());
-    mediaIcons.appendChild(camIcon);
-
-    li.appendChild(avatar);
-    li.appendChild(info);
-    li.appendChild(mediaIcons);
-    if (p.id !== room?.localParticipantId) li.appendChild(participantActionButton(p.id, p.name));
-    participantList.appendChild(li);
-  }
-
-  // Update classic users panel if in classic mode
-  renderClassicUsersPanel(participants);
-}
-
-function renderClassicUsersPanel(participants: Map<string, Participant>): void {
-  const layout = getLayout();
+  sortParticipantRoster(all);
+  community.retainProfiles(all.filter((person) => person.authenticated).map((person) => person.id));
+  const classic = getLayout() === 'classic' && isDesktopLayout();
   let panel = document.getElementById('classic-users-panel');
-
-  if (layout !== 'classic') {
-    panel?.remove();
+  const visible = classic
+    ? !panelPreferences.rosterCollapsed
+    : document.getElementById('users-panel')!.classList.contains('active') &&
+      !(isDesktopLayout() ? panelPreferences.chatCollapsed : isMobilePanelCollapsed());
+  if (!visible) {
+    clearChildren(participantList);
+    if (classic) panel?.querySelector('.classic-user-list')?.replaceChildren();
+    else panel?.remove();
     return;
   }
-
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'classic-users-panel';
-
-    const title = document.createElement('div');
-    title.className = 'panel-title';
-    title.textContent = 'Users';
-    panel.appendChild(title);
-
-    const list = document.createElement('ul');
-    list.className = 'classic-user-list';
-    panel.appendChild(list);
-
-    roomScreen.insertBefore(panel, roomScreen.firstChild);
-    attachPanelResize(panel, 'roster');
-    applyPanelPreferences();
-  }
-
-  const list = panel.querySelector('.classic-user-list') as HTMLElement;
-  clearChildren(list);
-
-  // Include local user with actual media state
-  const allParticipants: Participant[] = [];
-  if (room?.localParticipantId) {
-    const localProducers = new Map<string, { kind: 'audio' | 'video'; source?: string }>();
-    if (room.audioEnabled)
-      localProducers.set('local-audio', { kind: 'audio', source: 'microphone' });
-    if (room.videoEnabled) localProducers.set('local-video', { kind: 'video', source: 'camera' });
-    allParticipants.push({
-      id: room.localParticipantId,
-      name: room.nickname || nameInput.value.trim(),
-      role: room.role,
-      ...(room.chatStyle && { chatStyle: room.chatStyle }),
-      producers: localProducers,
-    });
-  }
-  for (const p of participants.values()) {
-    allParticipants.push(p);
-  }
-  sortParticipantRoster(allParticipants);
-  panel.querySelector('.panel-title')!.textContent = `People (${allParticipants.length})`;
-
-  for (const p of allParticipants) {
-    const li = document.createElement('li');
-    li.dataset['participantId'] = p.id;
-    li.style.setProperty('--person-color', chatColor(p.name, p.chatStyle?.color));
-
-    // Context menu for moderation (only on remote participants)
-    if (p.id !== room?.localParticipantId) {
-      li.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        showModerationMenu(p.id, p.name, e.clientX, e.clientY);
-      });
+  let list: HTMLElement = participantList;
+  if (classic) {
+    clearChildren(participantList);
+    if (!panel) {
+      panel = el('div');
+      panel.id = 'classic-users-panel';
+      panel.append(el('div', '', 'panel-title'), el('ul', undefined, 'classic-user-list'));
+      roomScreen.insertBefore(panel, roomScreen.firstChild);
+      attachPanelResize(panel, 'roster');
+      applyPanelPreferences();
     }
-
-    const avatar = document.createElement('div');
-    avatar.className = 'participant-avatar';
-    Object.assign(avatar.style, avatarColors(p.name, p.chatStyle?.color));
-    avatar.style.width = '24px';
-    avatar.style.height = '24px';
-    avatar.style.fontSize = '0.65rem';
-    avatar.textContent = p.name.charAt(0).toUpperCase();
+    panel.querySelector('.panel-title')!.textContent = `People (${all.length})`;
+    list = panel.querySelector<HTMLElement>('.classic-user-list')!;
+  } else panel?.remove();
+  const existing = new Map(
+    Array.from(list.children, (node) => [
+      (node as HTMLElement).dataset['participantId'],
+      node as HTMLElement,
+    ]),
+  );
+  const retained = new Set<HTMLElement>();
+  const focusedId =
+    document.activeElement?.closest<HTMLElement>('[data-participant-id]')?.dataset['participantId'];
+  let position = list.firstChild;
+  for (const p of all) {
+    const local = p.id === localId;
+    const hasAudio = Array.from(p.producers.values()).some((producer) => producer.kind === 'audio');
+    const hasVideo = Array.from(p.producers.values()).some((producer) => producer.kind === 'video');
+    const fingerprint = JSON.stringify([
+      p.name,
+      p.role,
+      p.chatStyle,
+      classic,
+      local,
+      hasAudio,
+      hasVideo,
+    ]);
+    let row = existing.get(p.id);
+    if (!row || row.dataset['rosterState'] !== fingerprint) {
+      row = el('li');
+      row.dataset['participantId'] = p.id;
+      row.dataset['rosterState'] = fingerprint;
+      row.style.setProperty('--person-color', chatColor(p.name, p.chatStyle?.color));
+      if (!local)
+        row.addEventListener('contextmenu', (event) => {
+          event.preventDefault();
+          showModerationMenu(p.id, p.name, event.clientX, event.clientY);
+        });
+      const avatar = el('div', p.name.charAt(0).toUpperCase(), 'participant-avatar');
+      avatar.dataset['initial'] = p.name.charAt(0).toUpperCase();
+      Object.assign(avatar.style, avatarColors(p.name, p.chatStyle?.color));
+      const name = el('span', undefined, classic ? 'classic-participant-name' : 'participant-name');
+      const badge = getRoleBadgeSpan(p.role);
+      if (badge) name.append(badge);
+      name.append(document.createTextNode(p.name));
+      if (local) name.append(el('span', ' (you)', 'you-tag'));
+      row.append(avatar);
+      if (classic) row.append(name);
+      else {
+        const info = el('div', undefined, 'participant-info');
+        info.append(name);
+        const media = el('div', undefined, 'participant-media-icons');
+        for (const [enabled, label, svg] of [
+          [hasAudio, 'Microphone', hasAudio ? icons.micOn() : icons.micOff()],
+          [hasVideo, 'Camera', hasVideo ? icons.camOn() : icons.camOff()],
+        ] as const) {
+          const icon = el('span', undefined, `media-icon ${enabled ? 'active' : 'muted'}`);
+          icon.title = `${label} ${enabled ? 'on' : 'off'}`;
+          icon.setAttribute('role', 'img');
+          icon.setAttribute('aria-label', icon.title);
+          icon.insertAdjacentHTML('afterbegin', svg);
+          media.append(icon);
+        }
+        row.append(info, media);
+      }
+      if (!local) row.append(participantActionButton(p.id, p.name));
+    }
+    retained.add(row);
+    if (row === position) position = position.nextSibling;
+    else list.insertBefore(row, position);
     community.decorateAvatar(
-      avatar,
+      row.querySelector<HTMLElement>('.participant-avatar')!,
       p.id,
-      p.id === room?.localParticipantId ? auth.isLoggedIn : p.authenticated === true,
+      p.authenticated === true,
     );
-
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'classic-participant-name';
-    // Role badge in classic panel
-    const classicBadge = getRoleBadgeSpan(p.role);
-    if (classicBadge) nameSpan.appendChild(classicBadge);
-    nameSpan.appendChild(document.createTextNode(p.name));
-    if (p.id === room?.localParticipantId) {
-      nameSpan.appendChild(document.createTextNode(' (you)'));
-    }
-
-    li.appendChild(avatar);
-    li.appendChild(nameSpan);
-    if (p.id !== room?.localParticipantId) li.appendChild(participantActionButton(p.id, p.name));
-    list.appendChild(li);
+  }
+  for (const node of Array.from(list.children))
+    if (!retained.has(node as HTMLElement)) node.remove();
+  if (focusedId && document.activeElement === document.body) {
+    Array.from(retained)
+      .find((node) => node.dataset['participantId'] === focusedId)
+      ?.querySelector<HTMLButtonElement>('button')
+      ?.focus();
   }
 }
 

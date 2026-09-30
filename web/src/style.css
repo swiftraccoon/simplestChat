@@ -1191,6 +1191,12 @@ header h1 {
   display: block;
 }
 
+.classic-user-list .participant-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 0.65rem;
+}
+
 #classic-users-panel .panel-title {
   font-size: 0.75rem;
   font-weight: 600;

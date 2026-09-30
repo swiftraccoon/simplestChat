@@ -696,11 +696,7 @@ async function publicChat(page) {
 }
 async function action(page, name, label) {
   const buttons = page.getByRole('button', { name: `Actions for ${name}`, exact: true });
-  for (const node of await buttons.all())
-    if (await node.isVisible()) {
-      await node.click();
-      break;
-    }
+  await buttons.filter({ visible: true }).first().click();
   await page.locator('#mod-menu').getByRole('button', { name: label, exact: true }).click();
 }
 /** Room tools needed now and then live in the room tools' "More" menu (absent in older builds). */

@@ -84,8 +84,8 @@ test('every initial renderer applies both colors, and a chosen color, from the s
     ts.forEachChild(node, visit);
   };
   visit(ast);
-  // Both people lists, and every tile through paintTile.
-  assert.equal(assignments.length, 3);
+  // Both people lists share one renderer; every tile uses paintTile.
+  assert.equal(assignments.length, 2);
   assert.doesNotMatch(source, /\bnameColor\b/);
   for (const assignment of assignments) {
     for (const chosen of [null, 'violet']) {

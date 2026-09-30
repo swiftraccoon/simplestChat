@@ -684,3 +684,81 @@ test('room-scoped actions mount in the room tools while account actions stay in 
     ['Nickname', 'Manage room'],
   );
 });
+
+test('roster profiles deduplicate above 100 people, bound concurrency, and evict departed members', async () => {
+  const f = await fixture();
+  const pending = deferred();
+  f.state.handle = () => pending.promise;
+  const ids = Array.from({ length: 300 }, (_, index) => `person-${index}`);
+  const paint = () => {
+    for (const id of ids) {
+      const avatar = f.document.createElement('div');
+      f.document.body.append(avatar);
+      f.community.decorateAvatar(avatar, id, true);
+    }
+  };
+  f.community.retainProfiles(ids);
+  paint();
+  paint();
+  assert.equal(f.state.requests.length, 8, 'pending profile reads have a concurrency ceiling');
+  assert.equal(f.community.profiles.size, 300, 'queued and active reads share the same cache');
+  pending.resolve({ ...f.profile, avatar_url: null });
+  await Promise.all(f.community.profiles.values());
+  assert.equal(f.state.requests.length, 300, 'exactly one read per account');
+  paint();
+  await flush();
+  assert.equal(f.state.requests.length, 300, 'unchanged redraws do not fetch profiles again');
+  f.community.retainProfiles(ids.slice(1));
+  assert.equal(f.community.profiles.has(ids[0]), false);
+  assert.equal(f.community.profiles.size, 299);
+});
+
+test('very large rosters keep bounded avatars without evicting active cached profiles on redraw', async () => {
+  const f = await fixture();
+  const ids = Array.from({ length: 700 }, (_, index) => `person-${index}`);
+  const paint = () => {
+    f.community.retainProfiles(ids);
+    for (const id of ids) f.community.decorateAvatar(f.document.createElement('div'), id, true);
+  };
+  paint();
+  await Promise.all(f.community.profiles.values());
+  assert.equal(f.state.requests.length, 512);
+  paint();
+  await flush();
+  assert.equal(f.state.requests.length, 512);
+  assert.equal(f.community.profiles.size, 512);
+});
+
+test('retired queued profile reads do not run against a replacement room', async () => {
+  const f = await fixture();
+  const pending = deferred();
+  f.state.handle = () => pending.promise;
+  const ids = Array.from({ length: 20 }, (_, index) => `old-person-${index}`);
+  f.community.retainProfiles(ids);
+  for (const id of ids) f.community.decorateAvatar(f.document.createElement('div'), id, true);
+  const work = Promise.all(f.community.profiles.values());
+  f.state.room = { currentRoomId: 'new-room', localParticipantId: 'local', role: 'user' };
+  f.community.refresh();
+  pending.resolve(null);
+  await work;
+  assert.equal(f.state.requests.length, 8, 'only reads already sent may settle after replacement');
+  assert.equal(f.community.profiles.size, 0);
+});
+
+test('explicit profile visits take the next slot before queued avatar decoration', async () => {
+  const f = await fixture();
+  const active = Array.from({ length: 8 }, () => deferred());
+  let index = 0;
+  f.state.handle = () => active[index++]?.promise ?? Promise.resolve(f.profile);
+  const ids = Array.from({ length: 30 }, (_, number) => `avatar-${number}`);
+  f.community.retainProfiles(ids);
+  for (const id of ids) f.community.decorateAvatar(f.document.createElement('div'), id, true);
+  const shown = f.community.showProfile('requested-account');
+  assert.equal(f.state.requests.length, 8);
+  active[0].resolve(f.profile);
+  await flush();
+  assert.equal(f.state.requests[8][0], '/api/auth/profiles/requested-account');
+  for (const pending of active.slice(1)) pending.resolve(f.profile);
+  await shown;
+  await Promise.all(f.community.profiles.values());
+});

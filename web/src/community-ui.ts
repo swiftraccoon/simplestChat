@@ -70,6 +70,10 @@ export class CommunityUI {
   private readonly nicknameButton = button('Nickname', () => this.openNickname());
   private readonly manageButton = button('Manage room', () => this.openManagement());
   private profiles = new Map<string, Promise<PublicProfile | null>>();
+  private avatarVersions = new WeakMap<HTMLElement, number>();
+  private rosterProfiles: Set<string> | null = null;
+  private profileActive = 0;
+  private profileWaiting: (() => void)[] = [];
   private generation = 0;
   private accountGeneration = 0;
   private accountIdentity = '';
@@ -101,6 +105,8 @@ export class CommunityUI {
       this.identity = identity;
       this.generation++;
       this.profiles.clear();
+      this.rosterProfiles = null;
+      for (const resume of this.profileWaiting.splice(0)) resume();
       document.querySelectorAll<HTMLDialogElement>('.community-dialog').forEach((dialog) => {
         if (accountChanged || dialog.getAttribute('data-account-dialog') !== 'true') dialog.close();
       });
@@ -111,11 +117,35 @@ export class CommunityUI {
     this.manageButton.hidden = !room?.localParticipantId || ROLES.indexOf(room.role) < 3;
   }
 
+  /** Cache only the current roster, with a hard memory bound; larger rosters keep initials. */
+  retainProfiles(ids: Iterable<string>): void {
+    const retained = new Set<string>();
+    for (const id of ids) {
+      retained.add(id);
+      if (retained.size === 512) break;
+    }
+    this.rosterProfiles = retained;
+    for (const id of this.profiles.keys()) if (!retained.has(id)) this.profiles.delete(id);
+  }
+
   decorateAvatar(node: HTMLElement, id: string, authenticated: boolean): void {
-    if (!authenticated) return;
+    if (
+      !authenticated ||
+      (this.rosterProfiles && !this.rosterProfiles.has(id)) ||
+      (!this.profiles.has(id) && this.profiles.size >= 512)
+    )
+      return;
+    const version = (this.avatarVersions.get(node) ?? 0) + 1;
+    this.avatarVersions.set(node, version);
     this.profile(id)
       .then((profile) => {
-        if (!node.isConnected || !profile?.avatar_url || !safeRasterUrl(profile.avatar_url)) return;
+        if (!node.isConnected || this.avatarVersions.get(node) !== version || !profile) return;
+        if (!profile.avatar_url || !safeRasterUrl(profile.avatar_url)) {
+          const initial = node.dataset?.['initial'];
+          if (node.querySelector('img') && initial !== undefined) node.textContent = initial;
+          return;
+        }
+        if (node.querySelector('img')?.getAttribute('src') === profile.avatar_url) return;
         const image = el('img');
         image.src = profile.avatar_url;
         image.alt = '';
@@ -132,7 +162,7 @@ export class CommunityUI {
     const view = modal('Profile');
     this.profiles.delete(id); // Explicit profile visits refresh the cached account details.
     view.body.append(el('p', 'Loading profile…'));
-    const profile = await this.profile(id);
+    const profile = await this.loadProfile(id, false);
     if (!view.dialog.open) return;
     view.body.replaceChildren();
     if (!profile) {
@@ -243,12 +273,36 @@ export class CommunityUI {
     view.body.append(submit);
   }
 
+  /** At most eight profile reads in flight, with membership-owned queued requests. */
+  private async loadProfile(id: string, cached = true): Promise<PublicProfile | null> {
+    const generation = this.generation;
+    while (this.profileActive >= 8) {
+      await new Promise<void>((resolve) => {
+        // A requested profile takes the next slot before optional avatar decoration.
+        if (cached) this.profileWaiting.push(resolve);
+        else this.profileWaiting.unshift(resolve);
+      });
+      if (generation !== this.generation || (cached && !this.profiles.has(id))) {
+        this.profileWaiting.shift()?.();
+        return null;
+      }
+    }
+    this.profileActive++;
+    try {
+      return await api.publicProfile(id);
+    } catch {
+      return null;
+    } finally {
+      this.profileActive--;
+      this.profileWaiting.shift()?.();
+    }
+  }
+
   private async profile(id: string): Promise<PublicProfile | null> {
     let promise = this.profiles.get(id);
     if (!promise) {
-      promise = api.publicProfile(id).catch(() => null);
-      if (this.profiles.size >= 100) this.profiles.delete(this.profiles.keys().next().value!);
-      this.profiles.set(id, promise);
+      promise = this.loadProfile(id);
+      if (this.profiles.size < 512) this.profiles.set(id, promise);
     }
     return promise;
   }
