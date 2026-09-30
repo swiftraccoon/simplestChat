@@ -2,6 +2,7 @@ import type { CreateRoomRequest } from './protocol';
 import {
   type ChatPreferences,
   decodeAccountProfile,
+  decodeServerCapabilities,
   decodeChatPreferences,
   decodeInviteRedemption,
   decodeMemberships,
@@ -291,6 +292,16 @@ async function apiNoContent(
 
 /** Endpoint-owned contracts: callers cannot select an arbitrary response type or decoder. */
 export const api = {
+  capabilities: () =>
+    apiJson(
+      decodeServerCapabilities,
+      '/api/capabilities',
+      null,
+      'GET',
+      undefined,
+      undefined,
+      'omit',
+    ),
   passkeySettings: (token: string, signal: AbortSignal) =>
     apiJson(decodePasskeySettings, '/api/auth/passkeys', token, 'GET', undefined, signal),
   passkeyAction: (

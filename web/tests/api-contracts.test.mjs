@@ -405,3 +405,33 @@ test('non-string JSON errors retain bounded plain text and network failures keep
   });
   await assert.rejects(network.ui.api.ownRooms(null), (error) => error === failure);
 });
+
+test('capabilities own a fixed decoded contract', async () => {
+  const { ui, state } = await uiFixture();
+  const capabilities = {
+    version: 1,
+    accounts: true,
+    passwordLogin: true,
+    passkeyLogin: false,
+    passwordRegistration: 'invite',
+    passkeyRegistration: 'disabled',
+    roomDirectory: true,
+    roomCreation: true,
+    adHocRooms: false,
+  };
+  state.response = {
+    ok: true,
+    status: 200,
+    json: async () => ({ ...capabilities, private: 'removed' }),
+  };
+  assert.deepEqual(await ui.api.capabilities(), capabilities);
+  assert.equal(state.requests[0][0], '/api/capabilities');
+  assert.equal(state.requests[0][1].credentials, 'omit');
+  for (const wrong of [
+    { ...capabilities, version: 2 },
+    { ...capabilities, passwordRegistration: 'maybe' },
+  ]) {
+    state.response = { ok: true, status: 200, json: async () => wrong };
+    await assert.rejects(ui.api.capabilities(), /invalid data/);
+  }
+});

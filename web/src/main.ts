@@ -23,6 +23,7 @@ import { avatarColors, chatColor } from './avatar-colors';
 import { spatialLayerForRenderedWidth } from './layer-cap';
 import './community.css';
 import type { CreateRoomRequest, RoomSettingsPatch } from './protocol';
+import type { ServerCapabilities } from './api-validation';
 
 declare const __APP_REVISION__: string;
 const telemetry = new ClientTelemetry(__APP_REVISION__);
@@ -160,14 +161,15 @@ const microphoneControls = document.getElementById('microphone-controls')!;
 document.getElementById('personal-settings-controls')!.remove();
 
 // --- Auth ---
+let capabilities: ServerCapabilities | null = null;
 const auth = new AuthManager();
 auth.setTelemetryHandler(telemetry.record);
 const authFlow = new AuthDialogFlow(() => auth.cancelPasskeyAttempt());
 
 function updateAuthUI(): void {
-  roomBrowser.hidden = false;
-  joinFormDivider.hidden = false;
-  createRoomBtn.hidden = !auth.isLoggedIn;
+  roomBrowser.hidden = capabilities?.roomDirectory === false;
+  joinFormDivider.hidden = roomBrowser.hidden;
+  createRoomBtn.hidden = !auth.isLoggedIn || capabilities?.roomCreation === false;
   if (auth.isLoggedIn) {
     authBarGuest.hidden = true;
     authBarUser.hidden = false;
@@ -180,7 +182,7 @@ function updateAuthUI(): void {
     authBarGuest.hidden = false;
     authBarUser.hidden = true;
   }
-  observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory');
+  if (!roomBrowser.hidden) observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory');
   updateJoinBtn();
   community.refresh();
 }
@@ -1362,6 +1364,42 @@ const accountSync = new AccountSessionSync({
 });
 auth.setSessionMutationHandler(() => accountSync.publish());
 
+/** Adapt onboarding to the host's supported account and room flows. */
+function applyCapabilities(value: ServerCapabilities): void {
+  capabilities = value;
+  signInBtn.hidden = !value.accounts;
+  loginSubmit.hidden = !value.passwordLogin;
+  loginEmail.closest('.setting-group')!.toggleAttribute('hidden', !value.passwordLogin);
+  loginPassword.closest('.setting-group')!.toggleAttribute('hidden', !value.passwordLogin);
+  loginPasskeyBtn.hidden = !value.passkeyLogin;
+  loginToRegister.hidden =
+    value.passwordRegistration === 'disabled' && value.passkeyRegistration === 'disabled';
+  registerSubmit.hidden = value.passwordRegistration === 'disabled';
+  registerPasskeyBtn.hidden = value.passkeyRegistration !== 'open';
+  registerInvite
+    .closest('.setting-group')!
+    .toggleAttribute('hidden', value.passwordRegistration !== 'invite' && !pendingInvite);
+  document.getElementById('registration-help')!.textContent =
+    value.passwordRegistration === 'invite'
+      ? 'An invite code lets you create a password account. You can add a passkey later when this server supports it.'
+      : 'Choose a sign-in method supported by this server.';
+  const notice = document.getElementById('server-mode')!;
+  notice.hidden = value.accounts || value.roomDirectory;
+  notice.textContent = value.adHocRooms
+    ? 'Guest rooms are available. Enter your name and a room ID to join.'
+    : 'Rooms are not available on this server yet. Contact its host for help.';
+  updateAuthUI();
+}
+observeUiTask(
+  api
+    .capabilities()
+    .then(applyCapabilities)
+    .catch(() => {
+      // Older hosts may not expose capabilities; preserve their existing flows.
+    }),
+  'Could not load server features',
+);
+
 // Try to restore auth session from cookie, then connect WS
 observeUiTask(
   auth.tryRestore().then(() => {
@@ -1377,6 +1415,7 @@ observeUiTask(
 // --- Join form ---
 function updateJoinBtn(): void {
   joinBtn.disabled =
+    (capabilities !== null && !capabilities.roomDirectory && !capabilities.adHocRooms) ||
     navigationPending ||
     departureInProgress !== null ||
     room !== null ||

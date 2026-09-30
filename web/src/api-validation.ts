@@ -1,5 +1,39 @@
 import type { AccountProfile, PublicProfile, RoomListItem } from './protocol';
-import { boolean, integer, list, nullable, object, text, record, invalid } from './validation';
+import {
+  boolean,
+  integer,
+  list,
+  nullable,
+  object,
+  text,
+  record,
+  invalid,
+  choice,
+} from './validation';
+
+/** Public server features; never includes deployment details or credentials. */
+export interface ServerCapabilities {
+  version: 1;
+  accounts: boolean;
+  passwordLogin: boolean;
+  passkeyLogin: boolean;
+  passwordRegistration: 'open' | 'invite' | 'disabled';
+  passkeyRegistration: 'open' | 'disabled';
+  roomDirectory: boolean;
+  roomCreation: boolean;
+  adHocRooms: boolean;
+}
+export const decodeServerCapabilities = object<ServerCapabilities>({
+  version: (value) => (value === 1 ? 1 : invalid()),
+  accounts: boolean,
+  passwordLogin: boolean,
+  passkeyLogin: boolean,
+  passwordRegistration: choice('open', 'invite', 'disabled'),
+  passkeyRegistration: choice('open', 'disabled'),
+  roomDirectory: boolean,
+  roomCreation: boolean,
+  adHocRooms: boolean,
+});
 
 export interface PasskeySettings {
   password_enabled: boolean;
