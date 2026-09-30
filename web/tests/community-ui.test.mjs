@@ -90,7 +90,7 @@ async function fixture() {
       state.signedOut++;
     },
   });
-  return { ...dom, ...api, auth, state, profile, community };
+  return { ...dom, ...api, ui, auth, state, profile, community };
 }
 
 function dialog(fixture, title) {
@@ -761,4 +761,50 @@ test('explicit profile visits take the next slot before queued avatar decoration
   for (const pending of active.slice(1)) pending.resolve(f.profile);
   await shown;
   await Promise.all(f.community.profiles.values());
+});
+
+test('membership pages append unique rooms and keep the cursor on a failed read', async () => {
+  const f = await fixture();
+  const requests = [];
+  let failNext = false;
+  const member = (id) => ({ id, display_name: id, role: 'member', participant_count: 1 });
+  // Named endpoint contracts are tested separately; this fixture observes dialog ownership.
+  f.community.options.onJoinRoom = (id) => requests.push(['join', id]);
+  const original = f.community.openRooms;
+  assert.equal(typeof original, 'function');
+  f.state.handle = async (path) => {
+    if (path === '/api/rooms/mine') return [];
+    throw new Error('Unexpected fixture request');
+  };
+  // The shared fixture's API object is supplied by reference to this instance.
+  f.community.options.auth.jwt = 'token';
+  f.ui.api.memberships = async (_token, cursor) => {
+    requests.push(['page', cursor]);
+    if (failNext) {
+      failNext = false;
+      throw new Error('Temporary read failure');
+    }
+    return cursor
+      ? { items: [member('first'), member('second')], next_cursor: null }
+      : { items: [member('first')], next_cursor: 'first' };
+  };
+  await f.community.openRooms();
+  const view = dialog(f, 'My rooms');
+  const more = view
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Load more memberships');
+  assert.ok(more);
+  failNext = true;
+  more.click();
+  await flush();
+  assert.equal(more.disabled, false);
+  more.click();
+  await flush();
+  assert.equal(more.hidden, true);
+  assert.equal(view.querySelectorAll('.owned-room').length, 2);
+  assert.deepEqual(requests, [
+    ['page', undefined],
+    ['page', 'first'],
+    ['page', 'first'],
+  ]);
 });

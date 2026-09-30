@@ -591,28 +591,48 @@ export class CommunityUI {
         view.body.append(row);
       }
       // Rooms someone else owns where this account holds a role.
-      const memberships = await api.memberships(token);
-      if (!view.dialog.open) return;
       view.body.append(el('h3', 'Rooms you belong to'));
-      if (!memberships.length)
-        view.body.append(
-          el('p', 'None yet. An invitation link from a room admin adds you here.', 'setting-hint'),
-        );
-      for (const membership of memberships) {
-        const row = el('div', undefined, 'owned-room');
-        row.append(
-          el('h3', membership.display_name),
-          el(
-            'p',
-            `${membership.id} · ${membership.role} · ${membership.participant_count ?? '?'} online`,
-          ),
-          button('Join', () => {
-            view.close();
-            this.options.onJoinRoom(membership.id);
-          }),
-        );
-        view.body.append(row);
-      }
+      const membershipList = el('div');
+      const seen = new Set<string>();
+      let cursor: string | undefined;
+      const loadMore = asyncButton(
+        'Load more memberships',
+        () => busy(loadMore, view.error, loadMemberships),
+        (error) => this.showError(view.error, error),
+      );
+      const loadMemberships = async (): Promise<void> => {
+        const page = await api.memberships(token, cursor);
+        if (!view.dialog.open || !membershipList.isConnected) return;
+        for (const membership of page.items) {
+          if (seen.has(membership.id)) continue;
+          seen.add(membership.id);
+          const row = el('div', undefined, 'owned-room');
+          row.append(
+            el('h3', membership.display_name),
+            el(
+              'p',
+              `${membership.id} · ${membership.role} · ${membership.participant_count ?? '?'} online`,
+            ),
+            button('Join', () => {
+              view.close();
+              this.options.onJoinRoom(membership.id);
+            }),
+          );
+          membershipList.append(row);
+        }
+        if (!seen.size)
+          membershipList.append(
+            el(
+              'p',
+              'None yet. An invitation link from a room admin adds you here.',
+              'setting-hint',
+            ),
+          );
+        loadMore.hidden = page.next_cursor === null || page.next_cursor === cursor;
+        cursor = page.next_cursor ?? undefined;
+      };
+      view.body.append(membershipList, loadMore);
+      await busy(loadMore, view.error, loadMemberships);
     };
     try {
       await refresh();

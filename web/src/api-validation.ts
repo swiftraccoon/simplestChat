@@ -1,4 +1,5 @@
 import type { AccountProfile, PublicProfile, RoomListItem } from './protocol';
+import type { Decoder } from './validation';
 import {
   boolean,
   integer,
@@ -179,6 +180,17 @@ export const decodeInviteRedemption = object<InviteRedemption>({
   display_name: text,
   role: text,
 });
-export const decodeMemberships = list(
-  object<MembershipItem>({ ...roomListItemFields, role: text }),
-);
+export interface MembershipPage {
+  items: MembershipItem[];
+  next_cursor: string | null;
+}
+const decodeMembershipItems = list(object<MembershipItem>({ ...roomListItemFields, role: text }));
+const decodeMembershipPage = object<MembershipPage>({
+  items: decodeMembershipItems,
+  next_cursor: nullable(text),
+});
+/** Older servers ignore the pagination query and return their first page as an array. */
+export const decodeMemberships: Decoder<MembershipPage> = (value) =>
+  Array.isArray(value)
+    ? { items: decodeMembershipItems(value), next_cursor: null }
+    : decodeMembershipPage(value);

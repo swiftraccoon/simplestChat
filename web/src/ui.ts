@@ -356,8 +356,12 @@ export const api = {
     apiJson(decodeRegistrationInvite, '/api/auth/invites', token, 'POST'),
   revokeRegistrationInvite: (token: string | null, code: string) =>
     apiNoContent(`/api/auth/invites/${encodeURIComponent(code)}`, token, 'DELETE'),
-  memberships: (token: string | null) =>
-    apiJson(decodeMemberships, '/api/rooms/memberships', token),
+  memberships: (token: string | null, after?: string) =>
+    apiJson(
+      decodeMemberships,
+      `/api/rooms/memberships?paginated=true${after ? `&after=${encodeURIComponent(after)}` : ''}`,
+      token,
+    ),
   roomInvites: (token: string | null, id: string) =>
     apiJson(decodeRoomInvites, `/api/rooms/${encodeURIComponent(id)}/invites`, token),
   createRoomInvite: (

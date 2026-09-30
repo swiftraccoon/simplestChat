@@ -127,9 +127,9 @@ const endpoints = [
   [
     'memberships',
     (api) => api.memberships('token'),
-    '/api/rooms/memberships',
+    '/api/rooms/memberships?paginated=true',
     'GET',
-    [{ ...room, role: 'member' }],
+    { items: [{ ...room, role: 'member' }], next_cursor: null },
   ],
   [
     'room invites',
@@ -259,7 +259,7 @@ for (const [name, request, path, method, valid] of endpoints) {
       false,
       'private server fragment',
       { internal: 'private' },
-      Array.isArray(valid) ? [{}] : [],
+      Array.isArray(valid) || name === 'memberships' ? [{}] : [],
     ]) {
       state.response = { ok: true, status: 200, json: async () => payload };
       await assert.rejects(request(ui.api), {
@@ -406,7 +406,7 @@ test('non-string JSON errors retain bounded plain text and network failures keep
   await assert.rejects(network.ui.api.ownRooms(null), (error) => error === failure);
 });
 
-test('capabilities own a fixed decoded contract', async () => {
+test('capabilities and membership pagination own fixed decoded contracts', async () => {
   const { ui, state } = await uiFixture();
   const capabilities = {
     version: 1,
@@ -434,4 +434,18 @@ test('capabilities own a fixed decoded contract', async () => {
     state.response = { ok: true, status: 200, json: async () => wrong };
     await assert.rejects(ui.api.capabilities(), /invalid data/);
   }
+  state.response = { ok: true, status: 200, json: async () => ({ items: [], next_cursor: null }) };
+  assert.deepEqual(await ui.api.memberships('token', 'after /?'), { items: [], next_cursor: null });
+  assert.equal(
+    state.requests.at(-1)[0],
+    '/api/rooms/memberships?paginated=true&after=after%20%2F%3F',
+  );
+  state.response = { ok: true, status: 200, json: async () => [{ ...room, role: 'member' }] };
+  assert.deepEqual(await ui.api.memberships('token'), {
+    items: [{ ...room, role: 'member' }],
+    next_cursor: null,
+  });
+  assert.equal(state.requests.at(-1)[0], '/api/rooms/memberships?paginated=true');
+  state.response = { ok: true, status: 200, json: async () => [{ ...room, role: 4 }] };
+  await assert.rejects(ui.api.memberships('token'), /invalid data/);
 });
