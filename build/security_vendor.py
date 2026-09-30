@@ -299,8 +299,13 @@ def validate_references(manifest: Manifest) -> None:
     }
     if any(manifest.sources[source].format == "file" for source in native_sources):
         raise IntegrityError("Native wraps require archive sources")
-    if any(not path.endswith("/README.md") for path in manifest.maintained_files):
-        raise IntegrityError("Only explicitly declared README files may be repository-authored")
+    if any(
+        not path.endswith("/README.md") and path != "vendor/native-components.json"
+        for path in manifest.maintained_files
+    ):
+        raise IntegrityError(
+            "Only declared README/native-component metadata may be repository-authored"
+        )
 
 
 def read_regular(path: Path, limit: int) -> bytes:
@@ -664,6 +669,21 @@ def validate_wrap_patch(
 
 def validate_coverage(manifest: Manifest, local: Mapping[str, bytes]) -> None:
     """Discover every vendor file and wrap, including newly introduced dependencies."""
+    if "vendor/native-components.json" in manifest.maintained_files:
+        metadata = fields(
+            decode_json(local["vendor/native-components.json"]),
+            {
+                "wrap_components",
+                "adapted_component",
+                "openssl",
+                "registry_component",
+                "native_links",
+            },
+        )
+        for record in array_value(metadata["wrap_components"]):
+            _ = fields(record, {"source", "name", "version", "linkage", "usage", "license"})
+        for key in ("adapted_component", "openssl", "registry_component", "native_links"):
+            _ = object_value(metadata[key])
     covered = set(manifest.files) | set(manifest.maintained_files) | {"vendor/integrity.json"}
     for tree in manifest.trees:
         covered |= {path for path in local if path.startswith(tree.path + "/")}

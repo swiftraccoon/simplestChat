@@ -337,7 +337,8 @@
   ],
   "maintained_files": [
     "vendor/README.md",
-    "vendor/seclists-passwords/README.md"
+    "vendor/seclists-passwords/README.md",
+    "vendor/native-components.json"
   ],
   "wraps": [
     {

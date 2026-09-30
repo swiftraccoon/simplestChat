@@ -54,7 +54,8 @@ side. A stale entry fails as well as an unlisted change. The two local WrapDB
 overlays also have independent archive comparisons, preserving their provenance
 alongside their inclusion in the worker's maintained patch. The SecLists data
 and license use exact raw-file sources. Explicitly listed repository-authored
-README files and the integrity manifest itself are the only metadata exceptions.
+README files, the structurally checked `native-components.json`, and the integrity
+manifest itself are the only metadata exceptions.
 
 The complete discovered set of Meson `.wrap` files must match `wraps`. Every wrap
 must use `wrap-file` with the recorded HTTPS source URL and SHA-256. Remote patches
@@ -74,6 +75,55 @@ run for review. For an intentional update, authenticate the new upstream source,
 review the complete changes, amend each affected source/deviation record and the
 explanation below, then rerun verification and relevant native/application tests.
 There is no command that automatically approves the current working tree.
+
+### Native build evidence
+
+[`native-components.json`](native-components.json) classifies the complete native
+source inventory and binds its source IDs to the integrity manifest. Production
+worker inputs, header-only code, native test dependencies and Windows-only inputs
+have explicit roles. Adapted libwebrtc retains its branch and revision instead of
+claiming to be an unmodified upstream release. AWS-LC records both the containing
+locked Cargo crate and its bundled native version/revision. OpenSSL records the
+exact source archive and the checksum-verifying installer. Native license
+expressions are reviewed source metadata; libuv's additional BSD/ISC components
+and AWS-LC's composite expression remain explicit.
+
+The production Fedora builder retains the final successful default-feature Cargo
+invocation with `--message-format=json`. After building, it runs:
+
+```bash
+python3 build/security_native.py --root /app \
+  --vendor-report /app/vendor-evidence/report.json \
+  --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
+  --openssl-prefix /opt/openssl-3.5.8 --output /app/native-components.build.json
+```
+
+The helper rechecks the vendor receipt against current files, selects the actual
+production server artifact, and resolves static archives only from the recorded
+build-script link search paths. Missing, ambiguous, thin, unexpected or incorrectly
+located native archives fail. It verifies the AWS-LC crate checksum before
+comparing every unpacked source file; Cargo's exact completion marker is the only
+unpacked-cache exception. The receipt binds the final executable, static archive
+bytes, Cargo messages, Cargo lockfile, vendor source/patch records, compiler
+identity and builder RPM/source-RPM inventory. The static C++ runtime must belong
+to the recorded `libstdc++-static` package.
+
+`rust_licenses` covers the packages in that actual Cargo invocation. Registry
+license declarations come from checksum-authenticated crate manifests; a
+`license-file` retains its exact content hash. Local patched packages must belong
+to verified vendor trees. No license is guessed from a filename or package name.
+The unpublished first-party application intentionally has no declared distribution
+license; its record is marked `first_party` and preserves that missing value.
+Image license policy selects runtime packages by their exact embedded Cargo
+identity, rather than treating build-time packages or the whole lockfile as
+runtime dependencies. The C++ runtime license comes from its owning RPM metadata.
+
+The image retains the receipt at
+`/usr/share/simplestchat/native-components.json`. An archive hash identifies a
+build input; it does not prove that every archive member survives final linking.
+Header-only and adapted source records are likewise source evidence. Separate
+image checks verify ELF hardening, dynamic dependencies and the exact executable
+hash; runtime-loaded components and deployed protections need separate evidence.
 
 ## Maintained changes
 

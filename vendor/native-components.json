@@ -1,0 +1,126 @@
+{
+  "wrap_components": [
+    {
+      "source": "abseil-cpp-20240722.2",
+      "name": "abseil-cpp",
+      "version": "20240722.2",
+      "linkage": "static",
+      "usage": "production",
+      "license": "Apache-2.0"
+    },
+    {
+      "source": "catch2-3.16.0",
+      "name": "Catch2",
+      "version": "3.16.0",
+      "linkage": "static",
+      "usage": "native-test",
+      "license": "BSL-1.0"
+    },
+    {
+      "source": "flatbuffers-24.3.25",
+      "name": "FlatBuffers",
+      "version": "24.3.25",
+      "linkage": "static",
+      "usage": "production",
+      "license": "Apache-2.0"
+    },
+    {
+      "source": "libsrtp-3.0.0-beta-2fc078db",
+      "name": "libsrtp",
+      "version": "3.0.0-beta-2fc078db",
+      "linkage": "static",
+      "usage": "production",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "source": "libuv-v1.52.1",
+      "name": "libuv",
+      "version": "1.52.1",
+      "linkage": "static",
+      "usage": "production",
+      "license": "MIT AND BSD-2-Clause AND ISC"
+    },
+    {
+      "source": "unordered_dense-4.11.0",
+      "name": "unordered_dense",
+      "version": "4.11.0",
+      "linkage": "header-only",
+      "usage": "production",
+      "license": "MIT"
+    },
+    {
+      "source": "wingetopt-1.00",
+      "name": "wingetopt",
+      "version": "1.00",
+      "linkage": "static",
+      "usage": "windows-only",
+      "license": "ISC AND BSD-2-Clause"
+    }
+  ],
+  "adapted_component": {
+    "name": "libwebrtc",
+    "version": "m77",
+    "revision": "2bac7da1349c75e5cf89612ab9619a1920d5d974",
+    "path": "vendor/mediasoup-sys-0.17.0/deps/libwebrtc",
+    "license": "BSD-3-Clause"
+  },
+  "openssl": {
+    "version": "3.5.8",
+    "source": {
+      "id": "openssl-3.5.8",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.8/openssl-3.5.8.tar.gz",
+      "sha256": "a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2",
+      "format": "tar.gz"
+    },
+    "installer_sha256": "d994d9f780ac94b2950f6970031c288f4302250a224120dc6061359ed0935f30",
+    "license": "Apache-2.0"
+  },
+  "registry_component": {
+    "name": "AWS-LC",
+    "version": "5.7.0",
+    "revision": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+    "crate": "aws-lc-sys",
+    "crate_version": "0.45.0",
+    "source": {
+      "id": "aws-lc-sys-0.45.0",
+      "url": "https://static.crates.io/crates/aws-lc-sys/aws-lc-sys-0.45.0.crate",
+      "sha256": "9bff6c3b54fad79a2e60b8102caf565819711497c1f5f092f49508e2f5c31b27",
+      "format": "tar.gz"
+    },
+    "license": "ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0)"
+  },
+  "native_links": {
+    "mediasoup-sys": {
+      "static": [
+        "stdc++",
+        "mediasoup-worker",
+        "ssl",
+        "crypto"
+      ],
+      "system": [
+        "dl",
+        "pthread",
+        "m",
+        "rt"
+      ]
+    },
+    "openssl-sys": {
+      "static": [
+        "ssl",
+        "crypto"
+      ],
+      "system": [
+        "dl",
+        "pthread",
+        "m",
+        "rt"
+      ]
+    },
+    "aws-lc-sys": {
+      "static": [
+        "aws_lc_0_45_0_crypto"
+      ],
+      "system": []
+    }
+  }
+}

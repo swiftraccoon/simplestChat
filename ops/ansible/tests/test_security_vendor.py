@@ -231,6 +231,23 @@ class VendorTests(unittest.TestCase):
         with self.assertRaisesRegex(vendor.IntegrityError, "Unlisted or missing native wraps"):
             _ = self.check()
 
+    def test_native_metadata_exception_is_exact_and_structurally_checked(self) -> None:
+        """One reviewed metadata filename cannot exempt arbitrary JSON or unknown schema fields."""
+        maintained = array_value(self.manifest["maintained_files"])
+        maintained.append("vendor/native-components.json")
+        data = (ROOT / "vendor/native-components.json").read_bytes()
+        self.put("vendor/native-components.json", data)
+        self.save_manifest()
+        _ = self.check("metadata-valid")
+        malformed = object_value(decode_json(data))
+        malformed["unknown"] = True
+        self.put("vendor/native-components.json", vendor.json_bytes(malformed))
+        with self.assertRaisesRegex(vendor.IntegrityError, "Unexpected manifest fields"):
+            _ = self.check("metadata-invalid")
+        maintained.append("vendor/unreviewed.json")
+        with self.assertRaisesRegex(vendor.IntegrityError, "Only declared README"):
+            _ = vendor.parse_manifest(vendor.json_bytes(self.manifest))
+
     def test_vcs_unhashed_and_unknown_native_fetches_fail(self) -> None:
         """The active Meson contract accepts only manifest-matching archive pins."""
         for name, contents in (

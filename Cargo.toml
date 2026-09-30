@@ -1,6 +1,8 @@
 [package]
 name = "simplestChat"
 version = "0.1.0"
+# This executable is deployed as an image, not published as a library crate.
+publish = false
 edition = "2024"
 rust-version = "1.98.1"
 
