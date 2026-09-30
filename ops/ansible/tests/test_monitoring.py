@@ -32,6 +32,8 @@ class MonitoringTests(unittest.TestCase):
             root = Path(directory)
             state = root / "state"
             state.mkdir(mode=0o750)
+            # Match the installed directory even under an inherited private umask.
+            state.chmod(0o750)
             partial = root / "results" / "release.partial"
             partial.mkdir(parents=True)
             _ = (partial / "database-before.dump").write_bytes(b"x" * 100)
