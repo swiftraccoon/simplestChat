@@ -10,8 +10,8 @@ query, range, rendered-message digest and complete primary-file digest.
 not exclusions for test files, upstream code or entire queries.
 
 The initial disposition is 64 false positives, four findings requiring source
-fixes, and one Medium upstream finding left open. Later native C/C++ alerts
-70–101 are a separate review; this document does not assert a clean repository
+fixes, and one Medium upstream finding left open. Native C/C++ alerts
+70–101 have a [separate exact-source review](codeql-native-review-2026-09-30.md); this document does not assert a clean repository
 or a complete passing analysis. No alert was dismissed while preparing this
 review.
 
@@ -91,12 +91,24 @@ tracked file to match the selected Git revision; changed files, symlinks and pat
 escapes fail. The fingerprint covers that file digest plus query, analyzer
 version, range and rendered-message digest. It is not a proof that dependencies
 or callers elsewhere never change: source review remains necessary when their
-contracts change. Generated upstream source needs separate verified-archive
-binding; unsupported source fails rather than being skipped.
+contracts change. Generated upstream source uses `--source-cache "$VERIFIED_VENDOR_CACHE"` and the
+current `vendor/integrity.json`. The vendor gate must populate that private cache
+before checking native reports or a complete API plan. This mode is offline: it
+checks archive SHA256 before the bounded archive reader parses any member, maps
+only declared Meson source roots, and verifies remote patch archives or tracked
+packagefiles overlays against the maintained vendor delta. When an extracted
+source exists, its bytes must match. The fingerprint additionally binds archive,
+manifest, wrap and applicable overlay identities. Missing archives, unsupported
+source and unexpected local changes fail rather than being skipped.
+
+Raw SARIF stays private on the runner. CI should upload only the explicit policy
+`report.json` or `failure.json`, which contain no source text or raw diagnostic
+messages. Fixed validation codes identify rejected report shapes without exposing
+report content.
 
 ## Explicitly authorized dismissal
 
-A human must review the exact plan and authorize changes before running:
+Review the exact plan under the repository maintenance authorization before running:
 
 ```sh
 python3 build/security_codeql_triage.py apply \
@@ -106,10 +118,10 @@ python3 build/security_codeql_triage.py apply \
 ```
 
 The apply operation requires repository, revision, reference, complete plan,
-current policy digest and each selected alert to remain unchanged. It re-fetches
+current policy and explicit-review digests, and each selected alert to remain unchanged. It re-fetches
 the full plan and then each alert immediately before its PATCH. Only an open
 alert with an exact unexpired exception **and** an exact false-positive review
-record is eligible; risk acceptance alone cannot trigger dismissal. At most 64
+record is eligible; risk acceptance alone cannot trigger dismissal. At most 128
 alerts may be dismissed in one operation. No automatic retries or broad dismissal
 endpoint is used. The API target is fixed to GitHub.com and the selected validated
 owner/repository; credentials are never written into evidence.
@@ -123,7 +135,10 @@ the documented [GitHub code-scanning REST API](https://docs.github.com/en/rest/c
 
 ## Per-alert review index
 
-The linked source path and line describe the observed revision above. Exact
+Alerts 36 and 37 were re-reviewed from the actual `c107ca9dfb9df66701d2a8a1c54fe785ed39add8`
+analysis after the test module gained its separate secret-canary submodule. Their
+old fingerprints were replaced rather than retained as alternate exceptions.
+Other linked source paths and lines describe the original revision above. Exact
 fingerprints and full rationale are retained in the JSON record. A subsequent
 source or location change must receive another explicit review; it does not
 inherit this decision merely because the alert number is unchanged.
@@ -165,8 +180,8 @@ inherit this decision merely because the alert number is unchanged.
 | <a id="alert-33"></a>[33](https://github.com/swiftraccoon/simplestChat/security/code-scanning/33) | high | false-positive | [`src/metrics.rs:1153`](../src/metrics.rs#L1153) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |
 | <a id="alert-34"></a>[34](https://github.com/swiftraccoon/simplestChat/security/code-scanning/34) | high | false-positive | [`src/metrics.rs:1157`](../src/metrics.rs#L1157) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |
 | <a id="alert-35"></a>[35](https://github.com/swiftraccoon/simplestChat/security/code-scanning/35) | high | false-positive | [`src/signaling/mod.rs:1667`](../src/signaling/mod.rs#L1667) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |
-| <a id="alert-36"></a>[36](https://github.com/swiftraccoon/simplestChat/security/code-scanning/36) | high | false-positive | [`src/signaling/connection_authorization_tests.rs:247`](../src/signaling/connection_authorization_tests.rs#L247) | The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages. |
-| <a id="alert-37"></a>[37](https://github.com/swiftraccoon/simplestChat/security/code-scanning/37) | high | false-positive | [`src/signaling/connection_authorization_tests.rs:295`](../src/signaling/connection_authorization_tests.rs#L295) | The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages. |
+| <a id="alert-36"></a>[36](https://github.com/swiftraccoon/simplestChat/security/code-scanning/36) | high | false-positive | [`src/signaling/connection_authorization_tests.rs:250`](../src/signaling/connection_authorization_tests.rs#L250) | The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages. |
+| <a id="alert-37"></a>[37](https://github.com/swiftraccoon/simplestChat/security/code-scanning/37) | high | false-positive | [`src/signaling/connection_authorization_tests.rs:298`](../src/signaling/connection_authorization_tests.rs#L298) | The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages. |
 | <a id="alert-38"></a>[38](https://github.com/swiftraccoon/simplestChat/security/code-scanning/38) | critical | false-positive | [`src/auth/common_passwords.rs:266`](../src/auth/common_passwords.rs#L266) | All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials. |
 | <a id="alert-39"></a>[39](https://github.com/swiftraccoon/simplestChat/security/code-scanning/39) | critical | false-positive | [`src/auth/common_passwords.rs:267`](../src/auth/common_passwords.rs#L267) | All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials. |
 | <a id="alert-40"></a>[40](https://github.com/swiftraccoon/simplestChat/security/code-scanning/40) | critical | false-positive | [`src/auth/common_passwords.rs:268`](../src/auth/common_passwords.rs#L268) | All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials. |

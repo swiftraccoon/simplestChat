@@ -374,6 +374,29 @@ class CodeqlTriageTests(unittest.TestCase):
             self.assertLessEqual(limits.timeout, 20)
             self.assertEqual(limits.stdout, triage.MAX_SOURCE)
 
+    def test_cli_preserves_fixed_validation_code_without_raw_report_values(self) -> None:
+        """Private failure evidence identifies a schema refusal without including input text."""
+        with tempfile.TemporaryDirectory() as temporary, redirect_stderr(io.StringIO()):
+            output = Path(temporary) / "new"
+            report = Path(temporary) / "input.json"
+            _ = report.write_text('{"version":"private-untrusted-value","runs":[]}')
+            self.assertEqual(
+                triage.main(
+                    [
+                        "sarif",
+                        "--revision",
+                        REVISION,
+                        "--input",
+                        str(report),
+                        "--output",
+                        str(output),
+                    ]
+                ),
+                1,
+            )
+            evidence = decode_json((output / "failure.json").read_bytes())
+            self.assertEqual(evidence, {"passed": False, "reason": "codeql_sarif_version"})
+
     def test_cli_requires_explicit_apply_intent_and_fresh_private_output(self) -> None:
         """No API client is created when authorization or evidence ownership is absent."""
         with tempfile.TemporaryDirectory() as temporary, redirect_stderr(io.StringIO()):

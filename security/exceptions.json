@@ -282,16 +282,6 @@
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-license-review.md"
     },
     {
-      "scanner": "gitleaks",
-      "fingerprint": "public-fixture:325cc9602fddb4943f1bdc20d61ac4e1f09729f587768df4b9779a2daf2ffe10",
-      "scope": "security/license-evidence/fedora-rpm-review-2026-09-30.json",
-      "owner": "swiftraccoon",
-      "rationale": "Exact public Fedora RPM signing-key fingerprint in reviewed package metadata. A fingerprint identifies a public key and cannot authenticate as its private key.",
-      "reachability": "The complete fingerprint and exact evidence path must both match; other values and paths remain scanned.",
-      "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-license-review.md"
-    },
-    {
       "scanner": "codeql",
       "fingerprint": "codeql:7053ee0ff50d1ef8f59ea7f335f55bbdb1e18ca519e35390f8195ed23f087430",
       "scope": "web/e2e/ui-stress.cjs:119:119:26:33",
@@ -593,21 +583,21 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:6550030265c403d3308b7c42c85d6362e78182b8c7c434bb7145bf290165de47",
-      "scope": "src/signaling/connection_authorization_tests.rs:247:247:21:62",
+      "fingerprint": "codeql:f2845d3b88e689b7ae37434d51df9a4fb7e7d672da566b7b2446d7cb8279b8ba",
+      "scope": "src/signaling/connection_authorization_tests.rs:250:250:21:62",
       "owner": "swiftraccoon",
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 726a5d24666106dca787589a24acec542e45a26ec8c3259b82e33ac4b8e0493c. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 9f56f0c82a12603884ef7839f1d1560e10313a5a36a141ff8f77516b8c90df7b. The cfg(test) boundary and complete local path were reviewed after adding the separate secret-canary module; no general test or Rust-query exclusion. Changed source/location requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-36"
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:c61504e29181881d53dcb7eb7fde5de64f82d7122f2f577cb12ca8ab8611dc4e",
-      "scope": "src/signaling/connection_authorization_tests.rs:295:295:17:51",
+      "fingerprint": "codeql:6dee1f72565e651f8df4d783e5e077f0648895a370b98d4941290330af985346",
+      "scope": "src/signaling/connection_authorization_tests.rs:298:298:17:51",
       "owner": "swiftraccoon",
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 726a5d24666106dca787589a24acec542e45a26ec8c3259b82e33ac4b8e0493c. The cfg(test) boundary and complete local path were reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 9f56f0c82a12603884ef7839f1d1560e10313a5a36a141ff8f77516b8c90df7b. The cfg(test) boundary and complete local path were reviewed after adding the separate secret-canary module; no general test or Rust-query exclusion. Changed source/location requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-37"
     },
@@ -932,6 +922,16 @@
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-69"
     },
     {
+      "scanner": "gitleaks",
+      "fingerprint": "public-fixture:325cc9602fddb4943f1bdc20d61ac4e1f09729f587768df4b9779a2daf2ffe10",
+      "scope": "security/license-evidence/fedora-rpm-review-2026-09-30.json",
+      "owner": "swiftraccoon",
+      "rationale": "Exact public Fedora RPM signing-key fingerprint in reviewed package metadata. A fingerprint identifies a public key and cannot authenticate as its private key.",
+      "reachability": "The complete fingerprint and exact evidence path must both match; other values and paths remain scanned.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-license-review.md"
+    },
+    {
       "scanner": "zizmor",
       "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
       "scope": ".github/workflows/security.yml#jobs/security-mutation/steps/1/uses",
@@ -940,6 +940,326 @@
       "reachability": "Exact same-revision checkout without persisted credentials, no intervening checkout replacement, scheduled/manual execution and a separate mutation cache namespace.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:4d2152c58c24c39283ca0ae31e451af31fca2d181cf4bdde1c1294374dd84e7d",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:657:657:27:73",
+      "owner": "swiftraccoon",
+      "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 92be60a5ed7ea08b23cc0c5935963373e5163b64b67436e8716376e06c890ae2; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-70"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:ad0d23018a17cd3b4fe4a2f86bc19d6f586f8d9a745f4e1e26ec41aca9e0c2c5",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:664:664:50:76",
+      "owner": "swiftraccoon",
+      "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 92be60a5ed7ea08b23cc0c5935963373e5163b64b67436e8716376e06c890ae2; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-71"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:9c4bded8ec7908cd3f829487c2fb67dfaa94cdded31f9da50f5ffa4a2d414482",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:598:598:27:73",
+      "owner": "swiftraccoon",
+      "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 92be60a5ed7ea08b23cc0c5935963373e5163b64b67436e8716376e06c890ae2; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-72"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:c8438d7e4e4a2cd3ffbd5d4188b767636ff727db90ceac637e023002963e1483",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:606:606:50:76",
+      "owner": "swiftraccoon",
+      "rationale": "Both ELF section readers reject e_shentsize unless it equals sizeof(ElfW(Shdr)). e_shstrndx and e_shnum are 16-bit ELF Half fields, and the loop index is bounded by e_shnum. For the analyzed ELF64 layout, each multiplication is at most 64 * 65535 = 4194240, below INT_MAX; the ELF32 layout is smaller. The flagged multiplication therefore cannot overflow int on the analyzed Linux target.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 92be60a5ed7ea08b23cc0c5935963373e5163b64b67436e8716376e06c890ae2; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-73"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:1a323afb3fba0051db03ef74721eedd66f78a087be67efc43b24afe393ca71a2",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/time/internal/cctz/src/time_zone_posix.cc:91:91:13:63",
+      "owner": "swiftraccoon",
+      "rationale": "ParseInt checks decimal accumulation and enforces every supplied bound. All ParseOffset callers supply hours in 0..24 or -167..167, minutes and seconds in 0..59, and sign +/-1. The absolute intermediate/result bound is 604799 seconds, safely within int. The multiplication-to-int_fast32_t warning misses these caller/parser bounds.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest e3aea59e85beeea4dba4e3efe63b9d5ea5a0b9ed7e5f8d690a19318b828ebd51; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-74"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:2ed1e2cb71f8bb738b0596c81e8c7c3d8da061084d93a1d0a56780f2511e4cb7",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/str_format/float_conversion.cc:1205:1205:9:60",
+      "owner": "swiftraccoon",
+      "rationale": "The checked exp is not an arbitrary integer: the only FloatToBufferImpl calls pass Decomposed.exponent, produced by frexp(finite_float) minus numeric_limits<Float>::digits. Nonfinite values are handled before decomposition. Consequently digits + exp reconstructs the bounded binary floating-point exponent, far below INT_MAX on the analyzed double/long-double targets; this is a mantissa-fit comparison, not an unsafe signed-overflow detector.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 2575c28b169f347e32fb35cd51991afa0af2c1d93d4c284b3d6ae8501e9f13f9; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-75"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:25855688f8d15d5e902b23d98110dc23de53a27afbf5334740ede01e236c927d",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/inet.c:133:133:11:19",
+      "owner": "swiftraccoon",
+      "rationale": "inet_ntop6 constructs exactly eight 16-bit words from a 16-byte address. Each fixed %x conversion emits at most four ASCII characters; the longest uncompressed hexadecimal result is 39 characters plus NUL in the 46-byte local buffer. Zero compression shortens it. The embedded IPv4 branch checks inet_ntop4 success before strlen. Therefore the accumulated snprintf count cannot be a truncated length in this routine, and the caller buffer is separately size-checked before copying.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 5fedd5da664c70aa539ae0f0fa10b28ea092c892f9516e95cf1bb782016d52f2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-76"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:cab63f504eeb9683048271183a0be89206ac8dba895e79167101ad59a6390a8b",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/substitute.cc:113:113:37:50",
+      "owner": "swiftraccoon",
+      "rationale": "Arg(const void*) deliberately formats the pointer address as hexadecimal. Its static_assert reserves two hexadecimal digits per pointer byte plus the 0x prefix, so sizeof(value) intentionally measures the pointer type rather than the pointed-to object.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 8e2103a71ff7b8620dfb0f28a12eeb451f29426238092bb417ed54750ba7fbf9; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-77"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:593fdd30c46bdedf577038c3158a0f7f399cff902293c0527b8b02f1fa8e2c0a",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:364:364:13:18",
+      "owner": "swiftraccoon",
+      "rationale": "Every path reaching calculate_version initialized all three outputs: the Ubuntu and Debian paths jump only when sscanf returns exactly 3, and the uname-release path returns early unless sscanf returns 3. UNAME26 adjustment only modifies already initialized fields. The warning does not preserve the checked conversion count through the shared label.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-78"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:e85c9e314f8057f474cefdc4462d83d8ef5c00766839d2bf2f8bf51bb9a400cb",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:364:364:29:34",
+      "owner": "swiftraccoon",
+      "rationale": "Every path reaching calculate_version initialized all three outputs: the Ubuntu and Debian paths jump only when sscanf returns exactly 3, and the uname-release path returns early unless sscanf returns 3. UNAME26 adjustment only modifies already initialized fields. The warning does not preserve the checked conversion count through the shared label.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-79"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:bd58410b8d08aa86635c2d0aac4b203b374e1a7e1e65aeaed2a506d0aa00fe83",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:364:364:43:48",
+      "owner": "swiftraccoon",
+      "rationale": "Every path reaching calculate_version initialized all three outputs: the Ubuntu and Debian paths jump only when sscanf returns exactly 3, and the uname-release path returns early unless sscanf returns 3. UNAME26 adjustment only modifies already initialized fields. The warning does not preserve the checked conversion count through the shared label.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-80"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:0978d4d5dfb67c11cdb4e8c585f80b5b6e310395f98a93f8f96b72414341be42",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/time/internal/cctz/src/time_zone_info.cc:454:454:24:29",
+      "owner": "swiftraccoon",
+      "rationale": "The reported source is the process TZDIR environment variable, intentionally selecting the operator-controlled timezone database directory, and the sink is a read-only zoneinfo open. This application does not expose process-environment mutation or a request-supplied TZDIR to participants. There is no lower-trust request-to-filesystem authority transition in this deployment. Re-review if runtime timezone configuration becomes participant-controlled.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 59d424606a32818621390d8eae39b4a6c43fbcc2a2f0591ba615066596cb2f42; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-81"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:f374f6371528d58475c63fd39c34563ca07a4d4dfa2972c10a991906df2ea3b3",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/flatbuffers-24.3.25/src/annotated_binary_text_gen.cpp:445:445:37:42",
+      "owner": "swiftraccoon",
+      "rationale": "This is flatc compiler annotation output, intentionally derived from the invoking user's command-line input filename. Meson lists annotated_binary_text_gen.cpp only in the flatc executable sources, not the worker runtime library. The repository invokes flatc with fixed --cpp flags over its tracked .fbs schema list and no annotation mode. No participant input reaches this build-only path.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 21f5591d119ae89d6883f0f84fcc1d442ad13a16d50acccbf8e23e5258879194; upstream archive 4157c5cacdb59737c5d627e47ac26b140e9ee28b1102f812b36068aab728c1ed plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-82"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:59dcc4705505941bd98bf1e55489e88b020e4dcf9b22e6c8f6a1774a7afb0971",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2408:2408:17:21",
+      "owner": "swiftraccoon",
+      "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-83"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:20b6d52966417098c610267db7bf4b5ed4317091f15194ccff349753b0763a72",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2419:2419:17:21",
+      "owner": "swiftraccoon",
+      "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-84"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:aa5a6246ac16bd0831630c9b77d1a51dfa5d2663277dfe4f123d177efc8fc3ec",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2317:2317:17:21",
+      "owner": "swiftraccoon",
+      "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-85"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:a4edfac51b026e005d4c3d89b34bc97328dfed48dfe7d425544327086f5643e3",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2340:2340:19:28",
+      "owner": "swiftraccoon",
+      "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-86"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:91a145483b259a134828385aec1568dcf1544ee342fbe00d1372b7c79629eedc",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2256:2256:26:34",
+      "owner": "swiftraccoon",
+      "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-87"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:3cceabe73b086e6bd50a277045634416a3e000b733d7499c4167d4653a2615ba",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2232:2232:31:39",
+      "owner": "swiftraccoon",
+      "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-88"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:cb2d7df3e13bae7d13d2a9845717c4421ceefc939eb8139a90c166e10f315d0f",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2181:2181:26:34",
+      "owner": "swiftraccoon",
+      "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-89"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:52fd97095345bea59e98039fb731f145d17fcc50df32b341ee6e7221c0e30f4e",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2183:2183:27:35",
+      "owner": "swiftraccoon",
+      "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-90"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:9011260ca8840a4cc1af39cbc001b13b034a796a44b278d41161ce20680d38f6",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2141:2141:29:37",
+      "owner": "swiftraccoon",
+      "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-91"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:77ac2e1f18815195b9fa30cd09d235757fb18378fa79c328fe68a7ff0cbac51d",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/linux.c:2145:2145:28:36",
+      "owner": "swiftraccoon",
+      "rationale": "The read-taint source is kernel-generated /proc/self/cgroup, read at fixed paths by uv_get_constrained_memory, uv_get_available_memory, or uv__get_constrained_cpu. Static helpers join that process cgroup identity to fixed /sys/fs/cgroup resource-metadata prefixes and suffixes, then perform bounded read-only scalar/controller reads. No remote request selects this source or these file paths. Altering this metadata requires control over the process host/container cgroup or mount environment, outside the participant trust boundary. Re-review if deployment permits untrusted cgroup/proc mounts.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 215185d94697e05cd75ba9466bb9ea93076769a7767218d4183eaf0723ccf2d2; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-92"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:3aecfcddab1655b60b42170e213bdf026172327955c18634979f54e9f35c0617",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/container/internal/raw_hash_set.h:1393:1393:50:57",
+      "owner": "swiftraccoon",
+      "rationale": "The allocation layout intentionally places one GrowthInfo object immediately before the control-byte array. ControlOffset adds sizeof(GrowthInfo), and static_asserts establish its size and alignment; RawHashSetLayout reserves this header. Casting the control address and subtracting one GrowthInfo locates that header. It is not mistaken byte arithmetic or double scaling.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest bf52c88f9f1e342dfe06068ad1e77d208ecb8a2187360c76c4c4c3dda2b252f0; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-93"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:ab31e65e70891b08c0f68bb4da94fb76d9acb8d04f423ad2c3c2dd296bc2006f",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/flatbuffers-24.3.25/include/flatbuffers/flexbuffers.h:1193:1193:15:19",
+      "owner": "swiftraccoon",
+      "rationale": "EndMap deliberately sorts alternating key/value Value elements as TwoValue pairs. MapElementCount returns (stack_.size() - start) / 2, so dict + len advances by pairs across exactly the original Value span. The queried type-size change is intentional, not double-scaled indexing. The upstream strict-aliasing TODO is a separate portability concern; this review does not declare that concern resolved. No first-party worker source uses FlexBuffers.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest f06d546f71d57a3f2ab4f4f1f44731d4cbe65d86bbab326443a939b0c785921e; upstream archive 4157c5cacdb59737c5d627e47ac26b140e9ee28b1102f812b36068aab728c1ed plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-94"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:914a57cdd58ae71b28406f0d31fdea365e057bb9e7c07942f30ae4c62395d231",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_internal.h:436:436:24:58",
+      "owner": "swiftraccoon",
+      "rationale": "Cord nodes use a constructor-maintained discriminator: CordRepBtree::InitInstance sets BTREE, while external nodes use EXTERNAL. CordRep::Destroy dispatches EXTERNAL separately and returns from the BTREE branch. Btree leaf deletion operates only on data edges and selects EXTERNAL after the flat case. CordRepExternal::Delete also asserts IsExternal. The reported Btree-to-External conversion joins mutually exclusive tagged-node flows; no external serialized tag is being trusted.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 9198b429e7a7a083e6fa8395b36d3747d5a4fb0ed65ff5c458472f0d92c0ecb8; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-95"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:201c27ff039d8302c7469859f546c79c14b848bd28a0d81386439d5bed739156",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_internal.h:864:864:10:52",
+      "owner": "swiftraccoon",
+      "rationale": "CordRep::substring is a tagged-node downcast. Substring constructors set SUBSTRING, Btree constructors set BTREE, and the reviewed destroy, dump, and substring paths test SUBSTRING or operate on the documented data-edge subset before this cast. The accessors assert IsSubstring as well. A Btree and a Substring are distinct valid allocations; the alert merges their mutually exclusive discriminator paths rather than demonstrating a Btree reaching the cast.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 9198b429e7a7a083e6fa8395b36d3747d5a4fb0ed65ff5c458472f0d92c0ecb8; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-96"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:4c43eb6b94aa8f82590ff64e12fe7182ebefaa413f3c2c85553d8c8dd9c928b9",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_internal.h:859:859:10:46",
+      "owner": "swiftraccoon",
+      "rationale": "CordRep::substring is a tagged-node downcast. Substring constructors set SUBSTRING, Btree constructors set BTREE, and the reviewed destroy, dump, and substring paths test SUBSTRING or operate on the documented data-edge subset before this cast. The accessors assert IsSubstring as well. A Btree and a Substring are distinct valid allocations; the alert merges their mutually exclusive discriminator paths rather than demonstrating a Btree reaching the cast.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 9198b429e7a7a083e6fa8395b36d3747d5a4fb0ed65ff5c458472f0d92c0ecb8; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-97"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:a423a7ac5a291e32bcd26951ae7545dc463b2532e223742e732baf12595af351",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/strings/internal/cord_rep_crc.h:91:91:10:40",
+      "owner": "swiftraccoon",
+      "rationale": "CordRepCrc::New allocates CordRepCrc and sets its CRC discriminator; a Btree retains BTREE. CRC access is guarded by IsCrc in New, RemoveCrcNode, and SkipCrcNode, or the CRC branch in CordRep::Destroy. The accessor additionally asserts IsCrc. The alert merges distinct tagged-node paths; it does not establish conversion of a Btree allocation after the CRC guard.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest abf52010f2e23ca0ba2451a52587c9c7782f56c8cfcb6bc47cca78e7379632eb; upstream archive ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-98"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:149e5077a2cc9981443730bc27e5072096e339480a97174a1250b379f9b12acc",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/core.c:199:199:21:40",
+      "owner": "swiftraccoon",
+      "rationale": "uv_close switches on the initialized handle->type before each cast. uv_timer_init, uv_poll_init, and uv_signal_init set their matching UV_TIMER/UV_POLL/UV_SIGNAL tags through uv__handle_init; TCP and UDP are handled by separate switch cases. The reported TCP/UDP-to-other-handle conversions cross mutually exclusive cases. Handle discriminators are internal object state, not remotely supplied serialized values.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 18bfd5f2045417f8ace5d76e222bf7441b31ead5fc2cbaf6225965e0afea8767; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-99"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:8491fc5bc8793879baccd54019e4297ec271d59d81bf7c273fada48d83cd8ea4",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/core.c:220:220:20:38",
+      "owner": "swiftraccoon",
+      "rationale": "uv_close switches on the initialized handle->type before each cast. uv_timer_init, uv_poll_init, and uv_signal_init set their matching UV_TIMER/UV_POLL/UV_SIGNAL tags through uv__handle_init; TCP and UDP are handled by separate switch cases. The reported TCP/UDP-to-other-handle conversions cross mutually exclusive cases. Handle discriminators are internal object state, not remotely supplied serialized values.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 18bfd5f2045417f8ace5d76e222bf7441b31ead5fc2cbaf6225965e0afea8767; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-100"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:b32f58a5d9e3b8b13bfab7dd5a99855f405ab7493dfc945bee3958ba69082166",
+      "scope": "vendor/mediasoup-sys-0.17.0/subprojects/libuv-v1.52.1/src/unix/core.c:230:230:22:43",
+      "owner": "swiftraccoon",
+      "rationale": "uv_close switches on the initialized handle->type before each cast. uv_timer_init, uv_poll_init, and uv_signal_init set their matching UV_TIMER/UV_POLL/UV_SIGNAL tags through uv__handle_init; TCP and UDP are handled by separate switch cases. The reported TCP/UDP-to-other-handle conversions cross mutually exclusive cases. Handle discriminators are internal object state, not remotely supplied serialized values.",
+      "reachability": "Exact CodeQL query/version/message/range and regular member digest 18bfd5f2045417f8ace5d76e222bf7441b31ead5fc2cbaf6225965e0afea8767; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-101"
     }
   ]
 }

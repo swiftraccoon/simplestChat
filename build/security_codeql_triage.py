@@ -8,19 +8,23 @@ No query, path, severity class or remote dismissal acts as an exclusion.
 from __future__ import annotations
 
 import argparse
+import configparser
 import hashlib
 import json
 import os
 import re
 import shutil
 import sys
+import tarfile
 import time
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 from urllib.parse import unquote, urlencode
 
 import security_policy
+from security_codeql_sources import NativeSources
 from security_tools import ToolError, bounded_file, require, write_private
 
 # isort: split
@@ -37,7 +41,7 @@ MAX_REPORT = 64 * 1024**2
 MAX_SOURCE = 4 * 1024**2
 MAX_PAGE = 100
 MAX_PAGES = 20
-MAX_APPLY = 64
+MAX_APPLY = 128
 MAX_SECONDS = 300
 MAX_FINDINGS = 2000
 HIGH_SCORE = 7
@@ -47,7 +51,10 @@ MEDIUM_SCORE = 4
 LANGUAGES = frozenset({"actions", "javascript-typescript", "python", "rust", "c-cpp"})
 SEVERITIES = frozenset({"critical", "high", "medium", "low", "advisory"})
 REGION = ("start_line", "end_line", "start_column", "end_column")
-REVIEW_PATH = ROOT / "security/codeql-review-2026-09-30.json"
+REVIEW_PATHS = (
+    ROOT / "security/codeql-review-2026-09-30.json",
+    ROOT / "security/codeql-native-review-2026-09-30.json",
+)
 
 
 def digest(value: JsonValue) -> str:
@@ -88,7 +95,14 @@ def source_hash(root: Path, revision: str, name: str) -> str:
 
 
 def finding(  # noqa: PLR0913 -- Independent source, query and location evidence.
-    root: Path, revision: str, rule: str, version: str, location: JsonObject, *, message: str
+    root: Path,
+    revision: str,
+    rule: str,
+    version: str,
+    location: JsonObject,
+    *,
+    message: str,
+    sources: NativeSources | None = None,
 ) -> JsonObject:
     """Use the same complete primary source/range identity for SARIF and API findings."""
     name = string_value(location["path"])
@@ -97,13 +111,14 @@ def finding(  # noqa: PLR0913 -- Independent source, query and location evidence
     # GitHub renders SARIF's numbered related-location links as plain labels.
     # No other Markdown or message normalization is performed.
     rendered = re.sub(r"\[([^\[\]\n]+)\]\([0-9]+\)", r"\1", message)
+    native = sources.identity(name) if sources is not None else None
     identity: JsonObject = {
         "rule": rule,
         "toolVersion": version,
         "path": name,
         "region": region,
         "messageSha256": hashlib.sha256(rendered.encode()).hexdigest(),
-        "sourceSha256": source_hash(root, revision, name),
+        **(native if native is not None else {"sourceSha256": source_hash(root, revision, name)}),
     }
     scope = name + ":" + ":".join(str(region[key]) for key in REGION)
     return {**identity, "scope": scope, "fingerprint": "codeql:" + digest(identity)}
@@ -143,7 +158,9 @@ def sarif_score(rule: JsonObject) -> str:
     return "medium" if value >= MEDIUM_SCORE else "low"
 
 
-def sarif_findings(raw: JsonObject, root: Path, revision: str) -> list[JsonObject]:
+def sarif_findings(
+    raw: JsonObject, root: Path, revision: str, sources: NativeSources | None = None
+) -> list[JsonObject]:
     """Require successful nonempty analysis metadata and reject suppressed/unknown report shapes."""
     require(raw.get("version") == "2.1.0", "codeql_sarif_version")
     runs = array_value(raw["runs"])
@@ -213,6 +230,7 @@ def sarif_findings(raw: JsonObject, root: Path, revision: str) -> list[JsonObjec
                         version,
                         location,
                         message=string_value(object_value(item["message"])["text"]),
+                        sources=sources,
                     ),
                     "severity": sarif_score(rules[identifier]),
                 }
@@ -280,7 +298,9 @@ class Github:
         return entries
 
 
-def api_finding(raw: JsonObject, root: Path, revision: str, reference: str) -> JsonObject:
+def api_finding(
+    raw: JsonObject, root: Path, revision: str, reference: str, sources: NativeSources | None = None
+) -> JsonObject:
     """Validate the exact current reference; fixed historical alerts are handled separately."""
     tool = object_value(raw["tool"])
     require(tool["name"] == "CodeQL", "codeql_api_tool")
@@ -303,6 +323,7 @@ def api_finding(raw: JsonObject, root: Path, revision: str, reference: str) -> J
             string_value(tool["version"]),
             object_value(instance["location"]),
             message=string_value(object_value(instance["message"])["text"]),
+            sources=sources,
         ),
         "number": positive(raw["number"]),
         "severity": severity,
@@ -310,8 +331,14 @@ def api_finding(raw: JsonObject, root: Path, revision: str, reference: str) -> J
     }
 
 
-def api_plan(
-    client: Github, root: Path, revision: str, reference: str, reviews: Sequence[ExceptionRecord]
+def api_plan(  # noqa: PLR0913 -- Explicit API identity, policy and verified source inputs.
+    client: Github,
+    root: Path,
+    revision: str,
+    reference: str,
+    reviews: Sequence[ExceptionRecord],
+    *,
+    sources: NativeSources | None = None,
 ) -> JsonObject:
     """Require all five exact-revision analyses and assess every still-active alert."""
     require(
@@ -341,12 +368,13 @@ def api_plan(
         require(raw["state"] in {"open", "dismissed", "fixed"}, "codeql_alert_state")
         if object_value(raw["most_recent_instance"])["state"] == "fixed":
             continue
-        findings.append(api_finding(raw, root, revision, reference))
+        findings.append(api_finding(raw, root, revision, reference, sources))
     return {
         "schemaVersion": 1,
         "repository": client.repository,
         "revision": revision,
         "ref": reference,
+        "reviewSha256": review_identity(),
         "analysisCategories": list[JsonValue](sorted(categories)),
         **verdict(findings, reviews),
         "policySha256": hashlib.sha256(
@@ -355,30 +383,49 @@ def api_plan(
     }
 
 
-def false_positive(item: JsonObject, repository: str) -> bool:
-    """Risk acceptances and unrelated repositories cannot become false-positive dismissals."""
-    raw = object_value(decode_json(bounded_file(REVIEW_PATH, security_policy.MAX_POLICY)))
-    require(raw["schemaVersion"] == 1, "codeql_review_schema")
-    return raw["repository"] == repository and any(
-        entry.get("disposition") == "false-positive"
-        and entry.get("number") == item.get("number")
-        and entry.get("fingerprint") == item.get("fingerprint")
-        and entry.get("scope") == item.get("scope")
-        for entry in [object_value(value) for value in array_value(raw["alerts"])]
+def review_identity() -> str:
+    """Bind plans to the complete explicit false-positive decisions as well as exceptions."""
+    return digest(
+        {
+            path.name: hashlib.sha256(bounded_file(path, security_policy.MAX_POLICY)).hexdigest()
+            for path in REVIEW_PATHS
+        }
     )
 
 
-def apply_plan(
+def false_positive(item: JsonObject, repository: str) -> bool:
+    """Risk acceptances and unrelated repositories cannot become false-positive dismissals."""
+    matches: list[JsonObject] = []
+    for path in REVIEW_PATHS:
+        raw = object_value(decode_json(bounded_file(path, security_policy.MAX_POLICY)))
+        require(raw["schemaVersion"] == 1, "codeql_review_schema")
+        if raw["repository"] == repository:
+            matches.extend(
+                object_value(entry)
+                for entry in array_value(raw["alerts"])
+                if object_value(entry).get("number") == item.get("number")
+            )
+    require(len(matches) <= 1, "codeql_duplicate_review")
+    return bool(matches) and (
+        matches[0].get("disposition") == "false-positive"
+        and matches[0].get("fingerprint") == item.get("fingerprint")
+        and matches[0].get("scope") == item.get("scope")
+    )
+
+
+def apply_plan(  # noqa: PLR0913 -- Separate policy, evidence journal and native provenance.
     client: Github,
     root: Path,
     plan: JsonObject,
     reviews: Sequence[ExceptionRecord],
     journal: Callable[[JsonObject], None],
+    *,
+    sources: NativeSources | None = None,
 ) -> JsonObject:
     """Revalidate the plan and each exact reviewed alert immediately before PATCH."""
     require(plan["repository"] == client.repository, "codeql_apply_repository")
     revision, reference = string_value(plan["revision"]), string_value(plan["ref"])
-    fresh = api_plan(client, root, revision, reference, reviews)
+    fresh = api_plan(client, root, revision, reference, reviews, sources=sources)
     require(fresh == plan, "codeql_apply_plan_changed")
     selected = [
         object_value(item)
@@ -395,7 +442,7 @@ def apply_plan(
         number = positive(expected["number"])
         current = object_value(client.request(f"alerts/{number}"))
         require(
-            api_finding(current, root, revision, reference) == expected,
+            api_finding(current, root, revision, reference, sources) == expected,
             "codeql_apply_alert_changed",
         )
         comment = (
@@ -442,6 +489,7 @@ class Options(argparse.Namespace):
     revision: str = ""
     reference: str = "refs/heads/main"
     authorize_dismissals: bool = False
+    source_cache: Path | None = None
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -454,6 +502,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ = parser.add_argument("--revision", required=True)
     _ = parser.add_argument("--ref", dest="reference", default="refs/heads/main")
     _ = parser.add_argument("--authorize-dismissals", action="store_true")
+    _ = parser.add_argument("--source-cache", type=Path)
     args = parser.parse_args(argv, namespace=Options())
     created = False
     action_number = 0
@@ -489,29 +538,63 @@ def main(argv: Sequence[str] | None = None) -> int:
             0o600,
         )
         reviews = security_policy.read_exceptions()
+        sources = (
+            NativeSources(ROOT, args.revision, args.source_cache)
+            if args.source_cache is not None
+            else None
+        )
         if args.mode in {"sarif", "apply"}:
             require(args.input is not None, "codeql_input_required")
             raw = object_value(decode_json(bounded_file(Path(str(args.input)), MAX_REPORT)))
             if args.mode == "sarif":
-                output = verdict(sarif_findings(raw, ROOT, args.revision), reviews)
+                output = verdict(sarif_findings(raw, ROOT, args.revision, sources), reviews)
             else:
                 require(
                     raw["revision"] == args.revision and raw["ref"] == args.reference,
                     "codeql_apply_selection",
                 )
-                output = apply_plan(Github(args.repository), ROOT, raw, reviews, journal)
+                output = apply_plan(
+                    Github(args.repository), ROOT, raw, reviews, journal, sources=sources
+                )
         else:
             require(args.input is None, "codeql_unexpected_input")
-            output = api_plan(Github(args.repository), ROOT, args.revision, args.reference, reviews)
+            output = api_plan(
+                Github(args.repository),
+                ROOT,
+                args.revision,
+                args.reference,
+                reviews,
+                sources=sources,
+            )
         write_private(
             args.output / "report.json", (json.dumps(output, indent=2) + "\n").encode(), 0o600
         )
         return int(args.mode in {"sarif", "check"} and output.get("passed") is not True)
-    except (ToolError, bounded_process.ProcessError, OSError, ValueError, KeyError, TypeError):
+    except (
+        ToolError,
+        bounded_process.ProcessError,
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        configparser.Error,
+        tarfile.TarError,
+        zipfile.BadZipFile,
+    ) as error:
         if created:
             write_private(
                 args.output / "failure.json",
-                b'{"passed":false,"reason":"validation_or_operation_failed"}\n',
+                (
+                    json.dumps(
+                        {
+                            "passed": False,
+                            "reason": str(error)
+                            if isinstance(error, ToolError)
+                            else type(error).__name__,
+                        }
+                    )
+                    + "\n"
+                ).encode(),
                 0o600,
             )
         _ = sys.stderr.write(
