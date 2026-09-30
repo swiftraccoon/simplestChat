@@ -59,7 +59,7 @@ def finding(coordinates: tuple[int, int, int, int], rule: str = "github-pat") ->
 
 
 class SecretSpanTests(unittest.TestCase):
-    """Candidate hashes identify exact projection regions, never an approval or secret value."""
+    """Only independently authenticated complete regions can support reviewed identities."""
 
     def test_real_detector_lf_crlf_multiline_and_encoded_coordinates(self) -> None:
         """Reported columns describe the match region, including encoded source when decoded."""
@@ -162,8 +162,8 @@ class SecretSpanTests(unittest.TestCase):
                 with self.subTest(limit=constant), self.assertRaises(ToolError):
                     _ = spans.collect([finding((32835, 32835, 8, 47))], paths, directory)
 
-    def test_added_diagnostics_do_not_change_existing_fingerprint_or_disposition(self) -> None:
-        """Preserve exact whole-file matching for both blocked and reviewed cases."""
+    def test_pipeline_computes_current_regions_before_reviewing_each_finding(self) -> None:
+        """Use actual projection bytes rather than caller-supplied candidate text."""
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             _, paths = fixture(root, b"heading\nTOKEN=" + CANARY + b"\n")
@@ -172,7 +172,10 @@ class SecretSpanTests(unittest.TestCase):
             secrets.mkdir()
             image.write(root / "secret-paths.json", paths)
             image.write(secrets / "gitleaks.json", report)
-            fingerprint = "github-pat:001/example:32835:" + str(object_value(paths[NAME])["sha256"])
+            regions = spans.collect(report, paths, root / "secret-input")
+            fingerprint = policy.secret_fingerprint(
+                object_value(array_value(regions["findings"])[0])
+            )
             review = ExceptionRecord(
                 scanner="gitleaks",
                 fingerprint=fingerprint,
@@ -184,7 +187,7 @@ class SecretSpanTests(unittest.TestCase):
                 review="https://example.invalid/review",
             )
             for reviews in ([], [review]):
-                expected = policy.secret_verdict(report, reviews, paths)
+                expected = policy.secret_verdict(report, reviews, paths, regions)
                 actual = image.secret_checks(secrets, root, reviews)
                 _ = actual.pop("projectionSpans")
                 self.assertEqual(actual, expected)

@@ -2,7 +2,7 @@
 
 Coordinates belong to the pinned scanner's fragments, not ordinary text lines.
 Repeated coordinates on a fragmented long line are deliberately ambiguous.
-These diagnostics never participate in exception matching.
+Only uniquely resolved complete regions can support exact public-data reviews.
 """
 
 from __future__ import annotations
@@ -190,7 +190,7 @@ def inspect(path: Path, expected: JsonObject, findings: list[Finding], budget: B
 
 
 def collect(value: JsonValue, paths: JsonObject, directory: Path) -> JsonObject:
-    """Add exact or explicitly unresolved diagnostics without changing the blocking verdict."""
+    """Authenticate exact regions for policy; unresolved findings remain unreviewable."""
     require(load_lock()[0]["gitleaks"].version == VERSION, "secret_span_scanner_version")
     rows = array_value(value)
     require(len(rows) <= MAX_FINDINGS, "secret_span_finding_count")

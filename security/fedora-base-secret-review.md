@@ -7,7 +7,8 @@ The [retained evidence](secret-evidence/fedora-base-2026-09-30.json) supports
 15 exact Gitleaks findings in five files from the pinned Fedora 44 amd64 base
 layer. These findings contain public upstream test data or format-recognition
 data. They are not application or deployment credentials. The review does not
-approve other files, future package versions, or an entire detector class.
+approve other paths, other detected bytes, package behavior, or an entire
+detector class.
 
 The original [CI scan](https://github.com/swiftraccoon/simplestChat/actions/runs/36743690076)
 failed with 20 secret findings. This review addresses only the 15 listed here.
@@ -44,14 +45,21 @@ claim independent detached-signature verification of those archives.
 
 ## Enforcement and limits
 
-Each ledger entry matches one detector rule, original layer path, projection
-line and complete original-file SHA-256. A changed file, path, line or rule does
-not inherit the review. There is no general exception for binaries, RPM files,
+Each ledger entry matches the pinned scanner/projection format, detector rule,
+exact original layer path, complete uniquely resolved match-region length and
+SHA-256. All 15 regions were independently resolved and compared with the private
+scanner's complete `Match` bytes. No captured-secret substring or normalized
+content is substituted. A changed region, path, rule or format cannot inherit
+the review. Changed surrounding file bytes or line positions preserve fresh
+whole-file/projection evidence without changing the identity of these exact
+reviewed public bytes. This is not an approval of the containing file or package.
+There is no general exception for binaries, RPM files,
 public-key libraries, TPM configuration, or private-key findings. The detector
 self-test and all-layer scanning, including deleted files, remain enabled.
 
 No candidate key or match text is committed or uploaded by this review. The
 retained source and content hashes support independent comparison; they do not
 make the referenced public test keys suitable for use as real credentials.
-Changed evidence requires a new assessment, and expiry is never renewed
-automatically.
+Changed matched bytes or scope require a new assessment, and expiry is never
+renewed automatically. The original full-file hashes and package/source records
+remain provenance for this review; per-image reports retain their current hashes.

@@ -619,7 +619,8 @@ def secret_selftest(sandbox: Sandbox) -> None:
         "gitleaks", secret_arguments(), destination=output, mounts={"/layers": source}
     )
     report = policy.report(output / "gitleaks.json")
-    verdict = policy.secret_verdict(report, [], identity)
+    spans = security_secret_spans.collect(report, identity, source)
+    verdict = policy.secret_verdict(report, [], identity, spans)
     findings = array_value(verdict["blocked"])
     policy.require(
         status == FINDINGS_EXIT
@@ -628,7 +629,6 @@ def secret_selftest(sandbox: Sandbox) -> None:
         and {string_value(object_value(item)["path"]) for item in findings} == set(prefixes),
         "image_secret_detector_selftest",
     )
-    spans = security_secret_spans.collect(report, identity, source)
     policy.require(
         all(
             object_value(item).get("status") == "resolved"
@@ -767,13 +767,12 @@ def runtime_disposition(  # noqa: PLR0913 -- Explicit artifact and output bindin
 def secret_checks(
     secret_dir: Path, output: Path, exceptions: Sequence[ExceptionRecord]
 ) -> JsonObject:
-    """Preserve exact blocking policy while adding independently authenticated span diagnostics."""
+    """Authenticate current complete match regions before applying exact public-data reviews."""
     report = policy.report(secret_dir / "gitleaks.json")
     paths = object_value(policy.report(output / "secret-paths.json"))
-    verdict = policy.secret_verdict(report, exceptions, paths)
-    verdict["projectionSpans"] = security_secret_spans.collect(
-        report, paths, output / "secret-input"
-    )
+    spans = security_secret_spans.collect(report, paths, output / "secret-input")
+    verdict = policy.secret_verdict(report, exceptions, paths, spans)
+    verdict["projectionSpans"] = spans
     return verdict
 
 

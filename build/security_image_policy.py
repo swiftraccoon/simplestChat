@@ -8,6 +8,7 @@ Unknown licenses, missing inventories and stale databases fail closed.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import stat
 from datetime import UTC, datetime
@@ -17,9 +18,11 @@ from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
 import security_elf
 import security_image_advisories
+import security_secret_spans
 import security_tools
 from security_license_identity import raw_license_identity
 from security_policy import permitted
+from security_secret_projection import FORMAT as SECRET_PROJECTION_FORMAT
 
 # isort: split
 from release_json import JsonObject, JsonValue, array_value, decode_json, object_value, string_value
@@ -33,6 +36,8 @@ MAX_REPORT = 64 * 1024 * 1024
 MAX_PACKAGES = 20000
 MAX_NATIVE_INSTANCES = 20000
 MAX_MATCHES = 100000
+MAX_SECRET_PATH = 4096
+MAX_SECRET_IDENTITY = 32768
 MAX_EXPRESSION = 4096
 MAX_LICENSE_DEPTH = 32
 RPM_FIELDS = 3
@@ -278,29 +283,108 @@ def vulnerability_verdict(
     }
 
 
+def secret_fingerprint(span: JsonObject) -> str:
+    """Identify only an exact, uniquely resolved current-format match, never a captured group."""
+    require(span.get("status") == "resolved", "image_secret_span_unresolved")
+    size, checksum = span["spanBytes"], string_value(span["spanSha256"])
+    require(
+        type(size) is int and 0 < size <= security_secret_spans.MAX_FILE,
+        "image_secret_span_size",
+    )
+    require(re.fullmatch(r"[a-f0-9]{64}", checksum), "image_secret_span_digest")
+    identity: JsonObject = {
+        "format": security_secret_spans.FORMAT,
+        "projectionFormat": SECRET_PROJECTION_FORMAT,
+        "rule": span["rule"],
+        "path": span["path"],
+        "spanBytes": size,
+        "spanSha256": checksum,
+    }
+    encoded = json.dumps(
+        identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode()
+    require(len(encoded) <= MAX_SECRET_IDENTITY, "image_secret_identity_size")
+    return (
+        "image-match:" + hashlib.sha256(b"simplestchat-image-secret-match\0" + encoded).hexdigest()
+    )
+
+
+def secret_span_binding(finding: JsonObject, paths: JsonObject, span: JsonObject) -> JsonObject:
+    """Bind each computed span to the corresponding scanner row and complete current path map."""
+    entry = string_value(finding["File"]).removeprefix("/layers/")
+    require(
+        re.fullmatch(r"content-[0-9]{6}", entry) and entry in paths, "image_secret_file_unknown"
+    )
+    identity = object_value(paths[entry])
+    path, rule = string_value(identity["path"]), string_value(finding["RuleID"])
+    require(
+        0 < len(path.encode()) <= MAX_SECRET_PATH
+        and not path.startswith("/")
+        and PurePosixPath(path).as_posix() == path
+        and ".." not in PurePosixPath(path).parts
+        and not re.search(r"[\x00-\x1f\x7f]", path),
+        "image_secret_path",
+    )
+    require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", rule), "image_secret_rule")
+    require(identity["projectionFormat"] == SECRET_PROJECTION_FORMAT, "image_secret_projection")
+    expected: JsonObject = {
+        "rule": rule,
+        "path": path,
+        "fileSha256": identity["sha256"],
+        "projectionSha256": identity["projectionSha256"],
+    }
+    for field in ("fileSha256", "projectionSha256"):
+        require(
+            re.fullmatch(r"[a-f0-9]{64}", string_value(expected[field])), "image_secret_file_digest"
+        )
+    for field in security_secret_spans.COORDINATES:
+        value = finding[field]
+        require(
+            type(value) is int and 0 <= value <= security_secret_spans.MAX_FILE,
+            "image_secret_coordinates",
+        )
+        expected[field[0].lower() + field[1:]] = value
+    require(
+        all(
+            type(span.get(key)) is type(value) and span.get(key) == value
+            for key, value in expected.items()
+        ),
+        "image_secret_span_binding",
+    )
+    status = span.get("status")
+    require(status in {"resolved", "ambiguous", "unresolved"}, "image_secret_span_status")
+    fields = set(expected) | {"status"}
+    if status == "resolved":
+        fields |= {"spanBytes", "spanSha256"}
+    require(set(span) == fields, "image_secret_span_fields")
+    return {**expected, "line": finding["StartLine"], "status": status}
+
+
 def secret_verdict(
-    value: JsonValue, exceptions: Sequence[ExceptionRecord], paths: JsonObject
+    value: JsonValue, exceptions: Sequence[ExceptionRecord], paths: JsonObject, spans: JsonObject
 ) -> JsonObject:
-    """Never copy candidate secret text or scanner Match/Secret fields into public evidence."""
-    findings = array_value(value)
-    require(len(findings) <= MAX_MATCHES, "image_secret_count")
+    """Review exact public match bytes; keep changed surrounding bytes as fresh evidence."""
+    findings, regions = array_value(value), array_value(spans["findings"])
+    require(
+        set(spans) == {"format", "findings"}
+        and spans["format"] == security_secret_spans.FORMAT
+        and len(findings) == len(regions)
+        and len(findings) <= security_secret_spans.MAX_FINDINGS,
+        "image_secret_span_report",
+    )
     blocked: list[JsonValue] = []
     waived: list[JsonValue] = []
-    for item in findings:
-        finding = object_value(item)
-        entry = string_value(finding["File"]).removeprefix("/layers/")
-        require(entry in paths, "image_secret_file_unknown")
-        identity = object_value(paths[entry])
-        path = string_value(identity["path"])
-        content_hash = string_value(identity["sha256"])
-        require(re.fullmatch(r"[a-f0-9]{64}", content_hash), "image_secret_file_digest")
-        require(not path.startswith("/") and ".." not in Path(path).parts, "image_secret_path")
-        rule = string_value(finding["RuleID"])
-        line = finding["StartLine"]
-        require(type(line) is int and line > 0, "image_secret_line")
-        fingerprint = f"{rule}:{path}:{line}:{content_hash}"
-        record: JsonObject = {"rule": rule, "path": path, "line": line, "fingerprint": fingerprint}
-        (waived if permitted(exceptions, "gitleaks", fingerprint, path) else blocked).append(record)
+    for item, raw_span in zip(findings, regions, strict=True):
+        span = object_value(raw_span)
+        record = secret_span_binding(object_value(item), paths, span)
+        approved = False
+        if record["status"] == "resolved":
+            fingerprint = secret_fingerprint(span)
+            record.update(
+                fingerprint=fingerprint, spanBytes=span["spanBytes"], spanSha256=span["spanSha256"]
+            )
+            approved = permitted(exceptions, "gitleaks", fingerprint, string_value(record["path"]))
+        (waived if approved else blocked).append(record)
     return {
         "passed": not blocked,
         "blocked": blocked,

@@ -158,24 +158,6 @@ class ImagePolicyTests(unittest.TestCase):
                 image.license_verdict([package(expression=expression)], policy, [])["passed"]
             )
 
-    def test_secret_summary_omits_payload_and_binds_layer_path_rule_line(self) -> None:
-        """Private candidate bytes never enter the publishable verdict."""
-        finding: JsonObject = {
-            "File": "/layers/000/removed.env",
-            "RuleID": "fixture",
-            "StartLine": 1,
-            "Match": "SENSITIVE-FIXTURE",
-            "Secret": "SENSITIVE-FIXTURE",
-        }
-        verdict = image.secret_verdict(
-            [finding], [], {"000/removed.env": {"path": "000/removed.env", "sha256": "a" * 64}}
-        )
-        self.assertFalse(verdict["passed"])
-        self.assertNotIn("SENSITIVE", str(verdict))
-        self.assertIn("fixture:000/removed.env:1", str(verdict))
-        with self.assertRaises(ToolError):
-            _ = image.secret_verdict([{**finding, "File": "/outside/private"}], [], {})
-
     def test_reports_reject_symlinks_duplicate_keys_and_size_limits(self) -> None:
         """Scanner reports are untrusted input rather than trusted process output."""
         with tempfile.TemporaryDirectory() as temporary:
@@ -189,32 +171,3 @@ class ImagePolicyTests(unittest.TestCase):
                 _ = image.report(link)
             with self.assertRaises(ToolError):
                 _ = image.report(path, limit=1)
-
-    def test_secret_exception_cannot_authorize_changed_file_bytes(self) -> None:
-        """A reviewed line and path do not waive a different credential at the same location."""
-        path = "000/removed.env"
-        finding: JsonObject = {
-            "File": "/layers/content-000000",
-            "RuleID": "fixture",
-            "StartLine": 1,
-        }
-        review = ExceptionRecord(
-            scanner="gitleaks",
-            fingerprint=f"fixture:{path}:1:" + "a" * 64,
-            scope=path,
-            owner="security",
-            rationale="Inert published fixture",
-            reachability="Never issued",
-            expires=(NOW + timedelta(days=30)).date(),
-            review="https://example.org/review/fixture",
-        )
-        for content_hash, expected in (("a" * 64, True), ("b" * 64, False)):
-            with self.subTest(digest=content_hash):
-                self.assertEqual(
-                    image.secret_verdict(
-                        [finding],
-                        [review],
-                        {"content-000000": {"path": path, "sha256": content_hash}},
-                    )["passed"],
-                    expected,
-                )

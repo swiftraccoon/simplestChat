@@ -20,7 +20,7 @@
   },
   "reproductionPlatform": "darwin-arm64",
   "canonicalScannerPlatform": "linux-amd64",
-  "reproduction": "All original file and projection SHA256/size records match; all15 canonical rule/path/start-line tuples reproduce exactly using the maintained projector and pinned Gitleaks8.30.1. Default detector config and decoding flags are unchanged; local report redaction is disabled only inside this private evidence directory to review the exact matches.",
+  "reproduction": "All original file and projection SHA256/size records match; all15 canonical rule/path/start-line tuples reproduce exactly using the maintained projector and pinned Gitleaks8.30.1. Default detector config and decoding flags are unchanged; local report redaction is disabled only inside this private evidence directory to review the exact matches. All 15 complete match regions resolve uniquely and their SHA-256 and byte length agree with the private scanner Match bytes; only digests and coordinates are retained.",
   "sources": [
     {
       "name": "gnutls-3.8.13.tar.xz",
@@ -78,7 +78,7 @@
       "disposition": "reviewed-public-data",
       "findings": [
         {
-          "fingerprint": "generic-api-key:000/etc/tpm2-tss/fapi-profiles/P_ECCP384SHA384.json:32920:b13a1027cd41dc4dcef1b7dc326021421cfd2789a453807e20393374aac0f428",
+          "fingerprint": "image-match:4f60e66b0b07d1ba0062f61654a8d1c866f5b43fb110c6bf2809a3dfa2555737",
           "line": 32920,
           "path": "000/etc/tpm2-tss/fapi-profiles/P_ECCP384SHA384.json",
           "rule": "generic-api-key",
@@ -87,7 +87,20 @@
           "sourceMember": "dist/fapi-profiles/P_ECCP384SHA384.json",
           "sourceSha256": "b13a1027cd41dc4dcef1b7dc326021421cfd2789a453807e20393374aac0f428",
           "jsonPath": "ek_policy.policy.0.branches.1.policy.0.nvPublic.nvPublic.authPolicy",
-          "matchedHexCharacters": 96
+          "matchedHexCharacters": 96,
+          "span": {
+            "rule": "generic-api-key",
+            "path": "000/etc/tpm2-tss/fapi-profiles/P_ECCP384SHA384.json",
+            "fileSha256": "b13a1027cd41dc4dcef1b7dc326021421cfd2789a453807e20393374aac0f428",
+            "projectionSha256": "fd4821426aadbb79f27573ee89543ee44b3f47377930c5e412bbc2907605e311",
+            "startLine": 32920,
+            "endLine": 32920,
+            "startColumn": 43,
+            "endColumn": 152,
+            "status": "resolved",
+            "spanBytes": 110,
+            "spanSha256": "bc9d1fbf657cdbbbf83ed6f57a0b3f04406257b33ad98ff201b6ec2187d44aec"
+          }
         }
       ]
     },
@@ -103,7 +116,7 @@
       "disposition": "reviewed-public-data",
       "findings": [
         {
-          "fingerprint": "generic-api-key:000/etc/tpm2-tss/fapi-profiles/P_RSA3072SHA384.json:32927:7f0a1d5529f987faf93be4baae05bf02f2619dbda4a9499b664c9cef46318e85",
+          "fingerprint": "image-match:142b038d22c29ef1a2ca625b862386858f8dee9c6ac2b4386a1019bbcc51ccfe",
           "line": 32927,
           "path": "000/etc/tpm2-tss/fapi-profiles/P_RSA3072SHA384.json",
           "rule": "generic-api-key",
@@ -112,7 +125,20 @@
           "sourceMember": "dist/fapi-profiles/P_RSA3072SHA384.json",
           "sourceSha256": "7f0a1d5529f987faf93be4baae05bf02f2619dbda4a9499b664c9cef46318e85",
           "jsonPath": "ek_policy.policy.0.branches.1.policy.0.nvPublic.nvPublic.authPolicy",
-          "matchedHexCharacters": 96
+          "matchedHexCharacters": 96,
+          "span": {
+            "rule": "generic-api-key",
+            "path": "000/etc/tpm2-tss/fapi-profiles/P_RSA3072SHA384.json",
+            "fileSha256": "7f0a1d5529f987faf93be4baae05bf02f2619dbda4a9499b664c9cef46318e85",
+            "projectionSha256": "d9e5324b47e286846f85af1f12326a25e69c65ae150029933385697e90834bc7",
+            "startLine": 32927,
+            "endLine": 32927,
+            "startColumn": 43,
+            "endColumn": 152,
+            "status": "resolved",
+            "spanBytes": 110,
+            "spanSha256": "bc9d1fbf657cdbbbf83ed6f57a0b3f04406257b33ad98ff201b6ec2187d44aec"
+          }
         }
       ]
     },
@@ -128,7 +154,7 @@
       "disposition": "reviewed-public-data",
       "findings": [
         {
-          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359612:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "fingerprint": "image-match:d37d16c49fc87673fb61861352cf356434d669dc8b29e9590755bcf74739f303",
           "line": 1359612,
           "path": "000/usr/lib64/libgnutls.so.30.42.0",
           "rule": "private-key",
@@ -151,10 +177,23 @@
             579,
             1020,
             1030
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/lib64/libgnutls.so.30.42.0",
+            "fileSha256": "c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+            "projectionSha256": "afe4a83e9d6705c236870e0a5c447ea49bc469ddae503ac874167e10c07e974e",
+            "startLine": 1359612,
+            "endLine": 1359615,
+            "startColumn": 2,
+            "endColumn": 26,
+            "status": "resolved",
+            "spanBytes": 155,
+            "spanSha256": "fed7079dd4491609e4c996e232f366ac434fa4cc9df19df363391d079d470964"
+          }
         },
         {
-          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359693:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "fingerprint": "image-match:83b0160d38615a45cdfe419ca6ca7e8ba0429efa87acf0ac5c9e93f1ffd21a56",
           "line": 1359693,
           "path": "000/usr/lib64/libgnutls.so.30.42.0",
           "rule": "private-key",
@@ -177,10 +216,23 @@
             579,
             1020,
             1030
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/lib64/libgnutls.so.30.42.0",
+            "fileSha256": "c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+            "projectionSha256": "afe4a83e9d6705c236870e0a5c447ea49bc469ddae503ac874167e10c07e974e",
+            "startLine": 1359693,
+            "endLine": 1359695,
+            "startColumn": 2,
+            "endColumn": 26,
+            "status": "resolved",
+            "spanBytes": 118,
+            "spanSha256": "5a09eb5df3674472eda0077d83cbccef72692c3d052ab393368ac57295439c58"
+          }
         },
         {
-          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359705:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "fingerprint": "image-match:c12d2442b6f9aff4b6bd89e7892ca609c73d3e97c808980af5c24ca90242c6e8",
           "line": 1359705,
           "path": "000/usr/lib64/libgnutls.so.30.42.0",
           "rule": "private-key",
@@ -203,10 +255,23 @@
             579,
             1020,
             1030
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/lib64/libgnutls.so.30.42.0",
+            "fileSha256": "c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+            "projectionSha256": "afe4a83e9d6705c236870e0a5c447ea49bc469ddae503ac874167e10c07e974e",
+            "startLine": 1359705,
+            "endLine": 1359709,
+            "startColumn": 2,
+            "endColumn": 26,
+            "status": "resolved",
+            "spanBytes": 200,
+            "spanSha256": "a4d138d7ef9748464117b44fb9c0a4b5b85a1599a127d02690abaa96d03c16e6"
+          }
         },
         {
-          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359733:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "fingerprint": "image-match:5d4f3a654a16e1d41023bf798d7cfba41aba144621536be46cd748606b879bad",
           "line": 1359733,
           "path": "000/usr/lib64/libgnutls.so.30.42.0",
           "rule": "private-key",
@@ -229,10 +294,23 @@
             579,
             1020,
             1030
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/lib64/libgnutls.so.30.42.0",
+            "fileSha256": "c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+            "projectionSha256": "afe4a83e9d6705c236870e0a5c447ea49bc469ddae503ac874167e10c07e974e",
+            "startLine": 1359733,
+            "endLine": 1359736,
+            "startColumn": 2,
+            "endColumn": 26,
+            "status": "resolved",
+            "spanBytes": 155,
+            "spanSha256": "fa0b06a72461ec0a963dcfccb8d5b61bd88a6074fc7271573bff68ab86b8c1af"
+          }
         },
         {
-          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359741:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "fingerprint": "image-match:415162d87fda79623e944b16ec6d23913213cfa1375880b4df025b75c2bef3b8",
           "line": 1359741,
           "path": "000/usr/lib64/libgnutls.so.30.42.0",
           "rule": "private-key",
@@ -255,10 +333,23 @@
             579,
             1020,
             1030
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/lib64/libgnutls.so.30.42.0",
+            "fileSha256": "c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+            "projectionSha256": "afe4a83e9d6705c236870e0a5c447ea49bc469ddae503ac874167e10c07e974e",
+            "startLine": 1359741,
+            "endLine": 1359744,
+            "startColumn": 2,
+            "endColumn": 26,
+            "status": "resolved",
+            "spanBytes": 151,
+            "spanSha256": "ef237ea8db4f2ae9ee100e8ced96d29b5dceb0e6a948443e6b8a00b1791f9ec9"
+          }
         },
         {
-          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359862:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "fingerprint": "image-match:eb1005926d5be01bd737fc094f04ddfa3669a32a0ed475cefc13e641e62e717f",
           "line": 1359862,
           "path": "000/usr/lib64/libgnutls.so.30.42.0",
           "rule": "private-key",
@@ -281,10 +372,23 @@
             579,
             1020,
             1030
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/lib64/libgnutls.so.30.42.0",
+            "fileSha256": "c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+            "projectionSha256": "afe4a83e9d6705c236870e0a5c447ea49bc469ddae503ac874167e10c07e974e",
+            "startLine": 1359862,
+            "endLine": 1359862,
+            "startColumn": 2,
+            "endColumn": 355,
+            "status": "resolved",
+            "spanBytes": 354,
+            "spanSha256": "f8766749b0c6f9b5661364568226af0ba7ae8d87c0073df24e440de4417521cd"
+          }
         },
         {
-          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1359978:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "fingerprint": "image-match:001a2a2f90c13cd82301e36df32c50634e2d22da3b457c69aabc8226099737de",
           "line": 1359978,
           "path": "000/usr/lib64/libgnutls.so.30.42.0",
           "rule": "private-key",
@@ -307,10 +411,23 @@
             579,
             1020,
             1030
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/lib64/libgnutls.so.30.42.0",
+            "fileSha256": "c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+            "projectionSha256": "afe4a83e9d6705c236870e0a5c447ea49bc469ddae503ac874167e10c07e974e",
+            "startLine": 1359978,
+            "endLine": 1359978,
+            "startColumn": 2,
+            "endColumn": 283,
+            "status": "resolved",
+            "spanBytes": 282,
+            "spanSha256": "293216817f0d585f0b54f225582f59e7b2e2a795b5f8002e2d71c5e3d49ce9b0"
+          }
         },
         {
-          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1360058:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "fingerprint": "image-match:da9db31e22b14f78d045d5c68f4c86582998628e38780f815d2c19fd300008ba",
           "line": 1360058,
           "path": "000/usr/lib64/libgnutls.so.30.42.0",
           "rule": "private-key",
@@ -333,10 +450,23 @@
             579,
             1020,
             1030
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/lib64/libgnutls.so.30.42.0",
+            "fileSha256": "c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+            "projectionSha256": "afe4a83e9d6705c236870e0a5c447ea49bc469ddae503ac874167e10c07e974e",
+            "startLine": 1360058,
+            "endLine": 1360062,
+            "startColumn": 2,
+            "endColumn": 29,
+            "status": "resolved",
+            "spanBytes": 226,
+            "spanSha256": "91ea1699ff6b1a34b4a1d500a9c75a808441e47b9ea68da6fb0195e01ce1dc61"
+          }
         },
         {
-          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1360133:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "fingerprint": "image-match:e09ed0e9cae53cd6306ab82138c7427231d421a9bdabf358ae4b4e522553c805",
           "line": 1360133,
           "path": "000/usr/lib64/libgnutls.so.30.42.0",
           "rule": "private-key",
@@ -359,10 +489,23 @@
             579,
             1020,
             1030
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/lib64/libgnutls.so.30.42.0",
+            "fileSha256": "c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+            "projectionSha256": "afe4a83e9d6705c236870e0a5c447ea49bc469ddae503ac874167e10c07e974e",
+            "startLine": 1360133,
+            "endLine": 1360152,
+            "startColumn": 2,
+            "endColumn": 30,
+            "status": "resolved",
+            "spanBytes": 1211,
+            "spanSha256": "7c4c63ee462e0e700cd9e29c8e0f730b3f1b484c4abdd83f1e69fcd477c061fa"
+          }
         },
         {
-          "fingerprint": "private-key:000/usr/lib64/libgnutls.so.30.42.0:1360538:c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+          "fingerprint": "image-match:6ce06db2ef70c858b36981e57422d3f56f141303ebc4f1ca6016ffba8c246e29",
           "line": 1360538,
           "path": "000/usr/lib64/libgnutls.so.30.42.0",
           "rule": "private-key",
@@ -385,7 +528,20 @@
             579,
             1020,
             1030
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/lib64/libgnutls.so.30.42.0",
+            "fileSha256": "c401fdf47f90dac4efa3893135e19ca1a9275696ff4a4a292fa183539f8d374d",
+            "projectionSha256": "afe4a83e9d6705c236870e0a5c447ea49bc469ddae503ac874167e10c07e974e",
+            "startLine": 1360538,
+            "endLine": 1360564,
+            "startColumn": 2,
+            "endColumn": 30,
+            "status": "resolved",
+            "spanBytes": 1674,
+            "spanSha256": "d039c8119a029ab9f9c83c04d67002d887b6bc6026c4264402ab27cdf24cf138"
+          }
         }
       ]
     },
@@ -401,7 +557,7 @@
       "disposition": "reviewed-public-data",
       "findings": [
         {
-          "fingerprint": "private-key:000/usr/lib64/libssh.so.4.12.0:402805:a03dafdd2d7ac474c3451644eac5426161b6fc363e583de67c0ac436af0a6341",
+          "fingerprint": "image-match:7a16ea46bdf1ed5fd531d818189b80470d19d8cdfd90cd1fa14164947f2ee672",
           "line": 402805,
           "path": "000/usr/lib64/libssh.so.4.12.0",
           "rule": "private-key",
@@ -428,7 +584,20 @@
               ],
               "sha256": "2f9222e1eb1c27d89567598b6532d5d643cf52354e65e1612168086a0c54a818"
             }
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/lib64/libssh.so.4.12.0",
+            "fileSha256": "a03dafdd2d7ac474c3451644eac5426161b6fc363e583de67c0ac436af0a6341",
+            "projectionSha256": "37af8a0a9298fd5e65aded1a120ce00ee170bf02f235e3d03eec8e017d52d733",
+            "startLine": 402805,
+            "endLine": 402812,
+            "startColumn": 2,
+            "endColumn": 34,
+            "status": "resolved",
+            "spanBytes": 113,
+            "spanSha256": "8c3f36974ee6f296520800cdc4cb76bdfb20689d070211a6fc9db7cae3fbc577"
+          }
         }
       ]
     },
@@ -444,7 +613,7 @@
       "disposition": "reviewed-public-data",
       "findings": [
         {
-          "fingerprint": "private-key:000/usr/share/misc/magic.mgc:37079:7c7cb700483efbe0dc4009589912911bae33a669bf17f71b1ae03a5f5e2de4f9",
+          "fingerprint": "image-match:dcb6e6f5dc27f00f3ad61fa7902c36934286969ba68007c3a92e67d0747f9b86",
           "line": 37079,
           "path": "000/usr/share/misc/magic.mgc",
           "rule": "private-key",
@@ -468,10 +637,23 @@
               ],
               "sha256": "2a606fb0edfe4df2cb3ffdef8a412a74cdf154bec64d21c8fd5624fbfbe3aee0"
             }
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/share/misc/magic.mgc",
+            "fileSha256": "7c7cb700483efbe0dc4009589912911bae33a669bf17f71b1ae03a5f5e2de4f9",
+            "projectionSha256": "1f007d3bf3ddecf2d31da340f440c8953ae2d61e614ec1de0967e1029a10958a",
+            "startLine": 37079,
+            "endLine": 37801,
+            "startColumn": 2,
+            "endColumn": 36,
+            "status": "resolved",
+            "spanBytes": 899,
+            "spanSha256": "224c146505ab10ba5b98faeaf412057fe66d4266a2d74c0d2d8956bac0e077bf"
+          }
         },
         {
-          "fingerprint": "private-key:000/usr/share/misc/magic.mgc:75777:7c7cb700483efbe0dc4009589912911bae33a669bf17f71b1ae03a5f5e2de4f9",
+          "fingerprint": "image-match:a228a74f2c12fa3e6e802a4801faae7c60cd91c30ef4ae4690d6a86b067f93a7",
           "line": 75777,
           "path": "000/usr/share/misc/magic.mgc",
           "rule": "private-key",
@@ -495,7 +677,20 @@
               ],
               "sha256": "2a606fb0edfe4df2cb3ffdef8a412a74cdf154bec64d21c8fd5624fbfbe3aee0"
             }
-          ]
+          ],
+          "span": {
+            "rule": "private-key",
+            "path": "000/usr/share/misc/magic.mgc",
+            "fileSha256": "7c7cb700483efbe0dc4009589912911bae33a669bf17f71b1ae03a5f5e2de4f9",
+            "projectionSha256": "1f007d3bf3ddecf2d31da340f440c8953ae2d61e614ec1de0967e1029a10958a",
+            "startLine": 75777,
+            "endLine": 78795,
+            "startColumn": 2,
+            "endColumn": 27,
+            "status": "resolved",
+            "spanBytes": 3482,
+            "spanSha256": "e0985a32657882d913d70defcd54d7426ff2c048d26ac923f1df1cdc55179207"
+          }
         }
       ]
     }
@@ -515,6 +710,7 @@
     "owner": "swiftraccoon",
     "expires": "2026-11-29",
     "authority": "Agent-performed technical review under the owner-authorized security rollout; independently checked against the canonical findings and exact original/projected file bytes.",
-    "scope": "Only the 15 retained exact scanner fingerprints and five immutable base-layer paths; no package-wide or rule-wide exemption."
-  }
+    "scope": "Only the 15 complete reviewed match regions at their exact five base-layer paths, pinned scanner/projection format and rule; no package-wide or rule-wide exemption."
+  },
+  "matchFormat": "gitleaks-8.30.1-projection-match"
 }
