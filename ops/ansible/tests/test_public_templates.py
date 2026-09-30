@@ -482,6 +482,62 @@ class PublicTemplateTests(unittest.TestCase):
         statements = "\n".join(line for line in grants.splitlines() if not line.startswith("--"))
         self.assertNotIn("_sqlx_migrations", statements)
 
+    @staticmethod
+    def production_rust(source: str) -> str:
+        """Omit only cfg(test) items, retaining production declarations that follow them."""
+        tokens = list(
+            re.finditer(
+                r'(?s)//[^\n]*|/\*.*?\*/|(?:br|r)(?P<hash>\#{0,32})".*?"(?P=hash)'
+                + r"""|b?"(?:\\.|[^"\\])*"|b?'(?:\\.|[^'\\])'"""
+                + r"|[A-Za-z_][A-Za-z0-9_]*|[^\s]",
+                source,
+            )
+        )
+        expected = ["#", "[", "cfg", "(", "test", ")", "]"]
+        result: list[str] = []
+        cursor = 0
+        index = 0
+        while index < len(tokens):
+            if [token.group() for token in tokens[index : index + 7]] != expected:
+                index += 1
+                continue
+            result.append(source[cursor : tokens[index].start()])
+            index += 7
+            depth = 0
+            while index < len(tokens):
+                token = tokens[index]
+                index += 1
+                value = token.group()
+                if value == "{":
+                    depth += 1
+                elif value == "}":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                elif value == ";" and depth == 0:
+                    break
+            cursor = tokens[index - 1].end()
+        result.append(source[cursor:])
+        return "".join(result)
+
+    def test_runtime_grant_scanner_keeps_production_after_test_items(self) -> None:
+        """Test-only imports/functions/modules cannot hide later runtime SQL statements."""
+        source = """
+#[cfg(test)] use fixture::owner;
+fn first() { query("INSERT INTO rooms VALUES (1)"); }
+#[cfg(test)]
+mod tests { fn fixture() { query(r#"DELETE FROM users; }"#); } }
+#[cfg(test)]
+fn helper() { query("UPDATE users SET name = 'fixture'"); }
+fn runtime() { query("UPDATE rooms SET name = 'current'"); }
+"""
+        production = self.production_rust(source)
+        self.assertIn("INSERT INTO rooms", production)
+        self.assertIn("UPDATE rooms", production)
+        self.assertNotIn("DELETE FROM users", production)
+        self.assertNotIn("UPDATE users", production)
+        self.assertNotIn("fixture::owner", production)
+
     def test_runtime_grants_cover_every_statement_the_server_runs(self) -> None:
         """Every table the server inserts into, updates or deletes from is granted that right."""
         granted: dict[str, set[str]] = {}
@@ -494,7 +550,7 @@ class PublicTemplateTests(unittest.TestCase):
                 granted[table.strip().removeprefix("public.")] = rights
         tables = (
             "users|webauthn_credentials|sessions|rooms|room_roles|room_states|room_reports"
-            + "|moderation_events|invites"
+            + "|moderation_events|invites|invite_redemptions"
         )
         statement = re.compile(r"\b(INSERT INTO|UPDATE|DELETE FROM)\s+(" + tables + r")\b")
         needed: dict[str, set[str]] = {}
@@ -504,8 +560,7 @@ class PublicTemplateTests(unittest.TestCase):
         for path in sources:
             if path.name.endswith("_tests.rs"):
                 continue
-            # Tests sit after the first cfg(test) in a file and run as the owner.
-            production = path.read_text().split("#[cfg(test)]", maxsplit=1)[0]
+            production = self.production_rust(path.read_text())
             for found in statement.finditer(production):
                 needed.setdefault(str(found.group(2)), set()).add(str(found.group(1)).split()[0])
         self.assertEqual(needed["webauthn_credentials"], {"INSERT", "UPDATE", "DELETE"})
