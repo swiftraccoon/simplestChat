@@ -14,7 +14,7 @@ use crate::room::settings;
 use crate::signaling::SignalingServer;
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -28,8 +28,8 @@ pub const MAX_LIVE_ROOM_INVITES: i64 = 20;
 pub const MAX_INVITE_USES: i32 = 100;
 pub const MAX_INVITE_DAYS: i32 = 30;
 const DEFAULT_INVITE_DAYS: i32 = 7;
-/// Rooms one account is listed as belonging to.
-const MAX_MEMBERSHIPS: i64 = 100;
+/// Memberships returned on one page; additional memberships use an ID cursor.
+const MEMBERSHIP_PAGE_SIZE: usize = 100;
 /// Successful redemptions remain retryable until this many days after expiry.
 pub(crate) const INVITE_RECEIPT_RETENTION_DAYS: i32 = 7;
 
@@ -79,6 +79,36 @@ pub struct MembershipItem {
     #[serde(flatten)]
     pub room: RoomListItem,
     pub role: &'static str,
+}
+
+#[derive(Serialize)]
+pub struct MembershipPage {
+    pub items: Vec<MembershipItem>,
+    pub next_cursor: Option<String>,
+}
+
+/// Existing open clients receive their array shape until they opt into paging.
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum MembershipResponse {
+    Legacy(Vec<MembershipItem>),
+    Page(MembershipPage),
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MembershipParams {
+    pub after: Option<String>,
+    #[serde(default)]
+    pub paginated: bool,
+}
+
+fn membership_response(params: &MembershipParams, page: MembershipPage) -> MembershipResponse {
+    if params.paginated || params.after.is_some() {
+        MembershipResponse::Page(page)
+    } else {
+        MembershipResponse::Legacy(page.items)
+    }
 }
 
 /// Mint a code for `room_id`; `None` when the room already holds its limit.
@@ -256,42 +286,57 @@ type MembershipRow = (
     i16,
 );
 
-/// Rooms the account holds a role in, other than the ones it owns.
+pub struct MembershipBatch {
+    pub rows: Vec<(RoomListRow, i16)>,
+    pub next_cursor: Option<String>,
+}
+
+/// A stable ID-ordered membership page, excluding rooms owned by the account.
+/// Room renames do not shift the pagination boundary.
 pub async fn memberships(
     pool: &PgPool,
     user_id: Uuid,
-) -> Result<Vec<(RoomListRow, i16)>, sqlx::Error> {
-    let rows: Vec<MembershipRow> = sqlx::query_as(
+    after: Option<&str>,
+) -> Result<MembershipBatch, sqlx::Error> {
+    let mut rows: Vec<MembershipRow> = sqlx::query_as(
         "SELECT r.id, r.display_name, r.topic, r.password_hash IS NOT NULL, r.moderated,
                     r.description, r.image_url, r.secret, rr.role
              FROM room_roles rr JOIN rooms r ON r.id = rr.room_id
              WHERE rr.user_id = $1 AND r.owner_id <> $1
-             ORDER BY r.display_name, r.id LIMIT $2",
+               AND ($3::text IS NULL OR r.id > $3)
+             ORDER BY r.id LIMIT $2",
     )
     .bind(user_id)
-    .bind(MAX_MEMBERSHIPS)
+    .bind(MEMBERSHIP_PAGE_SIZE as i64 + 1)
+    .bind(after)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(
-            |(id, name, topic, password, moderated, description, image, secret, role)| {
-                (
+    let has_more = rows.len() > MEMBERSHIP_PAGE_SIZE;
+    rows.truncate(MEMBERSHIP_PAGE_SIZE);
+    let next_cursor = has_more.then(|| rows.last().expect("full membership page").0.clone());
+    Ok(MembershipBatch {
+        next_cursor,
+        rows: rows
+            .into_iter()
+            .map(
+                |(id, name, topic, password, moderated, description, image, secret, role)| {
                     (
-                        id,
-                        name,
-                        topic,
-                        password,
-                        moderated,
-                        description,
-                        image,
-                        secret,
-                    ),
-                    role,
-                )
-            },
-        )
-        .collect())
+                        (
+                            id,
+                            name,
+                            topic,
+                            password,
+                            moderated,
+                            description,
+                            image,
+                            secret,
+                        ),
+                        role,
+                    )
+                },
+            )
+            .collect(),
+    })
 }
 
 fn not_found() -> RoomApiError {
@@ -467,28 +512,72 @@ pub async fn redeem(
 pub async fn list_memberships(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
-) -> Result<(HeaderMap, Json<Vec<MembershipItem>>), RoomApiError> {
+    Query(params): Query<MembershipParams>,
+) -> Result<(HeaderMap, Json<MembershipResponse>), RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
-    let rows = memberships(&pool, user)
+    if params
+        .after
+        .as_deref()
+        .is_some_and(|cursor| !settings::valid_room_id(cursor))
+    {
+        return Err(bad_request("Invalid membership cursor"));
+    }
+    let batch = memberships(&pool, user, params.after.as_deref())
         .await
         .map_err(room_database_error)?;
     Ok((
         private_headers(),
-        Json(
-            rows.into_iter()
-                .map(|(row, role)| MembershipItem {
-                    room: room_list_item(&server, row),
-                    role: Role::from_db(role).name(),
-                })
-                .collect(),
-        ),
+        Json(membership_response(
+            &params,
+            MembershipPage {
+                next_cursor: batch.next_cursor,
+                items: batch
+                    .rows
+                    .into_iter()
+                    .map(|(row, role)| MembershipItem {
+                        room: room_list_item(&server, row),
+                        role: Role::from_db(role).name(),
+                    })
+                    .collect(),
+            },
+        )),
     ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn membership_paging_is_opt_in_for_older_open_clients() {
+        for (uri, paged) in [
+            ("/api/rooms/memberships", false),
+            ("/api/rooms/memberships?paginated=false", false),
+            ("/api/rooms/memberships?paginated=true", true),
+            ("/api/rooms/memberships?after=room-100", true),
+            (
+                "/api/rooms/memberships?paginated=false&after=room-100",
+                true,
+            ),
+        ] {
+            let Query(params) =
+                Query::<MembershipParams>::try_from_uri(&uri.parse().unwrap()).unwrap();
+            let response = membership_response(
+                &params,
+                MembershipPage {
+                    items: Vec::new(),
+                    next_cursor: None,
+                },
+            );
+            let json = serde_json::to_value(response).unwrap();
+            if paged {
+                assert_eq!(json, serde_json::json!({"items": [], "next_cursor": null}));
+            } else {
+                assert_eq!(json, serde_json::json!([]));
+            }
+        }
+    }
 
     #[tokio::test]
     #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
@@ -726,13 +815,20 @@ mod tests {
         );
 
         // Memberships list the rooms an account belongs to, not the ones it owns.
-        let mine = memberships(&pool, alice).await.unwrap();
-        assert_eq!(mine.len(), 1);
+        let mine = memberships(&pool, alice, None).await.unwrap();
+        assert_eq!(mine.rows.len(), 1);
+        assert!(mine.next_cursor.is_none());
         assert_eq!(
-            (mine[0].0.0.as_str(), mine[0].1),
+            (mine.rows[0].0.0.as_str(), mine.rows[0].1),
             (room_id.as_str(), Role::Member.to_db())
         );
-        assert!(memberships(&pool, owner).await.unwrap().is_empty());
+        assert!(
+            memberships(&pool, owner, None)
+                .await
+                .unwrap()
+                .rows
+                .is_empty()
+        );
 
         sqlx::query("DELETE FROM rooms WHERE id=$1")
             .bind(&room_id)
@@ -744,5 +840,83 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+    async fn database_memberships_paginate_every_room_and_ignore_display_name_changes() {
+        let pool =
+            sqlx::PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+                .await
+                .unwrap();
+        let owner = Uuid::new_v4();
+        let member = Uuid::new_v4();
+        for id in [owner, member] {
+            sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Paging account')")
+                .bind(id)
+                .bind(format!("{id}@membership.invalid"))
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        let prefix = format!("pages-{}-", Uuid::new_v4());
+        let rooms: Vec<String> = (0..205)
+            .map(|index| format!("{prefix}{index:03}"))
+            .collect();
+        sqlx::query("INSERT INTO rooms(id,owner_id,display_name) SELECT id,$2,'Same name' FROM unnest($1::text[]) AS id")
+            .bind(&rooms).bind(owner).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO room_roles(room_id,user_id,role,granted_by) SELECT id,$2,1,$3 FROM unnest($1::text[]) AS id")
+            .bind(&rooms).bind(member).bind(owner).execute(&pool).await.unwrap();
+        let first = memberships(&pool, member, None).await.unwrap();
+        assert_eq!(first.rows.len(), 100);
+        assert_eq!(first.next_cursor.as_ref(), Some(&rooms[99]));
+        sqlx::query("UPDATE rooms SET display_name='A new name',updated_at=now() WHERE id=ANY($1)")
+            .bind(&rooms)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let second = memberships(&pool, member, first.next_cursor.as_deref())
+            .await
+            .unwrap();
+        assert_eq!(second.rows.len(), 100);
+        assert_eq!(second.next_cursor.as_ref(), Some(&rooms[199]));
+        let third = memberships(&pool, member, second.next_cursor.as_deref())
+            .await
+            .unwrap();
+        assert_eq!(third.rows.len(), 5);
+        assert!(third.next_cursor.is_none());
+        let all: Vec<String> = first
+            .rows
+            .into_iter()
+            .chain(second.rows)
+            .chain(third.rows)
+            .map(|(row, _)| row.0)
+            .collect();
+        assert_eq!(all, rooms);
+        assert!(
+            memberships(&pool, member, rooms.last().map(String::as_str))
+                .await
+                .unwrap()
+                .rows
+                .is_empty()
+        );
+        assert!(
+            memberships(&pool, owner, None)
+                .await
+                .unwrap()
+                .rows
+                .is_empty()
+        );
+        sqlx::query("DELETE FROM rooms WHERE id=ANY($1)")
+            .bind(&rooms)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id=ANY($1)")
+            .bind(vec![owner, member])
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
     }
 }
