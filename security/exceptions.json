@@ -280,6 +280,16 @@
       "reachability": "Only the exact provisional ARM observation matches, including ordered complete raw records and RPM database layer identity. Different values, missing records, package identity, location or architecture require a new review; no final image pass is claimed.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-license-review.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "public-fixture:325cc9602fddb4943f1bdc20d61ac4e1f09729f587768df4b9779a2daf2ffe10",
+      "scope": "security/license-evidence/fedora-rpm-review-2026-09-30.json",
+      "owner": "swiftraccoon",
+      "rationale": "Exact public Fedora RPM signing-key fingerprint in reviewed package metadata. A fingerprint identifies a public key and cannot authenticate as its private key.",
+      "reachability": "The complete fingerprint and exact evidence path must both match; other values and paths remain scanned.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-license-review.md"
     }
   ]
 }

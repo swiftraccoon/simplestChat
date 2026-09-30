@@ -64,3 +64,10 @@ condition = "AND"
 paths = ["(^|/)vendor/mediasoup\\-sys\\-0\\.17\\.0/test/src/RTC/ICE/TestStunPacket\\.cpp$"]
 regexTarget = "secret"
 regexes = ["^1ezk7fni4jeo5bt7ibcdk4wjl8712suw$"]
+
+[[allowlists]]
+description = "Public fixture: security/license-evidence/fedora-rpm-review-2026-09-30.json"
+condition = "AND"
+paths = ["(^|/)security/license-evidence/fedora-rpm-review-2026-09-30\\.json$"]
+regexTarget = "secret"
+regexes = ["^36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6$"]
