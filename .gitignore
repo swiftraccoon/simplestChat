@@ -14,6 +14,7 @@
 !/docs/performance-results.md
 !/docs/native-security.md
 !/docs/authorization-testing.md
+!/docs/response-policy.md
 /build.log
 web/node_modules
 web/dist

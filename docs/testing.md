@@ -329,6 +329,13 @@ image, using the real release helper and public deployment templates. It checks
 a successful replacement, failed candidate startup and rollback while requiring
 PostgreSQL and Caddy to stay running.
 
+After fixture readiness, the harness also checks five fixed anonymous HTTPS
+responses for proxy headers/CSP, public JSON cache policy, absent cookies,
+missing-authorization rejection, private endpoint omission and bounded content.
+It verifies fixture ownership and the local CA and sends no account or chat
+mutations. See the [passive response-policy check](response-policy.md) for scope,
+limits and existing complementary coverage.
+
 Push CI retains that same immutable production image for deployment. Offline
 operations tests cover export without rebuilding, commit/run/artifact identity,
 bounded CI waiting, single-host selection and stopping after a failed deployment

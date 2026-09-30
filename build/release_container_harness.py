@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, TypedDict, Unpack
 
+import release_http_policy
 import release_public as release
 from release_artifact import sha256_file, validate_manifest, verify_archive
 from release_container_fixture import LABEL, FixtureIdentity, render_fixture
@@ -478,6 +479,36 @@ class Harness:
             require(time.monotonic() < deadline, "Fixture readiness deadline exceeded")
             time.sleep(0.5)
 
+    def response_policy(self) -> None:
+        """Check passive HTTP policy only after the fixture owns its TLS proxy and application."""
+        caddy, app = self.service("caddy"), self.service("simplestchat")
+        require(self.ca_digest is not None, "Fixture TLS authority is not recorded")
+        result = self.commands.run(
+            [
+                sys.executable,
+                "-B",
+                str(PROJECT / "build/release_http_policy.py"),
+                "--fixture-token",
+                self.token,
+                "--caddy-id",
+                string_value(caddy["id"]),
+                "--app-id",
+                string_value(app["id"]),
+                "--ca",
+                str(self.private / "ca.crt"),
+                "--ca-sha256",
+                str(self.ca_digest),
+            ],
+            timeout=35,
+        )
+        require(
+            object_value(decode_json(result.text())) == release_http_policy.success_report(),
+            "Fixture HTTP response policy did not pass completely",
+        )
+        object_value(self.report["cases"])["httpResponsePolicy"] = (
+            release_http_policy.success_report()
+        )
+
     def derivative(self, kind: str) -> dict[str, str]:
         """Derive an isolated fixture image from the same checked local production image."""
         revision = hashlib.sha256(f"disposable-release:{self.token}:{kind}".encode()).hexdigest()[
@@ -778,6 +809,7 @@ class Harness:
             "up", "--detach", "--no-build", "--pull", "never", "simplestchat", "caddy", timeout=60
         )
         self.ready()
+        self.response_policy()
         for kind in ("candidate", "failed"):
             self.artifact(self.fixture_images[kind])
 
