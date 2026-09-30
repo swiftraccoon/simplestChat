@@ -253,18 +253,6 @@ pub fn validate_text(value: &str, maximum: usize, multiline: bool) -> bool {
         })
 }
 
-fn validate_password(password: &str) -> Result<(), AuthError> {
-    if super::common_passwords::is_common(password) {
-        Err(AuthError::InvalidInput("Choose a less common password"))
-    } else if routes::password_length_ok(password) && !password.chars().any(char::is_control) {
-        Ok(())
-    } else {
-        Err(AuthError::InvalidInput(
-            "Password must be 8–128 characters without control characters",
-        ))
-    }
-}
-
 fn image_dimensions(mime: &str, bytes: &[u8]) -> Option<(u32, u32)> {
     match mime {
         "image/png"
@@ -442,7 +430,7 @@ pub(super) async fn verified_password_hash(
     claims: &Claims,
     password: String,
 ) -> Result<String, AuthError> {
-    if password.len() > 128 {
+    if password.len() > routes::MAX_PASSWORD_BYTES {
         return Err(AuthError::InvalidCredentials);
     }
     if !server.allow_auth_principal(&claims.sub) {
@@ -488,7 +476,7 @@ pub async fn change_password(
     headers: HeaderMap,
     Json(request): Json<ChangePasswordRequest>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
-    validate_password(&request.new_password)?;
+    routes::validate_new_password(&request.new_password)?;
     let _permit = routes::acquire_auth_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     let old_hash = verified_password_hash(&server, &claims, request.current_password).await?;
@@ -625,7 +613,7 @@ pub(crate) async fn redeem_recovery(
     if let Some(wait) = server.sign_in_wait(source_ip, &email) {
         return Err(AuthError::TooManyFailures(wait));
     }
-    validate_password(&request.new_password)?;
+    routes::validate_new_password(&request.new_password)?;
     let hash = recovery_hash(request.recovery_key.trim())?;
     let _permit = routes::acquire_auth_request(&server)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;

@@ -21,12 +21,27 @@ const MAX_PASSWORD_CHARS: usize = 128;
 /// Bounds the hashing input; 128 characters of any script fit within it.
 pub(super) const MAX_PASSWORD_BYTES: usize = 512;
 
-/// 8–128 characters, counted as characters so scripts with multi-byte letters
+/// 15–128 NFC-normalized characters, counted as characters so scripts with multi-byte letters
 /// are neither admitted short nor refused long.
 pub(super) fn password_length_ok(password: &str) -> bool {
-    let characters = password.chars().count();
-    (8..=MAX_PASSWORD_CHARS).contains(&characters) && password.len() <= MAX_PASSWORD_BYTES
+    let normalized = password::normalize_selection(password);
+    let characters = normalized.chars().count();
+    (15..=MAX_PASSWORD_CHARS).contains(&characters) && password.len() <= MAX_PASSWORD_BYTES
 }
+/// Apply the same selection policy at signup, change and recovery. Login does
+/// not reapply selection rules, so existing credentials remain usable.
+pub(super) fn validate_new_password(value: &str) -> Result<(), AuthError> {
+    if !password_length_ok(value) || value.chars().any(char::is_control) {
+        return Err(AuthError::InvalidInput(
+            "Password must be 15–128 characters without control characters",
+        ));
+    }
+    if super::common_passwords::is_common(&password::normalize_selection(value)) {
+        return Err(AuthError::InvalidInput("Choose a less common password"));
+    }
+    Ok(())
+}
+
 const GLOBAL_USER_REGISTRATION_LOCK: i64 = 7_349_872_340_911;
 // A valid Argon2id hash using the same default work factors as real account
 // hashes. Unknown and passwordless accounts verify against this value so the
@@ -232,7 +247,7 @@ pub(super) async fn hash_password_async(
 ) -> Result<String, AuthError> {
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        password::hash_password(&password_value)
+        password::hash_account_password(&password_value)
     })
     .await
     .map_err(|error| AuthError::DatabaseError(format!("Password worker failed: {error}")))?
@@ -246,7 +261,7 @@ pub(super) async fn verify_password_async(
 ) -> Result<bool, AuthError> {
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        password::verify_password(&password_value, &password_hash)
+        password::verify_account_password(&password_value, &password_hash)
     })
     .await
     .map_err(|error| AuthError::DatabaseError(format!("Password worker failed: {error}")))?
@@ -287,12 +302,7 @@ pub(crate) async fn register(
 
     let email = canonicalize_email(&req.email)?;
     validate_display_name(&req.display_name)?;
-    if !password_length_ok(&req.password) {
-        return Err(AuthError::InvalidCredentials);
-    }
-    if super::common_passwords::is_common(&req.password) {
-        return Err(AuthError::InvalidInput("Choose a less common password"));
-    }
+    validate_new_password(&req.password)?;
     // The taken-email answer below is the only way to learn whether an address
     // has an account here, so each address gets a few answers an hour, not more.
     if !server.allow_registration(source_ip) {
@@ -856,6 +866,21 @@ pub(super) async fn verify_discoverable_assertion(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_password_policy_counts_nfc_characters_and_allows_long_scripts() {
+        for password in [
+            "a".repeat(14),
+            "e\u{301}".repeat(14),
+            "x\n".repeat(8),
+            "a".repeat(129),
+        ] {
+            assert!(validate_new_password(&password).is_err());
+        }
+        for password in ["a".repeat(15), "e\u{301}".repeat(15), "語".repeat(128)] {
+            assert!(validate_new_password(&password).is_ok());
+        }
+    }
 
     #[test]
     fn passkey_login_start_accepts_no_account_selector() {
