@@ -79,8 +79,20 @@ def rust_evidence() -> tuple[list[JsonObject], JsonObject, JsonObject]:
         }
         for item in (object_value(value) for value in licenses)
     ]
+    for value in licenses:
+        object_value(value)["evidence"] = {"compilerArtifact": True, "embeddedMetadata": True}
+    metadata: JsonObject = {
+        "format": 1,
+        "sha256": "a" * 64,
+        "compressedSha256": "b" * 64,
+        "packageCount": len(graph),
+    }
     packages = [rust_package(name) for name in ("simplestChat", "serde", "mediasoup")]
-    return packages, {"rust_licenses": licenses}, {"auditable": {"packages": graph}}
+    return (
+        packages,
+        {"rust_licenses": licenses, "rust_dependency_metadata": dict(metadata)},
+        {"auditable": {**metadata, "packages": graph}},
+    )
 
 
 def rpm_package() -> JsonObject:
@@ -190,19 +202,13 @@ class RustEvidenceTests(unittest.TestCase):
             ):
                 native_producer.produce(fixture.arguments)
             native = object_value(decode_json(fixture.arguments.output.read_bytes()))
+            metadata = native_producer.binary_dependencies(fixture.binary)[1]
         records = [object_value(item) for item in array_value(native["rust_licenses"])]
         packages = [
             rust_package(string_value(item["name"]), string_value(item["version"]))
             for item in records
         ]
-        elf: JsonObject = {
-            "auditable": {
-                "packages": [
-                    {"name": item["name"], "version": item["version"], "source": item["source"]}
-                    for item in records
-                ]
-            }
-        }
+        elf: JsonObject = {"auditable": metadata}
         policy.rust_license_join(packages, native, elf)
         app = next(item for item in packages if item["name"] == "simplestChat")
         self.assertEqual(
@@ -212,6 +218,37 @@ class RustEvidenceTests(unittest.TestCase):
         self.assertEqual(object_value(array_value(openssl["licenses"])[0])["spdxExpression"], "MIT")
         worker = next(item for item in packages if item["name"] == "mediasoup-sys")
         self.assertEqual(worker["licenses"], [])
+
+    def test_metadata_digest_or_coverage_mismatch_cannot_join(self) -> None:
+        """A license receipt must bind this graph and acknowledge every observed node."""
+        for key, changed in (
+            ("sha256", "c" * 64),
+            ("compressedSha256", "c" * 64),
+            ("packageCount", 9),
+            ("format", True),
+        ):
+            packages, native, elf = rust_evidence()
+            object_value(native["rust_dependency_metadata"])[key] = changed
+            with self.subTest(key=key), self.assertRaisesRegex(ToolError, "metadata_binding"):
+                policy.rust_license_join(packages, native, elf)
+        for key, changed in (("compilerArtifact", "true"), ("embeddedMetadata", False)):
+            packages, native, elf = rust_evidence()
+            record = object_value(array_value(native["rust_licenses"])[0])
+            object_value(record["evidence"])[key] = changed
+            with self.subTest(key=key), self.assertRaisesRegex(ToolError, "license_coverage"):
+                policy.rust_license_join(packages, native, elf)
+
+    def test_embedded_only_record_is_retained_in_policy_inventory(self) -> None:
+        """Metadata-only evidence still requires a real license and remains policy-visible."""
+        packages, native, elf = rust_evidence()
+        record = object_value(array_value(native["rust_licenses"])[1])
+        object_value(record["evidence"])["compilerArtifact"] = False
+        policy.rust_license_join(packages, native, elf)
+        self.assertEqual(len(packages), 3)
+        serde = next(item for item in packages if item["name"] == "serde")
+        self.assertEqual(
+            object_value(array_value(serde["licenses"])[0])["spdxExpression"], "MIT OR Apache-2.0"
+        )
 
     def test_source_mismatch_missing_and_ambiguous_license_records_fail(self) -> None:
         """Equal names and versions cannot borrow a license from a different source."""

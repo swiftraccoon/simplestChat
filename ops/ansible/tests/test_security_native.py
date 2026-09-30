@@ -14,6 +14,7 @@ from test_support import ROOT
 # isort: split
 import security_native as native
 import security_vendor as vendor
+import test_security_elf as elf_fixture
 from release_json import JsonObject, JsonValue, array_value, decode_json, object_value
 from test_security_vendor import tar_bytes
 
@@ -75,7 +76,20 @@ class Fixture:
         self.openssl: Path = root / "openssl"
         self.cargo: Path = root / "cargo-home"
         self.registry: Path = self.cargo / "registry/src/index/aws-lc-sys-0.45.0"
-        self.binary: Path = put(root, "target/release/simplestChat", b"production binary fixture")
+        self.embedded: list[JsonValue] = [
+            {
+                "name": "simplestChat",
+                "version": "0.1.0",
+                "source": "local",
+                "root": True,
+                "dependencies": [1, 2, 3],
+            },
+            {"name": "aws-lc-sys", "version": "0.45.0", "source": "crates.io"},
+            {"name": "openssl-sys", "version": "0.9.117", "source": "crates.io"},
+            {"name": "mediasoup-sys", "version": "0.17.0", "source": "local"},
+        ]
+        self.binary: Path = root / "target/release/simplestChat"
+        self.save_binary()
         self.native_manifest: JsonObject = self.make_sources()
         self.events: list[JsonValue] = self.make_events()
         self.arguments: native.Build = native.Build(
@@ -284,6 +298,30 @@ class Fixture:
             ("\n".join(json.dumps(item) for item in self.events) + "\n").encode(),
         )
 
+    def save_binary(self) -> None:
+        """Embed the fixture graph in real inert ELF bytes without invoking a compiler."""
+        with patch.object(
+            elf_fixture, "metadata", return_value={"format": 1, "packages": self.embedded}
+        ):
+            _ = put(self.root, "target/release/simplestChat", elf_fixture.fixture())
+
+    def embedded_registry(self) -> Path:
+        """Add an archive-authenticated embedded-only node without build events or unpacking."""
+        name, version = "optional-crate", "1.2.3"
+        manifest = b'[package]\nname="optional-crate"\nversion="1.2.3"\nlicense="MIT"\n'
+        data = tar_bytes({name + "-" + version + "/Cargo.toml": manifest})
+        path = put(self.cargo, "registry/cache/index/optional-crate-1.2.3.crate", data)
+        lock = self.root / "Cargo.lock"
+        _ = lock.write_text(
+            lock.read_text()
+            + '\n[[package]]\nname="optional-crate"\nversion="1.2.3"\n'
+            + f'source="{native.SOURCE_REGISTRY}"\nchecksum="{vendor.sha256(data)}"\n'
+        )
+        array_value(object_value(self.embedded[0])["dependencies"]).append(len(self.embedded))
+        self.embedded.append({"name": name, "version": version, "source": "crates.io"})
+        self.save_binary()
+        return path
+
     def refresh_vendor_receipt(self) -> None:
         """Generate source evidence without requiring any Internet connectivity."""
         vendor.verify(self.root, self.cache, self.root / "vendor-evidence", offline=True)
@@ -403,6 +441,53 @@ class NativeTests(unittest.TestCase):
         _ = put(fixture.cargo, "registry/cache/index/openssl-sys-0.9.117.crate", b"corrupt")
         with self.assertRaisesRegex(vendor.IntegrityError, "SHA-256"):
             _ = self.produce()
+
+    def test_embedded_only_registry_node_has_authenticated_distinct_coverage(self) -> None:
+        """Optional graph nodes retain exact licenses without claiming compiler events."""
+        fixture = self.current()
+        archive = fixture.embedded_registry()
+        report = self.produce()
+        records = [object_value(item) for item in array_value(report["rust_licenses"])]
+        extra = next(item for item in records if item["name"] == "optional-crate")
+        self.assertEqual(extra["evidence"], {"compilerArtifact": False, "embeddedMetadata": True})
+        self.assertEqual(extra["source_sha256"], vendor.sha256(archive.read_bytes()))
+        self.assertEqual(object_value(extra["license"])["expression"], "MIT")
+        self.assertEqual(len(records), 5)
+        metadata = native.binary_dependencies(fixture.binary)[1]
+        self.assertEqual(
+            object_value(report["rust_dependency_metadata"])["sha256"], metadata["sha256"]
+        )
+
+    def test_embedded_only_archive_missing_or_corrupt_fails_without_network(self) -> None:
+        """No declaration is invented when the exact Cargo archive is unavailable."""
+        fixture = self.current()
+        archive = fixture.embedded_registry()
+        data = archive.read_bytes()
+        for corruption in (b"corrupt", None):
+            with self.subTest(corruption=corruption):
+                if corruption is None:
+                    archive.unlink()
+                else:
+                    _ = archive.write_bytes(corruption)
+                with self.assertRaises((vendor.IntegrityError, OSError)):
+                    _ = self.produce()
+                self.assertFalse(fixture.arguments.output.exists())
+                _ = archive.write_bytes(data)
+
+    def test_embedded_only_local_or_changed_lock_identity_fails(self) -> None:
+        """Extra graph identities cannot borrow evidence from unrelated build packages."""
+        fixture = self.current()
+        _ = fixture.embedded_registry()
+        item = object_value(fixture.embedded[-1])
+        for key, changed in (("source", "local"), ("version", "9.0.0")):
+            original = item[key]
+            with self.subTest(key=key):
+                item[key] = changed
+                fixture.save_binary()
+                with self.assertRaises(native.NativeError):
+                    _ = self.produce()
+                self.assertFalse(fixture.arguments.output.exists())
+                item[key] = original
 
     def test_license_files_retain_exact_hash_and_unknowns_stay_unknown(self) -> None:
         """License-file declarations preserve source identity without guessing a SPDX name."""

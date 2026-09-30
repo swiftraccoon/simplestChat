@@ -332,7 +332,17 @@ def license_verdict(
 
 def rust_license_join(packages: list[JsonObject], native: JsonObject, elf: JsonObject) -> None:
     """Join binary-observed Rust identities to authenticated build-source license records."""
-    graph = [object_value(item) for item in array_value(object_value(elf["auditable"])["packages"])]
+    metadata = object_value(elf["auditable"])
+    declared = object_value(native["rust_dependency_metadata"])
+    require(
+        set(declared) == {"format", "sha256", "compressedSha256", "packageCount"}
+        and all(
+            type(declared[key]) is type(metadata[key]) and declared[key] == metadata[key]
+            for key in declared
+        ),
+        "image_rust_metadata_binding",
+    )
+    graph = [object_value(item) for item in array_value(metadata["packages"])]
     built = [object_value(item) for item in array_value(native["rust_licenses"])]
     seen: set[tuple[str, str]] = set()
     expected = {
@@ -356,6 +366,13 @@ def rust_license_join(packages: list[JsonObject], native: JsonObject, elf: JsonO
         ]
         require(len(licenses) == 1, "image_rust_license_source")
         license_record = licenses[0]
+        coverage = object_value(license_record["evidence"])
+        require(
+            set(coverage) == {"compilerArtifact", "embeddedMetadata"}
+            and type(coverage["compilerArtifact"]) is bool
+            and coverage["embeddedMetadata"] is True,
+            "image_rust_license_coverage",
+        )
         expression = object_value(license_record["license"])["expression"]
         if license_record["first_party"] is True:
             require(

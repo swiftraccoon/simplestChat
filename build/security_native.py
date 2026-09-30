@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import security_elf as elf
 import security_vendor as vendor
 
 # isort: split
@@ -483,14 +484,25 @@ def registry_license_source(
         or manifest.parent.parent.parent != (build.cargo_home / "registry/src").resolve()
     ):
         raise NativeError("Rust license source directory differs")
+    archive = (
+        build.cargo_home / "registry/cache" / manifest.parent.parent.name / (package_id + ".crate")
+    )
+    return registry_archive_license(archive, locked)
+
+
+def registry_archive_license(
+    archive: Path, locked: JsonObject
+) -> tuple[JsonObject, dict[str, bytes]]:
+    """Read declarations only from a Cargo.lock-authenticated crates.io archive."""
+    name, version = text(locked, "name"), text(locked, "version")
+    if locked.get("source") != SOURCE_REGISTRY:
+        raise NativeError("Rust license provenance requires a pinned crates.io archive")
+    package_id = name + "-" + version
     source = vendor.Source(
         package_id,
         f"https://static.crates.io/crates/{name}/{package_id}.crate",
         vendor.digest(locked["checksum"]),
         "tar.gz",
-    )
-    archive = (
-        build.cargo_home / "registry/cache" / manifest.parent.parent.name / (package_id + ".crate")
     )
     members = vendor.archive_files(source, vendor.read_regular(archive, vendor.MAX_DOWNLOAD))
     prefix = package_id + "/"
@@ -503,12 +515,38 @@ def registry_license_source(
     return package, files
 
 
-def rust_licenses(build: Build, graph: CargoBuild, integrity: vendor.Manifest) -> list[JsonValue]:
-    """Record licenses for the actual build graph; consumers select exact runtime packages."""
+def binary_dependencies(path: Path) -> tuple[JsonObject, JsonObject]:
+    """Bind the bounded embedded dependency graph to the same exact executable bytes."""
+    binary = record_hash(path)
+    data = elf.read_binary(path)
+    if vendor.sha256(data) != binary["sha256"] or len(data) != binary["size"]:
+        raise NativeError("Production binary changed during metadata inspection")
+    machine = int.from_bytes(data[18:20], "little")
+    platform = next((name for name, value in elf.PLATFORMS.items() if value[0] == machine), None)
+    if platform is None:
+        raise NativeError("Unsupported production binary architecture")
+    metadata = object_value(
+        json_value(elf.dependency_metadata(elf.parse(data, platform).audit_section))
+    )
+    return binary, metadata
+
+
+def rust_licenses(
+    build: Build, graph: CargoBuild, integrity: vendor.Manifest, embedded: JsonObject
+) -> list[JsonValue]:
+    """Authenticate the union of compiler events and the exact binary's embedded graph."""
     locked = [
         object_value(item) for item in array_value(toml(build.root / "Cargo.lock")["package"])
     ]
     records: list[JsonValue] = []
+    embedded_identities = {
+        (text(item, "name"), text(item, "version"), text(item, "source"))
+        for value in array_value(embedded["packages"])
+        for item in [object_value(value)]
+    }
+    if len(embedded_identities) != len(array_value(embedded["packages"])):
+        raise NativeError("Ambiguous embedded Rust package identity")
+    registry_indexes: set[str] = set()
     for identifier, artifact in sorted(graph.artifacts.items()):
         name = package_name(identifier)
         version = identifier.rpartition("@")[2]
@@ -522,6 +560,7 @@ def rust_licenses(build: Build, graph: CargoBuild, integrity: vendor.Manifest) -
         first_party = path.resolve() == build.root / "Cargo.toml"
         if identifier.startswith(SOURCE_REGISTRY + "#"):
             package, files = registry_license_source(build, path, package_lock)
+            registry_indexes.add(path.resolve(strict=True).parent.parent.name)
             source_hash = package_lock["checksum"]
             source_kind = "crates.io"
         else:
@@ -540,7 +579,63 @@ def rust_licenses(build: Build, graph: CargoBuild, integrity: vendor.Manifest) -
                 "source_sha256": source_hash,
                 "manifest_sha256": vendor.sha256(files["Cargo.toml"]),
                 "first_party": first_party,
+                "evidence": {
+                    "compilerArtifact": True,
+                    "embeddedMetadata": (name, version, source_kind) in embedded_identities,
+                },
                 **({"cargo_publish": False} if first_party else {}),
+                "license": package_license(package, files),
+            }
+        )
+    recorded = {
+        (text(item, "name"), text(item, "version"), text(item, "source"))
+        for value in records
+        for item in [object_value(value)]
+    }
+    records.extend(
+        embedded_registry_licenses(build, locked, embedded_identities - recorded, registry_indexes)
+    )
+    if len(records) > MAX_RECORDS:
+        raise NativeError("Rust license evidence exceeds the record budget")
+    return records
+
+
+def embedded_registry_licenses(
+    build: Build,
+    locked: list[JsonObject],
+    identities: set[tuple[str, str, str]],
+    registry_indexes: set[str],
+) -> list[JsonValue]:
+    """Authenticate additional embedded identities without asserting they were compiled."""
+    records: list[JsonValue] = []
+    for name, version, source_kind in sorted(identities):
+        if source_kind != "crates.io" or len(registry_indexes) != 1:
+            raise NativeError("Embedded-only package requires one proven crates.io cache")
+        matches = [
+            item for item in locked if item.get("name") == name and item.get("version") == version
+        ]
+        if len(matches) != 1 or matches[0].get("source") != SOURCE_REGISTRY:
+            raise NativeError("Embedded Rust package is missing or ambiguous in Cargo.lock")
+        package_lock = matches[0]
+        archive = (
+            build.cargo_home
+            / "registry/cache"
+            / next(iter(registry_indexes))
+            / (name + "-" + version + ".crate")
+        )
+        package, files = registry_archive_license(archive, package_lock)
+        if package.get("name") != name or package.get("version") != version:
+            raise NativeError("Embedded package identity differs from authenticated metadata")
+        records.append(
+            {
+                "package_id": SOURCE_REGISTRY + "#" + name + "@" + version,
+                "name": name,
+                "version": version,
+                "source": source_kind,
+                "source_sha256": package_lock["checksum"],
+                "manifest_sha256": vendor.sha256(files["Cargo.toml"]),
+                "first_party": False,
+                "evidence": {"compilerArtifact": False, "embeddedMetadata": True},
                 "license": package_license(package, files),
             }
         )
@@ -705,8 +800,9 @@ def produce(build: Build) -> None:
     vendor_digest = validate_vendor_receipt(build, integrity)
     cargo_data = vendor.read_regular(build.cargo_messages, MAX_MESSAGES)
     graph = cargo_build(build.root, cargo_data)
+    binary, embedded = binary_dependencies(graph.binary)
     registry = registry_component(build, graph, manifest["registry_component"])
-    licenses = rust_licenses(build, graph, integrity)
+    licenses = rust_licenses(build, graph, integrity, embedded)
     archives, runtime = link_archives(build, graph, manifest)
     toolchain = toolchain_evidence(build.root, runtime)
     openssl = object_value(manifest["openssl"])
@@ -724,12 +820,15 @@ def produce(build: Build) -> None:
         "cargo_lock_sha256": vendor.sha256(
             vendor.read_regular(build.root / "Cargo.lock", vendor.MAX_MANIFEST)
         ),
-        "binary": record_hash(graph.binary),
+        "binary": binary,
         "wrap_components": manifest["wrap_components"],
         "adapted_component": manifest["adapted_component"],
         "openssl": openssl,
         "registry_component": registry,
         "rust_licenses": licenses,
+        "rust_dependency_metadata": {
+            key: embedded[key] for key in ("format", "sha256", "compressedSha256", "packageCount")
+        },
         "vendor_sources": [
             {
                 "id": source.identifier,
@@ -759,12 +858,18 @@ def produce(build: Build) -> None:
         "limits": [
             "Static archive identity does not prove every member survives final linking.",
             "Header-only and adapted components are authenticated source inputs.",
-            "Runtime license policy selects exact identities from Cargo build artifacts.",
+            "Rust license evidence covers compiler events and the exact embedded dependency graph.",
+            "Embedded metadata can include optional packages without compiler-artifact events.",
             "The unpublished first-party application has no inferred distribution license.",
             "Runtime-loaded libraries and deployed protections need separate checks.",
         ],
     }
-    vendor.write_private(build.output, vendor.json_bytes(report))
+    if record_hash(graph.binary) != binary:
+        raise NativeError("Production binary changed before receipt publication")
+    encoded = vendor.json_bytes(report)
+    if len(encoded) > MAX_REPORT:
+        raise NativeError("Native provenance report exceeds its byte budget")
+    vendor.write_private(build.output, encoded)
 
 
 @dataclass

@@ -113,7 +113,7 @@ RUN python3 build/security_tools.py path cargo-auditable --directory /opt/securi
     && strings target/release/simplestChat | grep -Fq 'OpenSSL 3.5.8 25 Aug 2026' \
     && ! strings target/release/simplestChat | grep -Fq 'OpenSSL 3.0.8' \
     && ! ldd target/release/simplestChat | grep -Eq 'lib(ssl|crypto)\.so'
-COPY build/security_native.py build/install-openssl.sh ./build/
+COPY build/security_native.py build/security_elf.py build/install-openssl.sh ./build/
 RUN python3 build/security_native.py --root /app \
     --vendor-report /app/vendor-evidence/report.json \
     --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \

@@ -120,11 +120,24 @@ crate, compiler identity, builder RPM/source-RPM identities, and the final
 executable's SHA-256. Fedora signing-key pseudo-packages are recorded separately;
 they are not misrepresented as source-backed runtime packages.
 
-Rust license declarations come from the actual Cargo build graph. Registry
-archive bytes must match `Cargo.lock`; local patched packages must match the
-vendor receipt. A referenced license file retains its hash, and missing
-expressions remain missing. The image checker joins these declarations to exact
-name/version/source identities observed in `.dep-v0`. The application has no
+Rust license evidence covers both the successful Cargo compiler-artifact stream
+and the dependency graph decoded from the exact final executable's `.dep-v0`
+section. These inventories can differ: embedded metadata can include optional
+resolved packages that emitted no compiler-artifact event. Every observed package
+remains in policy evaluation. Each receipt record distinguishes compiler-event
+evidence from embedded-metadata evidence; neither establishes that every package
+contributed machine code after linking.
+
+Registry archive bytes must match the exact `Cargo.lock` checksum; local patched
+packages must match the vendor receipt. An embedded-only registry package uses
+the single registry cache already selected by actual compiled manifests. Missing
+archives, ambiguous identities, unsupported sources and unrecorded local packages
+fail the build; the producer has no network fallback and invents no declaration.
+A referenced license file retains its hash, and missing expressions remain
+missing. The receipt binds the embedded graph's compressed and decoded hashes,
+format and package count, as well as the executable hash. The image checker
+requires the same binding and joins exact name/version/source identities without
+accepting an older receipt shape. The application has no
 asserted license: its SPDX value is `NOASSERTION`, with an explicit policy for the
 unpublished first-party package and verified `publish = false`. This grants no
 license and does not waive requirements for shipped dependencies.
