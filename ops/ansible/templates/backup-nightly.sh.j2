@@ -1,42 +1,22 @@
 #!/usr/bin/env bash
-# Nightly logical backup of the public database: dump, list-validate, receipt, prune.
-# Runs as root from the systemd timer; the dump never leaves /srv/simplestchat-public.
+# The Python worker validates paths and owns the shared workload lock and archive lifecycle.
 set -euo pipefail
 umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
-unset DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_CONFIG
-export DOCKER_HOST=unix:///var/run/docker.sock
-target=/srv/simplestchat-public/backups/nightly
-keep_days={{ scpub_backup_keep_days | default(14) }}
-keep_at_least={{ scpub_backup_keep_at_least | default(3) }}
+unset PYTHONPATH PYTHONHOME DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_CONFIG
+helper=/usr/local/libexec/simplestchat-public/backup_public.py
+keep_days={{ scpub_backup_keep_days | default(14) | int }}
+keep_at_least={{ scpub_backup_keep_at_least | default(3) | int }}
 {% raw %}
-mkdir -m 700 -p "$target"
-database_id=$(docker ps --quiet --filter name='^simplestchat-public-postgres-1$')
-[[ "$database_id" =~ ^[a-f0-9]{12,64}$ ]] || { echo 'The public database container is not running.' >&2; exit 1; }
-[[ $(df --output=avail --block-size=1 "$target" | tail -1) -gt 1073741824 ]] || { echo 'Insufficient backup headroom.' >&2; exit 1; }
-stamp=$(date -u +%Y%m%dT%H%M%SZ)
-dump="$target/$stamp.dump"
-partial="$dump.partial"
-timeout --signal=TERM --kill-after=2s 120s docker exec --user 999:999 "$database_id" \
-  pg_dump --host /run/simplestchat-postgres --username postgres --dbname simplestchat --format custom >"$partial"
-[[ -s "$partial" ]]
-timeout --signal=TERM --kill-after=2s 30s docker exec --interactive --user 999:999 "$database_id" \
-  pg_restore --list <"$partial" >/dev/null
-mv "$partial" "$dump"
-bytes=$(stat -c %s "$dump")
-sha256=$(sha256sum "$dump" | cut -d' ' -f1)
-receipt="$target/$stamp.receipt.json"
-printf '{"schemaVersion":1,"dump":"%s","bytes":%s,"sha256":"%s","completedAt":"%s"}\n' \
-  "$stamp.dump" "$bytes" "$sha256" "$(date -u +%FT%TZ)" >"$receipt.partial"
-mv "$receipt.partial" "$receipt"
-# Prune dumps older than keep_days, always keeping the newest keep_at_least.
-mapfile -t dumps < <(ls -1t "$target"/*.dump 2>/dev/null)
-for ((i = keep_at_least; i < ${#dumps[@]}; i++)); do
-  old="${dumps[$i]}"
-  if [[ -n $(find "$old" -mtime "+$keep_days" -print) ]]; then
-    rm -f -- "$old" "${old%.dump}.receipt.json"
-  fi
-done
-rm -f -- "$target"/*.partial
-echo "Nightly backup $stamp.dump ($bytes bytes) recorded."
+cleanup() {
+  status=$?
+  # Reacquire the shared lock before touching any recognized orphan. A busy or
+  # unfinished release is left alone; next successful startup retries cleanup.
+  /usr/bin/python3 -E -s -B "$helper" cleanup >/dev/null 2>&1 || true
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+/usr/bin/python3 -E -s -B "$helper" nightly --keep-days "$keep_days" --keep-at-least "$keep_at_least"
 {% endraw %}

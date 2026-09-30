@@ -365,6 +365,8 @@ class FixtureRunner:
             return b""
         if args[0] == "exec":
             if "psql" in args:
+                if "SELECT pg_database_size(current_database())" in args:
+                    return b"8388608\n"
                 return "".join(
                     f"{version} t {checksum}\n"
                     for version, checksum in self.database_migrations.items()
@@ -1661,18 +1663,67 @@ class PublicRunnerTests(unittest.TestCase):
             _ = self.runner.run(["fixture-no-execution"])
         self.assertEqual((self.directory / "001.stdout").stat().st_size, 2 * 1024 * 1024 + 1)
 
-    def test_timeout_cleanup_falls_back_to_owned_child_without_group_probes(self) -> None:
-        """Timeout cleanup falls back to owned child without group probes."""
+    def test_timeout_cleanup_does_not_claim_group_cleanup_after_permission_failure(self) -> None:
+        """A denied group signal cannot be hidden by stopping only its direct child."""
         child = ChildProcess(returncode=None, timed_out=True)
         with (
             patch.object(subprocess, "Popen", return_value=child),
             patch.object(os, "killpg", side_effect=PermissionError("fixture")) as group,
-            self.assertRaises(subprocess.TimeoutExpired),
+            patch.object(public, "leader_exited", return_value=False),
+            self.assertRaises(PermissionError),
         ):
             _ = self.runner.run(["fixture-no-execution"], timeout=1)
         group.assert_called_once_with(12345, signal.SIGTERM)
-        self.assertEqual(child.signals, [signal.SIGTERM])
-        self.assertEqual(child.waits, [10])
+        self.assertEqual(child.signals, [])
+        self.assertEqual(child.waits, [])
+
+    def test_zombie_only_permission_handling_requires_complete_darwin_proof(self) -> None:
+        """Only an exited reserved leader and complete same-group zombie rows permit EPERM."""
+        for platform, rows, accepted in (
+            ("darwin", b"123 123 Zs\n", True),
+            ("darwin", b"123 123 Zs\n124 123 Z\n", True),
+            ("darwin", b"123 123 Zs\n124 123 S\n", False),
+            ("darwin", b"123 123 Zs\n124 456 Z\n", False),
+            ("darwin", b"123 123 Zs\n123 123 Zs\n", False),
+            ("darwin", b"123 123 Zombie\n", False),
+            ("darwin", b"123 123 Zs\n" + b"9" * 5000, False),
+            ("darwin", b"", False),
+            ("darwin", None, False),
+            ("linux", b"123 123 Zs\n", False),
+        ):
+            with (
+                self.subTest(platform=platform, rows=rows),
+                patch.object(sys, "platform", platform),
+                patch.object(os, "killpg", side_effect=PermissionError),
+                patch.object(public, "leader_exited", return_value=True),
+                patch.object(public, "process_group_rows", return_value=rows),
+            ):
+                if accepted:
+                    public.signal_group(123, signal.SIGKILL)
+                else:
+                    with self.assertRaises(PermissionError):
+                        public.signal_group(123, signal.SIGKILL)
+
+    def test_timeout_cleanup_keeps_leader_unreaped_until_group_escalation(self) -> None:
+        """The nonreaping exit check reserves the process-group identity through SIGKILL."""
+        child = ChildProcess(returncode=None, timed_out=True)
+        calls: list[int] = []
+
+        def signal_group(_pid: int, signal_number: int) -> None:
+            calls.append(signal_number)
+
+        with (
+            patch.object(subprocess, "Popen", return_value=child),
+            patch.object(os, "killpg", side_effect=signal_group),
+            patch.object(os, "waitid", return_value=object()) as observation,
+            self.assertRaises(subprocess.TimeoutExpired),
+        ):
+            _ = self.runner.run(["fixture-no-execution"], timeout=1)
+        observation.assert_called_once_with(
+            os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT
+        )
+        self.assertEqual(calls, [signal.SIGTERM, signal.SIGKILL])
+        self.assertEqual(child.waits, [5])
 
 
 class BackupReceiptTests(unittest.TestCase):

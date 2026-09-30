@@ -5,6 +5,9 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
+RuntimeDirectory=simplestchat-bench
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
 ExecStart=/usr/bin/bash /usr/local/libexec/simplestchat-public/backup-nightly.sh
 UMask=0077
 TimeoutStartSec=300
@@ -15,6 +18,6 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/srv/simplestchat-public/backups
+ReadWritePaths=/srv/simplestchat-public/backups /run/simplestchat-bench
 RestrictSUIDSGID=true
 LockPersonality=true

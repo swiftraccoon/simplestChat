@@ -12,9 +12,11 @@ moved. Successful recovery never converts a failed release into a passed one.
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
+import select
 import shutil
 import signal
 import stat
@@ -24,7 +26,7 @@ import tempfile
 import time
 import uuid
 from collections.abc import Generator, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -36,6 +38,10 @@ from release_artifact import ArtifactError, Manifest, sha256_file, validate_mani
 from release_json import JsonObject, JsonValue, decode_json, object_value, string_value
 
 ROOT = Path("/srv/simplestchat-public")
+ROOT_UID = 0
+MAX_BACKUP_RECEIPT_BYTES = 16384
+BACKUP_PRIVATE_MODE = 0o600
+BACKUP_HASH_CACHE_SECONDS = 86400
 CONFIG = Path("/etc/simplestchat-public")
 WORK = Path("/run/simplestchat-bench")
 SOURCES = Path("/srv/simplestchat-bench/sources")
@@ -69,6 +75,7 @@ IDENTITY_KEYS = frozenset(
 )
 ID = re.compile(r"sha256:[a-f0-9]{64}")
 MAX_INSPECTION_BYTES = 2 * 1024 * 1024
+MAX_GROUP_INSPECTION_BYTES = 65536
 LEDGER_COLUMNS = 3
 IMAGE_SELECTIONS = 2
 CONTAINER_FORMAT = (
@@ -212,7 +219,7 @@ def protected(
     """Require an ordinary root-owned path with approved permissions and size."""
     metadata = path.lstat()
     require(
-        metadata.st_uid == 0 and stat.S_IMODE(metadata.st_mode) in modes,
+        metadata.st_uid == ROOT_UID and stat.S_IMODE(metadata.st_mode) in modes,
         f"Unexpected ownership or permissions: {path}",
     )
     require(
@@ -240,6 +247,96 @@ def atomic(path: Path, data: JsonValue | bytes) -> None:
         os.fsync(directory)
     finally:
         os.close(directory)
+
+
+def leader_exited(pid: int) -> bool:
+    """Observe exit without reaping the leader that reserves its process-group identity."""
+    return os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None
+
+
+def process_group_rows(pid: int) -> bytes | None:
+    """Read a complete bounded Darwin process-group snapshot using only the fixed system ps."""
+    try:
+        child = subprocess.Popen(  # noqa: S603 -- trusted system utility and numeric owned group.
+            ["/bin/ps", "-g", str(pid), "-o", "pid=,pgid=,stat="],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=ENV,
+            start_new_session=True,
+        )
+    except OSError:
+        return None
+    output, error = bytearray(), bytearray()
+    try:
+        require(
+            child.stdout is not None and child.stderr is not None,
+            "Missing process inspection pipes",
+        )
+        streams = [stream for stream in (child.stdout, child.stderr) if stream is not None]
+        deadline = time.monotonic() + 2
+        while streams:
+            remaining = deadline - time.monotonic()
+            require(remaining > 0, "Process inspection timed out")
+            ready_streams, _, _ = select.select(streams, [], [], min(remaining, 0.1))
+            for stream in ready_streams:
+                chunk = os.read(stream.fileno(), 4096)
+                if not chunk:
+                    streams.remove(stream)
+                    continue
+                target = output if stream is child.stdout else error
+                require(
+                    len(target) + len(chunk) <= MAX_GROUP_INSPECTION_BYTES,
+                    "Process inspection overflow",
+                )
+                target.extend(chunk)
+        if child.wait(timeout=max(0.001, deadline - time.monotonic())) != 0 or error:
+            return None
+        return bytes(output)
+    except (OSError, ReleaseError, subprocess.SubprocessError):
+        return None
+    finally:
+        if child.returncode is None:
+            # ps is a trusted no-fork utility. Its failure cannot recurse through
+            # the group-signaling path whose ambiguity it is helping resolve.
+            with suppress(ProcessLookupError):
+                child.kill()
+            _ = child.wait(timeout=5)
+        for stream in (child.stdout, child.stderr):
+            if stream is not None:
+                stream.close()
+
+
+def darwin_zombie_group(pid: int) -> bool:
+    """Accept Darwin zombie-only EPERM only with complete group membership and a reserved leader."""
+    if not leader_exited(pid):
+        return False
+    output = process_group_rows(pid)
+    if output is None:
+        return False
+    members: set[int] = set()
+    for row in output.splitlines():
+        match = re.fullmatch(
+            rb"[ \t]*([1-9][0-9]{0,9})[ \t]+([1-9][0-9]{0,9})[ \t]+Z[+<>AELNSsVWX]*[ \t]*", row
+        )
+        if match is None:
+            return False
+        member, group = int(match[1]), int(match[2])
+        if group != pid or member in members:
+            return False
+        members.add(member)
+    return pid in members and leader_exited(pid)
+
+
+def signal_group(pid: int, signum: signal.Signals) -> None:
+    """Signal the owned group, refusing to hide permission failures involving any live member."""
+    try:
+        os.killpg(pid, signum)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        if sys.platform != "darwin" or not darwin_zombie_group(pid):
+            raise
 
 
 class Runner:
@@ -280,7 +377,7 @@ class Runner:
         finally:
             if source:
                 source.close()
-            if process is not None and process.poll() is None:
+            if process is not None and process.returncode is None:
                 self.stop(process)
         if process is None:
             message = "Command failed before creating an owned process"
@@ -298,20 +395,15 @@ class Runner:
 
     @staticmethod
     def stop(process: subprocess.Popen[bytes]) -> None:
-        """Terminate only the owned subprocess group and observe its exit."""
-
-        def send(signum: signal.Signals) -> None:
-            try:
-                os.killpg(process.pid, signum)
-            except (ProcessLookupError, PermissionError):
-                process.send_signal(signum)
-
-        send(signal.SIGTERM)
-        try:
-            _ = process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            send(signal.SIGKILL)
-            _ = process.wait(timeout=5)
+        """Remove the owned process group before reaping its PID-reserving leader."""
+        signal_group(process.pid, signal.SIGTERM)
+        deadline = time.monotonic() + 10
+        while not leader_exited(process.pid):
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.1)
+        signal_group(process.pid, signal.SIGKILL)
+        _ = process.wait(timeout=5)
 
     def docker(self, *args: str, **kwargs: Unpack[CommandOptions]) -> bytes:
         """Use the fixed local Unix socket without inherited Docker configuration."""
@@ -376,8 +468,32 @@ def boot_id() -> str:
     return value
 
 
+def expired_backup(record: JsonObject) -> bool:
+    """Allow only the nightly owner's bounded daemon work to age out or cross a reboot."""
+    deadline = record.get("untilMonotonic")
+    recorded_boot = record.get("bootId")
+    return (
+        record.get("operation") == "nightly_backup"
+        and type(deadline) in (int, float)
+        and isinstance(deadline, (int, float))
+        and deadline > 0
+        and isinstance(recorded_boot, str)
+        and bool(
+            re.fullmatch(
+                r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", recorded_boot
+            )
+        )
+        and (recorded_boot != boot_id() or time.monotonic() >= deadline)
+    )
+
+
 @contextmanager
-def workload_lock(*, after_reboot: bool = False, cancel_reboot: bool = False) -> Generator[None]:
+def workload_lock(
+    *,
+    after_reboot: bool = False,
+    cancel_reboot: bool = False,
+    recover_expired_backup: bool = False,
+) -> Generator[None]:
     """Serialize work and reject any unfinished persistent ownership journal."""
     require(not (after_reboot and cancel_reboot), "Choose one reboot recovery action")
     protected(ROOT, directory=True, modes=(0o700,))
@@ -399,7 +515,10 @@ def workload_lock(*, after_reboot: bool = False, cancel_reboot: bool = False) ->
             require(
                 type(record.get("schemaVersion")) is int
                 and record["schemaVersion"] == 1
-                and record.get("finalized") is True,
+                and (
+                    record.get("finalized") is True
+                    or (recover_expired_backup and expired_backup(record))
+                ),
                 "Resolve unfinished benchmark cleanup before releasing",
             )
         state = ROOT / "release-state.json"
@@ -955,6 +1074,140 @@ def write_backup_receipt(attempt: Path, backup: Path, sha256: str, revision: str
     atomic(attempt / "database-before.receipt.json", json.dumps(receipt, indent=2) + "\n")
 
 
+def publish_backup(partial: Path, destination: Path) -> None:
+    """Flush complete archive bytes before publishing its name or any success receipt."""
+    require(partial.parent == destination.parent, "Backup publication must stay on one filesystem")
+    require(not destination.exists() and not destination.is_symlink(), "Backup already exists")
+    descriptor = os.open(partial, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        metadata = os.fstat(descriptor)
+        require(stat.S_ISREG(metadata.st_mode) and metadata.st_size > 0, "Empty or unsafe backup")
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    _ = partial.replace(destination)
+    descriptor = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def backup_headroom(runner: RunnerProtocol, database: str) -> None:
+    """Reserve twice the current database size plus 1 GiB before creating a dump."""
+    size = (
+        runner.docker(
+            "exec",
+            "--user",
+            "999:999",
+            database,
+            "psql",
+            "-X",
+            "-q",
+            "-t",
+            "-A",
+            "-h",
+            "/run/simplestchat-postgres",
+            "-U",
+            "postgres",
+            "-d",
+            "simplestchat",
+            "-c",
+            "SELECT pg_database_size(current_database())",
+            timeout=15,
+        )
+        .decode()
+        .strip()
+    )
+    require(re.fullmatch(r"[1-9][0-9]{0,15}", size), "Invalid database size for backup reserve")
+    require(
+        shutil.disk_usage(runner.attempt).free > 1024**3 + 2 * int(size),
+        "Insufficient backup headroom",
+    )
+
+
+def validated_backup(
+    receipt: Path,
+    *,
+    digest_cache: JsonObject | None = None,
+) -> tuple[Path, JsonObject, float]:
+    """Verify private receipt metadata and the current archive bytes without following links."""
+    protected(receipt.parent, directory=True, modes=(0o700,))
+    protected(receipt, limit=MAX_BACKUP_RECEIPT_BYTES)
+    descriptor = os.open(receipt, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as source:
+        metadata = os.fstat(source.fileno())
+        require(
+            stat.S_ISREG(metadata.st_mode)
+            and metadata.st_uid == ROOT_UID
+            and stat.S_IMODE(metadata.st_mode) == BACKUP_PRIVATE_MODE
+            and metadata.st_nlink == 1
+            and metadata.st_size <= MAX_BACKUP_RECEIPT_BYTES,
+            "Unsafe backup receipt",
+        )
+        record = object_value(decode_json(source.read(MAX_BACKUP_RECEIPT_BYTES + 1)))
+    name, size, digest = record.get("dump"), record.get("bytes"), record.get("sha256")
+    require(
+        type(record.get("schemaVersion")) is int and record["schemaVersion"] == 1,
+        "Invalid backup receipt schema",
+    )
+    require(
+        isinstance(name, str)
+        and re.fullmatch(r"(?:database-before|[0-9]{8}T[0-9]{6}Z)\.dump", name),
+        "Invalid backup filename",
+    )
+    require(type(size) is int and size > 0, "Invalid backup size")
+    require(
+        isinstance(digest, str) and re.fullmatch(r"[a-f0-9]{64}", digest), "Invalid backup digest"
+    )
+    completed = datetime.fromisoformat(string_value(record.get("completedAt")))
+    require(
+        completed.tzinfo is not None and 0 < completed.timestamp() <= time.time() + 300,
+        "Invalid backup completion time",
+    )
+    backup = receipt.with_name(string_value(name))
+    protected(backup)
+    descriptor = os.open(backup, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as source:
+        before = os.fstat(source.fileno())
+        require(
+            stat.S_ISREG(before.st_mode)
+            and before.st_uid == ROOT_UID
+            and stat.S_IMODE(before.st_mode) == BACKUP_PRIVATE_MODE
+            and before.st_nlink == 1
+            and before.st_size == size,
+            "Backup size or permissions differ",
+        )
+        signature: list[JsonValue] = [
+            str(backup),
+            digest,
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        ]
+        cached_at = digest_cache.get("checkedAt") if digest_cache is not None else None
+        cached = (
+            digest_cache is not None
+            and digest_cache.get("signature") == signature
+            and type(cached_at) in (int, float)
+            and isinstance(cached_at, (int, float))
+            and 0 <= time.time() - cached_at < BACKUP_HASH_CACHE_SECONDS
+        )
+        actual = digest if cached else hashlib.file_digest(source, "sha256").hexdigest()
+        after = os.fstat(source.fileno())
+        require(
+            (before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+            == (after.st_size, after.st_mtime_ns, after.st_ctime_ns),
+            "Backup changed during validation",
+        )
+    require(actual == digest, "Backup digest differs")
+    if digest_cache is not None and not cached:
+        digest_cache.update({"signature": signature, "checkedAt": time.time()})
+    return backup, record, completed.timestamp()
+
+
 def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replacement and bounded rollback together.
     runner: RunnerProtocol,
     manifest: Manifest,
@@ -1018,7 +1271,8 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
     ready(runner, origin=origin, seconds=3)
     quiet(runner, report, quiet_seconds)
     backup = runner.attempt / "database-before.dump"
-    require(shutil.disk_usage(ROOT).free > 1024**3, "Insufficient backup headroom")
+    partial = runner.attempt / "database-before.dump.partial"
+    backup_headroom(runner, database_id)
     journal(runner, finalized=False, phase="live_backup")
     _ = runner.docker(
         "exec",
@@ -1039,9 +1293,9 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
         "--format",
         "custom",
         timeout=60,
-        output_path=backup,
+        output_path=partial,
     )
-    require(backup.stat().st_size > 0, "Empty live database backup")
+    require(partial.stat().st_size > 0, "Empty live database backup")
     _ = runner.docker(
         "exec",
         "--interactive",
@@ -1054,8 +1308,9 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
         "15s",
         "pg_restore",
         "--list",
-        input_path=backup,
+        input_path=partial,
     )
+    publish_backup(partial, backup)
     report["backupSha256"] = sha256_file(backup)
     write_backup_receipt(
         runner.attempt, backup, string_value(report["backupSha256"]), manifest["revision"]
@@ -1236,7 +1491,8 @@ def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the st
     require(re.fullmatch(r"https://[a-z0-9.-]+", origin), "Unexpected public origin")
     ready(runner, origin=origin, seconds=3)
     backup = runner.attempt / "database-before.dump"
-    require(shutil.disk_usage(ROOT).free > 1024**3, "Insufficient backup headroom")
+    partial = runner.attempt / "database-before.dump.partial"
+    backup_headroom(runner, database_id)
     journal(runner, finalized=False, phase="live_backup")
     _ = runner.docker(
         "exec",
@@ -1257,9 +1513,9 @@ def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the st
         "--format",
         "custom",
         timeout=60,
-        output_path=backup,
+        output_path=partial,
     )
-    require(backup.stat().st_size > 0, "Empty live database backup")
+    require(partial.stat().st_size > 0, "Empty live database backup")
     _ = runner.docker(
         "exec",
         "--interactive",
@@ -1272,8 +1528,9 @@ def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the st
         "15s",
         "pg_restore",
         "--list",
-        input_path=backup,
+        input_path=partial,
     )
+    publish_backup(partial, backup)
     report["backupSha256"] = sha256_file(backup)
     write_backup_receipt(
         runner.attempt, backup, string_value(report["backupSha256"]), manifest["revision"]

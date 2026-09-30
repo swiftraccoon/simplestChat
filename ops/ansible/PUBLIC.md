@@ -285,19 +285,32 @@ existing site, take an independent database backup and provider snapshot; copy
 backups off the VPS through a protected channel and test restoration.
 
 A nightly local dump is a separate opt-in. Set `scpub_backup_enabled: true` in
-the ignored inventory and apply [backup.yml](backup.yml): a systemd timer runs
-`pg_dump` at 04:00 UTC into `/srv/simplestchat-public/backups/nightly`, validates
-the archive with `pg_restore --list`, writes a receipt beside it (size, hash,
-time) that monitoring counts as backup evidence, and prunes dumps older than
-`scpub_backup_keep_days` (14) while keeping `scpub_backup_keep_at_least` (3).
-The dump stays on the VPS; copy it off through a protected channel, for example
-from the controller:
+the ignored inventory and apply [backup.yml](backup.yml). Its 04:00 UTC timer
+runs the reviewed worker under the same workload lock as releases and benchmarks.
+An active or unfinished operation blocks a new backup. The worker clears only
+recognized private stale partials, reserves twice the current database size plus
+1 GiB, bounds `pg_dump` inside the database container, and validates the archive
+with `pg_restore --list`. It then flushes the dump, renames it, flushes the
+parent directory, and durably publishes its receipt. The receipt contains size,
+SHA256, completion time, the exact PostgreSQL image and applied migration ledger.
+The live-size reserve is a conservative estimate, not a guarantee against later
+filesystem growth.
+
+`scpub_backup_keep_days` accepts integers from 1–3650 (default 14), and
+`scpub_backup_keep_at_least` accepts integers from 1–365 (default 3). Pruning
+retains the newest verified archives and removes older eligible pairs only after
+a new successful archive. Private nightly command logs share the age limit.
+Release evidence is separate and is never automatically pruned.
+
+Normal failure cleanup removes the worker's own partial dump. The wrapper has an
+EXIT cleanup trap; startup also checks for stale partials. An abrupt termination
+retains `operation=nightly_backup` in the canonical ownership journal. Its cleanup
+command may clear only that operation after the recorded same-boot safety deadline
+(eight minutes) or a reboot, while holding the shared lock. This allows the bounded
+daemon-side dump to finish before other work is admitted:
 
 ```sh
-ansible -i ops/ansible/inventory.local.yml public_vps -b -m shell \
-  -a "ls -1t /srv/simplestchat-public/backups/nightly/*.dump | head -1"
-ansible -i ops/ansible/inventory.local.yml public_vps -b -m fetch \
-  -a "src=<that path> dest=results/backups/ flat=yes"
+sudo /usr/bin/python3 -E -s -B /usr/local/libexec/simplestchat-public/backup_public.py cleanup
 ```
 
 Application SQL migrations run only during explicit deployment. PostgreSQL

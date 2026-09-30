@@ -227,7 +227,10 @@ Use a new unit name for a later attempt. Do not automatically retry a failed job
 The command checks running configuration against Compose, requires a healthy
 application/database, and rejects missing, changed, failed, or additional SQL
 migrations. It takes a live consistent PostgreSQL dump before stopping the app.
-The dump is local and its contents listing is checked; off-host retention and
+The dump is first written privately as a partial file. Its contents listing is
+checked, its bytes are flushed before rename, and the containing directory is
+flushed before a durable SHA256 receipt is published. Headroom reserves twice
+the current database size plus 1 GiB. Off-host retention and
 restoration drills remain separate responsibilities.
 
 Only the application is replaced. Caddy and PostgreSQL must retain their IDs,

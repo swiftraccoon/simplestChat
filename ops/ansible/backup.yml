@@ -10,6 +10,12 @@
         that:
           - scpub_enabled | bool
           - scpub_backup_enabled | bool
+          - scpub_backup_keep_days | default(14) is integer
+          - scpub_backup_keep_days | default(14) | int >= 1
+          - scpub_backup_keep_days | default(14) | int <= 3650
+          - scpub_backup_keep_at_least | default(3) is integer
+          - scpub_backup_keep_at_least | default(3) | int >= 1
+          - scpub_backup_keep_at_least | default(3) | int <= 365
         fail_msg: Set scpub_enabled and scpub_backup_enabled on a prepared public host.
 
     - name: Require the public database container
@@ -28,6 +34,15 @@
         owner: root
         group: root
         mode: '0700'
+
+    - name: Install the reviewed backup worker and its shared release primitives
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: [backup_public.py, release_public.py, release_artifact.py, release_json.py]
 
     - name: Install the backup script
       ansible.builtin.template:
