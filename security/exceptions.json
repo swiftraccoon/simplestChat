@@ -1260,6 +1260,16 @@
       "reachability": "Exact CodeQL query/version/message/range and regular member digest 18bfd5f2045417f8ace5d76e222bf7441b31ead5fc2cbaf6225965e0afea8767; upstream archive 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7 plus reviewed wrap/manifest/overlay identities. Complete local source and supporting invariants reviewed. No upstream path/query exclusion; changed pinned context requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-native-review-2026-09-30.md#alert-101"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:4e2b6329bf7a01f2a82cbd04f4a8aee49152b10e61e606703956b8fa99e24baa",
+      "scope": "src/security_canary_tests.rs:90:90:21:62",
+      "owner": "swiftraccoon",
+      "rationale": "The cfg(test) SensitiveValues.assert_absent assertion evaluates a boolean containment check and formats only the fixed label and surface strings. All 13 callsites pass literal surface names; labels are literals supplied directly or through fixed tuple arrays. Neither the sensitive value, its encodings nor the observed output is a formatting argument. The reported receiver-level flows do not represent a secret reaching this diagnostic.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 465a36f3c06f71753da0d1f21cef3f451ec2ef2fb23d5d22a6898d943858d26e. Reviewed cfg(test) helper and all 13 caller paths; no sensitive value is formatted. No blanket test/query exclusion. Changed helper, range or message requires another exact review; changed callers require renewed source review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-102"
     }
   ]
 }

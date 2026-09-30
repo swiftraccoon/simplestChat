@@ -44,6 +44,51 @@ surface but does not make the reported operation a false positive. Alert 5's
 bundle-reader file race and alerts 24–26's unspecified TLS minimum require source
 changes and fresh analysis; no exception authorizes dismissing them.
 
+## Follow-up: canary assertion diagnostic
+
+<a id="alert-102"></a>[Alert 102](https://github.com/swiftraccoon/simplestChat/security/code-scanning/102)
+is a High `rust/cleartext-logging` result from CodeQL `2.27.1`, run
+`36716564147`, revision `def5a4a0ed7949d34be3643744ae8b110473835a`.
+Its primary range is `src/security_canary_tests.rs:90:90:21:62`. This individual
+result is a false positive; the original 69-alert disposition above is unchanged.
+
+`SensitiveValues` stores each fixed descriptive label separately from its
+sensitive value. `assert_absent` checks the value and three encodings against
+captured output, then passes only the resulting boolean to `assert!`. The
+failure format interpolates **only `label` and `surface`**. Neither `value`,
+`encoded`, `output` nor the collection receiver is a formatting argument.
+For example, a failure can say `sensitive password appeared in application
+tracing`; it cannot include the password through these arguments.
+
+The 13 paths reported by CodeQL cover every current callsite:
+
+| Reviewed caller | Literal surface arguments |
+| --- | --- |
+| [`src/security_canary_tests.rs:118`](../src/security_canary_tests.rs#L118), line 121 | `guard fixture`, `safe fixture` |
+| [`src/signaling/auth_secret_canary_tests.rs:149`](../src/signaling/auth_secret_canary_tests.rs#L149), lines 215, 239, 261, 306–309 | `denied login response`, `denied invitation response`, `denied credential response`, `revoked-session response`, `application tracing`, `HTTP metrics`, `media diagnostic response`, `request URIs and URL response headers` |
+| [`src/signaling/connection_secret_canary_tests.rs:146`](../src/signaling/connection_secret_canary_tests.rs#L146), lines 147–148 | `dispatcher tracing`, `diagnostic JSONL`, `dispatcher metrics` |
+
+Every `add` label is also a literal, either passed directly or obtained from a
+fixed tuple array in those three files. The helper is declared under
+`#[cfg(test)]` in `src/lib.rs:29–30`; the HTTP and dispatcher callers are nested
+under the test-only authorization modules in `src/signaling/mod.rs:5–6` and
+`src/signaling/connection.rs:2093–2095`. The decision rests on the actual format
+arguments as well as this test boundary, not on a general exemption for tests.
+
+The reviewed complete-file SHA256 values are:
+
+| Source | SHA256 |
+| --- | --- |
+| `src/security_canary_tests.rs` | `465a36f3c06f71753da0d1f21cef3f451ec2ef2fb23d5d22a6898d943858d26e` |
+| `src/signaling/auth_secret_canary_tests.rs` | `1267148612660ecc2387546f3f139bf9fa0fc2ea3d7c6d1395350eee97df372b` |
+| `src/signaling/connection_secret_canary_tests.rs` | `fc65f814dbfec87de61253c68d16a30290efbdb540535cf00604ab01a1aeb812` |
+
+All bytes matched the analyzed revision when reviewed. The exception binds the
+exact query, analyzer, primary range, complete rendered message and helper-file
+digest and expires on 2026-11-29. Changed callers still require renewed review;
+their behavior is not covered by the primary-file fingerprint. No Rust source
+was changed to silence this query, and this review performs no remote dismissal.
+
 ## Maintained command contract
 
 Run commands from the repository root with the documented Python environment.

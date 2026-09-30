@@ -604,14 +604,14 @@ class CodeqlTriageTests(unittest.TestCase):
                 client.assert_not_called()
 
     def test_all_reviewed_records_are_exact_and_fix_findings_remain_unwaived(self) -> None:
-        """The checked-in review covers every initial alert while retaining real remediation."""
+        """Initial and follow-up reviews retain exact identities and real remediation."""
         raw = object_value(
             decode_json((ROOT / "security/codeql-review-2026-09-30.json").read_bytes())
         )
         entries = [object_value(item) for item in array_value(raw["alerts"])]
         self.assertEqual(
             {triage.positive(item["number"]) for item in entries},
-            set(range(1, INITIAL_ALERT_COUNT + 1)),
+            set(range(1, INITIAL_ALERT_COUNT + 1)) | {102},
         )
         reviews = security_policy.read_exceptions(today=TODAY)
         for item in entries:

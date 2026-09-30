@@ -1522,6 +1522,29 @@
       "rationale": "The sink is a cfg(test) assertion diagnostic for a response from the test-owned loopback HTTP server. The route returns fixed status/body bytes to test timeout and admission metrics; no external input or production logging path is used.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/69"
+    },
+    {
+      "rule": "rust/cleartext-logging",
+      "toolVersion": "2.27.1",
+      "path": "src/security_canary_tests.rs",
+      "region": {
+        "start_line": 90,
+        "end_line": 90,
+        "start_column": 21,
+        "end_column": 62
+      },
+      "messageSha256": "a6c9baee7ad6c1f3d9376a68dde607f75df57553ba397e5cd68f4990b2097be2",
+      "sourceSha256": "465a36f3c06f71753da0d1f21cef3f451ec2ef2fb23d5d22a6898d943858d26e",
+      "scope": "src/security_canary_tests.rs:90:90:21:62",
+      "fingerprint": "codeql:4e2b6329bf7a01f2a82cbd04f4a8aee49152b10e61e606703956b8fa99e24baa",
+      "number": 102,
+      "severity": "high",
+      "state": "open",
+      "disposition": "false-positive",
+      "rationale": "The cfg(test) SensitiveValues.assert_absent assertion evaluates a boolean containment check and formats only the fixed label and surface strings. All 13 callsites pass literal surface names; labels are literals supplied directly or through fixed tuple arrays. Neither the sensitive value, its encodings nor the observed output is a formatting argument. The reported receiver-level flows do not represent a secret reaching this diagnostic.",
+      "observedRevision": "def5a4a0ed7949d34be3643744ae8b110473835a",
+      "observedRunId": 36716564147,
+      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/102"
     }
   ]
 }
