@@ -464,13 +464,18 @@ class ImageRunnerTests(unittest.TestCase):
         finding: JsonObject = {
             "File": "/layers/content-000000",
             "RuleID": "github-pat",
-            "StartLine": 1,
+            "StartLine": 32900,
+            "EndLine": 32900,
+            "StartColumn": 8,
+            "EndColumn": 47,
         }
         findings: list[JsonObject] = [
-            {**finding, "File": f"/layers/content-{index:06d}"} for index in range(4)
+            {**finding, "File": f"/layers/content-{index:06d}", "StartLine": line, "EndLine": line}
+            for index, line in enumerate((32900, 65604, 32835, 32834))
         ]
         cases: tuple[tuple[int, list[JsonObject] | None, bool], ...] = (
             (image.FINDINGS_EXIT, findings, True),
+            (image.FINDINGS_EXIT, [{**item, "StartColumn": 9} for item in findings], False),
             (image.FINDINGS_EXIT, [finding], False),
             (0, [], False),
             (image.FINDINGS_EXIT, [], False),

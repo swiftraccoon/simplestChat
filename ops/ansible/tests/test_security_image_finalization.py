@@ -15,6 +15,7 @@ import release_build
 import security_image as image
 import security_image_policy as image_policy
 import security_rpm_notices
+import security_secret_spans
 from release_json import decode_json, object_value
 from test_security_image_advisories import empty_grype, openssl
 
@@ -27,6 +28,7 @@ def passing_scans(stack: ExitStack, output: Path) -> None:
     _ = stack.enter_context(
         patch.object(security_rpm_notices, "collect", return_value={"passed": True})
     )
+    _ = stack.enter_context(patch.object(security_secret_spans, "collect", return_value={}))
     fixed: dict[str, object] = {
         "bind_archive": {
             "revision": "b" * 40,

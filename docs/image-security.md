@@ -396,6 +396,24 @@ scanner-supported encodings; it does not decode UTF-16, compressed/encrypted
 content or strings split by nonprintable bytes. A passing result is not proof
 that arbitrary hidden data contains no secrets.
 
+The public secret verdict also retains digest-only `projectionSpans` diagnostics.
+Each record binds the original whole-file hash, full projection hash, and all
+four scanner coordinates. The helper mirrors Gitleaks 8.30.1's bounded file
+framing and byte-column convention: columns include the preceding LF except at
+a fragment's first line. A uniquely resolved match region receives its byte
+length and SHA-256. Decoded findings identify the original encoded region;
+the region is not necessarily the rule's captured `Secret` group. Ambiguous
+coordinates on fragmented long lines, or coordinates without an exact region,
+remain explicitly unresolved and never receive a guessed digest. These fields
+do not change existing fingerprints, exceptions, or blocking decisions.
+
+The helper authenticates complete projection bytes using no-follow regular-file
+reads, with 256 MiB plus prefix per file, four GiB aggregate reads, 20,000
+findings, 100,000 candidate checks and a 90-second deadline. `--redact=100`
+remains enabled; candidate text, context, scanner `Match` and `Secret` fields
+are never published. Hashes reveal equality and permit offline guessing of
+low-entropy values; they are diagnostic identifiers, not encrypted secrets.
+
 Before scanning the artifact, the identical pinned executable and arguments
 must detect a never-issued inert credential-shaped canary in each text, ELF,
 PDF and ISO-shaped input, through the same projector. Inline allow comments

@@ -28,6 +28,7 @@ import security_image_policy as policy
 import security_rpm_notices
 import security_runtime
 import security_secret_projection as projection
+import security_secret_spans
 import security_tools
 from native_security import engine_prefix
 from security_policy import read_exceptions
@@ -39,6 +40,8 @@ from release_json import JsonObject, JsonValue, array_value, decode_json, object
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+
+    from security_policy import ExceptionRecord
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ("syft", "grype", "gitleaks")
@@ -615,7 +618,8 @@ def secret_selftest(sandbox: Sandbox) -> None:
     status, _ = sandbox.run(
         "gitleaks", secret_arguments(), destination=output, mounts={"/layers": source}
     )
-    verdict = policy.secret_verdict(policy.report(output / "gitleaks.json"), [], identity)
+    report = policy.report(output / "gitleaks.json")
+    verdict = policy.secret_verdict(report, [], identity)
     findings = array_value(verdict["blocked"])
     policy.require(
         status == FINDINGS_EXIT
@@ -623,6 +627,15 @@ def secret_selftest(sandbox: Sandbox) -> None:
         and all(object_value(item)["rule"] == "github-pat" for item in findings)
         and {string_value(object_value(item)["path"]) for item in findings} == set(prefixes),
         "image_secret_detector_selftest",
+    )
+    spans = security_secret_spans.collect(report, identity, source)
+    policy.require(
+        all(
+            object_value(item).get("status") == "resolved"
+            and object_value(item).get("spanSha256") == hashlib.sha256(canary.encode()).hexdigest()
+            for item in array_value(spans["findings"])
+        ),
+        "image_secret_coordinate_selftest",
     )
     write(
         sandbox.output / "secret-selftest.json",
@@ -751,6 +764,19 @@ def runtime_disposition(  # noqa: PLR0913 -- Explicit artifact and output bindin
     return vulnerabilities
 
 
+def secret_checks(
+    secret_dir: Path, output: Path, exceptions: Sequence[ExceptionRecord]
+) -> JsonObject:
+    """Preserve exact blocking policy while adding independently authenticated span diagnostics."""
+    report = policy.report(secret_dir / "gitleaks.json")
+    paths = object_value(policy.report(output / "secret-paths.json"))
+    verdict = policy.secret_verdict(report, exceptions, paths)
+    verdict["projectionSpans"] = security_secret_spans.collect(
+        report, paths, output / "secret-input"
+    )
+    return verdict
+
+
 def execute(args: Options) -> bool:
     """Persist separate evidence and one honest final verdict, including failed checks."""
     manifest = bind_archive(args)
@@ -853,11 +879,7 @@ def execute(args: Options) -> bool:
         checks: JsonObject = {
             "vulnerabilities": vulnerabilities,
             "licenses": policy.license_verdict(packages, image_policy, exceptions),
-            "secrets": policy.secret_verdict(
-                policy.report(secret_dir / "gitleaks.json"),
-                exceptions,
-                object_value(policy.report(output / "secret-paths.json")),
-            ),
+            "secrets": secret_checks(secret_dir, output, exceptions),
         }
         write(output / "checks.json", checks)
         outcome["checks"] = checks
