@@ -30,6 +30,8 @@ pub const MAX_INVITE_DAYS: i32 = 30;
 const DEFAULT_INVITE_DAYS: i32 = 7;
 /// Rooms one account is listed as belonging to.
 const MAX_MEMBERSHIPS: i64 = 100;
+/// Successful redemptions remain retryable until this many days after expiry.
+pub(crate) const INVITE_RECEIPT_RETENTION_DAYS: i32 = 7;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct RoomInvite {
@@ -154,22 +156,31 @@ pub async fn revoke_room_invite(
 
 /// Spend one use of a room code for `user_id` and grant its role, never a
 /// lower one than the account already holds; the owner keeps ownership.
-/// `None` when the code is unknown, exhausted or expired.
+/// A successful account/code pair replays its receipt until seven days after
+/// expiry, without spending again or changing a subsequently edited membership.
+/// The returned role is the original result, not a current authorization check.
+/// `None` when no receipt exists and the code is unknown, exhausted or expired;
+/// revocation and receipt expiry also make previous successes unavailable.
 pub async fn redeem_room_invite(
     pool: &PgPool,
     code: &str,
     user_id: Uuid,
 ) -> Result<Option<(String, String, Role)>, sqlx::Error> {
     let mut transaction = pool.begin().await?;
-    let redeemed: Option<(String, i16, Uuid)> = sqlx::query_as(
-        "UPDATE invites SET uses_left = uses_left - 1
-         WHERE code = $1 AND kind = 'room' AND uses_left > 0 AND expires_at > now()
-         RETURNING room_id, role, created_by",
+    // Serialize all attempts against this code before checking the receipt.
+    // A repeated successful request never spends again or re-grants a role that
+    // a moderator has subsequently changed.
+    let invitation: Option<(String, i16, Uuid, i32, bool)> = sqlx::query_as(
+        "SELECT room_id, role, created_by, uses_left, expires_at > clock_timestamp()
+         FROM invites WHERE code = $1 AND kind = 'room'
+           AND expires_at > clock_timestamp() - make_interval(days => $2)
+         FOR UPDATE",
     )
     .bind(code)
+    .bind(INVITE_RECEIPT_RETENTION_DAYS)
     .fetch_optional(&mut *transaction)
     .await?;
-    let Some((room_id, role, created_by)) = redeemed else {
+    let Some((room_id, role, created_by, uses_left, live)) = invitation else {
         return Ok(None);
     };
     let room: Option<(Uuid, String)> =
@@ -180,6 +191,24 @@ pub async fn redeem_room_invite(
     let Some((owner_id, display_name)) = room else {
         return Ok(None);
     };
+    let receipt: Option<i16> = sqlx::query_scalar(
+        "SELECT granted_role FROM invite_redemptions WHERE code = $1 AND user_id = $2",
+    )
+    .bind(code)
+    .bind(user_id)
+    .fetch_optional(&mut *transaction)
+    .await?;
+    if let Some(role) = receipt {
+        let role = u8::try_from(role)
+            .ok()
+            .and_then(Role::from_u8)
+            .ok_or_else(|| sqlx::Error::Protocol("invalid invitation receipt role".into()))?;
+        transaction.commit().await?;
+        return Ok(Some((room_id, display_name, role)));
+    }
+    if !live || uses_left == 0 {
+        return Ok(None);
+    }
     let granted = if owner_id == user_id {
         Role::Owner
     } else {
@@ -200,6 +229,16 @@ pub async fn redeem_room_invite(
         .await?;
         Role::from_db(stored)
     };
+    sqlx::query("UPDATE invites SET uses_left = uses_left - 1 WHERE code = $1")
+        .bind(code)
+        .execute(&mut *transaction)
+        .await?;
+    sqlx::query("INSERT INTO invite_redemptions (code, user_id, granted_role) VALUES ($1, $2, $3)")
+        .bind(code)
+        .bind(user_id)
+        .bind(granted as i16)
+        .execute(&mut *transaction)
+        .await?;
     transaction.commit().await?;
     Ok(Some((room_id, display_name, granted)))
 }
@@ -489,7 +528,7 @@ mod tests {
         assert_eq!((invite.role.0, invite.uses_left), (Role::Member, 2));
         assert_eq!(list_room_invites(&pool, &room_id).await.unwrap().len(), 1);
 
-        // Alice becomes a member; redeeming again changes nothing but the count.
+        // Alice becomes a member; a lost-response retry must not spend twice.
         let (redeemed_room, name, role) = redeem_room_invite(&pool, &invite.code, alice)
             .await
             .unwrap()
@@ -504,6 +543,18 @@ mod tests {
                 .unwrap(),
             Role::Member
         );
+        let repeated = redeem_room_invite(&pool, &invite.code, alice)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            repeated,
+            (room_id.clone(), "Invited room".into(), Role::Member)
+        );
+        assert_eq!(
+            list_room_invites(&pool, &room_id).await.unwrap()[0].uses_left,
+            1
+        );
         // Bob is already a moderator: the code never demotes him.
         let (_, _, role) = redeem_room_invite(&pool, &invite.code, bob)
             .await
@@ -514,8 +565,8 @@ mod tests {
             redeem_room_invite(&pool, &invite.code, alice)
                 .await
                 .unwrap()
-                .is_none(),
-            "two uses, spent"
+                .is_some(),
+            "a spent code still replays its successful receipt"
         );
         assert!(list_room_invites(&pool, &room_id).await.unwrap().is_empty());
 
@@ -558,6 +609,105 @@ mod tests {
                 .await
                 .unwrap()
         );
+
+        // Concurrent retries of a single-use code both observe one committed receipt.
+        let retry = create_room_invite(&pool, &room_id, Role::Member, 1, 1, owner)
+            .await
+            .unwrap()
+            .unwrap();
+        let (first, second) = tokio::join!(
+            redeem_room_invite(&pool, &retry.code, alice),
+            redeem_room_invite(&pool, &retry.code, alice),
+        );
+        let first = first
+            .unwrap()
+            .expect("initial single-use redemption succeeds");
+        assert_eq!(first.2, Role::Member);
+        assert_eq!(Some(first), second.unwrap());
+        let remaining: i32 = sqlx::query_scalar("SELECT uses_left FROM invites WHERE code = $1")
+            .bind(&retry.code)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(remaining, 0);
+        // A role removed after redemption is never restored by a retry.
+        sqlx::query("DELETE FROM room_roles WHERE room_id = $1 AND user_id = $2")
+            .bind(&room_id)
+            .bind(alice)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(
+            redeem_room_invite(&pool, &retry.code, alice)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        let roles: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM room_roles WHERE room_id = $1 AND user_id = $2",
+        )
+        .bind(&room_id)
+        .bind(alice)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(roles, 0);
+        // Receipt retries survive expiry for seven days; new users cannot redeem them.
+        sqlx::query("UPDATE invites SET expires_at = now() - interval '1 day' WHERE code = $1")
+            .bind(&retry.code)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(
+            redeem_room_invite(&pool, &retry.code, alice)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            redeem_room_invite(&pool, &retry.code, bob)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        sqlx::query("UPDATE invites SET expires_at = now() - interval '8 days' WHERE code = $1")
+            .bind(&retry.code)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(
+            redeem_room_invite(&pool, &retry.code, alice)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        // Explicit revocation immediately invalidates an existing receipt too.
+        assert!(
+            revoke_room_invite(&pool, &room_id, &invite.code)
+                .await
+                .unwrap()
+        );
+        assert!(
+            redeem_room_invite(&pool, &invite.code, alice)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let receipts: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM invite_redemptions WHERE code = $1")
+                .bind(&invite.code)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(receipts, 0);
+        sqlx::query("INSERT INTO room_roles(room_id,user_id,role,granted_by) VALUES($1,$2,$3,$4)")
+            .bind(&room_id)
+            .bind(alice)
+            .bind(Role::Member.to_db())
+            .bind(owner)
+            .execute(&pool)
+            .await
+            .unwrap();
 
         // The room holds twenty live codes at most.
         for _ in 0..MAX_LIVE_ROOM_INVITES {

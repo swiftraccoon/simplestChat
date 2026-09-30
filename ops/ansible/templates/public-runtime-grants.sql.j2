@@ -13,4 +13,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE
      public.room_states, public.room_reports, public.moderation_events,
      public.invites
   TO simplestchat_app;
+GRANT SELECT, INSERT, DELETE
+  ON public.invite_redemptions
+  TO simplestchat_app;
 COMMIT;

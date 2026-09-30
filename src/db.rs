@@ -121,7 +121,7 @@ pub async fn connect() -> anyhow::Result<Option<PgPool>> {
 /// One column from each table the newest migrations shaped. A deployment that ran
 /// the binary against an unmigrated database fails here, at startup, with a message
 /// naming the gap, instead of on the first request that touches it.
-const EXPECTED_COLUMNS: [(&str, &str); 8] = [
+const EXPECTED_COLUMNS: [(&str, &str); 9] = [
     ("users", "preferences"),
     ("sessions", "refresh_token_family_hash"),
     ("rooms", "updated_at"),
@@ -129,6 +129,7 @@ const EXPECTED_COLUMNS: [(&str, &str); 8] = [
     ("room_reports", "resolved_by"),
     ("moderation_events", "report_id"),
     ("invites", "uses_left"),
+    ("invite_redemptions", "granted_role"),
     ("webauthn_credentials", "credential_json"),
 ];
 
