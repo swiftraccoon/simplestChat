@@ -180,9 +180,15 @@ Before the first authenticated SSH connection only, lifecycle evidence includes
 stderr byte count, SHA-256 and a diagnostic projection of at most the first 8 KiB,
 12 lines and 1 KiB per line. The projection reconstructs only fixed error classes,
 OS reasons and emulator component names; it never copies input text. It covers
-KVM, block/backing formats, sandbox, boot/device, memory/resource limits and
-GLib/thread startup failures. Unknown, oversized or control-bearing lines are
-withheld, with truncation/count metadata retained. Pre-auth guest serial stdout
+KVM, block/backing formats, sandbox, boot/device, memory/resource limits,
+GLib/thread startup failures (including QEMU's `qemu_thread_create` fatal format),
+and QEMU/libc or GLib assertion failures, including GLib's unreachable-code form.
+Exact filename-and-line tokens can add one of four fixed component hints:
+`thread-pool.c`, `qemu-thread-posix.c`, `async.c` or `gmem.c`. Assertion diagnostics
+expose only fixed labels; source paths, line numbers, function names and assertion
+expressions remain private.
+Unknown, oversized or control-bearing lines are withheld, with truncation/count
+metadata retained. Pre-auth guest serial stdout
 contributes only a byte count, digest and fixed milestone labels for firmware,
 disk boot, missing boot disk, GRUB, Linux, kernel panic, initramfs, reboot,
 disk resizing, poweroff, cloud-init and SSH startup. Matching uses a 128-byte

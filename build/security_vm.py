@@ -71,6 +71,7 @@ RECAP = re.compile(
     + r"\s+failed=(\d+)\s+skipped=(\d+)\s+rescued=(\d+)\s+ignored=(\d+)\s*$",
     re.MULTILINE,
 )
+STARTUP_ASSERTION = r"\bassertion\b.*\bfailed\b|\bcode should not be reached\b"
 STARTUP_ERRORS = {
     "kvm": r"\bkvm\b|accelerator|accel=|hardware virtualization",
     "block_backend": r"backing|block node|blockdev|qcow2|image format|block driver",
@@ -82,7 +83,8 @@ STARTUP_ERRORS = {
     "device": r"device|machine type|machine.*support|bus .*found|driver.*found",
     "memory": r"memory|mmap|address.space|allocation|allocate|ram size|pc\.ram",
     "resource_limit": r"rlimit|prlimit|resource limit|too many open files|file size limit",
-    "thread_start": r"gthread|pthread|creating thread|glib-error",
+    "thread_start": r"gthread|pthread|qemu_thread_create|creating thread|glib-error",
+    "assertion_failure": STARTUP_ASSERTION,
     "network": r"network|netdev|host forwarding|hostfwd|address already in use|slirp",
     "option": r"invalid (?:option|parameter|argument)|unknown option"
     + r"|unrecognized option|expects|requires",
@@ -119,6 +121,7 @@ STARTUP_COMPONENTS = (
     "gthread",
     "pthread",
 )
+STARTUP_SOURCE_COMPONENTS = ("thread-pool.c", "qemu-thread-posix.c", "async.c", "gmem.c")
 BOOT_MILESTONES = {
     "firmware": rb"seabios|tianocore|uefi firmware",
     "boot_disk": rb"booting from hard disk",
@@ -248,7 +251,11 @@ def startup_errors(content: bytes) -> dict[str, object]:
                 "could not access kvm kernel module:",
                 "failed to initialize kvm:",
             )
-        ) and not re.search(r"\b(?:glib-error|gthread|pthread_create)\b", line):
+        ) and not re.search(
+            r"\b(?:glib-error|gthread|pthread_create)\b"
+            + rf"|^(?:glib:)?error:.*(?:{STARTUP_ASSERTION})",
+            line,
+        ):
             withheld += 1
             continue
         classes = [name for name, pattern in STARTUP_ERRORS.items() if re.search(pattern, line)]
@@ -259,7 +266,12 @@ def startup_errors(content: bytes) -> dict[str, object]:
             {
                 "classes": classes,
                 "reasons": [reason for reason in STARTUP_REASONS if reason in line],
-                "components": [name for name in STARTUP_COMPONENTS if name in line],
+                "components": [name for name in STARTUP_COMPONENTS if name in line]
+                + [
+                    name
+                    for name in STARTUP_SOURCE_COMPONENTS
+                    if re.search(rf"(?:^|[/\s:]){re.escape(name)}:[0-9]+(?=[:\s]|$)", line)
+                ],
             }
         )
     return {

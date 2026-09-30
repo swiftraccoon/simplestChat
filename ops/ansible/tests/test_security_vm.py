@@ -372,6 +372,103 @@ class BoundaryTests(unittest.TestCase):
 class StartupDiagnosticTests(unittest.TestCase):
     """Recognize actionable emulator failures without publishing any arbitrary input words."""
 
+    def test_abort_formats_keep_only_fixed_thread_and_assertion_labels(self) -> None:
+        """QEMU, GLib and libc fatal formats never disclose assertion expressions or paths."""
+        for line, classes, reasons, components in (
+            (
+                "qemu: qemu_thread_create: Resource temporarily unavailable",
+                ["thread_start"],
+                ["resource temporarily unavailable"],
+                [],
+            ),
+            (
+                "qemu: qemu_thread_create: Cannot allocate memory",
+                ["memory", "thread_start"],
+                ["cannot allocate memory"],
+                [],
+            ),
+            (
+                "GLib:ERROR:/private-fixture.c:7:private_function: "
+                + "assertion failed: (private_expression)",
+                ["assertion_failure"],
+                [],
+                ["glib"],
+            ),
+            (
+                "ERROR:/private-fixture.c:7:private_function: "
+                + "assertion failed: (private_expression)",
+                ["assertion_failure"],
+                [],
+                [],
+            ),
+            (
+                "qemu-system-x86_64: /private-fixture.c:7: private_function: "
+                + "Assertion `private_expression' failed.",
+                ["assertion_failure"],
+                [],
+                [],
+            ),
+            (
+                "GLib:ERROR:/private-fixture.c:7:private_function: code should not be reached",
+                ["assertion_failure"],
+                [],
+                ["glib"],
+            ),
+            (
+                "ERROR:/private-fixture.c:7:private_function: code should not be reached",
+                ["assertion_failure"],
+                [],
+                [],
+            ),
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(
+                    vm.startup_errors((line + "\n").encode()),
+                    {
+                        "messages": [
+                            {"classes": classes, "reasons": reasons, "components": components}
+                        ],
+                        "withheldLines": 0,
+                    },
+                )
+        for line in (
+            b"private-prefix: ERROR: assertion failed: (private_expression)",
+            b"ERROR: private-message-without-assertion",
+            b"GLib:ERROR: assertion failed: \x1b[31mprivate-expression",
+            b"ERROR: assertion failed: " + b"x" * vm.MAX_STARTUP_LINE,
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(
+                    vm.startup_errors(line + b"\n"), {"messages": [], "withheldLines": 1}
+                )
+
+    def test_assertion_component_hints_require_exact_filename_and_line_boundaries(self) -> None:
+        """Only four reviewed basenames become fixed hints; no location or expression escapes."""
+        for name in ("thread-pool.c", "qemu-thread-posix.c", "async.c", "gmem.c"):
+            for phrase in ("assertion failed: (private_expression)", "code should not be reached"):
+                for location, expected in (
+                    (f"/private-path/{name}:73591:private_function", [name]),
+                    (f"{name}:73591:private_function", [name]),
+                    (f"/private-path/prefix-{name}:73591:private_function", []),
+                    (f"/private-path/{name}.extra:73591:private_function", []),
+                    (f"/private-path/{name}:73591extra:private_function", []),
+                    (f"/private-path/{name}:private_function", []),
+                ):
+                    with self.subTest(name=name, phrase=phrase, location=location):
+                        self.assertEqual(
+                            vm.startup_errors(f"ERROR:{location}: {phrase}\n".encode()),
+                            {
+                                "messages": [
+                                    {
+                                        "classes": ["assertion_failure"],
+                                        "reasons": [],
+                                        "components": expected,
+                                    }
+                                ],
+                                "withheldLines": 0,
+                            },
+                        )
+
     def test_common_startup_errors_keep_only_fixed_classes_reasons_and_components(self) -> None:
         """KVM, block, resource, GLib/thread and sandbox failures remain distinguishable."""
         for line, expected in (
