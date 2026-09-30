@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 MAX_REPORT = 64 * 1024 * 1024
 MAX_PACKAGES = 20000
+MAX_NATIVE_INSTANCES = 20000
 MAX_MATCHES = 100000
 MAX_EXPRESSION = 4096
 MAX_LICENSE_DEPTH = 32
@@ -531,7 +532,7 @@ def native_packages(native: JsonObject) -> list[JsonObject]:
 
 
 def openssl_build_binding(native: JsonObject, expected: JsonObject) -> None:
-    """Require current configured-source evidence and the exact two linked OpenSSL archives."""
+    """Bind both configured archives to every distinct Cargo provider build instance."""
     component = object_value(native["openssl"])
     require(
         set(component) == set(expected) | {"build"}
@@ -591,19 +592,33 @@ def openssl_build_binding(native: JsonObject, expected: JsonObject) -> None:
         "image_openssl_configuration_identity",
     )
     linked = [object_value(item) for item in array_value(native["static_archives"])]
+    previous_instances: set[tuple[str, str]] | None = None
     for library in libraries:
         name = string_value(library["library"])
         matches = [item for item in linked if item["library"] == name]
+        instances = {
+            (string_value(item["provider"]), string_value(item["out_dir"])) for item in matches
+        }
         require(
             library["path"] == f"{prefix}/lib/lib{name}.a"
-            and len(matches) == len(OPENSSL_PROVIDERS)
-            and frozenset(string_value(item["provider"]) for item in matches) == OPENSSL_PROVIDERS
+            and 0 < len(matches) <= MAX_NATIVE_INSTANCES
+            and len(instances) == len(matches)
+            and frozenset(provider for provider, _ in instances) == OPENSSL_PROVIDERS
+            and (previous_instances is None or instances == previous_instances)
             and all(
-                all(item[key] == library[key] for key in ("path", "sha256", "size"))
+                PurePosixPath(out_dir).is_absolute()
+                and str(PurePosixPath(out_dir)) == out_dir
+                and ".." not in PurePosixPath(out_dir).parts
+                for _, out_dir in instances
+            )
+            and all(
+                type(item["size"]) is int
+                and all(item[key] == library[key] for key in ("path", "sha256", "size"))
                 for item in matches
             ),
             "image_openssl_archive_binding",
         )
+        previous_instances = instances
 
 
 def enrich_sbom(

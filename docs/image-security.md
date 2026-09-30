@@ -184,6 +184,9 @@ OpenSSL's current build receipt requires the reviewed `no-shared`, `no-dso`,
 `no-module` and `no-engine` configuration. It binds the installed version and
 configuration header hashes, the build-system disabled-options record, and the
 actual `ssl`/`crypto` archive identities referenced by both native link providers.
+Distinct Cargo build instances of a provider remain separate records: SSL and
+crypto must cover the same provider/output-directory pairs, and every record
+must identify the configured archive's exact path, size and hash.
 The image consumer checks those records against the current source/installer
 manifest and link inputs; a version-only receipt is insufficient. These settings
 disable dynamic loading and engines while retaining the default, base and legacy

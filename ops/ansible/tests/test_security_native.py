@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import tempfile
 import unittest
@@ -12,10 +13,12 @@ from unittest.mock import patch
 from test_support import ROOT
 
 # isort: split
+import security_image_policy as image_policy
 import security_native as native
 import security_vendor as vendor
 import test_security_elf as elf_fixture
 from release_json import JsonObject, JsonValue, array_value, decode_json, object_value
+from security_tools import ToolError
 from test_security_vendor import tar_bytes
 
 if TYPE_CHECKING:
@@ -308,6 +311,21 @@ class Fixture:
             "cargo-build.json",
             ("\n".join(json.dumps(item) for item in self.events) + "\n").encode(),
         )
+
+    def additional_openssl_instance(self) -> Path:
+        """Model the two distinct openssl-sys events observed in the production Cargo graph."""
+        script = next(
+            object_value(item).copy()
+            for item in self.events
+            if object_value(item)["reason"] == "build-script-executed"
+            and native.package_name(native.text(object_value(item), "package_id")) == "openssl-sys"
+        )
+        out = self.root / "target/release/build/openssl-sys-second/out"
+        out.mkdir(parents=True)
+        script["out_dir"] = str(out)
+        self.events.insert(-1, script)
+        self.save_events()
+        return out
 
     def save_binary(self) -> None:
         """Embed the fixture graph in real inert ELF bytes without invoking a compiler."""
@@ -753,6 +771,78 @@ class NativeTests(unittest.TestCase):
                 object_value(report["openssl"]),
                 array_value(report["static_archives"]),
             )
+
+    def test_production_openssl_instances_survive_full_producer_and_consumer(self) -> None:
+        """Repeated provider names retain distinct build events and bind every archive byte."""
+        fixture = self.current()
+        second = fixture.additional_openssl_instance()
+        report = self.produce()
+        archives = [object_value(item) for item in array_value(report["static_archives"])]
+        self.assertEqual(len(archives), 9)
+        for library in ("ssl", "crypto"):
+            selected = [item for item in archives if item["library"] == library]
+            self.assertEqual(len(selected), 3)
+            self.assertEqual(
+                {(item["provider"], item["out_dir"]) for item in selected},
+                {
+                    ("mediasoup-sys", str(fixture.root / "target/release/build/mediasoup-sys/out")),
+                    ("openssl-sys", str(fixture.root / "target/release/build/openssl-sys/out")),
+                    ("openssl-sys", str(second)),
+                },
+            )
+            actual = native.archive_record(fixture.openssl / f"lib/lib{library}.a")
+            self.assertTrue(
+                all(all(item[key] == value for key, value in actual.items()) for item in selected)
+            )
+        image_policy.openssl_build_binding(report, object_value(fixture.native_manifest["openssl"]))
+
+    def test_every_openssl_instance_and_library_pair_is_required(self) -> None:
+        """Multiple valid instances cannot conceal a missing provider, pair or changed input."""
+        fixture = self.current()
+        second = fixture.additional_openssl_instance()
+        report = self.produce()
+        expected = object_value(fixture.native_manifest["openssl"])
+        for mutation in (
+            "missing-provider",
+            "unknown-provider",
+            "duplicate-instance",
+            "missing-pair",
+            "different-instance",
+            "sha256",
+            "size",
+            "path",
+        ):
+            changed = copy.deepcopy(report)
+            archives = array_value(changed["static_archives"])
+            selected = next(
+                object_value(item)
+                for item in archives
+                if object_value(item)["library"] == "crypto"
+                and object_value(item)["out_dir"] == str(second)
+            )
+            if mutation == "missing-provider":
+                archives[:] = [
+                    item for item in archives if object_value(item)["provider"] != "mediasoup-sys"
+                ]
+            elif mutation == "unknown-provider":
+                selected["provider"] = "unreviewed-provider"
+            elif mutation == "duplicate-instance":
+                archives.append(selected.copy())
+            elif mutation == "missing-pair":
+                archives.remove(selected)
+            elif mutation == "different-instance":
+                selected["out_dir"] = str(second.parent / "other-out")
+            elif mutation == "sha256":
+                selected["sha256"] = "0" * 64
+            elif mutation == "size":
+                selected["size"] = 1
+            else:
+                selected["path"] = str(fixture.openssl / "lib/other.a")
+            with self.subTest(mutation=mutation):
+                with self.assertRaisesRegex(native.NativeError, "static link archives differ"):
+                    _ = native.openssl_build_evidence(fixture.openssl, expected, archives)
+                with self.assertRaisesRegex(ToolError, "image_openssl_archive_binding"):
+                    image_policy.openssl_build_binding(changed, expected)
 
     def test_same_package_host_and_target_events_remain_distinct(self) -> None:
         """Cargo emits distinct output directories when host and target instances differ."""

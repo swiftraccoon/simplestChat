@@ -248,17 +248,22 @@ def openssl_build_evidence(
     if disabled != ("\n".join(OPENSSL_DISABLED) + "\n").encode():
         raise NativeError("Built OpenSSL configuration does not disable modules")
     libraries: list[JsonValue] = []
+    previous_instances: set[tuple[str, str]] | None = None
     for library in ("ssl", "crypto"):
         actual = archive_record(prefix / "lib" / f"lib{library}.a")
         linked = [
             object_value(item) for item in archives if object_value(item)["library"] == library
         ]
+        instances = {(text(item, "provider"), text(item, "out_dir")) for item in linked}
         if (
-            len(linked) != len(OPENSSL_PROVIDERS)
-            or frozenset(text(item, "provider") for item in linked) != OPENSSL_PROVIDERS
+            not 0 < len(linked) <= MAX_RECORDS
+            or len(instances) != len(linked)
+            or frozenset(provider for provider, _ in instances) != OPENSSL_PROVIDERS
+            or (previous_instances is not None and instances != previous_instances)
             or any(any(item[key] != actual[key] for key in actual) for item in linked)
         ):
             raise NativeError("OpenSSL configuration and static link archives differ")
+        previous_instances = instances
         libraries.append({"library": library, **actual})
     return {
         **component,
