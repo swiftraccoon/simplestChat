@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, statSync } from 'node:fs';
+import { globSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -61,6 +61,32 @@ function copiedDestination(filename) {
   }
   return undefined;
 }
+
+// Check every explicit local COPY source, including native build helpers. This
+// intentionally rejects new syntax until the input guard understands it.
+function verifyLocalCopySources(rules = ignoreRules) {
+  for (const line of dockerfile.split('\n').filter(value => value.startsWith('COPY '))) {
+    const values = line.slice(5).trim().split(/\s+/);
+    if (values[0].startsWith('--from=')) continue;
+    assert.ok(values.length >= 2 && values.every(value => /^[\w./*-]+$/.test(value)),
+      'Extend the local COPY input guard explicitly when introducing new syntax');
+    for (const source of values.slice(0, -1)) {
+      const filenames = source.includes('*') ? globSync(source, { cwd: root }) : [source];
+      assert.ok(filenames.length > 0, `${source} must match a build input`);
+      for (const filename of filenames) {
+        assert.ok(statSync(path.join(root, filename)), `${filename} must exist`);
+        assert.equal(excluded(filename, rules), false,
+          `${filename} is explicitly copied but excluded from the build context`);
+      }
+    }
+  }
+}
+
+test('all explicit local COPY inputs are admitted by the Docker context', () => {
+  verifyLocalCopySources();
+  assert.throws(() => verifyLocalCopySources(ignoreRules.filter(rule => rule !== '!build/security_elf.py')),
+    /security_elf\.py is explicitly copied but excluded/);
+});
 
 test('web-builder copies the complete production frontend input set', () => {
   const projects = JSON.parse(read('web/tsconfig.json')).references

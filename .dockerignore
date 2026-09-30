@@ -15,6 +15,7 @@ build/**
 !build/security-tools.lock.json
 !build/security_vendor.py
 !build/security_native.py
+!build/security_elf.py
 !ops/
 ops/**
 !ops/ansible/
