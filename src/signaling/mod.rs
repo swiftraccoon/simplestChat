@@ -99,11 +99,16 @@ struct AuthRateEntry {
     requests: u32,
 }
 
-#[derive(Default)]
 struct AuthRateTable {
-    entries: HashMap<IpAddr, AuthRateEntry>,
-    order: std::collections::VecDeque<(IpAddr, Instant)>,
-    overflow: Option<AuthRateEntry>,
+    entries: lru::LruCache<IpAddr, AuthRateEntry>,
+}
+
+impl Default for AuthRateTable {
+    fn default() -> Self {
+        Self {
+            entries: lru::LruCache::new(std::num::NonZeroUsize::new(MAX_TRACKED_AUTH_IPS).unwrap()),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -141,29 +146,13 @@ impl AuthGuard {
     fn allow_at(&self, ip: IpAddr, now: Instant) -> bool {
         let ip = rate_limit_ip(ip);
         let mut table = self.entries.lock().unwrap_or_else(|e| e.into_inner());
-        while let Some((address, started)) = table.order.front().copied() {
-            if now.duration_since(started) < PRINCIPAL_RATE_WINDOW {
-                break;
-            }
-            table.order.pop_front();
-            table.entries.remove(&address);
-        }
-        let entry = if table.entries.contains_key(&ip) {
-            table.entries.get_mut(&ip).expect("existing address")
-        } else if table.entries.len() < MAX_TRACKED_AUTH_IPS {
-            table.order.push_back((ip, now));
-            table.entries.entry(ip).or_insert(AuthRateEntry {
-                window_started: now,
-                requests: 0,
-            })
-        } else {
-            // Unknown sources share one finite allowance while capacity is full.
-            // A live source's allowance can never be reset by identity churn.
-            table.overflow.get_or_insert(AuthRateEntry {
-                window_started: now,
-                requests: 0,
-            })
-        };
+        // At capacity, evict a cold cohort rather than imposing one stranger's
+        // exhausted allowance on every untracked address. Global semaphores
+        // remain independent of this best-effort per-address rate memory.
+        let entry = table.entries.get_or_insert_mut(ip, || AuthRateEntry {
+            window_started: now,
+            requests: 0,
+        });
         if now.duration_since(entry.window_started) >= PRINCIPAL_RATE_WINDOW {
             entry.window_started = now;
             entry.requests = 0;
@@ -1542,7 +1531,7 @@ mod security_tests {
     }
 
     #[test]
-    fn ip_capacity_preserves_live_buckets_and_bounds_overflow() {
+    fn ip_capacity_evicts_cold_buckets_without_shared_overflow_denial() {
         let guard = AuthGuard::new(
             1,
             1,
@@ -1560,15 +1549,17 @@ mod security_tests {
         // interacting with production services or exhausting live resources.
         assert!(guard.allow_at(IpAddr::from([192, 0, 2, 1]), started));
         for last in 2..=32 {
-            assert!(!guard.allow_at(IpAddr::from([192, 0, 2, last]), started));
+            assert!(guard.allow_at(IpAddr::from([192, 0, 2, last]), started));
         }
         assert!(!guard.allow_at(victim, started));
         let table = guard.entries.lock().unwrap();
         assert_eq!(table.entries.len(), MAX_TRACKED_AUTH_IPS);
-        assert_eq!(table.order.len(), MAX_TRACKED_AUTH_IPS);
         drop(table);
         assert!(guard.allow_at(victim, started + PRINCIPAL_RATE_WINDOW));
-        assert_eq!(guard.entries.lock().unwrap().entries.len(), 1);
+        assert_eq!(
+            guard.entries.lock().unwrap().entries.len(),
+            MAX_TRACKED_AUTH_IPS
+        );
     }
 
     #[tokio::test]
@@ -1925,6 +1916,98 @@ mod security_tests {
             )
             .unwrap()
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+    async fn database_password_and_passkey_signup_share_taken_email_budget() {
+        use crate::auth::{
+            routes,
+            types::{AuthError, RegisterRequest},
+        };
+        let pool = PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+            .await
+            .unwrap();
+        let id = uuid::Uuid::new_v4();
+        let email = format!("{id}@signup.invalid");
+        sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Existing')")
+            .bind(id)
+            .bind(&email)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let mut media = crate::media::config::MediaConfig::default();
+        media.worker_config.num_workers = 1;
+        media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
+        let metrics = ServerMetrics::new();
+        let manager = Arc::new(
+            RoomManager::new(media, metrics.clone(), None)
+                .await
+                .unwrap(),
+        );
+        let mut server = SignalingServer::new(manager, None, metrics, Some(pool.clone())).unwrap();
+        server.registration_enabled = true;
+        server.jwt_secret = Some(format!("{}{}", uuid::Uuid::new_v4(), uuid::Uuid::new_v4()));
+        server.webauthn = Some(Arc::new(
+            webauthn_rs::prelude::WebauthnBuilder::new(
+                "localhost",
+                &url::Url::parse("https://localhost").unwrap(),
+            )
+            .unwrap()
+            .build()
+            .unwrap(),
+        ));
+        server.challenge_store = Some(Arc::new(ChallengeStore::new()));
+        server.registration_limiter = Arc::new(crate::auth::limiter::WindowLimiter::new(
+            1,
+            Duration::from_secs(3600),
+        ));
+        let password = |ip| {
+            routes::register(
+                State(server.clone()),
+                axum::Extension(ClientIp(ip)),
+                Json(RegisterRequest {
+                    email: email.clone(),
+                    password: "unique-river-passphrase".into(),
+                    display_name: "Existing".into(),
+                    invite_code: None,
+                }),
+            )
+        };
+        let passkey = |ip| {
+            routes::passkey_register_start(
+                State(server.clone()),
+                axum::Extension(ClientIp(ip)),
+                Json(
+                    serde_json::from_value::<routes::PasskeyRegisterStartRequest>(
+                        serde_json::json!({
+                            "email": email, "display_name": "Existing"
+                        }),
+                    )
+                    .unwrap(),
+                ),
+            )
+        };
+        let first = IpAddr::from([192, 0, 2, 1]);
+        let second = IpAddr::from([192, 0, 2, 2]);
+        assert!(matches!(
+            password(first).await,
+            Err(AuthError::EmailAlreadyExists)
+        ));
+        assert!(matches!(passkey(first).await, Err(AuthError::RateLimited)));
+        assert!(matches!(
+            passkey(second).await,
+            Err(AuthError::EmailAlreadyExists)
+        ));
+        assert!(matches!(
+            password(second).await,
+            Err(AuthError::RateLimited)
+        ));
+        sqlx::query("DELETE FROM users WHERE id=$1")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
     }
 
     #[test]

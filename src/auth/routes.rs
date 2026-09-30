@@ -556,6 +556,10 @@ pub(crate) async fn passkey_register_start(
     }
     let email = canonicalize_email(&req.email)?;
     validate_display_name(&req.display_name)?;
+    // Password and passkey signup share the same taken-email answer budget.
+    if !server.allow_registration(source_ip) {
+        return Err(AuthError::RateLimited);
+    }
     let _request_permit = acquire_auth_request(&server)?;
 
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")

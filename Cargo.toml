@@ -63,6 +63,7 @@ hex = "0.4.3"
 icu_casemap = "2.3.0"
 icu_normalizer = { version = "2.3.0", default-features = false, features = ["compiled_data"] }
 icu_properties = "2.3.0"
+lru = { version = "0.18.4", default-features = false }
 
 [dev-dependencies]
 tokio-test = "0.4.5"

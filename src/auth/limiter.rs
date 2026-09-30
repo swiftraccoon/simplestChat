@@ -1,31 +1,22 @@
 #![forbid(unsafe_code)]
 //! Sign-in failure delays and a registration window, keyed by client address.
 //!
-//! Every sign-in used to spend one of an account's twenty requests per minute,
-//! so anyone who knew an email address could hold its owner out of password
-//! sign-in for as long as they cared to keep sending. Here only failures count.
-//! Each address cohort serves a delay that doubles with every further failure
-//! against one account, and the account itself has a second, low-ceilinged
-//! schedule so a spread of addresses is slowed without keeping the owner out
-//! for more than half a minute. A success clears both.
+//! Only failures from the same address cohort against the same account delay
+//! password proof. A distributed failure stream must not lock out an owner at
+//! an unrelated address. Bounded LRU tables evict cold records rather than
+//! assigning strangers a shared overflow penalty. HTTP admission and password
+//! work semaphores independently bound resource use under distributed traffic.
 
-use std::collections::{HashMap, VecDeque};
+use lru::LruCache;
 use std::hash::Hash;
 use std::net::IpAddr;
+use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// Failures one address may make against one account before it waits.
 const FREE_PAIR_FAILURES: u32 = 3;
-/// The longest wait one address serves for one account.
 const MAX_PAIR_DELAY: Duration = Duration::from_secs(300);
-/// Failures against an account from anywhere before every address waits.
-const FREE_ACCOUNT_FAILURES: u32 = 10;
-/// The longest wait strangers can impose on an account's owner.
-const MAX_ACCOUNT_DELAY: Duration = Duration::from_secs(30);
-/// A key's failures are forgotten this long after its last one.
 const FAILURE_MEMORY: Duration = Duration::from_secs(3600);
-/// Live keys per table; beyond this, unknown keys share one allowance.
 const MAX_TRACKED_KEYS: usize = 10_000;
 
 /// Keyed IPv6 clients by their /64, like every other address limit here.
@@ -70,46 +61,23 @@ struct Failures {
 }
 
 struct FailureTable<K> {
-    entries: HashMap<K, Failures>,
-    /// A shared entry for new keys while the table is full: an identity churn
-    /// can never evict a live key's record to start afresh.
-    overflow: Option<Failures>,
+    entries: LruCache<K, Failures>,
     free: u32,
     ceiling: Duration,
 }
 
-impl<K> FailureTable<K>
-where
-    K: Eq + Hash + Clone,
-{
+impl<K: Eq + Hash> FailureTable<K> {
     fn new(free: u32, ceiling: Duration) -> Self {
         Self {
-            entries: HashMap::new(),
-            overflow: None,
+            entries: LruCache::new(NonZeroUsize::new(MAX_TRACKED_KEYS).unwrap()),
             free,
             ceiling,
         }
     }
 
-    fn forget_expired(&mut self, now: Instant) {
+    fn wait(&mut self, key: &K, now: Instant) -> Duration {
         self.entries
-            .retain(|_, entry| now.duration_since(entry.last_failure) < FAILURE_MEMORY);
-        if self
-            .overflow
-            .as_ref()
-            .is_some_and(|entry| now.duration_since(entry.last_failure) >= FAILURE_MEMORY)
-        {
-            self.overflow = None;
-        }
-    }
-
-    fn wait(&self, key: &K, now: Instant) -> Duration {
-        let entry = match self.entries.get(key) {
-            Some(entry) => Some(entry),
-            None if self.entries.len() >= MAX_TRACKED_KEYS => self.overflow.as_ref(),
-            None => None,
-        };
-        entry
+            .get(key)
             .filter(|entry| now.duration_since(entry.last_failure) < FAILURE_MEMORY)
             .map_or(Duration::ZERO, |entry| {
                 entry.blocked_until.saturating_duration_since(now)
@@ -117,22 +85,11 @@ where
     }
 
     fn record_failure(&mut self, key: K, now: Instant) {
-        if !self.entries.contains_key(&key) && self.entries.len() >= MAX_TRACKED_KEYS {
-            self.forget_expired(now);
-        }
-        let entry = if self.entries.contains_key(&key) || self.entries.len() < MAX_TRACKED_KEYS {
-            self.entries.entry(key).or_insert(Failures {
-                count: 0,
-                blocked_until: now,
-                last_failure: now,
-            })
-        } else {
-            self.overflow.get_or_insert(Failures {
-                count: 0,
-                blocked_until: now,
-                last_failure: now,
-            })
-        };
+        let entry = self.entries.get_or_insert_mut(key, || Failures {
+            count: 0,
+            blocked_until: now,
+            last_failure: now,
+        });
         if now.duration_since(entry.last_failure) >= FAILURE_MEMORY {
             entry.count = 0;
         }
@@ -142,13 +99,12 @@ where
     }
 
     fn clear(&mut self, key: &K) {
-        self.entries.remove(key);
+        self.entries.pop(key);
     }
 }
 
 struct FailureState {
     pairs: FailureTable<(IpAddr, String)>,
-    accounts: FailureTable<String>,
 }
 
 /// Failure-charged delays for password sign-in and recovery redemption.
@@ -168,7 +124,6 @@ impl FailureLimiter {
         Self {
             state: Arc::new(Mutex::new(FailureState {
                 pairs: FailureTable::new(FREE_PAIR_FAILURES, MAX_PAIR_DELAY),
-                accounts: FailureTable::new(FREE_ACCOUNT_FAILURES, MAX_ACCOUNT_DELAY),
             })),
         }
     }
@@ -180,12 +135,9 @@ impl FailureLimiter {
     }
 
     fn wait_at(&self, address: IpAddr, account: &str, now: Instant) -> Option<u64> {
-        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let pair = (cohort(address), account.to_owned());
-        let wait = state
-            .pairs
-            .wait(&pair, now)
-            .max(state.accounts.wait(&pair.1, now));
+        let wait = state.pairs.wait(&pair, now);
         if wait.is_zero() {
             return None;
         }
@@ -206,14 +158,12 @@ impl FailureLimiter {
         state
             .pairs
             .record_failure((cohort(address), account.to_owned()), now);
-        state.accounts.record_failure(account.to_owned(), now);
     }
 
     /// A correct password proves the owner is present: forgive everything.
     pub fn record_success(&self, address: IpAddr, account: &str) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         state.pairs.clear(&(cohort(address), account.to_owned()));
-        state.accounts.clear(&account.to_owned());
     }
 }
 
@@ -223,29 +173,19 @@ struct Window {
     used: u32,
 }
 
-/// Registrations (and taken-email answers) one address cohort may receive per
-/// window. The window starts at its first use and is dropped, never reset,
-/// when it ends, so the reclamation order is the insertion order.
+/// Registrations and taken-email answers share one address-cohort window.
+/// Cold entries may be evicted at the hard memory bound; unrelated addresses
+/// never inherit another cohort's exhausted allowance.
 pub struct WindowLimiter {
-    entries: Mutex<WindowState>,
+    entries: Mutex<LruCache<IpAddr, Window>>,
     window: Duration,
     allowance: u32,
-}
-
-struct WindowState {
-    entries: HashMap<IpAddr, Window>,
-    order: VecDeque<(IpAddr, Instant)>,
-    overflow: Option<Window>,
 }
 
 impl WindowLimiter {
     pub fn new(allowance: u32, window: Duration) -> Self {
         Self {
-            entries: Mutex::new(WindowState {
-                entries: HashMap::new(),
-                order: VecDeque::new(),
-                overflow: None,
-            }),
+            entries: Mutex::new(LruCache::new(NonZeroUsize::new(MAX_TRACKED_KEYS).unwrap())),
             window,
             allowance,
         }
@@ -256,39 +196,18 @@ impl WindowLimiter {
     }
 
     fn allow_at(&self, address: IpAddr, now: Instant) -> bool {
-        let address = cohort(address);
-        let mut state = self
+        let mut entries = self
             .entries
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        while let Some((key, started)) = state.order.front().copied() {
-            if now.duration_since(started) < self.window {
-                break;
-            }
-            state.order.pop_front();
-            state.entries.remove(&key);
+        let window = entries.get_or_insert_mut(cohort(address), || Window {
+            started: now,
+            used: 0,
+        });
+        if now.duration_since(window.started) >= self.window {
+            window.started = now;
+            window.used = 0;
         }
-        if state
-            .overflow
-            .as_ref()
-            .is_some_and(|window| now.duration_since(window.started) >= self.window)
-        {
-            state.overflow = None;
-        }
-        let window = if state.entries.contains_key(&address) {
-            state.entries.get_mut(&address).expect("checked above")
-        } else if state.entries.len() < MAX_TRACKED_KEYS {
-            state.order.push_back((address, now));
-            state.entries.entry(address).or_insert(Window {
-                started: now,
-                used: 0,
-            })
-        } else {
-            state.overflow.get_or_insert(Window {
-                started: now,
-                used: 0,
-            })
-        };
         if window.used >= self.allowance {
             return false;
         }
@@ -330,10 +249,9 @@ mod tests {
             limiter.wait_at(HOME, "a@example.test", start + MAX_PAIR_DELAY),
             None
         );
-        // Other accounts are untouched; another address meets only the account
-        // schedule (fifteen failures: five past its allowance, sixteen seconds).
+        // Other accounts and address cohorts remain able to prove credentials.
         assert_eq!(limiter.wait_at(HOME, "b@example.test", start), None);
-        assert_eq!(limiter.wait_at(OTHER, "a@example.test", start), Some(16));
+        assert_eq!(limiter.wait_at(OTHER, "a@example.test", start), None);
     }
 
     #[test]
@@ -351,26 +269,17 @@ mod tests {
     }
 
     #[test]
-    fn strangers_spread_over_addresses_slow_an_account_but_never_past_its_ceiling() {
+    fn failures_from_other_addresses_cannot_hold_an_owner_out() {
         let limiter = FailureLimiter::new();
         let start = Instant::now();
-        for host in 1..=40u8 {
-            let address = IpAddr::V4(std::net::Ipv4Addr::new(198, 51, 100, host));
-            limiter.record_failure_at(address, "victim@example.test", start);
+        for round in 0..100 {
+            let now = start + Duration::from_secs(round);
+            for host in 1..=40u8 {
+                let address = IpAddr::V4(std::net::Ipv4Addr::new(198, 51, 100, host));
+                limiter.record_failure_at(address, "victim@example.test", now);
+            }
+            assert_eq!(limiter.wait_at(HOME, "victim@example.test", now), None);
         }
-        // Each of those addresses is below its own free allowance; the account
-        // schedule alone makes the owner wait, and only for the ceiling.
-        assert_eq!(
-            limiter.wait_at(HOME, "victim@example.test", start),
-            Some(MAX_ACCOUNT_DELAY.as_secs())
-        );
-        assert_eq!(
-            limiter.wait_at(HOME, "victim@example.test", start + MAX_ACCOUNT_DELAY),
-            None
-        );
-        // The owner's own success from home clears the account schedule too.
-        limiter.record_success(HOME, "victim@example.test");
-        assert_eq!(limiter.wait_at(HOME, "victim@example.test", start), None);
     }
 
     #[test]
@@ -390,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn a_full_table_shares_one_allowance_for_newcomers_and_keeps_live_records() {
+    fn a_full_table_evicts_cold_keys_without_penalizing_unrelated_newcomers() {
         let mut table: FailureTable<u32> = FailureTable::new(1, Duration::from_secs(8));
         let start = Instant::now();
         for key in 0..MAX_TRACKED_KEYS as u32 {
@@ -398,18 +307,31 @@ mod tests {
         }
         table.record_failure(0, start);
         table.record_failure(0, start);
-        assert_eq!(table.wait(&0, start), Duration::from_secs(2));
-        // Newcomers now share the overflow record.
         table.record_failure(u32::MAX, start);
-        table.record_failure(u32::MAX - 1, start);
-        assert_eq!(table.wait(&(u32::MAX - 2), start), Duration::from_secs(1));
+        table.record_failure(u32::MAX, start);
+        assert_eq!(table.entries.len(), MAX_TRACKED_KEYS);
+        assert!(
+            table.entries.peek(&1).is_none(),
+            "least recently used key evicted"
+        );
         assert_eq!(table.wait(&0, start), Duration::from_secs(2));
-        // Once the old records expire, newcomers get their own again.
-        let later = start + FAILURE_MEMORY;
-        table.record_failure(u32::MAX, later);
-        assert_eq!(table.entries.len(), 1);
-        assert_eq!(table.wait(&u32::MAX, later), Duration::ZERO);
-        assert_eq!(table.entries[&u32::MAX].count, 1);
+        assert_eq!(table.wait(&(u32::MAX - 1), start), Duration::ZERO);
+        assert_eq!(table.wait(&u32::MAX, start), Duration::from_secs(1));
+        table.record_failure(u32::MAX, start + FAILURE_MEMORY);
+        assert_eq!(table.entries.peek(&u32::MAX).unwrap().count, 1);
+    }
+
+    #[test]
+    fn full_registration_memory_does_not_share_a_denial_with_new_addresses() {
+        let limiter = WindowLimiter::new(1, Duration::from_secs(3600));
+        let now = Instant::now();
+        for key in 0..MAX_TRACKED_KEYS as u32 {
+            assert!(limiter.allow_at(IpAddr::V4(key.into()), now));
+        }
+        assert!(limiter.allow_at(HOME, now));
+        assert!(!limiter.allow_at(HOME, now));
+        assert!(limiter.allow_at(OTHER, now));
+        assert_eq!(limiter.entries.lock().unwrap().len(), MAX_TRACKED_KEYS);
     }
 
     #[test]

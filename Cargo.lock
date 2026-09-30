@@ -3701,6 +3701,7 @@ dependencies = [
  "icu_normalizer",
  "icu_properties",
  "jsonwebtoken",
+ "lru",
  "mediasoup",
  "mediasoup-types",
  "num_cpus",
