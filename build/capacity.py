@@ -1599,6 +1599,7 @@ def server_command(context: Context, name: str, port: int, token: str) -> list[s
     environment.update(context.server_env)
     return [
         "run", "--detach", "--name", name,
+        "--label", f"simplestchat.capacity.run={context.run_id}",
         "--cpus", f"{context.shape.server_cpus:g}",
         "--memory", context.server_memory, "--memory-swap", context.server_memory,
         "--pids-limit", "4096", "--read-only",
@@ -1753,6 +1754,34 @@ def monitor(
     return watch.setup_mark, watch.start_mark, watch.end_mark
 
 
+def remember_container(
+    output: Path, run_id: str, name: str, image: str, container_id: str = ""
+) -> None:
+    """Persist exact ownership before creation and the immutable ID when returned.
+
+    The expected name and run label also cover an interrupted engine response;
+    controllers must inspect those identities, never remove a name prefix.
+    """
+    path = output / "ownership.json"
+    value: dict[str, object] = (
+        read_json(path)
+        if path.exists()
+        else {"schemaVersion": 1, "runId": run_id, "containers": []}
+    )
+    if value.get("runId") != run_id:
+        message = "Capacity ownership journal belongs to another run"
+        raise CapacityError(message)
+    containers = as_list(value.get("containers"), "ownership containers")
+    entry = {"name": name, "image": image, "id": container_id or None}
+    value["containers"] = [
+        item for item in containers if as_object(item, "container").get("name") != name
+    ] + [entry]
+    temporary = path.with_suffix(".tmp")
+    _ = temporary.write_text(json.dumps(value, indent=2), encoding="utf-8")
+    temporary.chmod(0o600)
+    _ = temporary.replace(path)
+
+
 def run_step(context: Context, plan: StepPlan, index: int) -> StepResult:
     """Run one workload size and collect what the server and the kernel saw."""
     name = f"{context.run_id}-{index}"
@@ -1776,7 +1805,9 @@ def run_step(context: Context, plan: StepPlan, index: int) -> StepResult:
     )
     marks: Marks = (None, None, None)
     try:
-        _ = engine.run(*server_command(context, server, port, token))
+        remember_container(context.output, context.run_id, server, context.server_image)
+        server_id = engine.run(*server_command(context, server, port, token)).strip()
+        remember_container(context.output, context.run_id, server, context.server_image, server_id)
         wait_ready(port, time.monotonic() + 90)
         before = parse_udp(
             engine.read(server, "/proc/net/snmp"), engine.read(server, "/proc/net/udp"), ports
@@ -1784,12 +1815,17 @@ def run_step(context: Context, plan: StepPlan, index: int) -> StepResult:
         memory_limit = engine.read(server, "/sys/fs/cgroup/memory.max").strip()
         result.memory_limit_bytes = int(memory_limit) if memory_limit.isdigit() else 0
         label = f"capacity-{plan.workload}-{plan.size}"
-        _ = engine.run(
+        remember_container(context.output, context.run_id, generator, context.generator_image)
+        generator_id = engine.run(
             "run", "--detach", "--name", generator, "--network", f"container:{server}",
+            "--label", f"simplestchat.capacity.run={context.run_id}",
             "--cpus", f"{context.shape.generator_cpus:g}", "--memory", context.generator_memory,
             "--pids-limit", "8192", "--env", "RUST_LOG=warn", context.generator_image,
             *plan.generator_args(context.browser, label, context.revisions),
         )  # fmt: skip
+        remember_container(
+            context.output, context.run_id, generator, context.generator_image, generator_id.strip()
+        )
         marks = monitor(context, plan, (server, generator), (port, token), result)
         if engine.running(server):
             after = parse_udp(
@@ -1932,7 +1968,9 @@ def read_summary(result: StepResult, summary: Mapping[str, object]) -> None:
 # --- The calibration ------------------------------------------------------------
 
 
-def host_facts(engine: Engine, image: str) -> dict[str, object]:
+def host_facts(
+    engine: Engine, image: str, *, ownership: tuple[Path, str] | None = None
+) -> dict[str, object]:
     """CPU model, logical CPUs, memory, idle load and socket buffer ceilings."""
     script = (
         "cat /proc/cpuinfo; echo @@; cat /proc/meminfo; echo @@; cat /proc/stat; echo @@; "
@@ -1940,8 +1978,24 @@ def host_facts(engine: Engine, image: str) -> dict[str, object]:
         "cat /proc/sys/kernel/osrelease; echo @@; "
         "cat /sys/class/dmi/id/sys_vendor /sys/class/dmi/id/product_name 2>/dev/null; true"
     )
+    identity: list[str] = []
+    if ownership is not None:
+        directory, run_id = ownership
+        name = f"capacity-probe-{run_id}"
+        remember_container(directory, run_id, name, image)
+        identity = ["--name", name, "--label", f"simplestchat.capacity.run={run_id}"]
     output = engine.run(
-        "run", "--rm", "--network", "none", "--entrypoint", "sh", image, "-c", script, timeout=120
+        "run",
+        "--rm",
+        *identity,
+        "--network",
+        "none",
+        "--entrypoint",
+        "sh",
+        image,
+        "-c",
+        script,
+        timeout=120,
     )
     parts = [part.strip() for part in output.split("@@")]
     if len(parts) != len(("cpuinfo", "meminfo", "stat", "stat", "rmem", "kernel", "dmi")):
@@ -2103,7 +2157,8 @@ def calibrate(options: Options) -> int:
         "generator": image_facts(engine, options.generator_image),
     }
     log("reading host facts (a 5 s idle sample)")
-    host = host_facts(engine, options.server_image)
+    run_id = secrets.token_hex(8)
+    host = host_facts(engine, options.server_image, ownership=(output, run_id))
     cpus = int(as_number(host["logicalCpus"], "logicalCpus"))
     host_mib = int(as_number(host["memoryMib"], "memoryMib"))
     deployment = deployment_for(
@@ -2127,7 +2182,7 @@ def calibrate(options: Options) -> int:
         log(f"warning: {warning}")
     context = Context(
         engine=engine,
-        run_id=secrets.token_hex(4),
+        run_id=run_id,
         server_image=options.server_image,
         generator_image=options.generator_image,
         revisions=(
