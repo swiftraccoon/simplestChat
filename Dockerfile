@@ -140,6 +140,7 @@ ARG SOURCE_REVISION=unknown
 ENV SOURCE_REVISION=${SOURCE_REVISION}
 COPY --from=builder /app/target/release/simplestChat /app/simplestChat
 COPY --from=builder /app/migrations /app/migrations
+COPY --from=builder /app/vendor/seclists-passwords/LICENSE /app/vendor/seclists-passwords/README.md /usr/share/licenses/simplestchat/seclists/
 COPY --from=web-builder /web/dist /app/web/dist
 RUN ldd /app/simplestChat > /tmp/simplestchat-ldd \
     && ! grep -Fq 'not found' /tmp/simplestchat-ldd \

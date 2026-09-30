@@ -1,8 +1,10 @@
 # Maintained Cargo patches
 
 This directory contains source for two exact crates.io releases that need
-small, auditable security and interoperability fixes. Their
-package names and versions are intentionally unchanged: Cargo's
+small, auditable security and interoperability fixes, plus a pinned password
+selection corpus. The corpus and its MIT license/provenance are documented in
+[seclists-passwords/README.md](seclists-passwords/README.md). The two Cargo packages keep their
+upstream names and versions unchanged: Cargo's
 `[patch.crates-io]` mechanism records that the source is local without
 pretending this is a new upstream release.
 

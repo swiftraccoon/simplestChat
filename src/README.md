@@ -88,14 +88,20 @@ operational data, not anonymous telemetry. Structured moderation history retains
 its separately governed labels, reasons and retention controls.
 
 Account password selection and verification consistently use NFC. New selections
-require 15–128 characters and use the same curated refusal list at registration,
-change and recovery; standard Argon2id PHC hashes contain no compatibility marker.
+require 15–128 characters and use the same offline refusal list at registration,
+change and recovery. The [pinned SecLists snapshot](../vendor/seclists-passwords/README.md)
+and local curated entries reject known complete passwords and weak stems padded
+with at most 16 ASCII digits/punctuation at each end. This bounded selection check
+does not split passphrases or contact an external service. Source/license hashes
+are pinned in regression tests, and container images carry the MIT notice. The
+corpus is approximately 10,000 common credentials, not a complete breach database.
+Standard Argon2id PHC hashes contain no compatibility marker.
 Existing ASCII credentials naturally verify; a credential previously selected
 with a non-NFC spelling may require account recovery. Password work remains
 bounded outside the async executor. Password and passkey signup share the email
 lookup budget. Failure delays are account-plus-address scoped, so a stream of
-failures at other addresses cannot continuously deny the owner's proof. All
-address-limiter tables use bounded LRU eviction, with no shared overflow penalty;
+failures at other addresses cannot continuously deny the owner's proof. The HTTP, registration and
+failure tables use bounded LRU eviction, with no shared overflow penalty;
 resource admission remains a separate protection against distributed traffic.
 
 Authenticated HTTP mints a 256-bit one-use upgrade ticket, consumed from the
@@ -105,7 +111,7 @@ retained per process. Full capacity refuses issuance after reclaiming expired
 records. Consumption is atomic before database revalidation; logout, credential
 revocation and original access-token expiry are checked again before upgrade.
 Existing connection expiry/renewal/revocation handling then owns the session.
-Unknown or credential-bearing protocols are rejected instead of becoming guests.
+Unknown protocols and reusable-JWT protocols are rejected instead of becoming guests.
 This removes reusable JWTs from handshake headers, but tickets remain secret
 until consumed/expired. A future load balancer must route ticket issuance and
 upgrade to the same application process or provide an equivalent shared atomic

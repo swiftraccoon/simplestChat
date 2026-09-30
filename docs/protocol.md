@@ -131,12 +131,20 @@ the receipt window described above.
 
 New account passwords are normalized to NFC and must contain 15–128 Unicode
 scalar characters, at most 512 input bytes, and no control characters. Signup,
-password change and recovery apply the same length and curated common-password
-blocklist rules. Password verification uses NFC too, without reapplying selection
-minimums. Hashes use standard Argon2id PHC encoding and the bounded password-work
+password change and recovery apply the same length and common-password refusal
+rules. The offline blocklist combines a pinned approximately 10,000-entry
+SecLists common-credential corpus with local curated entries. It checks the
+complete compatibility-normalized, case-folded comparison form, then one
+candidate with at most 16 ASCII digits/punctuation removed from each end; these common
+affixes do not make a known weak stem acceptable. Whole
+phrases are not split into words and no character-class composition is required.
+This comparison affects refusal only; the credential hash still uses NFC.
+Password verification uses NFC too, without reapplying selection minimums. Hashes use standard Argon2id PHC encoding and the bounded password-work
 lane; there is no raw-byte or versioned normalization fallback. Room passwords
-retain their separate policy. The bundled blocklist is a small curated list,
-not a claim to cover every compromised password or a complete NIST audit.
+retain their separate policy. The
+[pinned corpus and MIT license](../vendor/seclists-passwords/README.md) are verified in tests and included locally at build time. No password is sent to an
+external lookup service. This is a common-password list, not a complete breach
+database or a claim of NIST certification.
 
 Password and passkey signup consume the same per-address hourly budget before
 checking whether an email exists. Password/recovery failures accrue only against
@@ -147,7 +155,6 @@ evict cold entries at capacity; strangers never share an overflow penalty.
 Churn can evict a cold rate record, so these are best-effort abuse limits,
 complemented by HTTP admission, bounded request bodies and independent password
 work concurrency. A successful proof clears its cohort/account failure record.
-
 
 The browser connects to `/ws` on the page's host, using `wss:` for HTTPS pages and
 `ws:` for local HTTP. Messages are JSON text objects with a camelCase `type`

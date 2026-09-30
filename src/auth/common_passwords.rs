@@ -1,5 +1,11 @@
-//! Passwords so common that a guess list starts with them. The length rule admits
-//! them; this refuses them wherever a password is chosen. Compared in lowercase.
+//! Offline password-selection refusal list: a pinned common-credential corpus
+//! plus curated entries. Matching never sends credentials outside the process.
+
+use std::{collections::HashSet, sync::OnceLock};
+
+const CORPUS: &str = include_str!("../../vendor/seclists-passwords/10k-most-common.txt");
+const MAX_AFFIX: usize = 16;
+static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
 
 const COMMON: &[&str] = &[
     "password",
@@ -165,24 +171,93 @@ const COMMON: &[&str] = &[
     "clinic123",
 ];
 
-/// Whether `password` is on the refusal list, ignoring case.
+/// Refuse a known complete password or one common stem padded at either end
+/// with a bounded number of ASCII digits/punctuation. This is selection only:
+/// the actual password remains NFC-normalized, not case-folded or stripped.
 pub fn is_common(password: &str) -> bool {
-    let lowered = password.trim().to_lowercase();
-    COMMON.contains(&lowered.as_str())
+    let keys = KEYS.get_or_init(|| CORPUS.lines().chain(COMMON.iter().copied()).collect());
+    let comparison = crate::labels::comparison_key(password);
+    if keys.contains(comparison.as_str()) {
+        return true;
+    }
+    let removable = |c: char| c.is_ascii_digit() || c.is_ascii_punctuation();
+    let start = comparison
+        .chars()
+        .take(MAX_AFFIX)
+        .take_while(|c| removable(*c))
+        .count();
+    let tail = &comparison[start..]; // Every removed character is one ASCII byte.
+    let suffix = tail
+        .chars()
+        .rev()
+        .take(MAX_AFFIX)
+        .take_while(|c| removable(*c))
+        .count();
+    let core = &tail[..tail.len() - suffix];
+    !core.is_empty() && keys.contains(core)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{COMMON, is_common};
+    use super::{COMMON, CORPUS, is_common};
+    use sha2::{Digest, Sha256};
 
     #[test]
-    fn the_list_is_lowercase_and_within_the_length_rule() {
+    fn vendored_corpus_and_license_match_the_reviewed_revision() {
+        assert_eq!(
+            hex::encode(Sha256::digest(CORPUS.as_bytes())),
+            "68782d6a4a19a4768d5f15dd66bd534e7a33055cc755411e33f16d18c50fdcce"
+        );
+        assert_eq!(
+            hex::encode(Sha256::digest(include_bytes!(
+                "../../vendor/seclists-passwords/LICENSE"
+            ))),
+            "3dbdc93d5f8829de0941744841730a09c106d0732e5ae0e98ca1d77be7ded66c"
+        );
+        let entries: Vec<_> = CORPUS.lines().collect();
+        assert_eq!(entries.len(), 10_001);
+        assert!(entries.iter().all(|entry| !entry.is_empty()
+            && entry.is_ascii()
+            && *entry == entry.to_ascii_lowercase()));
+        assert_eq!(
+            entries
+                .iter()
+                .copied()
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            entries.len()
+        );
+    }
+
+    #[test]
+    fn common_stems_cannot_be_padded_with_years_symbols_or_invisible_characters() {
+        for value in [
+            "monkey20262026!!!",
+            "!!Samantha20262026!",
+            "Ｍｏｎｋｅｙ２０２６２０２６!!!",
+            "mon\u{200D}key20262026!!!",
+        ] {
+            assert!(value.chars().count() >= 15);
+            assert!(is_common(value), "{value:?}");
+        }
+        for value in [
+            "the river carries moonlight gently",
+            "correct horse battery staple",
+            "Q7v_X9q-F4m@L2p~K8w-C6r!",
+            "monkey joins five distant orchestras",
+        ] {
+            assert!(
+                !is_common(value),
+                "whole phrases are not reduced to individual words"
+            );
+        }
+    }
+
+    #[test]
+    fn curated_entries_are_normalized_and_nonempty() {
         for entry in COMMON {
             assert_eq!(*entry, entry.to_lowercase(), "{entry}");
-            assert!(
-                entry.chars().count() >= 8,
-                "{entry} would fail the length rule anyway"
-            );
+            assert!(!entry.is_empty());
         }
     }
 
