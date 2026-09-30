@@ -1,0 +1,5 @@
+# Security scanners run in a separate virtual environment from deployment tools.
+# Refresh the complete hashed wheel lock with the command in docs/security.md.
+pip-audit==2.10.1
+PyYAML==6.0.3
+Jinja2==3.1.6

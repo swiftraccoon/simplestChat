@@ -1,0 +1,66 @@
+title = "Reviewed public fixture values only"
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public fixture: src/auth/jwt.rs"
+condition = "AND"
+paths = ["(^|/)src/auth/jwt\\.rs$"]
+regexTarget = "secret"
+regexes = ["^claim\\-validation\\-test\\-secret\\-at\\-least\\-32\\-bytes$"]
+
+[[allowlists]]
+description = "Public fixture: src/signaling/connection_heartbeat_tests.rs"
+condition = "AND"
+paths = ["(^|/)src/signaling/connection_heartbeat_tests\\.rs$"]
+regexTarget = "secret"
+regexes = ["^interrupted\\-renewal\\-fixture\\-secret\\-at\\-least\\-32\\-bytes$"]
+
+[[allowlists]]
+description = "Public fixture: src/signaling/connection_authentication.rs"
+condition = "AND"
+paths = ["(^|/)src/signaling/connection_authentication\\.rs$"]
+regexTarget = "secret"
+regexes = ["^renewal\\-priority\\-fixture\\-secret\\-at\\-least\\-32\\-bytes$"]
+
+[[allowlists]]
+description = "Public fixture: src/signaling/connection_authentication.rs"
+condition = "AND"
+paths = ["(^|/)src/signaling/connection_authentication\\.rs$"]
+regexTarget = "secret"
+regexes = ["^ordinary\\-renewal\\-fixture\\-secret\\-at\\-least\\-32\\-bytes$"]
+
+[[allowlists]]
+description = "Public fixture: src/signaling/mod.rs"
+condition = "AND"
+paths = ["(^|/)src/signaling/mod\\.rs$"]
+regexTarget = "secret"
+regexes = ["^dGhlIHNhbXBsZSBub25jZQ==$"]
+
+[[allowlists]]
+description = "Public fixture: vendor/mediasoup-0.27.0/src/scalability_modes.rs"
+condition = "AND"
+paths = ["(^|/)vendor/mediasoup\\-0\\.27\\.0/src/scalability_modes\\.rs$"]
+regexTarget = "match"
+regexes = ["^L2T3KeyShift\\ =>\\ \"L2T3_KEY_SHIFT\"$"]
+
+[[allowlists]]
+description = "Public fixture: vendor/mediasoup-0.27.0/src/scalability_modes.rs"
+condition = "AND"
+paths = ["(^|/)vendor/mediasoup\\-0\\.27\\.0/src/scalability_modes\\.rs$"]
+regexTarget = "match"
+regexes = ["^L3T2KeyShift\\ =>\\ \"L3T2_KEY_SHIFT\"$"]
+
+[[allowlists]]
+description = "Public fixture: vendor/mediasoup-0.27.0/src/router/plain_transport.rs"
+condition = "AND"
+paths = ["(^|/)vendor/mediasoup\\-0\\.27\\.0/src/router/plain_transport\\.rs$"]
+regexTarget = "secret"
+regexes = ["^ZnQ3eWJraDg0d3ZoYzM5cXN1Y2pnaHU5NWxrZTVv$"]
+
+[[allowlists]]
+description = "Public fixture: vendor/mediasoup-sys-0.17.0/test/src/RTC/ICE/TestStunPacket.cpp"
+condition = "AND"
+paths = ["(^|/)vendor/mediasoup\\-sys\\-0\\.17\\.0/test/src/RTC/ICE/TestStunPacket\\.cpp$"]
+regexTarget = "secret"
+regexes = ["^1ezk7fni4jeo5bt7ibcdk4wjl8712suw$"]

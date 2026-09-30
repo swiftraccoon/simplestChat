@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "reviewedRevision": "2bd6d38215ddc4217b3f6cde0bd8fa30d93ce1cb",
+  "files": [
+    {
+      "path": "migrations/001_create_users.sql",
+      "sha256": "bbebea8bd2539ee643d2886e8768432aa1a5779c8eddde8ddc793a1b5244c055"
+    },
+    {
+      "path": "migrations/002_create_sessions.sql",
+      "sha256": "05f17896173da7710873b1a9c27c5a382d61fa792ebd06184273274d7fefc65d"
+    },
+    {
+      "path": "migrations/003_create_rooms.sql",
+      "sha256": "4613b7d16ff3d1013d40f000ee190f81921fd45345b7d9b343bfe9682f21c96f"
+    },
+    {
+      "path": "migrations/004_create_room_roles.sql",
+      "sha256": "fd48ecac483fca4817cf3aca2579d636d4e28f0cfe50ad3a9494608795274458"
+    },
+    {
+      "path": "migrations/005_create_room_states.sql",
+      "sha256": "080bddffaab54220dfd1bd895b4a182c51b5641ea2b916912e03f5ae4fa1236d"
+    },
+    {
+      "path": "migrations/006_add_session_token_index.sql",
+      "sha256": "90f0c732e14711277fa4860f432add0246bac1a744a5302b44e41e868028ab39"
+    },
+    {
+      "path": "migrations/007_add_webauthn_credential_id.sql",
+      "sha256": "3ccb56e348de74a4558a2f0738a4b3c1071c9fb2d8feb9d0bf3d8ee2480cd163"
+    },
+    {
+      "path": "migrations/008_canonicalize_user_emails.sql",
+      "sha256": "0f174c2e11557b83a162544648cfc56b68dcdf69cc7b0b6150456350c4e71d5f"
+    },
+    {
+      "path": "migrations/009_add_room_query_indexes.sql",
+      "sha256": "5ec67a15c52d8b23513ba6d06a13df4fd362728a15667b7e1715682122475026"
+    },
+    {
+      "path": "migrations/010_add_refresh_token_families.sql",
+      "sha256": "e899c3c04556f178b5ac073bcc1663d18ae1fee98355a19580f249fc84f521f9"
+    },
+    {
+      "path": "migrations/011_add_room_search_trigram_indexes.sql",
+      "sha256": "774a38d0ec2d52f07626791c13805798cdb78354939a59e9264032cefb8619a2"
+    },
+    {
+      "path": "migrations/012_canonicalize_guest_ipv6_moderation_ips.sql",
+      "sha256": "2f86e746831716d977939d48089c929d92130a0caf4cfde1738cf42a9b8fda9c"
+    },
+    {
+      "path": "migrations/013_community_accounts.sql",
+      "sha256": "12e87fd4df93e65f1b73c15235114d85b949892511f92243e8328cfa9f935dc2"
+    },
+    {
+      "path": "migrations/014_create_room_reports.sql",
+      "sha256": "8fb50d2aac34af107af9202dd98f7f218136a2f0ce534dae88d94ba4f25517a2"
+    },
+    {
+      "path": "migrations/015_add_user_chat_style.sql",
+      "sha256": "5468c15f39c07ec8269c14238101c15a60c9250a3c8fb666c79eebc2f1321bd9"
+    },
+    {
+      "path": "migrations/016_constraints_and_indexes.sql",
+      "sha256": "e13f704bd5df66ea16e4f96edbaf2c3d7f142d345aef220edd79ba6d68f0b2ac"
+    },
+    {
+      "path": "migrations/017_moderation_history.sql",
+      "sha256": "658371798367d60363967970cd2be1e22da92077351138d425a9e2bd62d21d9d"
+    },
+    {
+      "path": "migrations/018_user_chat_preferences.sql",
+      "sha256": "37da849ba26ee1daa82bcc0a6ae4c4d33867f5af517dfa7403902dff0eaff602"
+    },
+    {
+      "path": "migrations/019_invites.sql",
+      "sha256": "7719e618786672067ed7d5c229663850c4bcfbaa02d7e0ba79620dfc21bc6b51"
+    },
+    {
+      "path": "migrations/020_invite_receipts_and_retention.sql",
+      "sha256": "ea6956d4d5d928fba18ef43f7e33b811a066ea5e1c5e4d0ec0335c83b1bb6950"
+    },
+    {
+      "path": "migrations/021_invitation_secrets.sql",
+      "sha256": "5455be223eed9ff2ca16c19769f2b561b3f6e36557eb96d843185a4d1b632c6e"
+    },
+    {
+      "path": "migrations/022_require_current_sessions.sql",
+      "sha256": "6796904c9acb5448b614f9ce1e23f8c06462b8f9b84739b73e84f55ea16b8ca9"
+    }
+  ]
+}
