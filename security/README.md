@@ -62,6 +62,55 @@ Review both the direct version change and all transitive changes. The gate audit
 its own scanner environment; a vulnerable scanner dependency is not automatically
 exempt because it is used only in CI.
 
+## Source secret coverage
+
+The fast gate snapshots tracked and nonignored working-tree files before
+scanning. Each original file is bounded to 16 MiB, the complete snapshot to
+128 MiB, and the file count to 20,000. The current snapshot includes lockfiles,
+vendored inputs and binary files; ignored build output and local credentials are
+outside this source gate. The image tier scans shipped image contents separately.
+
+Gitleaks normally excludes some filenames and content types. The shared
+`security_secret_projection.py` helper creates a neutral-name, printable-ASCII
+view of every selected file. Its fixed text prefix prevents binary magic from
+triggering the pinned scanner's content exclusions. Contiguous ASCII strings,
+tabs and line endings are preserved; other bytes become newline delimiters.
+The projection remains bounded by the original file limit plus its fixed prefix.
+Before writing projections, the gate requires enough disk space for all source
+bytes, every prefix and a 64 MiB reserve. The file-count ceiling bounds prefix
+overhead as well as total work; a budget failure rejects the entire scan.
+Gitleaks' separate size cutoff is disabled because it must not silently omit a
+file already accepted by these repository bounds.
+
+Every projection records the original path, original SHA-256 and byte count,
+alongside the projected SHA-256, byte count and format. Private
+`secret-coverage.json` evidence binds the full set to the source manifest;
+`summary.json` retains only file/byte counts and the coverage digest. Findings
+refer to projected line numbers, so the original path and hash identify the
+source to inspect. Scanner output remains private and redacted.
+
+Each fast run first requires the actual pinned detector to find exactly one
+redacted, never-issued credential-shaped canary inside projected binary input.
+An inline `gitleaks:allow` comment must not suppress it. The current-tree scan
+and the selected Git diff scans must then return both a successful exit status
+and an explicit empty findings array. Fixture allowances retain their exact
+review fingerprints and original paths; translating a fixture to its neutral
+filename never exempts the same value elsewhere.
+
+This is printable-string detection, with up to three scanner decoding passes
+for supported encodings. It does not decrypt or unpack arbitrary content, decode
+UTF-16 credentials, or reconstruct strings separated by nonprintable bytes.
+Git history checks cover textual diffs; the complete projection applies to the
+selected current tree. Passing the gate does not establish that arbitrary
+binary or encoded content contains no secrets.
+
+After installing the pinned tools, run the focused real-engine checks with:
+
+```sh
+SIMPLESTCHAT_GITLEAKS_ENGINE_TESTS=1 python3 -m unittest discover \
+  -s ops/ansible/tests -p test_security_secrets.py
+```
+
 ## Review records and test data
 
 `exceptions.json` is the shared, exact-match, expiring review ledger. Its schema

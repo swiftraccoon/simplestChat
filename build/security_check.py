@@ -9,6 +9,7 @@ identities, status and elapsed time and is the uploadable CI evidence contract.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -21,10 +22,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import security_findings as findings
-from security_context import ROOT, Context, executable, json_object
+from security_context import MAX_REPORT, ROOT, Context, executable, json_object
 from security_policy import read_exceptions
+from security_secret_projection import project
 from security_secrets import neutral_snapshot
-from security_tools import ToolError, install, require, string, tool_path, write_private
+from security_tools import (
+    ToolError,
+    bounded_file,
+    install,
+    require,
+    string,
+    tool_path,
+    write_private,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -62,7 +72,7 @@ def secret_checks(
     base: str | None,
     snapshot: Path,
 ) -> None:
-    """Scan current nonignored bytes and the explicit Git change range with full redaction."""
+    """Scan current ASCII projections and textual Git changes with full redaction."""
     config = context.root / "security/gitleaks.toml"
     findings.gitleaks_configuration(config, reviews)
     neutral, translated = neutral_snapshot(context, snapshot, config)
@@ -77,20 +87,90 @@ def secret_checks(
         "--no-banner",
         "--report-format=json",
         "--report-path=-",
+        # Source snapshots already bound each original file and total bytes.
+        # A scanner-specific decimal-MB limit must not silently skip projections.
+        "--max-target-megabytes=0",
+        "--max-decode-depth=3",
     ]
     scanner = str(tool_path("gitleaks", tools))
+    secret_selftest(context, scanner, common)
     tree_options = list(common)
     tree_options[1] = str(translated)
-    _ = context.run("gitleaks-tree", [scanner, "dir", str(neutral), *tree_options])
+    clean_secret_scan(context, "gitleaks-tree", [scanner, "dir", str(neutral), *tree_options])
+    coverage_bytes = bounded_file(context.output / "secret-coverage.json", MAX_REPORT)
+    coverage = json_object(coverage_bytes)
+    context.checks[-1].update(
+        sourceFiles=coverage["files"],
+        sourceBytes=coverage["sourceBytes"],
+        projectionBytes=coverage["projectionBytes"],
+        projectionCoverageSha256=hashlib.sha256(coverage_bytes).hexdigest(),
+    )
     if base is not None:
         require(re.fullmatch(r"[a-f0-9]{40}", base), "invalid_security_diff_base")
         _ = context.run(
             "diff-base", [executable("git"), "merge-base", "--is-ancestor", base, "HEAD"]
         )
-        _ = context.run(
-            "gitleaks-diff", [scanner, "git", ".", "--log-opts=" + base + "..HEAD", *common]
+        clean_secret_scan(
+            context,
+            "gitleaks-diff",
+            [scanner, "git", ".", "--log-opts=" + base + "..HEAD", *common],
         )
-    _ = context.run("gitleaks-working-diff", [scanner, "git", ".", "--pre-commit", *common])
+    clean_secret_scan(
+        context, "gitleaks-working-diff", [scanner, "git", ".", "--pre-commit", *common]
+    )
+
+
+def clean_secret_scan(context: Context, name: str, arguments: Sequence[str]) -> None:
+    """Require a successful scanner to produce an explicit empty findings array."""
+    _, output = context.run(name, arguments)
+    require(
+        findings.list_value(cast("object", json.loads(output))) == [], "secret_findings_present"
+    )
+
+
+def secret_selftest(context: Context, scanner: str, options: Sequence[str]) -> None:
+    """Prove the actual detector finds a redacted inert credential in projected binary bytes."""
+    canary = (
+        "ghp_"
+        + base64.b64encode(hashlib.sha512(b"inert source scanner coverage only").digest())
+        .decode()
+        .replace("+", "x")
+        .replace("/", "y")[:36]
+    )
+    source = context.output / "secret-canary.original"
+    write_private(
+        source,
+        b"\x7fELF\x02\x01\x01\x00" + ("TOKEN=" + canary + " # gitleaks:allow\n").encode(),
+        0o600,
+    )
+    inputs = context.output / "secret-canary-inputs"
+    inputs.mkdir(mode=0o700)
+    target = inputs / "content000000"
+    projection = project(source, target, max_bytes=1024)
+    configuration = context.output / "secret-canary.toml"
+    write_private(configuration, b"[extend]\nuseDefault = true\n", 0o600)
+    arguments = list(options)
+    arguments[1] = str(configuration)
+    _, output = context.run(
+        "gitleaks-selftest",
+        [scanner, "dir", str(inputs), *arguments, "--exit-code=10"],
+        accepted=(10,),
+    )
+    entries = findings.list_value(cast("object", json.loads(output)))
+    require(len(entries) == 1, "secret_detector_selftest_count")
+    entry = findings.object_value(entries[0])
+    require(
+        entry.get("RuleID") == "github-pat"
+        and entry.get("Secret") == "REDACTED"
+        and Path(string(entry["File"])).resolve() == target.resolve()
+        and canary.encode() not in output,
+        "secret_detector_selftest_identity",
+    )
+    context.checks[-1].update(
+        expectedFinding="github-pat",
+        sourceSha256=projection.source_sha256,
+        projectionSha256=projection.projection_sha256,
+    )
 
 
 def dependency_checks(context: Context, tools: Path, reviews: Sequence[ExceptionRecord]) -> None:

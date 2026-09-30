@@ -68,11 +68,17 @@ for detailed archive, scanner, database, license and ELF contracts.
 | Squawk | New PostgreSQL migrations, transaction-aware and pinned to the deployed major | The fixed existing-migration baseline forbids edits to old SQL. |
 | Runtime configuration | Maintained rendered container restrictions and configuration invariants | Source tests cannot prove live kernel or provider state. |
 
-The source scan renames files in its private staging area so generic detector
-filename exclusions cannot silently skip a lockfile or vendor source path.
-Fixture exemptions bind an exact original file and value. Broad community
-Semgrep packs are not a blocking substitute for the curated rules and their
-positive/negative real-engine fixtures.
+The current-tree secret gate projects every tracked or nonignored file, including
+binaries and lockfiles, into bounded printable ASCII under neutral filenames.
+An actual-detector canary must pass first; original/projection hashes and byte
+counts identify what was scanned. Prefix overhead and free disk are checked
+before writing. Fixture reviews retain their exact original path and value.
+Coverage includes contiguous ASCII credentials and supported encodings; UTF-16,
+encrypted/compressed content and strings split by nonprintable bytes are outside
+that scope. Git history checks cover textual diffs. The
+[source coverage guide](../security/README.md#source-secret-coverage) documents
+the limits and real-engine tests. Broad community Semgrep packs are not a
+blocking substitute for the curated rules and their positive/negative fixtures.
 
 Migration lint uses a generated private configuration with no rule or path
 exclusions. New SQL cannot contain inline Squawk suppression directives, and
