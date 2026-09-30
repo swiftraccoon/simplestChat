@@ -1990,7 +1990,7 @@ impl RoomManager {
         }
         for room_id in rooms {
             if let Err(error) = self
-                .close_room_for_rejoin(&room_id, "Media worker restarted; rejoining")
+                .close_room_for_rejoin(&room_id, dead_worker, "Media worker restarted; rejoining")
                 .await
             {
                 warn!(room_id, %error, "Failed to close a room whose media worker died");
@@ -1999,9 +1999,15 @@ impl RoomManager {
     }
 
     /// Removes a live room's runtime and tells its members to rejoin. Unlike
-    /// deletion this keeps any persisted row and reserves nothing, so the next
-    /// join recreates the room on a live worker.
-    async fn close_room_for_rejoin(&self, room_id: &str, reason: &str) -> Result<()> {
+    /// deletion this keeps any persisted row. Its room ID stays reserved until
+    /// old media teardown finishes, so delayed cleanup cannot remove a rejoin's
+    /// replacement router.
+    async fn close_room_for_rejoin(
+        &self,
+        room_id: &str,
+        expected_worker: mediasoup::worker::WorkerId,
+        reason: &str,
+    ) -> Result<()> {
         let Ok(room_lock) = self.get_room(room_id) else {
             return Ok(());
         };
@@ -2009,6 +2015,27 @@ impl RoomManager {
             tokio::time::timeout(ROOM_CREATION_TIMEOUT, self.room_creation_lock.lock())
                 .await
                 .map_err(|_| anyhow::anyhow!("Room creation is busy"))?;
+        if !self
+            .rooms
+            .read()
+            .unwrap_or_else(|error| error.into_inner())
+            .get(room_id)
+            .is_some_and(|current| Arc::ptr_eq(current, &room_lock))
+        {
+            return Ok(());
+        }
+        // Worker recreation awaited after the original affected-room snapshot.
+        // A room replaced in the meantime belongs to a different worker generation.
+        if self
+            .media_server
+            .router_manager()
+            .get_worker_id(room_id)
+            .await
+            .ok()
+            != Some(expected_worker)
+        {
+            return Ok(());
+        }
         let control_guard =
             tokio::time::timeout(control::ADMISSION_TIMEOUT, control::lock_room(&room_lock))
                 .await
@@ -2053,6 +2080,11 @@ impl RoomManager {
                 rooms.remove(room_id);
             }
         }
+        let deletion_token = uuid::Uuid::new_v4();
+        self.deleting_rooms
+            .write()
+            .unwrap_or_else(|error| error.into_inner())
+            .insert(room_id.to_owned(), deletion_token);
         drop(control_guard);
         drop(creation_guard);
         for (participant_id, media_session_id) in participant_sessions {
@@ -2067,9 +2099,22 @@ impl RoomManager {
                 debug!(room_id, %participant_id, %error, "Media for a rejoining participant was already gone");
             }
         }
-        if let Err(error) = self.media_server.remove_router(room_id).await {
-            debug!(room_id, %error, "Router for a closed room was already gone");
-        }
+        let teardown = tokio::time::timeout(
+            ROOM_DELETE_TIMEOUT,
+            self.media_server.remove_router(room_id),
+        )
+        .await;
+        let succeeded = matches!(&teardown, Ok(Ok(())));
+        release_deletion_reservation_after_router_teardown(
+            &self.deleting_rooms,
+            room_id,
+            deletion_token,
+            succeeded,
+        );
+        anyhow::ensure!(
+            succeeded,
+            "Recovery router cleanup incomplete; room ID remains reserved"
+        );
         Ok(())
     }
 
@@ -6707,6 +6752,51 @@ mod security_tests {
         let (_again_tx, _again_rx) = join_guest(&manager, "alpha", "alice").await;
         assert!(routers.has_router("alpha").await);
         assert_ne!(routers.get_worker_id("alpha").await.unwrap(), alpha_worker);
+    }
+
+    #[tokio::test]
+    async fn recovery_reserves_the_room_until_its_old_router_cleanup_finishes() {
+        let manager = two_worker_test_manager().await;
+        let (_sender, _receiver) = join_guest(&manager, "recovering", "alice").await;
+        let routers = manager.media_server().router_manager();
+        let old_router = routers.get_router("recovering").await.unwrap().id();
+        let expected_worker = routers.get_worker_id("recovering").await.unwrap();
+        manager.get_or_create_room("healthy").await.unwrap();
+        let other_worker = routers.get_worker_id("healthy").await.unwrap();
+        assert_ne!(expected_worker, other_worker);
+        manager
+            .close_room_for_rejoin("recovering", other_worker, "Stale death notice")
+            .await
+            .unwrap();
+        assert_eq!(
+            routers.get_router("recovering").await.unwrap().id(),
+            old_router
+        );
+        let pause = routers.pause_router_removal_for_test().await;
+        let recovering = manager.clone();
+        let task = tokio::spawn(async move {
+            recovering
+                .close_room_for_rejoin("recovering", expected_worker, "Rejoining")
+                .await
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while routers.has_router("recovering").await {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(manager.get_room("recovering").is_err());
+        assert!(matches!(manager.get_or_create_room("recovering").await,
+            Err(error) if error.to_string() == "Room is being deleted"));
+        assert!(!task.is_finished());
+        drop(pause);
+        task.await.unwrap().unwrap();
+        let (_new_sender, _new_receiver) = join_guest(&manager, "recovering", "alice").await;
+        assert_ne!(
+            routers.get_router("recovering").await.unwrap().id(),
+            old_router
+        );
     }
 
     #[tokio::test]

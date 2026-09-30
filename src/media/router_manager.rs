@@ -428,6 +428,12 @@ impl RouterManager {
         }
     }
 
+    /// Hold the final cleanup phase so room recovery/rejoin ordering is deterministic.
+    #[cfg(test)]
+    pub(crate) async fn pause_router_removal_for_test(&self) -> impl Drop + '_ {
+        self.viewer_routers.lock().await
+    }
+
     /// Removes a room's router entry and immediately releases its allocation load.
     /// Other callers may still hold native router handles; the count tracks
     /// registered and pending rooms, not the lifetime of every cloned handle.
