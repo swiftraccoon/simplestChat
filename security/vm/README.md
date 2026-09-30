@@ -8,6 +8,16 @@ image. The manual/scheduled CI workflow verifies release provenance before
 invoking this helper; the helper independently verifies the release manifest,
 archive checksum, image layout and source revision.
 
+The manual workflow also provides `boot_only`, defaulting to `false`. This
+diagnostic scope boots the same checksum-pinned Debian image, authenticates the
+new guest's SSH host key, waits for cloud-init and verifies owned cleanup. It
+accepts no application artifact, skips release acquisition, inventory generation
+and Ansible, and cannot establish deployment, migration or restore success.
+Scheduled runs always retain the full signed-release path. The workflow job name
+distinguishes boot diagnostics from deployment validation, and every summary
+records `bootOnly`, `scope` and `fullDeploymentValidated`; a boot-only pass always
+has `scope: "boot"` and `fullDeploymentValidated: false`.
+
 ## What a passing run proves
 
 The controller applies `ops/ansible/site.yml` with the `host,docker,benchmark`
@@ -83,6 +93,20 @@ artifact or authenticate a GitHub signer itself. Archive and manifest validation
 also runs before the guest starts, and again through canonical staging inside
 the guest.
 
+For a boot failure, run the explicit diagnostic scope without waiting for an
+application build; it still requires the exact clean source checkout and all
+KVM, ownership and resource checks:
+
+```sh
+ops/ansible/.venv/bin/python build/security_vm.py \
+  --boot-only --output "$RUNNER_TEMP/disposable-vm-boot-evidence"
+```
+
+`--boot-only` and `--artifact-dir` are mutually exclusive. The diagnostic mode
+never accepts an unsigned or alternate application artifact. Its Python path
+uses only the standard library; the workflow installs the pinned Ansible
+dependencies only for a full deployment run.
+
 The dated Debian image and its complete upstream SHA-512 checksum are recorded in
 [`debian-cloud.json`](debian-cloud.json), checked against Debian's published
 [SHA512SUMS](https://cloud.debian.org/images/cloud/trixie/20260914-2601/SHA512SUMS).
@@ -132,9 +156,33 @@ stderr byte count, SHA-256 and a diagnostic projection of at most the first 8 Ki
 OS reasons and emulator component names; it never copies input text. It covers
 KVM, block/backing formats, sandbox, boot/device, memory/resource limits and
 GLib/thread startup failures. Unknown, oversized or control-bearing lines are
-withheld, with truncation/count metadata retained. Guest serial stdout is never
-projected. SSH authentication clears this prefix and suppresses all startup
-stderr evidence before cloud-init or Ansible commands run.
+withheld, with truncation/count metadata retained. Pre-auth guest serial stdout
+contributes only a byte count, digest and fixed milestone labels for firmware,
+disk boot, missing boot disk, GRUB, Linux, kernel panic, initramfs, reboot,
+disk resizing, poweroff, cloud-init and SSH startup. Matching uses a 128-byte
+overlap across bounded reads; no serial text or extracted field is published. These labels are
+diagnostic observations, not authenticated guest health assertions. SSH
+authentication clears buffered startup text and suppresses both stderr and
+serial diagnostics before cloud-init or Ansible commands run.
+
+The controller also observes the owned QEMU instance through a private Unix QMP
+socket in the generated directory (at most 100 path bytes). QEMU waits for this
+connection; the observer connects within ten seconds and sends only the fixed
+`qmp_capabilities` handshake. It sends no guest-control or arbitrary monitor
+commands. Parsing is limited to 64 KiB, 128 newline-delimited messages and 8 KiB
+per message, within the shared deadline. Public evidence retains connection,
+negotiation and EOF flags, counts, fixed failure codes and only `RESET`/`SHUTDOWN`
+events with allowlisted reasons and a boolean guest-origin flag. No raw QMP text,
+paths, error descriptions or timestamps are published. Observer failures fail
+validation; incomplete observer cleanup also fails the cleanup assertion.
+
+With the retained `-no-reboot` option, QEMU documents a guest reset as a
+[shutdown with reason `guest-reset`](https://www.qemu.org/docs/master/interop/qemu-qmp-ref.html#event-SHUTDOWN).
+However, [QMP events are unavailable before capability
+negotiation](https://www.qemu.org/docs/master/interop/qmp-spec.html#capabilities-negotiation),
+so an absent event cannot prove that no reset or shutdown occurred. The report
+states this limitation explicitly. Boot milestones and QMP observations narrow
+the diagnosis; they do not substitute for authenticated SSH and cloud-init.
 
 Raw SSH/Ansible/QEMU logs are bounded and private but may contain
 fixture-only secrets; do not upload the complete evidence directory. No

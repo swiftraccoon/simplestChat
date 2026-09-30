@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '17 6 * * *'
   workflow_dispatch:
+    inputs:
+      boot_only:
+        description: 'Only diagnose Debian guest boot; no application deployment or restore proof'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,7 +20,7 @@ concurrency:
 
 jobs:
   infrastructure:
-    name: Debian VM deployment and restore policy
+    name: ${{ inputs.boot_only && 'Debian VM boot diagnostics' || 'Debian VM deployment and restore policy' }}
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -33,9 +38,13 @@ jobs:
           test -c /dev/kvm
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
           python3 -m venv "$RUNNER_TEMP/vm-controller"
+      - name: Install deployment controller dependencies
+        if: ${{ !inputs.boot_only }}
+        run: |
           "$RUNNER_TEMP/vm-controller/bin/python" -m pip --isolated install \
             --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
       - name: Acquire and verify the exact signed main release
+        if: ${{ !inputs.boot_only }}
         timeout-minutes: 20
         env:
           GH_TOKEN: ${{ github.token }}
@@ -43,11 +52,18 @@ jobs:
           "$RUNNER_TEMP/vm-controller/bin/python" build/security_vm_release.py \
             --repository "$GITHUB_REPOSITORY" --output "$RUNNER_TEMP/vm-release"
       - name: Apply twice and verify host policy and isolated restore
+        if: ${{ !inputs.boot_only }}
         timeout-minutes: 35
         run: |
           "$RUNNER_TEMP/vm-controller/bin/python" build/security_vm.py \
             --artifact-dir "$RUNNER_TEMP/vm-release/artifact" \
             --output "$RUNNER_TEMP/security-vm"
+      - name: Diagnose only the owned Debian guest boot
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.boot_only }}
+        timeout-minutes: 35
+        run: |
+          "$RUNNER_TEMP/vm-controller/bin/python" build/security_vm.py \
+            --boot-only --output "$RUNNER_TEMP/security-vm"
       - name: Preserve only the sanitized VM summary
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

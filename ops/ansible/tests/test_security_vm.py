@@ -108,6 +108,23 @@ class CleanupFailure:
         return {"terminalBeforeCleanup": {"state": "running"}, "cleanupReturnCode": None}
 
 
+@dataclass
+class FixtureObserver:
+    """Model the diagnostic-only observer for inert processes that do not speak QMP."""
+
+    failure: str | None = None
+
+    def start(self) -> None:
+        """Start no real socket; independent QMP tests exercise the actual protocol."""
+
+    def close(self) -> None:
+        """Own no fixture resources beyond the real child already checked by Guest."""
+
+    def diagnostics(self) -> dict[str, object]:
+        """Make modeled observer evidence explicit in orchestration-only test receipts."""
+        return {"fixture": True}
+
+
 def manifest() -> Manifest:
     """Build a complete current release contract without representing a usable image."""
     return Manifest(
@@ -224,6 +241,11 @@ class BoundaryTests(unittest.TestCase):
         self.assertEqual(
             args[args.index("-netdev") + 1], "user,id=net0,hostfwd=tcp:127.0.0.1:22345-:22"
         )
+        self.assertEqual(
+            args[args.index("-qmp") + 1],
+            "unix:/owned/fixture,,with comma/qmp.sock,server=on,wait=on",
+        )
+        self.assertIn("-no-reboot", args)
         disks = [
             object_json(args[index + 1]) for index, item in enumerate(args) if item == "-blockdev"
         ]
@@ -544,6 +566,7 @@ class LifecycleTests(unittest.TestCase):
                 ),
                 patch.object(vm, "boot", side_effect=boot_ready),
                 patch.object(vm, "exercise", return_value={}),
+                patch.object(vm, "Observer", return_value=FixtureObserver()),
                 self.assertRaisesRegex(ToolError, "vm_stdout_limit"),
             ):
                 _ = vm.run(root / "artifact", root / "output")

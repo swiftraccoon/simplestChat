@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, cast, final
 
 from security_context import ROOT, environment, executable, json_object
 from security_tools import ToolError, bounded_file, record, require, string, write_private
+from security_vm_qmp import Observer
 
 # isort: split
 # security_context installs the canonical standalone operations-helper directory.
@@ -117,6 +118,21 @@ STARTUP_COMPONENTS = (
     "gthread",
     "pthread",
 )
+BOOT_MILESTONES = {
+    "firmware": rb"seabios|tianocore|uefi firmware",
+    "boot_disk": rb"booting from hard disk",
+    "no_bootable_disk": rb"no bootable device|no bootable disk|boot failed",
+    "grub": rb"\bgrub\b",
+    "linux": rb"linux version|booting linux",
+    "kernel_panic": rb"kernel panic|not syncing",
+    "initramfs": rb"\(initramfs\)|unable to mount root fs|dropping to a shell",
+    "disk_resize": rb"growroot|growpart|resize2fs|partition resize",
+    "reboot": rb"reboot: restarting system|rebooting",
+    "poweroff": rb"power down|powering off",
+    "cloud_init": rb"cloud-init",
+    "ssh": rb"started openssh|starting openssh|ssh.service",
+}
+BOOT_OVERLAP = 128
 
 
 def startup_errors(content: bytes) -> dict[str, object]:
@@ -503,6 +519,8 @@ def qemu_command(work: Path, port: int, run_id: str) -> list[str]:
         "none",
         "-monitor",
         "none",
+        "-qmp",
+        "unix:" + str(work / "qmp.sock").replace(",", ",,") + ",server=on,wait=on",
         "-serial",
         "stdio",
         "-no-reboot",
@@ -540,7 +558,7 @@ def qemu_command(work: Path, port: int, run_id: str) -> list[str]:
 class Guest:
     """Keep the exact QEMU leader unreaped until cleanup; never search by process name."""
 
-    def __init__(self, host: Host, argv: Sequence[str]) -> None:
+    def __init__(self, host: Host, argv: Sequence[str], *, qmp_path: Path | None = None) -> None:
         """Start one owned process group and bounded pipe drainer without daemonization."""
         self.host = host
         self.failure: str | None = None
@@ -554,6 +572,11 @@ class Guest:
         self.startup_buffer = bytearray()
         self.startup_bytes = 0
         self.startup_digest = hashlib.sha256()
+        self.serial_bytes = 0
+        self.serial_digest = hashlib.sha256()
+        self.serial_tail = b""
+        self.serial_milestones: set[str] = set()
+        self.observer = Observer(qmp_path, host.deadline) if qmp_path is not None else None
         self.child = subprocess.Popen(  # noqa: S603 -- Fixed reviewed QEMU/prlimit argv; no shell.
             argv,
             stdin=subprocess.DEVNULL,
@@ -569,6 +592,12 @@ class Guest:
         except BaseException:
             bounded_process.stop(self.child)
             raise
+        if self.observer is not None:
+            try:
+                self.observer.start()
+            except BaseException:
+                self.close()
+                raise
 
     def startup_capture(self, content: bytes) -> None:
         """Retain a finite emulator-only prefix until SSH authenticates this exact guest."""
@@ -585,6 +614,20 @@ class Guest:
         with self.startup_lock:
             self.authenticated.set()
             self.startup_buffer.clear()
+            self.serial_tail = b""
+            self.serial_milestones.clear()
+
+    def serial_capture(self, content: bytes) -> None:
+        """Retain only fixed boot milestones from bounded pre-auth guest serial output."""
+        with self.startup_lock:
+            if not self.authenticated.is_set():
+                self.serial_bytes += len(content)
+                self.serial_digest.update(content)
+                window = (self.serial_tail + content).lower()
+                for name, pattern in BOOT_MILESTONES.items():
+                    if re.search(pattern, window):
+                        self.serial_milestones.add(name)
+                self.serial_tail = window[-BOOT_OVERLAP:]
 
     def diagnostics(self) -> dict[str, object]:
         """Publish numeric lifecycle facts and a finite stderr vocabulary, never exception text."""
@@ -595,6 +638,8 @@ class Guest:
             "drainerErrno": self.drainer_errno,
             "authenticatedSsh": self.authenticated.is_set(),
         }
+        if self.observer is not None:
+            result["qmp"] = self.observer.diagnostics()
         with self.startup_lock:
             if not self.authenticated.is_set():
                 result["startupStderr"] = {
@@ -603,6 +648,11 @@ class Guest:
                     "prefixBytes": len(self.startup_buffer),
                     "truncated": self.startup_bytes > len(self.startup_buffer),
                     **startup_errors(bytes(self.startup_buffer)),
+                }
+                result["startupSerial"] = {
+                    "bytesObserved": self.serial_bytes,
+                    "sha256": self.serial_digest.hexdigest(),
+                    "milestones": sorted(self.serial_milestones),
                 }
         return result
 
@@ -638,6 +688,8 @@ class Guest:
                         name = cast("str", key.data)
                         if name == "stderr":
                             self.startup_capture(content)
+                        else:
+                            self.serial_capture(content)
                         require(
                             counts[key.fd] + len(content) <= MAX_STREAM, "vm_" + name + "_limit"
                         )
@@ -657,6 +709,8 @@ class Guest:
     def require_alive(self) -> None:
         """Observe exit without poll()/wait(), keeping the owned process group reserved."""
         self.observed_terminal = terminal_status(self.child.pid)
+        if self.observer is not None and self.observer.failure is not None:
+            self.failure = self.observer.failure
         require(self.failure is None, self.failure or "vm_drainer_unhealthy")
         require(self.observed_terminal["state"] == "running", "vm_child_exited")
 
@@ -664,20 +718,33 @@ class Guest:
         """Stop only this unreaped child's group and close its private output pipes."""
         if self.closed:
             return
-        self.observed_terminal = terminal_status(self.child.pid)
-        bounded_process.stop(self.child)
-        self.closed = True
-        # Cleanup closes every owned producer. Let the drainer consume its final
-        # error bytes through EOF before requesting a bounded forced stop.
-        self.thread.join(timeout=1)
-        self.stopping.set()
-        self.thread.join(timeout=5)
-        require(not self.thread.is_alive(), "vm_output_cleanup_incomplete")
-        for stream in (self.child.stdout, self.child.stderr):
-            if stream is not None:
-                stream.close()
+        try:
+            self.observed_terminal = terminal_status(self.child.pid)
+            bounded_process.stop(self.child)
+            self.closed = True
+        finally:
+            self._close_io()
         if self.failure is None and self.drainer_status != "completed":
             self.failure = self.drainer_status = "vm_output_incomplete"
+        if self.observer is not None and self.observer.failure is not None:
+            self.failure = self.failure or self.observer.failure
+            require(self.observer.failure != "vm_qmp_cleanup_incomplete", self.observer.failure)
+
+    def _close_io(self) -> None:
+        """Stop diagnostic readers even when the exact owned-child cleanup fails."""
+        try:
+            if self.observer is not None:
+                self.observer.close()
+        finally:
+            # Cleanup closes every owned producer. Let the drainer consume its final
+            # error bytes through EOF before requesting a bounded forced stop.
+            self.thread.join(timeout=1)
+            self.stopping.set()
+            self.thread.join(timeout=5)
+            require(not self.thread.is_alive(), "vm_output_cleanup_incomplete")
+            for stream in (self.child.stdout, self.child.stderr):
+                if stream is not None:
+                    stream.close()
 
 
 def recap(data: bytes, *, unchanged: bool) -> dict[str, int]:
@@ -904,6 +971,18 @@ def exercise(host: Host, guest: Guest, work: Path, port: int, run_id: str) -> di
     return phases
 
 
+def source_revision(host: Host) -> str:
+    """Require a clean source tree for either the deployment or explicit boot-only scope."""
+    _, revision = host.run("source-revision", [executable("git"), "rev-parse", "HEAD"])
+    selected = revision.decode().strip()
+    require(re.fullmatch(r"[a-f0-9]{40}", selected), "vm_invalid_source_revision")
+    _, changes = host.run(
+        "source-clean", [executable("git"), "status", "--porcelain", "--untracked-files=normal"]
+    )
+    require(not changes.strip(), "vm_requires_clean_checkout")
+    return selected
+
+
 def artifact_input(host: Host, path: Path) -> Manifest:
     """Require the canonical current-head artifact before copying anything into the guest."""
     require(
@@ -927,13 +1006,28 @@ def artifact_input(host: Host, path: Path) -> Manifest:
         )
     manifest = validate_manifest(path / "release.json")
     _ = verify_archive(path / "image.tar", manifest)
-    _, revision = host.run("source-revision", [executable("git"), "rev-parse", "HEAD"])
-    require(revision.decode().strip() == manifest["revision"], "vm_release_revision_differs")
-    _, changes = host.run(
-        "source-clean", [executable("git"), "status", "--porcelain", "--untracked-files=normal"]
-    )
-    require(not changes.strip(), "vm_requires_clean_checkout")
+    require(source_revision(host) == manifest["revision"], "vm_release_revision_differs")
     return manifest
+
+
+def inputs(host: Host, artifact_dir: Path | None, *, boot_only: bool) -> dict[str, object]:
+    """Boot diagnostics cannot select an application artifact or claim its verification."""
+    if boot_only:
+        require(artifact_dir is None, "vm_boot_only_forbids_artifact")
+        return {"revision": source_revision(host)}
+    require(artifact_dir is not None, "vm_deployment_requires_artifact")
+    manifest = artifact_input(host, cast("Path", artifact_dir))
+    return {"revision": manifest["revision"], "imageArchiveSha256": manifest["archiveSha256"]}
+
+
+def inventory(work: Path, port: int, run_id: str, artifact: Path | None, revision: str) -> None:
+    """Create an Ansible inventory only for the canonical deployment scope."""
+    if artifact is not None:
+        write_private(
+            work / "inventory.json",
+            json.dumps(fixture_inventory(work, port, run_id, artifact, revision)).encode(),
+            mode=0o600,
+        )
 
 
 def close_guest(guest: Guest, report: dict[str, object]) -> None:
@@ -944,7 +1038,7 @@ def close_guest(guest: Guest, report: dict[str, object]) -> None:
         report["vmLifecycle"] = guest.diagnostics()
 
 
-def run(artifact_dir: Path, output: Path) -> dict[str, object]:
+def run(artifact_dir: Path | None, output: Path, *, boot_only: bool = False) -> dict[str, object]:
     """Publish success only after guest assertions and exact owned-process cleanup succeed."""
     require(output.is_absolute() and output.resolve() == output, "invalid_vm_output")
     output.mkdir(mode=0o700)
@@ -956,6 +1050,9 @@ def run(artifact_dir: Path, output: Path) -> dict[str, object]:
         "passed": False,
         "cleanupPassed": False,
         "guestExecuted": False,
+        "bootOnly": boot_only,
+        "scope": "boot" if boot_only else "deployment-restore",
+        "fullDeploymentValidated": False,
         "checks": host.checks,
     }
     guest: Guest | None = None
@@ -963,31 +1060,20 @@ def run(artifact_dir: Path, output: Path) -> dict[str, object]:
     try:
         preflight(output)
         pin = CloudImage.read()
-        manifest = artifact_input(host, artifact_dir)
-        report.update(
-            {
-                "revision": manifest["revision"],
-                "imageArchiveSha256": manifest["archiveSha256"],
-                "cloudImageSha512": pin.sha512,
-            }
-        )
+        report.update(inputs(host, artifact_dir, boot_only=boot_only))
+        report["cloudImageSha512"] = pin.sha512
         work = Path(tempfile.mkdtemp(prefix="vm-private-", dir=output))
         with socket.socket() as selected:
             selected.bind(("127.0.0.1", 0))
             port = cast("tuple[str, int]", selected.getsockname())[1]
         prepare_disk(host, work, pin)
         create_seed(host, work, port, run_id)
-        write_private(
-            work / "inventory.json",
-            json.dumps(
-                fixture_inventory(work, port, run_id, artifact_dir, manifest["revision"])
-            ).encode(),
-            mode=0o600,
-        )
-        guest = Guest(host, qemu_command(work, port, run_id))
+        inventory(work, port, run_id, artifact_dir, string(report["revision"]))
+        guest = Guest(host, qemu_command(work, port, run_id), qmp_path=work / "qmp.sock")
         report["guestExecuted"] = True
         boot(host, guest, work, port)
-        report["phases"] = exercise(host, guest, work, port, run_id)
+        if not boot_only:
+            report["phases"] = exercise(host, guest, work, port, run_id)
         report["passed"] = True
     except BaseException as error:
         report["failure"] = str(error) if isinstance(error, ToolError) else type(error).__name__
@@ -1007,6 +1093,7 @@ def run(artifact_dir: Path, output: Path) -> dict[str, object]:
             if guest is not None and guest.failure is not None:
                 report["passed"] = False
                 _ = report.setdefault("failure", guest.failure)
+            report["fullDeploymentValidated"] = report["passed"] is True and not boot_only
             write_private(
                 output / "summary.json", json.dumps(report, indent=2).encode() + b"\n", mode=0o600
             )
@@ -1018,14 +1105,17 @@ def run(artifact_dir: Path, output: Path) -> dict[str, object]:
 class Options(argparse.Namespace):
     """There are deliberately no provider, host, inventory or arbitrary-command options."""
 
-    artifact_dir: Path = Path()
+    artifact_dir: Path | None = None
+    boot_only: bool = False
     output: Path = Path()
 
 
 def main() -> int:
     """Keep public diagnostics fixed while retaining bounded private failure evidence."""
     parser = argparse.ArgumentParser(description=__doc__)
-    _ = parser.add_argument("--artifact-dir", type=Path, required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    _ = mode.add_argument("--artifact-dir", type=Path)
+    _ = mode.add_argument("--boot-only", action="store_true")
     _ = parser.add_argument("--output", type=Path, required=True)
     options = parser.parse_args(namespace=Options())
     _ = os.umask(0o077)
@@ -1037,11 +1127,16 @@ def main() -> int:
     for number in (signal.SIGTERM, signal.SIGINT):
         _ = signal.signal(number, interrupted)
     try:
-        _ = run(options.artifact_dir.absolute(), options.output.absolute())
+        _ = run(
+            options.artifact_dir.absolute() if options.artifact_dir is not None else None,
+            options.output.absolute(),
+            boot_only=options.boot_only,
+        )
     except (ToolError, OSError, ValueError, RuntimeError):
         _ = sys.stderr.write("Disposable VM validation failed; inspect its private evidence.\n")
         return 1
-    _ = sys.stdout.write("Disposable VM validation and owned cleanup passed.\n")
+    scope = "boot-only" if options.boot_only else "deployment and restore"
+    _ = sys.stdout.write(f"Disposable VM {scope} validation and owned cleanup passed.\n")
     return 0
 
 
