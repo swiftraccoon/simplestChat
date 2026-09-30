@@ -305,8 +305,10 @@ def sandbox_args(image: str, run_id: str, digest: str) -> list[str]:
         "--memory-swap=6g",
         "--pids-limit=256",
         "--ulimit=core=0:0",
-        "--tmpfs=/work:rw,nosuid,nodev,size=5g,mode=1777",
-        "--tmpfs=/tmp:rw,nosuid,nodev,size=256m,mode=1777",
+        # Meson executes compiler sanity checks and the built tests here.
+        # Docker tmpfs defaults to noexec unless execution is explicit.
+        "--tmpfs=/work:rw,exec,nosuid,nodev,size=5g,mode=1777",
+        "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=256m,mode=1777",
         image,
     ]
 

@@ -155,6 +155,8 @@ class NativeSecurityTests(unittest.TestCase):
             "--ulimit=core=0:0",
             "--security-opt=no-new-privileges:true",
             "--user=65532:65532",
+            "--tmpfs=/work:rw,exec,nosuid,nodev,size=5g,mode=1777",
+            "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=256m,mode=1777",
             "--rm",
         ):
             self.assertIn(required, argv)

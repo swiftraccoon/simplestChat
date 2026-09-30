@@ -81,6 +81,14 @@ Linux capabilities. It uses a read-only root filesystem and numeric UID/GID
 no additional swap allowance and a 256-process limit. Engine log storage is
 disabled; the owner captures independently bounded streams.
 
+The `/work` tmpfs explicitly permits execution because Meson runs compiler
+sanity-check executables there before building and running the native tests.
+Leaving this implicit makes Docker's non-executable tmpfs default fail setup
+with `Permission denied`, before any sanitizer coverage. `/tmp` is explicitly
+non-executable; both mounts retain `nosuid` and `nodev`. This workspace permission
+does not add host mounts, networking, capabilities or privileges.
+[Docker tmpfs mount options](https://docs.docker.com/engine/storage/tmpfs/).
+
 Build/test tasks have a 1,200-second deadline. Replay processes have a 10-second
 outer deadline and a 5-second per-input timeout. Reviewed inputs are at most
 64 KiB and libFuzzer has a 2 GiB RSS ceiling. The owner also applies a separate
