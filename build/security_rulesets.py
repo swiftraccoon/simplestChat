@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from security_context import executable
-from security_tools import bounded_file, require
+from security_tools import ToolError, bounded_file, require
 
 # isort: split
 import bounded_process
@@ -139,23 +139,41 @@ def healthy_checks(value: JsonObject, revision: str) -> None:
 
 
 def healthy_analyses(value: JsonValue, revision: str) -> None:
-    """Require current coverage within the bounded newest-first analysis window."""
+    """Require the newest successful security analysis per language at the selected head."""
     entries = array_value(value)
     require(len(entries) <= PAGE_LIMIT, "ruleset_analysis_window")
-    categories: set[str] = set()
+    expected = {f"/language:{language}/security" for language in LANGUAGES}
+    selected: dict[str, JsonObject] = {}
     for raw in entries:
         entry = object_value(raw)
-        if (
-            entry.get("commit_sha") != revision
-            or object_value(entry["tool"]).get("name") != "CodeQL"
-        ):
+        if object_value(entry["tool"]).get("name") != "CodeQL":
             continue
-        require(not entry.get("error"), "ruleset_analysis_failed")
-        if entry.get("ref") == "refs/heads/main":
-            categories.add(string_value(entry["category"]))
+        category = string_value(entry["category"])
+        if category in expected and category not in selected:
+            selected[category] = entry
+    require(set(selected) == expected, "ruleset_language_coverage")
+    for entry in selected.values():
+        require(
+            entry.get("commit_sha") == revision and entry.get("ref") == "refs/heads/main",
+            "ruleset_analysis_not_current",
+        )
+        require(
+            entry.get("error") == "" and entry.get("warning") == "",
+            "ruleset_analysis_failed",
+        )
+        count = entry.get("rules_count")
+        require(type(count) is int and count > 0, "ruleset_analysis_empty")
+
+
+def require_main_head(repository: str, revision: str) -> None:
+    """Refuse a moved or differently typed main reference immediately before writes."""
+    head = object_value(api(repository, "git/ref/heads/main"))
+    target = object_value(head["object"])
     require(
-        {f"/language:{language}/security" for language in LANGUAGES} <= categories,
-        "ruleset_language_coverage",
+        head.get("ref") == "refs/heads/main"
+        and target.get("type") == "commit"
+        and target.get("sha") == revision,
+        "ruleset_remote_head_changed",
     )
 
 
@@ -170,8 +188,7 @@ def ready(repository: str, revision: str) -> None:
         not command([executable("git"), "status", "--porcelain=v1", "--untracked-files=all"]),
         "ruleset_dirty_checkout",
     )
-    head = object_value(api(repository, "git/ref/heads/main"))
-    require(object_value(head["object"])["sha"] == revision, "ruleset_remote_head_changed")
+    require_main_head(repository, revision)
     healthy_checks(
         object_value(api(repository, f"commits/{revision}/check-runs?per_page=100&filter=latest")),
         revision,
@@ -191,7 +208,12 @@ def ready(repository: str, revision: str) -> None:
         "ruleset_trusted_ci_not_successful",
     )
     healthy_analyses(
-        api(repository, "code-scanning/analyses?ref=refs%2Fheads%2Fmain&per_page=100"), revision
+        api(
+            repository,
+            "code-scanning/analyses?ref=refs%2Fheads%2Fmain&per_page=100"
+            + "&tool_name=CodeQL&sort=created&direction=desc",
+        ),
+        revision,
     )
     for severity in ("critical", "high"):
         alerts = array_value(
@@ -232,10 +254,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             require(args.revision is not None, "ruleset_revision_required")
             ready(repository, args.revision or "")
             for policy in changes:
+                require_main_head(repository, args.revision or "")
                 existing = current.get(string_value(policy["name"]))
                 endpoint = "rulesets" if existing is None else "rulesets/" + str(existing["id"])
                 _ = api(repository, endpoint, policy)
+            require_main_head(repository, args.revision or "")
             current = inventory(repository)
+            require_main_head(repository, args.revision or "")
             require(
                 all(
                     comparable(current[string_value(item["name"])]) == comparable(item)
@@ -254,7 +279,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             + "\n"
         )
-    except (ValueError, OSError, KeyError, RuntimeError, bounded_process.ProcessError) as error:
+    except (
+        ToolError,
+        ValueError,
+        OSError,
+        KeyError,
+        RuntimeError,
+        bounded_process.ProcessError,
+    ) as error:
         _ = sys.stderr.write(f"Ruleset reconciliation failed: {type(error).__name__}\n")
         return 1
     return 1 if args.mode == "check" and changes else 0

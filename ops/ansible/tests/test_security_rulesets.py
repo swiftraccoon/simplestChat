@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import copy
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -47,6 +49,8 @@ class RulesetTests(unittest.TestCase):
                 "commit_sha": REVISION,
                 "tool": {"name": "CodeQL"},
                 "error": "",
+                "warning": "",
+                "rules_count": 1,
                 "ref": "refs/heads/main",
                 "category": f"/language:{language}/security",
             }
@@ -110,8 +114,84 @@ class RulesetTests(unittest.TestCase):
         window: list[JsonValue] = [*current, *[old] * (rules.PAGE_LIMIT - len(current))]
         rules.healthy_analyses(window, REVISION)
         window[0] = old
-        with self.assertRaisesRegex(ToolError, "ruleset_language_coverage"):
+        with self.assertRaisesRegex(ToolError, "ruleset_analysis_not_current"):
             rules.healthy_analyses(window, REVISION)
+
+    def test_newest_category_cannot_fall_back_to_an_older_revision_or_success(self) -> None:
+        """Newest-first API order is authoritative before filtering revision or errors."""
+        older = self.analyses()
+        newest = copy.deepcopy(older)
+        for item in newest:
+            test_support.obj(item)["commit_sha"] = OTHER
+        with self.assertRaisesRegex(ToolError, "ruleset_analysis_not_current"):
+            rules.healthy_analyses(newest + older, REVISION)
+        newest = copy.deepcopy(older)
+        test_support.obj(newest[0])["error"] = "failed"
+        with self.assertRaisesRegex(ToolError, "ruleset_analysis_failed"):
+            rules.healthy_analyses(newest + older, REVISION)
+        rules.healthy_analyses(older + newest, REVISION)
+
+    def test_partial_or_empty_analysis_cannot_activate_protection(self) -> None:
+        """Require explicit clean diagnostics and real query coverage for every language."""
+        for key, value in (
+            ("warning", "partial extraction"),
+            ("warning", None),
+            ("error", None),
+            ("rules_count", 0),
+            ("rules_count", None),
+            ("rules_count", True),
+        ):
+            with self.subTest(key=key, value=value):
+                records = self.analyses()
+                test_support.obj(records[0])[key] = json_value(value)
+                with self.assertRaises(ToolError):
+                    rules.healthy_analyses(records, REVISION)
+
+    def test_current_head_requires_exact_ref_commit_type_and_sha(self) -> None:
+        """A matching SHA under another ref or object type does not establish current main."""
+        valid: JsonObject = {
+            "ref": "refs/heads/main",
+            "object": {"type": "commit", "sha": REVISION},
+        }
+        with patch.object(rules, "api", return_value=valid) as api:
+            rules.require_main_head("owner/repository", REVISION)
+            api.assert_called_once_with("owner/repository", "git/ref/heads/main")
+        for key, value in (("ref", "refs/heads/other"), ("type", "tag"), ("sha", OTHER)):
+            with self.subTest(key=key):
+                changed = copy.deepcopy(valid)
+                if key == "ref":
+                    changed[key] = value
+                else:
+                    test_support.obj(changed["object"])[key] = value
+                with patch.object(rules, "api", return_value=changed), self.assertRaises(ToolError):
+                    rules.require_main_head("owner/repository", REVISION)
+
+    def test_apply_rechecks_head_before_every_mutation_and_both_sides_of_readback(self) -> None:
+        """Moving main stops subsequent writes or success without reverting protective changes."""
+        repository, identifier, policies = rules.load_policy()
+        observed = {str(item["name"]): item for item in policies}
+        for moved_at in range(len(policies) + 2):
+            with self.subTest(moved_at=moved_at):
+                states: list[ToolError | None] = [None] * moved_at + [
+                    ToolError("ruleset_remote_head_changed")
+                ]
+                with (
+                    redirect_stdout(io.StringIO()),
+                    redirect_stderr(io.StringIO()),
+                    patch.object(rules, "ready"),
+                    patch.object(rules, "inventory", side_effect=[{}, observed]) as inventory,
+                    patch.object(rules, "require_main_head", side_effect=states) as head,
+                    patch.object(
+                        rules, "api", return_value={"id": identifier, "default_branch": "main"}
+                    ) as api,
+                ):
+                    self.assertEqual(rules.main(["apply", "--revision", REVISION]), 1)
+                    self.assertEqual(head.call_count, moved_at + 1)
+                    self.assertEqual(api.call_count, 1 + min(moved_at, len(policies)))
+                    self.assertEqual(
+                        inventory.call_count, 2 if moved_at == len(policies) + 1 else 1
+                    )
+                    self.assertEqual(api.call_args_list[0].args[:2], (repository, ""))
 
     def test_maintained_policy_splits_review_from_mandatory_gates(self) -> None:
         """The sole-owner review exception never grants a security-check bypass."""

@@ -177,7 +177,12 @@ python3 build/security_rulesets.py apply --revision FULL_GREEN_MAIN_COMMIT_SHA
 nonzero on drift. `apply` creates or updates only the two named rulesets and
 reads them back. It requires a clean checkout at the exact remote main revision,
 a completed successful main-push CI run, the aggregate GitHub Actions gate,
-all five non-advisory CodeQL categories, and no open High/Critical security alerts.
+the newest security analysis for each of the five CodeQL categories at that same
+revision, and no open High/Critical security alerts. Analysis warnings, missing
+query counts and empty query coverage fail the preflight. It rechecks the remote
+main ref before each write and before and after readback. A changed head stops
+remaining operations and reports failure; protection already installed remains
+in place and a fresh `plan` shows any remaining differences.
 It has no delete or disable mode. The operator's authenticated `gh` account must
 have repository administration permission; no administration token enters PR CI.
 
