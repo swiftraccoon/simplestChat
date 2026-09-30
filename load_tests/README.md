@@ -78,6 +78,7 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 | `--subscription-seed N` | Required for fixed graphs; unsigned 32-bit integer, held constant across comparisons |
 | `--churn-rate N` | Select `min(clients, floor(N × duration))` clients to repeatedly join; 0. Refused with `--profile browser`, whose grid models rooms that only fill |
 | `--audio-only`, `--video-only` | Generate only the selected media kind |
+| `--chat-interval-ms MS` | Optional public text message per media client every 1,000–600,000 ms, staggered within each room; disabled by default. Restricted to owned loopback servers, stable clients and at most five messages/s per room |
 | `--quality PRESET`, `--fps FPS` | `480p`/`720p`/`1080p`, 15/30/60 fps; defaults 480p/30 (synthetic profile only) |
 | `--profile NAME` | `synthetic` (default: the fixed stream every historical result used) or `browser` (what the web client costs; see below) |
 | `--capture 720p\|1080p` | Browser camera; 720p (100/300/900 kbit/s layers), 1080p raises the top layer to 2.5 Mbit/s |
@@ -108,6 +109,28 @@ most 20,000 identities and fails the run on overflow. This scheduling does not
 change consumer caps, coverage thresholds, keyframe cadence, or session lengths.
 
 ### The browser profile
+
+For rooms of thirty continuously speaking microphone publishers, use
+`--profile browser --audio-only --speakers 30 --clients 30 --rooms 1`.
+Every participant receives all twenty-nine remote audio streams. To exercise
+text on those same connections, add `--chat-interval-ms 30000 --duration 60`:
+each participant sends a 128-byte public message approximately every thirty
+seconds, with phases spread evenly across the room (one message/s per full
+thirty-person room). The last two seconds of the shared measurement window
+allow acknowledgements and fanout to drain; new chat sends stop before that
+period. Missed slots never produce catch-up bursts and missing planned sends
+fail the run.
+
+The optional `chat` summary verifies every scheduled send, matching sender,
+content and server message ID in its acknowledgement, and one delivery to
+every other participant in the room. Duplicates, unexpected identities,
+missing acknowledgements or deliveries, and acknowledgement/delivery latency
+over two seconds fail the run. Exact latency histograms appear under
+`signalingLatencies.operations.chat_ack` and `chat_delivery`. Delivery evidence
+is bounded to one million expected events; invalid rate, duration, churn or
+inventory combinations fail before connections open. These checks exercise
+guest signaling and synthetic RTP, not account/database capacity, rendered
+chat responsiveness or decoded speech quality.
 
 `--profile browser` makes each client cost the server what the web client
 costs, so capacity figures measured with it hold for real rooms:

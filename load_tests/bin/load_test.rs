@@ -50,6 +50,9 @@ mod datagram_counter {
 mod browser_profile {
     include!("../clients/browser_profile.rs");
 }
+mod chat_load {
+    include!("../clients/chat_load.rs");
+}
 
 #[cfg(test)]
 mod keyframe_tests {
@@ -173,6 +176,7 @@ struct ClientConfig {
     profile: Profile,
     /// When this publisher talks (browser profile only).
     speaking: Option<browser_profile::Speaking>,
+    chat: Option<chat_load::ChatClient>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -202,6 +206,8 @@ struct TestConfig {
     /// Size of the loopback source-address pool (0 keeps the default source).
     source_addresses: usize,
     profile: Profile,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    chat_interval_ms: Option<u64>,
 }
 
 impl TestConfig {
@@ -590,6 +596,7 @@ impl Default for TestConfig {
             subscription_seed: None,
             source_addresses: 0,
             profile: Profile::Synthetic,
+            chat_interval_ms: None,
         }
     }
 }
@@ -639,6 +646,7 @@ async fn main() -> Result<()> {
                 i += 2;
             }
             "--warmup"
+            | "--chat-interval-ms"
             | "--deadline-grace"
             | "--output-dir"
             | "--run-label"
@@ -649,6 +657,7 @@ async fn main() -> Result<()> {
                     .ok_or_else(|| anyhow::anyhow!("Missing value for {}", args[i]))?;
                 match args[i].as_str() {
                     "--warmup" => config.warmup_secs = value.parse()?,
+                    "--chat-interval-ms" => config.chat_interval_ms = Some(value.parse()?),
                     "--deadline-grace" => config.deadline_grace_secs = value.parse()?,
                     "--output-dir" => config.output_dir = value.into(),
                     "--run-label" => config.run_label = value.clone(),
@@ -950,7 +959,8 @@ fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
     anyhow::ensure!(!value.starts_with("--"), "Missing value for {option}");
     match option {
         "--clients" | "-c" | "--duration" | "-d" | "--ramp-up" | "-r" | "--rooms"
-        | "--max-audio" | "--max-video" | "--warmup" | "--deadline-grace" => {
+        | "--max-audio" | "--max-video" | "--warmup" | "--deadline-grace"
+        | "--chat-interval-ms" => {
             value
                 .parse::<u64>()
                 .map_err(|_| anyhow::anyhow!("Invalid integer for {option}: {value}"))?;
@@ -1085,6 +1095,14 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         "Ratios must be finite"
     );
     let num_churners = config.churner_count()?;
+    chat_load::validate(
+        &config.server_url,
+        config.num_clients,
+        config.num_rooms,
+        config.chat_interval_ms,
+        config.duration_secs,
+        config.churn_rate,
+    )?;
     std::fs::create_dir_all(&config.output_dir)?;
     let provenance = generator_provenance(&config)?;
     // Anchor reported wall time next to the monotonic workload schedule, after
@@ -1098,6 +1116,15 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         measurement_start,
         Duration::from_secs(config.duration_secs),
     ));
+    let chat = config.chat_interval_ms.map(|interval| {
+        chat_load::ChatLoad::new(
+            config.num_clients,
+            config.num_rooms,
+            interval,
+            measurement_start,
+            window.end,
+        )
+    });
     // The generator's own scheduling delay, second by second: a client handles
     // its packets late by as much, and its transport-wide feedback then reports
     // network delay that was the runtime's.
@@ -1269,6 +1296,7 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
             source_address: source_address_for(i, config.source_addresses),
             profile: config.profile,
             speaking,
+            chat: chat.as_ref().map(|load| load.client(i)),
         };
 
         let metrics = collector.clone();
@@ -1318,7 +1346,7 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         &provenance,
         !late,
         failures,
-        &runtime_lag,
+        (&runtime_lag, chat.as_ref().map(|load| load.report())),
     )?;
     if !watchdog.finish() {
         // Write the immutable marker here as well: exiting must not race the
@@ -1370,8 +1398,9 @@ fn write_results_sync(
     provenance: &serde_json::Value,
     completed: bool,
     mut failures: Vec<String>,
-    runtime_lag: &[u32],
+    evidence: (&[u32], Option<chat_load::ChatReport>),
 ) -> Result<bool> {
+    let (runtime_lag, chat) = evidence;
     let mut all_metrics = Vec::new();
     for collector in collectors {
         all_metrics.push(collector.generate_report());
@@ -1457,6 +1486,9 @@ fn write_results_sync(
     }
     let attempt_coverage =
         gate_attempt_coverage(&all_metrics, config.churner_count()?, &mut failures);
+    if let Some(chat) = &chat {
+        failures.extend(chat.failure_reasons.iter().cloned());
+    }
     let passed = completed && failures.is_empty();
     let mut report = serde_json::to_value(&summary)?;
     report["schemaVersion"] = serde_json::json!(2);
@@ -1466,6 +1498,9 @@ fn write_results_sync(
     });
     report["attemptCoverage"] = serde_json::to_value(attempt_coverage)?;
     report["subscriptionPlan"] = serde_json::to_value(config.planned_subscriptions()?)?;
+    if let Some(chat) = chat {
+        report["chat"] = serde_json::to_value(chat)?;
+    }
     report["run"] = serde_json::json!({
         "completed": completed, "passed": passed, "failureReasons": failures,
         "startedAt": started_at, "finishedAt": chrono::Utc::now().to_rfc3339(),
@@ -1664,6 +1699,9 @@ async fn run_client_inner(
             participants,
             ..
         } => {
+            if let Some(chat) = &config.chat {
+                chat.register(&participant_id)?;
+            }
             if let Some(plan) = &config.planned_subscriptions {
                 // Register before any Produce request: another client's live
                 // notification can arrive before this client's producer ack.
@@ -2107,6 +2145,7 @@ async fn run_client_inner(
             departure_receiver,
             planned_subscriptions,
             grid,
+            config.chat,
         )
         .await;
     });
@@ -3316,6 +3355,7 @@ async fn receive_messages_loop(
     mut departure_receiver: Option<tokio::sync::oneshot::Receiver<DepartureRequest>>,
     planned_subscriptions: Option<PlannedClientSubscriptions>,
     mut grid: Option<browser_profile::BrowserGrid>,
+    chat: Option<chat_load::ChatClient>,
 ) {
     let deadline = tokio::time::Instant::now() + timeout;
     let mut needs_renegotiation = false;
@@ -3336,6 +3376,7 @@ async fn receive_messages_loop(
         None => Subscriptions::new(max_audio, max_video),
     };
     for event in existing_producer_events {
+        observe_chat(chat.as_ref(), &event, &metrics);
         handle_server_message(
             event,
             &metrics,
@@ -3352,9 +3393,34 @@ async fn receive_messages_loop(
     // branch that could drain every producer or repeatedly renegotiate SDP.
     let mut next_subscription_work = tokio::time::Instant::now();
     let attempt = metrics.diagnostic_attempt();
+    let mut chat_schedule = chat.clone().map(chat_load::ChatClient::schedule);
 
     while tokio::time::Instant::now() < deadline {
+        let chat_next = chat_schedule
+            .as_ref()
+            .and_then(chat_load::ChatSchedule::next);
         let got_message = tokio::select! {
+            _ = async {
+                match chat_next {
+                    Some(next) => tokio::time::sleep_until(next.into()).await,
+                    None => std::future::pending().await,
+                }
+            }, if chat_next.is_some() => {
+                match chat_schedule.as_mut().unwrap().prepare(Instant::now()) {
+                    Ok(Some(message)) => {
+                        if let Err(error) = send_message(&mut write, message).await {
+                            metrics.record_error(format!("Chat write failed: {error}"));
+                            chat_schedule = None;
+                        }
+                    }
+                    Ok(None) => chat_schedule = None,
+                    Err(error) => {
+                        metrics.record_error(format!("Chat schedule failed: {error}"));
+                        chat_schedule = None;
+                    }
+                }
+                true
+            }
             request = async {
                 match departure_receiver.as_mut() {
                     Some(receiver) => receiver.await,
@@ -3378,6 +3444,7 @@ async fn receive_messages_loop(
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<ServerMessage>(&text) {
                             Ok(server_msg) => {
+                                observe_chat(chat.as_ref(), &server_msg, &metrics);
                                 handle_server_message(
                                     server_msg,
                                     &metrics,
@@ -3539,6 +3606,7 @@ async fn receive_messages_loop(
                         match msg {
                             Some(Ok(Message::Text(text))) => {
                                 if let Ok(server_msg) = serde_json::from_str::<ServerMessage>(&text) {
+                                    observe_chat(chat.as_ref(), &server_msg, &metrics);
                                     handle_server_message(
                                         server_msg,
                                         &metrics,
@@ -3661,6 +3729,112 @@ async fn receive_messages_loop(
 // Configurable via TestConfig, but use these as defaults.
 const DEFAULT_MAX_AUDIO_CONSUMERS: usize = 4;
 const DEFAULT_MAX_VIDEO_CONSUMERS: usize = 4;
+
+fn observe_chat(
+    chat: Option<&chat_load::ChatClient>,
+    message: &ServerMessage,
+    metrics: &MetricsCollector,
+) {
+    if let Some(chat) = chat {
+        match chat.observe(message, Instant::now()) {
+            Ok(Some((operation, milliseconds))) => {
+                metrics.record_signaling_latency(operation, milliseconds)
+            }
+            Ok(None) => {}
+            Err(error) => metrics.record_error(format!("Chat delivery failed: {error}")),
+        }
+    }
+}
+
+#[cfg(test)]
+mod chat_signaling_tests {
+    use super::*;
+    use simplestChat::signaling::protocol::{ChatEntry, ChatStyle};
+
+    #[tokio::test]
+    async fn paced_chat_uses_the_real_signaling_writer_and_ack_observer() -> Result<()> {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+            let address = listener.local_addr()?;
+            let (client, server) = tokio::join!(connect_async(format!("ws://{address}/")), async {
+                let (stream, _) = listener.accept().await?;
+                Ok::<_, anyhow::Error>(tokio_tungstenite::accept_async(stream).await?)
+            });
+            let (client, _) = client?;
+            let mut server = server?;
+            let (write, read) = client.split();
+            let start = Instant::now() + Duration::from_millis(10);
+            let load = chat_load::ChatLoad::new(1, 1, 1_000, start, start + Duration::from_secs(3));
+            let chat = load.client(0);
+            chat.register("owned-participant")?;
+            let metrics = Arc::new(MetricsCollector::new("chat-socket".into()));
+            let session = Arc::new(Mutex::new(WebRtcSession::new(
+                "chat-socket".into(),
+                metrics.clone(),
+            )));
+            let mut tasks = tokio::task::JoinSet::new();
+            tasks.spawn(receive_messages_loop(
+                read,
+                write,
+                metrics.clone(),
+                "chat-socket".into(),
+                Duration::from_secs(10),
+                RtpCapabilities::default(),
+                session,
+                4,
+                4,
+                Vec::new(),
+                None,
+                None,
+                None,
+                Some(chat),
+            ));
+            let frame = server.next().await.context("No chat command")??;
+            let Message::Text(text) = frame else {
+                anyhow::bail!("Expected a chat frame")
+            };
+            let ClientMessage::ChatMessage {
+                content,
+                client_message_id: Some(id),
+                sequence: Some(1),
+                ..
+            } = serde_json::from_str(&text)?
+            else {
+                anyhow::bail!("Expected the first sequenced chat command")
+            };
+            let ack = ServerMessage::MessageAck {
+                client_message_id: id.clone(),
+                message: ChatEntry {
+                    message_id: "server-owned-message".into(),
+                    client_message_id: id,
+                    participant_id: "owned-participant".into(),
+                    participant_name: "TestUser0".into(),
+                    recipient_id: None,
+                    recipient_name: None,
+                    content,
+                    sent_at: "2026-09-30T00:00:00Z".into(),
+                    chat_style: ChatStyle::default(),
+                    reply_to: None,
+                    reactions: Vec::new(),
+                },
+            };
+            server
+                .send(Message::Text(serde_json::to_string(&ack)?.into()))
+                .await?;
+            while load.report().acknowledgements == 0 {
+                sleep(Duration::from_millis(5)).await;
+            }
+            assert!(load.report().passed);
+            let report = metrics.generate_report();
+            assert_eq!(report.signaling_latencies.operations["chat_ack"].count, 1);
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+            tasks.abort_all();
+            while tasks.join_next().await.is_some() {}
+            Ok(())
+        })
+        .await?
+    }
+}
 
 async fn handle_server_message(
     msg: ServerMessage,
@@ -4104,6 +4278,9 @@ fn print_usage() {
     println!("  --pixel-ratio <F>          Browser device pixel ratio (default 2)");
     println!("  --layout <classic|modern>  Browser room layout (default classic)");
     println!("  --audio-only               Send only audio (no video)");
+    println!(
+        "  --chat-interval-ms <MS>     Opt-in paced text per client (1000–600000ms), owned loopback only"
+    );
     println!("  --video-only               Send only video (no audio)");
     println!("  -q, --quality <PRESET>     Video quality: 480p (default), 720p, 1080p");
     println!("                             Sets resolution and bitrate to realistic values");
@@ -4325,6 +4502,7 @@ mod departure_tests {
                 Some(receiver),
                 None,
                 None,
+                None,
             ));
             request_explicit_leave(request, Duration::from_secs(1)).await?;
             // No server response is sent: the completion must be a write
@@ -4520,6 +4698,7 @@ mod incremental_receive_tests {
                     kind: MediaKind::Audio,
                     source: None,
                 }],
+                None,
                 None,
                 None,
                 None,
@@ -4725,6 +4904,7 @@ mod subscription_loop_tests {
                 max_video,
                 events,
                 Some(receiver),
+                None,
                 None,
                 None,
             ));
