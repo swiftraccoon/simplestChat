@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import copy
 import json
+import re
+import shlex
+import shutil
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -103,6 +107,46 @@ class Fixture:
 
 class RuntimeSecurityTests(unittest.TestCase):
     """Missing, changed and expired evidence never becomes an artifact exception."""
+
+    def test_runtime_recipe_replaces_nss_symlink_before_copy(self) -> None:
+        """Actual cleanup operands and ordering produce the direct file required by proof."""
+        recipe = (ROOT / "Dockerfile").read_text().split("AS runtime-base\n", 1)[1]
+        stage = recipe.split("\nFROM ", 1)[0]
+        cleanup = re.search(r"&& rm -f ([^\n]+)\n", stage)
+        self.assertIsNotNone(cleanup)
+        if cleanup is None:
+            self.fail("Runtime cleanup instruction is missing")
+        operands = shlex.split(cleanup[1])
+        self.assertEqual(set(operands), {"/etc/ld.so.cache", "/etc/nsswitch.conf"})
+        self.assertLess(
+            cleanup.start(), stage.index("COPY security/runtime/nsswitch.conf /etc/nsswitch.conf")
+        )
+        expected = (ROOT / runtime.NSS).read_bytes()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "etc/authselect").mkdir(parents=True)
+            target = root / "etc/authselect/nsswitch.conf"
+            original = b"hosts: files systemd dns\n"
+            _ = target.write_bytes(original)
+            direct = root / "etc/nsswitch.conf"
+            direct.symlink_to("authselect/nsswitch.conf")
+            # Copying alone follows the base symlink and fails the unchanged proof.
+            _ = shutil.copyfile(ROOT / runtime.NSS, direct)
+            self.assertEqual(target.read_bytes(), expected)
+            with self.assertRaisesRegex(ToolError, "runtime_nss_kind"):
+                _ = runtime.filesystem_profile(root, expected)
+            _ = target.write_bytes(original)
+            _ = (root / "etc/ld.so.cache").write_bytes(b"old cache")
+            # Apply only the checked recipe's two operands under this owned root.
+            for operand in operands:
+                (root / operand.removeprefix("/")).unlink()
+            _ = shutil.copyfile(ROOT / runtime.NSS, direct)
+            self.assertTrue(stat.S_ISREG(direct.lstat().st_mode))
+            self.assertEqual(direct.read_bytes(), expected)
+            self.assertEqual(target.read_bytes(), original)
+            self.assertEqual(
+                runtime.filesystem_profile(root, expected)["nssSha256"], runtime.sha256(expected)
+            )
 
     def test_integrated_disposition_publishes_matching_proof_and_vex_hashes(self) -> None:
         """The pipeline's persisted artifacts agree with every public outcome binding."""

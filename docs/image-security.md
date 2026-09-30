@@ -133,7 +133,10 @@ are described below.
 ## Managed runtime profile
 
 The runtime layer removes `/etc/ld.so.cache` after its last package installation
-and installs the reviewed `security/runtime/nsswitch.conf`. Name-service lookups
+and replaces the base image's NSS symlink with the reviewed
+`security/runtime/nsswitch.conf` as a regular file. Removing the symlink before
+copying prevents Docker from writing through it into authselect's configuration.
+Name-service lookups
 use glibc's built-in `files` implementation and ordinary container DNS for hosts;
 the image no longer selects optional systemd NSS modules. This does not remove
 their RPM inventory or claim that every installed program has the same behavior.

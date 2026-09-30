@@ -138,8 +138,9 @@ RUN test -n "${FEDORA_REFRESH_EPOCH}" \
     && useradd --system --uid 10001 --gid 10001 --home-dir /nonexistent \
         --shell /sbin/nologin simplestchat \
     && dnf clean all \
-    && rm -f /etc/ld.so.cache
+    && rm -f /etc/ld.so.cache /etc/nsswitch.conf
 # Keep runtime name lookup within glibc's built-in files/DNS implementations.
+# Replace the base image's authselect symlink before COPY can follow it.
 # The image audit verifies these bytes and default-directory library resolution.
 COPY security/runtime/nsswitch.conf /etc/nsswitch.conf
 
