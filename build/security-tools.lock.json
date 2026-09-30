@@ -1,0 +1,419 @@
+{
+  "schemaVersion": 1,
+  "tools": {
+    "actionlint": {
+      "version": "1.7.12",
+      "executable": "actionlint",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz",
+          "sha256": "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8",
+          "format": "tar.gz",
+          "files": {
+            "actionlint": "actionlint"
+          }
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_arm64.tar.gz",
+          "sha256": "325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6",
+          "format": "tar.gz",
+          "files": {
+            "actionlint": "actionlint"
+          }
+        },
+        "darwin-arm64": {
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_arm64.tar.gz",
+          "sha256": "aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f",
+          "format": "tar.gz",
+          "files": {
+            "actionlint": "actionlint"
+          }
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_amd64.tar.gz",
+          "sha256": "5b44c3bc2255115c9b69e30efc0fecdf498fdb63c5d58e17084fd5f16324c644",
+          "format": "tar.gz",
+          "files": {
+            "actionlint": "actionlint"
+          }
+        }
+      }
+    },
+    "zizmor": {
+      "version": "1.30.1",
+      "executable": "zizmor",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-x86_64-unknown-linux-gnu.tar.gz",
+          "sha256": "e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a",
+          "format": "tar.gz",
+          "files": {
+            "zizmor": "zizmor"
+          }
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-aarch64-unknown-linux-gnu.tar.gz",
+          "sha256": "7ff1dce33bdd18fd2a4affe63bdd47efcccca97b2cec1c1863ec26e9e2647540",
+          "format": "tar.gz",
+          "files": {
+            "zizmor": "zizmor"
+          }
+        },
+        "darwin-arm64": {
+          "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-aarch64-apple-darwin.tar.gz",
+          "sha256": "e28d22b087f9ebb8d99da6e740d348c930f559961c7c3f12badda54f882195a2",
+          "format": "tar.gz",
+          "files": {
+            "zizmor": "zizmor"
+          }
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-x86_64-apple-darwin.tar.gz",
+          "sha256": "10e6b18b11ea07e515a16f0f0518c7b07527bc9977c1fd5698181ce7f3554202",
+          "format": "tar.gz",
+          "files": {
+            "zizmor": "zizmor"
+          }
+        }
+      }
+    },
+    "gitleaks": {
+      "version": "8.30.1",
+      "executable": "gitleaks",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz",
+          "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+          "format": "tar.gz",
+          "files": {
+            "gitleaks": "gitleaks"
+          }
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz",
+          "sha256": "e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080",
+          "format": "tar.gz",
+          "files": {
+            "gitleaks": "gitleaks"
+          }
+        },
+        "darwin-arm64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_arm64.tar.gz",
+          "sha256": "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5",
+          "format": "tar.gz",
+          "files": {
+            "gitleaks": "gitleaks"
+          }
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_x64.tar.gz",
+          "sha256": "dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709",
+          "format": "tar.gz",
+          "files": {
+            "gitleaks": "gitleaks"
+          }
+        }
+      }
+    },
+    "cargo-deny": {
+      "version": "0.20.2",
+      "executable": "cargo-deny",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f",
+          "format": "tar.gz",
+          "files": {
+            "cargo-deny-0.20.2-x86_64-unknown-linux-musl/cargo-deny": "cargo-deny"
+          }
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-aarch64-unknown-linux-musl.tar.gz",
+          "sha256": "995c82be0defc7a025cae49a2aa2644ce8245c9a3318fc4103907c6a285e8c7d",
+          "format": "tar.gz",
+          "files": {
+            "cargo-deny-0.20.2-aarch64-unknown-linux-musl/cargo-deny": "cargo-deny"
+          }
+        },
+        "darwin-arm64": {
+          "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-aarch64-apple-darwin.tar.gz",
+          "sha256": "fe67d82a10d8597a3549364cb733a3f9cc1bfff9031b7ae46384a9f2a72090c3",
+          "format": "tar.gz",
+          "files": {
+            "cargo-deny-0.20.2-aarch64-apple-darwin/cargo-deny": "cargo-deny"
+          }
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-apple-darwin.tar.gz",
+          "sha256": "248da7f581724e470071990c088ffc55c811981715f4cbdb258621fb79f8b7a6",
+          "format": "tar.gz",
+          "files": {
+            "cargo-deny-0.20.2-x86_64-apple-darwin/cargo-deny": "cargo-deny"
+          }
+        }
+      }
+    },
+    "cargo-audit": {
+      "version": "0.22.2",
+      "executable": "cargo-audit",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-unknown-linux-gnu-v0.22.2.tgz",
+          "sha256": "ab28a1bdb54db4d5d8ad5981cf1f959410370b3d28250dbd35f6a44248620e39",
+          "format": "tar.gz",
+          "files": {
+            "cargo-audit-x86_64-unknown-linux-gnu-v0.22.2/cargo-audit": "cargo-audit"
+          }
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-aarch64-unknown-linux-gnu-v0.22.2.tgz",
+          "sha256": "c6603814ddaa45e51263dafd31c0ac98808f688d26f7395804f9670b0fd599dd",
+          "format": "tar.gz",
+          "files": {
+            "cargo-audit-aarch64-unknown-linux-gnu-v0.22.2/cargo-audit": "cargo-audit"
+          }
+        },
+        "darwin-arm64": {
+          "url": "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-aarch64-apple-darwin-v0.22.2.tgz",
+          "sha256": "ec7ca4263769593df4d909be85b94a6b79efa2897be5d2bb8ebd516e823175af",
+          "format": "tar.gz",
+          "files": {
+            "cargo-audit-aarch64-apple-darwin-v0.22.2/cargo-audit": "cargo-audit"
+          }
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-apple-darwin-v0.22.2.tgz",
+          "sha256": "847831323de932155b226ab60ee4a180e13e5d007a019f0d4b7b4d89a6de2ab2",
+          "format": "tar.gz",
+          "files": {
+            "cargo-audit-x86_64-apple-darwin-v0.22.2/cargo-audit": "cargo-audit"
+          }
+        }
+      }
+    },
+    "cargo-auditable": {
+      "version": "0.7.6",
+      "executable": "cargo-auditable",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.6/cargo-auditable-x86_64-unknown-linux-gnu.tar.xz",
+          "sha256": "4b5b009ad799409bdaf70210e2e4d0ff00e415a78621949a88fb81a63f60ff48",
+          "format": "tar.xz",
+          "files": {
+            "cargo-auditable-x86_64-unknown-linux-gnu/cargo-auditable": "cargo-auditable"
+          }
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.6/cargo-auditable-aarch64-unknown-linux-gnu.tar.xz",
+          "sha256": "074cc9f05f8859a85681fd5f2af07ffc62ae623bb58299c0b0311c6cefbef927",
+          "format": "tar.xz",
+          "files": {
+            "cargo-auditable-aarch64-unknown-linux-gnu/cargo-auditable": "cargo-auditable"
+          }
+        },
+        "darwin-arm64": {
+          "url": "https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.6/cargo-auditable-aarch64-apple-darwin.tar.xz",
+          "sha256": "bf42fb077380f41a72ab9e217651bffcb6d46e641852a79ad1358bcc308323ff",
+          "format": "tar.xz",
+          "files": {
+            "cargo-auditable-aarch64-apple-darwin/cargo-auditable": "cargo-auditable"
+          }
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.6/cargo-auditable-x86_64-apple-darwin.tar.xz",
+          "sha256": "d6c26ddedd034e149bf2cd3bb211ef7bf043a1840f58d64cbd8e84fb149034cb",
+          "format": "tar.xz",
+          "files": {
+            "cargo-auditable-x86_64-apple-darwin/cargo-auditable": "cargo-auditable"
+          }
+        }
+      }
+    },
+    "squawk": {
+      "version": "2.66.0",
+      "executable": "squawk",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://github.com/sbdchd/squawk/releases/download/v2.66.0/squawk-linux-x64",
+          "sha256": "e7965f8146b53cfa7a4625ceecfea5c6aeb35add39132210aa60b11ae180b9f4",
+          "format": "binary",
+          "files": {
+            "squawk": "squawk"
+          }
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/sbdchd/squawk/releases/download/v2.66.0/squawk-linux-arm64",
+          "sha256": "04455267bb895de1568dc24e52eb062b311096ad614c3e15a77cf8a7b3483c2a",
+          "format": "binary",
+          "files": {
+            "squawk": "squawk"
+          }
+        },
+        "darwin-arm64": {
+          "url": "https://github.com/sbdchd/squawk/releases/download/v2.66.0/squawk-darwin-arm64",
+          "sha256": "d273f3a234b81b8d540b2cdf1b07ed84f719a3ab11b47d6f3efe96baaf21b40b",
+          "format": "binary",
+          "files": {
+            "squawk": "squawk"
+          }
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/sbdchd/squawk/releases/download/v2.66.0/squawk-darwin-x64",
+          "sha256": "e361365762a6bf11abbef746d29ff46ac0b4feba43df2f0570595f06c67d7daf",
+          "format": "binary",
+          "files": {
+            "squawk": "squawk"
+          }
+        }
+      }
+    },
+    "syft": {
+      "version": "1.52.0",
+      "executable": "syft",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://github.com/anchore/syft/releases/download/v1.52.0/syft_1.52.0_linux_amd64.tar.gz",
+          "sha256": "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d",
+          "format": "tar.gz",
+          "files": {
+            "syft": "syft"
+          }
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/anchore/syft/releases/download/v1.52.0/syft_1.52.0_linux_arm64.tar.gz",
+          "sha256": "c46d5e4c28e12aa4c5becfaa343ef1c7f89045b6b895f2c21d471c62db09c706",
+          "format": "tar.gz",
+          "files": {
+            "syft": "syft"
+          }
+        }
+      }
+    },
+    "grype": {
+      "version": "0.119.0",
+      "executable": "grype",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://github.com/anchore/grype/releases/download/v0.119.0/grype_0.119.0_linux_amd64.tar.gz",
+          "sha256": "3fa2dc4b924621ab65404cf08d0b8438d896d80ab949c9d5a4ca283c36004c9b",
+          "format": "tar.gz",
+          "files": {
+            "grype": "grype"
+          }
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/anchore/grype/releases/download/v0.119.0/grype_0.119.0_linux_arm64.tar.gz",
+          "sha256": "29f0ec7c549ddb0e2b6a0ca714851f7399438afc399b80c12808e065edc9a8f8",
+          "format": "tar.gz",
+          "files": {
+            "grype": "grype"
+          }
+        }
+      }
+    },
+    "semgrep-core": {
+      "version": "1.178.0",
+      "executable": "semgrep/bin/semgrep-core",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://files.pythonhosted.org/packages/b3/bf/5bc9cc1b1e1650467ceb6361306d170dd3641b911efa2a89bc7129be4d54/semgrep-1.178.0-cp310.cp311.cp312.cp313.cp314.py310.py311.py312.py313.py314-none-manylinux_2_34_x86_64.whl",
+          "sha256": "b7c4a4ba5cad1a6b0e76f7143c164b3f2853b9d0f902f2db2f64006257c941f2",
+          "format": "zip",
+          "files": {
+            "semgrep-1.178.0.data/purelib/semgrep/bin/semgrep-core": "semgrep/bin/semgrep-core",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libbz2.so.1": "semgrep/bin/libs/libbz2.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libcom_err.so.2": "semgrep/bin/libs/libcom_err.so.2",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libcrypto.so.3": "semgrep/bin/libs/libcrypto.so.3",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libcurl.so.4": "semgrep/bin/libs/libcurl.so.4",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libdw.so.1": "semgrep/bin/libs/libdw.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libelf.so.1": "semgrep/bin/libs/libelf.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libev.so.4": "semgrep/bin/libs/libev.so.4",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libgcc_s.so.1": "semgrep/bin/libs/libgcc_s.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libgmp.so.10": "semgrep/bin/libs/libgmp.so.10",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libgssapi_krb5.so.2": "semgrep/bin/libs/libgssapi_krb5.so.2",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libk5crypto.so.3": "semgrep/bin/libs/libk5crypto.so.3",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libkeyutils.so.1": "semgrep/bin/libs/libkeyutils.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libkrb5.so.3": "semgrep/bin/libs/libkrb5.so.3",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libkrb5support.so.0": "semgrep/bin/libs/libkrb5support.so.0",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/liblzma.so.5": "semgrep/bin/libs/liblzma.so.5",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libm.so.6": "semgrep/bin/libs/libm.so.6",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libnghttp2.so.14": "semgrep/bin/libs/libnghttp2.so.14",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libpcre2-8.so.0": "semgrep/bin/libs/libpcre2-8.so.0",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libresolv.so.2": "semgrep/bin/libs/libresolv.so.2",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libselinux.so.1": "semgrep/bin/libs/libselinux.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libssl.so.3": "semgrep/bin/libs/libssl.so.3",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libstdc++.so.6": "semgrep/bin/libs/libstdc++.so.6",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libtree-sitter.so.0.26": "semgrep/bin/libs/libtree-sitter.so.0.26",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libunwind.so.8": "semgrep/bin/libs/libunwind.so.8",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libz.so.1": "semgrep/bin/libs/libz.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libzstd.so.1": "semgrep/bin/libs/libzstd.so.1"
+          }
+        },
+        "linux-aarch64": {
+          "url": "https://files.pythonhosted.org/packages/a3/8f/b71f6065b429a03c89d50e5bfb927c465eca881af838708951fbd7dc1125/semgrep-1.178.0-cp310.cp311.cp312.cp313.cp314.py310.py311.py312.py313.py314-none-manylinux_2_34_aarch64.whl",
+          "sha256": "a64fb4ed4fc5b68016381085088f732a58cfd9a87b16c6ab70c12aac784bd17d",
+          "format": "zip",
+          "files": {
+            "semgrep-1.178.0.data/purelib/semgrep/bin/semgrep-core": "semgrep/bin/semgrep-core",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libbz2.so.1": "semgrep/bin/libs/libbz2.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libcom_err.so.2": "semgrep/bin/libs/libcom_err.so.2",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libcrypto.so.3": "semgrep/bin/libs/libcrypto.so.3",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libcurl.so.4": "semgrep/bin/libs/libcurl.so.4",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libdw.so.1": "semgrep/bin/libs/libdw.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libelf.so.1": "semgrep/bin/libs/libelf.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libev.so.4": "semgrep/bin/libs/libev.so.4",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libgcc_s.so.1": "semgrep/bin/libs/libgcc_s.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libgmp.so.10": "semgrep/bin/libs/libgmp.so.10",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libgssapi_krb5.so.2": "semgrep/bin/libs/libgssapi_krb5.so.2",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libk5crypto.so.3": "semgrep/bin/libs/libk5crypto.so.3",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libkeyutils.so.1": "semgrep/bin/libs/libkeyutils.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libkrb5.so.3": "semgrep/bin/libs/libkrb5.so.3",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libkrb5support.so.0": "semgrep/bin/libs/libkrb5support.so.0",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/liblzma.so.5": "semgrep/bin/libs/liblzma.so.5",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libm.so.6": "semgrep/bin/libs/libm.so.6",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libnghttp2.so.14": "semgrep/bin/libs/libnghttp2.so.14",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libpcre2-8.so.0": "semgrep/bin/libs/libpcre2-8.so.0",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libresolv.so.2": "semgrep/bin/libs/libresolv.so.2",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libselinux.so.1": "semgrep/bin/libs/libselinux.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libssl.so.3": "semgrep/bin/libs/libssl.so.3",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libstdc++.so.6": "semgrep/bin/libs/libstdc++.so.6",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libtree-sitter.so.0.26": "semgrep/bin/libs/libtree-sitter.so.0.26",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libunwind.so.8": "semgrep/bin/libs/libunwind.so.8",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libz.so.1": "semgrep/bin/libs/libz.so.1",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libzstd.so.1": "semgrep/bin/libs/libzstd.so.1"
+          }
+        },
+        "darwin-arm64": {
+          "url": "https://files.pythonhosted.org/packages/03/86/81080365a07d2ebf737fe22c2934d6a0a80e1f90982474b6b1b01ba81e4a/semgrep-1.178.0-cp310.cp311.cp312.cp313.cp314.py310.py311.py312.py313.py314-none-macosx_11_0_arm64.whl",
+          "sha256": "33eb20066093799ab5fb9c4d3722e891d2bfb89218a145762a1f4397642b9ad2",
+          "format": "zip",
+          "files": {
+            "semgrep-1.178.0.data/purelib/semgrep/bin/semgrep-core": "semgrep/bin/semgrep-core",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libdwarf.2.dylib": "semgrep/bin/libs/libdwarf.2.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libev.4.dylib": "semgrep/bin/libs/libev.4.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libgmp.10.dylib": "semgrep/bin/libs/libgmp.10.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libpcre2-8.0.dylib": "semgrep/bin/libs/libpcre2-8.0.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libtree-sitter.0.26.dylib": "semgrep/bin/libs/libtree-sitter.0.26.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libtree-sitter.dylib": "semgrep/bin/libs/libtree-sitter.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libzstd.1.dylib": "semgrep/bin/libs/libzstd.1.dylib"
+          }
+        },
+        "darwin-x86_64": {
+          "url": "https://files.pythonhosted.org/packages/45/3c/7331cfac09ae6942514b902b840b47573f1a9aa8d0e6938f953c36cc88db/semgrep-1.178.0-cp310.cp311.cp312.cp313.cp314.py310.py311.py312.py313.py314-none-macosx_10_14_x86_64.whl",
+          "sha256": "ba18dbf4f293ed20834b69aae62b9352a089f2c9308e66f6eb43d67ca780e633",
+          "format": "zip",
+          "files": {
+            "semgrep-1.178.0.data/purelib/semgrep/bin/semgrep-core": "semgrep/bin/semgrep-core",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libdwarf.2.dylib": "semgrep/bin/libs/libdwarf.2.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libev.4.dylib": "semgrep/bin/libs/libev.4.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libgmp.10.dylib": "semgrep/bin/libs/libgmp.10.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libpcre2-8.0.dylib": "semgrep/bin/libs/libpcre2-8.0.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libtree-sitter.0.26.dylib": "semgrep/bin/libs/libtree-sitter.0.26.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libtree-sitter.dylib": "semgrep/bin/libs/libtree-sitter.dylib",
+            "semgrep-1.178.0.data/purelib/semgrep/bin/libs/libzstd.1.dylib": "semgrep/bin/libs/libzstd.1.dylib"
+          }
+        }
+      }
+    }
+  }
+}
