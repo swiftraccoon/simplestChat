@@ -73,14 +73,46 @@ hold weak sender references and leave with the connection handler. The reconnect
 path supplies the snapshot needed after a missed event; ephemeral media hints
 remain lossy. Normal successful fan-out does not consult the overflow registry.
 
-Room invitation redemptions persist a receipt in the same transaction as the role
-grant and usage decrement. Repeating an account/code pair cannot consume a second
-use or restore a subsequently removed role. Migration 020 adds these receipts and
-retention indexes; production must apply it and grant runtime access before
-starting this server version. Membership listings opt into stable room-ID cursor
-pages of 100 rows with `paginated=true`, so accounts with more memberships can
-retrieve the remainder. Requests without paging parameters retain the legacy
-array response for already-open clients during upgrades.
+Identity comparison lives in `labels.rs`: ICU Unicode data supplies full case
+folding, compatibility normalization and default-ignorable handling. Displayed
+spelling remains separate from the comparison key. Every account and guest join
+receives an unambiguous room-local label, but full server-issued UUIDs remain the
+message, authorization and moderation identity. Cross-script lookalikes are not
+fully resolved by normalization; visible UUID discriminators provide the
+additional identity cue. Room creation and identity updates share label checks.
+Routine join/lobby logs contain IDs, not display names. User/participant IDs and
+room IDs intentionally remain in lifecycle and moderation logs to correlate
+failures and administrative actions; they are pseudonymous, potentially linkable
+operational data, not anonymous telemetry. Structured moderation history retains
+its separately governed labels, reasons and retention controls.
+
+Account password selection and verification consistently use NFC. New selections
+require 15–128 characters and use the same curated refusal list at registration,
+change and recovery; standard Argon2id PHC hashes contain no compatibility marker.
+Existing ASCII credentials naturally verify; a credential previously selected
+with a non-NFC spelling may require account recovery. Password work remains
+bounded outside the async executor. Password and passkey signup share the email
+lookup budget. Failure delays are account-plus-address scoped, so a stream of
+failures at other addresses cannot continuously deny the owner's proof. All
+address-limiter tables use bounded LRU eviction, with no shared overflow penalty;
+resource admission remains a separate protection against distributed traffic.
+
+Invitation creation returns a random 160-bit secret only once. Listings expose
+metadata and an unrelated UUID used for revocation. `invites.code_hash` stores a
+SHA-256 digest, and `invite_redemptions.invite_hash` references that digest.
+Migration 021 invalidates outstanding old invitations and their receipts while
+preserving existing memberships; production applies it before starting this
+binary. Earlier backups and WAL can still retain prior plaintext until their
+normal retention expires. No hashing migration promises secure erasure.
+
+Room invitation preview and acceptance take JSON bodies and require an account.
+Preview does not grant membership or join; acceptance requires an explicit user
+action and still does not join. A redemption receipt commits with the role grant
+and usage decrement. Repeating an account/code pair cannot consume a second use
+or restore a subsequently removed role. Membership listings opt into stable
+room-ID cursor pages of 100 rows with `paginated=true`, so accounts with more
+memberships can retrieve the remainder. Requests without paging parameters retain
+the existing array response.
 
 The retention job runs after one minute and every six hours thereafter. Each
 statement selects at most 1,000 eligible parent rows, skips locked rows and

@@ -25,7 +25,7 @@
 | `AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE` | `20` | Per-account limit on signed-in password checks (password change, recovery key, passkey management) |
 | `AUTH_MAX_CONCURRENCY` | `16` | Global cap on concurrent expensive authentication operations |
 | `REGISTRATION_ENABLED` | `false` | Allow new password/passkey accounts; must be explicitly enabled on every bind address |
-| `REGISTRATIONS_PER_IP_PER_HOUR` | `5` | Registrations, including taken-email answers, one client IP (IPv6 `/64`) may receive per hour |
+| `REGISTRATIONS_PER_IP_PER_HOUR` | `5` | Shared password/passkey signup budget, including taken-email answers, per client IP (IPv6 `/64`) per hour |
 | `MODERATION_ADDRESS_RETENTION_DAYS` | `30` | Days a sanction's address stays on a moderation history entry (1–3650) before the six-hourly sweep clears it |
 | `MODERATION_HISTORY_RETENTION_DAYS` | `365` | Days a history entry, a closed report or an expired sanction row stays (1–3650, at least the address period); open reports and live sanctions are never swept |
 | `MAX_USERS` | `100000` | Global database-backed account cap enforced transactionally |

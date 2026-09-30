@@ -22,13 +22,14 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `accountPreferences` | `GET /api/auth/preferences` | `ChatPreferences` |
 | `updatePreferences` | `PUT /api/auth/preferences` | `ChatPreferences` |
 | `registrationInvites` | `GET /api/auth/invites` | `RegistrationInvite[]` |
-| `createRegistrationInvite` | `POST /api/auth/invites` | `RegistrationInvite` |
-| `revokeRegistrationInvite` | `DELETE /api/auth/invites/:code` | `204`, no body |
+| `createRegistrationInvite` | `POST /api/auth/invites` | `RegistrationInvite` metadata plus one-time `code` |
+| `revokeRegistrationInvite` | `DELETE /api/auth/invites/:id` | `204`, no body |
 | `memberships` | `GET /api/rooms/memberships?paginated=true[&after=<room-id>]` | `{ items: MembershipItem[], next_cursor: string \| null }` |
 | `roomInvites` | `GET /api/rooms/:id/invites` | `RoomInvite[]` |
-| `createRoomInvite` | `POST /api/rooms/:id/invites` | `RoomInvite` |
-| `revokeRoomInvite` | `DELETE /api/rooms/:id/invites/:code` | `204`, no body |
-| `redeemInvite` | `POST /api/rooms/invites/:code` | `InviteRedemption` |
+| `createRoomInvite` | `POST /api/rooms/:id/invites` | `RoomInvite` metadata plus one-time `code` |
+| `revokeRoomInvite` | `DELETE /api/rooms/:id/invites/:invite_id` | `204`, no body |
+| `previewInvite` | `POST /api/rooms/invites/preview`, JSON `{code}` | `InviteRedemption` destination and offered role; no mutation |
+| `redeemInvite` | `POST /api/rooms/invites/redeem`, JSON `{code}` | `InviteRedemption` historical acceptance result |
 | `recoveryKey` | `POST /api/auth/recovery/key` | `{ recovery_key: string }` |
 | `redeemRecovery` | `POST /api/auth/recovery/redeem` | `204`, no body |
 | `rooms` | `GET /api/rooms` with directory query parameters | `RoomListItem[]` |
@@ -53,7 +54,21 @@ device and the chat look on the profile. `PUT` replaces the whole object; the
 newest write wins. A guest, or a viewer without a token, keeps everything in
 the browser.
 
-Invitations are 20-character codes (`src/invite_codes.rs`). A registration
+Invitations are 32-character random codes with 160 bits of entropy
+(`src/invite_codes.rs`). Stored rows contain only a SHA-256 digest and a separate
+random UUID `id` for management. Listing responses expose `id`, validity and use
+metadata, never `code` or the digest. Creation returns the metadata plus `code`
+once; a lost creation response requires revoking that metadata row and issuing a
+replacement. Revocation uses the nonsecret UUID, never the capability. The digest
+is deliberately unkeyed: high token entropy supplies preimage resistance without
+coupling live invitation availability to signing-key rotation. It does not
+protect against an actor who can modify the database.
+
+Migration 021 invalidates outstanding invitations and their retry receipts;
+already-granted memberships remain. There is one current code format and no
+plaintext-column or older-code fallback.
+
+A registration
 code (`RegistrationInvite`) is single use and a week long; any account holds at
 most five unused ones, and `register` accepts `invite_code`, which opens
 registration while `REGISTRATION_ENABLED` is false and is spent either way
@@ -84,9 +99,19 @@ already-open older clients survive a server upgrade. New browsers also accept a
 legacy array from an older server; additional pages become available after the
 server upgrade.
 
-The browser carries a code as `?invite=CODE`: it prefills the account
-form, and once the viewer is signed in it is redeemed and the room joined. Profile `avatar_url`, directory `topic`
-and directory `image_url` are required nullable fields; null is not a missing
+The browser carries a room code in `#invite=CODE` and a registration code in
+`#register-invite=CODE`. Fragments are not sent in the HTTP request target.
+Secrets travel to the application only in JSON bodies, never URL paths or query
+parameters. A room invitation requires sign-in, then a read-only preview and an
+explicit acceptance action. Preview reveals only the room ID, label and offered
+role; it creates no membership, presence or media. Acceptance grants membership
+without joining. Joining remains a separate user action. A preview is advisory;
+revocation, expiry or another redemption may make subsequent acceptance fail.
+Both preview and acceptance use authenticated, bounded room-API admission and
+`Cache-Control: private, no-store` responses.
+
+Profile `avatar_url`, directory `topic` and directory `image_url` are required
+nullable fields; null is not a missing
 response. Directory counts, description and visibility flags are also required.
 Unknown response fields are stripped before use. See the
 [HTTP decoders](../web/src/api-validation.ts), [account handlers](../src/auth/account.rs)
@@ -102,6 +127,26 @@ blindly. Room-invite redemption may be retried with the same account/code within
 the receipt window described above.
 
 ## Connection and authentication
+
+New account passwords are normalized to NFC and must contain 15–128 Unicode
+scalar characters, at most 512 input bytes, and no control characters. Signup,
+password change and recovery apply the same length and curated common-password
+blocklist rules. Password verification uses NFC too, without reapplying selection
+minimums. Hashes use standard Argon2id PHC encoding and the bounded password-work
+lane; there is no raw-byte or versioned normalization fallback. Room passwords
+retain their separate policy. The bundled blocklist is a small curated list,
+not a claim to cover every compromised password or a complete NIST audit.
+
+Password and passkey signup consume the same per-address hourly budget before
+checking whether an email exists. Password/recovery failures accrue only against
+that account and source address cohort (IPv6 `/64`), with three free failures and
+an exponential delay capped at five minutes. Failures elsewhere do not impose
+an account-wide lockout. Address tables retain at most 10,000 LRU entries and
+evict cold entries at capacity; strangers never share an overflow penalty.
+Churn can evict a cold rate record, so these are best-effort abuse limits,
+complemented by HTTP admission, bounded request bodies and independent password
+work concurrency. A successful proof clears its cohort/account failure record.
+
 
 The browser connects to `/ws` on the page's host, using `wss:` for HTTPS pages and
 `ws:` for local HTTP. Messages are JSON text objects with a camelCase `type`
@@ -380,13 +425,26 @@ join, and treats an unknown style as `accent`. The browser shows a color token i
 does not know as the automatic color and an unknown style as `accent`; neither
 drops the message.
 
-`roomJoined.yourName` is the name the room knows the joiner by. A guest whose
-name is already in use in the room (ignoring case and surrounding spaces)
-receives it with a number, `Maya (2)`, so a newcomer cannot pass for someone
-present; accounts keep their profile name. `changeNickname` refuses a name
-another participant or lobby entry holds. Names, nicknames and room labels also
-refuse bidirectional controls, the zero-width space and the byte-order mark, and
-`You` is reserved for the reader.
+`roomJoined.yourName` is the room-local label assigned to a joining participant.
+Guests and accounts both receive the smallest free numeric suffix when another
+participant or lobby entry holds an equivalent label, for example `Maya (2)`.
+Account profile names remain unchanged. `changeNickname` refuses a collision.
+Comparison uses compatibility normalization (NFKC), full Unicode case folding,
+and removal of Unicode default-ignorable characters; displayed spelling is
+preserved. Thus canonical accents, width variants, case variants and inserted
+joiners cannot bypass duplicate or reserved-`You` checks. Empty visible labels,
+control characters, bidi overrides/isolates, zero-width spaces and byte-order
+marks are rejected consistently by creation and room-label updates. Joiners,
+variation selectors and direction marks remain usable in legitimate displayed
+scripts and emoji, but do not create distinct comparison identities.
+
+Names are not authorization identifiers and this comparison does not promise to
+detect all cross-script confusables. The server-issued full participant UUID is
+the identity used for chat, replies, private-message targeting and moderation.
+An account uses its stable user UUID; a guest uses a random connection identity
+retained across grace reconnection. The browser displays a short discriminator
+and makes the full ID available; the shortened form is a visual aid, never a
+lookup key or proof of identity.
 
 A send may name the retained message it answers with `replyTo` (a `messageId`).
 The server quotes that message itself as `ChatEntry.replyTo` (`ChatReplyRef`: its
