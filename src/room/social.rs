@@ -53,6 +53,36 @@ type ReportRow = (
     Option<chrono::DateTime<chrono::Utc>>,
 );
 
+/// Owned projection: capture one consistent room view under a read lock, then
+/// serialize it after releasing the lock so snapshot encoding cannot block writes.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RoomSnapshot {
+    participants: Vec<ParticipantInfo>,
+    messages: Vec<ChatEntry>,
+    lobby: Vec<SnapshotLobbyEntry>,
+    your_role: &'static str,
+    chat_session_id: Uuid,
+    room_settings: Option<settings::RoomSettings>,
+    nickname: String,
+    allow_private_messages: bool,
+    ignored_participant_ids: Vec<String>,
+    paused_producer_ids: Vec<String>,
+    text_muted: bool,
+    cam_banned: bool,
+    can_chat: bool,
+    local_producer_ids: Vec<String>,
+    can_broadcast: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SnapshotLobbyEntry {
+    participant_id: String,
+    display_name: String,
+    authenticated: bool,
+}
+
 #[derive(Clone)]
 pub(crate) struct ParticipantSocial {
     pub(super) connected: bool,
@@ -1635,17 +1665,23 @@ mod tests {
             .await
             .unwrap();
         receivers[0].try_recv().unwrap();
-        manager
-            .handle_social_request(
+        let snapshot_room = manager.get_room(&room_id).unwrap();
+        let snapshot_read = snapshot_room.read().await;
+        tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            manager.handle_social_request(
                 &room_id,
                 &owner.id,
                 &owner.sender,
                 &ClientMessage::GetRoomSnapshot {
                     request_id: "snapshot".into(),
                 },
-            )
-            .await
-            .unwrap();
+            ),
+        )
+        .await
+        .expect("snapshots share room read access")
+        .unwrap();
+        drop(snapshot_read);
         let snapshot: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
         assert_eq!(snapshot["data"]["allowPrivateMessages"], false);
         assert_eq!(snapshot["data"]["ignoredParticipantIds"][0], absent.id);
@@ -2657,11 +2693,26 @@ impl RoomManager {
         if !valid_correlation_id(request_id) {
             return Err(rejected("Invalid request ID"));
         }
+        if let ClientMessage::GetRoomSnapshot { request_id } = command {
+            let room_lock = self.get_room(room_id)?;
+            let room = room_lock.read().await;
+            room.ensure_live()?;
+            let actor = Self::participant_for_sender(&room, participant_id, expected_sender)?;
+            let snapshot = self.room_snapshot(&room, actor);
+            drop(room);
+            return send(
+                &self.metrics,
+                expected_sender,
+                &ServerMessage::SocialResponse {
+                    request_id: request_id.clone(),
+                    action: "getRoomSnapshot".to_owned(),
+                    data: serde_json::to_value(snapshot)?,
+                },
+            );
+        }
         if matches!(
             command,
-            ClientMessage::SetChatPreferences { .. }
-                | ClientMessage::ChangeNickname { .. }
-                | ClientMessage::GetRoomSnapshot { .. }
+            ClientMessage::SetChatPreferences { .. } | ClientMessage::ChangeNickname { .. }
         ) {
             return self
                 .handle_social_request_inner(
@@ -2689,6 +2740,84 @@ impl RoomManager {
                 .await
         })
         .await
+    }
+
+    fn room_snapshot(&self, room: &Room, actor: &Participant) -> RoomSnapshot {
+        RoomSnapshot {
+            participants: room
+                .participants
+                .values()
+                .filter(|p| p.id != actor.id)
+                .map(|p| ParticipantInfo {
+                    id: p.id.clone(),
+                    name: p.name.clone(),
+                    role: p.role.name().to_owned(),
+                    authenticated: p.authenticated,
+                    chat_style: p.chat_style.clone(),
+                    producers: p
+                        .producers
+                        .iter()
+                        .map(|(id, (kind, source))| ProducerMetadata {
+                            id: id.clone(),
+                            kind: *kind,
+                            source: source.clone(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+            messages: room
+                .social
+                .history
+                .iter()
+                .filter(|entry| visible(entry, actor))
+                .map(|entry| entry.message.clone())
+                .collect(),
+            lobby: if actor.role >= roles::Role::Moderator {
+                room.lobby
+                    .values()
+                    .map(|p| SnapshotLobbyEntry {
+                        participant_id: p.participant_id.clone(),
+                        display_name: p.name.clone(),
+                        authenticated: p.authenticated,
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            },
+            your_role: actor.role.name(),
+            chat_session_id: actor.social.chat_session_id,
+            room_settings: room.settings.clone(),
+            nickname: actor.name.clone(),
+            allow_private_messages: actor.social.allow_private_messages,
+            ignored_participant_ids: actor.social.ignored.iter().cloned().collect(),
+            paused_producer_ids: room
+                .participants
+                .values()
+                .flat_map(|p| p.producers.keys())
+                .filter(|id| {
+                    self.media_server
+                        .transport_manager()
+                        .find_producer_paused(id)
+                        == Some(true)
+                })
+                .cloned()
+                .collect(),
+            text_muted: actor.punitive.text_muted,
+            cam_banned: actor.punitive.cam_banned,
+            can_chat: !room.settings.as_ref().is_some_and(|s| !s.allow_chat)
+                && moderation::can_chat(
+                    &actor.punitive,
+                    actor.role,
+                    room.settings.as_ref().is_some_and(|s| s.moderated),
+                ),
+            local_producer_ids: actor.producers.keys().cloned().collect(),
+            can_broadcast: Self::participant_can_produce(
+                room,
+                actor,
+                MediaKind::Audio,
+                "microphone",
+            ),
+        }
     }
 
     async fn handle_social_request_inner(
@@ -2837,66 +2966,6 @@ impl RoomManager {
             } => {
                 let reactions = react_to_message(&mut room, participant_id, message_id, emoji)?;
                 json!({"messageId": message_id, "reactions": reactions})
-            }
-            ClientMessage::GetRoomSnapshot { .. } => {
-                let actor = room.participants.get(participant_id).unwrap();
-                let participants: Vec<ParticipantInfo> = room
-                    .participants
-                    .values()
-                    .filter(|p| p.id != participant_id)
-                    .map(|p| ParticipantInfo {
-                        id: p.id.clone(),
-                        name: p.name.clone(),
-                        role: p.role.name().to_string(),
-                        authenticated: p.authenticated,
-                        chat_style: p.chat_style.clone(),
-                        producers: p
-                            .producers
-                            .iter()
-                            .map(|(id, (kind, source))| ProducerMetadata {
-                                id: id.clone(),
-                                kind: *kind,
-                                source: source.clone(),
-                            })
-                            .collect(),
-                    })
-                    .collect();
-                let messages: Vec<&ChatEntry> = room
-                    .social
-                    .history
-                    .iter()
-                    .filter(|entry| visible(entry, actor))
-                    .map(|entry| &entry.message)
-                    .collect();
-                let lobby: Vec<Value> = if actor_role >= roles::Role::Moderator {
-                    room.lobby.values().map(|p| json!({"participantId":p.participant_id,"displayName":p.name,"authenticated":p.authenticated})).collect()
-                } else {
-                    Vec::new()
-                };
-                let paused_producer_ids: Vec<String> = room
-                    .participants
-                    .values()
-                    .flat_map(|p| p.producers.keys())
-                    .filter(|id| {
-                        self.media_server
-                            .transport_manager()
-                            .find_producer_paused(id)
-                            == Some(true)
-                    })
-                    .cloned()
-                    .collect();
-                let can_chat = !room.settings.as_ref().is_some_and(|s| !s.allow_chat)
-                    && moderation::can_chat(
-                        &actor.punitive,
-                        actor.role,
-                        room.settings.as_ref().is_some_and(|s| s.moderated),
-                    );
-                json!({"participants":participants,"messages":messages,"lobby":lobby,"yourRole":actor_role.name(),
-                    "chatSessionId":actor.social.chat_session_id,
-                    "roomSettings":room.settings,"nickname":actor.name,"allowPrivateMessages":actor.social.allow_private_messages,"ignoredParticipantIds":actor.social.ignored,
-                    "pausedProducerIds":paused_producer_ids,"textMuted":actor.punitive.text_muted,"camBanned":actor.punitive.cam_banned,"canChat":can_chat,
-                    "localProducerIds":actor.producers.keys().collect::<Vec<_>>(),
-                    "canBroadcast":Self::participant_can_produce(&room,actor,MediaKind::Audio,"microphone")})
             }
             ClientMessage::ListRoomBans { offset, .. } => {
                 require_role(actor_role, roles::Role::Admin)?;
