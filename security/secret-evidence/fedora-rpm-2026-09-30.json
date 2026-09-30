@@ -1,0 +1,339 @@
+{
+  "schemaVersion": 1,
+  "reviewedOn": "2026-09-30",
+  "matchFormat": "gitleaks-8.30.1-projection-match",
+  "canonicalRevision": "6b710c5fdd29988f608fc82f0f811ba59d9c9f19",
+  "canonicalImageId": "sha256:66113924c67f0902ad6d016fccdd3daddb1643d85eb1d5ccdcf24c8af48c0041",
+  "canonicalArchiveSha256": "f13afa2dadb54fac1cba9e3aaea46326a6afa8d71fc7164ac0ec3c69099a1e70",
+  "artifact": {
+    "id": 11114179205,
+    "ciRunId": 36749727744,
+    "zipSha256": "6c51cb43ee5074665e2869aa72c766379fb366d461152f26ca1208ba1788f31a",
+    "url": "https://github.com/swiftraccoon/simplestChat/actions/runs/36749727744/artifacts/11114179205"
+  },
+  "canonicalReports": [
+    {
+      "path": "checks.json",
+      "sha256": "2c0ff73441f6051feba6433c5c86e1c577f27dde0bf024b0489ef75ce162c099"
+    },
+    {
+      "path": "secret-paths.json",
+      "sha256": "0eb98a60beb547780da9224527d51fb84954c964a5a28b55482d44587720f8c7"
+    },
+    {
+      "path": "sbom/sbom.syft.json",
+      "sha256": "5b46a0caf3bd4c61f22674a968a0db083918e564c844f1929fa832f8b69e8e40"
+    }
+  ],
+  "file": {
+    "neutralName": "content-003855",
+    "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+    "projectionBytes": 9044078,
+    "projectionFormat": "ascii-printable",
+    "projectionSha256": "e6ce9b621a635c3ff541621afee8488b8dfc2f6a10636b13136070303986c781",
+    "sha256": "81967958341efb5c89bd992f5770a22cd44958a4c847e15c01c4faec5c5d01f0",
+    "sourceBytes": 9011200
+  },
+  "package": {
+    "name": "fedora-gpg-keys",
+    "version": "44-2",
+    "type": "rpm",
+    "purl": "pkg:rpm/fedora/fedora-gpg-keys@44-2?arch=noarch&distro=fedora-44&upstream=fedora-repos-44-2.src.rpm"
+  },
+  "replay": {
+    "imageId": "sha256:ecaecf8bfad47c984ed42b0b505377d85eca3d22308e08298463724f33966381",
+    "layer": "sha256:db2e26d68d93d91f00190519374ae8c5a3a32a9c8330d201e956cacfa4baea03",
+    "file": {
+      "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "sha256": "2e83ec6bfaedd44cd8aaf35eaf051f1dcbf3e35eeed5f2ba4492adee5071e598",
+      "sourceBytes": 9011200,
+      "projectionSha256": "91d023868ce95b079dd1454553e12d6a47672229fc428776c3c46b287b257b9a",
+      "projectionBytes": 9044078,
+      "projectionFormat": "ascii-printable"
+    },
+    "baseIndex": "sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80",
+    "baseLayer": "sha256:8fe4b47a217bc002f0c86b6150035f88b3931a8d54b12053ba2b9bca79d762f3",
+    "scope": "Only the canonical runtime package-install RUN was built in an owned bounded local linux/amd64 image; no application was built or executed.",
+    "dockerfileSha256": "e96c6e691202ae6353f0d8116654a1ad613afed6e037c786b9da753189b07b65",
+    "scannerVersion": "8.30.1",
+    "scannerPlatform": "darwin-arm64",
+    "canonicalScannerPlatform": "linux-amd64",
+    "projectionSourceSha256": "de5343a3df952911f0ba6a17c445251909629f851014065c261c4e2e33f9975c",
+    "redactedProofSha256": "432943beca957721a3c24bace5cdec3859c9bae093197bb666921003cfdf4b66",
+    "indexProofSha256": "f012eab545633a531fde29a12c4d2f82c136c183cbc8fbd25ad754d64e892d8d",
+    "spanDiagnosticReceiptSha256": "bab041a9ceb79ebd4bac2936fdd9bfc191f5f998486ff1734616e8b310da4d21",
+    "wholeDatabaseEqual": false,
+    "allFourCompleteMatchDigestsAndLengthsEqual": true,
+    "installedRuntimePackageIdentitiesEqual": 148,
+    "separateStaticBuildInputIdentitiesEqual": 1
+  },
+  "findings": [
+    {
+      "fingerprint": "image-match:e29ff4443984a2a743de98c2b2bf46ba27049df409bca77b61905ca9f128d6f1",
+      "classification": "public-package-filename-and-sqlite-index-metadata",
+      "span": {
+        "endColumn": 29,
+        "endLine": 2298447,
+        "fileSha256": "81967958341efb5c89bd992f5770a22cd44958a4c847e15c01c4faec5c5d01f0",
+        "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+        "projectionSha256": "e6ce9b621a635c3ff541621afee8488b8dfc2f6a10636b13136070303986c781",
+        "rule": "generic-api-key",
+        "spanBytes": 61,
+        "spanSha256": "a353508efeba78f825916c089b141d2fb29d3714ffe76be0dd26d14d1099a6b3",
+        "startColumn": 2,
+        "startLine": 2298444,
+        "status": "resolved"
+      },
+      "replaySpan": {
+        "rule": "generic-api-key",
+        "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+        "fileSha256": "2e83ec6bfaedd44cd8aaf35eaf051f1dcbf3e35eeed5f2ba4492adee5071e598",
+        "projectionSha256": "91d023868ce95b079dd1454553e12d6a47672229fc428776c3c46b287b257b9a",
+        "startLine": 2298415,
+        "endLine": 2298418,
+        "startColumn": 2,
+        "endColumn": 29,
+        "status": "resolved",
+        "spanBytes": 61,
+        "spanSha256": "a353508efeba78f825916c089b141d2fb29d3714ffe76be0dd26d14d1099a6b3"
+      },
+      "context": {
+        "publicFilenameBasenameSha256": "c4da4700ea197fee3dbffcbfb8cc03259a47e3857d99174c1ffab2a149fcc548",
+        "publicFilenameBytes": 26,
+        "currentPackageFilePathsSha256": [
+          "062782e0ca8d0c0e8ad31f13dab56543e7950630d3bf547c726cb08cb5b4d870",
+          "41d1ecee241a5178046abc0d2930cdc74e15465e0d3b99e9d12d57effd28a8b6"
+        ],
+        "replayDatabaseOwner": [
+          {
+            "hnum": 152,
+            "fileIndex": 78,
+            "package": "fedora-gpg-keys"
+          },
+          {
+            "hnum": 152,
+            "fileIndex": 381,
+            "package": "fedora-gpg-keys"
+          }
+        ],
+        "replayLiveIndexRecords": [],
+        "replayDeletedIndexFreeblock": true,
+        "authenticatedBaseLiveIndexRecord": {
+          "baseIndexPage": 1643,
+          "offset": 6729087,
+          "filenameBytes": 26,
+          "rowidBytes": 1,
+          "rowid": 99,
+          "candidateExtendsIntoRowid": 1
+        }
+      }
+    },
+    {
+      "fingerprint": "image-match:30ea726d45e76264322ed7b3bca6fbc21ed9f5d426f36eeb02876f7fe233f7ec",
+      "classification": "public-package-filename-and-sqlite-index-metadata",
+      "span": {
+        "endColumn": 27,
+        "endLine": 2300211,
+        "fileSha256": "81967958341efb5c89bd992f5770a22cd44958a4c847e15c01c4faec5c5d01f0",
+        "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+        "projectionSha256": "e6ce9b621a635c3ff541621afee8488b8dfc2f6a10636b13136070303986c781",
+        "rule": "generic-api-key",
+        "spanBytes": 58,
+        "spanSha256": "f07379e860d8240d21dadaebe3c2a2be4c444cdd3080abae2668b6d0b7bbee07",
+        "startColumn": 2,
+        "startLine": 2300208,
+        "status": "resolved"
+      },
+      "replaySpan": {
+        "rule": "generic-api-key",
+        "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+        "fileSha256": "2e83ec6bfaedd44cd8aaf35eaf051f1dcbf3e35eeed5f2ba4492adee5071e598",
+        "projectionSha256": "91d023868ce95b079dd1454553e12d6a47672229fc428776c3c46b287b257b9a",
+        "startLine": 2300179,
+        "endLine": 2300182,
+        "startColumn": 2,
+        "endColumn": 27,
+        "status": "resolved",
+        "spanBytes": 58,
+        "spanSha256": "f07379e860d8240d21dadaebe3c2a2be4c444cdd3080abae2668b6d0b7bbee07"
+      },
+      "context": {
+        "publicFilenameBasenameSha256": "28b49920f948b2cdb414b0633b96f16f3c1fb7af9ac16d6ef4f3c02762a88b3c",
+        "publicFilenameBytes": 24,
+        "currentPackageFilePathsSha256": [
+          "944aaa6bad410da7633c223df56d13df76f0f36526a63d025894a8e45b761a07",
+          "83c469e0b918d164264c2cb132f2ff0602de48d060322b702496c636c06ee7ec"
+        ],
+        "replayDatabaseOwner": [
+          {
+            "hnum": 152,
+            "fileIndex": 287,
+            "package": "fedora-gpg-keys"
+          },
+          {
+            "hnum": 152,
+            "fileIndex": 590,
+            "package": "fedora-gpg-keys"
+          }
+        ],
+        "replayLiveIndexRecords": [
+          {
+            "keyOffset": 6742703,
+            "textSerialType": 61,
+            "filenameBytes": 24,
+            "rowidSerialType": 2,
+            "rowidBytes": 2,
+            "candidateExtendsIntoRowid": 2,
+            "rowid": 26993,
+            "rowidJoinsExpectedPackage": true
+          }
+        ],
+        "replayDeletedIndexFreeblock": false
+      }
+    },
+    {
+      "fingerprint": "image-match:be7a9fc2bba46f8c361ec3a6133c96d8b268a0aaceb163facad754957fcb6d16",
+      "classification": "public-package-filename-and-sqlite-index-metadata",
+      "span": {
+        "endColumn": 27,
+        "endLine": 2300229,
+        "fileSha256": "81967958341efb5c89bd992f5770a22cd44958a4c847e15c01c4faec5c5d01f0",
+        "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+        "projectionSha256": "e6ce9b621a635c3ff541621afee8488b8dfc2f6a10636b13136070303986c781",
+        "rule": "generic-api-key",
+        "spanBytes": 58,
+        "spanSha256": "42f7d38287fbaaf64b446e4e49b85508fdf28e5d120f33e64c33603699c2c468",
+        "startColumn": 2,
+        "startLine": 2300226,
+        "status": "resolved"
+      },
+      "replaySpan": {
+        "rule": "generic-api-key",
+        "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+        "fileSha256": "2e83ec6bfaedd44cd8aaf35eaf051f1dcbf3e35eeed5f2ba4492adee5071e598",
+        "projectionSha256": "91d023868ce95b079dd1454553e12d6a47672229fc428776c3c46b287b257b9a",
+        "startLine": 2300197,
+        "endLine": 2300200,
+        "startColumn": 2,
+        "endColumn": 27,
+        "status": "resolved",
+        "spanBytes": 58,
+        "spanSha256": "42f7d38287fbaaf64b446e4e49b85508fdf28e5d120f33e64c33603699c2c468"
+      },
+      "context": {
+        "publicFilenameBasenameSha256": "137a5c39f250da86b4b371ab1801974986caa094f757f1cd7c1b9c4fedad7c5a",
+        "publicFilenameBytes": 24,
+        "currentPackageFilePathsSha256": [
+          "1d803ff65fb8d3e4bb3285d318826cf97b7331d567d5a99f9a2a576a565b3a93",
+          "15b4c9aae3064e6c1fcd54253416dff4e211dc6bfcebb8276f70b2da5b579d34"
+        ],
+        "replayDatabaseOwner": [
+          {
+            "hnum": 152,
+            "fileIndex": 280,
+            "package": "fedora-gpg-keys"
+          },
+          {
+            "hnum": 152,
+            "fileIndex": 583,
+            "package": "fedora-gpg-keys"
+          }
+        ],
+        "replayLiveIndexRecords": [
+          {
+            "keyOffset": 6742937,
+            "textSerialType": 61,
+            "filenameBytes": 24,
+            "rowidSerialType": 2,
+            "rowidBytes": 2,
+            "candidateExtendsIntoRowid": 2,
+            "rowid": 26986,
+            "rowidJoinsExpectedPackage": true
+          }
+        ],
+        "replayDeletedIndexFreeblock": false
+      }
+    },
+    {
+      "fingerprint": "image-match:6cf3cdaf3ab06e93879c9977a9a82d6c5e87545cb11476db4432c1762ec69956",
+      "classification": "public-package-filename-and-sqlite-index-metadata",
+      "span": {
+        "endColumn": 27,
+        "endLine": 2300242,
+        "fileSha256": "81967958341efb5c89bd992f5770a22cd44958a4c847e15c01c4faec5c5d01f0",
+        "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+        "projectionSha256": "e6ce9b621a635c3ff541621afee8488b8dfc2f6a10636b13136070303986c781",
+        "rule": "generic-api-key",
+        "spanBytes": 58,
+        "spanSha256": "3fd0f5f5476474759fe6c7e696063dee6c57613e76a63b8070c047051e66e441",
+        "startColumn": 2,
+        "startLine": 2300239,
+        "status": "resolved"
+      },
+      "replaySpan": {
+        "rule": "generic-api-key",
+        "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+        "fileSha256": "2e83ec6bfaedd44cd8aaf35eaf051f1dcbf3e35eeed5f2ba4492adee5071e598",
+        "projectionSha256": "91d023868ce95b079dd1454553e12d6a47672229fc428776c3c46b287b257b9a",
+        "startLine": 2300210,
+        "endLine": 2300213,
+        "startColumn": 2,
+        "endColumn": 27,
+        "status": "resolved",
+        "spanBytes": 58,
+        "spanSha256": "3fd0f5f5476474759fe6c7e696063dee6c57613e76a63b8070c047051e66e441"
+      },
+      "context": {
+        "publicFilenameBasenameSha256": "bffef9487e69346cb2a634891f943b506722a5c81e9f593c41b1393b9a3306b5",
+        "publicFilenameBytes": 24,
+        "currentPackageFilePathsSha256": [
+          "394bc242afd961e82c00702e783cefef095ae8cd5b043633c9e37b503de46996",
+          "2466a4890f7bc1bd43b92212b1fded6d239d95d06784fe9033e354735a0c7f0e"
+        ],
+        "replayDatabaseOwner": [
+          {
+            "hnum": 152,
+            "fileIndex": 275,
+            "package": "fedora-gpg-keys"
+          },
+          {
+            "hnum": 152,
+            "fileIndex": 578,
+            "package": "fedora-gpg-keys"
+          }
+        ],
+        "replayLiveIndexRecords": [
+          {
+            "keyOffset": 6743097,
+            "textSerialType": 61,
+            "filenameBytes": 24,
+            "rowidSerialType": 2,
+            "rowidBytes": 2,
+            "candidateExtendsIntoRowid": 2,
+            "rowid": 26981,
+            "rowidJoinsExpectedPackage": true
+          }
+        ],
+        "replayDeletedIndexFreeblock": false
+      }
+    }
+  ],
+  "sources": [
+    "https://www.sqlite.org/fileformat.html#record_format",
+    "https://www.sqlite.org/fileformat.html#representation_of_sql_indices",
+    "https://www.sqlite.org/fileformat.html#b_tree_pages",
+    "https://packages.fedoraproject.org/pkgs/fedora-repos/fedora-gpg-keys/"
+  ],
+  "review": {
+    "owner": "swiftraccoon",
+    "expires": "2026-11-29",
+    "authority": "Technical review under the owner-authorized security rollout, after independent comparison with authenticated canonical artifact diagnostics.",
+    "scope": "Four exact complete match regions at the exact RPM database layer path, current pinned scanner/projection format and rule; no database-, package- or detector-wide exception."
+  },
+  "limitations": [
+    "Canonical whole-database bytes were not retained; canonical digest-only complete regions were compared with locally inspected replay bytes.",
+    "SQLite page/row interpretation describes the retained replay; equality of complete match regions does not assert identical canonical page layout or whole-file bytes.",
+    "No fresh whole-image gate pass, signing or deployment approval is claimed."
+  ],
+  "rawCandidatesPublished": false
+}

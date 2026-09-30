@@ -1670,6 +1670,46 @@
       "reachability": "The complete detected region is reviewed public upstream test or format data at this exact original layer path. Only the pinned scanner/projection format, rule, complete match byte length and SHA-256 inherit this review; other matches and changed paths or regions remain blocking. Complete file/projection hashes retain per-image provenance, and no approval of the containing package or its other behavior is implied.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-base-secret-review.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:e29ff4443984a2a743de98c2b2bf46ba27049df409bca77b61905ca9f128d6f1",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete canonical match digest and length equal inspected public fedora-gpg-keys filename/index metadata in the authenticated local package-install replay. Printable SQLite row-identifier bytes adjoin public filenames; this is not a bearer credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:30ea726d45e76264322ed7b3bca6fbc21ed9f5d426f36eeb02876f7fe233f7ec",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete canonical match digest and length equal inspected public fedora-gpg-keys filename/index metadata in the authenticated local package-install replay. Printable SQLite row-identifier bytes adjoin public filenames; this is not a bearer credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:be7a9fc2bba46f8c361ec3a6133c96d8b268a0aaceb163facad754957fcb6d16",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete canonical match digest and length equal inspected public fedora-gpg-keys filename/index metadata in the authenticated local package-install replay. Printable SQLite row-identifier bytes adjoin public filenames; this is not a bearer credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:6cf3cdaf3ab06e93879c9977a9a82d6c5e87545cb11476db4432c1762ec69956",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete canonical match digest and length equal inspected public fedora-gpg-keys filename/index metadata in the authenticated local package-install replay. Printable SQLite row-identifier bytes adjoin public filenames; this is not a bearer credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
     }
   ]
 }
