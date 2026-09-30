@@ -587,8 +587,12 @@ refusals, worker deaths, database/container/host pressure, disk space, public
 readiness, TURN health, certificate expiry, backup age and collector/recorder
 health. Thresholds are operational starting points, not measured capacity claims.
 Backup freshness counts completed release and optional nightly backup receipts
-whose dump still has its recorded size. It does not prove archive integrity or
-recovery. Install the opt-in [nightly backup timer](../ops/ansible/PUBLIC.md#maintenance-and-data)
+only after validating the receipt schema, private file ownership and permissions,
+regular-file type, recorded size and dump SHA-256. A successful digest check can
+be reused for up to 24 hours only while the path, recorded digest, device, inode,
+size, modification time and change time remain unchanged. This establishes
+integrity against the receipt; successful restoration remains separate evidence.
+Install the opt-in [nightly backup timer](../ops/ansible/PUBLIC.md#maintenance-and-data)
 for scheduling; its dumps remain local and need a separate off-host copy policy. Run the installed restore verifier
 against an explicitly selected existing release attempt:
 
@@ -619,9 +623,10 @@ the restored data. The local role stubs have no login or production passwords;
 this does not verify recovery of host secrets or a complete production cutover.
 Each restore and structural check has a 120-second deadline. Existing backups
 from before the operational schema was installed fail the current schema check.
-Legacy app-only releases without `backupMigrations` use their same-schema release
-manifest. Legacy maintenance archives without that field require a reviewed
-pre-upgrade ledger; the verifier refuses to guess it from the newer target schema.
+Both app-only and maintenance release backups must include their recorded
+pre-upgrade `backupMigrations` ledger. The verifier rejects a missing, empty or
+invalid ledger and requires every recorded checksum to match the reviewed
+release manifest; it never infers the backup schema from the target release.
 The verifier currently accepts release attempts, not nightly dump paths.
 
 Only successful restore, verification, container removal and snapshot removal
