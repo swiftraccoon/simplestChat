@@ -676,16 +676,17 @@
         "end_column": 79
       },
       "messageSha256": "67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694",
-      "sourceSha256": "11fcd936687e12bbfb93ca10d6118914692918938a867692aa28732641399f46",
+      "sourceSha256": "0e5ae936e7ed44248ce99e85c824c213427dfa8a5bab0371c79b2ddb4f499cdc",
       "scope": "ops/ansible/tests/test_release_playbook.py:76:76:23:79",
-      "fingerprint": "codeql:6f6a8d01062df540ddbda70909439f0e3add0c40b7620c479809bff10593dcc1",
+      "fingerprint": "codeql:ef9d399464afd3f47df8d58a8b83ec4451c130db1a3f6b488863bf23d778e61b",
       "number": 31,
       "severity": "high",
       "state": "open",
       "disposition": "false-positive",
-      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
+      "rationale": "The Jinja Environment evaluates local Ansible assertion expressions with StrictUndefined and bounded fixture values; it produces no HTML or browser response. Source re-review at f2bb7be1d2f1b848ae1e5d8b92635b6af52011c4 confirms the only file change adds a RELEASE.ROOT binding to an isolated Compose fixture near line 488. The complete flagged line and range at line 76 are byte-identical; no HTML sink or untrusted rendering path was introduced. HTML autoescaping is inappropriate for these configuration expressions.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/31"
+      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/31",
+      "sourceProvenanceRevision": "f2bb7be1d2f1b848ae1e5d8b92635b6af52011c4"
     },
     {
       "rule": "py/overly-permissive-file",

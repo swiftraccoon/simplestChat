@@ -44,6 +44,30 @@ surface but does not make the reported operation a false positive. Alert 5's
 bundle-reader file race and alerts 24–26's unspecified TLS minimum require source
 changes and fresh analysis; no exception authorizes dismissing them.
 
+## Source re-review: assertion fixture
+
+Alert 31 was re-reviewed against local source commit
+`f2bb7be1d2f1b848ae1e5d8b92635b6af52011c4` before its next analyzer run.
+The only change to `ops/ansible/tests/test_release_playbook.py` adds a
+`RELEASE.ROOT` binding to an isolated Compose fixture near line 488. A byte
+comparison against the parent commit confirms that the entire flagged line 76
+and its columns 23–79 remain identical:
+`Environment(undefined=StrictUndefined, autoescape=False)`. The surrounding
+method still evaluates Ansible assertion expressions with bounded fixture
+values; it produces no HTML or browser response. The original false-positive
+rationale therefore remains valid for these specifically reviewed bytes.
+
+The complete-file SHA-256 changes from
+`11fcd936687e12bbfb93ca10d6118914692918938a867692aa28732641399f46` to
+`0e5ae936e7ed44248ce99e85c824c213427dfa8a5bab0371c79b2ddb4f499cdc`.
+The canonical finding helper derives the replacement exact fingerprint using
+the unchanged query, CodeQL version, range and rendered-message digest. The
+superseded exception is replaced and its 2026-11-29 expiry is unchanged.
+`observedRevision` retains the actual earlier analysis; `sourceProvenanceRevision`
+records the new source review. This is not a claim that the new revision has
+already passed CodeQL: the next original SARIF must independently match the
+complete identity or the gate rejects it. No remote alert state was changed.
+
 ## Follow-up: canary assertion diagnostic
 
 <a id="alert-102"></a>[Alert 102](https://github.com/swiftraccoon/simplestChat/security/code-scanning/102)

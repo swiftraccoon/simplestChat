@@ -533,11 +533,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:6f6a8d01062df540ddbda70909439f0e3add0c40b7620c479809bff10593dcc1",
+      "fingerprint": "codeql:ef9d399464afd3f47df8d58a8b83ec4451c130db1a3f6b488863bf23d778e61b",
       "scope": "ops/ansible/tests/test_release_playbook.py:76:76:23:79",
       "owner": "swiftraccoon",
-      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 11fcd936687e12bbfb93ca10d6118914692918938a867692aa28732641399f46. Changes require a fresh review; no general test, template or path exclusion.",
+      "rationale": "The Jinja Environment evaluates local Ansible assertion expressions with StrictUndefined and bounded fixture values; it produces no HTML or browser response. Source re-review at f2bb7be1d2f1b848ae1e5d8b92635b6af52011c4 confirms the only file change adds a RELEASE.ROOT binding to an isolated Compose fixture near line 488. The complete flagged line and range at line 76 are byte-identical; no HTML sink or untrusted rendering path was introduced. HTML autoescaping is inappropriate for these configuration expressions.",
+      "reachability": "Exact query, CodeQL version, unchanged primary range/message and re-reviewed whole-file SHA256 0e5ae936e7ed44248ce99e85c824c213427dfa8a5bab0371c79b2ddb4f499cdc. The source-only review binds f2bb7be1d2f1b848ae1e5d8b92635b6af52011c4; the next analyzer report must independently match this full identity or fail. No general template/test exclusion or automatic renewal; expiry is unchanged.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-31"
     },
