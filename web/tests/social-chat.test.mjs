@@ -1321,8 +1321,8 @@ test('opted-in desktop notices announce mentions and private messages only while
   assert.deepEqual(
     f.state.notices.map((notice) => [notice.title, notice.body]),
     [
-      ['Alice mentioned you', 'hey @Local, look'],
-      ['Alice sent you a private message', 'psst'],
+      ['You were mentioned', 'Open SimplestChat to read it.'],
+      ['New private message', 'Open SimplestChat to read it.'],
     ],
   );
   f.state.notices[1].onclick();
@@ -1331,6 +1331,42 @@ test('opted-in desktop notices announce mentions and private messages only while
   f.document.hidden = false;
   f.chat.receive(entry('seen', { content: '@Local while watching' }));
   assert.equal(f.state.notices.length, 2, 'nothing while the tab is in view');
+});
+
+test('notification previews require an explicit preference and stale notices cannot open a replacement session', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.openPreferences();
+  const view = f.chat.preferencesDialog;
+  for (const preference of ['notifications', 'notificationPreviews'])
+    view.dialog
+      .querySelectorAll('input')
+      .find((node) => node.dataset.preference === preference).checked = true;
+  view.dialog
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Save preferences')
+    .click();
+  await flush();
+  f.document.hidden = true;
+  f.chat.receive(entry('preview', { content: '@Local hello' }));
+  const notice = f.state.notices[0];
+  assert.equal(notice.title, 'Alice mentioned you');
+  assert.equal(notice.body, '@Local hello');
+  f.chat.reset();
+  assert.equal(notice.closed, true);
+  const active = f.chat.store.active;
+  notice.onclick();
+  assert.equal(f.chat.store.active, active);
+  assert.equal(f.chat.preferences.notificationPreviews, false);
+});
+
+test('existing desktop-notification opt-in does not opt in to previews', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.state.storage.set(f.chat.preferenceKey(), JSON.stringify({ notifications: true }));
+  f.chat.loadPreferences();
+  assert.equal(f.chat.preferences.notifications, true);
+  assert.equal(f.chat.preferences.notificationPreviews, false);
 });
 
 test('a browser that refuses notification permission leaves desktop notices off and says why', async () => {

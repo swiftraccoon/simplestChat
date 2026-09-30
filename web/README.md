@@ -194,5 +194,8 @@ account IDs are stable. Offline message identities remain distinguishable by ID.
 Ordinary sign-out revokes the session before clearing saved app data from this
 browser and reloading. A failed revocation preserves the active session; a late
 completion cannot clear a replacement identity. Blocked storage cleanup is reported.
+Desktop notifications are opt-in and generic by default. Sender/message previews
+require a separate local preference and can expose content on the OS lock screen.
+Room/account teardown closes outstanding notices and retires their click handlers.
 Account password selection counts 15–128 Unicode scalar characters after NFC
 normalization, with a 512-byte raw UTF-8 limit; confirmation uses the same normalization.

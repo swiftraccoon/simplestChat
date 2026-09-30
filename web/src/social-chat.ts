@@ -29,6 +29,8 @@ type Preferences = {
   sounds: boolean;
   /** Desktop notices for mentions and private messages while the tab is out of sight. */
   notifications: boolean;
+  /** Explicitly reveals message content and sender on the operating system’s lock screen. */
+  notificationPreviews: boolean;
   largeText: boolean;
   timestamps: TimestampFormat;
   /** The last look chosen here; a guest's next join asks for it. */
@@ -119,6 +121,7 @@ export class SocialChat {
     allowPrivateMessages: true,
     sounds: false,
     notifications: false,
+    notificationPreviews: false,
     timestamps: 'hover',
     look: null,
     largeText: false,
@@ -137,6 +140,7 @@ export class SocialChat {
   private accountSync = 0;
   private preferencesDialog: ReturnType<typeof modal> | null = null;
   private audio: AudioContext | null = null;
+  private readonly desktopNotices = new Set<Notification>();
   private seenAtBottom = true;
   // Where reading last resumed: the first message that had arrived unseen.
   private dividerKey: string | null = null;
@@ -346,6 +350,7 @@ export class SocialChat {
     this.membershipVersion = -1;
     this.preferencesDialog?.close();
     this.preferencesDialog = null;
+    this.closeDesktopNotices();
     for (const timer of this.pending.values()) clearTimeout(timer);
     for (const id of this.pendingStarted.keys()) this.finishSend(id, 'superseded');
     this.pending.clear();
@@ -370,6 +375,7 @@ export class SocialChat {
       allowPrivateMessages: true,
       sounds: false,
       notifications: false,
+      notificationPreviews: false,
       largeText: false,
       timestamps: 'hover',
       look: null,
@@ -634,22 +640,48 @@ export class SocialChat {
     );
     if (!direct && !mentioned) return;
     try {
+      const activation = this.activation;
+      const room = this.activeRoom;
+      const viewer = this.viewerKey;
+      const preview = this.preferences.notificationPreviews;
       const notice = new Notification(
-        direct
-          ? `${message.participantName} sent you a private message`
-          : `${message.participantName} mentioned you`,
-        { body: message.content.slice(0, 160), tag: message.messageId },
+        preview
+          ? direct
+            ? `${message.participantName} sent you a private message`
+            : `${message.participantName} mentioned you`
+          : direct
+            ? 'New private message'
+            : 'You were mentioned',
+        {
+          body: preview ? message.content.slice(0, 160) : 'Open SimplestChat to read it.',
+          tag: message.messageId,
+        },
       );
+      this.desktopNotices.add(notice);
+      // Bound resources even if the OS does not dispatch notification close events.
+      if (this.desktopNotices.size > 20) {
+        const oldest = this.desktopNotices.values().next().value;
+        oldest?.close();
+        if (oldest) this.desktopNotices.delete(oldest);
+      }
+      notice.onclose = () => this.desktopNotices.delete(notice);
       notice.onclick = () => {
+        notice.close();
+        this.desktopNotices.delete(notice);
+        if (!room || !this.contextCurrent(activation, room, viewer)) return;
         globalThis.focus?.();
         if (direct) this.switchConversation(message.participantId, message.participantName);
         else if (this.store.active !== 'public') this.switchConversation('public');
         document.querySelector<HTMLButtonElement>('[data-tab="chat"]')?.click();
-        notice.close();
       };
     } catch {
       /* Some browsers (Android Chrome) only notify through a service worker. */
     }
+  }
+
+  private closeDesktopNotices(): void {
+    for (const notice of this.desktopNotices) notice.close();
+    this.desktopNotices.clear();
   }
 
   /** Asks during the click that enabled notices; resolves whether they may be shown. */
@@ -1417,6 +1449,7 @@ export class SocialChat {
       allowPrivateMessages: true,
       sounds: false,
       notifications: false,
+      notificationPreviews: false,
       largeText: false,
       timestamps: 'hover',
       look: null,
@@ -1430,6 +1463,7 @@ export class SocialChat {
       this.preferences.allowPrivateMessages = value.allowPrivateMessages !== false;
       this.preferences.sounds = value.sounds === true;
       this.preferences.notifications = value.notifications === true;
+      this.preferences.notificationPreviews = value.notificationPreviews === true;
       this.preferences.largeText = value.largeText === true;
       if (TIMESTAMP_FORMATS.includes(value.timestamps as TimestampFormat))
         this.preferences.timestamps = value.timestamps as TimestampFormat;
@@ -1573,6 +1607,12 @@ export class SocialChat {
       notices.dataset['preference'] = 'notifications';
       notices.checked = this.preferences.notifications && Notification.permission === 'granted';
     }
+    const previews = notices ? el('input') : null;
+    if (previews) {
+      previews.type = 'checkbox';
+      previews.dataset['preference'] = 'notificationPreviews';
+      previews.checked = this.preferences.notificationPreviews;
+    }
     // Each choice is shown as it looks, in the viewer's own time.
     const timestamps = el('select');
     timestamps.dataset['preference'] = 'timestamps';
@@ -1592,6 +1632,16 @@ export class SocialChat {
       field('Allow incoming private messages', allow),
       field('Message and PM sounds', sounds),
       ...(notices ? [field('Desktop notifications for mentions and PMs', notices)] : []),
+      ...(previews
+        ? [
+            field('Show sender and message previews in desktop notifications', previews),
+            el(
+              'p',
+              'Previews may appear on your lock screen. Generic notices keep names and messages private.',
+              'setting-hint',
+            ),
+          ]
+        : []),
       field('Larger chat text', large),
       field('Timestamps', timestamps),
     );
@@ -1608,6 +1658,7 @@ export class SocialChat {
             ...this.preferences,
             allowPrivateMessages: allow.checked,
             sounds: sounds.checked,
+            notificationPreviews: previews?.checked === true,
             largeText: large.checked,
             timestamps: TIMESTAMP_FORMATS.includes(timestamps.value as TimestampFormat)
               ? (timestamps.value as TimestampFormat)
@@ -1628,6 +1679,7 @@ export class SocialChat {
               operation !== this.preferenceOperation
             )
               return;
+            if (!next.notifications || !next.notificationPreviews) this.closeDesktopNotices();
             this.preferences = next;
             this.savePreferences(viewer);
             if (current() && next.sounds) this.playSound(550);
