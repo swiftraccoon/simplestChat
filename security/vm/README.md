@@ -56,6 +56,14 @@ sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils openssh-cli
 sudo setfacl -m "u:$(id -un):rw" /dev/kvm
 ```
 
+The workflow removes the unused preinstalled Android and .NET SDK directories
+from its fresh GitHub runner before installation. The standard runner's
+[documented storage allowance](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+does not guarantee this fixture's required free space. The helper still measures
+available space and refuses to start the guest below 24 GiB; SDK cleanup is not
+a substitute for that check. This cleanup belongs only to the disposable CI
+runner and is not a local workstation prerequisite.
+
 Use the repository's hash-pinned Ansible environment (`ops/ansible/requirements.txt`)
 and a supported controller Python (3.12–3.14). GNU `timeout` and `prlimit` must be available. Both inputs below
 must be absolute paths; the output directory must not already exist. Keep the

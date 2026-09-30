@@ -25,6 +25,9 @@ jobs:
           persist-credentials: false
       - name: Install owned-guest prerequisites
         run: |
+          # This fresh VM-only runner does not use the preinstalled mobile/.NET SDKs.
+          # Reclaim them before enforcing the guest's independent disk-space guard.
+          sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils openssh-client curl acl python3-venv
           test -c /dev/kvm
