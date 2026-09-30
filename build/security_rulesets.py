@@ -287,7 +287,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         RuntimeError,
         bounded_process.ProcessError,
     ) as error:
-        _ = sys.stderr.write(f"Ruleset reconciliation failed: {type(error).__name__}\n")
+        code = str(error) if isinstance(error, ToolError) else type(error).__name__
+        _ = sys.stderr.write(f"Ruleset reconciliation failed: {code}\n")
         return 1
     return 1 if args.mode == "check" and changes else 0
 

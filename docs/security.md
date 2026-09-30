@@ -215,6 +215,12 @@ query counts and empty query coverage fail the preflight. It rechecks the remote
 main ref before each write and before and after readback. A changed head stops
 remaining operations and reports failure; protection already installed remains
 in place and a fresh `plan` shows any remaining differences.
+Readback compares the complete rule parameters. The review policy explicitly
+records GitHub's current `required_reviewers: []` and
+`require_extra_approval_for_unattributed_changes: true` values; changed or added
+parameters remain drift rather than being discarded as defaults. Fixed failure
+codes distinguish failed API commands from mismatched readback without exposing
+API response bodies or exception details.
 It has no delete or disable mode. The operator's authenticated `gh` account must
 have repository administration permission; no administration token enters PR CI.
 

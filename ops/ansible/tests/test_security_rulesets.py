@@ -256,6 +256,107 @@ class RulesetTests(unittest.TestCase):
         observed["rules"] = list(reversed(array_value(observed["rules"])))
         self.assertEqual(rules.comparable(observed), rules.comparable(policies[0]))
 
+    @staticmethod
+    def recorded_review() -> JsonObject:
+        """Retain the complete current GitHub review-rule shape observed on 2026-09-30."""
+        return {
+            "id": 24277397,
+            "name": "Main pull request review",
+            "target": "branch",
+            "enforcement": "active",
+            "bypass_actors": [
+                {"actor_id": 47705353, "actor_type": "User", "bypass_mode": "pull_request"}
+            ],
+            "conditions": {"ref_name": {"include": ["refs/heads/main"], "exclude": []}},
+            "rules": [
+                {
+                    "type": "pull_request",
+                    "parameters": {
+                        "allowed_merge_methods": ["merge", "squash", "rebase"],
+                        "dismiss_stale_reviews_on_push": True,
+                        "require_code_owner_review": False,
+                        "require_extra_approval_for_unattributed_changes": True,
+                        "require_last_push_approval": True,
+                        "required_approving_review_count": 1,
+                        "required_review_thread_resolution": True,
+                        "required_reviewers": [],
+                    },
+                }
+            ],
+        }
+
+    def test_recorded_review_response_is_current_policy_without_normalization(self) -> None:
+        """The actual complete API shape must match without dropping nested parameters."""
+        _, identifier, policies = rules.load_policy()
+        observed = {str(item["name"]): item for item in policies}
+        observed["Main pull request review"] = self.recorded_review()
+        output = io.StringIO()
+        with (
+            redirect_stdout(output),
+            patch.object(rules, "inventory", return_value=observed),
+            patch.object(
+                rules, "api", return_value={"id": identifier, "default_branch": "main"}
+            ) as api,
+        ):
+            self.assertEqual(rules.main(["check"]), 0)
+        self.assertTrue(test_support.obj(decode_json(output.getvalue()))["matches"])
+        self.assertEqual(api.call_count, 1)
+        self.assertEqual(len(api.call_args.args), 2)
+
+    def test_changed_missing_or_new_review_parameters_fail_apply_readback(self) -> None:
+        """Explicit current API fields cannot hide changed or previously unknown semantics."""
+        _, identifier, policies = rules.load_policy()
+        cases: tuple[tuple[str, JsonValue], ...] = (
+            ("require_extra_approval_for_unattributed_changes", False),
+            ("required_reviewers", [{"reviewer": {"id": 1, "type": "Team"}}]),
+            ("unreviewed_parameter", True),
+            ("required_reviewers", None),
+        )
+        for key, replacement in cases:
+            with self.subTest(key=key, replacement=replacement):
+                response = self.recorded_review()
+                parameters = test_support.obj(response, "rules", 0, "parameters")
+                if replacement is None:
+                    _ = parameters.pop(key)
+                else:
+                    parameters[key] = replacement
+                observed = {str(item["name"]): item for item in policies}
+                observed["Main pull request review"] = response
+                error = io.StringIO()
+                with (
+                    redirect_stdout(io.StringIO()),
+                    redirect_stderr(error),
+                    patch.object(rules, "ready"),
+                    patch.object(rules, "require_main_head"),
+                    patch.object(rules, "inventory", side_effect=[{}, observed]),
+                    patch.object(
+                        rules, "api", return_value={"id": identifier, "default_branch": "main"}
+                    ),
+                ):
+                    self.assertEqual(rules.main(["apply", "--revision", REVISION]), 1)
+                self.assertEqual(
+                    error.getvalue(), "Ruleset reconciliation failed: ruleset_readback_differs\n"
+                )
+
+    def test_failures_keep_fixed_codes_without_reflecting_other_exception_details(self) -> None:
+        """Command failures and readback drift remain distinguishable from private parse data."""
+        for failure, code in (
+            (ToolError("ruleset_command_failed"), "ruleset_command_failed"),
+            (ValueError("private-canary"), "ValueError"),
+            (OSError("private-canary"), "OSError"),
+        ):
+            with self.subTest(code=code):
+                output, error = io.StringIO(), io.StringIO()
+                with (
+                    redirect_stdout(output),
+                    redirect_stderr(error),
+                    patch.object(rules, "load_policy", side_effect=failure),
+                ):
+                    self.assertEqual(rules.main(["check"]), 1)
+                self.assertEqual(output.getvalue(), "")
+                self.assertEqual(error.getvalue(), f"Ruleset reconciliation failed: {code}\n")
+                self.assertNotIn("private-canary", error.getvalue())
+
 
 if __name__ == "__main__":
     _ = unittest.main()
