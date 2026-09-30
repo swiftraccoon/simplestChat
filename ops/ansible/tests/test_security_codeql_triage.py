@@ -7,9 +7,11 @@ import hashlib
 import io
 import shutil
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stderr
 from datetime import date
+from itertools import pairwise
 from pathlib import Path
 from typing import cast, override
 from unittest.mock import patch
@@ -150,6 +152,8 @@ class FixtureGithub(triage.Github):
         self.calls: list[tuple[str, JsonObject | None]] = []
         self.changed_at_read: bool = False
         self.current_head: str = REVISION
+        self.read_effect: str = ""
+        self.write_effect: str = ""
 
     @override
     def head(self, reference: str) -> str:
@@ -174,8 +178,16 @@ class FixtureGithub(triage.Github):
         selected = copy.deepcopy(self.alerts[0])
         if body is not None:
             selected.update(body)
+            if self.write_effect == "finding":
+                object_value(selected["rule"])["id"] = "py/different"
+            elif self.write_effect == "comment":
+                selected["dismissed_comment"] = "another actor"
+            elif self.write_effect == "head":
+                self.current_head = "c" * 40
         elif self.changed_at_read:
             object_value(selected["rule"])["id"] = "py/different"
+        elif self.read_effect == "head":
+            self.current_head = "c" * 40
         return selected
 
 
@@ -422,6 +434,121 @@ class CodeqlTriageTests(unittest.TestCase):
                 ):
                     _ = triage.apply_plan(client, ROOT, plan, reviews, lambda _: None)
             self.assertFalse(any(body is not None for _, body in client.calls))
+
+    def test_apply_rechecks_head_and_review_after_each_alert_read(self) -> None:
+        """A push or edited review during the loop prevents the pending write."""
+        for change in ("head", "policy", "review"):
+            client = FixtureGithub()
+            journal: list[JsonObject] = []
+            with patch.object(triage, "source_hash", return_value=HASH):
+                reviews = [review(triage.api_finding(alert(), ROOT, REVISION, REFERENCE))]
+                plan = triage.api_plan(client, ROOT, REVISION, REFERENCE, reviews)
+                client.read_effect = change
+                with (
+                    self.subTest(change=change),
+                    patch.object(triage, "false_positive", return_value=True),
+                    patch.object(
+                        triage,
+                        "policy_identity",
+                        side_effect=[plan["policySha256"], "changed"]
+                        if change == "policy"
+                        else None,
+                        return_value=plan["policySha256"],
+                    ),
+                    patch.object(
+                        triage,
+                        "review_identity",
+                        side_effect=[plan["reviewSha256"], "changed"]
+                        if change == "review"
+                        else None,
+                        return_value=plan["reviewSha256"],
+                    ),
+                    self.assertRaises(ToolError),
+                ):
+                    _ = triage.apply_plan(client, ROOT, plan, reviews, journal.append)
+            self.assertFalse(any(body is not None for _, body in client.calls))
+            self.assertEqual(journal, [])
+
+    def test_apply_verifies_response_identity_comment_and_postwrite_head(self) -> None:
+        """An in-flight race remains unconfirmed and stops the batch after its intent record."""
+        for change in ("finding", "comment", "head"):
+            client = FixtureGithub()
+            journal: list[JsonObject] = []
+            with patch.object(triage, "source_hash", return_value=HASH):
+                reviews = [review(triage.api_finding(alert(), ROOT, REVISION, REFERENCE))]
+                plan = triage.api_plan(client, ROOT, REVISION, REFERENCE, reviews)
+                client.write_effect = change
+                with (
+                    self.subTest(change=change),
+                    patch.object(triage, "false_positive", return_value=True),
+                    self.assertRaises(ToolError),
+                ):
+                    _ = triage.apply_plan(client, ROOT, plan, reviews, journal.append)
+            self.assertEqual(
+                journal, [{"phase": "dismissal_requested", "number": 1, "dismissed": []}]
+            )
+
+    def test_mutation_transport_spaces_97_writes_and_preserves_read_budget(self) -> None:
+        """The planned batch stays below 80 writes/minute without real sleeps or API calls."""
+        now = [0.0]
+        started: list[float] = []
+        request_duration = 0.25
+        maximum_writes_per_minute = 80
+
+        def sleep(seconds: float) -> None:
+            self.assertGreater(seconds, 0)
+            now[0] += seconds
+
+        def process(*_args: object, **_kwargs: object) -> tuple[int, bytes, bytes]:
+            started.append(now[0])
+            now[0] += request_duration
+            return 0, b"{}", b""
+
+        with (
+            patch.object(shutil, "which", return_value="/fixture/gh"),
+            patch.object(time, "monotonic", side_effect=lambda: now[0]),
+            patch.object(time, "sleep", side_effect=sleep),
+            patch.object(bounded_process, "run", side_effect=process),
+        ):
+            client = triage.Github("owner/repository", apply=True)
+            read_client = triage.Github("owner/repository")
+            self.assertEqual(client.deadline, triage.MAX_APPLY_SECONDS)
+            self.assertEqual(read_client.deadline, triage.MAX_SECONDS)
+            for number in range(1, 98):
+                _ = client.request(f"alerts/{number}", {"state": "dismissed"})
+        self.assertEqual(len(started), 97)
+        self.assertTrue(
+            all(b - a >= triage.WRITE_INTERVAL + request_duration for a, b in pairwise(started))
+        )
+        self.assertTrue(
+            all(
+                sum(start <= t < start + 60 for t in started) < maximum_writes_per_minute
+                for start in started
+            )
+        )
+        self.assertLess(now[0], triage.MAX_APPLY_SECONDS)
+
+    def test_mutation_pacing_cannot_outlive_deadline_or_retry_failed_write(self) -> None:
+        """Rate-limit errors stop immediately, and pacing never consumes an expired budget."""
+        with (
+            patch.object(shutil, "which", return_value="/fixture/gh"),
+            patch.object(time, "monotonic", return_value=0.0),
+        ):
+            client = triage.Github("owner/repository", apply=True)
+            with patch.object(bounded_process, "run", return_value=(1, b"", b"")) as process:
+                with self.assertRaisesRegex(ToolError, "codeql_api_failed"):
+                    _ = client.request("alerts/1", {"state": "dismissed"})
+                process.assert_called_once()
+                self.assertEqual(client.next_write, triage.WRITE_INTERVAL)
+            client.next_write = client.deadline
+            with (
+                patch.object(time, "sleep") as sleep,
+                patch.object(bounded_process, "run") as process,
+                self.assertRaisesRegex(ToolError, "codeql_api_deadline"),
+            ):
+                _ = client.request("alerts/2", {"state": "dismissed"})
+            sleep.assert_not_called()
+            process.assert_not_called()
 
     def test_source_hash_refuses_edits_symlinks_and_path_escape(self) -> None:
         """Hash the complete descriptor-read file only if it equals the selected Git revision."""

@@ -195,6 +195,25 @@ make a fresh plan; do not assume the action failed or replay the old plan blindl
 `failure.json` never claims an unfinished apply completed. The helper implements
 the documented [GitHub code-scanning REST API](https://docs.github.com/en/rest/code-scanning/code-scanning?apiVersion=2022-11-28).
 
+Apply allows at most 128 writes within one 900-second operation deadline; read-only
+API operations retain their 300-second deadline. Every subprocess is also bounded
+by the remaining deadline and its 20-second request limit. At least one second
+elapses after each mutation completes before the next mutation can start. The
+helper waits before refreshing the next alert, then rechecks its complete source
+identity, the remote branch head, and the exact review and exception bytes before
+writing. It verifies the returned finding, dismissal comment and branch head
+before confirming the action. No failed request is retried automatically.
+
+This pacing follows [GitHub's REST guidance](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#pause-between-mutative-requests)
+and keeps one invocation below the general 80-content-writes-per-minute limit.
+Other account activity and endpoint-specific limits still share GitHub's budget;
+a rate-limit error stops the operation and retains its journal. The update endpoint
+does not provide an atomic alert-version or branch-head precondition, and GitHub
+does not generally support conditional PATCH requests. A change during an in-flight
+write can therefore be detected after that write, but cannot be prevented by these
+checks. Such a response remains unconfirmed and stops the batch; no automatic
+reopen or rollback risks overwriting another operator's decision.
+
 ## Per-alert review index
 
 Alerts 36 and 37 were re-reviewed from the actual `c107ca9dfb9df66701d2a8a1c54fe785ed39add8`

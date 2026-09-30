@@ -43,6 +43,8 @@ MAX_PAGE = 100
 MAX_PAGES = 20
 MAX_APPLY = 128
 MAX_SECONDS = 300
+MAX_APPLY_SECONDS = 900
+WRITE_INTERVAL = 1.0
 MAX_FINDINGS = 2000
 HIGH_SCORE = 7
 CRITICAL_SCORE = 9
@@ -275,17 +277,30 @@ def sarif_findings(
 class Github:
     """Bound every API response, page count and complete operation to GitHub.com."""
 
-    def __init__(self, repository: str) -> None:
+    def __init__(self, repository: str, *, apply: bool = False) -> None:
         """Only an explicit validated owner/repository can select the target."""
         require(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository), "codeql_repository")
         self.repository: str = repository
-        self.deadline: float = time.monotonic() + MAX_SECONDS
+        self.deadline: float = time.monotonic() + (MAX_APPLY_SECONDS if apply else MAX_SECONDS)
+        self.next_write: float = 0.0
         executable = shutil.which("gh")
         require(executable is not None, "codeql_gh_missing")
         self.executable: str = str(executable)
 
+    def prepare_write(self) -> None:
+        """Pace before refreshing mutation evidence; never sleep past the operation deadline."""
+        while True:
+            now = time.monotonic()
+            delay = max(0.0, self.next_write - now)
+            require(now + delay < self.deadline, "codeql_api_deadline")
+            if delay == 0:
+                return
+            time.sleep(delay)
+
     def request(self, suffix: str, body: JsonObject | None = None) -> JsonValue:
         """No shell, external hostname, API retries or unbounded output is permitted."""
+        if body is not None:
+            self.prepare_write()
         remaining = self.deadline - time.monotonic()
         require(remaining > 0, "codeql_api_deadline")
         reference_read = suffix.startswith("git/ref/")
@@ -301,27 +316,33 @@ class Github:
             "--hostname",
             "github.com",
             "--method",
-            "PATCH" if body else "GET",
+            "PATCH" if body is not None else "GET",
             "-H",
             "Accept: application/vnd.github+json",
             "-H",
             "X-GitHub-Api-Version: 2022-11-28",
             endpoint,
         ]
-        if body:
+        if body is not None:
             argv += ["--input", "-"]
         env = {key: value for key, value in os.environ.items() if key != "GH_DEBUG"}
         env.update({"GH_PROMPT_DISABLED": "1", "GH_HOST": "github.com", "GH_PAGER": "cat"})
-        status, output, _ = bounded_process.run(
-            argv,
-            env=env,
-            input_data=json.dumps(body).encode() if body else b"",
-            limits=bounded_process.Limits(
-                timeout=min(20, remaining), stdout=MAX_SOURCE, stderr=65536
-            ),
-        )
+        try:
+            status, output, _ = bounded_process.run(
+                argv,
+                env=env,
+                input_data=json.dumps(body).encode() if body is not None else b"",
+                limits=bounded_process.Limits(
+                    timeout=min(20, remaining), stdout=MAX_SOURCE, stderr=65536
+                ),
+            )
+        finally:
+            if body is not None:
+                self.next_write = time.monotonic() + WRITE_INTERVAL
         require(status == 0, "codeql_api_failed")
-        return decode_json(output)
+        result = decode_json(output)
+        require(time.monotonic() < self.deadline, "codeql_api_deadline")
+        return result
 
     def head(self, reference: str) -> str:
         """Bind API plans to the current exact Git reference, including historical fixed alerts."""
@@ -457,10 +478,15 @@ def api_plan(  # noqa: PLR0913 -- Explicit API identity, policy and verified sou
         "reviewSha256": review_identity(),
         "analysisCategories": list[JsonValue](sorted(categories)),
         **verdict(findings, reviews),
-        "policySha256": hashlib.sha256(
-            bounded_file(security_policy.DEFAULT_PATH, security_policy.MAX_POLICY)
-        ).hexdigest(),
+        "policySha256": policy_identity(),
     }
+
+
+def policy_identity() -> str:
+    """Keep the exact exception bytes fixed throughout a mutating operation."""
+    return hashlib.sha256(
+        bounded_file(security_policy.DEFAULT_PATH, security_policy.MAX_POLICY)
+    ).hexdigest()
 
 
 def review_identity() -> str:
@@ -519,11 +545,25 @@ def apply_plan(  # noqa: PLR0913 -- Separate policy, evidence journal and native
     )
     completed: list[JsonValue] = []
     for expected in selected:
+        client.prepare_write()
         number = positive(expected["number"])
         current = object_value(client.request(f"alerts/{number}"))
         require(
             api_finding(current, root, revision, reference, sources) == expected,
             "codeql_apply_alert_changed",
+        )
+        require(client.head(reference) == revision, "codeql_ref_head_changed")
+        require(
+            policy_identity() == plan["policySha256"]
+            and review_identity() == plan["reviewSha256"]
+            and false_positive(expected, client.repository)
+            and security_policy.permitted(
+                reviews,
+                "codeql",
+                string_value(expected["fingerprint"]),
+                string_value(expected["scope"]),
+            ),
+            "codeql_apply_review_changed",
         )
         comment = (
             "Reviewed false positive; "
@@ -545,9 +585,14 @@ def apply_plan(  # noqa: PLR0913 -- Separate policy, evidence journal and native
         require(
             result["number"] == number
             and result["state"] == "dismissed"
-            and result["dismissed_reason"] == "false positive",
+            and result["dismissed_reason"] == "false positive"
+            and result["dismissed_comment"] == comment
+            and api_finding(result, root, revision, reference, sources)
+            == {**expected, "state": "dismissed"},
             "codeql_dismissal_unconfirmed",
         )
+        require(client.head(reference) == revision, "codeql_ref_head_changed")
+        require(time.monotonic() < client.deadline, "codeql_api_deadline")
         completed.append(number)
         journal({"phase": "dismissal_confirmed", "number": number, "dismissed": completed.copy()})
     return {
@@ -634,7 +679,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "codeql_apply_selection",
                 )
                 output = apply_plan(
-                    Github(args.repository), ROOT, raw, reviews, journal, sources=sources
+                    Github(args.repository, apply=True),
+                    ROOT,
+                    raw,
+                    reviews,
+                    journal,
+                    sources=sources,
                 )
         else:
             require(args.input is None, "codeql_unexpected_input")
