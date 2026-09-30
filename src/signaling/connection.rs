@@ -2091,6 +2091,10 @@ async fn handle_connection_with_timing(
 mod close_tests;
 
 #[cfg(test)]
+#[path = "connection_authorization_tests.rs"]
+mod authorization_tests;
+
+#[cfg(test)]
 #[path = "connection_heartbeat_tests.rs"]
 mod heartbeat_tests;
 

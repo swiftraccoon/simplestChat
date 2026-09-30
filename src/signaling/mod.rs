@@ -2,6 +2,8 @@
 
 // Signaling module - WebSocket signaling server
 
+#[cfg(test)]
+mod authorization_tests;
 pub mod connection;
 mod media_diagnostics;
 pub(crate) mod outbound;

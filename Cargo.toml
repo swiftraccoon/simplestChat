@@ -66,7 +66,9 @@ icu_properties = "2.3.0"
 lru = { version = "0.18.4", default-features = false }
 
 [dev-dependencies]
+syn = { version = "=2.0.119", features = ["full", "visit"] }
 tokio-test = "0.4.5"
+tower = { version = "0.5.3", features = ["util"] }
 
 # Temporary, source-auditable forks of the exact crates.io releases.  The
 # mediasoup fork only raises `lru`; the sys fork replaces its vulnerable

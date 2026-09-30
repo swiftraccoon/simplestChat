@@ -1,0 +1,1315 @@
+{
+  "schemaVersion": 1,
+  "http": [
+    {
+      "method": "GET",
+      "path": "/api/auth/invites",
+      "handler": "crate::auth::invites::list",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/invites",
+      "handler": "crate::auth::invites::create",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/auth/invites/{id}",
+      "handler": "crate::auth::invites::revoke",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "handler": "crate::auth::routes::login",
+      "policy": "credentials",
+      "body": {
+        "email": "fixture@policy.invalid",
+        "password": "fixture-public-passphrase"
+      },
+      "unauthenticated_status": 401,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "handler": "crate::auth::routes::logout",
+      "policy": "refresh-cookie",
+      "body": null,
+      "unauthenticated_status": 204,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/passkey/login/finish",
+      "handler": "crate::auth::routes::passkey_login_finish",
+      "policy": "passkey-challenge",
+      "body": {
+        "ceremony_id": "00000000-0000-4000-8000-000000000001",
+        "credential": {
+          "id": "AA",
+          "rawId": "AA",
+          "type": "public-key",
+          "response": {
+            "clientDataJSON": "AA",
+            "authenticatorData": "AA",
+            "signature": "AA",
+            "userHandle": null
+          },
+          "extensions": {}
+        }
+      },
+      "unauthenticated_status": 401,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/passkey/login/start",
+      "handler": "crate::auth::routes::passkey_login_start",
+      "policy": "public-challenge",
+      "body": {},
+      "unauthenticated_status": 200,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/passkey/register/finish",
+      "handler": "crate::auth::routes::passkey_register_finish",
+      "policy": "registration-challenge",
+      "body": {
+        "ceremony_id": "fixture",
+        "credential": {
+          "id": "AA",
+          "rawId": "AA",
+          "type": "public-key",
+          "response": {
+            "clientDataJSON": "AA",
+            "attestationObject": "AA"
+          },
+          "extensions": {}
+        }
+      },
+      "unauthenticated_status": 403,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/passkey/register/start",
+      "handler": "crate::auth::routes::passkey_register_start",
+      "policy": "registration",
+      "body": {
+        "email": "fixture@policy.invalid",
+        "display_name": "Policy fixture"
+      },
+      "unauthenticated_status": 403,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/passkeys",
+      "handler": "crate::auth::passkeys::list",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/passkeys/authorize",
+      "handler": "crate::auth::passkeys::authorize",
+      "policy": "current-session",
+      "body": {
+        "ceremony_id": "fixture",
+        "credential": {
+          "id": "AA",
+          "rawId": "AA",
+          "type": "public-key",
+          "response": {
+            "clientDataJSON": "AA",
+            "authenticatorData": "AA",
+            "signature": "AA",
+            "userHandle": null
+          },
+          "extensions": {}
+        }
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/passkeys/enroll",
+      "handler": "crate::auth::passkeys::enroll",
+      "policy": "current-session",
+      "body": {
+        "ceremony_id": "fixture",
+        "credential": {
+          "id": "AA",
+          "rawId": "AA",
+          "type": "public-key",
+          "response": {
+            "clientDataJSON": "AA",
+            "attestationObject": "AA"
+          },
+          "extensions": {}
+        }
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/passkeys/start",
+      "handler": "crate::auth::passkeys::start",
+      "policy": "current-session",
+      "body": {
+        "operation": {
+          "action": "add"
+        },
+        "current_password": null
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/password",
+      "handler": "crate::auth::account::change_password",
+      "policy": "current-session",
+      "body": {
+        "current_password": "fixture-current-passphrase",
+        "new_password": "fixture-new-passphrase"
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/preferences",
+      "handler": "crate::auth::account::get_preferences",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/auth/preferences",
+      "handler": "crate::auth::account::put_preferences",
+      "policy": "current-session",
+      "body": {},
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/profile",
+      "handler": "crate::auth::account::get_profile",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/auth/profile",
+      "handler": "crate::auth::account::update_profile",
+      "policy": "current-session",
+      "body": {
+        "display_name": "Policy fixture",
+        "avatar_url": null,
+        "bio": ""
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/profiles/{id}",
+      "handler": "crate::auth::account::public_profile",
+      "policy": "public-profile",
+      "body": null,
+      "unauthenticated_status": 404,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/recovery/key",
+      "handler": "crate::auth::account::create_recovery_key",
+      "policy": "current-session",
+      "body": {
+        "current_password": "fixture-current-passphrase"
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/recovery/redeem",
+      "handler": "crate::auth::account::redeem_recovery",
+      "policy": "recovery-key",
+      "body": {
+        "email": "fixture@policy.invalid",
+        "recovery_key": "sc-recovery-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "new_password": "fixture-public-passphrase"
+      },
+      "unauthenticated_status": 401,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "handler": "crate::auth::routes::refresh",
+      "policy": "refresh-cookie",
+      "body": null,
+      "unauthenticated_status": 401,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "handler": "crate::auth::routes::register",
+      "policy": "registration",
+      "body": {
+        "email": "fixture@policy.invalid",
+        "display_name": "Policy fixture",
+        "password": "fixture-public-passphrase"
+      },
+      "unauthenticated_status": 403,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/ws-ticket",
+      "handler": "crate::auth::ws_tickets::issue",
+      "policy": "current-session",
+      "body": {},
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/capabilities",
+      "handler": "capabilities_handler",
+      "policy": "public-capabilities",
+      "body": null,
+      "unauthenticated_status": 200,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/rooms",
+      "handler": "crate::room::api::list_rooms",
+      "policy": "public-directory",
+      "body": null,
+      "unauthenticated_status": 200,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/rooms",
+      "handler": "crate::room::api::create_room",
+      "policy": "current-session",
+      "body": {
+        "id": "policy-room",
+        "display_name": "Policy room"
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/rooms/invites/preview",
+      "handler": "crate::room::invites::preview",
+      "policy": "current-session",
+      "body": {
+        "code": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/rooms/invites/redeem",
+      "handler": "crate::room::invites::redeem",
+      "policy": "current-session",
+      "body": {
+        "code": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/rooms/memberships",
+      "handler": "crate::room::invites::list_memberships",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/rooms/mine",
+      "handler": "crate::room::api::owned_rooms",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/rooms/{id}",
+      "handler": "crate::room::api::delete_room",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/rooms/{id}/identity",
+      "handler": "crate::room::api::update_room_identity",
+      "policy": "current-session",
+      "body": {
+        "display_name": "Policy room",
+        "topic": null,
+        "description": "",
+        "image_url": null
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/rooms/{id}/invites",
+      "handler": "crate::room::invites::list",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/rooms/{id}/invites",
+      "handler": "crate::room::invites::create",
+      "policy": "current-session",
+      "body": {
+        "role": 2
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/rooms/{id}/invites/{invite_id}",
+      "handler": "crate::room::invites::revoke",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/telemetry",
+      "handler": "telemetry::ingest",
+      "policy": "anonymous-bounded",
+      "body": {
+        "version": 1,
+        "browser": "other",
+        "events": [
+          {
+            "name": "connection",
+            "outcome": "started"
+          }
+        ]
+      },
+      "unauthenticated_status": 204,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/diagnostics/media",
+      "handler": "media_diagnostics::handler",
+      "policy": "metrics-bearer-opt-in",
+      "body": null,
+      "unauthenticated_status": 404,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "handler": "health_handler",
+      "policy": "public-health",
+      "body": null,
+      "unauthenticated_status": 200,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/metrics",
+      "handler": "metrics_handler",
+      "policy": "metrics-bearer",
+      "body": null,
+      "unauthenticated_status": 401,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "handler": "readiness_handler",
+      "policy": "public-readiness",
+      "body": null,
+      "unauthenticated_status": 200,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/ws",
+      "handler": "ws_handler",
+      "policy": "guest-or-ticket",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "database_ticket_http_and_upgrade_enforce_single_use_and_logout",
+        "websocket_origin_defaults_to_literal_loopback_host"
+      ]
+    }
+  ],
+  "websocket": [
+    {
+      "variant": "RenewAuthentication",
+      "operation": "renewAuthentication",
+      "boundary": "current-session-renewal",
+      "lobby": "socket-authentication",
+      "body": {
+        "type": "renewAuthentication",
+        "requestId": "policy-request",
+        "token": "synthetic-noncredential"
+      },
+      "checks": [
+        "authenticated_renewal_keeps_socket_and_membership_across_original_expiry",
+        "expired_or_unverifiable_account_cannot_receive_heartbeats"
+      ]
+    },
+    {
+      "variant": "JoinRoom",
+      "operation": "joinRoom",
+      "boundary": "room-admission",
+      "lobby": "allow",
+      "body": {
+        "type": "joinRoom",
+        "roomId": "policy-room",
+        "participantName": "Policy fixture"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "quiet_lobby_socket_survives_without_gaining_room_admission"
+      ]
+    },
+    {
+      "variant": "LeaveRoom",
+      "operation": "leaveRoom",
+      "boundary": "own-membership",
+      "lobby": "allow",
+      "body": {
+        "type": "leaveRoom"
+      },
+      "checks": [
+        "leaving_room_stops_heartbeat_renewal"
+      ]
+    },
+    {
+      "variant": "GetRouterRtpCapabilities",
+      "operation": "getRouterRtpCapabilities",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "getRouterRtpCapabilities"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "CreateSendTransport",
+      "operation": "createSendTransport",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "createSendTransport"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "CreateRecvTransport",
+      "operation": "createRecvTransport",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "createRecvTransport"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "ConnectTransport",
+      "operation": "connectTransport",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "connectTransport",
+        "transportId": "00000000-0000-4000-8000-000000000001",
+        "dtlsParameters": {
+          "role": "auto",
+          "fingerprints": []
+        }
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "Produce",
+      "operation": "produce",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "produce",
+        "transportId": "00000000-0000-4000-8000-000000000001",
+        "kind": "audio",
+        "rtpParameters": {
+          "codecs": [],
+          "headerExtensions": [],
+          "encodings": [],
+          "rtcp": {
+            "cname": "policy-fixture",
+            "reducedSize": true
+          }
+        }
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "Consume",
+      "operation": "consume",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "consume",
+        "producerId": "00000000-0000-4000-8000-000000000002",
+        "rtpCapabilities": {
+          "codecs": [],
+          "headerExtensions": []
+        }
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "ResumeConsumer",
+      "operation": "resumeConsumer",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "resumeConsumer",
+        "consumerId": "00000000-0000-4000-8000-000000000003"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "PauseConsumer",
+      "operation": "pauseConsumer",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "pauseConsumer",
+        "consumerId": "00000000-0000-4000-8000-000000000003"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "CloseConsumer",
+      "operation": "closeConsumer",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "closeConsumer",
+        "consumerId": "00000000-0000-4000-8000-000000000003"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "CloseProducer",
+      "operation": "closeProducer",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "closeProducer",
+        "producerId": "00000000-0000-4000-8000-000000000002"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "PauseProducer",
+      "operation": "pauseProducer",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "pauseProducer",
+        "producerId": "00000000-0000-4000-8000-000000000002"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "ResumeProducer",
+      "operation": "resumeProducer",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "resumeProducer",
+        "producerId": "00000000-0000-4000-8000-000000000002"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "Reconnect",
+      "operation": "reconnect",
+      "boundary": "reconnect-binding",
+      "lobby": "allow",
+      "body": {
+        "type": "reconnect",
+        "participantId": "00000000-0000-4000-8000-000000000004",
+        "roomId": "policy-room",
+        "reconnectToken": "00000000-0000-4000-8000-000000000005"
+      },
+      "checks": [
+        "authenticated_grace_requires_same_refreshed_identity",
+        "grace_entries_are_scoped_by_room",
+        "wrong_reconnect_token_does_not_consume_or_extend_grace"
+      ]
+    },
+    {
+      "variant": "RestartIce",
+      "operation": "restartIce",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "restartIce",
+        "transportId": "00000000-0000-4000-8000-000000000001"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "SetConsumerPreferredLayers",
+      "operation": "setConsumerPreferredLayers",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "setConsumerPreferredLayers",
+        "consumerId": "00000000-0000-4000-8000-000000000003",
+        "spatialLayer": 0
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "ChatMessage",
+      "operation": "chatMessage",
+      "boundary": "room-membership",
+      "lobby": "allow",
+      "body": {
+        "type": "chatMessage",
+        "content": "Policy fixture"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes"
+      ]
+    },
+    {
+      "variant": "PrivateMessage",
+      "operation": "privateMessage",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "privateMessage",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006",
+        "content": "Policy fixture",
+        "clientMessageId": "policy-client-message"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "RetryChatMessage",
+      "operation": "retryChatMessage",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "retryChatMessage",
+        "clientMessageId": "policy-client-message",
+        "sequence": 1,
+        "chatSessionId": "policy-session",
+        "content": "Policy fixture"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "SetChatPreferences",
+      "operation": "setChatPreferences",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "setChatPreferences",
+        "requestId": "policy-request",
+        "allowPrivateMessages": true,
+        "ignoredParticipantIds": []
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "SetChatStyle",
+      "operation": "setChatStyle",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "setChatStyle",
+        "requestId": "policy-request",
+        "chatStyle": {}
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "ReactToMessage",
+      "operation": "reactToMessage",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "reactToMessage",
+        "requestId": "policy-request",
+        "messageId": "policy-message",
+        "emoji": "\ud83d\udc4d"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "ChangeNickname",
+      "operation": "changeNickname",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "changeNickname",
+        "requestId": "policy-request",
+        "nickname": "Policy fixture"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "GetRoomSnapshot",
+      "operation": "getRoomSnapshot",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "getRoomSnapshot",
+        "requestId": "policy-request"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "ListRoomBans",
+      "operation": "listRoomBans",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "listRoomBans",
+        "requestId": "policy-request"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "RemoveRoomBan",
+      "operation": "removeRoomBan",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "removeRoomBan",
+        "requestId": "policy-request",
+        "banId": "00000000-0000-4000-8000-000000000008"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "ListRoomMembers",
+      "operation": "listRoomMembers",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "listRoomMembers",
+        "requestId": "policy-request"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "SetMemberRole",
+      "operation": "setMemberRole",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "setMemberRole",
+        "requestId": "policy-request",
+        "targetUserId": "00000000-0000-4000-8000-000000000007",
+        "role": 2
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "ReportParticipant",
+      "operation": "reportParticipant",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "reportParticipant",
+        "requestId": "policy-request",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006",
+        "reason": "Policy fixture"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "ListRoomReports",
+      "operation": "listRoomReports",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "listRoomReports",
+        "requestId": "policy-request"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "ResolveRoomReport",
+      "operation": "resolveRoomReport",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "resolveRoomReport",
+        "requestId": "policy-request",
+        "reportId": "00000000-0000-4000-8000-000000000009",
+        "status": "dismissed"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "ListModerationEvents",
+      "operation": "listModerationEvents",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "listModerationEvents",
+        "requestId": "policy-request"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "Typing",
+      "operation": "typing",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "typing"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "CloseCam",
+      "operation": "closeCam",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "closeCam",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_role_policy_matches_independent_expected_matrix",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "CamBan",
+      "operation": "camBan",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "camBan",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_role_policy_matches_independent_expected_matrix",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "CamUnban",
+      "operation": "camUnban",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "camUnban",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_role_policy_matches_independent_expected_matrix",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "TextMute",
+      "operation": "textMute",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "textMute",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_role_policy_matches_independent_expected_matrix",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "TextUnmute",
+      "operation": "textUnmute",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "textUnmute",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_role_policy_matches_independent_expected_matrix",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "Kick",
+      "operation": "kick",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "kick",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_role_policy_matches_independent_expected_matrix",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "Ban",
+      "operation": "ban",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "ban",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_role_policy_matches_independent_expected_matrix",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "Unban",
+      "operation": "unban",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "unban",
+        "targetUserId": "00000000-0000-4000-8000-000000000007"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "SetRole",
+      "operation": "setRole",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "setRole",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006",
+        "role": 2
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_role_policy_matches_independent_expected_matrix",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "RequestVoice",
+      "operation": "requestVoice",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "requestVoice"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "UpdateRoomSettings",
+      "operation": "updateRoomSettings",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "updateRoomSettings"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "SetTopic",
+      "operation": "setTopic",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "setTopic",
+        "topic": "Policy topic"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "authorization_dispatch_moderation_checks_actor_and_target_roles"
+      ]
+    },
+    {
+      "variant": "AdmitFromLobby",
+      "operation": "admitFromLobby",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "admitFromLobby",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "DenyFromLobby",
+      "operation": "denyFromLobby",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "denyFromLobby",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    }
+  ]
+}

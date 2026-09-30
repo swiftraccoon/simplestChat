@@ -13,6 +13,7 @@
 !/docs/performance.md
 !/docs/performance-results.md
 !/docs/native-security.md
+!/docs/authorization-testing.md
 /build.log
 web/node_modules
 web/dist
