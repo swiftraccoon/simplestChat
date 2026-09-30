@@ -133,6 +133,8 @@ Missing reports, invalid generator observations, workload failures, timeouts and
 uncertain cleanup return nonzero. An adaptive search may retain useful passing
 lower bounds before a failing step; its nonzero result preserves that distinction.
 
+Docker log reads request only the last 1,000 lines and retain at most 200,000 characters.
+
 Audio coverage requires at least 95% of the expected packet count for every
 continuous audio consumer, alongside the existing connection, sustained-media,
 CPU, memory and datagram-drop checks. Text requires matching acknowledgements
@@ -159,6 +161,20 @@ Remote evidence lives under
 - The container ownership journal and before/after container identities.
 - Worker outcome, final systemd result, bounded service logs and collection status.
 - A separate recovery receipt if recovery was explicitly requested.
+
+Within each workload step, untrusted generator JSON lives in `generator/`.
+Host-generated `generator.log`, `server.log`, `step.json`, metrics and
+`collection.json` remain outside it. Collection streams an uncompressed results
+archive with a 144 MiB transfer ceiling, validates the entire member list before
+extraction, and opens only new regular files with `O_EXCL` and `O_NOFOLLOW`.
+Only `load_test_summary.json` (8 MiB) and `load_test_results.json` (128 MiB) may
+complete a measurement. A timeout marker, missing file, failed transfer,
+duplicate name, link, special file, traversal or oversized file invalidates it.
+Physical tar headers and extended metadata are bounded before general parsing.
+The host-generated collection manifest records the exact size and SHA-256 of
+each accepted file and the transferred archive. After successful publication,
+the redundant raw archive is removed; failed transfers retain bounded evidence.
+JSON reads independently refuse links and nonregular files.
 
 Diagnostic container inspections retain only identity and lifecycle fields.
 They exclude container environment variables and scoped metrics credentials.

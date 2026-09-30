@@ -393,8 +393,11 @@ per 1,000 participant-hours and participants per monthly dollar,
 network-bound instead when `--port-mbps` times 0.8 carries fewer participants
 than the projection, plus egress beyond the allowance. `compare` ranks reports by that cost, so the same command on several
 VPS types finds the cheapest per participant. Each step keeps its generator
-results, both containers' logs, the server's final metrics and `step.json` in
-the report directory; a step whose container ran out of memory says which.
+results in a separate `generator/` directory, both containers' logs, the server's
+final metrics and `step.json` in the report directory. Its host-generated
+`collection.json` records accepted regular-file sizes and SHA-256 digests; a
+partial transfer or invalid archive makes the measurement invalid.
+A step whose container ran out of memory says which.
 Steal time above 5 % is logged per step: a noisy neighbour lowers that run's
 figures, so repeat it before trusting it. `--quick` shortens the windows and
 allows three steps per workload, which more often ends in a lower bound.

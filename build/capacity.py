@@ -37,7 +37,6 @@ later and Docker or Podman on Linux (Podman's VM on macOS works for trials).
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import math
 import re
@@ -47,6 +46,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tarfile
 import time
 import urllib.error
 import urllib.request
@@ -54,6 +54,9 @@ from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, NoReturn, cast
+
+import bounded_process
+import capacity_artifacts
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -138,8 +141,8 @@ def as_list(value: object, what: str) -> list[object]:
 
 
 def read_json(path: Path) -> dict[str, object]:
-    """Read a JSON object from `path`."""
-    return as_object(cast("object", json.loads(path.read_text(encoding="utf-8"))), str(path))
+    """Read a bounded regular JSON object without following generator-controlled links."""
+    return as_object(cast("object", json.loads(capacity_artifacts.read_regular(path))), str(path))
 
 
 def camel(name: str) -> str:
@@ -1384,14 +1387,19 @@ class Engine:
 
     def run(self, *args: str, timeout: float = 120, check: bool = True) -> str:
         """Run an engine command and return its standard output."""
-        completed = subprocess.run(  # noqa: S603 -- resolved engine executable, argument list.
-            [self.executable, *args], capture_output=True, text=True, timeout=timeout, check=False
-        )
-        if check and completed.returncode != 0:
-            detail = (completed.stderr or completed.stdout).strip().splitlines() or ["no output"]
+        try:
+            status, output, error = bounded_process.run(
+                [self.executable, *args], limits=bounded_process.Limits(timeout=timeout)
+            )
+        except bounded_process.ProcessError as error:
+            raise CapacityError(str(error)) from error
+        if check and status != 0:
+            detail = (error or output).decode(errors="replace").strip().splitlines() or [
+                "no output"
+            ]
             message = f"{Path(self.executable).name} {args[0]} failed: {detail[-1]}"
             raise CapacityError(message)
-        return completed.stdout
+        return output.decode()
 
     def read(self, container: str, path: str) -> str:
         """Read a file inside a container."""
@@ -1412,16 +1420,15 @@ class Engine:
         return state.strip() == "true"
 
     def logs(self, container: str) -> str:
-        """Return a container's output with standard error interleaved (the server logs there)."""
-        completed = subprocess.run(  # noqa: S603 -- resolved engine executable, argument list.
-            [self.executable, "logs", container],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=60,
-            check=False,
-        )
-        return completed.stdout
+        """Read a bounded tail without buffering unbounded container output."""
+        try:
+            _, output, error = bounded_process.run(
+                [self.executable, "logs", "--tail", "1000", container],
+                limits=bounded_process.Limits(timeout=60),
+            )
+        except bounded_process.ProcessError as error:
+            raise CapacityError(str(error)) from error
+        return (output + error).decode(errors="replace")
 
     def remove(self, container: str) -> None:
         """Remove a container this tool started, if it exists."""
@@ -1845,17 +1852,38 @@ def run_step(context: Context, plan: StepPlan, index: int) -> StepResult:
     except (CapacityError, subprocess.TimeoutExpired) as error:
         result.error = str(error)
     finally:
-        # Evidence first, whatever happened; removal must run even if collecting fails.
-        with contextlib.suppress(CapacityError, subprocess.TimeoutExpired, OSError):
-            collect(engine, (server, generator), directory)
-            if engine.oom_killed(server):
-                result.server_exit = "the server ran out of memory"
-            result.generator_out_of_memory = engine.oom_killed(generator)
-        engine.remove(generator)
-        engine.remove(server)
-    conclude(result, marks, directory / "load_test_summary.json")
+        finalize_step(engine, (server, generator), directory, result)
+    conclude(result, marks, directory / "generator/load_test_summary.json")
     _ = (directory / "step.json").write_text(json.dumps(record(result), indent=2), encoding="utf-8")
     return result
+
+
+def finalize_step(
+    engine: Engine, names: tuple[str, str], directory: Path, result: StepResult
+) -> None:
+    """Invalidate failed evidence and attempt both owned removals on every exit."""
+    server, generator = names
+    try:
+        collect(engine, names, directory)
+        if engine.oom_killed(server):
+            result.server_exit = "the server ran out of memory"
+        result.generator_out_of_memory = engine.oom_killed(generator)
+    except (
+        CapacityError,
+        capacity_artifacts.ArtifactError,
+        bounded_process.ProcessError,
+        subprocess.TimeoutExpired,
+        OSError,
+        tarfile.TarError,
+    ) as error:
+        result.error = (
+            result.error or f"generator evidence collection failed: {type(error).__name__}"
+        )
+    finally:
+        try:
+            engine.remove(generator)
+        finally:
+            engine.remove(server)
 
 
 # The last part of each container's log a step keeps.
@@ -1863,12 +1891,14 @@ LOG_TAIL_CHARACTERS: Final = 200_000
 
 
 def collect(engine: Engine, names: tuple[str, str], directory: Path) -> None:
-    """Keep a step's evidence: the generator's results and both containers' logs."""
+    """Keep host logs separate from an allowlisted, fully transferred result archive."""
     server, generator = names
-    _ = engine.run("cp", f"{generator}:/results/.", str(directory), check=False, timeout=120)
-    for container, file in ((generator, "generator.log"), (server, "server.log")):
-        log = engine.logs(container)[-LOG_TAIL_CHARACTERS:]
-        _ = (directory / file).write_text(log, encoding="utf-8")
+    try:
+        capacity_artifacts.collect(engine.executable, generator, directory)
+    finally:
+        for container, file in ((generator, "generator.log"), (server, "server.log")):
+            log = engine.logs(container)[-LOG_TAIL_CHARACTERS:]
+            capacity_artifacts.new_file(directory / file, log.encode())
 
 
 # A window's worth of per-worker loads: fewer scrapes cannot say how busy it was.
@@ -1890,9 +1920,9 @@ def conclude(result: StepResult, marks: Marks, summary: Path) -> None:
         read_summary(result, read_json(summary))
         clients = summary.with_name("load_test_results.json")
         if clients.exists():
-            listed = cast("object", json.loads(clients.read_text(encoding="utf-8")))
+            listed = cast("object", json.loads(capacity_artifacts.read_regular(clients)))
             read_clients(result, as_list(listed, "clients"))
-    except (CapacityError, ValueError) as error:
+    except (CapacityError, capacity_artifacts.ArtifactError, OSError, ValueError) as error:
         result.error = result.error or f"the generator's summary is unusable: {error}"
         return
     # Without the window's readings a pass or a failure may be the generator's
