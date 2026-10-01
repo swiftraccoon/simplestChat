@@ -780,3 +780,63 @@ sessions. A recovery key alone does not permit removing the last direct sign-in
 method. Recovery secrets are shown once and only their hashes are stored.
 Cancelled ceremonies and lost mutation responses must not be reported as
 confirmed changes; the UI asks for a reload when the server outcome is unknown.
+
+### Administrator initialization of missing recovery keys
+
+`build/issue_account_recovery.py` is a privileged operator action for an account
+owner who has explicitly authorized recovery and whose identity the administrator
+has established independently. Knowing an email address is not authorization.
+Use it only on the explicitly selected prepared host and PostgreSQL container;
+there is no public administrator recovery endpoint. It initializes only missing
+keys and refuses to replace an existing recovery key.
+
+Prepare a new private local directory and supply each exact, lowercase account
+email, the absolute private SSH identity path, and the full 64-character database
+container ID already established for that host:
+
+```sh
+mkdir -m 700 "$HOME/account-recovery"
+python3 build/issue_account_recovery.py \
+  --host chat.example.com \
+  --identity "$HOME/.ssh/deployment" \
+  --container '<full-64-character-postgresql-container-id>' \
+  --email owner@example.com \
+  --output "$HOME/account-recovery/keys.json"
+```
+
+Repeat `--email` to initialize several accounts atomically. SSH uses root, the
+explicit identity, and existing verified host keys; unknown host keys and
+interactive authentication fail. The output parent must already belong to the
+caller with no group or world permissions. Symlink parents and existing output
+files are rejected. The helper writes an exclusive mode-`0600` JSON file, flushes
+the file and directory to disk, then sends only email addresses and SHA-256
+digests through SSH standard input. Raw keys never enter command arguments,
+remote SQL, terminal output, or diagnostic logs.
+
+Every requested account must exist and have no saved recovery hash. The
+transaction locks rows in stable ID order, checks its exact update count before
+commit, and changes only the recovery hash and update timestamp. Passwords,
+passkeys and sessions remain intact. The terminal reports only
+`account_recovery_issued` after commit is confirmed. Deliver the saved keys to
+their verified owners through a private channel; use the existing recovery flow
+to establish a working sign-in method.
+
+Keep the private file if any command fails, including a timeout or lost SSH
+response: the database may already have committed. Do not rerun automatically
+or overwrite that file. An administrator must compare its locally computed key
+digests with the exact accounts through a read-only database check before
+deciding how to proceed. The helper has no replacement or retry mode.
+
+Run its focused tests with the PostgreSQL tools from the
+[database test setup](testing.md) on `PATH`:
+
+```sh
+build/with-test-postgres.sh ops/ansible/.venv/bin/python -m unittest discover \
+  -s ops/ansible/tests -p test_issue_account_recovery.py -v
+```
+
+Six tests cover local validation, private-file durability and transport failures.
+The three SQL tests exercise successful initialization and transaction rollback
+inside the wrapper's owned database. They explicitly skip without
+`DISPOSABLE_TEST_DATABASE=1`, which the wrapper sets with its disposable database
+URL; ordinary unwrapped unittest discovery does not run those SQL cases.
