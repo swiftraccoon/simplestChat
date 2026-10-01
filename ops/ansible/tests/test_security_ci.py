@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import shlex
 import unittest
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -252,6 +254,60 @@ class SecurityWorkflowTests(unittest.TestCase):
                     "${{ runner.temp }}/codeql-policy-evidence/failure.json",
                 },
             )
+
+    def test_fedora_package_layers_require_current_read_only_policy_inputs(self) -> None:
+        """A restored layer cannot bypass changed reviews in either Fedora install stage."""
+        recipe = (ROOT / "Dockerfile").read_text().replace("\\\n", " ")
+        stages = re.split(r"^FROM .+ AS (\S+)\n", recipe, flags=re.MULTILINE)
+        expected = {
+            # These are read-only image build mounts, not temporary host files.
+            "security/exceptions.json": "/tmp/simplestchat-image-exceptions.json",  # noqa: S108
+            "security/image-policy.json": "/tmp/simplestchat-image-policy.json",  # noqa: S108
+        }
+        checked: set[str] = set()
+        for stage, body in zip(stages[1::2], stages[2::2], strict=True):
+            installs = [
+                line
+                for line in body.splitlines()
+                if line.startswith("RUN ") and "dnf upgrade" in line
+            ]
+            if not installs:
+                continue
+            self.assertEqual(len(installs), 1)
+            command = installs[0]
+            tokens = shlex.split(command)
+            mounts = [token.removeprefix("--mount=") for token in tokens[1:3]]
+            self.assertEqual(len(mounts), 2)
+            for mount, (source, target) in zip(mounts, expected.items(), strict=True):
+                self.assertEqual(
+                    set(mount.split(",")),
+                    {"type=bind", f"source={source}", f"target={target}", "readonly"},
+                )
+                self.assertLess(command.index(f"test -s {target}"), command.index("dnf upgrade"))
+                self.assertNotRegex(body, rf"(?m)^COPY .*{re.escape(source)}")
+            self.assertIn('test -n "${FEDORA_REFRESH_EPOCH}"', command)
+            self.assertIn("dnf upgrade -y --refresh", command)
+            self.assertIn("dnf install -y", command)
+            checked.add(stage)
+        self.assertEqual(checked, {"builder", "runtime-base"})
+
+    def test_image_cache_keys_include_both_current_policy_inputs(self) -> None:
+        """Saving under a policy-specific key complements the Dockerfile layer dependency."""
+        steps = objects(obj(workflow("ci.yml"), "jobs", "deployment"), "steps")
+        steps.extend(objects(obj(workflow("load-generator-image.yml"), "jobs", "image"), "steps"))
+        caches = [
+            obj(step, "with")
+            for step in steps
+            if string(step.get("uses", "")).startswith("actions/cache")
+        ]
+        self.assertEqual(len(caches), 2)
+        for config in caches:
+            key = string(config, "key")
+            for source in ("security/exceptions.json", "security/image-policy.json"):
+                self.assertIn(f"'{source}'", key)
+            # A broad fallback is safe only with the checked Dockerfile mount
+            # dependency and the existing trust/architecture namespace guard.
+            self.assertTrue(string(config, "restore-keys").startswith("buildx-v2-"))
 
     def test_build_caches_cannot_fall_back_across_trust_or_architecture(self) -> None:
         """PR build artifacts remain outside the main compiler/layer cache namespace."""

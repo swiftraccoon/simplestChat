@@ -20,7 +20,12 @@ RUN npm run build
 # requires a C++ toolchain and the static C/C++ runtime libraries.
 FROM docker.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80 AS builder
 ARG FEDORA_REFRESH_EPOCH
-RUN test -n "${FEDORA_REFRESH_EPOCH}" \
+# Public review inputs invalidate package caches without entering image layers.
+RUN --mount=type=bind,source=security/exceptions.json,target=/tmp/simplestchat-image-exceptions.json,readonly \
+    --mount=type=bind,source=security/image-policy.json,target=/tmp/simplestchat-image-policy.json,readonly \
+    test -n "${FEDORA_REFRESH_EPOCH}" \
+    && test -s /tmp/simplestchat-image-exceptions.json \
+    && test -s /tmp/simplestchat-image-policy.json \
     && dnf upgrade -y --refresh \
     && dnf install -y --setopt=install_weak_deps=False \
     ca-certificates \
@@ -127,7 +132,11 @@ RUN cargo build --locked --release --features load-test --bin load_test
 
 FROM docker.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80 AS runtime-base
 ARG FEDORA_REFRESH_EPOCH
-RUN test -n "${FEDORA_REFRESH_EPOCH}" \
+RUN --mount=type=bind,source=security/exceptions.json,target=/tmp/simplestchat-image-exceptions.json,readonly \
+    --mount=type=bind,source=security/image-policy.json,target=/tmp/simplestchat-image-policy.json,readonly \
+    test -n "${FEDORA_REFRESH_EPOCH}" \
+    && test -s /tmp/simplestchat-image-exceptions.json \
+    && test -s /tmp/simplestchat-image-policy.json \
     && dnf upgrade -y --refresh \
     && dnf install -y --setopt=install_weak_deps=False \
     ca-certificates \

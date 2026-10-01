@@ -5,6 +5,31 @@ checks alone cannot establish which native code or operating-system packages
 were included in that image. Each check must retain the exact image/platform,
 archive and file hashes it examined; a rebuilt image is a different artifact.
 
+## Fedora package refresh and review caches
+
+Both Fedora package-install instructions in `Dockerfile` mount the current
+`security/image-policy.json` and `security/exceptions.json` read-only.
+Their bytes participate in the
+[RUN bind-mount cache checksum](https://docs.docker.com/build/cache/invalidation/),
+so changing either file invalidates both the builder and runtime package layers.
+The files are admitted individually by `.dockerignore` and are not copied into
+image layers. `FEDORA_REFRESH_EPOCH` remains the explicit refresh control for
+package/security updates that do not change policy.
+
+The production and load-generator Actions cache keys include these same policy
+files. Their existing trusted-main/untrusted-PR and architecture separation
+remains intact. Prefix fallback can recover reusable build layers, but the
+Dockerfile's policy-dependent inputs prevent an obsolete package-install layer
+from matching. Updating only an outer Actions cache key would not provide that
+guarantee, because a restored BuildKit cache independently matches instructions.
+
+This dependency prevents a new package review from silently reusing packages
+cached under the superseded policy. It does not pin mutable Fedora repositories:
+two uncached builds can still resolve different package versions. Every exported
+image must pass the exact RPM/license/secret/runtime checks and retain its own
+evidence. A reviewed PR image neither broadens an exception nor substitutes for
+the main image's scan and signing requirements.
+
 ## Rust dependency metadata
 
 Both production Cargo builds in `Dockerfile` use the same checksum-pinned

@@ -777,7 +777,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/buildx-cache
-          key: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', 'Cargo.toml', 'Cargo.lock', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'vendor/**') }}
+          key: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', 'Cargo.toml', 'Cargo.lock', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'vendor/**', 'security/exceptions.json', 'security/image-policy.json') }}
           restore-keys: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build production container
