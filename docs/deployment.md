@@ -392,8 +392,19 @@ Review Dockerfile image digests and the
 advisories. Verify replacement multi-architecture digests with
 `docker buildx imagetools inspect <image-tag>` before updating them. When refreshing
 Fedora packages, update `FEDORA_REFRESH_EPOCH` and rebuild builder/runtime layers
-together. Repository-resolved packages are not bit-for-bit reproducible without
-a package-repository snapshot.
+together. Changes to `security/image-policy.json` or `security/exceptions.json`
+also invalidate both package-install layers automatically: each instruction
+mounts the current public files read-only as cache inputs, without copying them
+into the image. Production and load-generator CI caches include those inputs
+while preserving separate main/PR and architecture namespaces. Restoring an
+older cache cannot reuse a package-install layer from a different policy.
+
+Repository-resolved packages are still mutable; cache invalidation is not a
+package-repository snapshot or a guarantee that a later rebuild contains the
+same versions. The exact exported image must pass the
+[image security gate](image-security.md#fedora-package-refresh-and-review-caches).
+Review changed package identities rather than restoring superseded exceptions
+or treating a PR image's result as approval of a different main image.
 
 Keep the pinned static OpenSSL build and maintained mediasoup patches current;
 Cargo audit does not cover native code. Follow the

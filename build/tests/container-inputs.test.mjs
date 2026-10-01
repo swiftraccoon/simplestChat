@@ -82,12 +82,69 @@ function verifyLocalCopySources(rules = ignoreRules) {
   }
 }
 
+// RUN bind inputs need the same context closure as COPY, but must stay
+// read-only and outside committed image layers. Keep this deliberately narrow;
+// other mount types and cross-stage sources require an explicit guard update.
+function verifyLocalRunSources(rules = ignoreRules, recipe = dockerfile) {
+  const sources = [];
+  for (const line of recipe.split('\n').filter(value => value.startsWith('RUN '))) {
+    const tokens = line.slice(4).trim().split(/\s+/);
+    while (tokens[0]?.startsWith('--mount=')) {
+      const fields = tokens.shift().slice('--mount='.length).split(',');
+      const options = new Map(fields.map(field => {
+        const parts = field.split('=');
+        assert.ok(parts.length <= 2, 'Unsupported RUN mount option');
+        return [parts[0], parts[1] ?? true];
+      }));
+      assert.equal(options.size, fields.length, 'Duplicate RUN mount option');
+      assert.deepEqual([...options.keys()].toSorted(), ['readonly', 'source', 'target', 'type']);
+      assert.equal(options.get('type'), 'bind', 'RUN review inputs must use bind mounts');
+      assert.equal(options.get('readonly'), true, 'RUN review inputs must be read-only');
+      const source = options.get('source');
+      const target = options.get('target');
+      assert.ok(typeof source === 'string' && /^[\w./-]+$/.test(source)
+        && path.posix.normalize(source) === source && !source.startsWith('/')
+        && !source.startsWith('../'), 'RUN source must be an exact context-relative file');
+      assert.ok(typeof target === 'string' && /^\/[\w/-]+\.json$/.test(target),
+        'RUN target must be an absolute JSON file');
+      assert.ok(statSync(path.join(root, source)).isFile(), 'RUN source must be a regular file');
+      assert.equal(excluded(source, rules), false,
+        `${source} is explicitly mounted but excluded from the build context`);
+      sources.push(source);
+    }
+  }
+  return sources;
+}
+
 test('all explicit local COPY inputs are admitted by the Docker context', () => {
   verifyLocalCopySources();
   assert.throws(() => verifyLocalCopySources(ignoreRules.filter(rule => rule !== '!build/security_elf.py')),
     /security_elf\.py is explicitly copied but excluded/);
   assert.throws(() => verifyLocalCopySources(ignoreRules.filter(rule => rule !== '!web/scripts/mediasoup-runtime.mjs')),
     /mediasoup-runtime\.mjs is explicitly copied but excluded/);
+});
+
+test('both Fedora stages mount only admitted read-only public policy files', () => {
+  assert.deepEqual(verifyLocalRunSources(), [
+    'security/exceptions.json', 'security/image-policy.json',
+    'security/exceptions.json', 'security/image-policy.json',
+  ]);
+  for (const source of ['security/exceptions.json', 'security/image-policy.json']) {
+    assert.throws(() => verifyLocalRunSources(ignoreRules.filter(rule => rule !== `!${source}`)),
+      /explicitly mounted but excluded/);
+  }
+  assert.throws(() => verifyLocalRunSources(ignoreRules, dockerfile.replace(',readonly', ',readwrite')),
+    /readonly|readwrite/);
+  assert.throws(() => verifyLocalRunSources(ignoreRules,
+    dockerfile.replace('source=security/exceptions.json', 'source=security')),
+  /RUN source must be a regular file/);
+  assert.throws(() => verifyLocalRunSources(ignoreRules,
+    dockerfile.replace('type=bind', 'type=secret')), /RUN review inputs must use bind mounts/);
+  const securityRules = ignoreRules.filter(rule => rule.replace(/^!/, '').startsWith('security'));
+  assert.deepEqual(securityRules.toSorted(), [
+    '!security/', 'security/**', '!security/exceptions.json', '!security/image-policy.json',
+    '!security/runtime/', 'security/runtime/**', '!security/runtime/nsswitch.conf',
+  ].toSorted());
 });
 
 test('web-builder copies the complete production frontend input set', () => {
@@ -146,6 +203,7 @@ test('context excludes local-only descendants while retaining production inputs'
   for (const filename of [
     '.env', 'CLAUDE.md', 'results/local/report.json',
     'build/CLAUDE.md', 'build/private.env', 'src/CLAUDE.md', 'src/auth/private.env',
+    'security/private.env', 'security/notes.json', 'security/runtime/private.env',
     'src/media/CLAUDE.md', 'src/room/notes.md', 'src/signaling/private.env',
     'migrations/private.env', 'load_tests/notes.md', 'load_tests/bin/CLAUDE.md',
     'load_tests/clients/private.env', 'web/CLAUDE.md', 'web/.env',
@@ -156,6 +214,7 @@ test('context excludes local-only descendants while retaining production inputs'
   for (const filename of [
     'Dockerfile', '.dockerignore', 'Cargo.toml', 'Cargo.lock',
     'build/pip-constraints.txt', 'build/install-openssl.sh',
+    'security/exceptions.json', 'security/image-policy.json', 'security/runtime/nsswitch.conf',
     'src/main.rs', 'src/auth/mod.rs', 'src/media/mod.rs', 'src/room/mod.rs',
     'src/signaling/mod.rs', 'migrations/001_initial.sql',
     'load_tests/bin/load_test.rs', 'load_tests/clients/example.rs',

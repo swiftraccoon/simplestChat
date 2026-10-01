@@ -18,6 +18,8 @@ build/**
 !build/security_elf.py
 !security/
 security/**
+!security/exceptions.json
+!security/image-policy.json
 !security/runtime/
 security/runtime/**
 !security/runtime/nsswitch.conf
