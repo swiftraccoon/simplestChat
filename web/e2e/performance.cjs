@@ -111,12 +111,6 @@ const clients = [];
 const pendingBodies = [];
 let browser;
 
-/** Room tools needed now and then live in the room tools' "More" menu (absent in older builds). */
-async function openRoomMenu(page) {
-  const more = page.locator('#room-more-btn');
-  if ((await more.count()) && (await more.getAttribute('aria-expanded')) !== 'true')
-    await more.click();
-}
 async function makeClient(label) {
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
@@ -294,17 +288,7 @@ async function inboundStats(page) {
       report.chatDeliveryMs.push(performance.now() - start);
     }
 
-    // Mark setup complete without starting preview or including dialog interaction
-    // in the camera-publish-to-first-decoded-frame measurement.
-    await openRoomMenu(owner);
-    await owner.locator('#mic-setup-btn').click();
-    // Support the baseline and current product labels with the same harness.
-    // Playwright's strict locator still requires one matching native dialog.
-    const setup = owner.getByRole('dialog', {
-      name: /^(Camera & microphone|Your settings)$/,
-    });
-    await setup.getByRole('button', { name: 'Save settings', exact: true }).click();
-    await setup.waitFor({ state: 'hidden' });
+    // First camera activation requests capture directly, without a settings preflight.
     const cameraStart = performance.now();
     await owner.locator('#cam-btn').click();
     const firstFrameEvidence = await waitForDecodedVideoFrame(
@@ -312,6 +296,11 @@ async function inboundStats(page) {
       (milliseconds) => member.waitForTimeout(milliseconds),
     );
     const firstDecodedFrameMs = performance.now() - cameraStart;
+    assert.equal(
+      await owner.getByRole('dialog', { name: 'Your settings', exact: true }).count(),
+      0,
+      'camera activation does not require saving settings',
+    );
     const before = await inboundStats(member);
     await member.waitForTimeout(5000);
     const after = await inboundStats(member);

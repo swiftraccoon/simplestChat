@@ -112,6 +112,11 @@ Output selection is feature-detected and applies to owned playback elements.
 Device IDs remain tab-local; browsers without output routing use the system
 output. Speaker testing plays a short local tone and releases its URL/timer on
 completion or dialog departure. Device-list changes never request capture.
+The camera and microphone controls request access directly when explicitly
+activated; opening Settings or joining a room does not capture. Settings offers
+separate private **Test camera** and **Test microphone** actions beside the
+selectors to grant access and refresh device names before saving preferences.
+Saving settings changes active devices but does not turn an inactive device on.
 Screen sharing distinguishes cancellation/permission failure from setup errors,
 and reports whether optional screen audio is included, unavailable or ended.
 

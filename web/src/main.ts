@@ -3173,15 +3173,6 @@ async function toggleCamera(): Promise<void> {
   const membership = activeRoom.membershipVersion;
   cameraTogglePending = true;
   try {
-    if (!activeRoom.videoEnabled && !mediaControls.hasConfiguredSetup) {
-      if (!(await mediaControls.openSetup('camera'))) return;
-      if (
-        room !== activeRoom ||
-        membership !== activeRoom.membershipVersion ||
-        !canStartBroadcast('camera')
-      )
-        return;
-    }
     const enabled = await activeRoom.toggleVideo();
     if (room !== activeRoom || membership !== activeRoom.membershipVersion) return;
     updateCamButton(enabled);

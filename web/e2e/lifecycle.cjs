@@ -25,12 +25,6 @@ const {
   finalizePerformanceReport,
 } = require('./performance-report.cjs');
 
-/** Room tools needed now and then live in the room tools' "More" menu (absent in older builds). */
-async function openRoomMenu(page) {
-  const more = page.locator('#room-more-btn');
-  if ((await more.count()) && (await more.getAttribute('aria-expanded')) !== 'true')
-    await more.click();
-}
 async function run(env = process.env) {
   const config = configuration(env);
   const artifacts =
@@ -212,6 +206,11 @@ async function run(env = process.env) {
         ({ selector, enabled }) =>
           document.querySelector(selector).classList.contains('active') === enabled,
         { selector: button, enabled },
+      );
+      assert.equal(
+        await client.page.getByRole('dialog', { name: 'Your settings', exact: true }).count(),
+        0,
+        'explicit capture does not require a settings dialog',
       );
     }
   }
@@ -446,18 +445,6 @@ async function run(env = process.env) {
           before.capturesRequested,
           'Joining must not capture',
         );
-        if (cycle === 1) {
-          await openRoomMenu(client.page);
-          await client.page.locator('#mic-setup-btn').click();
-          const dialog = client.page.getByRole('dialog', { name: 'Your settings', exact: true });
-          await dialog.getByRole('button', { name: 'Save settings', exact: true }).click();
-          await dialog.waitFor({ state: 'hidden' });
-          assert.equal(
-            (await state(client)).capturesRequested,
-            before.capturesRequested,
-            'Saving setup must not capture',
-          );
-        }
       }
       await poll(
         'Both memberships',
