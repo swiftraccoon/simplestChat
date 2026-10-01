@@ -51,6 +51,151 @@ async function nativeAssertion(options) {
   };
 }
 
+/** Prove account coexistence and routing, without claiming password-manager chooser coverage. */
+async function multipleAccounts(page, cdp, authenticatorId) {
+  const accounts = [];
+  const nonce = Date.now().toString(36);
+  await page.addInitScript(() => {
+    const get = navigator.credentials.get.bind(navigator.credentials);
+    navigator.credentials.get = (options) => {
+      window.passkeyRequestShape = {
+        mediation: options.mediation,
+        rpId: options.publicKey.rpId,
+        allowCredentials: options.publicKey.allowCredentials?.length,
+        userVerification: options.publicKey.userVerification,
+        binaryChallenge: options.publicKey.challenge instanceof ArrayBuffer,
+      };
+      return get(options);
+    };
+  });
+  await page.goto(origin.toString());
+  for (let index = 0; index < 3; index++) {
+    await page.locator('#sign-in-btn').click();
+    await page.locator('#login-to-register').click();
+    const displayName = `Passkey account ${index + 1}`;
+    await page.locator('#register-email').fill(`passkey-multi-${nonce}-${index}@example.test`);
+    await page.locator('#register-name').fill(displayName);
+    const responses = Promise.all(
+      ['start', 'finish'].map((step) =>
+        page.waitForResponse((response) =>
+          response.url().endsWith(`/api/auth/passkey/register/${step}`),
+        ),
+      ),
+    );
+    await page.locator('#register-passkey-btn').click();
+    const [start, finish] = await responses;
+    assert.equal(start.status(), 200, 'owned account registration starts');
+    assert.equal(finish.status(), 200, 'owned account registration finishes');
+    const options = await start.json();
+    const { user } = await finish.json();
+    const handle = Buffer.from(options.publicKey.user.id, 'base64url');
+    assert.equal(handle.length, 16, 'registration uses a 16-byte account handle');
+    assert.ok(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(user.id),
+      'account identity is a UUIDv4',
+    );
+    assert.ok(
+      handle.equals(Buffer.from(user.id.replaceAll('-', ''), 'hex')),
+      'registration handle matches the committed account identity',
+    );
+    assert.ok(!accounts.some((account) => account.id === user.id), 'account identities differ');
+    assert.equal(options.publicKey.authenticatorSelection.residentKey, 'required');
+    assert.equal(options.publicKey.authenticatorSelection.requireResidentKey, true);
+    const { credentials } = await cdp.send('WebAuthn.getCredentials', { authenticatorId });
+    assert.equal(credentials.length, index + 1, 'new accounts do not replace existing credentials');
+    const owned = credentials.find((key) =>
+      Buffer.from(key.userHandle || '', 'base64').equals(handle),
+    );
+    assert.ok(owned, 'native registration preserves the decoded user handle');
+    assert.ok(owned.isResidentCredential, 'each account has a resident credential');
+    assert.equal(owned.rpId, origin.hostname);
+    assert.ok(
+      !accounts.some((account) => account.credentialId === owned.credentialId),
+      'account credentials differ',
+    );
+    accounts.push({ id: user.id, handle, credentialId: owned.credentialId, displayName });
+    await page.locator('#register-modal').waitFor({ state: 'hidden' });
+    await page.waitForFunction(
+      (name) => document.getElementById('auth-display-name').textContent === name,
+      displayName,
+    );
+    await page.locator('#logout-btn').click();
+    await page.locator('#sign-in-btn').waitFor({ state: 'visible' });
+  }
+
+  const signIn = async (expected) => {
+    await page.locator('#sign-in-btn').click();
+    assert.equal(await page.locator('#login-email').inputValue(), '');
+    const response = page.waitForResponse((item) =>
+      item.url().endsWith('/api/auth/passkey/login/finish'),
+    );
+    await page.locator('#login-passkey-btn').click();
+    const completed = await response;
+    assert.equal(completed.status(), 200, 'native discovery signs into an owned account');
+    const request = completed.request().postDataJSON();
+    const { user } = await completed.json();
+    const account = accounts.find((item) => item.id === user.id);
+    assert.ok(account, 'the returned identity belongs to a registered account');
+    assert.ok(
+      account.handle.equals(Buffer.from(request.credential.response.userHandle, 'base64url')) &&
+        Buffer.from(account.credentialId, 'base64').equals(
+          Buffer.from(request.credential.id, 'base64url'),
+        ),
+      'native selected credential, account handle and returned identity agree',
+    );
+    if (expected) assert.ok(account.id === expected.id, 'each selected account signs in as itself');
+    assert.deepEqual(await page.evaluate(() => window.passkeyRequestShape), {
+      mediation: 'required',
+      rpId: origin.hostname,
+      allowCredentials: 0,
+      userVerification: 'required',
+      binaryChallenge: true,
+    });
+    await page.locator('#login-modal').waitFor({ state: 'hidden' });
+    await page.waitForFunction(
+      (name) => document.getElementById('auth-display-name').textContent === name,
+      account.displayName,
+    );
+    await page.locator('#logout-btn').click();
+    await page.locator('#sign-in-btn').waitFor({ state: 'visible' });
+  };
+
+  // Leave all three credentials available for an unmodified native discovery.
+  // Chromium chooses a fixture credential; this does not exercise a vault chooser.
+  await signIn();
+  for (const account of accounts) {
+    const { credentials } = await cdp.send('WebAuthn.getCredentials', { authenticatorId });
+    assert.equal(credentials.length, 3, 'all account credentials coexist before selection');
+    const others = credentials.filter((key) => key.credentialId !== account.credentialId);
+    assert.equal(others.length, 2);
+    // Control only availability in the owned authenticator, not page options or
+    // assertions. Keep fresh snapshots and leave the selected key's advanced
+    // counter in place when restoring the other two credentials.
+    for (const key of others)
+      await cdp.send('WebAuthn.removeCredential', {
+        authenticatorId,
+        credentialId: key.credentialId,
+      });
+    await signIn(account);
+    for (const credential of others)
+      await cdp.send('WebAuthn.addCredential', { authenticatorId, credential });
+    const restored = await cdp.send('WebAuthn.getCredentials', { authenticatorId });
+    assert.equal(restored.credentials.length, 3, 'all account credentials are restored');
+    assert.ok(
+      accounts.every((item) =>
+        restored.credentials.some(
+          (key) =>
+            key.credentialId === item.credentialId &&
+            key.isResidentCredential &&
+            Buffer.from(key.userHandle || '', 'base64').equals(item.handle),
+        ),
+      ),
+      'restoration preserves each account and resident handle',
+    );
+  }
+  await signIn();
+}
+
 async function run() {
   const browser = await playwright.chromium.launch({ headless: true });
   const context = await browser.newContext();
@@ -367,6 +512,21 @@ async function run() {
     await page.keyboard.press('Escape');
     await page.locator('#login-modal').waitFor({ state: 'hidden' });
     checks.push('functional-nonresident-key-unavailable-to-discovery-no-fallback');
+
+    await cdp.send('WebAuthn.removeVirtualAuthenticator', { authenticatorId });
+    ({ authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
+      options: {
+        protocol: 'ctap2',
+        transport: 'usb',
+        hasResidentKey: true,
+        hasUserVerification: true,
+        isUserVerified: true,
+        automaticPresenceSimulation: true,
+      },
+    }));
+    await multipleAccounts(page, cdp, authenticatorId);
+    checks.push('three-ui-accounts-coexist-in-one-native-authenticator');
+    checks.push('each-native-account-signs-in-through-unmodified-discovery-ui');
     assert.deepEqual(failures, []);
     process.stdout.write(JSON.stringify({ browser: 'chromium', checks, passed: true }) + '\n');
   } finally {

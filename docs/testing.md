@@ -218,9 +218,21 @@ resident-key registration and usernameless login against the actual verifier,
 including rejected email selectors, wrong handles, changed signatures, replay,
 stale/equal counters and a natively signed assertion from a different origin.
 It also verifies that an otherwise functional nonresident credential cannot enter
-the discoverable flow. Credentials remain in memory and the disposable database;
-reports contain only outcomes. Native Bitwarden/Keychain selection and physical
-authenticator behavior still require device testing.
+the discoverable flow. A separate finite scenario registers three accounts through
+the actual UI in one persistent virtual authenticator. It checks distinct UUID
+handles, matching backend identities and three coexisting resident credentials,
+then signs in through the UI with all three available. To verify each account
+deterministically, the fixture temporarily removes the other two credentials from
+that owned authenticator and restores them from memory, preserving current
+signature counters. Browser request options and assertions are not rewritten;
+the test checks modal mediation and an empty credential allowlist at the native
+API boundary, plus the resulting backend and displayed account identities.
+
+Credentials remain in memory and the disposable database; reports contain only
+outcomes. The virtual authenticator selects credentials automatically, so this
+proves coexistence and account routing, not a visible multi-account chooser.
+Native Bitwarden/Keychain selection and physical authenticator behavior still
+require device testing.
 
 The companion management suite exercises fresh proof, backup-key enrollment,
 last-sign-in-method protection, session revocation and recovery using native
