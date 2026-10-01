@@ -755,8 +755,24 @@ async function roomSetting(page, id, checked) {
       ? 'Basics'
       : 'Participation';
   await dialog.getByRole('tab', { name: tab, exact: true }).click();
-  await dialog.locator(id).setChecked(checked);
+  const control = dialog.locator(id);
+  const changed = (await control.isChecked()) !== checked;
+  await control.setChecked(checked);
+  if (changed) {
+    // A checkbox updates before its correlated server acknowledgement. Closing
+    // early can leave the next one-shot dialog open blocked by the pending save.
+    await page.waitForFunction(
+      () => document.getElementById('room-settings-modal').getAttribute('aria-busy') === 'false',
+    );
+    assert.equal(
+      await dialog.locator('#room-settings-result').textContent(),
+      'Change saved',
+      `${id} must be acknowledged before the scenario continues`,
+    );
+  }
+  assert.equal(await control.isChecked(), checked, `${id} must retain the requested value`);
   await page.locator('#room-settings-close').click();
+  await dialog.waitFor({ state: 'hidden' });
 }
 async function keyboardTabs(dialog, names) {
   const first = dialog.getByRole('tab', { name: names[0], exact: true });
