@@ -236,7 +236,13 @@ require device testing.
 
 The companion management suite exercises fresh proof, backup-key enrollment,
 last-sign-in-method protection, session revocation and recovery using native
-credentials and an owned disposable account:
+credentials and owned disposable accounts. Its removal journey verifies that
+password proof stays available in the confirmation and deletes the selected key
+without opening a passkey prompt. A passkey-only replacement journey keeps one
+authenticator throughout, requires fresh proof and a saved-recovery-key
+acknowledgment before a separate registration gesture, then verifies the new
+credential signs into the same account without enabling a password. It also
+checks that the old server record and sessions are retired:
 
 ```sh
 PASSKEY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \

@@ -31,6 +31,12 @@ pub struct AccountRegistrationData {
     pub state: PasskeyRegistration,
     pub user_id: Uuid,
     pub auth_version: i64,
+    pub replacement: Option<ReplacementRegistration>,
+}
+
+pub struct ReplacementRegistration {
+    pub target: Uuid,
+    pub recovery_hash: String,
 }
 
 pub enum AccountChallenge {
@@ -39,6 +45,13 @@ pub enum AccountChallenge {
 }
 
 impl AccountChallenge {
+    fn ttl(&self) -> Duration {
+        match self {
+            Self::Registration(data) if data.replacement.is_some() => REPLACEMENT_TTL,
+            _ => CHALLENGE_TTL,
+        }
+    }
+
     fn owner(&self) -> (Uuid, i64) {
         match self {
             Self::Authentication(data) => (data.user_id, data.auth_version),
@@ -71,7 +84,7 @@ impl ChallengeMaps {
         self.authentications
             .retain(|_, challenge| challenge.created_at.elapsed() < CHALLENGE_TTL);
         self.accounts
-            .retain(|_, challenge| challenge.created_at.elapsed() < CHALLENGE_TTL);
+            .retain(|_, challenge| challenge.created_at.elapsed() < challenge.data.ttl());
     }
 
     fn len(&self) -> usize {
@@ -80,6 +93,9 @@ impl ChallengeMaps {
 }
 
 const CHALLENGE_TTL: Duration = Duration::from_secs(60);
+// The owner must save the newly issued recovery key before opening the provider.
+// Fresh ownership assertions and ordinary enrollment retain their one-minute lifetime.
+const REPLACEMENT_TTL: Duration = Duration::from_secs(300);
 // Email and display-name lengths are validated before anything reaches this
 // store. These limits are a final, process-wide memory bound; request-level
 // rate limiting should still be applied by the HTTP router.
@@ -252,7 +268,7 @@ impl ChallengeStore {
             return None;
         }
         let challenge = challenges.accounts.remove(id)?;
-        (challenge.created_at.elapsed() < CHALLENGE_TTL).then_some(challenge.data)
+        (challenge.created_at.elapsed() < challenge.data.ttl()).then_some(challenge.data)
     }
 }
 
@@ -386,6 +402,75 @@ mod tests {
     }
 
     #[test]
+    fn replacement_registration_has_five_minutes_without_extending_other_challenges() {
+        let webauthn = test_webauthn();
+        let store = ChallengeStore::new();
+        let owner = Uuid::new_v4();
+        let source = IpAddr::from([192, 0, 2, 1]);
+        let make = |replacement| {
+            let (_, state) = webauthn
+                .start_passkey_registration(owner, "owner@example.test", "Owner", None)
+                .unwrap();
+            AccountChallenge::Registration(AccountRegistrationData {
+                state,
+                user_id: owner,
+                auth_version: 7,
+                replacement,
+            })
+        };
+        let ordinary = store.store_account(make(None), source).unwrap();
+        let replacement = store
+            .store_account(
+                make(Some(ReplacementRegistration {
+                    target: Uuid::new_v4(),
+                    recovery_hash: "a".repeat(64),
+                })),
+                source,
+            )
+            .unwrap();
+        for id in [&ordinary, &replacement] {
+            store
+                .challenges
+                .write()
+                .unwrap()
+                .accounts
+                .get_mut(id)
+                .unwrap()
+                .created_at = Instant::now() - Duration::from_secs(90);
+        }
+        // Admission pruning uses the same per-operation deadline as consumption.
+        let latest = store.store_account(make(None), source).unwrap();
+        assert!(store.take_account(&ordinary, owner, 7).is_none());
+        assert!(
+            store
+                .take_account(&replacement, Uuid::new_v4(), 7)
+                .is_none()
+        );
+        assert!(store.take_account(&replacement, owner, 6).is_none());
+        assert!(store.take_account(&replacement, owner, 7).is_some());
+        assert!(store.take_account(&replacement, owner, 7).is_none());
+        assert!(store.take_account(&latest, owner, 7).is_some());
+        let expired = store
+            .store_account(
+                make(Some(ReplacementRegistration {
+                    target: Uuid::new_v4(),
+                    recovery_hash: "a".repeat(64),
+                })),
+                source,
+            )
+            .unwrap();
+        store
+            .challenges
+            .write()
+            .unwrap()
+            .accounts
+            .get_mut(&expired)
+            .unwrap()
+            .created_at = Instant::now() - REPLACEMENT_TTL;
+        assert!(store.take_account(&expired, owner, 7).is_none());
+    }
+
+    #[test]
     fn account_challenges_share_capacity_across_operations_without_eviction() {
         let webauthn = test_webauthn();
         let store = ChallengeStore::new();
@@ -403,6 +488,7 @@ mod tests {
                             state,
                             user_id: owner,
                             auth_version: 0,
+                            replacement: None,
                         }),
                         source,
                     )

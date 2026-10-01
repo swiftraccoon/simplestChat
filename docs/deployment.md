@@ -770,11 +770,32 @@ validate an alternate sign-in method or a discoverable replacement. There is no
 public legacy lookup fallback.
 
 The Account screen lists passkey record identifiers and registration dates and
-supports adding backup passkeys, removing keys and generating a saved recovery
-key. Every management action requires a fresh current-password check or a
-one-use passkey assertion bound to the account, authentication version and exact
-operation. Enrollment then requires its own account-bound registration ceremony;
-both ceremonies expire after 60 seconds. The account is limited to ten passkeys.
+supports adding backup passkeys, replacing or removing keys, and generating a
+saved recovery key. Every management action requires a fresh current-password
+check or a one-use passkey assertion bound to the account, authentication version
+and exact operation. Ordinary proof and backup enrollment ceremonies expire
+after 60 seconds. The account is limited to ten passkeys; replacement remains
+available at that limit because the final count does not increase.
+
+For a passkey-only account, choose **Replace** beside the key being changed.
+Verify with a working passkey, save the newly displayed recovery key, acknowledge
+that it is saved, then choose **Create replacement passkey**. A password is not
+required. Preparation replaces any previous recovery key and grants five minutes
+to save it and complete registration. Add excludes every existing credential;
+Replace excludes the other credentials but allows the selected key to be
+replaced in the same password manager, using the same account user handle.
+
+The saved recovery key protects against a password manager overwriting its local
+credential before the server receives the new registration. The server keeps
+the old credential until it verifies the new one, then inserts the replacement,
+deletes the selected record and revokes all sessions in one transaction. Finish
+also checks that the prepared recovery key is still current. A failed ceremony
+does not confirm replacement, and cancellation does not restore an earlier
+recovery key. Keep the displayed key: if the provider already overwrote the old
+credential, use **Recover with a saved key** to establish a password and regain
+access. Lost responses require checking the current account state rather than
+assuming the mutation rolled back.
+
 Removal must leave a password or another passkey and atomically revokes all
 sessions. A recovery key alone does not permit removing the last direct sign-in
 method. Recovery secrets are shown once and only their hashes are stored.
@@ -784,6 +805,9 @@ block its replacement. Verification precedes removal; only the server's
 successful response confirms deletion.
 Cancelled ceremonies and lost mutation responses must not be reported as
 confirmed changes; the UI asks for a reload when the server outcome is unknown.
+If the only passkey is already unavailable, use another working sign-in method
+or a previously saved recovery key. A signed-in session by itself is insufficient
+to replace credentials or issue a new recovery key.
 
 ### Administrator initialization of missing recovery keys
 

@@ -194,8 +194,17 @@
           email addresses.
         </p>
         <p>
-          In <strong>Account</strong>, use your current password to generate a recovery key and save
-          it somewhere private. It is shown once. Generating another key replaces the previous one.
+          In <strong>Account</strong>, verify with a working passkey or your current password to
+          generate a recovery key, then save it somewhere private. It is shown once. Generating
+          another key replaces the previous one.
+        </p>
+        <p>
+          To change your only passkey, choose <strong>Replace passkey</strong> beside it. Verify,
+          save the new recovery key, then choose <strong>Create replacement passkey</strong>. You do
+          not need a password. The old server key is removed only after the new one is verified; all
+          sessions then sign out. Keep the recovery key in case your password manager replaces its
+          local key but registration fails. If your only passkey is already unavailable, use a
+          previously saved recovery key to regain access.
         </p>
         <p>
           <strong>Recover with a saved key</strong> consumes that key and sets a new password.

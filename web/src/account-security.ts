@@ -10,8 +10,10 @@ type Phase =
   | 'register'
   | 'ceremony'
   | 'recovery_key'
+  | 'replacement_recovery'
   | 'uncertain'
-  | 'removed';
+  | 'removed'
+  | 'replaced';
 interface ChallengeDeadline {
   id: string;
   deadline: number;
@@ -26,10 +28,11 @@ interface SecurityOptions {
   token: () => string | null;
   current: () => boolean;
   changed: () => void;
-  removed: () => void;
+  completed: (kind: 'removed' | 'replaced') => void;
 }
 const REQUEST_MS = 20_000;
 const CEREMONY_MS = 60_000;
+const REPLACEMENT_MS = 300_000;
 
 /** Owns a single account operation; neither a dismissed dialog nor a late
  * browser/network completion can create a new operation or adopt its result.
@@ -91,9 +94,11 @@ export class AccountSecurityFlow {
     if (operation.action === 'add' && this.settings.passkeys.length >= this.settings.maximum)
       return;
     if (
-      operation.action === 'remove' &&
+      (operation.action === 'remove' || operation.action === 'replace') &&
       (!this.settings.passkeys.some((key) => key.id === operation.id) ||
-        (this.settings.passkeys.length <= 1 && !this.settings.password_enabled))
+        (operation.action === 'remove' &&
+          this.settings.passkeys.length <= 1 &&
+          !this.settings.password_enabled))
     )
       return;
     this.operation = operation;
@@ -114,6 +119,7 @@ export class AccountSecurityFlow {
 
   /** Called directly from a click handler after the challenge is fetched. */
   async continueWithPasskey(): Promise<void> {
+    if (this.disposed || !this.options.current()) return;
     const challenge = this.challenge;
     if (!challenge || (this.phase !== 'authenticate' && this.phase !== 'register')) return;
     if (performance.now() >= challenge.deadline || Date.now() >= challenge.wallDeadline) {
@@ -163,7 +169,9 @@ export class AccountSecurityFlow {
         this.challenge = null;
         this.phase = 'idle';
         this.message =
-          'The passkey step was cancelled, timed out or unavailable. Start again when ready.';
+          challenge.kind === 'register' && this.operation?.action === 'replace'
+            ? 'Replacement was not submitted. Your saved recovery key can reset your password if your previous passkey is no longer available. Start again when ready.'
+            : 'The passkey step was cancelled, timed out or unavailable. Start again when ready.';
         this.changed();
       }
     } finally {
@@ -180,8 +188,12 @@ export class AccountSecurityFlow {
       request,
       (result, started, wallStarted) => this.accept(result, step, started, wallStarted),
       (result) => {
-        if (result.kind === 'recovery_key') result.recovery_key = '';
+        if (result.kind === 'recovery_key' || result.kind === 'replace_registration')
+          result.recovery_key = '';
       },
+      step === 'register' && this.operation?.action === 'replace'
+        ? 'Keep your saved recovery key. After reloading, try the new passkey; if sign-in is unavailable, use the saved recovery key to reset your password.'
+        : '',
     );
   }
 
@@ -202,6 +214,7 @@ export class AccountSecurityFlow {
     request: (token: string, signal: AbortSignal) => Promise<T>,
     accept: (result: T, started: number, wallStarted: number) => void,
     retire: (result: T) => void = () => {},
+    failureHint = '',
   ): Promise<void> {
     const token = this.options.token();
     if (!token || !this.options.current() || this.disposed) return;
@@ -249,8 +262,11 @@ export class AccountSecurityFlow {
       } else {
         this.phase = 'uncertain';
         this.message =
-          'This change may have completed, but its response could not be confirmed. Reload before making another account change. If a recovery key was replaced, generate a new one after reloading.';
+          'This change may have completed, but its response could not be confirmed. Reload before making another account change.';
+        if (!failureHint)
+          this.message += ' If a recovery key was replaced, generate a new one after reloading.';
       }
+      if (failureHint) this.message += ` ${failureHint}`;
     } finally {
       if (this.controller === controller) this.controller = null;
       controller.abort();
@@ -266,18 +282,44 @@ export class AccountSecurityFlow {
   ): void {
     const action = this.operation?.action;
     const valid =
-      result.kind === 'authenticate'
-        ? step === 'start'
-        : result.kind === 'register'
-          ? action === 'add' && step !== 'register'
-          : result.kind === 'added'
-            ? action === 'add' && step === 'register'
-            : result.kind === 'removed'
-              ? action === 'remove' && step !== 'register'
-              : action === 'recovery_key' && step !== 'register';
+      (result.kind === 'authenticate' && step === 'start') ||
+      (result.kind === 'register' && action === 'add' && step !== 'register') ||
+      (result.kind === 'added' && action === 'add' && step === 'register') ||
+      (result.kind === 'replace_registration' && action === 'replace' && step !== 'register') ||
+      (result.kind === 'replaced' && action === 'replace' && step === 'register') ||
+      (result.kind === 'removed' && action === 'remove' && step !== 'register') ||
+      (result.kind === 'recovery_key' && action === 'recovery_key' && step !== 'register');
     if (!valid) {
-      if (result.kind === 'recovery_key') result.recovery_key = '';
+      if (result.kind === 'recovery_key' || result.kind === 'replace_registration')
+        result.recovery_key = '';
       throw new Error('Unexpected account action response');
+    }
+    if (result.kind === 'replace_registration') {
+      // The backup is already persisted. Preserve it even when the creation
+      // options are unusable, until it is saved or the dialog is dismissed.
+      this.recoveryKey = result.recovery_key;
+      result.recovery_key = '';
+      if (this.settings) this.settings.recovery_enabled = true;
+      this.phase = 'replacement_recovery';
+      this.message = '';
+      try {
+        this.challenge = {
+          kind: 'register',
+          id: result.ceremony_id,
+          deadline: started + REPLACEMENT_MS,
+          wallDeadline: wallStarted + REPLACEMENT_MS,
+          options: deserializeCreationOptions(result.options),
+        };
+        this.challengeTimer = setTimeout(
+          () => this.expireChallenge(),
+          Math.max(0, this.challenge.deadline - performance.now()),
+        );
+      } catch {
+        this.challenge = null;
+        this.message =
+          'Replacement could not be prepared. Save this recovery key before trying again.';
+      }
+      return;
     }
     if (result.kind === 'authenticate' || result.kind === 'register') {
       const deadline = {
@@ -300,7 +342,9 @@ export class AccountSecurityFlow {
         result.kind === 'authenticate'
           ? action === 'remove'
             ? 'The passkey has not been removed. Verify with an existing passkey for this account to remove it and sign out all sessions.'
-            : 'Verify with an existing passkey for this account.'
+            : action === 'replace'
+              ? 'Verify with an existing passkey for this account before preparing its replacement. A new recovery key will replace any previous recovery key.'
+              : 'Verify with an existing passkey for this account.'
           : 'Choose where to save your new passkey.';
       this.challengeTimer = setTimeout(
         () => this.expireChallenge(),
@@ -312,13 +356,16 @@ export class AccountSecurityFlow {
       if (this.settings) this.settings.recovery_enabled = true;
       this.phase = 'recovery_key';
       this.message = '';
-    } else if (result.kind === 'removed') {
-      this.phase = 'removed';
-      this.message = 'Passkey removed. Sign in again with a remaining sign-in method.';
+    } else if (result.kind === 'removed' || result.kind === 'replaced') {
+      this.phase = result.kind;
+      this.message =
+        result.kind === 'replaced'
+          ? 'Passkey replaced. Sign in again with your new passkey.'
+          : 'Passkey removed. Sign in again with a remaining sign-in method.';
       try {
-        this.options.removed();
+        this.options.completed(result.kind);
       } catch {
-        /* Confirmed removal still owns this terminal outcome. */
+        /* The confirmed account change still owns this terminal outcome. */
       }
     } else {
       this.phase = 'idle';
@@ -374,6 +421,12 @@ export class AccountSecurityFlow {
     if (this.disposed || !this.challenge) return;
     this.clearChallengeTimer();
     this.challenge = null;
+    if (this.phase === 'replacement_recovery') {
+      this.message =
+        'The replacement request expired. Save this recovery key before starting again.';
+      this.changed();
+      return;
+    }
     this.phase = 'idle';
     this.message = 'The passkey request expired. Start again when ready.';
     this.changed();
@@ -382,6 +435,21 @@ export class AccountSecurityFlow {
     if (this.phase !== 'recovery_key') return;
     this.recoveryKey = '';
     this.phase = 'idle';
+    this.changed();
+  }
+  acknowledgeReplacementRecovery(): void {
+    if (this.phase !== 'replacement_recovery' || this.disposed || !this.options.current()) return;
+    const challenge = this.challenge;
+    if (
+      challenge &&
+      (performance.now() >= challenge.deadline || Date.now() >= challenge.wallDeadline)
+    )
+      this.expireChallenge();
+    this.recoveryKey = '';
+    this.phase = this.challenge ? 'register' : 'idle';
+    this.message = this.challenge
+      ? 'Create your replacement passkey now. The previous passkey is removed from this account only after the new one is confirmed. All sessions will then be signed out.'
+      : 'Your saved recovery key can reset your password. Start replacement again when ready.';
     this.changed();
   }
   /** Retire an unused proof challenge; no account mutation has been submitted. */
@@ -412,7 +480,7 @@ export function mountAccountSecurity(options: {
   dialog: HTMLDialogElement;
   token: () => string | null;
   current: () => boolean;
-  removed: () => void;
+  completed: (kind: 'removed' | 'replaced') => void;
   interactionChanged?: (canStart: boolean) => void;
 }): AccountSecurityFlow {
   const section = el('section');
@@ -420,7 +488,7 @@ export function mountAccountSecurity(options: {
   options.container.append(section);
   let passwordInput: HTMLInputElement | null = null;
   let recoveryInput: HTMLTextAreaElement | null = null;
-  let removal: { id: string; description: string } | null = null;
+  let keyAction: { action: 'remove' | 'replace'; id: string; description: string } | null = null;
   const run = (work: Promise<void>): void => {
     work.catch(() => {
       /* Flow owns safe errors. */
@@ -431,7 +499,16 @@ export function mountAccountSecurity(options: {
     options.interactionChanged?.(flow.canStart);
     if (passwordInput) passwordInput.value = '';
     if (recoveryInput) recoveryInput.value = '';
-    section.replaceChildren(el('h3', removal ? 'Remove passkey' : 'Sign-in and recovery'));
+    section.replaceChildren(
+      el(
+        'h3',
+        keyAction
+          ? keyAction.action === 'replace'
+            ? 'Replace passkey'
+            : 'Remove passkey'
+          : 'Sign-in and recovery',
+      ),
+    );
     if (flow.message) section.append(el('p', flow.message, 'setting-hint'));
     if (flow.phase === 'uncertain') {
       section.append(
@@ -443,20 +520,29 @@ export function mountAccountSecurity(options: {
       section.append(
         button(
           flow.phase === 'authenticate'
-            ? removal
-              ? 'Verify and remove passkey'
+            ? keyAction
+              ? keyAction.action === 'replace'
+                ? 'Verify replacement with passkey'
+                : 'Verify and remove passkey'
               : 'Verify with passkey'
-            : 'Create passkey',
+            : keyAction?.action === 'replace'
+              ? 'Create replacement passkey'
+              : 'Create passkey',
           () => run(flow.continueWithPasskey()),
           'btn-primary',
         ),
       );
-      if (removal && flow.phase === 'authenticate')
+      if (keyAction && flow.phase === 'authenticate')
         section.append(
-          button('Back to removal options', () => {
-            flow.cancelVerification();
-            section.querySelector('select')?.focus();
-          }),
+          button(
+            keyAction.action === 'replace'
+              ? 'Back to replacement options'
+              : 'Back to removal options',
+            () => {
+              flow.cancelVerification();
+              section.querySelector('select')?.focus();
+            },
+          ),
         );
       return;
     }
@@ -464,6 +550,7 @@ export function mountAccountSecurity(options: {
       flow.phase === 'requesting' ||
       flow.phase === 'ceremony' ||
       flow.phase === 'removed' ||
+      flow.phase === 'replaced' ||
       flow.phase === 'loading'
     ) {
       section.append(
@@ -476,11 +563,13 @@ export function mountAccountSecurity(options: {
       );
       return;
     }
-    if (flow.phase === 'recovery_key') {
+    if (flow.phase === 'recovery_key' || flow.phase === 'replacement_recovery') {
       section.append(
         el(
           'p',
-          'Save this one-time recovery key in your password manager. It is shown only now and can reset your password once. Any previous recovery key no longer works. No email is sent.',
+          flow.phase === 'replacement_recovery'
+            ? 'Save this one-time recovery key before creating the replacement passkey. Your password manager may overwrite the previous passkey before the site confirms the new one. This key can reset your password if replacement fails. Any previous recovery key no longer works. No email is sent.'
+            : 'Save this one-time recovery key in your password manager. It is shown only now and can reset your password once. Any previous recovery key no longer works. No email is sent.',
         ),
       );
       const key = el('textarea');
@@ -492,7 +581,11 @@ export function mountAccountSecurity(options: {
       const copy = async (): Promise<void> => {
         try {
           await navigator.clipboard.writeText(key.value);
-          if (options.current() && flow.phase === 'recovery_key') copied.textContent = 'Copied';
+          if (
+            options.current() &&
+            (flow.phase === 'recovery_key' || flow.phase === 'replacement_recovery')
+          )
+            copied.textContent = 'Copied';
         } catch {
           if (options.current())
             copied.textContent = 'Copy failed. Select and save the key manually.';
@@ -502,7 +595,11 @@ export function mountAccountSecurity(options: {
         field('Recovery key', key),
         button('Copy recovery key', () => run(copy())),
         copied,
-        button('I saved my recovery key', () => flow.dismissRecoveryKey()),
+        button('I saved my recovery key', () =>
+          flow.phase === 'replacement_recovery'
+            ? flow.acknowledgeReplacementRecovery()
+            : flow.dismissRecoveryKey(),
+        ),
       );
       return;
     }
@@ -514,8 +611,10 @@ export function mountAccountSecurity(options: {
     section.append(
       el(
         'p',
-        removal
-          ? `Remove the key added ${removal.description}? Verify your identity before removal. After removal, all sessions will be signed out. Make sure you can use another sign-in method.`
+        keyAction
+          ? keyAction.action === 'replace'
+            ? `Replace the key added ${keyAction.description}? Verify your identity before replacement. Save the new recovery key before creating a replacement; it will replace any previous recovery key. The previous passkey stays on this account until the new one is confirmed, then all sessions are signed out.`
+            : `Remove the key added ${keyAction.description}? Verify your identity before removal. After removal, all sessions will be signed out. Make sure you can use another sign-in method.`
           : `${settings.passkeys.length} of ${settings.maximum} passkeys saved. ${settings.password_enabled ? 'Password sign-in is also available.' : 'This account signs in with passkeys.'}`,
         'setting-hint',
       ),
@@ -532,7 +631,7 @@ export function mountAccountSecurity(options: {
       proof.append(option);
     }
     proof.value =
-      removal && settings.password_enabled
+      keyAction && settings.password_enabled
         ? 'password'
         : settings.passkeys.length > 0
           ? 'passkey'
@@ -551,23 +650,23 @@ export function mountAccountSecurity(options: {
       if (proof.value === 'password' && !password.value) {
         flow.message = 'Enter your current password to verify this change.';
         render();
-        if (removal) passwordInput?.focus();
+        if (keyAction) passwordInput?.focus();
         return;
       }
       const secret = proof.value === 'password' ? password.value : undefined;
       password.value = '';
       run(flow.start(operation, secret));
     };
-    if (removal) {
-      const id = removal.id;
+    if (keyAction) {
+      const { action, id } = keyAction;
       section.append(
         button(
-          'Verify and remove passkey',
-          () => choose({ action: 'remove', id }),
-          'btn-secondary danger',
+          action === 'replace' ? 'Verify before replacement' : 'Verify and remove passkey',
+          () => choose({ action, id }),
+          action === 'replace' ? 'btn-primary' : 'btn-secondary danger',
         ),
         button('Keep passkey', () => {
-          removal = null;
+          keyAction = null;
           flow.message = '';
           render();
           section.querySelector('select')?.focus();
@@ -578,14 +677,20 @@ export function mountAccountSecurity(options: {
     for (const key of settings.passkeys) {
       const description = `${new Date(key.created_at).toLocaleString()} · ${key.id.slice(0, 8)}`;
       const row = el('div', undefined, 'community-field');
+      const replace = button(`Replace passkey ${key.id.slice(0, 8)}`, () => {
+        keyAction = { action: 'replace', id: key.id, description };
+        flow.message = '';
+        render();
+        section.querySelector('select')?.focus();
+      });
       const remove = button(`Remove passkey ${key.id.slice(0, 8)}`, () => {
-        removal = { id: key.id, description };
+        keyAction = { action: 'remove', id: key.id, description };
         flow.message = '';
         render();
         section.querySelector('select')?.focus();
       });
       remove.disabled = settings.passkeys.length <= 1 && !settings.password_enabled;
-      row.append(el('span', description), remove);
+      row.append(el('span', description), replace, remove);
       section.append(row);
     }
     if (settings.passkeys.length <= 1 && !settings.password_enabled)
@@ -620,7 +725,7 @@ export function mountAccountSecurity(options: {
     token: options.token,
     current: options.current,
     changed: render,
-    removed: options.removed,
+    completed: options.completed,
   });
   options.dialog.addEventListener(
     'close',

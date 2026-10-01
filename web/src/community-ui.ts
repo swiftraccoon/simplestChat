@@ -368,11 +368,16 @@ export class CommunityUI {
           if (changePassword) changePassword.disabled = !canStart;
           if (!canStart) for (const secret of passwordFields) secret.value = '';
         },
-        removed: () => {
+        completed: (kind) => {
           view.dialog.close();
-          this.options.notify('Passkey removed. Sign in again with a remaining sign-in method.');
+          const action = kind === 'replaced' ? 'Passkey replaced.' : 'Passkey removed.';
+          this.options.notify(
+            kind === 'replaced'
+              ? `${action} Sign in again with your new passkey.`
+              : `${action} Sign in again with a remaining sign-in method.`,
+          );
           this.options.onSignedOut().catch(() => {
-            this.options.notify('Passkey removed. Reload to finish signing out.');
+            this.options.notify(`${action} Reload to finish signing out.`);
           });
         },
       });

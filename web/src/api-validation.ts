@@ -42,11 +42,17 @@ export interface PasskeySettings {
   maximum: number;
 }
 export type PasskeyOperation =
-  { action: 'add' } | { action: 'remove'; id: string } | { action: 'recovery_key' };
+  { action: 'add' } | { action: 'remove' | 'replace'; id: string } | { action: 'recovery_key' };
 export type PasskeyActionResponse =
   | { kind: 'authenticate' | 'register'; ceremony_id: string; options: Record<string, unknown> }
+  | {
+      kind: 'replace_registration';
+      ceremony_id: string;
+      options: Record<string, unknown>;
+      recovery_key: string;
+    }
   | { kind: 'recovery_key'; recovery_key: string }
-  | { kind: 'removed' | 'added' };
+  | { kind: 'removed' | 'added' | 'replaced' };
 
 function exact(value: unknown, keys: string[]): Record<string, unknown> {
   const result = record(value);
@@ -88,13 +94,24 @@ export function decodePasskeySettings(value: unknown): PasskeySettings {
 export function decodePasskeyAction(value: unknown): PasskeyActionResponse {
   const result = record(value);
   const kind = result['kind'];
-  if (kind === 'added' || kind === 'removed') {
+  if (kind === 'added' || kind === 'removed' || kind === 'replaced') {
     exact(value, ['kind']);
     return { kind };
   }
   if (kind === 'recovery_key') {
     exact(value, ['kind', 'recovery_key']);
     return { kind, recovery_key: boundedText(result['recovery_key'], 256) };
+  }
+  if (kind === 'replace_registration') {
+    exact(value, ['kind', 'ceremony_id', 'options', 'recovery_key']);
+    const options = exact(result['options'], ['publicKey']);
+    record(options['publicKey']);
+    return {
+      kind,
+      ceremony_id: boundedText(result['ceremony_id'], 256),
+      options,
+      recovery_key: boundedText(result['recovery_key'], 256),
+    };
   }
   if (kind === 'authenticate' || kind === 'register') {
     exact(value, ['kind', 'ceremony_id', 'options']);
