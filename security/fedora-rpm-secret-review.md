@@ -1,63 +1,77 @@
 # Fedora RPM database secret findings
 
 Reviewed **2026-09-30** under the owner-authorized security rollout.
-Owner: `swiftraccoon`. Review expiry: **2026-11-29**.
+Owner: `swiftraccoon`. Review expiry: **2026-11-29**, unchanged.
 
-The [retained evidence](secret-evidence/fedora-rpm-2026-09-30.json) supports four
-exact `generic-api-key` findings in `001/usr/lib/sysimage/rpm/rpmdb.sqlite`.
-They contain public package filenames and adjacent SQLite index metadata.
-This review approves those complete detected regions at that exact path; it
-neither exempts RPM databases nor approves arbitrary package content.
+The [current evidence](secret-evidence/fedora-rpm-2026-09-30-pr6.json) supports
+four exact `generic-api-key` findings in
+`001/usr/lib/sysimage/rpm/rpmdb.sqlite`. They contain public package filenames
+and adjacent SQLite index metadata. This agent technical assessment approves
+only those complete detected regions at that exact path; it neither exempts RPM
+databases nor approves arbitrary package content.
 
 ## Canonical evidence and comparison
 
-[CI run 36749727744](https://github.com/swiftraccoon/simplestChat/actions/runs/36749727744)
-scanned revision `6b710c5fdd29988f608fc82f0f811ba59d9c9f19`, image
-`sha256:66113924c67f0902ad6d016fccdd3daddb1643d85eb1d5ccdcf24c8af48c0041`.
-Artifact `11114179205` was independently rehashed before comparison; its ZIP
-SHA-256 is `6c51cb43ee5074665e2869aa72c766379fb366d461152f26ca1208ba1788f31a`.
-The scan reported four blocking secret findings and 15 separately reviewed
-base-image findings. Its license and vulnerability checks passed. The image
-scan itself failed; this review does not claim a subsequent passing build.
+[CI run 36804977075](https://github.com/swiftraccoon/simplestChat/actions/runs/36804977075)
+scanned revision `4839ebcc194e2a03b5653a720a6e9c39b64565ca`, image
+`sha256:8694dee5fb069746c2e9618c2a324f54e53c2d3903158606aa3f37317faf51fe`.
+Artifact `11137861810` was independently rehashed and all 18 members compared
+before review; its ZIP SHA-256 is
+`b4797374b470c1e22d3c7afc122c476d22f5038cd7daca75ba093dabeba140d8`.
+Its four blocking secret findings are distinct from the prior reviewed spans.
+The image gate failed; this review does not claim a subsequent passing build.
 
-All four canonical match regions resolved uniquely. Their lengths and SHA-256
-values equal the private scanner's complete `Match` bytes from the retained
-local replay: one 61-byte region and three 58-byte regions. The comparison uses
-the entire detected region, not only a captured token or selected substring.
-Canonical line positions shifted by 29 and its complete database hash differs
-from the replay. Neither matching line numbers nor identical database bytes
-are assumed.
+A new bounded local replay built only the canonical runtime package-install
+instruction from the exact pinned Fedora base. It used two CPU cores, 2 GiB of
+memory and a 900-second deadline; no application was built or executed. All 148
+installed runtime package identities match the canonical SBOM, including the
+updated `glibc` package. The separate authenticated static RPM input is outside
+that installed inventory. Public signing-key filenames belong to the exact
+`fedora-gpg-keys` version `44-2` package in the canonical SBOM.
 
-The replay built only the repository's runtime package-install instruction from
-the exact pinned Fedora base, within fixed CPU, memory and time limits. It did
-not build or execute the application. Its 148 installed package identities
-match the canonical inventory; the additional canonical RPM is an authenticated
-static build input. The relevant public paths also appear under the exact
-`fedora-gpg-keys` version `44-2` package in the new canonical SBOM.
+The replay's entire 9,412,718-byte maintained ASCII projection equals the
+canonical projection SHA-256
+`c4fa9f2d789064aebe4a05c6d696b150196eceb855a9ae72b60808fc9cd465dd`.
+All four complete scanner `Match` values also agree in length, SHA-256 and
+coordinates: three 57-byte regions and one 65-byte region. This comparison uses
+the complete detected bytes, not just the candidate token or a normalized SQL
+value. The raw database hashes differ. The full canonical image archive was not
+retained, so source-layout analysis is explicitly a replay observation, bound to
+the canonical scanner bytes through the complete projection and span digests.
 
 ## Source assessment and limits
 
-In the inspected replay, three candidates occupy live `Basenames_key_idx`
-records: printable serialized row-identifier bytes directly follow public
-filenames. The fourth occupies a deleted index freeblock; its bytes also match
-a live record in the authenticated immutable Fedora base database. Read-only
-row/package joins and public filename hashes bind all four to the published
-[Fedora signing-key package](https://packages.fedoraproject.org/pkgs/fedora-repos/fedora-gpg-keys/).
-The interpretation follows SQLite's documented
+All four captured candidates occupy live `Basenames_key_idx` records. For three,
+one printable serialized row-identifier byte directly follows a public filename.
+Their complete 57-byte detected regions span two live filename/index records
+apiece. The fourth candidate is exactly a public filename; its full 65-byte
+region spans a live record and an adjacent 34-byte deleted-record freeblock.
+The latter's four-byte freeblock header is accounted for, and its surviving
+29-byte filename plus one-byte row identifier match a live record in the
+independently authenticated immutable Fedora base database.
+
+Read-only SQLite integrity checks, live row/package joins, explicit index-cell
+and freeblock traversal, and canonical public filename hashes account for every
+byte in all four regions. The interpretation follows SQLite's documented
 [record format](https://www.sqlite.org/fileformat.html#record_format),
 [index representation](https://www.sqlite.org/fileformat.html#representation_of_sql_indices)
 and [B-tree freeblocks](https://www.sqlite.org/fileformat.html#b_tree_pages).
-These are package metadata, not signing private keys or issued bearer tokens.
-The page-layout interpretation describes the replay; only the complete detected
-region digests and package context are asserted to match the canonical image.
+The filenames identify the public
+[Fedora signing-key package](https://packages.fedoraproject.org/pkgs/fedora-repos/fedora-gpg-keys/);
+they are not signing private keys or issued bearer tokens.
 
-Each expiring ledger entry uses the current image-secret identity: exact rule,
-original layer path, pinned scanner/projection format, complete match length and
-SHA-256. SQLite row-identifier bytes are included without normalization.
-Surrounding transaction changes retain fresh file/projection hashes as evidence;
-a changed region, path, rule or format requires a new review. Every additional
-finding remains independently blocking. There is no blanket path or package
-exception, and review expiry is not renewed automatically.
+Each expiring ledger entry binds the exact rule, original layer path, pinned
+scanner/projection format, complete match length and SHA-256. All serialized
+row-identifier bytes remain included. A changed region, path, rule or format
+requires a fresh review; every additional finding remains independently
+blocking. There is no blanket path or package exception and no automatic expiry
+renewal.
+
+The [previous observation](secret-evidence/fedora-rpm-2026-09-30.json), from
+run `36749727744`, remains historical evidence. Its four fingerprints are removed
+from the active ledger and do not authorize either current or future findings.
+Regression tests require each current review individually and reject superseded,
+changed and additional spans.
 
 Only hashes, coordinates and structural metadata are retained publicly. Candidate
 values and raw scanner matches remain private. A fresh canonical image gate is

@@ -1,0 +1,538 @@
+{
+  "canonical": {
+    "archiveSha256": "91ece5d05e63666402dd9fb66878bc37ba8aaff9bbc2bb274073f21040bde41f",
+    "artifactId": 11137861810,
+    "artifactMembersByteCompared": 18,
+    "artifactUrl": "https://github.com/swiftraccoon/simplestChat/actions/runs/36804977075/artifacts/11137861810",
+    "artifactZipBytes": 1836792,
+    "artifactZipDigestMatchesGithubApi": true,
+    "artifactZipSha256": "b4797374b470c1e22d3c7afc122c476d22f5038cd7daca75ba093dabeba140d8",
+    "binarySha256": "e0327419afd9b8c4f0e12b1cd12053c423c42d70c023caf899e055ee82770d71",
+    "binding": "Downloaded CI artifact ZIP SHA-256 matches the GitHub artifact API digest; all 18 regular members match the retained files. Its outcome binds the notice report and SPDX document. Syft independently agrees on image, revision, layers and ordered declarations. The exported image archive digest is reported by CI; this review did not download that image archive. The artifact is failed-check evidence, not a signed passing-release attestation.",
+    "ciRunId": 36804977075,
+    "ciRunUrl": "https://github.com/swiftraccoon/simplestChat/actions/runs/36804977075",
+    "imageCheckPassed": false,
+    "imageId": "sha256:8694dee5fb069746c2e9618c2a324f54e53c2d3903158606aa3f37317faf51fe",
+    "licenseBlockedBeforeReview": 3,
+    "licenseCheckPassedBeforeReview": false,
+    "noticeCheckPassed": true,
+    "noticeSha256": "2b300b7e5ac54ca76706ac05ba43dd68b2353f48e79419c7683eb419b2bf2a08",
+    "outcomeSha256": "4d0297b6a3c557a83b333f140ddbafc2dfab444d6053d6feea448ea4f75cedbf",
+    "platform": "linux/amd64",
+    "recordedExceptionsSha256": "77baddaf4799df54ad96989bf3bd338fdf32e29768f09186a2d820854c21a84c",
+    "recordedPolicySha256": "cc30767f9babb12395a5b18276cd91790eed27880a41bb4c2331ea74cb27f6a2",
+    "recordedToolLockSha256": "79656fc5845b29639f9741e069e9c3926f48e03132e1afb28eaba8ad349ad198",
+    "revision": "4839ebcc194e2a03b5653a720a6e9c39b64565ca",
+    "runtimeProofPassed": true,
+    "runtimeProofSha256": "c1b00ff58f50a1e4653f86500ade38ec14766782e9cfc573700607920ed33558",
+    "selectedImage": {
+      "architecture": "amd64",
+      "archiveConfigSha256": "8694dee5fb069746c2e9618c2a324f54e53c2d3903158606aa3f37317faf51fe",
+      "id": "sha256:8694dee5fb069746c2e9618c2a324f54e53c2d3903158606aa3f37317faf51fe",
+      "layers": [
+        "sha256:8fe4b47a217bc002f0c86b6150035f88b3931a8d54b12053ba2b9bca79d762f3",
+        "sha256:d558eed11d26b94286622462e933b7e0987c6c66c36e680d9b2b6f47d8e68cbd",
+        "sha256:5de30da80eb69d040e746db9f6fb39c7e21f1f69408ee98c61b9d2bdbd70ef2d",
+        "sha256:bf1fbec997d5bc475c7d1834e13175f566cd93d0004969b564a4c2a043fd911b",
+        "sha256:ab39a62e5dd3092a9525e80503673d6a445f55befdb47e840330d5bb7c561d18",
+        "sha256:b8c51412490e3f4f4596bec4f990dc6ccf4d3db08525b9567ecdc847529cf810",
+        "sha256:402e1a47a62ba08c0dfa8254e2289f48e91378b09debaf2626f10f1087a81c6c",
+        "sha256:b2489df2a2e7f2d9d9a8ce80f9493fbb02a7cf5eeba9060cbcbc23dfa5183640",
+        "sha256:f47f33cc256320e16af94ad7d5168268828695d621554b04f6d31f5498f34222",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      ]
+    },
+    "spdxSha256": "c10492d36b472cc51bc5d7fc6145e34487dd15ad96e07c84a58b1abf184fa3cc",
+    "syftSha256": "163023bf73a8719be0615e158d44bb04b9d4ad41fbaa8ef13065bdc6c4f8de68"
+  },
+  "conditions": [
+    "Each active ledger entry uses the observed canonical PURL including architecture, epoch, version and source RPM, and one current declaration fingerprint. No architecture scope was synthesized.",
+    "Complete ordered declarations and every required notice/shared owner matched this image. Original raw record hashes retain scanner provenance; only validated location layer digests are normalized for raw-license review identity.",
+    "The existing ledger matches exact PURL plus declaration fingerprint; image and notice hashes in this evidence record the reviewed artifact, not additional automatically enforced matching fields. Changed notice, source or distribution context requires review even if a scanner emits the same PURL and declaration.",
+    "Retain required notices and source/compilation/redistribution conditions. Unused code and absent execution do not remove those obligations. This is technical scanner policy, not complete redistribution clearance.",
+    "Changed packages, sources, declarations, notices or expiry require fresh review. No wildcard, automatic renewal, alternate historical fingerprints or general license allowance."
+  ],
+  "declarations": {
+    "D03": {
+      "records": [
+        {
+          "locations": [
+            {
+              "accessPath": "/usr/lib/sysimage/rpm/rpmdb.sqlite",
+              "annotations": {
+                "evidence": "primary"
+              },
+              "layerID": "sha256:d558eed11d26b94286622462e933b7e0987c6c66c36e680d9b2b6f47d8e68cbd",
+              "path": "/usr/lib/sysimage/rpm/rpmdb.sqlite"
+            }
+          ],
+          "spdxExpression": "LGPL-2.1-or-later AND SunPro AND LGPL-2.1-or-later WITH GCC-exception-2.0 AND BSD-3-Clause AND GPL-2.0-or-later AND LGPL-2.1-or-later WITH GNU-compiler-exception AND GPL-2.0-only AND ISC AND LicenseRef-Fedora-Public-Domain AND HPND AND CMU-Mach AND LGPL-2.0-or-later AND Unicode-3.0 AND GFDL-1.1-or-later AND GPL-1.0-or-later AND FSFUL AND MIT AND Inner-Net-2.0 AND X11 AND GPL-2.0-or-later WITH GCC-exception-2.0 AND GFDL-1.3-only AND GFDL-1.1-only AND GPL-3.0-or-later AND GPL-3.0-or-later WITH Autoconf-exception-generic-3.0 AND GPL-3.0-or-later WITH Texinfo-exception",
+          "type": "declared",
+          "urls": [],
+          "value": "LGPL-2.1-or-later AND SunPro AND LGPL-2.1-or-later WITH GCC-exception-2.0 AND BSD-3-Clause AND GPL-2.0-or-later AND LGPL-2.1-or-later WITH GNU-compiler-exception AND GPL-2.0-only AND ISC AND LicenseRef-Fedora-Public-Domain AND HPND AND CMU-Mach AND LGPL-2.0-or-later AND Unicode-3.0 AND GFDL-1.1-or-later AND GPL-1.0-or-later AND FSFUL AND MIT AND Inner-Net-2.0 AND X11 AND GPL-2.0-or-later WITH GCC-exception-2.0 AND GFDL-1.3-only AND GFDL-1.1-only AND GPL-3.0-or-later AND GPL-3.0-or-later WITH Autoconf-exception-generic-3.0 AND GPL-3.0-or-later WITH Texinfo-exception"
+        }
+      ],
+      "recordsSha256": "979ef3875c9f44a7be80e80251cac4bdf990603af63bc59d1c060ddffff58a63",
+      "reviewFingerprint": "license:30642b306924ce375ecb58acd5513b6bf1b01d94b18a6cfbde3817bc0871424c"
+    }
+  },
+  "historicalEvidence": {
+    "disposition": "Historical bytes and observations remain unchanged; 23 unaffected exact reviews are retained and the three release-8 scopes are removed from active policy.",
+    "path": "security/license-evidence/fedora-runtime-2026-09-30.json",
+    "sha256": "c6b3ad4a9a7d65b1f4472d2204b18ccc2be409851bbab38900fb5e0e9b8796fa"
+  },
+  "noticeSets": {
+    "N02": {
+      "files": [
+        {
+          "bytes": 26419,
+          "kind": "regular",
+          "matchesRpmDigest": true,
+          "path": "/usr/share/licenses/glibc/COPYING.LESSERv2",
+          "resolvedPath": "/usr/share/licenses/glibc/COPYING.LESSERv2",
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95"
+        },
+        {
+          "bytes": 26419,
+          "kind": "symlink",
+          "matchesRpmDigest": null,
+          "path": "/usr/share/licenses/glibc/COPYING.LIB",
+          "resolvedPath": "/usr/share/licenses/glibc/COPYING.LESSERv2",
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95"
+        },
+        {
+          "bytes": 17984,
+          "kind": "regular",
+          "matchesRpmDigest": true,
+          "path": "/usr/share/licenses/glibc/COPYINGv2",
+          "resolvedPath": "/usr/share/licenses/glibc/COPYINGv2",
+          "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+        },
+        {
+          "bytes": 35149,
+          "kind": "regular",
+          "matchesRpmDigest": true,
+          "path": "/usr/share/licenses/glibc/COPYINGv3",
+          "resolvedPath": "/usr/share/licenses/glibc/COPYINGv3",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+        },
+        {
+          "bytes": 19665,
+          "kind": "regular",
+          "matchesRpmDigest": true,
+          "path": "/usr/share/licenses/glibc/LICENSES",
+          "resolvedPath": "/usr/share/licenses/glibc/LICENSES",
+          "sha256": "b22a69aa3f80a5201818c66cb0df0f25f9fa13cf5861b0093a058dbd12d50dce"
+        }
+      ],
+      "ownerPackage": "glibc",
+      "ownerPurl": "pkg:rpm/fedora/glibc@2.43-9.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-9.fc44.src.rpm",
+      "ownerSpdxPackageId": "SPDXRef-Package-rpm-glibc-7557aa3e74775f0f",
+      "sourceRpm": "glibc-2.43-9.fc44.src.rpm"
+    }
+  },
+  "packages": [
+    {
+      "canonical": {
+        "architecture": "x86_64",
+        "epoch": null,
+        "purl": "pkg:rpm/fedora/glibc@2.43-9.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-9.fc44.src.rpm",
+        "sourceRpm": "glibc-2.43-9.fc44.src.rpm",
+        "spdxLicenseDeclared": "(LGPL-2.1-or-later AND SunPro AND LGPL-2.1-or-later WITH GCC-exception-2.0 AND BSD-3-Clause AND GPL-2.0-or-later AND LGPL-2.1-or-later WITH GNU-compiler-exception AND GPL-2.0-only AND ISC AND LicenseRef-Fedora-Public-Domain AND HPND AND CMU-Mach AND LGPL-2.0-or-later AND Unicode-3.0 AND GFDL-1.1-or-later AND GPL-1.0-or-later AND FSFUL AND MIT AND Inner-Net-2.0 AND X11 AND GPL-2.0-or-later WITH GCC-exception-2.0 AND GFDL-1.3-only AND GFDL-1.1-only AND GPL-3.0-or-later AND GPL-3.0-or-later WITH Autoconf-exception-generic-3.0 AND GPL-3.0-or-later WITH Texinfo-exception)",
+        "spdxPackageId": "SPDXRef-Package-rpm-glibc-7557aa3e74775f0f",
+        "version": "2.43-9.fc44"
+      },
+      "declaration": "D03",
+      "name": "glibc",
+      "noticeSet": "N02",
+      "observedRpmFileCount": 103,
+      "rationale": "Exact Fedora release-9 source and reviewed upstream delta retain the complete software/documentation aggregate. Four installed regular notices and COPYING.LIB match the manifest-verified source archive. The unchanged manual has invariant sections and cover texts; glibc-doc is absent from this runtime inventory.",
+      "sourceIds": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S008"
+      ]
+    },
+    {
+      "canonical": {
+        "architecture": "x86_64",
+        "epoch": null,
+        "purl": "pkg:rpm/fedora/glibc-common@2.43-9.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-9.fc44.src.rpm",
+        "sourceRpm": "glibc-2.43-9.fc44.src.rpm",
+        "spdxLicenseDeclared": "(LGPL-2.1-or-later AND SunPro AND LGPL-2.1-or-later WITH GCC-exception-2.0 AND BSD-3-Clause AND GPL-2.0-or-later AND LGPL-2.1-or-later WITH GNU-compiler-exception AND GPL-2.0-only AND ISC AND LicenseRef-Fedora-Public-Domain AND HPND AND CMU-Mach AND LGPL-2.0-or-later AND Unicode-3.0 AND GFDL-1.1-or-later AND GPL-1.0-or-later AND FSFUL AND MIT AND Inner-Net-2.0 AND X11 AND GPL-2.0-or-later WITH GCC-exception-2.0 AND GFDL-1.3-only AND GFDL-1.1-only AND GPL-3.0-or-later AND GPL-3.0-or-later WITH Autoconf-exception-generic-3.0 AND GPL-3.0-or-later WITH Texinfo-exception)",
+        "spdxPackageId": "SPDXRef-Package-rpm-glibc-common-74c8a663b77137fe",
+        "version": "2.43-9.fc44"
+      },
+      "declaration": "D03",
+      "name": "glibc-common",
+      "noticeSet": "N02",
+      "observedRpmFileCount": 53,
+      "rationale": "Same exact source and complete declaration as glibc. The immutable Fedora spec requires matching glibc; that observed package owns the verified five-entry shared notice set. No separate notice or general license allowance is inferred.",
+      "sourceIds": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S008"
+      ]
+    },
+    {
+      "canonical": {
+        "architecture": "x86_64",
+        "epoch": null,
+        "purl": "pkg:rpm/fedora/glibc-minimal-langpack@2.43-9.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-9.fc44.src.rpm",
+        "sourceRpm": "glibc-2.43-9.fc44.src.rpm",
+        "spdxLicenseDeclared": "(LGPL-2.1-or-later AND SunPro AND LGPL-2.1-or-later WITH GCC-exception-2.0 AND BSD-3-Clause AND GPL-2.0-or-later AND LGPL-2.1-or-later WITH GNU-compiler-exception AND GPL-2.0-only AND ISC AND LicenseRef-Fedora-Public-Domain AND HPND AND CMU-Mach AND LGPL-2.0-or-later AND Unicode-3.0 AND GFDL-1.1-or-later AND GPL-1.0-or-later AND FSFUL AND MIT AND Inner-Net-2.0 AND X11 AND GPL-2.0-or-later WITH GCC-exception-2.0 AND GFDL-1.3-only AND GFDL-1.1-only AND GPL-3.0-or-later AND GPL-3.0-or-later WITH Autoconf-exception-generic-3.0 AND GPL-3.0-or-later WITH Texinfo-exception)",
+        "spdxPackageId": "SPDXRef-Package-rpm-glibc-minimal-langpack-207ff7ffd7a4bca3",
+        "version": "2.43-9.fc44"
+      },
+      "declaration": "D03",
+      "name": "glibc-minimal-langpack",
+      "noticeSet": "N02",
+      "observedRpmFileCount": 0,
+      "rationale": "Empty exact release-9 metapackage: both the Fedora file list and observed RPM metadata have no payload. Its spec requires exact-version glibc and glibc-common; the observed glibc owns the verified shared notices. Preserve the complete aggregate and manual context.",
+      "sourceIds": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S008"
+      ]
+    }
+  ],
+  "review": {
+    "authority": "Agent technical scanner-policy assessment under the owner-authorized security rollout; exact package-scoped exceptions only, not complete redistribution clearance.",
+    "date": "2026-10-01",
+    "disposition": "Accept only the three observed release-9 package/declaration records with retained source and shared-notice conditions; supersede release-8 scopes without renewing the fixed expiry.",
+    "expires": "2026-11-29",
+    "owner": "swiftraccoon"
+  },
+  "schemaVersion": 1,
+  "scope": "Exact canonical linux/amd64 Fedora glibc 2.43-9.fc44 license-source delta review",
+  "sourceAuthentication": [
+    "Read-only official Koji getBuild response binds successful exact NVR glibc-2.43-9.fc44 to immutable Fedora dist-git commit 8e9e7eb6e4f312296c6fc451b8e0ca1049725391.",
+    "Source bytes were fetched from primary HTTPS endpoints and hashed. The exact Fedora sources manifest SHA-512 matches the downloaded source archive. No downloaded code, package scripts or tests were executed.",
+    "No independent detached RPM or release-signature verification is claimed. HTTPS source provenance plus exact hashes and the successful build mapping support this bounded source comparison; this is not a reproducible-build proof."
+  ],
+  "sourceComparison": {
+    "archiveLicenseMembers": {
+      "COPYING.LESSERv2": {
+        "bytes": 26419,
+        "kind": "regular",
+        "path": "glibc-2.43-71-g9cda6fc96a/COPYING.LESSERv2",
+        "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95"
+      },
+      "COPYING.LIB": {
+        "kind": "symlink",
+        "path": "glibc-2.43-71-g9cda6fc96a/COPYING.LIB",
+        "target": "COPYING.LESSERv2"
+      },
+      "COPYINGv2": {
+        "bytes": 17984,
+        "kind": "regular",
+        "path": "glibc-2.43-71-g9cda6fc96a/COPYINGv2",
+        "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+      },
+      "COPYINGv3": {
+        "bytes": 35149,
+        "kind": "regular",
+        "path": "glibc-2.43-71-g9cda6fc96a/COPYINGv3",
+        "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+      },
+      "LICENSES": {
+        "bytes": 19665,
+        "kind": "regular",
+        "path": "glibc-2.43-71-g9cda6fc96a/LICENSES",
+        "sha256": "b22a69aa3f80a5201818c66cb0df0f25f9fa13cf5861b0093a058dbd12d50dce"
+      },
+      "manual/libc.texinfo": {
+        "bytes": 4565,
+        "kind": "regular",
+        "path": "glibc-2.43-71-g9cda6fc96a/manual/libc.texinfo",
+        "sha256": "a7f870abdec8b99fca6d9b0efe7f359ad8e218b65c1c58b55615ab889532568d"
+      }
+    },
+    "fedoraNewCommit": "8e9e7eb6e4f312296c6fc451b8e0ca1049725391",
+    "fedoraOldCommit": "35dbb287f9fb06e287a9c703eb9da8ff63399aa6",
+    "sharedNoticeDependencyEvidence": {
+      "glibcCommonRequires": "glibc = %{version}-%{release}",
+      "glibcRequires": "glibc-common = %{version}-%{release}",
+      "minimalLangpackRequires": [
+        "glibc = %{version}-%{release}",
+        "glibc-common = %{version}-%{release}"
+      ],
+      "note": "The exact Fedora spec retains version equality. Syft runtime requires lists corroborate dependency names but omit their version relation.",
+      "sourceId": "S002"
+    },
+    "specDelta": "Only upstream source snapshot, Fedora base release and changelog changed. License expression, notice installation, subpackages and exact dependencies are unchanged.",
+    "unchangedFedoraAuxiliarySourcesAndPatches": {
+      "ChangeLog.old": {
+        "35dbb287f9fb06e287a9c703eb9da8ff63399aa6": {
+          "bytes": 673548,
+          "sha256": "2866836f36e59c50490238ff8a594bf18fd83768af708963884312f3faa41e6b",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/ChangeLog.old"
+        },
+        "8e9e7eb6e4f312296c6fc451b8e0ca1049725391": {
+          "bytes": 673548,
+          "sha256": "2866836f36e59c50490238ff8a594bf18fd83768af708963884312f3faa41e6b",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/ChangeLog.old"
+        }
+      },
+      "bench.mk": {
+        "35dbb287f9fb06e287a9c703eb9da8ff63399aa6": {
+          "bytes": 2448,
+          "sha256": "088ad5e364954864a8bb31781a4507b3249ba20775a80bd6cbb196224fa1e357",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/bench.mk"
+        },
+        "8e9e7eb6e4f312296c6fc451b8e0ca1049725391": {
+          "bytes": 2448,
+          "sha256": "088ad5e364954864a8bb31781a4507b3249ba20775a80bd6cbb196224fa1e357",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/bench.mk"
+        }
+      },
+      "glibc-bench-compare": {
+        "35dbb287f9fb06e287a9c703eb9da8ff63399aa6": {
+          "bytes": 3211,
+          "sha256": "fe3baa4249cb9f1625252e334a94c7cf2946ce57254685ccf746fffa3f63862a",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/glibc-bench-compare"
+        },
+        "8e9e7eb6e4f312296c6fc451b8e0ca1049725391": {
+          "bytes": 3211,
+          "sha256": "fe3baa4249cb9f1625252e334a94c7cf2946ce57254685ccf746fffa3f63862a",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/glibc-bench-compare"
+        }
+      },
+      "glibc-cs-path.patch": {
+        "35dbb287f9fb06e287a9c703eb9da8ff63399aa6": {
+          "bytes": 1928,
+          "sha256": "e41ac2eecbd434a2897d16886f8a8d625e1bd621d8e29b283598a38a95175c7c",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/glibc-cs-path.patch"
+        },
+        "8e9e7eb6e4f312296c6fc451b8e0ca1049725391": {
+          "bytes": 1928,
+          "sha256": "e41ac2eecbd434a2897d16886f8a8d625e1bd621d8e29b283598a38a95175c7c",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/glibc-cs-path.patch"
+        }
+      },
+      "glibc-fedora-localedata-rh61908.patch": {
+        "35dbb287f9fb06e287a9c703eb9da8ff63399aa6": {
+          "bytes": 1451,
+          "sha256": "f53b363a2009ce4dfb4fa22a42d4e5585048297898b8bac7a1ac9fdadd8311ac",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/glibc-fedora-localedata-rh61908.patch"
+        },
+        "8e9e7eb6e4f312296c6fc451b8e0ca1049725391": {
+          "bytes": 1451,
+          "sha256": "f53b363a2009ce4dfb4fa22a42d4e5585048297898b8bac7a1ac9fdadd8311ac",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/glibc-fedora-localedata-rh61908.patch"
+        }
+      },
+      "glibc-python3.patch": {
+        "35dbb287f9fb06e287a9c703eb9da8ff63399aa6": {
+          "bytes": 1059,
+          "sha256": "f05c7cd3a9a5955350a22049125d5df9ccd495f2a5bc2b2fe51833042650f020",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/glibc-python3.patch"
+        },
+        "8e9e7eb6e4f312296c6fc451b8e0ca1049725391": {
+          "bytes": 1059,
+          "sha256": "f05c7cd3a9a5955350a22049125d5df9ccd495f2a5bc2b2fe51833042650f020",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/glibc-python3.patch"
+        }
+      },
+      "glibc-rh2426825.patch": {
+        "35dbb287f9fb06e287a9c703eb9da8ff63399aa6": {
+          "bytes": 647,
+          "sha256": "d5abb0df2a744f45b883837438f5f8e59db744255e9691bcae300d6de8e5dcd9",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/glibc-rh2426825.patch"
+        },
+        "8e9e7eb6e4f312296c6fc451b8e0ca1049725391": {
+          "bytes": 647,
+          "sha256": "d5abb0df2a744f45b883837438f5f8e59db744255e9691bcae300d6de8e5dcd9",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/glibc-rh2426825.patch"
+        }
+      },
+      "glibc.attr": {
+        "35dbb287f9fb06e287a9c703eb9da8ff63399aa6": {
+          "bytes": 87,
+          "sha256": "8c20caf666bc4a0639171c92d3f9c248e77f1bbf3b51e68e6c3ef5ff1e03400a",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/glibc.attr"
+        },
+        "8e9e7eb6e4f312296c6fc451b8e0ca1049725391": {
+          "bytes": 87,
+          "sha256": "8c20caf666bc4a0639171c92d3f9c248e77f1bbf3b51e68e6c3ef5ff1e03400a",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/glibc.attr"
+        }
+      },
+      "glibc.req.in": {
+        "35dbb287f9fb06e287a9c703eb9da8ff63399aa6": {
+          "bytes": 1760,
+          "sha256": "912b6e4ed20807496c2dbc1d6f1af034a75a0ae149f788d9786744c1c875a688",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/glibc.req.in"
+        },
+        "8e9e7eb6e4f312296c6fc451b8e0ca1049725391": {
+          "bytes": 1760,
+          "sha256": "912b6e4ed20807496c2dbc1d6f1af034a75a0ae149f788d9786744c1c875a688",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/glibc.req.in"
+        }
+      },
+      "parse-SUPPORTED.py": {
+        "35dbb287f9fb06e287a9c703eb9da8ff63399aa6": {
+          "bytes": 1278,
+          "sha256": "aa72e727c7e92b923f24e9271efe7e9a3b3f52950a393b9efc779fe2ae39cd9d",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/parse-SUPPORTED.py"
+        },
+        "8e9e7eb6e4f312296c6fc451b8e0ca1049725391": {
+          "bytes": 1278,
+          "sha256": "aa72e727c7e92b923f24e9271efe7e9a3b3f52950a393b9efc779fe2ae39cd9d",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/parse-SUPPORTED.py"
+        }
+      },
+      "wrap-find-debuginfo.sh": {
+        "35dbb287f9fb06e287a9c703eb9da8ff63399aa6": {
+          "bytes": 4288,
+          "sha256": "739a4197a3feabdaebc8e7067b08b9da03ddd12bff303a1fe23cf6556f5f5464",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/wrap-find-debuginfo.sh"
+        },
+        "8e9e7eb6e4f312296c6fc451b8e0ca1049725391": {
+          "bytes": 4288,
+          "sha256": "739a4197a3feabdaebc8e7067b08b9da03ddd12bff303a1fe23cf6556f5f5464",
+          "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/wrap-find-debuginfo.sh"
+        }
+      }
+    },
+    "upstreamChangedPaths": [
+      "NEWS",
+      "Rules",
+      "elf/dl-tunables.c",
+      "elf/tst-rtld-list-tunables.sh",
+      "hesiod/nss_hesiod/hesiod-proto.c",
+      "hesiod/nss_hesiod/hesiod-service.c",
+      "iconvdata/Makefile",
+      "iconvdata/euc-jisx0213.c",
+      "iconvdata/shift_jisx0213.c",
+      "iconvdata/tst-jisx0213-progress.c",
+      "libio/Makefile",
+      "libio/fileops.c",
+      "libio/tst-fopen-ccs-empty.c",
+      "malloc/arena.c",
+      "malloc/malloc.c",
+      "misc/tsearch.c",
+      "nss/nss_files/files-ethers.c",
+      "nss/nss_files/files-hosts.c",
+      "nss/nss_files/files-network.c",
+      "nss/nss_files/files-parse.c",
+      "nss/nss_files/files-proto.c",
+      "nss/nss_files/files-rpc.c",
+      "nss/nss_files/files-service.c",
+      "posix/Makefile",
+      "posix/tst-wordexp-append.c",
+      "posix/wordexp.c",
+      "resolv/resolv_conf.c",
+      "resolv/tst-resolv-res_init-skeleton.c",
+      "stdlib/Makefile",
+      "stdlib/setenv.c",
+      "stdlib/strfmon_l.c",
+      "stdlib/tst-strfmon-bug34510.c",
+      "sysdeps/alpha/Makefile",
+      "sysdeps/alpha/fpu/bits/fenv.h",
+      "sysdeps/m68k/m680x0/fpu/e_fmod.c",
+      "sysdeps/m68k/m680x0/fpu/e_fmodf.c",
+      "sysdeps/m68k/m680x0/fpu/w_fmod_compat.c",
+      "sysdeps/unix/sysv/linux/alpha/makecontext.S",
+      "sysdeps/unix/sysv/linux/alpha/setrlimit64.c",
+      "timezone/zic.c"
+    ],
+    "upstreamDelta": "40 changed paths; no LICENSES, COPYING notice or manual change. Four new regression test files retain standard FSF LGPL-2.1-or-later headers; no changed license grant on runtime source files was found.",
+    "upstreamNewCommit": "9cda6fc96abd035d9cbe68482138d4a78a51a7d5",
+    "upstreamOldCommit": "bc95068f5f9d7f57d0f01757fed0900893b122b8"
+  },
+  "sources": {
+    "S001": {
+      "argument": "glibc-2.43-9.fc44",
+      "buildId": 3110438,
+      "completionTime": "2026-09-29 11:06:04.901031+00:00",
+      "method": "XML-RPC getBuild (read-only)",
+      "pageUrl": "https://koji.fedoraproject.org/koji/buildinfo?buildID=3110438",
+      "responseBytes": 2884,
+      "responseSha256": "3b99a5a308ad83ff25238867e8ed295db12e4577a1d8bc8e2467c1fe5bce1fd7",
+      "source": "git+https://src.fedoraproject.org/rpms/glibc.git#8e9e7eb6e4f312296c6fc451b8e0ca1049725391",
+      "state": 1,
+      "url": "https://koji.fedoraproject.org/kojihub"
+    },
+    "S002": {
+      "bytes": 167236,
+      "name": "glibc.spec",
+      "release": "9",
+      "sha256": "01ce9dbd00d468f1c3045953da50bea01a82dbc106ee95857ed91bdb7c0d2105",
+      "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/glibc.spec"
+    },
+    "S003": {
+      "bytes": 173,
+      "name": "sources",
+      "release": "9",
+      "sha256": "9dbf43e9ac0a29838521472b8992df3d9c05f861e35a62f438b3af6b4a85364a",
+      "url": "https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/sources"
+    },
+    "S004": {
+      "bytes": 21349324,
+      "sha256": "0068bf7cd5cdd7fe612c05baa84b8b9ab15255dcadbe8f2ebd4d24626da75bc2",
+      "sha512": "c3407cb0bc7e4e9cd7772898a1e875ab8fb72fc9b445623d3dbbed1322942d88ab2c3610e13d292b44899c62deec3ac0df8c5abc65c339a7bdab7a6efa8f0e7d",
+      "url": "https://src.fedoraproject.org/repo/pkgs/rpms/glibc/glibc-2.43-71-g9cda6fc96a.tar.xz/sha512/c3407cb0bc7e4e9cd7772898a1e875ab8fb72fc9b445623d3dbbed1322942d88ab2c3610e13d292b44899c62deec3ac0df8c5abc65c339a7bdab7a6efa8f0e7d/glibc-2.43-71-g9cda6fc96a.tar.xz"
+    },
+    "S005": {
+      "bytes": 50743,
+      "sha256": "d6ee8712d4bba824b53292d5d09b7ed4594ff86e758ab1c5a8192ec82a83f266",
+      "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=9cda6fc96abd035d9cbe68482138d4a78a51a7d5;hp=bc95068f5f9d7f57d0f01757fed0900893b122b8"
+    },
+    "S006": {
+      "bytes": 165134,
+      "name": "glibc.spec",
+      "release": "8",
+      "sha256": "c8a9e6c6a7324359e6f8460398897299550ded20f847ed65e32175e3ba583edc",
+      "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/glibc.spec"
+    },
+    "S007": {
+      "bytes": 173,
+      "name": "sources",
+      "release": "8",
+      "sha256": "8d6112a9b7abcd6c746ac6982556ab46eb51ba0c10a639cf1d701a6a59e80aec",
+      "url": "https://src.fedoraproject.org/rpms/glibc/raw/35dbb287f9fb06e287a9c703eb9da8ff63399aa6/f/sources"
+    },
+    "S008": {
+      "bytes": 332,
+      "commit": "cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "gitBlob": "38de09a88a6bee32ed7bc35d3909b19e2197aef5",
+      "representation": "decoded-Fedora-API-content",
+      "sha256": "23b16457ac128a0114a1899c0f1b18a50a2cc89215691e3e29526721e83da3e4",
+      "url": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/LicenseRef-Fedora-Public-Domain.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4"
+    }
+  },
+  "status": "reviewed; exact three replacement ledger entries required; all other gates remain independent",
+  "supersedes": [
+    "pkg:rpm/fedora/glibc@2.43-8.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-8.fc44.src.rpm",
+    "pkg:rpm/fedora/glibc-common@2.43-8.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-8.fc44.src.rpm",
+    "pkg:rpm/fedora/glibc-minimal-langpack@2.43-8.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-8.fc44.src.rpm"
+  ],
+  "verification": {
+    "beforeReviewBlockedScopes": [
+      "pkg:rpm/fedora/glibc@2.43-9.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-9.fc44.src.rpm",
+      "pkg:rpm/fedora/glibc-common@2.43-9.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-9.fc44.src.rpm",
+      "pkg:rpm/fedora/glibc-minimal-langpack@2.43-9.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-9.fc44.src.rpm"
+    ],
+    "declarationDifferenceFromHistorical": "Only the original provenance location layerID changes; the complete declaration, record fields and order otherwise match.",
+    "exactObservedPackageCount": 3,
+    "glibcDocPresent": false,
+    "manualInvariantAndCoverTextBytesUnchanged": true,
+    "minimalLangpackRpmFileCount": 0,
+    "noticeBytesKindsAndResolutionMatchHistorical": true,
+    "noticeBytesMatchVerifiedSourceArchive": true,
+    "orderedDeclarationsMatchSyftAndReport": true,
+    "preservedOtherReviewCount": 23,
+    "regularNoticeDigestsMatchRpmMetadata": true,
+    "spdxPackageIdentitiesMatch": true
+  }
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import unittest
 from datetime import date
+from typing import TYPE_CHECKING
 
 from test_support import ROOT
 
@@ -13,13 +14,19 @@ import security_image_policy as image
 import security_policy as ledger
 from release_json import JsonObject, JsonValue, array_value, object_value, string_value
 
-EVIDENCE = ROOT / "security/secret-evidence/fedora-rpm-2026-09-30.json"
+if TYPE_CHECKING:
+    from pathlib import Path
+
+EVIDENCE = ROOT / "security/secret-evidence/fedora-rpm-2026-09-30-pr6.json"
+HISTORICAL = ROOT / "security/secret-evidence/fedora-rpm-2026-09-30.json"
 TODAY = date(2026, 9, 30)
 
 
-def observation(*, replay: bool = False) -> tuple[list[JsonValue], JsonObject, JsonObject]:
+def observation(
+    *, replay: bool = False, evidence_path: Path = EVIDENCE
+) -> tuple[list[JsonValue], JsonObject, JsonObject]:
     """Reconstruct only redacted current-contract observations from retained source evidence."""
-    evidence = object_value(image.report(EVIDENCE))
+    evidence = object_value(image.report(evidence_path))
     canonical = object_value(evidence["file"])
     name = string_value(canonical["neutralName"])
     identity = object_value(object_value(evidence["replay"])["file"]) if replay else canonical
@@ -106,8 +113,52 @@ class RpmSecretReviewTests(unittest.TestCase):
             self.assertEqual(canonical["fingerprint"], replay["fingerprint"])
             self.assertEqual(canonical["spanSha256"], replay["spanSha256"])
             self.assertEqual(canonical["spanBytes"], replay["spanBytes"])
-            for field in ("fileSha256", "projectionSha256", "startLine"):
-                self.assertNotEqual(canonical[field], replay[field])
+            self.assertNotEqual(canonical["fileSha256"], replay["fileSha256"])
+            for field in ("projectionSha256", "startLine", "endLine", "startColumn", "endColumn"):
+                self.assertEqual(canonical[field], replay[field])
+
+    def test_superseded_fingerprints_are_historical_not_active_reviews(self) -> None:
+        """The prior four observations remain auditable without broadening current permission."""
+        rows, paths, spans = observation(evidence_path=HISTORICAL)
+        current = ledger.read_exceptions(today=TODAY)
+        previous = {
+            image.secret_fingerprint(object_value(raw)) for raw in array_value(spans["findings"])
+        }
+        self.assertEqual(len(previous), 4)
+        self.assertTrue(previous.isdisjoint(item.fingerprint for item in current))
+        result = image.secret_verdict(rows, current, paths, spans)
+        self.assertFalse(result["passed"])
+        self.assertEqual(len(array_value(result["blocked"])), 4)
+        self.assertEqual(array_value(result["waived"]), [])
+
+    def test_complete_source_regions_have_bounded_structural_coverage(self) -> None:
+        """Every detected byte is accounted for, including the adjacent deleted-record block."""
+        evidence = object_value(image.report(EVIDENCE))
+        replay = object_value(evidence["replay"])
+        self.assertTrue(replay["wholeProjectionEqual"])
+        self.assertFalse(replay["wholeDatabaseEqual"])
+        self.assertEqual(replay["installedRuntimePackageIdentitiesEqual"], 148)
+        regions = [object_value(raw) for raw in array_value(evidence["findings"])]
+        for region in regions:
+            context = object_value(region["context"])
+            span = object_value(region["span"])
+            self.assertEqual(context["coveredSourceBytes"], span["spanBytes"])
+            self.assertEqual(context["spanSha256"], span["spanSha256"])
+            self.assertTrue(context["allBytesAreFilenameIndexRecordsOrFreeblockMetadata"])
+            self.assertEqual(context["index"], "Basenames_key_idx")
+            for raw in array_value(context["records"]):
+                self.assertEqual(object_value(raw)["package"], "fedora-gpg-keys")
+        freeblocks = [
+            object_value(raw)
+            for region in regions
+            for raw in array_value(object_value(region["context"])["freeblocks"])
+        ]
+        self.assertEqual(len(freeblocks), 1)
+        self.assertEqual(freeblocks[0]["bytes"], 34)
+        self.assertEqual(
+            object_value(freeblocks[0]["authenticatedBaseLiveRecord"])["package"],
+            "fedora-gpg-keys",
+        )
 
     def test_additional_database_finding_is_not_covered(self) -> None:
         """Reviewing all four known public regions never exempts another match in the file."""
