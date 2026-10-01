@@ -130,6 +130,14 @@
   font-size: 0.9rem;
   min-width: 0;
 }
+.media-device-field {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+}
+.media-device-field > button {
+  justify-self: start;
+}
 .media-setup-fields select {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);

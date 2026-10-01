@@ -295,8 +295,9 @@ async function run() {
     checks.push('password-account-enrolls-first-passkey');
 
     const uiPassword = `Owned-UI-password-${Date.now().toString(36)}!`;
+    const uiEmail = `passkey-ui-${Date.now().toString(36)}@example.test`;
     const uiRegistered = await postAnonymous('/api/auth/register', {
-      email: `passkey-ui-${Date.now().toString(36)}@example.test`,
+      email: uiEmail,
       password: uiPassword,
       display_name: 'Password management fixture',
     });
@@ -341,6 +342,258 @@ async function run() {
     assert.equal((await request('/api/auth/passkeys', uiRegistered.token)).passkeys.length, 1);
     await closeAccount(account);
     checks.push('ui-password-account-enrolls-first-passkey-with-separate-native-gesture');
+
+    failureStage = 'ui-password-removal-without-authenticator';
+    await cdp.send('WebAuthn.removeVirtualAuthenticator', { authenticatorId });
+    authenticatorId = undefined;
+    const beforeRemoval = await ceremonies();
+    account = await openAccount();
+    await account.getByRole('button', { name: /^Remove passkey / }).click();
+    await account.getByRole('heading', { name: 'Remove passkey', exact: true }).waitFor();
+    const removalMethod = account.getByRole('combobox', {
+      name: 'Verify account changes with',
+      exact: true,
+    });
+    assert.equal(await removalMethod.isVisible(), true, 'Removal displays its own proof selector');
+    assert.equal(await removalMethod.inputValue(), 'password', 'Password proof is the default');
+    const removalPassword = account.getByLabel('Current password for verification', {
+      exact: true,
+    });
+    assert.equal(await removalPassword.isVisible(), true, 'Removal password field is visible');
+    await removalPassword.fill(uiPassword);
+    const removalPasswordElement = await removalPassword.elementHandle();
+    const removedResponse = page.waitForResponse((response) =>
+      response.url().endsWith('/api/auth/passkeys/start'),
+    );
+    await account.getByRole('button', { name: 'Verify and remove passkey', exact: true }).click();
+    const removal = await removedResponse;
+    assert.equal(removal.status(), 200, 'The server accepts current-password removal');
+    assert.equal((await removal.json()).kind, 'removed');
+    assert.ok(
+      removal.request().postDataJSON().current_password === uiPassword,
+      'Visible removal proof reaches the real server',
+    );
+    assert.equal(
+      await removalPasswordElement.evaluate((element) => element.value),
+      '',
+      'Removal clears even the detached proof field',
+    );
+    await removalPasswordElement.dispose();
+    await account.waitFor({ state: 'hidden' });
+    await page.locator('#sign-in-btn').waitFor({ state: 'visible' });
+    assert.deepEqual(
+      await ceremonies(),
+      beforeRemoval,
+      'Password-authorized removal must not call native credential get or create',
+    );
+    await request('/api/auth/passkeys', uiRegistered.token, undefined, 401);
+    checks.push('ui-password-removal-needs-no-authenticator-and-revokes-session');
+
+    failureStage = 'ui-password-signin-after-passkey-removal';
+    await page.locator('#sign-in-btn').click();
+    await page.locator('#login-email').fill(uiEmail);
+    await page.locator('#login-password').fill(uiPassword);
+    const signedInResponse = page.waitForResponse((response) =>
+      response.url().endsWith('/api/auth/login'),
+    );
+    await page.locator('#login-submit').click();
+    const signedIn = await signedInResponse;
+    assert.equal(signedIn.status(), 200, 'Password sign-in survives last-passkey removal');
+    const passwordSession = await signedIn.json();
+    assert.ok(
+      passwordSession.user.id === uiRegistered.user.id,
+      'Password sign-in returns the same account',
+    );
+    await page.locator('#login-modal').waitFor({ state: 'hidden' });
+    await page.locator('#logout-btn').waitFor({ state: 'visible' });
+    const noPasskeys = await request('/api/auth/passkeys', passwordSession.token);
+    assert.equal(noPasskeys.password_enabled, true);
+    assert.equal(noPasskeys.passkeys.length, 0, 'The real server deleted the selected credential');
+    assert.deepEqual(await ceremonies(), beforeRemoval, 'Password sign-in uses no authenticator');
+
+    failureStage = 'ui-password-account-reenrolls-after-removal';
+    await authenticator();
+    account = await openAccount();
+    await account
+      .getByText('0 of 10 passkeys saved. Password sign-in is also available.', { exact: true })
+      .waitFor();
+    await account.getByLabel('Current password for verification', { exact: true }).fill(uiPassword);
+    await account.getByRole('button', { name: 'Add passkey', exact: true }).click();
+    await account.getByRole('button', { name: 'Create passkey', exact: true }).waitFor();
+    assert.deepEqual(await ceremonies(), beforeRemoval, 'Re-enrollment waits for its own gesture');
+    await account.getByRole('button', { name: 'Create passkey', exact: true }).click();
+    await account
+      .getByText('1 of 10 passkeys saved. Password sign-in is also available.', { exact: true })
+      .waitFor();
+    assert.equal((await request('/api/auth/passkeys', passwordSession.token)).passkeys.length, 1);
+    const reenrollmentCalls = (await ceremonies()).slice(beforeRemoval.length);
+    assert.equal(reenrollmentCalls.length, 1);
+    assert.equal(reenrollmentCalls[0].kind, 'create');
+    assert.equal(reenrollmentCalls[0].active, true, 'Re-enrollment retains its explicit gesture');
+    await closeAccount(account);
+    checks.push('ui-password-signin-and-passkey-reenrollment-work-after-removal');
+
+    failureStage = 'ui-passkey-only-replacement-fixture';
+    await authenticator();
+    const replacementAuthenticator = authenticatorId;
+    const replacementStart = await postAnonymous('/api/auth/passkey/register/start', {
+      email: `passkey-replacement-${Date.now().toString(36)}@example.test`,
+      display_name: 'Replacement fixture',
+    });
+    const originalCredential = await credential(replacementStart, true);
+    const replacementAccount = await postAnonymous('/api/auth/passkey/register/finish', {
+      ceremony_id: replacementStart.ceremony_id,
+      credential: originalCredential,
+    });
+    const beforeReplacement = await request('/api/auth/passkeys', replacementAccount.token);
+    assert.equal(beforeReplacement.password_enabled, false);
+    assert.equal(beforeReplacement.recovery_enabled, false);
+    assert.equal(beforeReplacement.passkeys.length, 1);
+    const originalRecord = beforeReplacement.passkeys[0].id;
+    await page.reload();
+    account = await openAccount();
+    assert.equal(
+      await account.getByRole('button', { name: /^Remove passkey / }).isDisabled(),
+      true,
+      'A passkey-only account cannot remove its only sign-in method',
+    );
+    const replaceButton = account.getByRole('button', { name: /^Replace passkey / });
+    assert.equal(await replaceButton.isEnabled(), true, 'Its only passkey can be replaced');
+    await replaceButton.click();
+    const replacementMethod = account.getByRole('combobox', {
+      name: 'Verify account changes with',
+      exact: true,
+    });
+    assert.equal(await replacementMethod.isVisible(), true);
+    assert.equal(await replacementMethod.inputValue(), 'passkey');
+    assert.deepEqual(await replacementMethod.locator('option').allTextContents(), [
+      'Existing passkey',
+    ]);
+    assert.deepEqual(await ceremonies(), [], 'Opening replacement performs no native ceremony');
+    await account.getByRole('button', { name: 'Verify before replacement', exact: true }).click();
+    const replacementProof = account.getByRole('button', {
+      name: 'Verify replacement with passkey',
+      exact: true,
+    });
+    await replacementProof.waitFor();
+    assert.deepEqual(await ceremonies(), [], 'Replacement proof needs its own explicit gesture');
+    const replacementAuthorized = page.waitForResponse((response) =>
+      response.url().endsWith('/api/auth/passkeys/authorize'),
+    );
+    await replacementProof.click();
+    const authorizedReplacement = await replacementAuthorized;
+    assert.equal(authorizedReplacement.status(), 200);
+    const preparedReplacement = await authorizedReplacement.json();
+    assert.equal(preparedReplacement.kind, 'replace_registration');
+    assert.ok(
+      Buffer.from(preparedReplacement.options.publicKey.user.id, 'base64url').equals(
+        Buffer.from(replacementAccount.user.id.replaceAll('-', ''), 'hex'),
+      ),
+      'Replacement preserves the account user handle',
+    );
+    assert.equal(preparedReplacement.options.publicKey.excludeCredentials.length, 0);
+    assert.equal(
+      preparedReplacement.options.publicKey.authenticatorSelection.residentKey,
+      'required',
+    );
+    const replacementKey = account.getByLabel('Recovery key', { exact: true });
+    await replacementKey.waitFor();
+    assert.ok(
+      /^sc-recovery-[A-Za-z0-9_-]{43}$/.test(await replacementKey.inputValue()),
+      'Replacement exposes its recovery backup before credential creation',
+    );
+    const replacementKeyElement = await replacementKey.elementHandle();
+    const replacementProofCalls = await ceremonies();
+    assert.equal(replacementProofCalls.length, 1);
+    assert.equal(replacementProofCalls[0].kind, 'get');
+    assert.equal(replacementProofCalls[0].active, true);
+    const createReplacement = account.getByRole('button', {
+      name: 'Create replacement passkey',
+      exact: true,
+    });
+    assert.equal(await createReplacement.isVisible(), false);
+    const duringReplacement = await request('/api/auth/passkeys', replacementAccount.token);
+    assert.equal(duringReplacement.password_enabled, false);
+    assert.equal(duringReplacement.recovery_enabled, true);
+    assert.equal(duringReplacement.passkeys.length, 1);
+    assert.ok(
+      duringReplacement.passkeys[0].id === originalRecord,
+      'The original server credential remains until replacement finishes',
+    );
+    failureStage = 'ui-replacement-backup-acknowledgment';
+    await account.getByRole('button', { name: 'I saved my recovery key', exact: true }).click();
+    await replacementKey.waitFor({ state: 'hidden' });
+    assert.equal(
+      await replacementKeyElement.evaluate((element) => element.value),
+      '',
+      'Acknowledgment clears even the detached replacement recovery field',
+    );
+    await replacementKeyElement.dispose();
+    await createReplacement.waitFor();
+    assert.deepEqual(
+      await ceremonies(),
+      replacementProofCalls,
+      'Saving the backup must not automatically create a replacement credential',
+    );
+    checks.push('ui-last-passkey-replacement-requires-proof-and-backup-acknowledgment');
+
+    failureStage = 'ui-same-authenticator-passkey-replacement';
+    const replacementEnrolled = page.waitForResponse((response) =>
+      response.url().endsWith('/api/auth/passkeys/enroll'),
+    );
+    await createReplacement.click();
+    const enrolledReplacement = await replacementEnrolled;
+    assert.equal(enrolledReplacement.status(), 200);
+    assert.equal((await enrolledReplacement.json()).kind, 'replaced');
+    const newCredential = enrolledReplacement.request().postDataJSON().credential;
+    assert.ok(
+      newCredential.id !== originalCredential.id,
+      'The replacement has a new credential identity',
+    );
+    assert.ok(
+      authenticatorId === replacementAuthenticator,
+      'Proof and replacement use the same owned authenticator',
+    );
+    const replacementCalls = await ceremonies();
+    assert.deepEqual(
+      replacementCalls.map((call) => call.kind),
+      ['get', 'create'],
+    );
+    assert.equal(replacementCalls[1].active, true, 'Replacement creation has its own user gesture');
+    assert.ok(replacementCalls[1].clicks > replacementCalls[0].clicks);
+    await account.waitFor({ state: 'hidden' });
+    await page.locator('#sign-in-btn').waitFor({ state: 'visible' });
+    await request('/api/auth/passkeys', replacementAccount.token, undefined, 401);
+    checks.push('ui-same-authenticator-replacement-creates-new-key-and-revokes-session');
+
+    failureStage = 'ui-replacement-passkey-signin';
+    await page.locator('#sign-in-btn').click();
+    const replacementSignedIn = page.waitForResponse((response) =>
+      response.url().endsWith('/api/auth/passkey/login/finish'),
+    );
+    await page.locator('#login-passkey-btn').click();
+    const signedInReplacement = await replacementSignedIn;
+    assert.equal(signedInReplacement.status(), 200);
+    const replacementSession = await signedInReplacement.json();
+    assert.ok(
+      replacementSession.user.id === replacementAccount.user.id,
+      'The replacement signs into the original account',
+    );
+    assert.ok(
+      signedInReplacement.request().postDataJSON().credential.id === newCredential.id,
+      'Native sign-in uses the new credential',
+    );
+    await page.locator('#login-modal').waitFor({ state: 'hidden' });
+    await page.locator('#logout-btn').waitFor({ state: 'visible' });
+    const afterReplacement = await request('/api/auth/passkeys', replacementSession.token);
+    assert.equal(afterReplacement.password_enabled, false);
+    assert.equal(afterReplacement.recovery_enabled, true);
+    assert.equal(afterReplacement.passkeys.length, 1);
+    assert.ok(
+      afterReplacement.passkeys[0].id !== originalRecord,
+      'The original server credential is gone',
+    );
+    checks.push('ui-replacement-signin-preserves-passkey-only-account-and-recovery');
     process.stdout.write(JSON.stringify({ browser: 'chromium', checks, passed: true }) + '\n');
   } finally {
     if (cdp && authenticatorId)

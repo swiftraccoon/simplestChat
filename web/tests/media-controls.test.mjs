@@ -155,22 +155,67 @@ test('closing preview while permission is pending stops late tracks without a me
   assert.equal(state.contexts.length, 0);
 });
 
-test('an older preview permission result cannot replace a newer preview', async (t) => {
+test('a retired permission prompt blocks overlapping capture until its late tracks are stopped', async (t) => {
   const { preview, state } = await fixture(t);
   const oldPermission = deferred();
   state.capture = () => oldPermission.promise;
-  const older = preview.start(preferences);
-  const current = stream();
-  state.capture = () => Promise.resolve(current);
-  await preview.start(preferences);
+  const older = preview.start(preferences, true, false);
+  assert.equal(preview.pending, true);
+  preview.stop();
+  assert.equal(preview.pending, true, 'Stop retires the result, not the native permission prompt');
+  assert.equal(await preview.start(preferences, false, true), false);
+  assert.equal(state.captures.length, 1, 'another kind cannot open a second permission prompt');
   const stale = stream();
   oldPermission.resolve(stale);
-  await older;
+  assert.equal(await older, false);
+  assert.equal(preview.pending, false);
+  assert.ok(stale.getTracks().every((track) => track.readyState === 'ended'));
+  assert.ok(state.streams.every((value) => value === null));
+  assert.equal(state.contexts.length, 0);
+  const current = stream();
+  state.capture = () => Promise.resolve(current);
+  assert.equal(await preview.start(preferences, false, true), true);
+  assert.equal(state.captures.length, 2);
   assert.equal(state.streams.at(-1), current);
   assert.ok(current.getTracks().every((track) => track.readyState === 'live'));
-  assert.ok(stale.getTracks().every((track) => track.readyState === 'ended'));
   assert.equal(state.contexts.length, 1);
 });
+
+test('repeated preview start while permission is pending does not retire or duplicate the active request', async (t) => {
+  const { preview, state } = await fixture(t);
+  const permission = deferred();
+  state.capture = () => permission.promise;
+  const first = preview.start(preferences, true, false);
+  assert.equal(await preview.start(preferences, true, false), false);
+  assert.equal(state.captures.length, 1);
+  const captured = stream();
+  permission.resolve(captured);
+  assert.equal(await first, true);
+  assert.equal(preview.pending, false);
+  assert.equal(state.streams.at(-1), captured);
+  assert.ok(captured.getTracks().every((track) => track.readyState === 'live'));
+});
+
+for (const kind of ['camera', 'microphone']) {
+  test(`testing the selected ${kind} requests only that kind and retains its exact selection`, async (t) => {
+    const { preview, state, stored } = await fixture(t);
+    const selected = {
+      ...preferences,
+      cameraDeviceId: 'selected-camera',
+      microphoneDeviceId: 'selected-mic',
+    };
+    await preview.start(selected, kind === 'camera', kind === 'microphone');
+    const constraints = state.captures[0];
+    if (kind === 'camera') {
+      assert.equal(constraints.audio, false);
+      assert.equal(constraints.video.deviceId.exact, selected.cameraDeviceId);
+    } else {
+      assert.equal(constraints.video, false);
+      assert.equal(constraints.audio.deviceId.exact, selected.microphoneDeviceId);
+    }
+    assert.equal(stored.size, 0, 'testing never saves settings');
+  });
+}
 
 test('preview capture errors clear resources and allow a microphone-only retry', async (t) => {
   const { preview, state } = await fixture(t);
@@ -178,11 +223,24 @@ test('preview capture errors clear resources and allow a microphone-only retry',
     throw new Error('Permission denied');
   };
   await assert.rejects(preview.start(preferences), /Permission denied/);
+  assert.equal(preview.pending, false);
   assert.equal(state.streams.at(-1), null);
   state.capture = async () => stream();
   await preview.start(preferences, false, true);
   assert.equal(state.captures.at(-1).video, false);
   assert.equal(state.captures.at(-1).audio.echoCancellation, true);
+});
+
+test('late permission denial after cancellation clears the busy state without changing a retired preview', async (t) => {
+  const { preview, state } = await fixture(t);
+  const permission = deferred();
+  state.capture = () => permission.promise;
+  const starting = preview.start(preferences, false, true);
+  preview.stop();
+  permission.reject(new DOMException('Owned denial', 'NotAllowedError'));
+  assert.equal(await starting, false);
+  assert.equal(preview.pending, false);
+  assert.ok(state.streams.every((value) => value === null));
 });
 
 test('preferences survive reload and normalize damaged local storage without capture', async (t) => {

@@ -770,13 +770,101 @@ validate an alternate sign-in method or a discoverable replacement. There is no
 public legacy lookup fallback.
 
 The Account screen lists passkey record identifiers and registration dates and
-supports adding backup passkeys, removing keys and generating a saved recovery
-key. Every management action requires a fresh current-password check or a
-one-use passkey assertion bound to the account, authentication version and exact
-operation. Enrollment then requires its own account-bound registration ceremony;
-both ceremonies expire after 60 seconds. The account is limited to ten passkeys.
+supports adding backup passkeys, replacing or removing keys, and generating a
+saved recovery key. Every management action requires a fresh current-password
+check or a one-use passkey assertion bound to the account, authentication version
+and exact operation. Ordinary proof and backup enrollment ceremonies expire
+after 60 seconds. The account is limited to ten passkeys; replacement remains
+available at that limit because the final count does not increase.
+
+For a passkey-only account, choose **Replace** beside the key being changed.
+Verify with a working passkey, save the newly displayed recovery key, acknowledge
+that it is saved, then choose **Create replacement passkey**. A password is not
+required. Preparation replaces any previous recovery key and grants five minutes
+to save it and complete registration. Add excludes every existing credential;
+Replace excludes the other credentials but allows the selected key to be
+replaced in the same password manager, using the same account user handle.
+
+The saved recovery key protects against a password manager overwriting its local
+credential before the server receives the new registration. The server keeps
+the old credential until it verifies the new one, then inserts the replacement,
+deletes the selected record and revokes all sessions in one transaction. Finish
+also checks that the prepared recovery key is still current. A failed ceremony
+does not confirm replacement, and cancellation does not restore an earlier
+recovery key. Keep the displayed key: if the provider already overwrote the old
+credential, use **Recover with a saved key** to establish a password and regain
+access. Lost responses require checking the current account state rather than
+assuming the mutation rolled back.
+
 Removal must leave a password or another passkey and atomically revokes all
 sessions. A recovery key alone does not permit removing the last direct sign-in
 method. Recovery secrets are shown once and only their hashes are stored.
+The removal confirmation presents its own verification controls and defaults to
+the current password when one is available, so an unavailable passkey does not
+block its replacement. Verification precedes removal; only the server's
+successful response confirms deletion.
 Cancelled ceremonies and lost mutation responses must not be reported as
 confirmed changes; the UI asks for a reload when the server outcome is unknown.
+If the only passkey is already unavailable, use another working sign-in method
+or a previously saved recovery key. A signed-in session by itself is insufficient
+to replace credentials or issue a new recovery key.
+
+### Administrator initialization of missing recovery keys
+
+`build/issue_account_recovery.py` is a privileged operator action for an account
+owner who has explicitly authorized recovery and whose identity the administrator
+has established independently. Knowing an email address is not authorization.
+Use it only on the explicitly selected prepared host and PostgreSQL container;
+there is no public administrator recovery endpoint. It initializes only missing
+keys and refuses to replace an existing recovery key.
+
+Prepare a new private local directory and supply each exact, lowercase account
+email, the absolute private SSH identity path, and the full 64-character database
+container ID already established for that host:
+
+```sh
+mkdir -m 700 "$HOME/account-recovery"
+python3 build/issue_account_recovery.py \
+  --host chat.example.com \
+  --identity "$HOME/.ssh/deployment" \
+  --container '<full-64-character-postgresql-container-id>' \
+  --email owner@example.com \
+  --output "$HOME/account-recovery/keys.json"
+```
+
+Repeat `--email` to initialize several accounts atomically. SSH uses root, the
+explicit identity, and existing verified host keys; unknown host keys and
+interactive authentication fail. The output parent must already belong to the
+caller with no group or world permissions. Symlink parents and existing output
+files are rejected. The helper writes an exclusive mode-`0600` JSON file, flushes
+the file and directory to disk, then sends only email addresses and SHA-256
+digests through SSH standard input. Raw keys never enter command arguments,
+remote SQL, terminal output, or diagnostic logs.
+
+Every requested account must exist and have no saved recovery hash. The
+transaction locks rows in stable ID order, checks its exact update count before
+commit, and changes only the recovery hash and update timestamp. Passwords,
+passkeys and sessions remain intact. The terminal reports only
+`account_recovery_issued` after commit is confirmed. Deliver the saved keys to
+their verified owners through a private channel; use the existing recovery flow
+to establish a working sign-in method.
+
+Keep the private file if any command fails, including a timeout or lost SSH
+response: the database may already have committed. Do not rerun automatically
+or overwrite that file. An administrator must compare its locally computed key
+digests with the exact accounts through a read-only database check before
+deciding how to proceed. The helper has no replacement or retry mode.
+
+Run its focused tests with the PostgreSQL tools from the
+[database test setup](testing.md) on `PATH`:
+
+```sh
+build/with-test-postgres.sh ops/ansible/.venv/bin/python -m unittest discover \
+  -s ops/ansible/tests -p test_issue_account_recovery.py -v
+```
+
+Six tests cover local validation, private-file durability and transport failures.
+The three SQL tests exercise successful initialization and transaction rollback
+inside the wrapper's owned database. They explicitly skip without
+`DISPOSABLE_TEST_DATABASE=1`, which the wrapper sets with its disposable database
+URL; ordinary unwrapped unittest discovery does not run those SQL cases.

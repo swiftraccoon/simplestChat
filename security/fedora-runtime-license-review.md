@@ -1,5 +1,80 @@
 # Canonical runtime RPM license context review
 
+## Current glibc release-9 assessment — 2026-10-01
+
+The three canonical amd64 packages `glibc`, `glibc-common` and
+`glibc-minimal-langpack` changed from `2.43-8.fc44` to `2.43-9.fc44` in
+[CI run 36804977075](https://github.com/swiftraccoon/simplestChat/actions/runs/36804977075).
+Their **exact release-9 PURLs replace the three release-8 scopes** in the active
+ledger. The 23 other assessments below remain unchanged. The
+[new evidence](license-evidence/fedora-glibc-2026-10-01.json) records this separate
+source review; the original evidence remains byte-for-byte historical.
+Owner `swiftraccoon` and expiry **2026-11-29** remain unchanged.
+
+All three retain the complete, ordered declaration and fingerprint
+`license:30642b306924ce375ecb58acd5513b6bf1b01d94b18a6cfbde3817bc0871424c`.
+Only the original Syft declaration's provenance layer digest changes. No term is
+removed from the aggregate and no license is added to the global allowlist.
+
+### Exact source and notice comparison
+
+The official read-only Koji `getBuild` response identifies successful
+[build 3110438](https://koji.fedoraproject.org/koji/buildinfo?buildID=3110438),
+`glibc-2.43-9.fc44`, and Fedora dist-git commit
+`8e9e7eb6e4f312296c6fc451b8e0ca1049725391`. The
+[immutable spec](https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/glibc.spec)
+changes only the upstream snapshot, Fedora release and changelog relative to the
+reviewed release-8 spec. Its license expression, notice installation, subpackages
+and exact shared-package dependencies remain unchanged. All seven auxiliary
+source files and four Fedora patch files are byte-identical between those
+immutable commits.
+
+The downloaded `glibc-2.43-71-g9cda6fc96a.tar.xz` archive matches the SHA-512 in
+the [exact Fedora source manifest](https://src.fedoraproject.org/rpms/glibc/raw/8e9e7eb6e4f312296c6fc451b8e0ca1049725391/f/sources).
+Its four regular notices match both the current image and historical review,
+and `COPYING.LIB` still links to `COPYING.LESSERv2`. The unchanged
+`manual/libc.texinfo` retains its invariant sections and cover-text terms.
+`glibc-doc` is absent from this image's runtime inventory; that absence does not
+remove terms from the recorded aggregate.
+
+The [exact upstream delta](https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=9cda6fc96abd035d9cbe68482138d4a78a51a7d5;hp=bc95068f5f9d7f57d0f01757fed0900893b122b8)
+changes 40 paths without changing the notices or manual. Four added regression
+test files carry the existing FSF LGPL-2.1-or-later form; no changed license grant
+on runtime source files was found. The retained evidence records source-response,
+archive, member, patch and delta hashes. Sources were read over primary HTTPS;
+no downloaded code was executed and no detached RPM signature or reproducible
+build verification is claimed.
+
+| Exact release-9 package | Reviewed context |
+| --- | --- |
+| glibc | Owns four verified regular notices plus the verified `COPYING.LIB` link. Retain the entire software/documentation declaration and manual context. |
+| glibc-common | Same source and declaration. The exact Fedora spec requires matching glibc, which supplies the observed shared notice set. |
+| glibc-minimal-langpack | Empty metapackage in both the spec and observed RPM file inventory. Its exact glibc/common dependencies supply the verified shared notices. |
+
+### Artifact binding and limits
+
+[Artifact 11137861810](https://github.com/swiftraccoon/simplestChat/actions/runs/36804977075/artifacts/11137861810)
+comes from source revision `4839ebcc194e2a03b5653a720a6e9c39b64565ca`.
+The downloaded 1,836,792-byte artifact ZIP has SHA-256
+`b4797374b470c1e22d3c7afc122c476d22f5038cd7daca75ba093dabeba140d8`,
+matching GitHub's artifact metadata. All 18 regular members were compared
+byte-for-byte. Its outcome binds the notice
+report and SPDX document. The independent Syft report agrees on image ID,
+revision, layers, exact package PURLs and ordered declarations. The evidence
+retains all corresponding hashes and the CI-reported exported-image archive hash;
+the image archive itself was not separately downloaded for this review.
+
+That retained image check **failed**: its runtime proof passed, while its license
+verdict blocked exactly these three changed package scopes and its independent
+secret check also failed. This assessment does not relabel the retained run as
+successful or supply a signed passing-release attestation. A fresh canonical
+check must pass all gates. Ledger matching remains exact **PURL plus fingerprint**;
+source and notice hashes record review evidence, not additional automatic
+matching fields. Changed source, notice or distribution context still requires
+review, and all notice/source/relinking/attribution obligations below remain.
+
+## Original 2026-09-30 assessment — historical observation
+
 Reviewed **2026-09-30** by an agent under the owner-authorized security rollout
 for `swiftraccoon`; review expiry is **2026-11-29**. This is an explicit technical
 scanner-policy assessment of the exact canonical amd64 package records in the
@@ -40,7 +115,7 @@ but does not, by itself, satisfy source availability, compilation, attribution,
 documentation, or other applicable conditions. Changes to distribution require
 separate review.
 
-## Evidence and identity
+### Evidence and identity
 
 The evidence separates package identities, original ordered Syft declarations,
 required notice sets, and primary sources. Repeated declarations and shared
@@ -68,7 +143,7 @@ payload context. Absence of a notice is not a permission. The evidence's
 `noticeSets` record exact image paths, lengths and hashes; `sources` retain exact
 URLs, source revisions and byte hashes without workstation paths or raw file text.
 
-## Package-specific findings
+### Package-specific findings
 
 | Packages | Canonical version | Context and retained evidence |
 | --- | --- | --- |
@@ -93,7 +168,7 @@ URLs, source revisions and byte hashes without workstation paths or raw file tex
 | libtool-ltdl | 2.5.4-10.fc44 | Exact raw LGPLv2+ declaration, pinned Fedora abbreviation review and 26,419-byte COPYING.LIB hash match the observed x86_64 package. Preserve its unparsed scanner record; no synthetic SPDX declaration is substituted. |
 | xz | 1:5.8.2-2.fc44 | Exact COPYING distinguishes 0BSD code, GPL scripts and public-domain documentation/translation portions. Preserve the package-wide aggregate rather than substituting the library-only license. |
 
-## Assessment and continuing conditions
+### Assessment and continuing conditions
 
 All 25 source-context candidates matched the actual canonical package versions,
 source RPMs, epochs, raw declaration semantics, current fingerprints, required

@@ -61,7 +61,16 @@ async function fixture() {
     },
   });
   const api = await loadTypeScript('src/community-ui.ts', {
-    modules: { './ui': ui, './account-security': security },
+    modules: {
+      './ui': ui,
+      './account-security': {
+        ...security,
+        mountAccountSecurity: (options) => {
+          state.securityCompleted = options.completed;
+          return security.mountAccountSecurity(options);
+        },
+      },
+    },
     globals: {
       document: dom.document,
       TextEncoder,
@@ -499,6 +508,23 @@ test('recovery key is shown once, copies exactly, and clears on dialog close', a
   assert.equal(key.value, '');
   assert.equal(result.recovery_key, '');
 });
+
+for (const kind of ['removed', 'replaced']) {
+  test(`confirmed passkey ${kind} closes Account and reports the matching sign-in guidance`, async () => {
+    const f = await fixture();
+    await f.community.openAccount();
+    const account = dialog(f, 'Account');
+    f.state.securityCompleted(kind);
+    await flush();
+    assert.equal(account.open, false);
+    assert.equal(f.state.signedOut, 1);
+    assert.deepEqual(f.state.notifications, [
+      kind === 'replaced'
+        ? 'Passkey replaced. Sign in again with your new passkey.'
+        : 'Passkey removed. Sign in again with a remaining sign-in method.',
+    ]);
+  });
+}
 
 for (const reason of ['close', 'identity change']) {
   test(`a recovery-key response after ${reason} does not open another dialog`, async () => {

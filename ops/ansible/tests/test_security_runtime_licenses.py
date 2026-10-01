@@ -16,6 +16,8 @@ from security_license_identity import digest
 from security_tools import ToolError
 
 EVIDENCE = ROOT / "security/license-evidence/fedora-runtime-2026-09-30.json"
+GLIBC_EVIDENCE = ROOT / "security/license-evidence/fedora-glibc-2026-10-01.json"
+GLIBC_PACKAGES = {"glibc", "glibc-common", "glibc-minimal-langpack"}
 TODAY = date(2026, 9, 30)
 
 
@@ -38,12 +40,20 @@ def packages(value: JsonObject) -> list[JsonObject]:
     return result
 
 
+def current_packages() -> list[JsonObject]:
+    """Replace superseded observations with the separately retained release-9 evidence."""
+    retained = [
+        item for item in packages(evidence()) if string_value(item["name"]) not in GLIBC_PACKAGES
+    ]
+    return [*retained, *packages(object_value(image.report(GLIBC_EVIDENCE)))]
+
+
 class CanonicalRuntimeLicenseTests(unittest.TestCase):
     """Evidence supports exact scanner dispositions, never a blanket software license grant."""
 
     def test_every_record_needs_its_exact_current_review(self) -> None:
         """No new global license allowance substitutes for one of the 26 assessments."""
-        observed = packages(evidence())
+        observed = current_packages()
         original = copy.deepcopy(observed)
         policy = image.load_policy(ROOT / "security/image-policy.json")
         current = reviews.read_exceptions(today=TODAY)
@@ -64,7 +74,7 @@ class CanonicalRuntimeLicenseTests(unittest.TestCase):
         """Exact release/source/architecture and complete declaration records remain necessary."""
         policy = image.load_policy(ROOT / "security/image-policy.json")
         current = reviews.read_exceptions(today=TODAY)
-        for package in packages(evidence()):
+        for package in current_packages():
             scope = string_value(package["purl"])
             variants: list[JsonObject] = [
                 {**package, "purl": scope + "&unreviewed=1"},
@@ -81,12 +91,39 @@ class CanonicalRuntimeLicenseTests(unittest.TestCase):
                 with self.subTest(name=package["name"], variant=changed):
                     self.assertFalse(image.license_verdict([changed], policy, current)["passed"])
         libtool = next(
-            package for package in packages(evidence()) if package["name"] == "libtool-ltdl"
+            package for package in current_packages() if package["name"] == "libtool-ltdl"
         )
         old_scope = string_value(libtool["purl"]).replace("arch=x86_64", "arch=aarch64")
         self.assertFalse(
             image.license_verdict([{**libtool, "purl": old_scope}], policy, current)["passed"]
         )
+
+    def test_superseded_glibc_scopes_are_historical_evidence_only(self) -> None:
+        """The reviewed update does not accumulate compatibility approvals for release 8."""
+        updated = object_value(image.report(GLIBC_EVIDENCE))
+        old = [
+            item for item in packages(evidence()) if string_value(item["name"]) in GLIBC_PACKAGES
+        ]
+        new = packages(updated)
+        self.assertEqual({string_value(item["name"]) for item in new}, GLIBC_PACKAGES)
+        self.assertEqual(len(new), 3)
+        self.assertEqual(
+            {string_value(scope) for scope in array_value(updated["supersedes"])},
+            {string_value(item["purl"]) for item in old},
+        )
+        current = reviews.read_exceptions(today=TODAY)
+        policy = image.load_policy(ROOT / "security/image-policy.json")
+        self.assertEqual(
+            len(array_value(image.license_verdict(old, policy, current)["blocked"])), 3
+        )
+        self.assertTrue(image.license_verdict(new, policy, current)["passed"])
+        old_declaration = object_value(object_value(evidence()["declarations"])["D03"])
+        new_declaration = object_value(object_value(updated["declarations"])["D03"])
+        self.assertEqual(old_declaration["reviewFingerprint"], new_declaration["reviewFingerprint"])
+        old_notices = object_value(object_value(evidence()["noticeSets"])["N02"])
+        new_notices = object_value(object_value(updated["noticeSets"])["N02"])
+        self.assertEqual(old_notices["files"], new_notices["files"])
+        self.assertNotEqual(old_notices["ownerPurl"], new_notices["ownerPurl"])
 
     def test_declaration_provenance_and_shared_notices_are_retained(self) -> None:
         """Original record hashes and explicit shared owners remain reviewable evidence."""
@@ -143,7 +180,7 @@ class CanonicalRuntimeLicenseTests(unittest.TestCase):
     def test_expiry_and_contextual_terms_remain_restrictive(self) -> None:
         """Changed distribution context cannot be approved by an unbounded term allowance."""
         current = reviews.read_exceptions(today=TODAY)
-        scopes = {string_value(package["purl"]) for package in packages(evidence())}
+        scopes = {string_value(package["purl"]) for package in current_packages()}
         selected = [entry for entry in current if entry.scope in scopes]
         self.assertEqual(len(selected), 26)
         self.assertTrue(all(entry.expires == date(2026, 11, 29) for entry in selected))

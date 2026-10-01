@@ -1304,9 +1304,9 @@
     {
       "scanner": "image-license",
       "fingerprint": "license:30642b306924ce375ecb58acd5513b6bf1b01d94b18a6cfbde3817bc0871424c",
-      "scope": "pkg:rpm/fedora/glibc@2.43-8.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-8.fc44.src.rpm",
+      "scope": "pkg:rpm/fedora/glibc@2.43-9.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-9.fc44.src.rpm",
       "owner": "swiftraccoon",
-      "rationale": "Official Koji build 3073599 binds glibc 2.43-8.fc44 to dist-git 35dbb287f9fb06e287a9c703eb9da8ff63399aa6, resolving the earlier branch-spec mismatch. All four regular installed notices match the exact upstream 2.43 texts, and COPYING.LIB resolves to the matching LGPL notice. The exact spec establishes shared notice ownership and same-version common/minimal dependencies. Documentation conditions are preserved; glibc-doc is absent from the observed runtime RPM set.",
+      "rationale": "Official Koji build 3110438 binds glibc 2.43-9.fc44 to immutable Fedora dist-git 8e9e7eb6e4f312296c6fc451b8e0ca1049725391. The verified source archive and exact release delta retain the complete declared aggregate. All four installed regular notices and the COPYING.LIB symlink match the verified source; manual invariant and cover terms remain unchanged, and glibc-doc is absent from the observed runtime inventory.",
       "reachability": "The canonical artifact retains the exact glibc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
@@ -1314,9 +1314,9 @@
     {
       "scanner": "image-license",
       "fingerprint": "license:30642b306924ce375ecb58acd5513b6bf1b01d94b18a6cfbde3817bc0871424c",
-      "scope": "pkg:rpm/fedora/glibc-common@2.43-8.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-8.fc44.src.rpm",
+      "scope": "pkg:rpm/fedora/glibc-common@2.43-9.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-9.fc44.src.rpm",
       "owner": "swiftraccoon",
-      "rationale": "Official Koji build 3073599 binds glibc 2.43-8.fc44 to dist-git 35dbb287f9fb06e287a9c703eb9da8ff63399aa6, resolving the earlier branch-spec mismatch. All four regular installed notices match the exact upstream 2.43 texts, and COPYING.LIB resolves to the matching LGPL notice. The exact spec establishes shared notice ownership and same-version common/minimal dependencies. Documentation conditions are preserved; glibc-doc is absent from the observed runtime RPM set.",
+      "rationale": "The exact release-9 Koji build, immutable Fedora source snapshot and complete declared aggregate match the reviewed glibc source. Its exact-version glibc dependency supplies the verified five-entry shared notice set. The source delta preserves notice and manual terms; shared ownership does not remove applicable distribution obligations.",
       "reachability": "The canonical artifact retains the exact glibc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
@@ -1324,9 +1324,9 @@
     {
       "scanner": "image-license",
       "fingerprint": "license:30642b306924ce375ecb58acd5513b6bf1b01d94b18a6cfbde3817bc0871424c",
-      "scope": "pkg:rpm/fedora/glibc-minimal-langpack@2.43-8.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-8.fc44.src.rpm",
+      "scope": "pkg:rpm/fedora/glibc-minimal-langpack@2.43-9.fc44?arch=x86_64&distro=fedora-44&upstream=glibc-2.43-9.fc44.src.rpm",
       "owner": "swiftraccoon",
-      "rationale": "Official Koji build 3073599 binds the exact 2.43-8 source spec. It defines minimal-langpack as an empty metapackage requiring the exact glibc and glibc-common versions; the actual RPM inventory confirms zero owned files and all three matching packages. Shared glibc notice ownership and all notice hashes are established. Preserve the source aggregate and documentation conditions.",
+      "rationale": "Official Koji build 3110438 binds the exact release-9 source spec. This empty metapackage requires the exact glibc and glibc-common versions, both present in the canonical inventory. Their verified shared notices and unchanged source/manual context support the complete declared aggregate; absence of owned files is not an independent license grant.",
       "reachability": "The canonical artifact retains the exact glibc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
@@ -1673,40 +1673,40 @@
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:e29ff4443984a2a743de98c2b2bf46ba27049df409bca77b61905ca9f128d6f1",
+      "fingerprint": "image-match:0e1f4907756da26059b25ce7acfe1d18e2e384888c0b8c25eecf3778666f648c",
       "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
       "owner": "swiftraccoon",
-      "rationale": "The complete canonical match digest and length equal inspected public fedora-gpg-keys filename/index metadata in the authenticated local package-install replay. Printable SQLite row-identifier bytes adjoin public filenames; this is not a bearer credential or signing private key.",
+      "rationale": "The complete 57-byte canonical match equals the inspected bounded package-install replay. Every detected byte is covered by live public fedora-gpg-keys filename/index records, including printable serialized row-identifier bytes. The entire ASCII projection also matches canonical evidence. This is public package metadata, not an issued bearer credential or signing private key.",
       "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:30ea726d45e76264322ed7b3bca6fbc21ed9f5d426f36eeb02876f7fe233f7ec",
+      "fingerprint": "image-match:61937b657d1400ca48c69f80ff380abb1c0ec5f0d8e01b5399fbd5187a5a2d18",
       "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
       "owner": "swiftraccoon",
-      "rationale": "The complete canonical match digest and length equal inspected public fedora-gpg-keys filename/index metadata in the authenticated local package-install replay. Printable SQLite row-identifier bytes adjoin public filenames; this is not a bearer credential or signing private key.",
+      "rationale": "The complete 57-byte canonical match equals the inspected bounded package-install replay. Every detected byte is covered by live public fedora-gpg-keys filename/index records, including printable serialized row-identifier bytes. The entire ASCII projection also matches canonical evidence. This is public package metadata, not an issued bearer credential or signing private key.",
       "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:be7a9fc2bba46f8c361ec3a6133c96d8b268a0aaceb163facad754957fcb6d16",
+      "fingerprint": "image-match:8151be4ea07844ef88e1ed64c3fb599452bca5db2e923a848c39b65bcbfa2cd5",
       "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
       "owner": "swiftraccoon",
-      "rationale": "The complete canonical match digest and length equal inspected public fedora-gpg-keys filename/index metadata in the authenticated local package-install replay. Printable SQLite row-identifier bytes adjoin public filenames; this is not a bearer credential or signing private key.",
+      "rationale": "The complete 57-byte canonical match equals the inspected bounded package-install replay. Every detected byte is covered by live public fedora-gpg-keys filename/index records, including printable serialized row-identifier bytes. The entire ASCII projection also matches canonical evidence. This is public package metadata, not an issued bearer credential or signing private key.",
       "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:6cf3cdaf3ab06e93879c9977a9a82d6c5e87545cb11476db4432c1762ec69956",
+      "fingerprint": "image-match:ae0325c1bb2087fd257d470d58a96600c8c0cdb866001ab6e141a8723b00d999",
       "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
       "owner": "swiftraccoon",
-      "rationale": "The complete canonical match digest and length equal inspected public fedora-gpg-keys filename/index metadata in the authenticated local package-install replay. Printable SQLite row-identifier bytes adjoin public filenames; this is not a bearer credential or signing private key.",
+      "rationale": "The complete 65-byte canonical match equals the inspected bounded package-install replay. It is fully covered by a live public filename index record and adjacent deleted-index metadata. The surviving filename and row-identifier bytes in that freeblock independently match a live record in the authenticated immutable Fedora base. The entire ASCII projection also matches canonical evidence; no row bytes or match regions are normalized.",
       "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"

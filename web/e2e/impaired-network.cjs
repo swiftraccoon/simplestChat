@@ -521,19 +521,8 @@ async function main() {
     if (blockUdp) impair('block-udp');
     const publisher = await client('publisher');
     if (callOutcomes) await expectCall(publisher, 'call_join', 'no_media_expected');
-    // The first camera request opens the capture settings dialog; saving it
-    // with the fake devices selected starts the camera.
+    // The explicit camera control requests its device directly.
     await publisher.locator('#cam-btn').click();
-    const setup = publisher.getByRole('dialog', { name: 'Your settings', exact: true });
-    if (
-      await setup.waitFor({ state: 'visible', timeout: 3000 }).then(
-        () => true,
-        () => false,
-      )
-    ) {
-      await setup.getByRole('button', { name: 'Save settings', exact: true }).click();
-      await setup.waitFor({ state: 'hidden' });
-    }
     await publisher.waitForFunction(
       () =>
         [...document.querySelectorAll('.video-tile.local video')].some(
@@ -541,6 +530,11 @@ async function main() {
         ),
       null,
       { timeout: 20000 },
+    );
+    assert.equal(
+      await publisher.getByRole('dialog', { name: 'Your settings', exact: true }).count(),
+      0,
+      'camera activation does not require saving settings',
     );
     if (!callOutcomes) await publisher.locator('#mic-btn').click();
     await publisher.waitForTimeout(1200);

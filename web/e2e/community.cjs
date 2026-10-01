@@ -1609,10 +1609,13 @@ async function setRole(owner, name, role) {
         await connected(probe);
         assert.equal(await probe.evaluate(() => window.__communityCaptureRequests), 0);
         await probe.locator('#cam-btn').click();
-        const setup = probe.getByRole('dialog', { name: 'Your settings', exact: true });
-        await setup.getByRole('button', { name: 'Save settings', exact: true }).click();
-        await setup.waitFor({ state: 'hidden' });
         await probe.locator('#cam-btn:not(.muted)').waitFor({ state: 'visible' });
+        assert.equal(
+          await probe.getByRole('dialog', { name: 'Your settings', exact: true }).count(),
+          0,
+          'first camera activation requests capture without a settings prerequisite',
+        );
+        assert.equal(await probe.evaluate(() => window.__communityCaptureRequests), 1);
         await probe.locator('#mic-btn').click();
         await remotePlayback(owner, 'video');
         await remotePlayback(owner, 'audio');
@@ -1695,11 +1698,6 @@ async function setRole(owner, name, role) {
             // Give the probe a live return stream too. A paused receive
             // transport can legitimately have zero RTP bytes after restarting.
             await owner.locator('#cam-btn').click();
-            const settings = owner.getByRole('dialog', { name: 'Your settings', exact: true });
-            if (await settings.isVisible()) {
-              await settings.getByRole('button', { name: 'Save settings', exact: true }).click();
-              await settings.waitFor({ state: 'hidden' });
-            }
             await owner.locator('#mic-btn').click();
             await remotePlayback(probe, 'video');
             await remotePlayback(probe, 'audio');

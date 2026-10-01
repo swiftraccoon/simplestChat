@@ -33,11 +33,45 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `redeemInvite` | `POST /api/rooms/invites/redeem`, JSON `{code}` | `InviteRedemption` historical acceptance result |
 | `recoveryKey` | `POST /api/auth/recovery/key` | `{ recovery_key: string }` |
 | `redeemRecovery` | `POST /api/auth/recovery/redeem` | `204`, no body |
+| `passkeySettings` | `GET /api/auth/passkeys` | Password/recovery availability and passkey record IDs/dates |
+| `passkeyAction` | `POST /api/auth/passkeys/start` | Operation-bound fresh proof or the authorized action result |
+| `passkeyAuthorize` | `POST /api/auth/passkeys/authorize` | Authorized action result after fresh passkey proof |
+| `passkeyEnroll` | `POST /api/auth/passkeys/enroll` | `{ kind: "added" }` or `{ kind: "replaced" }` |
 | `rooms` | `GET /api/rooms` with directory query parameters | `RoomListItem[]` |
 | `ownRooms` | `GET /api/rooms/mine` | `RoomListItem[]` |
 | `createRoom` | `POST /api/rooms` | `RoomSettings` |
 | `updateRoomIdentity` | `PATCH /api/rooms/:id/identity` | `RoomListItem` |
 | `deleteRoom` | `DELETE /api/rooms/:id` | `204`, no body |
+
+Passkey management accepts operations `{action:"add"}`, `{action:"remove",id}`,
+`{action:"replace",id}` and `{action:"recovery_key"}`. Each requires a current
+password or fresh, account-bound passkey assertion. Replacement returns
+`{kind:"replace_registration",ceremony_id,options,recovery_key}` only after
+persisting the new recovery digest. This key replaces the previous saved key.
+The browser must display it and obtain explicit saved-key acknowledgment before
+calling credential creation. Replacement options exclude all other account
+credentials while preserving the account's user handle; ordinary Add continues
+to exclude every existing credential.
+
+Replacement registration expires after five minutes, allowing time to save the
+backup before opening the provider; authentication and ordinary enrollment stay
+at sixty seconds. Both enrollment variants submit `{ceremony_id,credential}` to
+the same endpoint. Challenges remain one-use and account/auth-version bound.
+Replacement additionally binds the exact old record and issued recovery digest.
+After verified registration, one transaction rechecks these bindings, inserts
+the new credential, removes the selected old record, increments the authentication
+version and deletes all sessions. The `replaced` response clears the refresh
+cookie; the user signs in with the new passkey. It works at the passkey limit
+and without a password. The recovery digest remains available after replacement.
+
+An authenticator may overwrite its local key during creation, before the server
+can commit. Retaining the old database record does not undo that overwrite.
+Keep the saved recovery key after cancellation, expiry or an unconfirmed finish;
+try the new passkey if the commit may have succeeded. A concurrent recovery-key
+rotation makes the prepared replacement fail closed, so recovery requires the
+latest saved key. Existing recovery redemption sets a new password. A failed
+preparation response can also follow a committed recovery-key rotation, but
+creation has not started yet: reload and verify again before continuing.
 
 `RoomListItem.participant_count` and `broadcaster_count` are `null`, never zero,
 when the room's live state was busy at listing time; the browser renders an

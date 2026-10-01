@@ -191,6 +191,29 @@ test('passkey management endpoints have fixed strict contracts and preserve canc
       '/api/auth/passkeys/enroll',
       { kind: 'added' },
     ],
+    [
+      () =>
+        ui.api.passkeyAction(
+          'token',
+          {
+            operation: { action: 'replace', id: summary.passkeys[0].id },
+          },
+          signal,
+        ),
+      '/api/auth/passkeys/start',
+      {
+        kind: 'replace_registration',
+        ceremony_id: 'owned-replacement',
+        options: { publicKey: {} },
+        recovery_key: 'sc-recovery-' + 'a'.repeat(43),
+      },
+    ],
+    [
+      () =>
+        ui.api.passkeyEnroll('token', { ceremony_id: 'owned-replacement', credential: {} }, signal),
+      '/api/auth/passkeys/enroll',
+      { kind: 'replaced' },
+    ],
   ]) {
     state.response = { ok: true, status: 200, json: async () => body };
     assert.deepEqual(await invoke(), body);
@@ -217,6 +240,20 @@ test('passkey management endpoints have fixed strict contracts and preserve canc
     { kind: 'login' },
     { kind: 'recovery_key', recovery_key: '' },
     { kind: 'authenticate', ceremony_id: '', options: { publicKey: {} } },
+    { kind: 'replace_registration', ceremony_id: 'owned', options: { publicKey: {} } },
+    {
+      kind: 'replace_registration',
+      ceremony_id: 'owned',
+      options: { publicKey: {} },
+      recovery_key: '',
+    },
+    {
+      kind: 'replace_registration',
+      ceremony_id: '',
+      options: { publicKey: {} },
+      recovery_key: 'saved',
+    },
+    { kind: 'replaced', recovery_key: 'must-not-leak' },
   ]) {
     state.response.json = async () => invalid;
     await assert.rejects(

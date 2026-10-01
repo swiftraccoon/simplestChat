@@ -59,7 +59,6 @@ interface FrameWatch {
 }
 
 const MASTER_VOLUME_KEY = 'simplestchat.masterVolume';
-const SETUP_KEY = 'simplestchat.mediaSetupConfigured';
 
 function readStored(key: string): string | null {
   try {
@@ -152,6 +151,7 @@ export function applyPersonalPlayback(
 /** Owns a preview capture independently from room producers. Closing invalidates late permissions. */
 export class MediaPreview {
   private generation = 0;
+  private starting = false;
   private stream: MediaStream | null = null;
   private audioContext: AudioContext | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
@@ -162,10 +162,18 @@ export class MediaPreview {
     private onLevel: (level: number) => void,
   ) {}
 
-  async start(preferences: CapturePreferences, video = true, audio = true): Promise<void> {
+  get pending(): boolean {
+    return this.starting;
+  }
+
+  async start(preferences: CapturePreferences, video = true, audio = true): Promise<boolean> {
+    // A permission prompt cannot be cancelled through getUserMedia. Keep it
+    // single-flight even when Stop has retired its eventual result.
+    if (this.starting) return false;
     this.stop();
     const generation = this.generation;
     if (!video && !audio) throw new Error('Select a camera or microphone to preview.');
+    this.starting = true;
     try {
       if (!navigator.mediaDevices?.getUserMedia)
         throw new Error('Media preview requires localhost or a secure connection.');
@@ -175,7 +183,7 @@ export class MediaPreview {
       });
       if (generation !== this.generation) {
         stream.getTracks().forEach((track) => track.stop());
-        return;
+        return false;
       }
       this.stream = stream;
       this.onStream(stream);
@@ -206,10 +214,13 @@ export class MediaPreview {
           this.audioContext = null;
         }
       }
+      return true;
     } catch (error) {
-      if (generation !== this.generation) return;
+      if (generation !== this.generation) return false;
       this.stop();
       throw error;
+    } finally {
+      this.starting = false;
     }
   }
 
@@ -235,7 +246,6 @@ export class MediaControls {
   private preview: MediaPreview | null = null;
   private dialog: HTMLDialogElement | null = null;
   private finishSetup: ((saved: boolean) => void) | null = null;
-  private configured = readStored(SETUP_KEY) === 'true';
   private masterVolume = volumeValue(Number(readStored(MASTER_VOLUME_KEY) ?? 1));
   private speakerTest: SpeakerTest | null = null;
   private devices: ReturnType<typeof observeMediaDevices> | null = null;
@@ -250,10 +260,6 @@ export class MediaControls {
   ]);
 
   constructor(private options: MediaControlsOptions) {}
-
-  get hasConfiguredSetup(): boolean {
-    return this.configured;
-  }
 
   mountToolbar(container: HTMLElement): void {
     const toolbar = document.createElement('div');
@@ -287,7 +293,7 @@ export class MediaControls {
   }
 
   /** Opens without capture. Saving may switch active devices, but never enables an inactive one. */
-  openSetup(mode: 'camera' | 'microphone' | 'settings' = 'settings'): Promise<boolean> {
+  openSetup(mode: 'microphone' | 'settings' = 'settings'): Promise<boolean> {
     this.closeSetup(false);
     let preferences = loadCapturePreferences();
     const dialog = document.createElement('dialog');
@@ -295,11 +301,9 @@ export class MediaControls {
     dialog.setAttribute('aria-labelledby', 'media-setup-title');
     // Static copy chosen by the opening control; no user content enters this markup.
     const intro =
-      mode === 'camera'
-        ? 'You chose to turn on your camera. Pick a camera, try it privately, then save to start it.'
-        : mode === 'microphone'
-          ? 'Pick a microphone and try it privately. Saving never turns it on by itself.'
-          : 'Just for you, on this browser.';
+      mode === 'microphone'
+        ? 'Pick a microphone and try it privately. Saving never turns it on by itself.'
+        : 'Just for you, on this browser.';
     dialog.innerHTML = `
       <form method="dialog" class="settings-dialog-form">
         <div class="settings-dialog-header"><div><h2 id="media-setup-title">Your settings</h2>
@@ -314,9 +318,17 @@ export class MediaControls {
             <h3 class="settings-section-heading">Camera &amp; microphone</h3>
             <p class="settings-description">Saving updates active devices. Devices that are off stay off.</p>
             <div class="media-setup-fields">
-              <label>Camera <select name="cameraDeviceId"><option value="">Default camera</option></select></label>
-              <label>Microphone <select name="microphoneDeviceId"><option value="">Default microphone</option></select></label>
+              <div class="media-device-field">
+                <label>Camera <select name="cameraDeviceId" aria-describedby="media-device-permission-hint"><option value="">Default camera</option></select></label>
+                <button type="button" data-action="test-camera">Test camera</button>
+              </div>
+              <div class="media-device-field">
+                <label>Microphone <select name="microphoneDeviceId" aria-describedby="media-device-permission-hint"><option value="">Default microphone</option></select></label>
+                <button type="button" data-action="test-microphone">Test microphone</button>
+              </div>
             </div>
+            <p id="media-device-permission-hint" class="media-setup-hint">Device names may stay hidden until you allow access. Test a device to allow it and refresh its list now, without saving or broadcasting.</p>
+            <p class="media-preview-status" role="status">Tests and preview are private. Only you can see the camera or microphone level.</p>
             <section class="media-speaker-panel" aria-label="Speaker settings">
               <label>Speaker <select data-output-device><option value="">System default</option></select></label>
               <div class="media-preview-actions"><button type="button" data-output-apply>Use speaker</button>
@@ -333,7 +345,6 @@ export class MediaControls {
                 <label><input type="checkbox" name="previewMicrophone" checked> Microphone preview</label>
               </div>
               <label class="media-meter-label">Microphone level <meter min="0" max="1" value="0" aria-label="Microphone input level"></meter></label>
-              <p class="media-preview-status" role="status">Preview is private and does not broadcast to the room.</p>
               <div class="media-preview-actions"><button type="button" data-action="preview">Start preview</button>
                 <button type="button" data-action="stop" disabled>Stop preview</button></div>
             </section>
@@ -525,15 +536,28 @@ export class MediaControls {
         status.textContent = 'Device list unavailable. You can still try the default devices.';
     });
     const previewButton = dialog.querySelector<HTMLButtonElement>('[data-action="preview"]')!;
+    const cameraTest = dialog.querySelector<HTMLButtonElement>('[data-action="test-camera"]')!;
+    const microphoneTest = dialog.querySelector<HTMLButtonElement>(
+      '[data-action="test-microphone"]',
+    )!;
+    const startButtons = [previewButton, cameraTest, microphoneTest];
     const stopButton = dialog.querySelector<HTMLButtonElement>('[data-action="stop"]')!;
     const saveButton = dialog.querySelector<HTMLButtonElement>('[type="submit"]')!;
     let previewAction = 0;
+    let saving = false;
+    const updateCaptureButtons = () => {
+      const busy = saving || preview.pending;
+      for (const button of startButtons) button.disabled = busy;
+      saveButton.disabled = busy;
+    };
     const stopPreview = () => {
       previewAction++;
       preview.stop();
-      previewButton.disabled = saveButton.disabled;
+      updateCaptureButtons();
       stopButton.disabled = true;
-      status.textContent = 'Preview stopped.';
+      status.textContent = preview.pending
+        ? 'Preview cancelled. Dismiss the browser permission prompt before testing again.'
+        : 'Preview stopped.';
     };
     stopButton.addEventListener('click', stopPreview);
     dialog.addEventListener('settings-tab-change', (event) => {
@@ -542,47 +566,66 @@ export class MediaControls {
         this.speakerTest?.stop();
       }
     });
-    previewButton.addEventListener('click', () => {
+    const startPreview = (camera: boolean, microphone: boolean) => {
+      if (this.dialog !== dialog || saving || preview.pending) return;
       const action = ++previewAction;
-      const startPreview = async () => {
-        previewButton.disabled = true;
+      field<HTMLInputElement>('previewCamera').checked = camera;
+      field<HTMLInputElement>('previewMicrophone').checked = microphone;
+      const device =
+        camera && microphone
+          ? 'Camera and microphone'
+          : camera
+            ? 'Camera'
+            : microphone
+              ? 'Microphone'
+              : 'Preview';
+      const start = async () => {
         stopButton.disabled = false;
-        status.textContent = 'Waiting for device permission…';
+        status.textContent = `${device}: waiting for browser permission…`;
         try {
-          await preview.start(
-            readPreferences(),
-            field<HTMLInputElement>('previewCamera').checked,
-            field<HTMLInputElement>('previewMicrophone').checked,
-          );
+          // Start within this click's turn, requesting only the chosen kinds.
+          const capture = preview.start(readPreferences(), camera, microphone);
+          updateCaptureButtons();
+          const started = await capture;
           if (this.dialog !== dialog || action !== previewAction) return;
-          status.textContent =
-            'Preview is local to you. Your microphone is not played through the speakers.';
+          if (!started) return;
+          status.textContent = camera
+            ? microphone
+              ? 'Preview is private. Check the picture and microphone level below; no microphone sound plays through the speakers.'
+              : 'Camera preview is private. Check the picture below and choose a camera above.'
+            : 'Microphone test is private. Check the level below; your microphone is not played through the speakers.';
           this.devices?.refresh();
         } catch (error) {
           if (this.dialog !== dialog || action !== previewAction) return;
           stopButton.disabled = true;
-          status.textContent = mediaErrorMessage(error);
+          status.textContent = mediaErrorMessage(error, device);
         } finally {
-          if (this.dialog === dialog && action === previewAction) previewButton.disabled = false;
+          if (this.dialog === dialog) updateCaptureButtons();
         }
       };
-      startPreview().catch((error) => {
+      start().catch((error) => {
         if (this.dialog === dialog && action === previewAction)
-          status.textContent = mediaErrorMessage(error);
+          status.textContent = mediaErrorMessage(error, device);
       });
+    };
+    cameraTest.addEventListener('click', () => startPreview(true, false));
+    microphoneTest.addEventListener('click', () => startPreview(false, true));
+    previewButton.addEventListener('click', () => {
+      startPreview(
+        field<HTMLInputElement>('previewCamera').checked,
+        field<HTMLInputElement>('previewMicrophone').checked,
+      );
     });
     dialog.querySelector('form')!.addEventListener('change', (event) => {
       // Layout and microphone mode apply immediately, independently of capture drafts.
       if (!(event.target instanceof Element) || !event.target.matches('[name]')) return;
-      previewAction++;
-      preview.stop();
-      status.textContent = 'Settings changed. Start preview to try them.';
-      previewButton.disabled = false;
-      stopButton.disabled = true;
+      stopPreview();
+      if (!preview.pending)
+        status.textContent = 'Settings changed. Test a device or start preview to try them.';
     });
     dialog.querySelector('form')!.addEventListener('submit', (event) => {
       event.preventDefault();
-      if (saveButton.disabled) return;
+      if (saving || preview.pending) return;
       const save = async () => {
         const next = readPreferences();
         const activeRoom = this.options.getRoom();
@@ -590,8 +633,8 @@ export class MediaControls {
         previewAction++;
         preview.stop();
         stopButton.disabled = true;
-        previewButton.disabled = true;
-        saveButton.disabled = true;
+        saving = true;
+        updateCaptureButtons();
         saveButton.textContent = 'Saving…';
         const captureFields = dialog.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
           'input[name], select[name]',
@@ -601,8 +644,6 @@ export class MediaControls {
         });
         try {
           if (!(await applyCaptureSettings(activeRoom, next, preferences, isCurrent))) return;
-          this.configured = true;
-          writeStored(SETUP_KEY, 'true');
           this.closeSetup(true);
         } catch (error) {
           if (!isCurrent()) return;
@@ -611,9 +652,9 @@ export class MediaControls {
           dialog.querySelector<HTMLButtonElement>('#media-devices-tab')!.click();
         } finally {
           if (isCurrent()) {
-            saveButton.disabled = false;
+            saving = false;
+            updateCaptureButtons();
             saveButton.textContent = 'Save settings';
-            previewButton.disabled = false;
             captureFields.forEach((control) => {
               control.disabled = false;
             });
@@ -982,12 +1023,12 @@ export class MediaControls {
   }
 }
 
-function mediaErrorMessage(error: unknown): string {
+function mediaErrorMessage(error: unknown, device = 'Camera or microphone'): string {
   if (error instanceof Error) {
     if (error.name === 'NotAllowedError')
-      return 'Camera or microphone permission was denied. Allow access in your browser and try again.';
+      return `${device} access was denied. Allow access in your browser and try again.`;
     if (error.name === 'NotFoundError')
-      return 'No matching camera or microphone was found. Select another device or preview only one device.';
+      return `${device} could not be found. Select another device or test one device at a time.`;
     if (error.name === 'OverconstrainedError')
       return 'The selected device is unavailable. Choose a default device and try again.';
     if (error.name === 'NotReadableError')

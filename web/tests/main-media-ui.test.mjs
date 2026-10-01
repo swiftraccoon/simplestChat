@@ -79,57 +79,110 @@ test('concurrent home and leave actions share cleanup until it finishes', async 
   await retry;
 });
 
-for (const scenario of ['cancel', 'leave', 'rejoin', 'save']) {
-  test(`camera setup ${scenario} honors the current room before publishing`, async () => {
-    const pending = deferred();
-    let publishes = 0,
-      opens = 0;
-    const activeRoom = {
-      hasMedia: true,
-      membershipVersion: 1,
-      videoEnabled: false,
-      async toggleVideo() {
-        publishes++;
-        return true;
+async function cameraUiFixture() {
+  const state = { pending: deferred(), captures: 0, updates: [], toasts: [] };
+  const activeRoom = {
+    hasMedia: true,
+    membershipVersion: 1,
+    videoEnabled: false,
+    role: 'member',
+    roomSettings: {},
+    toggleVideo() {
+      state.captures++;
+      return state.pending.promise;
+    },
+  };
+  const api = evaluateTypeScript(
+    `let room = initialRoom;
+     let cameraTogglePending = false;
+     let roomRecovering = false;
+     ${await functionSource('canStartBroadcast')}
+     ${await functionSource('toggleCamera')}
+     export { toggleCamera };
+     export function replaceRoom(next) { room = next; }
+     export function recovering(value) { roomRecovering = value; }`,
+    {
+      globals: {
+        initialRoom: activeRoom,
+        updateCamButton: (enabled) => state.updates.push(['camera', enabled]),
+        updateLocalTile: () => state.updates.push(['tile']),
+        showToast: (message) => state.toasts.push(message),
       },
-    };
-    const api = evaluateTypeScript(
-      `
-      let room = initialRoom;
-      let cameraTogglePending = false;
-      ${await functionSource('toggleCamera')}
-      export { toggleCamera };
-      export function leave() { room = null; }
-    `,
-      {
-        globals: {
-          initialRoom: activeRoom,
-          mediaControls: {
-            hasConfiguredSetup: false,
-            openSetup() {
-              opens++;
-              return pending.promise;
-            },
-          },
-          canStartBroadcast() {
-            return true;
-          },
-          updateCamButton() {},
-          updateLocalTile() {},
-          showToast() {},
-        },
-      },
-    );
-    const activation = api.toggleCamera();
-    await api.toggleCamera();
-    assert.equal(opens, 1, 'repeated activation must not open another dialog');
-    assert.equal(publishes, 0);
-    if (scenario === 'leave') api.leave();
-    if (scenario === 'rejoin') activeRoom.membershipVersion++;
-    pending.resolve(scenario !== 'cancel');
-    await activation;
-    assert.equal(publishes, scenario === 'save' ? 1 : 0);
-  });
+    },
+  );
+  return { ...api, state, activeRoom };
+}
+
+test('explicit camera activation captures in the click turn without setup or duplicate pending capture', async () => {
+  const f = await cameraUiFixture();
+  assert.equal(f.state.captures, 0, 'initializing the action never captures');
+  const activation = f.toggleCamera();
+  assert.equal(
+    f.state.captures,
+    1,
+    'camera access begins before the first await without a settings prerequisite',
+  );
+  await f.toggleCamera();
+  assert.equal(f.state.captures, 1);
+  assert.deepEqual(f.state.updates, []);
+  f.state.pending.resolve(true);
+  await activation;
+  assert.deepEqual(f.state.updates, [['camera', true], ['tile']]);
+});
+
+test('camera activation preserves room readiness, recovery and broadcasting permissions', async () => {
+  const f = await cameraUiFixture();
+  f.activeRoom.hasMedia = false;
+  await f.toggleCamera();
+  f.activeRoom.hasMedia = true;
+  f.recovering(true);
+  await f.toggleCamera();
+  f.recovering(false);
+  f.activeRoom.roomSettings = { allowVideo: false };
+  await f.toggleCamera();
+  f.activeRoom.role = 'guest';
+  f.activeRoom.roomSettings = { guestsCanBroadcast: false };
+  await f.toggleCamera();
+  f.activeRoom.roomSettings = { moderated: true };
+  await f.toggleCamera();
+  assert.equal(f.state.captures, 0);
+  assert.deepEqual(f.state.updates, []);
+
+  f.activeRoom.videoEnabled = true;
+  f.state.pending.resolve(false);
+  await f.toggleCamera();
+  assert.equal(f.state.captures, 1, 'turning an active camera off remains available');
+  assert.deepEqual(f.state.updates, [['camera', false], ['tile']]);
+});
+
+test('a refused camera request reports the current state and permits a new explicit gesture', async () => {
+  const f = await cameraUiFixture();
+  const activation = f.toggleCamera();
+  f.state.pending.reject(new Error('Camera access denied'));
+  await activation;
+  assert.deepEqual(f.state.updates, [['camera', false]]);
+  assert.deepEqual(f.state.toasts, ['Camera access denied']);
+  f.state.pending = deferred();
+  const retry = f.toggleCamera();
+  assert.equal(f.state.captures, 2, 'a failed request does not latch later explicit actions');
+  f.state.pending.resolve(true);
+  await retry;
+});
+
+for (const change of ['leave', 'replacement']) {
+  for (const outcome of ['resolve', 'reject']) {
+    test(`camera ${outcome} after ${change} cannot update another room`, async () => {
+      const f = await cameraUiFixture();
+      const activation = f.toggleCamera();
+      f.replaceRoom(change === 'leave' ? null : { ...f.activeRoom, membershipVersion: 2 });
+      if (outcome === 'reject') f.state.pending.reject(new Error('Retired camera permission'));
+      else f.state.pending.resolve(true);
+      await activation;
+      assert.equal(f.state.captures, 1);
+      assert.deepEqual(f.state.updates, []);
+      assert.deepEqual(f.state.toasts, []);
+    });
+  }
 }
 
 for (const action of ['toggleMicrophone', 'toggleCamera', 'toggleScreenShare', 'pttActivate']) {
@@ -163,7 +216,6 @@ for (const action of ['toggleMicrophone', 'toggleCamera', 'toggleScreenShare', '
         {
           globals: {
             initialRoom: activeRoom,
-            mediaControls: { hasConfiguredSetup: true },
             canStartBroadcast: () => true,
             updateMicButton: () => updates.push('microphone'),
             updateCamButton: () => updates.push('camera'),

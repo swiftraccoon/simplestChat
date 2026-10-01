@@ -63,6 +63,14 @@ lists and display-capture outcomes use controlled browser API fixtures. Physical
 hardware, OS sleep, real picker permissions and actual speaker sound remain
 manual checks.
 
+Before its media transport scenarios, `media-continuity.cjs` conceals input
+devices until each explicit **Test camera** or **Test microphone** action opens
+the native fake device. It verifies immediate list refresh without a
+`devicechange` event, capture of only the requested kind, private preview cleanup
+on Stop/Close, and no broadcast or capture from joining, opening Settings or
+saving while devices are off. This tests the permission-driven UI with controlled
+device visibility; it does not exercise an operating system permission prompt.
+
 ```sh
 AUTH_CROSS_TAB_E2E=1 E2E_BROWSER=firefox \
   build/with-test-server.sh node web/e2e/auth-cross-tab.cjs

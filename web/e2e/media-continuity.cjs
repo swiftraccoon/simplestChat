@@ -48,6 +48,9 @@ const roomName = `continuity-${Date.now().toString(36)}`;
 function installDeviceFixtures() {
   const evidence = (window.__mediaProduct = {
     captures: 0,
+    captureRequests: [],
+    captureStreams: [],
+    revealInputs: false,
     screenCaptures: 0,
     chooserGestures: [],
     plays: 0,
@@ -59,9 +62,24 @@ function installDeviceFixtures() {
     tones: [],
   });
   const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-  navigator.mediaDevices.getUserMedia = (...args) => {
+  navigator.mediaDevices.getUserMedia = async (constraints) => {
     evidence.captures++;
-    return capture(...args);
+    const requested = { video: Boolean(constraints.video), audio: Boolean(constraints.audio) };
+    evidence.captureRequests.push(requested);
+    const stream = await capture(constraints);
+    evidence.captureStreams.push(stream);
+    if (evidence.revealInputs) {
+      for (const [kind, enabled, label] of [
+        ['videoinput', requested.video, 'Fixture camera'],
+        ['audioinput', requested.audio, 'Fixture microphone'],
+      ]) {
+        if (enabled && !evidence.devices.some((device) => device.kind === kind))
+          evidence.devices.push({ kind, deviceId: `permission-${kind}`, label, groupId: '' });
+      }
+      // Permission alone need not dispatch devicechange. The product must
+      // refresh its concealed device list immediately after explicit preview.
+    }
+    return stream;
   };
   navigator.mediaDevices.enumerateDevices = async () => [...evidence.devices];
   const sinks = new WeakMap();
@@ -148,6 +166,11 @@ async function join(browser, label) {
   await page.locator('#room-screen').waitFor({ state: 'visible' });
   await page.waitForFunction(
     () => document.querySelector('#connection-status').textContent === 'Connected',
+  );
+  assert.equal(
+    await page.evaluate(() => window.__mediaProduct.captures),
+    0,
+    'opening the site and joining never requests camera or microphone capture',
   );
   return page;
 }
@@ -240,6 +263,106 @@ async function deviceUi(page) {
   });
 }
 
+async function privatePermissionPreview(page) {
+  await page.evaluate(() => {
+    window.__mediaProduct.devices = [];
+    window.__mediaProduct.revealInputs = true;
+  });
+  let dialog = await settings(page);
+  assert.equal(await dialog.locator('select[name=cameraDeviceId] option').count(), 1);
+  assert.equal(await dialog.locator('select[name=microphoneDeviceId] option').count(), 1);
+  assert.equal(await page.evaluate(() => window.__mediaProduct.captures), 0);
+
+  const observation = () =>
+    page.evaluate(() => ({
+      requests: window.__mediaProduct.captureRequests,
+      liveKinds: window.__mediaProduct.captureStreams
+        .flatMap((stream) => stream.getTracks())
+        .filter((track) => track.readyState === 'live')
+        .map((track) => track.kind)
+        .sort(),
+      sending: window.__communityPeers.some((peer) =>
+        peer.getSenders().some((sender) => sender.track?.readyState === 'live'),
+      ),
+      cameraEnabled: document.querySelector('#cam-btn').classList.contains('active'),
+      microphoneEnabled: !document.querySelector('#mic-btn').classList.contains('muted'),
+    }));
+  await dialog.getByRole('button', { name: 'Test camera', exact: true }).click();
+  await dialog
+    .locator('select[name=cameraDeviceId] option[value=permission-videoinput]')
+    .waitFor({ state: 'attached' });
+  assert.equal(await dialog.locator('select[name=microphoneDeviceId] option').count(), 1);
+  assert.equal(
+    await dialog.getByRole('button', { name: 'Save settings', exact: true }).isEnabled(),
+    true,
+  );
+  assert.deepEqual(await observation(), {
+    requests: [{ video: true, audio: false }],
+    liveKinds: ['video'],
+    sending: false,
+    cameraEnabled: false,
+    microphoneEnabled: false,
+  });
+  await dialog.getByRole('button', { name: 'Stop preview', exact: true }).click();
+  await page.waitForFunction(() =>
+    window.__mediaProduct.captureStreams.every((stream) =>
+      stream.getTracks().every((track) => track.readyState === 'ended'),
+    ),
+  );
+  assert.equal(
+    await dialog.locator('.media-preview-video').evaluate((video) => video.srcObject === null),
+    true,
+  );
+
+  await dialog.getByRole('button', { name: 'Test microphone', exact: true }).click();
+  await dialog
+    .locator('select[name=microphoneDeviceId] option[value=permission-audioinput]')
+    .waitFor({ state: 'attached' });
+  assert.equal(await dialog.locator('select[name=cameraDeviceId] option').count(), 2);
+  assert.equal(
+    await dialog.getByRole('button', { name: 'Save settings', exact: true }).isEnabled(),
+    true,
+  );
+  assert.deepEqual(await observation(), {
+    requests: [
+      { video: true, audio: false },
+      { video: false, audio: true },
+    ],
+    liveKinds: ['audio'],
+    sending: false,
+    cameraEnabled: false,
+    microphoneEnabled: false,
+  });
+  await dialog.getByRole('button', { name: 'Close your settings', exact: true }).click();
+  await page.waitForFunction(() =>
+    window.__mediaProduct.captureStreams.every((stream) =>
+      stream.getTracks().every((track) => track.readyState === 'ended'),
+    ),
+  );
+  dialog = await settings(page);
+  assert.equal(await page.evaluate(() => window.__mediaProduct.captures), 2);
+  await dialog.getByRole('button', { name: 'Save settings', exact: true }).click();
+  assert.deepEqual(await observation(), {
+    requests: [
+      { video: true, audio: false },
+      { video: false, audio: true },
+    ],
+    liveKinds: [],
+    sending: false,
+    cameraEnabled: false,
+    microphoneEnabled: false,
+  });
+  report.checks.push({
+    name: 'private-per-kind-preview-reveals-devices-before-save',
+    passed: true,
+    captures: 2,
+    cameraOnly: true,
+    microphoneOnly: true,
+    stoppedAndClosed: true,
+    broadcast: false,
+  });
+}
+
 async function decoded(page) {
   return page.evaluate(async () => {
     let frames = 0;
@@ -303,11 +426,17 @@ async function main() {
     const viewer = await join(browser, 'Viewer');
     stage = 'device-ui';
     await deviceUi(viewer);
+    stage = 'private-permission-preview';
+    await privatePermissionPreview(viewer);
+    const viewerCaptureCounts = await viewer.evaluate(() => window.__mediaProduct.captures);
     stage = 'camera';
     await publisher.locator('#cam-btn').click();
-    const dialog = publisher.getByRole('dialog', { name: 'Your settings', exact: true });
-    await dialog.getByRole('button', { name: 'Save settings', exact: true }).click();
     await progressing(viewer, 'native-camera-decoding');
+    assert.equal(
+      await publisher.getByRole('dialog', { name: 'Your settings', exact: true }).isVisible(),
+      false,
+      'explicit camera activation does not require opening and saving Settings',
+    );
     assert.equal(
       await publisher.locator('#mic-btn').evaluate((button) => button.classList.contains('muted')),
       true,
@@ -389,7 +518,7 @@ async function main() {
     await progressing(viewer, 'native-signaling-reconnect-decoding');
     assert.equal(
       await viewer.evaluate(() => window.__mediaProduct.captures),
-      0,
+      viewerCaptureCounts,
       'receiver recovery never enables capture',
     );
     assert.equal(
