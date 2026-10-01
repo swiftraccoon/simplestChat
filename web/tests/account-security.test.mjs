@@ -19,8 +19,11 @@ const challenge = (kind) => ({
   options: { publicKey: {}, mediation: 'required' },
 });
 
-async function fixture(t, initial = settings()) {
+async function fixture(t, initial = settings(), mounted = false) {
   const dom = await uiFixture();
+  dom.Node.prototype.focus = function () {
+    dom.document.activeElement = this;
+  };
   const requests = [],
     native = [],
     timers = new Map();
@@ -39,56 +42,73 @@ async function fixture(t, initial = settings()) {
     requests.push({ method, token, data, signal });
     return typeof state.response === 'function' ? state.response(method) : state.response;
   };
-  const { AccountSecurityFlow } = await loadTypeScript('src/account-security.ts', {
-    modules: {
-      './auth': {
-        deserializeRequestOptions: (options) => options,
-        deserializeCreationOptions: (options) => options,
-        serializeCredential: () => ({ id: 'owned-assertion' }),
-      },
-      './ui': {
-        ...dom.ui,
-        api: {
-          passkeySettings: async () => state.list,
-          passkeyAction: (...args) => request('start', ...args),
-          passkeyAuthorize: (...args) => request('authorize', ...args),
-          passkeyEnroll: (...args) => request('enroll', ...args),
+  const { AccountSecurityFlow, mountAccountSecurity } = await loadTypeScript(
+    'src/account-security.ts',
+    {
+      modules: {
+        './auth': {
+          deserializeRequestOptions: (options) => options,
+          deserializeCreationOptions: (options) => options,
+          serializeCredential: () => ({ id: 'owned-assertion' }),
         },
-      },
-    },
-    globals: {
-      performance: { now: () => now },
-      Date: { now: () => wall },
-      setTimeout: (callback, ms) => {
-        timers.set(++timerId, { callback, at: now + ms });
-        return timerId;
-      },
-      clearTimeout: (id) => timers.delete(id),
-      navigator: {
-        credentials: {
-          get: (options) => {
-            native.push({ kind: 'get', options });
-            return state.native();
-          },
-          create: (options) => {
-            native.push({ kind: 'create', options });
-            return state.native();
+        './ui': {
+          ...dom.ui,
+          api: {
+            passkeySettings: async () => state.list,
+            passkeyAction: (...args) => request('start', ...args),
+            passkeyAuthorize: (...args) => request('authorize', ...args),
+            passkeyEnroll: (...args) => request('enroll', ...args),
           },
         },
       },
+      globals: {
+        performance: { now: () => now },
+        Date: class extends Date {
+          static now() {
+            return wall;
+          }
+        },
+        setTimeout: (callback, ms) => {
+          timers.set(++timerId, { callback, at: now + ms });
+          return timerId;
+        },
+        clearTimeout: (id) => timers.delete(id),
+        navigator: {
+          credentials: {
+            get: (options) => {
+              native.push({ kind: 'get', options });
+              return state.native();
+            },
+            create: (options) => {
+              native.push({ kind: 'create', options });
+              return state.native();
+            },
+          },
+        },
+      },
     },
-  });
-  const flow = new AccountSecurityFlow({
+  );
+  const options = {
     token: () => 'owned-token',
     current: () => state.current,
     changed: () => state.changes++,
     removed: () => state.removed++,
-  });
+  };
+  const dialog = dom.ui.el('dialog');
+  const container = dom.ui.el('div');
+  dialog.append(container);
+  dom.document.body.append(dialog);
+  dialog.showModal();
+  const flow = mounted
+    ? mountAccountSecurity({ ...options, container, dialog })
+    : new AccountSecurityFlow(options);
   t.after(() => flow.dispose());
   await flow.load();
   return {
     ...dom,
     flow,
+    container,
+    dialog,
     requests,
     native,
     timers,
@@ -267,4 +287,146 @@ test('mismatched successful action responses are uncertain rather than reported 
   await f.flow.start({ action: 'recovery_key' });
   assert.equal(f.flow.phase, 'uncertain');
   assert.equal(f.flow.recoveryKey, '');
+});
+
+function clickButton(f, label) {
+  const node = f.container
+    .querySelectorAll('button')
+    .find((button) => button.textContent === label);
+  assert.ok(node, `Expected visible button: ${label}`);
+  node.click();
+}
+
+function proofControls(f) {
+  const proof = f.container.querySelector('select');
+  const password = f.container.querySelector('input');
+  assert.ok(proof?.isConnected, 'verification selector is in the current screen');
+  assert.ok(password?.isConnected, 'verification password is in the current screen');
+  return { proof, password };
+}
+
+test('rendered removal uses visible password proof and reports removal only after confirmation', async (t) => {
+  const f = await fixture(t, settings(true), true);
+  assert.equal(proofControls(f).proof.value, 'passkey', 'other account actions keep their default');
+  clickButton(f, 'Remove passkey 11111111');
+  assert.equal(f.container.querySelector('h3').textContent, 'Remove passkey');
+  const { proof, password } = proofControls(f);
+  assert.equal(proof.value, 'password');
+  assert.equal(password.parentNode.hidden, false);
+  assert.equal(password.autocomplete, 'current-password');
+  assert.equal(f.document.activeElement, proof);
+  assert.match(f.container.textContent, /Verify your identity before removal/);
+  assert.equal(f.requests.length, 0);
+
+  const pending = deferred();
+  f.state.response = () => pending.promise;
+  password.value = 'owned-password';
+  clickButton(f, 'Verify and remove passkey');
+  assert.deepEqual(f.requests[0].data, {
+    operation: { action: 'remove', id: first },
+    current_password: 'owned-password',
+  });
+  assert.equal(password.value, '', 'detached password input is cleared');
+  assert.equal(f.native.length, 0);
+  assert.equal(f.state.removed, 0);
+  assert.equal(f.flow.phase, 'requesting');
+  assert.doesNotMatch(f.container.textContent, /Passkey removed/);
+  pending.resolve({ kind: 'removed' });
+  await flush();
+  assert.equal(f.state.removed, 1);
+  assert.match(f.container.textContent, /Passkey removed\. Sign in again/);
+  assert.equal(f.native.length, 0, 'password proof never invokes the browser authenticator');
+});
+
+test('missing password keeps removal controls visible and cancelling sends no request', async (t) => {
+  const f = await fixture(t, settings(true), true);
+  clickButton(f, 'Remove passkey 11111111');
+  clickButton(f, 'Verify and remove passkey');
+  assert.equal(f.requests.length, 0);
+  assert.equal(f.native.length, 0);
+  assert.equal(f.container.querySelector('h3').textContent, 'Remove passkey');
+  const { proof, password } = proofControls(f);
+  assert.equal(proof.value, 'password');
+  assert.equal(password.parentNode.hidden, false);
+  assert.equal(f.document.activeElement, password);
+  assert.match(f.container.textContent, /Enter your current password/);
+  password.value = 'unsent-password';
+  clickButton(f, 'Keep passkey');
+  assert.equal(password.value, '');
+  assert.equal(f.container.querySelector('h3').textContent, 'Sign-in and recovery');
+  assert.equal(proofControls(f).proof.value, 'passkey');
+  assert.equal(f.requests.length, 0);
+  assert.equal(f.state.removed, 0);
+});
+
+test('removal allows choosing passkey proof and returning to password without a native prompt', async (t) => {
+  const f = await fixture(t, settings(true), true);
+  clickButton(f, 'Remove passkey 11111111');
+  const { proof, password } = proofControls(f);
+  password.value = 'unused-password';
+  proof.value = 'passkey';
+  proof.emit('change');
+  assert.equal(password.value, '');
+  assert.equal(password.parentNode.hidden, true);
+  clickButton(f, 'Verify and remove passkey');
+  await flush();
+  assert.deepEqual(f.requests[0].data, { operation: { action: 'remove', id: first } });
+  assert.equal(f.flow.phase, 'authenticate');
+  assert.match(f.container.textContent, /The passkey has not been removed/);
+  assert.equal(f.native.length, 0, 'fetching proof options is not a user gesture to authenticate');
+  clickButton(f, 'Back to removal options');
+  assert.equal(f.flow.phase, 'idle');
+  assert.equal(proofControls(f).proof.value, 'password');
+  assert.equal(proofControls(f).password.parentNode.hidden, false);
+  assert.equal(f.timers.size, 0);
+  await f.flow.continueWithPasskey();
+  assert.equal(f.native.length, 0, 'retired proof cannot be submitted');
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.state.removed, 0);
+});
+
+test('passkey-only removal still verifies on a separate gesture before deletion', async (t) => {
+  const f = await fixture(t, settings(false, 2), true);
+  clickButton(f, 'Remove passkey 11111111');
+  const { proof, password } = proofControls(f);
+  assert.equal(proof.value, 'passkey');
+  assert.equal(proof.children.length, 1);
+  assert.equal(password.parentNode.hidden, true);
+  clickButton(f, 'Verify and remove passkey');
+  await flush();
+  assert.equal(f.native.length, 0);
+  assert.equal(f.state.removed, 0);
+  assert.match(f.container.textContent, /The passkey has not been removed/);
+  f.state.response = { kind: 'removed' };
+  clickButton(f, 'Verify and remove passkey');
+  assert.equal(f.native.length, 1, 'explicit verification invokes native get in the click turn');
+  await flush();
+  assert.equal(f.requests[1].method, 'authorize');
+  assert.equal(f.state.removed, 1);
+});
+
+test('rendered last-passkey lockout cannot be bypassed by a recovery key', async (t) => {
+  const f = await fixture(t, { ...settings(), recovery_enabled: true }, true);
+  const remove = f.container
+    .querySelectorAll('button')
+    .find((button) => button.textContent === 'Remove passkey 11111111');
+  assert.equal(remove.disabled, true);
+  remove.click();
+  assert.equal(f.container.querySelector('h3').textContent, 'Sign-in and recovery');
+  assert.equal(f.requests.length, 0);
+  assert.equal(f.native.length, 0);
+});
+
+test('back from verification cannot cancel an in-flight mutation or uncertain result', async (t) => {
+  const f = await fixture(t, settings(true));
+  const pending = deferred();
+  f.state.response = () => pending.promise;
+  const work = f.flow.start({ action: 'remove', id: first }, 'owned-password');
+  f.flow.cancelVerification();
+  assert.equal(f.flow.phase, 'requesting');
+  await f.advance(20000);
+  await work;
+  f.flow.cancelVerification();
+  assert.equal(f.flow.phase, 'uncertain');
+  assert.equal(f.flow.canStart, false);
 });

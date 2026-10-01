@@ -295,8 +295,9 @@ async function run() {
     checks.push('password-account-enrolls-first-passkey');
 
     const uiPassword = `Owned-UI-password-${Date.now().toString(36)}!`;
+    const uiEmail = `passkey-ui-${Date.now().toString(36)}@example.test`;
     const uiRegistered = await postAnonymous('/api/auth/register', {
-      email: `passkey-ui-${Date.now().toString(36)}@example.test`,
+      email: uiEmail,
       password: uiPassword,
       display_name: 'Password management fixture',
     });
@@ -341,6 +342,96 @@ async function run() {
     assert.equal((await request('/api/auth/passkeys', uiRegistered.token)).passkeys.length, 1);
     await closeAccount(account);
     checks.push('ui-password-account-enrolls-first-passkey-with-separate-native-gesture');
+
+    failureStage = 'ui-password-removal-without-authenticator';
+    await cdp.send('WebAuthn.removeVirtualAuthenticator', { authenticatorId });
+    authenticatorId = undefined;
+    const beforeRemoval = await ceremonies();
+    account = await openAccount();
+    await account.getByRole('button', { name: /^Remove passkey / }).click();
+    await account.getByRole('heading', { name: 'Remove passkey', exact: true }).waitFor();
+    const removalMethod = account.getByRole('combobox', {
+      name: 'Verify account changes with',
+      exact: true,
+    });
+    assert.equal(await removalMethod.isVisible(), true, 'Removal displays its own proof selector');
+    assert.equal(await removalMethod.inputValue(), 'password', 'Password proof is the default');
+    const removalPassword = account.getByLabel('Current password for verification', {
+      exact: true,
+    });
+    assert.equal(await removalPassword.isVisible(), true, 'Removal password field is visible');
+    await removalPassword.fill(uiPassword);
+    const removalPasswordElement = await removalPassword.elementHandle();
+    const removedResponse = page.waitForResponse((response) =>
+      response.url().endsWith('/api/auth/passkeys/start'),
+    );
+    await account.getByRole('button', { name: 'Verify and remove passkey', exact: true }).click();
+    const removal = await removedResponse;
+    assert.equal(removal.status(), 200, 'The server accepts current-password removal');
+    assert.equal((await removal.json()).kind, 'removed');
+    assert.ok(
+      removal.request().postDataJSON().current_password === uiPassword,
+      'Visible removal proof reaches the real server',
+    );
+    assert.equal(
+      await removalPasswordElement.evaluate((element) => element.value),
+      '',
+      'Removal clears even the detached proof field',
+    );
+    await removalPasswordElement.dispose();
+    await account.waitFor({ state: 'hidden' });
+    await page.locator('#sign-in-btn').waitFor({ state: 'visible' });
+    assert.deepEqual(
+      await ceremonies(),
+      beforeRemoval,
+      'Password-authorized removal must not call native credential get or create',
+    );
+    await request('/api/auth/passkeys', uiRegistered.token, undefined, 401);
+    checks.push('ui-password-removal-needs-no-authenticator-and-revokes-session');
+
+    failureStage = 'ui-password-signin-after-passkey-removal';
+    await page.locator('#sign-in-btn').click();
+    await page.locator('#login-email').fill(uiEmail);
+    await page.locator('#login-password').fill(uiPassword);
+    const signedInResponse = page.waitForResponse((response) =>
+      response.url().endsWith('/api/auth/login'),
+    );
+    await page.locator('#login-submit').click();
+    const signedIn = await signedInResponse;
+    assert.equal(signedIn.status(), 200, 'Password sign-in survives last-passkey removal');
+    const passwordSession = await signedIn.json();
+    assert.ok(
+      passwordSession.user.id === uiRegistered.user.id,
+      'Password sign-in returns the same account',
+    );
+    await page.locator('#login-modal').waitFor({ state: 'hidden' });
+    await page.locator('#logout-btn').waitFor({ state: 'visible' });
+    const noPasskeys = await request('/api/auth/passkeys', passwordSession.token);
+    assert.equal(noPasskeys.password_enabled, true);
+    assert.equal(noPasskeys.passkeys.length, 0, 'The real server deleted the selected credential');
+    assert.deepEqual(await ceremonies(), beforeRemoval, 'Password sign-in uses no authenticator');
+
+    failureStage = 'ui-password-account-reenrolls-after-removal';
+    await authenticator();
+    account = await openAccount();
+    await account
+      .getByText('0 of 10 passkeys saved. Password sign-in is also available.', { exact: true })
+      .waitFor();
+    await account.getByLabel('Current password for verification', { exact: true }).fill(uiPassword);
+    await account.getByRole('button', { name: 'Add passkey', exact: true }).click();
+    await account.getByRole('button', { name: 'Create passkey', exact: true }).waitFor();
+    assert.deepEqual(await ceremonies(), beforeRemoval, 'Re-enrollment waits for its own gesture');
+    await account.getByRole('button', { name: 'Create passkey', exact: true }).click();
+    await account
+      .getByText('1 of 10 passkeys saved. Password sign-in is also available.', { exact: true })
+      .waitFor();
+    assert.equal((await request('/api/auth/passkeys', passwordSession.token)).passkeys.length, 1);
+    const reenrollmentCalls = (await ceremonies()).slice(beforeRemoval.length);
+    assert.equal(reenrollmentCalls.length, 1);
+    assert.equal(reenrollmentCalls[0].kind, 'create');
+    assert.equal(reenrollmentCalls[0].active, true, 'Re-enrollment retains its explicit gesture');
+    await closeAccount(account);
+    checks.push('ui-password-signin-and-passkey-reenrollment-work-after-removal');
     process.stdout.write(JSON.stringify({ browser: 'chromium', checks, passed: true }) + '\n');
   } finally {
     if (cdp && authenticatorId)

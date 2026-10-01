@@ -778,6 +778,10 @@ both ceremonies expire after 60 seconds. The account is limited to ten passkeys.
 Removal must leave a password or another passkey and atomically revokes all
 sessions. A recovery key alone does not permit removing the last direct sign-in
 method. Recovery secrets are shown once and only their hashes are stored.
+The removal confirmation presents its own verification controls and defaults to
+the current password when one is available, so an unavailable passkey does not
+block its replacement. Verification precedes removal; only the server's
+successful response confirms deletion.
 Cancelled ceremonies and lost mutation responses must not be reported as
 confirmed changes; the UI asks for a reload when the server outcome is unknown.
 

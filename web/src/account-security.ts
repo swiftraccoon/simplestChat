@@ -298,7 +298,9 @@ export class AccountSecurityFlow {
       this.phase = result.kind;
       this.message =
         result.kind === 'authenticate'
-          ? 'Verify with an existing passkey for this account.'
+          ? action === 'remove'
+            ? 'The passkey has not been removed. Verify with an existing passkey for this account to remove it and sign out all sessions.'
+            : 'Verify with an existing passkey for this account.'
           : 'Choose where to save your new passkey.';
       this.challengeTimer = setTimeout(
         () => this.expireChallenge(),
@@ -382,6 +384,17 @@ export class AccountSecurityFlow {
     this.phase = 'idle';
     this.changed();
   }
+  /** Retire an unused proof challenge; no account mutation has been submitted. */
+  cancelVerification(): void {
+    if (this.phase !== 'authenticate') return;
+    this.generation++;
+    this.clearChallengeTimer();
+    this.challenge = null;
+    this.operation = null;
+    this.phase = 'idle';
+    this.message = '';
+    this.changed();
+  }
   dispose(): void {
     this.disposed = true;
     this.generation++;
@@ -407,6 +420,7 @@ export function mountAccountSecurity(options: {
   options.container.append(section);
   let passwordInput: HTMLInputElement | null = null;
   let recoveryInput: HTMLTextAreaElement | null = null;
+  let removal: { id: string; description: string } | null = null;
   const run = (work: Promise<void>): void => {
     work.catch(() => {
       /* Flow owns safe errors. */
@@ -417,7 +431,7 @@ export function mountAccountSecurity(options: {
     options.interactionChanged?.(flow.canStart);
     if (passwordInput) passwordInput.value = '';
     if (recoveryInput) recoveryInput.value = '';
-    section.replaceChildren(el('h3', 'Sign-in and recovery'));
+    section.replaceChildren(el('h3', removal ? 'Remove passkey' : 'Sign-in and recovery'));
     if (flow.message) section.append(el('p', flow.message, 'setting-hint'));
     if (flow.phase === 'uncertain') {
       section.append(
@@ -428,11 +442,22 @@ export function mountAccountSecurity(options: {
     if (flow.phase === 'authenticate' || flow.phase === 'register') {
       section.append(
         button(
-          flow.phase === 'authenticate' ? 'Verify with passkey' : 'Create passkey',
+          flow.phase === 'authenticate'
+            ? removal
+              ? 'Verify and remove passkey'
+              : 'Verify with passkey'
+            : 'Create passkey',
           () => run(flow.continueWithPasskey()),
           'btn-primary',
         ),
       );
+      if (removal && flow.phase === 'authenticate')
+        section.append(
+          button('Back to removal options', () => {
+            flow.cancelVerification();
+            section.querySelector('select')?.focus();
+          }),
+        );
       return;
     }
     if (
@@ -489,7 +514,9 @@ export function mountAccountSecurity(options: {
     section.append(
       el(
         'p',
-        `${settings.passkeys.length} of ${settings.maximum} passkeys saved. ${settings.password_enabled ? 'Password sign-in is also available.' : 'This account signs in with passkeys.'}`,
+        removal
+          ? `Remove the key added ${removal.description}? Verify your identity before removal. After removal, all sessions will be signed out. Make sure you can use another sign-in method.`
+          : `${settings.passkeys.length} of ${settings.maximum} passkeys saved. ${settings.password_enabled ? 'Password sign-in is also available.' : 'This account signs in with passkeys.'}`,
         'setting-hint',
       ),
     );
@@ -504,7 +531,12 @@ export function mountAccountSecurity(options: {
       option.value = 'password';
       proof.append(option);
     }
-    proof.value = settings.passkeys.length > 0 ? 'passkey' : 'password';
+    proof.value =
+      removal && settings.password_enabled
+        ? 'password'
+        : settings.passkeys.length > 0
+          ? 'passkey'
+          : 'password';
     const password = input('', 'password', 128);
     passwordInput = password;
     password.autocomplete = 'current-password';
@@ -519,29 +551,38 @@ export function mountAccountSecurity(options: {
       if (proof.value === 'password' && !password.value) {
         flow.message = 'Enter your current password to verify this change.';
         render();
+        if (removal) passwordInput?.focus();
         return;
       }
       const secret = proof.value === 'password' ? password.value : undefined;
       password.value = '';
       run(flow.start(operation, secret));
     };
+    if (removal) {
+      const id = removal.id;
+      section.append(
+        button(
+          'Verify and remove passkey',
+          () => choose({ action: 'remove', id }),
+          'btn-secondary danger',
+        ),
+        button('Keep passkey', () => {
+          removal = null;
+          flow.message = '';
+          render();
+          section.querySelector('select')?.focus();
+        }),
+      );
+      return;
+    }
     for (const key of settings.passkeys) {
       const description = `${new Date(key.created_at).toLocaleString()} · ${key.id.slice(0, 8)}`;
       const row = el('div', undefined, 'community-field');
       const remove = button(`Remove passkey ${key.id.slice(0, 8)}`, () => {
-        section.replaceChildren(
-          el('h3', 'Remove passkey'),
-          el(
-            'p',
-            `Remove the key added ${description}? All sessions will be signed out. Make sure you can use another sign-in method.`,
-          ),
-          button(
-            'Confirm removal',
-            () => choose({ action: 'remove', id: key.id }),
-            'btn-secondary danger',
-          ),
-          button('Keep passkey', render),
-        );
+        removal = { id: key.id, description };
+        flow.message = '';
+        render();
+        section.querySelector('select')?.focus();
       });
       remove.disabled = settings.passkeys.length <= 1 && !settings.password_enabled;
       row.append(el('span', description), remove);
