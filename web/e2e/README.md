@@ -396,8 +396,11 @@ with isolated HTTP and WebSocket fixtures; build `web/dist` first and do not
 rebuild it during the run. No server, database or capture device is used. The
 suite checks native dialog keyboard ownership, blocked/quota-exhausted storage,
 late room creation, capability-specific onboarding, stable roster focus and
-hidden roster removal, plus the chat composer at 320×568, 390×844 and 844×390
-with its emoji picker open. Unexpected page errors or any capture request fail.
+hidden roster removal. Joined-room checks cover the compact header, video-column
+call controls, full-height side panels, conversation pills and private drafts,
+focus restoration, and long chat drafts at 320×568, 390×844 and 844×390 with the emoji
+picker open. Desktop keyboard and emulated touch contexts check multiline
+composition and sending. Unexpected page errors or any capture request fail.
 
 Set `E2E_ARTIFACTS` to an output directory, or allow a fresh temporary directory.
 The runner saves a JSON result, small-screen screenshots and owned Chromium

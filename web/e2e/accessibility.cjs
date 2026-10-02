@@ -1,4 +1,5 @@
 /** Opt-in accessibility smoke against owned disposable loopback services. */
+const { openRoomMenu } = require('./room-menu.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -318,7 +319,7 @@ async function run(env = process.env) {
       () => document.querySelector('#connection-status').textContent === 'Connected',
     );
     await page
-      .getByRole('combobox', { name: 'Conversation', exact: true })
+      .getByRole('navigation', { name: 'Conversations', exact: true })
       .waitFor({ state: 'visible' });
     await scan(page, 'joined-chat-desktop', AxeBuilder);
     await check('participant initials have readable rendered contrast', async () => {
@@ -351,7 +352,7 @@ async function run(env = process.env) {
     await check('newest-message button is keyboard-operable after real chat overflow', async () => {
       const content = 'Accessibility keyboard scrolling check. '.repeat(45).trim();
       await page.locator('#chat-input').fill(content);
-      await page.locator('#chat-send-btn').click();
+      await page.locator('#chat-input').press('Enter');
       await page.waitForFunction(
         (text) =>
           [...document.querySelectorAll('.chat-msg')].some(
@@ -419,6 +420,7 @@ async function run(env = process.env) {
         await room.waitFor({ state: 'hidden' });
         assert.equal(await roomOpener.evaluate((node) => node === document.activeElement), true);
       });
+      await openRoomMenu(page);
       const accountOpener = page
         .locator('#community-actions')
         .getByRole('button', { name: 'Account', exact: true });
@@ -432,7 +434,10 @@ async function run(env = process.env) {
       await check(`${prefix}-account-Escape-restores-focus`, async () => {
         await page.keyboard.press('Escape');
         await account.waitFor({ state: 'hidden' });
-        assert.equal(await accountOpener.evaluate((node) => node === document.activeElement), true);
+        assert.equal(
+          await page.locator('#room-more-btn').evaluate((node) => node === document.activeElement),
+          true,
+        );
       });
     };
     await settings('desktop');
@@ -450,6 +455,7 @@ async function run(env = process.env) {
     await check('Help opens a separate tab without leaving the room', async () => {
       const label = await page.locator('#room-label').textContent();
       const opened = page.waitForEvent('popup');
+      await openRoomMenu(page);
       await page.getByRole('link', { name: 'Help (opens in a new tab)', exact: true }).click();
       const help = await opened;
       try {

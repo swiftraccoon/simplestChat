@@ -4,6 +4,7 @@
  * harness; only the default full profile rolls over the 300-message history.
  * No production origins, rate-limit overrides, fake replies, or capture devices.
  */
+const { openRoomMenu } = require('./room-menu.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -516,6 +517,7 @@ async function run(env = process.env) {
   async function deleteOwnedRoom() {
     if (!roomCreated || roomDeleted) return;
     const page = clients[0].page;
+    await openRoomMenu(page);
     await page
       .locator('#community-actions')
       .getByRole('button', { name: 'My rooms', exact: true })

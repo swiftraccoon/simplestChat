@@ -5,6 +5,7 @@
  * PLAYWRIGHT_MODULE=/path/to/node_modules/playwright node web/e2e/community.cjs
  * PLAYWRIGHT_BROWSERS_PATH can point at an isolated browser installation.
  */
+const { openRoomMenu } = require('./room-menu.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -243,7 +244,7 @@ async function connected(page) {
     () => document.querySelector('#connection-status').textContent === 'Connected',
   );
   await page
-    .getByRole('combobox', { name: 'Conversation', exact: true })
+    .getByRole('navigation', { name: 'Conversations', exact: true })
     .waitFor({ state: 'visible' });
 }
 async function reconnectMediaIdentity(page) {
@@ -684,7 +685,7 @@ async function submitMessage(page) {
   // Human-paced messages preserve the server's 2/s chat flood protection.
   const remaining = 600 - (Date.now() - (lastSend.get(page) || 0));
   if (remaining > 0) await page.waitForTimeout(remaining);
-  await page.locator('#chat-send-btn').click();
+  await page.locator('#chat-input').press('Enter');
   lastSend.set(page, Date.now());
 }
 async function send(page, text) {
@@ -692,21 +693,15 @@ async function send(page, text) {
   await submitMessage(page);
 }
 async function publicChat(page) {
-  await page.getByRole('combobox', { name: 'Conversation', exact: true }).selectOption('public');
+  await page.locator('.conversation-tab[data-conversation-id="public"]').click();
 }
 async function action(page, name, label) {
   const buttons = page.getByRole('button', { name: `Actions for ${name}`, exact: true });
   await buttons.filter({ visible: true }).first().click();
   await page.locator('#mod-menu').getByRole('button', { name: label, exact: true }).click();
 }
-/** Room tools needed now and then live in the room tools' "More" menu (absent in older builds). */
-async function openRoomMenu(page) {
-  const more = page.locator('#room-more-btn');
-  if ((await more.count()) && (await more.getAttribute('aria-expanded')) !== 'true')
-    await more.click();
-}
 async function header(page, name) {
-  // Account actions stay in the header; room-scoped actions live in the room tools' menu.
+  // Joined-room account and room actions share the More menu.
   const target = page
     .locator('#community-actions, #room-actions')
     .getByRole('button', { name, exact: true });
@@ -946,7 +941,7 @@ async function setRole(owner, name, role) {
         'no duplicate toolbar setup',
       );
       for (const selector of ['#settings-btn', '#mic-setup-btn']) {
-        // Mic setup waits in the More menu, and closing the dialog returns to More.
+        // Mic setup lives in More; the main settings button stays below the video.
         const inMenu = selector === '#mic-setup-btn';
         if (inMenu) await openRoomMenu(guest);
         const opener = guest.locator(selector);
@@ -1107,8 +1102,10 @@ async function setRole(owner, name, role) {
         await action(owner, 'E2E Member', 'Private message');
         await send(owner, 'Private owner hello');
         await member.waitForFunction(() =>
-          [...document.querySelector('[aria-label="Conversation"]').options].some(
-            (o) => o.text.includes('E2E Owner') && o.text.includes('(1)'),
+          [...document.querySelectorAll('.conversation-tab')].some(
+            (node) =>
+              node.getAttribute('aria-label')?.includes('E2E Owner') &&
+              node.querySelector('.conversation-unread')?.textContent === '1',
           ),
         );
         const ownerId = await member
@@ -1118,10 +1115,13 @@ async function setRole(owner, name, role) {
           })
           .getAttribute('data-participant-id');
         assert.ok(ownerId);
-        const conversations = member.getByRole('combobox', { name: 'Conversation', exact: true });
-        await conversations.selectOption(ownerId);
-        const label = await conversations.locator(`option[value="${ownerId}"]`).textContent();
-        assert.match(label, /^#[0-9a-f]{8} · account · E2E Owner$/);
+        const conversation = member.locator(`.conversation-tab[data-conversation-id="${ownerId}"]`);
+        await conversation.click();
+        assert.equal(await conversation.getAttribute('aria-pressed'), 'true');
+        assert.match(
+          await conversation.getAttribute('aria-label'),
+          /^#[0-9a-f]{8} · account · E2E Owner\. Participant ID:/,
+        );
         await visible(member, 'Private owner hello');
         await visible(owner, 'Private owner hello');
         assert.equal(
@@ -1292,8 +1292,9 @@ async function setRole(owner, name, role) {
         await leave(member);
         await owner.waitForFunction(() =>
           document
-            .querySelector('[aria-label="Conversation"]')
-            .selectedOptions[0]?.text.includes('offline'),
+            .querySelector('.conversation-tab[aria-pressed="true"]')
+            ?.getAttribute('aria-label')
+            ?.includes('offline'),
         );
         await chatEnabled(owner, false);
         await setRole(owner, 'E2E Member', 3);
@@ -2007,12 +2008,12 @@ async function setRole(owner, name, role) {
       await close(mine);
       await guest.locator('#room-topic').filter({ hasText: topic }).waitFor({ state: 'visible' });
       const topicBounds = await guest.locator('#room-topic').boundingBox();
-      assert.ok(topicBounds.width > 300, 'topic uses the available desktop header width');
+      const headerBounds = await guest.locator('header').boundingBox();
+      assert.ok(topicBounds.width > 0, 'topic remains a visible keyboard-accessible control');
       assert.ok(
-        await guest
-          .locator('#room-topic')
-          .evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
-        'full topic wraps without clipping',
+        headerBounds.height <= 96 &&
+          topicBounds.y + topicBounds.height <= headerBounds.y + headerBounds.height + 1,
+        'a long topic keeps the room header compact',
       );
       await guest.locator('#room-topic').focus();
       await guest.keyboard.press('Enter');

@@ -356,7 +356,7 @@ header h1 {
 #room-screen {
   flex: 1;
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: minmax(0, 1fr);
   gap: 0;
   overflow: hidden;
   transition: grid-template-columns var(--transition-normal);
@@ -375,6 +375,9 @@ header h1 {
   grid-column: 1;
   grid-row: 1;
   display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -382,6 +385,7 @@ header h1 {
 
 #video-grid {
   flex: 1;
+  min-height: 0;
   display: grid;
   gap: 8px;
   padding: 8px;
@@ -582,6 +586,11 @@ header h1 {
   flex-shrink: 0;
 }
 
+/* A lone Chat tab adds no navigation; keep tabs when People or Lobby is available. */
+#sidebar-tabs:has([data-tab='users'][hidden]):has(#lobby-tab[hidden]) {
+  display: none;
+}
+
 .sidebar-collapse {
   display: none;
   flex: 0 0 44px;
@@ -740,7 +749,7 @@ header h1 {
 /* Scroll-to-bottom button */
 #scroll-bottom-btn {
   position: absolute;
-  bottom: 52px;
+  bottom: calc(var(--chat-composer-height, 52px) + 0.5rem);
   left: 50%;
   transform: translateX(-50%);
   background: var(--accent-fill);
@@ -785,6 +794,7 @@ header h1 {
   z-index: 1;
   background: var(--surface);
   display: flex;
+  align-items: flex-end;
   gap: 6px;
   padding: 0.5rem;
   border-top: 1px solid var(--border);
@@ -794,12 +804,18 @@ header h1 {
 #chat-input {
   flex: 1;
   min-width: 0;
+  min-height: 38px;
+  max-height: calc(8.4em + 1rem + 2px);
+  resize: none;
+  overflow-y: auto;
   padding: 0.5rem 0.7rem;
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   color: var(--text);
+  font-family: inherit;
   font-size: 0.9rem;
+  line-height: 1.4;
   outline: none;
   transition:
     border-color var(--transition-fast),
@@ -811,9 +827,14 @@ header h1 {
   box-shadow: 0 0 0 2px var(--accent-glow);
 }
 
+#chat-input-row .emoji-toggle {
+  min-width: 44px;
+  min-height: 38px;
+}
+
 #chat-send-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   background: var(--accent-fill);
   color: var(--on-accent);
@@ -930,23 +951,24 @@ header h1 {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-/* ========== Controls Bar ========== */
+/* ========== Call controls, confined to the video column ========== */
 
 #controls {
-  grid-column: 1 / -1;
-  grid-row: 2;
   display: flex;
-  justify-content: center;
+  flex-shrink: 0;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.6rem;
   background: var(--surface);
   border-top: 1px solid var(--border);
 }
 
 #controls button {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
   border-radius: 50%;
   border: 2px solid var(--border-strong);
   background: var(--surface-2);
@@ -964,7 +986,12 @@ header h1 {
 }
 
 #controls button:hover {
-  transform: scale(1.08);
+  background: var(--surface-3);
+}
+
+#controls button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 #controls button .btn-tooltip {
@@ -1034,14 +1061,18 @@ header h1 {
   }
 }
 
-/* PTT mode indicator label below mic button */
+/* Keep the push-to-talk badge inside its button so it never consumes another row. */
 .ptt-label {
   position: absolute;
-  bottom: -18px;
+  bottom: 0;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 0.6rem;
-  color: var(--text-dim);
+  font-size: 0.55rem;
+  line-height: 1;
+  padding: 1px 2px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  color: var(--text);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -1204,17 +1235,6 @@ header h1 {
   width: 24px;
   height: 24px;
   font-size: 0.65rem;
-}
-
-#classic-users-panel .panel-title {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0 0.5rem 0.5rem;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 0.5rem;
 }
 
 #classic-users-panel .classic-user-list {
@@ -1573,7 +1593,7 @@ header h1 {
   #room-screen,
   #room-screen.layout-classic {
     grid-template-columns: 1fr !important;
-    grid-template-rows: 1fr auto auto;
+    grid-template-rows: minmax(0, 1fr) auto;
   }
 
   #main-area {
@@ -1590,11 +1610,6 @@ header h1 {
 
   #classic-users-panel {
     display: none !important;
-  }
-
-  #controls {
-    grid-column: 1 !important;
-    grid-row: 3;
   }
 
   /* Touch targets stay at 44px; the row shrinks through its gaps instead. */
@@ -1615,11 +1630,6 @@ header h1 {
 
   .join-card {
     padding: 1.5rem 1rem;
-  }
-
-  #controls {
-    gap: 0.45rem;
-    padding: 0.5rem 0.4rem;
   }
 
   .room-label {
@@ -2037,28 +2047,54 @@ header h1 {
   overflow-wrap: anywhere;
 }
 
-/* Room tools remain reachable when either desktop panel is collapsed. */
-#room-tools {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  padding: 0.3rem 0.6rem;
-  flex-shrink: 0;
-  background: var(--surface);
+/* One header, with the room name on the same line as the app name. */
+header.in-room {
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+  padding: 0.4rem 0.75rem;
   border-bottom: 1px solid var(--border);
 }
+header.in-room:has(#room-more-btn[aria-expanded='true']) {
+  z-index: 310;
+}
+header.in-room .header-left {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+header.in-room .room-label {
+  display: block;
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: 40%;
+  color: var(--text);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+header.in-room .room-topic {
+  flex: 1 1 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#room-tools,
+.room-tools-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+.room-tools-right {
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--border);
+}
 .room-navigation,
-.room-tools-right,
 #community-actions {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   flex-wrap: wrap;
-}
-.room-tools-right {
-  margin-left: auto;
 }
 #room-actions {
   display: contents;
@@ -2127,25 +2163,19 @@ header h1 {
 #room-more-btn[aria-expanded='true'] svg {
   transform: rotate(180deg);
 }
-/* The slider keeps its "Room volume" name; a speaker drawn in the text colour labels it. */
-.room-volume-slot .media-controls-toolbar label {
-  gap: 0.45rem;
-  font-size: 0;
-  color: var(--text-dim);
+.room-volume-slot .media-controls-toolbar {
+  padding: 0.55rem 0.75rem;
+  justify-content: stretch;
 }
-.room-volume-slot .media-controls-toolbar label::before {
-  content: '';
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  background: currentColor;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='11 5 6 9 2 9 2 15 6 15 11 19 11 5'/%3E%3Cpath d='M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='11 5 6 9 2 9 2 15 6 15 11 19 11 5'/%3E%3Cpath d='M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14'/%3E%3C/svg%3E")
-    center / contain no-repeat;
+.room-volume-slot .media-controls-toolbar label {
+  width: 100%;
+  justify-content: space-between;
+  color: var(--text-dim);
+  font-size: 0.8rem;
 }
 .room-volume-slot input[type='range'] {
-  width: 5.5rem;
+  width: 6rem;
+  min-height: 24px;
   accent-color: var(--accent);
 }
 .room-more {
@@ -2159,15 +2189,22 @@ header h1 {
   z-index: 310;
   display: flex;
   flex-direction: column;
-  min-width: 13rem;
+  width: min(17rem, calc(100vw - 1rem));
+  max-height: calc(100dvh - 72px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.3rem;
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
 }
-.room-more-menu button {
-  display: block;
+.room-more-menu button,
+.room-more-menu .help-link {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 40px;
   width: 100%;
   padding: 0.55rem 0.75rem;
   border: none;
@@ -2177,9 +2214,32 @@ header h1 {
   font: inherit;
   font-size: 0.875rem;
   text-align: left;
+  justify-content: flex-start;
   text-decoration: none;
   cursor: pointer;
 }
+.room-more-menu svg {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+.room-more-menu .room-navigation,
+.room-more-menu #community-actions {
+  display: contents;
+}
+.room-more-menu .header-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.room-more-menu .status,
+.room-more-menu .quality-dot {
+  margin: 0.4rem 0.5rem;
+}
+.room-more-menu .settings-description {
+  padding: 0.4rem 0.75rem;
+}
+.room-more-menu .help-link:hover,
 .room-more-menu button:hover {
   background: var(--surface-3);
 }
@@ -2274,9 +2334,6 @@ header h1 {
   border: 0;
   overflow: hidden;
 }
-#room-tools .media-controls-toolbar {
-  padding: 0;
-}
 .room-card[role='button'] {
   cursor: pointer;
 }
@@ -2306,16 +2363,6 @@ header h1 {
     max-width: 100%;
     flex-wrap: wrap;
   }
-  /* One row: the rarer tools wait in "More", so nothing has to scroll or wrap. */
-  #room-tools {
-    flex-wrap: nowrap;
-    gap: 0.25rem;
-    padding: 0.25rem 0.5rem;
-  }
-  .room-navigation,
-  .room-tools-right {
-    flex-wrap: nowrap;
-  }
   .tool-button {
     min-height: 40px;
     padding: 0.35rem 0.6rem;
@@ -2330,7 +2377,7 @@ header h1 {
   }
   #room-screen,
   #room-screen.layout-classic {
-    grid-template-rows: minmax(0, 1fr) minmax(220px, 32dvh) auto;
+    grid-template-rows: minmax(0, 1fr) minmax(220px, 32dvh);
   }
   #sidebar {
     max-height: none;
@@ -2346,6 +2393,10 @@ header h1 {
   .emoji-toggle {
     min-height: 44px;
   }
+  #chat-input {
+    max-height: calc(4.2em + 1rem + 2px);
+    font-size: 1rem;
+  }
   #chat-send-btn {
     width: 44px;
     height: 44px;
@@ -2353,7 +2404,7 @@ header h1 {
   /* Collapsed: only the tab bar stays, so the video gets the height back. */
   #room-screen.mobile-panel-collapsed,
   #room-screen.mobile-panel-collapsed.layout-classic {
-    grid-template-rows: minmax(100px, 1fr) auto auto;
+    grid-template-rows: minmax(100px, 1fr) auto;
   }
   #room-screen.mobile-panel-collapsed #sidebar {
     min-height: 0;
@@ -2390,7 +2441,7 @@ header h1 {
   #room-screen.layout-classic,
   #room-screen.mobile-panel-collapsed {
     grid-template-columns: minmax(0, 1fr) minmax(200px, 42%) !important;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr);
   }
   #main-area,
   #room-screen.layout-classic #main-area {
@@ -2414,19 +2465,55 @@ header h1 {
   .sidebar-collapse {
     display: none;
   }
-  #controls {
-    grid-column: 1 / -1 !important;
-    grid-row: 2;
-    padding: 0.35rem;
-  }
-  #controls button {
-    width: 40px;
-    height: 40px;
-  }
   header {
     padding: 0.25rem 0.75rem;
   }
+}
+
+/* Preserve a single row when the room name is long or the viewport is narrow. */
+@media (max-width: 900px) {
+  .room-tools-right > .tool-button .tool-label,
+  #room-more-btn .tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .room-tools-right > .tool-button {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+}
+@media (max-width: 768px) {
+  header.in-room {
+    gap: 0.4rem;
+    padding: 0.25rem 0.5rem;
+  }
   #room-tools {
-    padding: 0.2rem 0.5rem;
+    gap: 0.25rem;
+  }
+  #controls {
+    gap: 0.25rem;
+    padding: 0.25rem 0.4rem;
+  }
+  .room-tools-right {
+    border: 0;
+    padding: 0;
+  }
+  #room-more-btn {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0.25rem;
+  }
+  #room-more-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+  .room-more-menu button,
+  .room-more-menu .help-link {
+    min-height: 44px;
   }
 }

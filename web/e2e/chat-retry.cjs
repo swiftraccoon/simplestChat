@@ -155,7 +155,7 @@ async function check(sender, receiver, name, dropSend, privateMessage = false) {
   active = scenario;
   const content = `Owned retry fixture ${scenarios.length}`;
   await sender.locator('#chat-input').fill(content);
-  await sender.locator('#chat-send-btn').click();
+  await sender.locator('#chat-input').press('Enter');
   const row = sender
     .locator('.chat-msg')
     .filter({ has: sender.getByText(content, { exact: true }) });
@@ -177,14 +177,9 @@ async function check(sender, receiver, name, dropSend, privateMessage = false) {
     );
   }, content);
   if (privateMessage) {
-    const choice = await receiver
-      .getByRole('combobox', { name: 'Conversation', exact: true })
-      .locator('option')
-      .evaluateAll((nodes) => nodes.find((node) => node.textContent.includes(' · Sender'))?.value);
-    assert.equal(typeof choice, 'string');
-    await receiver
-      .getByRole('combobox', { name: 'Conversation', exact: true })
-      .selectOption(choice);
+    const conversation = receiver.locator('.conversation-tab').filter({ hasText: 'Sender' });
+    await conversation.click();
+    assert.equal(await conversation.getAttribute('aria-pressed'), 'true');
   }
   await receiver.getByText(content, { exact: true }).waitFor({ state: 'visible' });
   await sender.waitForTimeout(350);
