@@ -23,8 +23,11 @@ build/check-security.sh image sha256:FULL_IMAGE_ID
 ```
 
 `--base` adds the explicit committed Git range to the source and uncommitted-diff
-secret checks. It must be a full ancestor commit SHA. CI supplies the PR base or
-previous push revision. It is not a replacement for scanning the current tree.
+secret checks and identifies newly introduced dependency versions, hashes and
+action pins. It must be a full ancestor commit SHA. CI supplies the PR base or
+previous push revision; complete local CI uses the recorded remote-main ancestor
+so all unpublished commits are covered. Without `--base`, dependency comparison
+uses `HEAD` for working-tree iteration. Current-tree vulnerability scans always run.
 
 Each invocation creates a new private `results/security.<tier>.*` directory.
 Use `--output /private/new-directory` to select a different, nonexistent output
@@ -78,6 +81,8 @@ for detailed archive, scanner, database, license and ELF contracts.
 | Cargo deny | Approved licenses, crates.io origins, banned crates and dependency constraints | A separate exact duplicate budget covers the all-feature graph. |
 | Pip audit | All five hashed build, deployment, scanner and native Python requirement sets | Uses current package advisory service responses. |
 | Npm audit | Both web and browser-harness lockfiles | Lockfile audit remains necessary for bundled JavaScript. |
+| Changed dependency licenses | Authenticated npm release metadata and every hash-locked Python wheel use the existing license allowlist | Changed unsupported locks or unknown declarations fail; unchanged dependencies are not reclassified. |
+| Changed GitHub Actions | Exact-ref licenses and current reviewed/malware advisory feeds, with release versions bound to immutable action pins | Unresolved affected versions or incomplete metadata fail; no workflow code is downloaded or executed by this check. |
 | Squawk | New PostgreSQL migrations, transaction-aware and pinned to the deployed major | The fixed existing-migration baseline forbids edits to old SQL. |
 | Runtime configuration | Maintained rendered container restrictions and configuration invariants | Source tests cannot prove live kernel or provider state. |
 

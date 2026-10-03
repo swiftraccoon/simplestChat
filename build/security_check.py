@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+import security_actions
+import security_dependency_licenses
 import security_findings as findings
 import security_openssl
 from security_context import MAX_REPORT, ROOT, Context, executable, json_object
@@ -322,6 +324,8 @@ def fast(context: Context, base: str | None) -> None:
     workflow_checks(context, tools, reviews)
     secret_checks(context, tools, reviews, base, snapshot)
     dependency_checks(context, tools, reviews)
+    security_dependency_licenses.check(context, snapshot, base)
+    security_actions.check(context, snapshot, base)
     source_checks(context, tools)
     security_openssl.check(context, snapshot)
     _ = context.snapshot("final-source")
