@@ -827,10 +827,29 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          # The default driver cannot export a layer cache; a container builder
-          # can, and --load hands the finished image to the runner's daemon.
+          # The container driver retains exported layer caches on both runner
+          # stores; --load hands the finished image to the runner's daemon.
+          driver_options=()
+          if [[ "${ACT:-}" == true && "$(uname -m)" == aarch64 ]]; then
+            [[ "${LOCAL_CI_DISPOSABLE:-}" == 1 ]] || exit 2
+            # BuildKit's AMD64 probe rejects Rosetta, then injects its bundled
+            # QEMU, which crashes the pinned Rust compiler. Keep the native
+            # BuildKit 0.33.1 ARM64 manifest and delegate AMD64 to kernel binfmt.
+            builder_context="$(mktemp -d "${RUNNER_TEMP}/buildkit-rosetta.XXXXXXXX")"
+            printf '%s\n' \
+              'FROM docker.io/moby/buildkit@sha256:3ad6bb9bc8c78c0069d03247adb9a59b3b43d68e55353e876e558b888c6c1768' \
+              'RUN test -x /usr/bin/buildkit-qemu-x86_64 && rm /usr/bin/buildkit-qemu-x86_64' \
+              > "${builder_context}/Dockerfile"
+            timeout --signal=TERM --kill-after=10s 3m \
+              docker buildx build --builder default --platform linux/arm64 --load \
+                --iidfile "${builder_context}/image.iid" "${builder_context}"
+            builder_id="$(<"${builder_context}/image.iid")"
+            [[ "${builder_id}" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
+            test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "${builder_id}")" = linux/arm64
+            driver_options=(--driver-opt "image=${builder_id}")
+          fi
           docker buildx rm --force simplestchat-ci 2>/dev/null || true
-          docker buildx create --name simplestchat-ci --driver docker-container --use
+          docker buildx create --name simplestchat-ci --driver docker-container ${driver_options[@]+"${driver_options[@]}"} --use
           cache_dir="${RUNNER_TEMP}/buildx-cache"
           cache_from=()
           if [[ -f "${cache_dir}/index.json" ]]; then

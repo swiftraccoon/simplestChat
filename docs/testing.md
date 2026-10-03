@@ -483,7 +483,10 @@ suites, including native sanitizers and CodeQL tracing. Production images remain
 explicitly AMD64 on both paths. After checking that the owned VM has no containers,
 the Mac launcher enables its registered Rosetta interpreter for AMD64 production
 commands and disables the competing QEMU handler. The packaged QEMU crashes when
-querying the pinned AMD64 Rust compiler. Authenticated OpenSSL extraction uses
+querying the pinned AMD64 Rust compiler. Local ARM64 production builds derive a
+digest-pinned native BuildKit image with only its bundled AMD64 QEMU removed,
+so build commands use the kernel's Rosetta registration. The existing container
+builder and exported layer cache remain in use. Authenticated OpenSSL extraction uses
 Python's filtered tar reader, which works with Rosetta. These ARM64 test runs
 exercise the same checks but do not claim identical ISA coverage to GitHub.
 The hosted AMD64 workflow remains a deployment gate.

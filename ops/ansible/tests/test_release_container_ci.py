@@ -2,6 +2,7 @@
 
 import re
 import subprocess
+import tempfile
 import unittest
 from functools import cached_property
 from pathlib import Path
@@ -119,6 +120,99 @@ class ReleaseContainerCiTests(unittest.TestCase):
             (ROOT / "build/test-container.sh").read_text(),
         )
         self.assertIn('--image "${PRODUCTION_IMAGE}"', string(self.step(INTEGRATION), "run"))
+
+    def run_builder_selection(
+        self,
+        machine: str,
+        *,
+        act: str = "true",
+        overrides: dict[str, str] | None = None,
+    ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+        """Execute actual workflow routing with Docker calls replaced by inert records."""
+        command = string(self.step("Build production container"), "run")
+        _, marker, selection = command.partition("driver_options=()\n")
+        self.assertTrue(marker)
+        selection, marker, _ = selection.partition('cache_dir="')
+        self.assertTrue(marker)
+        mocks = r"""
+uname() { printf '%s\n' "$TEST_MACHINE"; }
+timeout() { shift 3; "$@"; }
+docker() {
+  printf '%s ' "$@" >> "$RUNNER_TEMP/docker-calls"
+  printf '\n' >> "$RUNNER_TEMP/docker-calls"
+  case "$1 $2" in
+    'buildx build')
+      [[ "$TEST_BUILD_STATUS" == 0 ]] || return "$TEST_BUILD_STATUS"
+      while (($#)); do
+        if [[ "$1" == --iidfile ]]; then
+          shift
+          printf '%s\n' "$TEST_IMAGE_ID" > "$1"
+          break
+        fi
+        shift
+      done
+      ;;
+    'image inspect') printf '%s\n' "$TEST_IMAGE_ARCH" ;;
+  esac
+}
+"""
+        (ROOT / "results").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="builder-routing.", dir=ROOT / "results") as path:
+            result = subprocess.run(  # noqa: S603 -- Actual local block, inert shell mocks only.
+                ["/bin/bash", "-c", mocks + "set -euo pipefail\ndriver_options=()\n" + selection],
+                env={
+                    "RUNNER_TEMP": path,
+                    "ACT": act,
+                    "LOCAL_CI_DISPOSABLE": "1",
+                    "TEST_MACHINE": machine,
+                    "TEST_IMAGE_ID": "sha256:" + "a" * 64,
+                    "TEST_IMAGE_ARCH": "linux/arm64",
+                    "TEST_BUILD_STATUS": "0",
+                    **(overrides or {}),
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=5,
+            )
+            calls = Path(path) / "docker-calls"
+            return result, calls.read_text().splitlines() if calls.exists() else []
+
+    def test_local_arm_builder_changes_only_the_disposable_native_driver_image(self) -> None:
+        """Hosted and local AMD64 keep their driver; ARM uses a validated immutable image."""
+        for machine, act, derived in (
+            ("aarch64", "true", True),
+            ("x86_64", "true", False),
+            ("x86_64", "", False),
+            ("aarch64", "", False),
+        ):
+            with self.subTest(machine=machine, act=act):
+                result, calls = self.run_builder_selection(machine, act=act)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                creates = [call for call in calls if call.startswith("buildx create ")]
+                self.assertEqual(len(creates), 1)
+                self.assertIn("--driver docker-container", creates[0])
+                self.assertEqual("--driver-opt image=sha256:" in creates[0], derived)
+                self.assertEqual(any(call.startswith("buildx build ") for call in calls), derived)
+                if derived:
+                    self.assertIn("--builder default --platform linux/arm64 --load", calls[0])
+                    self.assertIn("image=sha256:" + "a" * 64, creates[0])
+
+    def test_local_builder_rejects_missing_opt_in_failed_build_and_untrusted_image(self) -> None:
+        """Failures cannot fall through to the bundled emulator or a mutable image tag."""
+        cases = (
+            {"LOCAL_CI_DISPOSABLE": ""},
+            {"TEST_BUILD_STATUS": "42"},
+            {"TEST_IMAGE_ID": "floating:tag"},
+            {"TEST_IMAGE_ARCH": "linux/amd64"},
+        )
+        for options in cases:
+            with self.subTest(options=options):
+                result, calls = self.run_builder_selection("aarch64", overrides=options)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(any(call.startswith("buildx create ") for call in calls))
+                if options.get("LOCAL_CI_DISPOSABLE") == "":
+                    self.assertEqual(calls, [])
 
     def test_push_export_never_rebuilds_and_publication_waits_for_required_checks(self) -> None:
         """Verify push export never rebuilds and publication waits for required checks."""
