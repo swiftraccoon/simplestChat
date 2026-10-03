@@ -139,7 +139,7 @@ jobs:
 
       - name: Audit Rust dependencies
         run: |
-          audit_tools="$RUNNER_TEMP/rust-audit-tools"
+          audit_tools="$(mktemp -d "$RUNNER_TEMP/rust-audit-tools.XXXXXXXX")/tools"
           python3 build/security_tools.py install --tools cargo-audit --directory "$audit_tools"
           cargo_audit="$(python3 build/security_tools.py path cargo-audit --directory "$audit_tools")"
           # SQLx 0.9 removes the old optional rsa lockfile entry. Keep its
