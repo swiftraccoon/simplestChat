@@ -56,7 +56,8 @@ workflow_hashes={name:hashlib.sha256(pathlib.Path('.github/workflows',name).read
 PY
     fi
     exit "$CI_FIXTURE_ACT_EXIT" ;;
-  uname) echo "$CI_FIXTURE_OS" ;;
+  uname)
+    if [[ "$1" == -m ]]; then echo "$CI_FIXTURE_ARCH"; else echo "$CI_FIXTURE_OS"; fi ;;
   podman)
     [[ "$1" == machine ]] || exit 94
     case "$2" in
@@ -66,6 +67,7 @@ PY
         elif [[ "$*" == *'{{.ConnectionInfo.PodmanSocket.Path}}'* ]]; then echo /owned-ci/socket; fi ;;
       list) if [[ -n "$CI_FIXTURE_OTHER_VM" ]]; then echo 'other-project true'; else echo 'simplestchat-ci false'; fi ;;
       init|start|stop) : ;;
+      ssh) [[ -z "$CI_FIXTURE_QEMU_FAIL" ]] || exit 69 ;;
       *) exit 95 ;;
     esac ;;
   *) exit 96 ;;
@@ -95,7 +97,7 @@ async function fixture(t) {
       await writeFile(log, '');
       const result = spawnSync('/bin/bash', [path.join(checkout, 'build/ci-local.sh'), ...args], {
         cwd: checkout,
-        env: { PATH: `${bin}:${process.env.PATH}`, CI_FIXTURE_LOG: log, CI_FIXTURE_OS: 'Darwin', CI_FIXTURE_ACT_EXIT: '0', LC_ALL: 'C', ...overrides },
+        env: { PATH: `${bin}:${process.env.PATH}`, CI_FIXTURE_LOG: log, CI_FIXTURE_OS: 'Darwin', CI_FIXTURE_ARCH: 'arm64', CI_FIXTURE_ACT_EXIT: '0', LC_ALL: 'C', ...overrides },
         encoding: 'utf8', timeout: 15_000,
       });
       assert.equal(result.error, undefined, result.stderr);
@@ -112,7 +114,7 @@ async function fixture(t) {
   };
 }
 
-test('all runs the canonical required DAG with isolated bounded amd64 runners and exact source event', async t => {
+test('all maps native ARM and explicit AMD64 runners with bounded resources and exact source event', async t => {
   const f = await fixture(t);
   const result = await f.run();
   assert.equal(result.status, 0, result.stderr);
@@ -120,12 +122,15 @@ test('all runs the canonical required DAG with isolated bounded amd64 runners an
   const value = key => act.args[act.args.indexOf(key) + 1];
   assert.equal(value('--job'), 'required');
   assert.equal(value('--workflows'), '.github/workflows/ci.yml');
-  assert.equal(value('--container-architecture'), 'linux/amd64');
+  assert.equal(value('--container-architecture'), '');
+  assert.ok(act.args.includes('ubuntu-24.04=docker.io/catthehacker/ubuntu@sha256:84e94c96278dd26b8feb71226a521d259f8160cf6b1dd08e51fd42be43a82e56'));
+  assert.ok(act.args.includes('ubuntu-24.04-amd64=docker.io/catthehacker/ubuntu@sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b'));
   assert.equal(value('--container-daemon-socket'), '-');
   assert.equal(value('--network'), 'bridge');
   assert.equal(value('--concurrent-jobs'), '1');
   assert.match(value('--container-options'), /--cpus=3 --memory=8g/);
   assert.match(value('--container-options'), /--privileged/);
+  assert.match(value('--container-options'), /--cgroupns=private/);
   assert.match(value('--container-options'), /host\.docker\.internal:10\.88\.0\.1/);
   assert.ok(act.args.includes('--rm'));
   assert.ok(act.args.includes('--use-new-action-cache=true'));
@@ -140,6 +145,11 @@ test('all runs the canonical required DAG with isolated bounded amd64 runners an
   assert.equal(result.summary.revision, revision);
   assert.equal(result.summary.base, base);
   assert.equal(result.summary.hostedOnly.length, 2);
+  assert.equal(result.summary.runnerPlatform, 'linux/arm64');
+  for (const target of ['productionPlatform', 'nativeSecurityPlatform', 'nativeCodeqlPlatform']) assert.equal(result.summary[target], 'linux/amd64');
+  const qemu = result.calls.findIndex(call => call.tool === 'podman' && call.args[1] === 'ssh');
+  const empty = result.calls.findIndex(call => call.tool === 'curl' && call.args.includes('http://localhost/containers/json?all=1'));
+  assert.ok(qemu > empty);
 });
 
 test('a selected job can filter its matrix and cannot claim a complete gate', async t => {
@@ -159,6 +169,7 @@ test('full CI refuses filtered coverage, dirty source, bad base and unsupported 
     [[], { CI_FIXTURE_SAME_BASE: '1' }],
     [[], { CI_FIXTURE_NONANCESTOR: '1' }],
     [['all', '--jobs', '1'], {}],
+    [['all', '--codeql', '/single-isa-bundle'], {}],
     [['all', '--job', 'web'], {}],
     [['release-security'], {}],
   ]) {
@@ -186,7 +197,7 @@ test('other VMs and existing containers are left untouched', async t => {
     const result = await f.run([], env);
     assert.notEqual(result.status, 0);
     assert.ok(!result.calls.some(call => call.tool === 'act'));
-    assert.ok(!result.calls.some(call => call.tool === 'podman' && ['start', 'stop'].includes(call.args[1])));
+    assert.ok(!result.calls.some(call => call.tool === 'podman' && ['start', 'stop', 'ssh'].includes(call.args[1])));
   }
 });
 
@@ -205,6 +216,37 @@ test('explicit engines require disposable intent and a local Unix socket', async
   const result = await f.run(['all', '--disposable-engine'], { DOCKER_HOST: 'unix:///owned/socket', CI_FIXTURE_OS: 'Linux' });
   assert.equal(result.status, 0, result.stderr);
   assert.ok(!result.calls.some(call => call.tool === 'podman'));
+  assert.equal(result.summary.runnerPlatform, 'linux/amd64');
+});
+
+test('failed owned-VM emulator selection stops before workflow execution', async t => {
+  const f = await fixture(t);
+  const result = await f.run([], { CI_FIXTURE_QEMU_FAIL: '1' });
+  assert.equal(result.status, 69);
+  assert.equal(result.summary.completeLocalGate, false);
+  assert.ok(!result.calls.some(call => call.tool === 'act'));
+});
+
+test('only a complete pinned dual-ISA CodeQL cache is mounted read-only', async t => {
+  const f = await fixture(t);
+  const pin = JSON.parse(await readFile(new URL('../../security/codeql-toolchain.json', import.meta.url), 'utf8'));
+  await mkdir(path.join(f.checkout, 'security'));
+  await writeFile(path.join(f.checkout, 'security/codeql-toolchain.json'), JSON.stringify(pin));
+  for (const platform of ['linux-x86_64', 'linux-aarch64']) {
+    const bundle = pin.bundles[platform];
+    const directory = path.join(f.checkout, 'target/codeql-tools', bundle.sha256);
+    await mkdir(path.join(directory, 'codeql'), { recursive: true });
+    await writeFile(path.join(directory, 'receipt.json'), JSON.stringify({ archiveSha256: bundle.sha256, archiveBytes: bundle.bytes }));
+    await writeFile(path.join(directory, 'codeql/codeql'), '#!/bin/sh\nexit 0\n');
+    await chmod(path.join(directory, 'codeql/codeql'), 0o755);
+    const result = await f.run();
+    assert.equal(result.status, 0, result.stderr);
+    const args = result.calls.find(call => call.tool === 'act').args;
+    const options = args[args.indexOf('--container-options') + 1];
+    assert.equal(options.includes('target/codeql-tools'), platform === 'linux-aarch64');
+    if (platform === 'linux-aarch64') assert.match(options.replaceAll('\\,', ','), /codeql-tools,readonly/);
+    assert.ok(!args.some(value => value.startsWith('LOCAL_CODEQL_BINARY=')));
+  }
 });
 
 test('changing source during a successful workflow invalidates the result', async t => {

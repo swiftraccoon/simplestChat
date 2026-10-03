@@ -5,8 +5,8 @@ umask 077
 [[ "${ACT:-}" == true && "${LOCAL_CI_DISPOSABLE:-}" == 1 ]] || {
   echo 'Private Docker setup is only for build/ci-local.sh runners.' >&2; exit 2;
 }
-[[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
-  echo 'The local production gate requires Linux/amd64.' >&2; exit 2;
+[[ "$(uname -s)" == Linux && "$(uname -m)" =~ ^(x86_64|aarch64)$ ]] || {
+  echo 'Private Docker requires a Linux AMD64 or ARM64 runner.' >&2; exit 2;
 }
 [[ -f /.dockerenv || -f /run/.containerenv ]] || {
   echo 'Refusing Docker setup outside a disposable job container.' >&2; exit 2;
@@ -19,6 +19,23 @@ umask 077
 [[ "$(dockerd --version)" == 'Docker version 29.7.2-1, build 6a43e3d5afddf4111da0f864bbc7cae5d7e95001' ]] || {
   echo 'The pinned act image must supply the expected Docker daemon.' >&2; exit 2;
 }
+# The launcher supplies a private cgroup namespace. Moby's hack/dind pattern
+# moves its root processes into a leaf before delegating resource controllers.
+if [[ -f /sys/fs/cgroup/cgroup.controllers ]]; then
+  mkdir -p /sys/fs/cgroup/init
+  enabled=0
+  for ((attempt = 0; attempt < 20; attempt++)); do
+    while IFS= read -r process; do
+      printf '%s\n' "$process" > /sys/fs/cgroup/init/cgroup.procs || true
+    done < /sys/fs/cgroup/cgroup.procs
+    if sed -e 's/ / +/g' -e 's/^/+/' < /sys/fs/cgroup/cgroup.controllers > /sys/fs/cgroup/cgroup.subtree_control; then
+      enabled=1
+      break
+    fi
+    sleep 0.05
+  done
+  [[ "$enabled" == 1 ]]
+fi
 docker_state="${RUNNER_TEMP:?}/local-ci-docker"
 mkdir "$docker_state"
 sudo mkdir -p /run/local-ci-docker

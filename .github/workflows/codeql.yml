@@ -63,11 +63,7 @@ jobs:
           CODEQL_LANGUAGE: ${{ matrix.language }}
           CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
         run: |
-          args=()
-          if [[ -n "${LOCAL_CODEQL_BINARY:-}" ]]; then
-            args+=(--codeql "$LOCAL_CODEQL_BINARY")
-          fi
-          python3 build/security_codeql_local.py "${args[@]}" --revision "$GITHUB_SHA" \
+          python3 build/security_codeql_local.py --revision "$GITHUB_SHA" \
             --language "$CODEQL_LANGUAGE" --suite "$CODEQL_SUITE" --output "$RUNNER_TEMP/codeql-local"
       - name: Retain compact local analysis evidence
         if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
@@ -186,11 +182,7 @@ jobs:
         env:
           CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
         run: |
-          args=()
-          if [[ -n "${LOCAL_CODEQL_BINARY:-}" ]]; then
-            args+=(--codeql "$LOCAL_CODEQL_BINARY")
-          fi
-          python3 build/security_codeql_local.py "${args[@]}" --revision "$GITHUB_SHA" \
+          python3 build/security_codeql_local.py --revision "$GITHUB_SHA" \
             --language c-cpp --suite "$CODEQL_SUITE" --openssl-prefix "$OPENSSL_DIR" \
             --output "$RUNNER_TEMP/codeql-local"
       - name: Retain compact local native analysis evidence

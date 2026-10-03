@@ -466,16 +466,22 @@ DOCKER_HOST=unix:///path/to/disposable/docker.sock \
   build/ci-local.sh all --disposable-engine
 ```
 
-Both paths run the pinned Ubuntu 24.04 **Linux/amd64** image, including on Apple
-silicon. Emulation needs working amd64 support in the VM and can be substantially
-slower than a native amd64 runner. Outer job groups run serially, with up to four
+Linux uses the pinned Ubuntu 24.04 AMD64 runner. Apple silicon uses its pinned
+ARM64 counterpart for native Docker networking and most checks; native C/C++
+CodeQL uses an explicitly mapped AMD64 runner. Production and sanitizer images
+remain AMD64 on both paths. After checking that the owned VM has no containers,
+the Mac launcher selects its packaged QEMU emulator instead of Rosetta, whose
+missing Fedora syscalls prevent the production build. These ARM64 test runs
+exercise the same checks but do not claim identical ISA coverage to GitHub.
+Outer job groups run serially, with up to four
 matrix entries concurrently, each limited to 3 CPUs and 8 GiB RAM. The workflows
 declare literal limits of three browser/native entries and four CodeQL entries;
 act cannot evaluate expressions for this setting.
 The privileged job containers are confined to the disposable engine. Each
 Docker-dependent job starts its own bundled, pinned daemon with a fresh storage
-volume and private socket. The outer engine socket is never mounted, and the
-production release fixture keeps its empty-engine and disposable-host checks.
+volume, private cgroup namespace and private socket. The outer engine socket is
+never mounted, and the production release fixture keeps its empty-engine and
+disposable-host checks.
 
 PostgreSQL services use distinct declared ports for the Rust and three browser
 groups. A local-only relay connects each job's loopback address to its published
@@ -488,12 +494,14 @@ The full gate requires a clean committed checkout and checks its identity again
 after execution. Completion receipts bind every required matrix entry and the
 successful aggregate to the current run and revision; dry runs or filtered
 matrices cannot report a complete local gate. `--base REF` selects the ancestor
-used for changed-source
-checks; by default it uses the merge base with local `origin/main`, or `HEAD^`
+used for changed-source checks; by default it uses the merge base with local
+`origin/main`, or `HEAD^`
 when already at that base. Update the tracking ref before validation when needed.
 Local `.env`, secret, input and variable files are not passed to the workflow.
-CodeQL installs its checksum-pinned bundle automatically; `--codeql DIRECTORY`
-can reuse an authenticated Linux bundle containing the `codeql` executable.
+CodeQL installs the checksum-pinned bundle for each job's actual architecture.
+If `target/codeql-tools` already contains the pinned bundles and receipts for all
+required architectures, the launcher mounts that cache read-only; every scan
+still verifies its CLI and query pins. An incomplete cache is left unused.
 
 The five local CodeQL scans enforce the same security query suites, exact finding
 reviews, completed-query health and real native compilation coverage. GitHub's
@@ -504,7 +512,8 @@ are additional tiers, not part of the required push gate.
 
 Action and build caches persist under `target/act`. Each invocation writes a
 private directory under `results/` containing its event, workflow log, source
-revision/base, exit status and retained compact check summaries. `--output`
+revision/base, actual default runner platform, explicit AMD64 target platforms,
+exit status and retained compact check summaries. `--output`
 accepts a new directory. A single-job run is available for focused fixes and
 always reports that it is partial:
 

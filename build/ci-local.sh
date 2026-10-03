@@ -11,14 +11,14 @@ Usage: build/ci-local.sh [all|JOB] [options]
   JOB                         Run one job; this is not a complete CI result.
   --base REF                  Changed-source base (default: merge-base with origin/main).
   --matrix KEY:VALUE          Select a matrix entry for a single job only.
-  --codeql DIRECTORY          Reuse an authenticated Linux CodeQL bundle; otherwise install its pin.
   --output NEW_DIRECTORY      Evidence directory (default: a new directory under results/).
   --disposable-engine         Use explicit DOCKER_HOST for an isolated disposable Linux engine.
   --help                      Show this help.
 
 Full CI requires a clean committed checkout, but no push or pull request. It runs
-Linux/amd64 from the actual GitHub workflow; hosted signing/publication stays on
-GitHub. macOS uses only the owned simplestchat-ci Podman VM. Linux requires
+the actual GitHub workflow; hosted signing/publication stays on GitHub. Apple
+silicon uses native ARM64 runners with explicit AMD64 image/native CodeQL targets.
+macOS uses only the owned simplestchat-ci Podman VM. Linux requires
 --disposable-engine and DOCKER_HOST; never point it at a shared or production engine.
 USAGE
 }
@@ -29,7 +29,6 @@ cd "${project_root}"
 job=all
 base_ref=''
 output=''
-codeql=''
 disposable_engine=0
 matrix_args=()
 if (($#)) && [[ "$1" != -* ]]; then job="$1"; shift; fi
@@ -37,12 +36,11 @@ while (($#)); do
   case "$1" in
     --help|-h) usage; exit 0 ;;
     --disposable-engine) disposable_engine=1; shift ;;
-    --base|--matrix|--codeql|--output)
+    --base|--matrix|--output)
       (($# >= 2)) || die "Missing value for $1"
       case "$1" in
         --base) base_ref="$2" ;;
         --matrix) matrix_args+=(--matrix "$2") ;;
-        --codeql) codeql="$2" ;;
         --output) output="$2" ;;
       esac
       shift 2 ;;
@@ -73,7 +71,9 @@ started_machine=0
 owned_output=0
 machine=simplestchat-ci
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-runner_image=docker.io/catthehacker/ubuntu@sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b
+amd64_image=docker.io/catthehacker/ubuntu@sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b
+runner_image="$amd64_image"
+runner_platform=linux/amd64
 cleanup() {
   local status=$?
   trap - EXIT
@@ -81,16 +81,18 @@ cleanup() {
   if ((started_machine)); then podman machine stop "$machine" || status=1; fi
   rmdir "${state}/run.lock" || status=1
   if ((owned_output)); then
-    python3 - "$output" "$revision" "$base" "$job" "$status" "$started_at" "$runner_image" <<'PY'
+    python3 - "$output" "$revision" "$base" "$job" "$status" "$started_at" "$runner_image" "$runner_platform" <<'PY'
 import datetime
 import json
 import pathlib
 import sys
 
-directory, revision, base, job, status, started, image = sys.argv[1:]
+directory, revision, base, job, status, started, image, runner_platform = sys.argv[1:]
 report = {
     "schema": 1, "revision": revision, "base": base, "selection": job,
-    "platform": "linux/amd64", "runnerImage": image, "exitCode": int(status),
+    "runnerPlatform": runner_platform, "runnerImage": image, "exitCode": int(status),
+    "productionPlatform": "linux/amd64", "nativeSecurityPlatform": "linux/amd64",
+    "nativeCodeqlPlatform": "linux/amd64",
     "status": "passed" if status == "0" else "failed",
     "startedAt": started, "finishedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "completeLocalGate": job == "all" and status == "0",
@@ -120,6 +122,10 @@ if ((disposable_engine)); then
 else
   [[ "$(uname -s)" == Darwin ]] || die 'Linux: set DOCKER_HOST for an isolated engine and pass --disposable-engine.'
   [[ -z "${DOCKER_HOST:-}" ]] || die 'Explicit DOCKER_HOST requires --disposable-engine; it is never selected implicitly.'
+  if [[ "$(uname -m)" == arm64 ]]; then
+    runner_image=docker.io/catthehacker/ubuntu@sha256:84e94c96278dd26b8feb71226a521d259f8160cf6b1dd08e51fd42be43a82e56
+    runner_platform=linux/arm64
+  fi
   command -v podman >/dev/null || die 'Install Podman to use the owned simplestchat-ci VM.'
   if ! podman machine inspect "$machine" >/dev/null 2>&1; then
     podman machine init --rootful --cpus 12 --memory 49152 --disk-size 80 "$machine"
@@ -144,6 +150,21 @@ with open(sys.argv[1]) as source:
     if json.load(source):
         raise SystemExit("The disposable engine contains existing containers; they were left untouched.")
 PY
+
+# Select the packaged emulator only after refusing existing containers. Rosetta
+# lacks Fedora 44's required syscalls; the job-owned Docker daemon stays native.
+if ((!disposable_engine)) && [[ "$runner_platform" == linux/arm64 ]]; then
+  podman machine ssh "$machine" 'sudo sh -se' <<'SH'
+test -x /usr/bin/qemu-x86_64-static
+/usr/lib/systemd/systemd-binfmt /usr/lib/binfmt.d/qemu-x86_64-static.conf
+if test -e /proc/sys/fs/binfmt_misc/rosetta; then
+  printf '0\n' > /proc/sys/fs/binfmt_misc/rosetta
+  grep -qx disabled /proc/sys/fs/binfmt_misc/rosetta
+fi
+grep -qx enabled /proc/sys/fs/binfmt_misc/qemu-x86_64
+grep -qx 'interpreter /usr/bin/qemu-x86_64-static' /proc/sys/fs/binfmt_misc/qemu-x86_64
+SH
+fi
 
 curl --silent --show-error --fail --max-time 10 --unix-socket "$engine_socket" \
   http://localhost/networks > "$output/engine-networks.json"
@@ -177,21 +198,39 @@ pathlib.Path(path).write_text(json.dumps({
 PY
 mkdir "$output/checks"
 printf -v evidence_mount '%q' "type=bind,source=${output}/checks,target=/local-ci-evidence"
-container_options="--privileged --cpus=3 --memory=8g --pids-limit=2048 --add-host=host.docker.internal:${gateway} --mount type=volume,target=/var/lib/local-ci-docker --mount ${evidence_mount}"
-codeql_args=()
-if [[ -n "$codeql" ]]; then
-  codeql="$(cd "$codeql" && pwd)"
-  [[ -x "$codeql/codeql" ]] || die '--codeql must contain the authenticated Linux bundle executable.'
-  [[ "$codeql" != *[,:\"\'[:space:]]* ]] || die 'The reusable bundle path must not contain mount-option separators or whitespace.'
-  container_options+=" --mount type=bind,source=${codeql},target=/opt/local-codeql,readonly"
-  codeql_args=(--env LOCAL_CODEQL_BINARY=/opt/local-codeql/codeql)
+container_options="--privileged --cgroupns=private --cpus=3 --memory=8g --pids-limit=2048 --add-host=host.docker.internal:${gateway} --mount type=volume,target=/var/lib/local-ci-docker --mount ${evidence_mount}"
+# Reuse only a complete architecture-aware cache. A fresh checkout still lets
+# each job install its authenticated bundle into its disposable workspace.
+if [[ -d "$project_root/target/codeql-tools" ]] && python3 - "$project_root" "$runner_platform" <<'PY'
+import json
+import os
+import pathlib
+import sys
+root = pathlib.Path(sys.argv[1])
+bundles = json.loads((root / "security/codeql-toolchain.json").read_text())["bundles"]
+platforms = ["linux-x86_64"] + (["linux-aarch64"] if sys.argv[2] == "linux/arm64" else [])
+try:
+    for platform in platforms:
+        pin = bundles[platform]
+        directory = root / "target/codeql-tools" / pin["sha256"]
+        if (json.loads((directory / "receipt.json").read_text()) != {
+                "archiveSha256": pin["sha256"], "archiveBytes": pin["bytes"]}
+                or not os.access(directory / "codeql/codeql", os.X_OK)):
+            raise SystemExit(1)
+except (OSError, ValueError, KeyError):
+    raise SystemExit(1)
+PY
+then
+  printf -v codeql_mount '%q' "type=bind,source=${project_root}/target/codeql-tools,target=${project_root}/target/codeql-tools,readonly"
+  container_options+=" --mount ${codeql_mount}"
 fi
 selected_job="$job"
 [[ "$job" != all ]] || selected_job=required
 set +e
 act push --workflows .github/workflows/ci.yml --job "$selected_job" \
   --eventpath "$output/event.json" --defaultbranch main \
-  --platform "ubuntu-24.04=${runner_image}" --container-architecture linux/amd64 \
+  --platform "ubuntu-24.04=${runner_image}" --platform "ubuntu-24.04-amd64=${amd64_image}" \
+  --container-architecture '' \
   --pull=false --rm --network bridge --concurrent-jobs 1 \
   --dryrun=false --list=false --graph=false --validate=false --watch=false --reuse=false \
   --bind=false --no-skip-checkout=false --list-options=false --bug-report=false --man-page=false \
@@ -200,7 +239,7 @@ act push --workflows .github/workflows/ci.yml --job "$selected_job" \
   --env-file /dev/null --secret-file /dev/null --var-file /dev/null --input-file /dev/null \
   --secret GITHUB_TOKEN= --env LOCAL_CI_DISPOSABLE=1 --env LOCAL_CI_EVIDENCE=/local-ci-evidence \
   --env "LOCAL_CI_RUN_ID=${run_id}" \
-  ${codeql_args[@]+"${codeql_args[@]}"} ${matrix_args[@]+"${matrix_args[@]}"} \
+  ${matrix_args[@]+"${matrix_args[@]}"} \
   2>&1 | tee "$output/act.log"
 statuses=("${PIPESTATUS[@]}")
 set -e
