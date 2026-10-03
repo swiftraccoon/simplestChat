@@ -456,9 +456,20 @@ The launcher enables act's shallow action cache so pinned actions fetch their
 exact revision without downloading full repository history.
 
 On macOS, the launcher creates or reuses only its rootful `simplestchat-ci`
-Podman VM (12 CPUs, 48 GiB RAM, 80 GiB disk). It refuses to stop another running
+Podman VM (12 CPUs, 80 GiB RAM, 80 GiB disk). It refuses to stop another running
 VM or select Docker Desktop implicitly. A VM started by the launcher is stopped
-when it exits; an already running VM stays running. On Linux, use an empty engine
+when it exits; an already running VM stays running. Existing VMs keep their
+configured resources. To resize an older owned VM, first end its CI invocation
+and verify that `podman --connection simplestchat-ci-root ps --all` lists no
+containers, then run:
+
+```sh
+podman machine stop simplestchat-ci
+podman machine set --cpus 12 --memory 81920 simplestchat-ci
+podman machine start simplestchat-ci
+```
+
+On Linux, use an empty engine
 inside a dedicated disposable VM and identify its local socket explicitly:
 
 ```sh
@@ -477,7 +488,7 @@ Python's filtered tar reader, which works with Rosetta. These ARM64 test runs
 exercise the same checks but do not claim identical ISA coverage to GitHub.
 The hosted AMD64 workflow remains a deployment gate.
 Outer job groups run serially, with up to four
-matrix entries concurrently, each limited to 3 CPUs and 8 GiB RAM. The workflows
+matrix entries concurrently, each limited to 3 CPUs and 16 GiB RAM. The workflows
 declare literal limits of three browser/native entries and four CodeQL entries;
 act cannot evaluate expressions for this setting.
 The privileged job containers are confined to the disposable engine. Each

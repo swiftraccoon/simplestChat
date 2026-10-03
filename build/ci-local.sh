@@ -127,7 +127,7 @@ else
   fi
   command -v podman >/dev/null || die 'Install Podman to use the owned simplestchat-ci VM.'
   if ! podman machine inspect "$machine" >/dev/null 2>&1; then
-    podman machine init --rootful --cpus 12 --memory 49152 --disk-size 80 "$machine"
+    podman machine init --rootful --cpus 12 --memory 81920 --disk-size 80 "$machine"
   fi
   if [[ "$(podman machine inspect --format '{{.State}}' "$machine")" != running ]]; then
     other="$(podman machine list --format '{{.Name}} {{.Running}}' | awk -v me="$machine" '$2 == "true" && $1 != me {print $1}')"
@@ -197,7 +197,7 @@ pathlib.Path(path).write_text(json.dumps({
 PY
 mkdir "$output/checks"
 printf -v evidence_mount '%q' "type=bind,source=${output}/checks,target=/local-ci-evidence"
-container_options="--privileged --cgroupns=private --cpus=3 --memory=8g --pids-limit=2048 --add-host=host.docker.internal:${gateway} --mount type=volume,target=/var/lib/local-ci-docker --mount ${evidence_mount}"
+container_options="--privileged --cgroupns=private --cpus=3 --memory=16g --pids-limit=2048 --add-host=host.docker.internal:${gateway} --mount type=volume,target=/var/lib/local-ci-docker --mount ${evidence_mount}"
 # Reuse only the pinned cache for this runner. A fresh checkout still lets
 # each job install its authenticated bundle into its disposable workspace.
 if [[ -d "$project_root/target/codeql-tools" ]] && python3 - "$project_root" "$runner_platform" <<'PY'

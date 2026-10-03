@@ -62,6 +62,7 @@ PY
     [[ "$1" == machine ]] || exit 94
     case "$2" in
       inspect)
+        if [[ -n "$CI_FIXTURE_NEW_VM" && "$*" != *--format* ]]; then exit 1; fi
         if [[ "$*" == *'{{.State}}'* ]]; then
           if [[ -n "$CI_FIXTURE_STOPPED" ]]; then echo stopped; else echo running; fi
         elif [[ "$*" == *'{{.ConnectionInfo.PodmanSocket.Path}}'* ]]; then echo /owned-ci/socket; fi ;;
@@ -132,7 +133,7 @@ test('all runs native ARM suites with bounded resources and explicit AMD64 produ
   assert.equal(value('--container-daemon-socket'), '-');
   assert.equal(value('--network'), 'bridge');
   assert.equal(value('--concurrent-jobs'), '1');
-  assert.match(value('--container-options'), /--cpus=3 --memory=8g/);
+  assert.match(value('--container-options'), /--cpus=3 --memory=16g/);
   assert.match(value('--container-options'), /--privileged/);
   assert.match(value('--container-options'), /--cgroupns=private/);
   assert.match(value('--container-options'), /host\.docker\.internal:10\.88\.0\.1/);
@@ -197,6 +198,20 @@ test('the owned VM is stopped only when this invocation started it, including wo
   const commands = result.calls.filter(call => call.tool === 'podman').map(call => call.args.slice(0, 2).join(' '));
   assert.equal(commands.filter(command => command === 'machine start').length, 1);
   assert.equal(commands.filter(command => command === 'machine stop').length, 1);
+});
+
+test('new owned VMs reserve memory for four runners without resizing existing VMs', async t => {
+  for (const create of [false, true]) {
+    const f = await fixture(t);
+    const result = await f.run([], create ? { CI_FIXTURE_NEW_VM: '1', CI_FIXTURE_STOPPED: '1' } : {});
+    assert.equal(result.status, 0, result.stderr);
+    const initializers = result.calls.filter(call => call.tool === 'podman' && call.args[1] === 'init');
+    assert.equal(initializers.length, create ? 1 : 0);
+    if (create) {
+      assert.deepEqual(initializers[0].args, ['machine', 'init', '--rootful', '--cpus', '12', '--memory', '81920', '--disk-size', '80', 'simplestchat-ci']);
+    }
+    assert.ok(!result.calls.some(call => call.tool === 'podman' && call.args[1] === 'set'));
+  }
 });
 
 test('other VMs and existing containers are left untouched', async t => {
