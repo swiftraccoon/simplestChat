@@ -1,5 +1,6 @@
 .DS_Store
 /target
+/.cache/codeql-tools/
 /reference/
 /results
 # Publish only shared guides; existing local plans stay private.

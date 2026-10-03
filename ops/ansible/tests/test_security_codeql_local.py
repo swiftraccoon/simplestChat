@@ -281,7 +281,37 @@ class LocalCodeqlTests(unittest.TestCase):
             self.assertRaisesRegex(ToolError, "fixture_extraction_interrupted"),
         ):
             _ = tools.install(context)
-        self.assertEqual(list((self.directory / "target/codeql-tools").iterdir()), [])
+        self.assertEqual(list((self.directory / ".cache/codeql-tools").iterdir()), [])
+
+    def test_shared_bundle_reuse_stays_outside_cargo_target_and_checks_its_receipt(self) -> None:
+        """The new cache reuses authenticated bytes without trusting an old target bundle."""
+        output = self.directory / "output"
+        output.mkdir()
+        context = Context(ROOT, output)
+        digest = "a" * 64
+        fixture = tools.pin()
+        fixture["bundles"] = {
+            target: {"url": "https://example.invalid/codeql", "bytes": 123, "sha256": digest}
+            for target in ("darwin", "linux-x86_64", "linux-aarch64")
+        }
+        receipt = {"archiveSha256": digest, "archiveBytes": 123}
+        directory = self.directory / ".cache/codeql-tools" / digest
+        old_directory = self.directory / "target/codeql-tools" / digest
+        for cache in (directory, old_directory):
+            cache.mkdir(parents=True)
+            _ = (cache / "receipt.json").write_text(json.dumps(receipt))
+        with (
+            patch.object(tools, "ROOT", self.directory),
+            patch.object(tools, "pin", return_value=fixture),
+            patch.object(context, "run") as run,
+        ):
+            self.assertEqual(tools.install(context), directory / "codeql/codeql")
+            _ = (directory / "receipt.json").write_text(
+                json.dumps({**receipt, "archiveBytes": 124})
+            )
+            with self.assertRaisesRegex(ToolError, "codeql_installation_receipt"):
+                _ = tools.install(context)
+            run.assert_not_called()
 
     def test_source_identity_accepts_unpushed_commit_and_rejects_dirty_source(self) -> None:
         """Bind local CI to real Git bytes without requiring publication or a pull request."""

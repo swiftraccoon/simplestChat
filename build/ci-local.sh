@@ -213,9 +213,9 @@ PY
 mkdir "$output/checks"
 printf -v evidence_mount '%q' "type=bind,source=${output}/checks,target=/local-ci-evidence"
 container_options="--privileged --cgroupns=private --cpus=3 --memory=16g --pids-limit=2048 --add-host=host.docker.internal:${gateway} --mount type=volume,target=/var/lib/local-ci-docker --mount ${evidence_mount}"
-# Reuse only the pinned cache for this runner. A fresh checkout still lets
-# each job install its authenticated bundle into its disposable workspace.
-if [[ -d "$project_root/target/codeql-tools" ]] && python3 - "$project_root" "$runner_platform" <<'PY'
+# Keep the pinned read-only bundle outside Cargo's recursively cached target.
+# A fresh checkout installs its authenticated bundle into the same separate cache.
+if [[ -d "$project_root/.cache/codeql-tools" ]] && python3 - "$project_root" "$runner_platform" <<'PY'
 import json
 import os
 import pathlib
@@ -225,7 +225,7 @@ bundles = json.loads((root / "security/codeql-toolchain.json").read_text())["bun
 platform = "linux-aarch64" if sys.argv[2] == "linux/arm64" else "linux-x86_64"
 try:
     pin = bundles[platform]
-    directory = root / "target/codeql-tools" / pin["sha256"]
+    directory = root / ".cache/codeql-tools" / pin["sha256"]
     if (json.loads((directory / "receipt.json").read_text()) != {
             "archiveSha256": pin["sha256"], "archiveBytes": pin["bytes"]}
             or not os.access(directory / "codeql/codeql", os.X_OK)):
@@ -234,7 +234,7 @@ except (OSError, ValueError, KeyError):
     raise SystemExit(1)
 PY
 then
-  printf -v codeql_mount '%q' "type=bind,source=${project_root}/target/codeql-tools,target=${project_root}/target/codeql-tools,readonly"
+  printf -v codeql_mount '%q' "type=bind,source=${project_root}/.cache/codeql-tools,target=${project_root}/.cache/codeql-tools,readonly"
   container_options+=" --mount ${codeql_mount}"
 fi
 selected_job="$job"

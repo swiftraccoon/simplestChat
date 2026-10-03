@@ -315,14 +315,21 @@ test('guest capability validation refuses inconsistent SVE2 before emulator or w
   }
 });
 
-test('only the actual runner ISA needs a pinned read-only CodeQL cache', async t => {
+test('only the actual runner ISA mounts its pinned CodeQL cache outside Cargo target', async t => {
   const f = await fixture(t);
   const pin = JSON.parse(await readFile(new URL('../../security/codeql-toolchain.json', import.meta.url), 'utf8'));
   await mkdir(path.join(f.checkout, 'security'));
   await writeFile(path.join(f.checkout, 'security/codeql-toolchain.json'), JSON.stringify(pin));
+  // A formerly shared target bundle must never be mounted or used as fallback.
+  const oldBundle = pin.bundles['linux-aarch64'];
+  const oldDirectory = path.join(f.checkout, 'target/codeql-tools', oldBundle.sha256);
+  await mkdir(path.join(oldDirectory, 'codeql'), { recursive: true });
+  await writeFile(path.join(oldDirectory, 'receipt.json'), JSON.stringify({ archiveSha256: oldBundle.sha256, archiveBytes: oldBundle.bytes }));
+  await writeFile(path.join(oldDirectory, 'codeql/codeql'), '#!/bin/sh\nexit 0\n');
+  await chmod(path.join(oldDirectory, 'codeql/codeql'), 0o755);
   for (const platform of ['linux-x86_64', 'linux-aarch64']) {
     const bundle = pin.bundles[platform];
-    const directory = path.join(f.checkout, 'target/codeql-tools', bundle.sha256);
+    const directory = path.join(f.checkout, '.cache/codeql-tools', bundle.sha256);
     await mkdir(path.join(directory, 'codeql'), { recursive: true });
     await writeFile(path.join(directory, 'receipt.json'), JSON.stringify({ archiveSha256: bundle.sha256, archiveBytes: bundle.bytes }));
     await writeFile(path.join(directory, 'codeql/codeql'), '#!/bin/sh\nexit 0\n');
@@ -331,8 +338,11 @@ test('only the actual runner ISA needs a pinned read-only CodeQL cache', async t
     assert.equal(result.status, 0, result.stderr);
     const args = result.calls.find(call => call.tool === 'act').args;
     const options = args[args.indexOf('--container-options') + 1];
-    assert.equal(options.includes('target/codeql-tools'), platform === 'linux-aarch64');
-    if (platform === 'linux-aarch64') assert.match(options.replaceAll('\\,', ','), /codeql-tools,readonly/);
+    assert.equal(options.includes('.cache/codeql-tools'), platform === 'linux-aarch64');
+    assert.ok(!options.includes('target/codeql-tools'));
+    if (platform === 'linux-aarch64') {
+      assert.match(options.replaceAll('\\,', ','), /target=.*\/\.cache\/codeql-tools,readonly/);
+    }
     assert.ok(!args.some(value => value.startsWith('LOCAL_CODEQL_BINARY=')));
     await rm(directory, { recursive: true });
   }

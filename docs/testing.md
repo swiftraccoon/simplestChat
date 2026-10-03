@@ -516,9 +516,13 @@ used for changed-source checks; by default it uses the merge base with local
 when already at that base. Update the tracking ref before validation when needed.
 Local `.env`, secret, input and variable files are not passed to the workflow.
 CodeQL installs the checksum-pinned bundle for each job's actual architecture.
-If `target/codeql-tools` already contains the pinned bundle and receipt for the
+If `.cache/codeql-tools` already contains the pinned bundle and receipt for the
 actual runner architecture, the launcher mounts that cache read-only; every scan
 still verifies its CLI and query pins. An incomplete cache is left unused.
+The analyzer cache stays outside Cargo's `target/`, which Rust caching restores
+and cleans recursively. Existing authenticated bundles can be moved from
+`target/codeql-tools` to `.cache/codeql-tools` while no local CI run is active;
+the same receipts and analyzer/query checks apply at the new location.
 
 The five local CodeQL scans enforce the same security query suites, exact finding
 reviews, completed-query health and real native compilation coverage. GitHub's

@@ -546,6 +546,11 @@ class SecurityWorkflowTests(unittest.TestCase):
                     self.assertEqual(config["path"], at(restore, "with", "path"))
                     config = obj(restore, "with")
                 key = string(config.get("prefix-key", config.get("key", "")))
+                if string(step, "uses").startswith("Swatinem/rust-cache@"):
+                    self.assertTrue(
+                        key.startswith("v3-rust-"), "Old archives included CodeQL tools"
+                    )
+                    self.assertNotIn("cache-targets", config, "Keep Rust target artifact caching")
                 self.assertIn("github.event_name != 'pull_request'", key)
                 self.assertIn("'main' || 'untrusted'", key)
                 self.assertIn("runner.arch", key)

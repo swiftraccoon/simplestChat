@@ -118,7 +118,8 @@ def install(context: Context) -> Path:
     size = asset["bytes"]
     require(type(size) is int and size > 0, "codeql_archive_bound")
     size = int(str(size))
-    directory = ROOT / "target/codeql-tools" / expected
+    # Cargo caches and cleans target recursively; shared analyzer bytes live outside it.
+    directory = ROOT / ".cache/codeql-tools" / expected
     receipt = directory / "receipt.json"
     if directory.exists():
         require(

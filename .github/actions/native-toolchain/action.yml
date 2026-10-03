@@ -70,7 +70,8 @@ runs:
       with:
         # Bump the prefix whenever the retention policy changes: an existing
         # key is reused as is and never re-saved.
-        prefix-key: v2-rust-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.arch }}
+        # v3 excludes old archives containing the relocated CodeQL bundle.
+        prefix-key: v3-rust-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.arch }}
         shared-key: ${{ inputs.cache-key }}
         key: vendor-${{ hashFiles('vendor/**') }}
 
