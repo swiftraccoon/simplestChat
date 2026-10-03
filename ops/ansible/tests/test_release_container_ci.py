@@ -19,6 +19,7 @@ PREPARE = "Install isolated release-container checks"
 PREPARE_START = "Start the isolated release-container controller build"
 INTEGRATION = "App-only release and rollback on a disposable host"
 RETENTION = "Preserve sanitized release-container report"
+LOCAL_DIAGNOSTICS = "Preserve private local release-container diagnostics"
 EXPORT = "Export the tested immutable production image"
 RELEASE = "Retain the verified production release"
 RUN_COMMAND = (
@@ -488,6 +489,78 @@ docker() {
         self.assertLess(self.steps.index(save), self.steps.index(self.step(INTEGRATION)))
         for step in (restore, save):
             self.assertNotIn("continue-on-error", step)
+
+    def test_local_failed_fixture_retains_only_private_command_diagnostics(self) -> None:
+        """Keep both original and cleanup failures even without a final report."""
+        retention = self.step(LOCAL_DIAGNOSTICS)
+        self.assertEqual(retention["if"], "${{ always() && env.ACT == 'true' }}")
+        self.assertEqual(self.steps.index(retention), self.steps.index(self.step(INTEGRATION)) + 1)
+        self.assertNotIn("continue-on-error", retention)
+        for completed_report in (False, True):
+            with (
+                self.subTest(completed_report=completed_report),
+                tempfile.TemporaryDirectory() as raw,
+            ):
+                root = Path(raw)
+                source = root / "runner/release-container"
+                private = source / "private"
+                private.mkdir(parents=True, mode=0o700)
+                evidence = root / "evidence"
+                evidence.mkdir(mode=0o700)
+                expected: dict[str, bytes] = {}
+                for number in (49, 54):
+                    for suffix in ("json", "stdout", "stderr"):
+                        name = f"command-{number:03d}.{suffix}"
+                        body = f"private {name}\n".encode()
+                        _ = (private / name).write_bytes(body)
+                        expected[f"private/{name}"] = body
+                if completed_report:
+                    body = b'{"passed":false,"failure":"Command 049 failed"}\n'
+                    _ = (source / "report.json").write_bytes(body)
+                    expected["report.json"] = body
+                for name in ("ca.key", "fixture-image.tar", "app.env"):
+                    _ = (private / name).write_text("not command evidence")
+                (private / "command-999.stderr").symlink_to(private / "ca.key")
+                result = subprocess.run(  # noqa: S603 - Execute the checked workflow in owned temp paths.
+                    ["/bin/bash", "-c", string(retention, "run")],
+                    env={
+                        "PATH": "/usr/bin:/bin",
+                        "RUNNER_TEMP": str(source.parent),
+                        "LOCAL_CI_EVIDENCE": str(evidence),
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=5,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "", "Private logs must not enter the CI console")
+                destination = evidence / "release-container"
+                copied = {
+                    str(path.relative_to(destination)): path.read_bytes()
+                    for path in destination.rglob("*")
+                    if path.is_file()
+                }
+                self.assertEqual(copied, expected)
+                for path in (evidence, destination, destination / "private"):
+                    self.assertEqual(path.stat().st_mode & 0o777, 0o700)
+                for relative in expected:
+                    self.assertEqual((destination / relative).stat().st_mode & 0o777, 0o600)
+
+    def test_local_diagnostics_allow_failure_before_fixture_started(self) -> None:
+        """An earlier build failure has no fixture evidence and remains the original failure."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            result = subprocess.run(  # noqa: S603 - Execute the checked workflow in an owned temp path.
+                ["/bin/bash", "-c", string(self.step(LOCAL_DIAGNOSTICS), "run")],
+                env={"PATH": "/usr/bin:/bin", "RUNNER_TEMP": str(root)},
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=5,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(list(root.iterdir()), [])
 
     def test_read_only_permissions_pinned_actions_and_no_remote_deployment(self) -> None:
         """Verify read only permissions pinned actions and no remote deployment."""

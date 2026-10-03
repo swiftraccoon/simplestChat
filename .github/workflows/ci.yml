@@ -963,6 +963,26 @@ jobs:
             build/test-release-container.py --disposable-host \
             --image "${PRODUCTION_IMAGE}" --output "${RUNNER_TEMP}/release-container"
 
+      - name: Preserve private local release-container diagnostics
+        if: ${{ always() && env.ACT == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="${RUNNER_TEMP}/release-container"
+          [[ -d "${source}" && ! -L "${source}" ]] || exit 0
+          destination="${LOCAL_CI_EVIDENCE:?}/release-container"
+          umask 077
+          mkdir -m 700 "${destination}" "${destination}/private"
+          if [[ -f "${source}/report.json" && ! -L "${source}/report.json" ]]; then
+            install -m 600 "${source}/report.json" "${destination}/report.json"
+          fi
+          if [[ -d "${source}/private" && ! -L "${source}/private" ]]; then
+            for log in "${source}"/private/command-*.{json,stdout,stderr}; do
+              [[ -f "${log}" && ! -L "${log}" ]] || continue
+              install -m 600 "${log}" "${destination}/private/${log##*/}"
+            done
+          fi
+
       - name: Scan the same exported production image
         timeout-minutes: 25
         run: |
