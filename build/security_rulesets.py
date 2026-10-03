@@ -1,8 +1,8 @@
-"""Reconcile the maintained main-branch rules only after exact-head gates pass.
+"""Reconcile main history protection after exact-head release gates pass.
 
 Plan/check are read-only. Apply requires a clean committed checkout, the same
 remote main revision, a successful trusted CI run and completed CodeQL analysis.
-Only the two named rulesets are managed; unrelated repository rules are retained.
+Only the named history ruleset is managed; unrelated repository rules are retained.
 There is no operation that disables protection or deletes a ruleset.
 """
 
@@ -31,7 +31,8 @@ POLICY = ROOT / "security/rulesets.json"
 FIELDS = {"name", "target", "enforcement", "bypass_actors", "conditions", "rules"}
 GATE = "Required security and correctness checks"
 GITHUB_ACTIONS = 15368
-NAMES = {"Main security gates", "Main pull request review"}
+NAMES = {"Main history protection"}
+OBSOLETE_NAMES = {"Main security gates", "Main pull request review"}
 LANGUAGES = {"actions", "javascript-typescript", "python", "rust", "c-cpp"}
 PAGE_LIMIT = 100
 
@@ -59,7 +60,7 @@ def api(repository: str, path: str, body: JsonObject | None = None) -> JsonValue
 
 
 def load_policy() -> tuple[str, int, list[JsonObject]]:
-    """Reject weakened targeting or bypass policy before any administrative request."""
+    """Require direct-push history protection with no bypass or merge prerequisites."""
     policy = object_value(decode_json(bounded_file(POLICY, 65536)))
     require(set(policy) == {"repository", "repositoryId", "rulesets"}, "ruleset_policy_schema")
     repository = string_value(policy["repository"])
@@ -84,14 +85,12 @@ def load_policy() -> tuple[str, int, list[JsonObject]]:
             == {"ref_name": {"include": ["refs/heads/main"], "exclude": []}},
             "ruleset_target",
         )
-        if entry["name"] == "Main security gates":
-            require(entry["bypass_actors"] == [], "security_gate_bypass_forbidden")
-        else:
-            require(
-                entry["bypass_actors"]
-                == [{"actor_id": 47705353, "actor_type": "User", "bypass_mode": "pull_request"}],
-                "review_bypass_scope",
-            )
+        require(entry["bypass_actors"] == [], "history_bypass_forbidden")
+        require(
+            sorted(array_value(entry["rules"]), key=lambda item: json.dumps(item, sort_keys=True))
+            == [{"type": "deletion"}, {"type": "non_fast_forward"}],
+            "history_rules_differ",
+        )
     return repository, int(str(identifier)), entries
 
 
@@ -112,7 +111,7 @@ def inventory(repository: str) -> dict[str, JsonObject]:
     for value in values:
         entry = object_value(value)
         name = string_value(entry["name"])
-        if name not in NAMES:
+        if name not in NAMES | OBSOLETE_NAMES:
             continue
         identifier = entry["id"]
         require(
@@ -244,6 +243,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "ruleset_repository_changed",
         )
         current = inventory(repository)
+        obsolete = sorted(current.keys() & OBSOLETE_NAMES)
         changes = [
             item
             for item in policies
@@ -251,6 +251,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             or comparable(current[string_value(item["name"])]) != comparable(item)
         ]
         if args.mode == "apply":
+            require(not obsolete, "ruleset_obsolete_policy_present")
             require(args.revision is not None, "ruleset_revision_required")
             ready(repository, args.revision or "")
             for policy in changes:
@@ -261,6 +262,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             require_main_head(repository, args.revision or "")
             current = inventory(repository)
             require_main_head(repository, args.revision or "")
+            obsolete = sorted(current.keys() & OBSOLETE_NAMES)
+            require(not obsolete, "ruleset_obsolete_policy_present")
             require(
                 all(
                     comparable(current[string_value(item["name"])]) == comparable(item)
@@ -274,7 +277,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "mode": args.mode,
                     "repository": repository,
                     "changes": [item["name"] for item in changes],
-                    "matches": not changes or args.mode == "apply",
+                    "obsoleteRulesets": obsolete,
+                    "matches": not obsolete and (not changes or args.mode == "apply"),
                 }
             )
             + "\n"
@@ -290,7 +294,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         code = str(error) if isinstance(error, ToolError) else type(error).__name__
         _ = sys.stderr.write(f"Ruleset reconciliation failed: {code}\n")
         return 1
-    return 1 if args.mode == "check" and changes else 0
+    return 1 if args.mode == "check" and (changes or obsolete) else 0
 
 
 if __name__ == "__main__":

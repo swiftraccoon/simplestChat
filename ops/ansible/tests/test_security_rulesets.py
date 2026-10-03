@@ -193,36 +193,15 @@ class RulesetTests(unittest.TestCase):
                     )
                     self.assertEqual(api.call_args_list[0].args[:2], (repository, ""))
 
-    def test_maintained_policy_splits_review_from_mandatory_gates(self) -> None:
-        """The sole-owner review exception never grants a security-check bypass."""
+    def test_maintained_policy_allows_direct_pushes_and_protects_history(self) -> None:
+        """Local checks precede direct pushes; hosted release gates do not gate Git writes."""
         repository, identifier, policies = rules.load_policy()
         self.assertEqual(repository, "swiftraccoon/simplestChat")
         self.assertEqual(identifier, 1155881649)
-        gates = next(item for item in policies if item["name"] == "Main security gates")
-        self.assertEqual(gates["bypass_actors"], [])
-        by_type = {
-            test_support.string(item["type"]): item for item in test_support.objects(gates, "rules")
-        }
-        self.assertEqual(
-            set(by_type),
-            {"deletion", "non_fast_forward", "required_status_checks", "code_scanning"},
-        )
-        self.assertEqual(
-            test_support.at(
-                by_type["required_status_checks"], "parameters", "required_status_checks"
-            ),
-            [{"context": rules.GATE, "integration_id": rules.GITHUB_ACTIONS}],
-        )
-        self.assertEqual(
-            test_support.at(by_type["code_scanning"], "parameters", "code_scanning_tools"),
-            [
-                {
-                    "tool": "CodeQL",
-                    "security_alerts_threshold": "high_or_higher",
-                    "alerts_threshold": "none",
-                }
-            ],
-        )
+        self.assertEqual(len(policies), 1)
+        self.assertEqual(policies[0]["name"], "Main history protection")
+        self.assertEqual(policies[0]["bypass_actors"], [])
+        self.assertEqual(policies[0]["rules"], [{"type": "deletion"}, {"type": "non_fast_forward"}])
 
     def test_bypass_or_wider_target_fails_before_api(self) -> None:
         """Reject a policy that silently broadens the activation scope."""
@@ -248,6 +227,34 @@ class RulesetTests(unittest.TestCase):
                 rules.ready("swiftraccoon/simplestChat", REVISION)
             api.assert_not_called()
 
+    def test_obsolete_rules_cannot_hide_behind_matching_history_protection(self) -> None:
+        """Old merge gates remain drift until the explicit administrative migration."""
+        _, identifier, policies = rules.load_policy()
+        for name in rules.OBSOLETE_NAMES:
+            observed = {str(item["name"]): item for item in policies}
+            observed[name] = {"name": name, "id": 9}
+            output, error = io.StringIO(), io.StringIO()
+            with (
+                self.subTest(name=name),
+                redirect_stdout(output),
+                redirect_stderr(error),
+                patch.object(rules, "inventory", return_value=observed),
+                patch.object(rules, "ready") as ready,
+                patch.object(
+                    rules, "api", return_value={"id": identifier, "default_branch": "main"}
+                ) as api,
+            ):
+                self.assertEqual(rules.main(["check"]), 1)
+                value = test_support.obj(decode_json(output.getvalue()))
+                self.assertFalse(value["matches"])
+                self.assertEqual(value["obsoleteRulesets"], [name])
+                self.assertEqual(rules.main(["apply", "--revision", REVISION]), 1)
+                ready.assert_not_called()
+                self.assertEqual(api.call_count, 2)
+                for call in api.call_args_list:
+                    self.assertEqual(len(call.args), 2)
+            self.assertIn("ruleset_obsolete_policy_present", error.getvalue())
+
     def test_comparison_ignores_metadata_and_rule_order(self) -> None:
         """Repeated apply is idempotent for equivalent GitHub policy responses."""
         _, _, policies = rules.load_policy()
@@ -256,79 +263,53 @@ class RulesetTests(unittest.TestCase):
         observed["rules"] = list(reversed(array_value(observed["rules"])))
         self.assertEqual(rules.comparable(observed), rules.comparable(policies[0]))
 
-    @staticmethod
-    def recorded_review() -> JsonObject:
-        """Retain the complete current GitHub review-rule shape observed on 2026-09-30."""
-        return {
-            "id": 24277397,
-            "name": "Main pull request review",
-            "target": "branch",
-            "enforcement": "active",
-            "bypass_actors": [
-                {"actor_id": 47705353, "actor_type": "User", "bypass_mode": "pull_request"}
-            ],
-            "conditions": {"ref_name": {"include": ["refs/heads/main"], "exclude": []}},
-            "rules": [
-                {
-                    "type": "pull_request",
-                    "parameters": {
-                        "allowed_merge_methods": ["merge", "squash", "rebase"],
-                        "dismiss_stale_reviews_on_push": True,
-                        "require_code_owner_review": False,
-                        "require_extra_approval_for_unattributed_changes": True,
-                        "require_last_push_approval": True,
-                        "required_approving_review_count": 1,
-                        "required_review_thread_resolution": True,
-                        "required_reviewers": [],
-                    },
-                }
-            ],
-        }
-
-    def test_recorded_review_response_is_current_policy_without_normalization(self) -> None:
-        """The actual complete API shape must match without dropping nested parameters."""
+    def test_obsolete_policy_reintroduced_during_apply_fails_readback(self) -> None:
+        """A concurrent administrator cannot restore merge gates unnoticed during apply."""
         _, identifier, policies = rules.load_policy()
         observed = {str(item["name"]): item for item in policies}
-        observed["Main pull request review"] = self.recorded_review()
-        output = io.StringIO()
+        observed["Main pull request review"] = {"name": "Main pull request review", "id": 9}
+        error = io.StringIO()
         with (
-            redirect_stdout(output),
-            patch.object(rules, "inventory", return_value=observed),
-            patch.object(
-                rules, "api", return_value={"id": identifier, "default_branch": "main"}
-            ) as api,
+            redirect_stdout(io.StringIO()),
+            redirect_stderr(error),
+            patch.object(rules, "ready"),
+            patch.object(rules, "require_main_head"),
+            patch.object(rules, "inventory", side_effect=[{}, observed]),
+            patch.object(rules, "api", return_value={"id": identifier, "default_branch": "main"}),
         ):
-            self.assertEqual(rules.main(["check"]), 0)
-        self.assertTrue(test_support.obj(decode_json(output.getvalue()))["matches"])
-        self.assertEqual(api.call_count, 1)
-        self.assertEqual(len(api.call_args.args), 2)
+            self.assertEqual(rules.main(["apply", "--revision", REVISION]), 1)
+        self.assertIn("ruleset_obsolete_policy_present", error.getvalue())
 
-    def test_changed_missing_or_new_review_parameters_fail_apply_readback(self) -> None:
-        """Explicit current API fields cannot hide changed or previously unknown semantics."""
+    def test_changed_history_rules_fail_policy_and_apply_readback(self) -> None:
+        """Missing history protection or new merge prerequisites are observable drift."""
         _, identifier, policies = rules.load_policy()
-        cases: tuple[tuple[str, JsonValue], ...] = (
-            ("require_extra_approval_for_unattributed_changes", False),
-            ("required_reviewers", [{"reviewer": {"id": 1, "type": "Team"}}]),
-            ("unreviewed_parameter", True),
-            ("required_reviewers", None),
+        cases: tuple[list[JsonValue], ...] = (
+            [{"type": "deletion"}],
+            [{"type": "non_fast_forward"}],
+            [*array_value(policies[0]["rules"]), {"type": "pull_request"}],
+            [*array_value(policies[0]["rules"]), {"type": "required_status_checks"}],
+            [{"type": "deletion", "parameters": {}}, {"type": "non_fast_forward"}],
         )
-        for key, replacement in cases:
-            with self.subTest(key=key, replacement=replacement):
-                response = self.recorded_review()
-                parameters = test_support.obj(response, "rules", 0, "parameters")
-                if replacement is None:
-                    _ = parameters.pop(key)
-                else:
-                    parameters[key] = replacement
-                observed = {str(item["name"]): item for item in policies}
-                observed["Main pull request review"] = response
+        for changed_rules in cases:
+            with self.subTest(rules=changed_rules):
+                response = copy.deepcopy(policies[0])
+                response["rules"] = changed_rules
+                policy = test_support.obj(decode_json(rules.POLICY.read_bytes()))
+                policy["rulesets"] = [response]
+                with (
+                    patch.object(rules, "bounded_file", return_value=json.dumps(policy).encode()),
+                    self.assertRaisesRegex(ToolError, "history_rules_differ"),
+                ):
+                    _ = rules.load_policy()
                 error = io.StringIO()
                 with (
                     redirect_stdout(io.StringIO()),
                     redirect_stderr(error),
                     patch.object(rules, "ready"),
                     patch.object(rules, "require_main_head"),
-                    patch.object(rules, "inventory", side_effect=[{}, observed]),
+                    patch.object(
+                        rules, "inventory", side_effect=[{}, {str(response["name"]): response}]
+                    ),
                     patch.object(
                         rules, "api", return_value={"id": identifier, "default_branch": "main"}
                     ),

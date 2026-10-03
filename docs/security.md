@@ -200,8 +200,20 @@ TURN and encrypted off-host backup delivery remain separate operational checks.
 
 ## Main-branch rules
 
-`security/rulesets.json` is the desired repository policy; the GitHub API is the
-source of truth for whether it is currently enforced. Reconcile it with:
+Publish directly to `main` after the complete [local CI gate](testing.md#run-ci-locally)
+passes. Pull requests and another person's approval are optional. The maintained
+`Main history protection` ruleset prevents deletion and force pushes, with no
+bypass actors. It does not require a GitHub check before accepting a push.
+
+Correctness and security remain release requirements. Every main push runs the
+shared CI checks, including full CodeQL analysis, exact finding reviews and the
+production-image policy. The release signer requires the successful aggregate;
+deployment accepts only its verified artifact for that exact main revision.
+A failed main run cannot publish a deployable release. Local results cannot
+substitute for GitHub's OIDC signature or manufacture hosted analysis receipts.
+
+`security/rulesets.json` is the desired history policy; GitHub's API records the
+currently enforced policy. Reconcile the maintained ruleset with:
 
 ```sh
 python3 build/security_rulesets.py plan
@@ -209,44 +221,17 @@ python3 build/security_rulesets.py check
 python3 build/security_rulesets.py apply --revision FULL_GREEN_MAIN_COMMIT_SHA
 ```
 
-`plan` reads the current rules and reports differences. `check` also exits
-nonzero on drift. `apply` creates or updates only the two named rulesets and
-reads them back. It requires a clean checkout at the exact remote main revision,
-a completed successful main-push CI run, the aggregate GitHub Actions gate,
-the newest security analysis for each of the five CodeQL categories at that same
-revision, and no open High/Critical security alerts. Analysis warnings, missing
-query counts and empty query coverage fail the preflight. It rechecks the remote
-main ref before each write and before and after readback. A changed head stops
-remaining operations and reports failure; protection already installed remains
-in place and a fresh `plan` shows any remaining differences.
-Readback compares the complete rule parameters. The review policy explicitly
-records GitHub's current `required_reviewers: []` and
-`require_extra_approval_for_unattributed_changes: true` values; changed or added
-parameters remain drift rather than being discarded as defaults. Fixed failure
-codes distinguish failed API commands from mismatched readback without exposing
-API response bodies or exception details.
-It has no delete or disable mode. The operator's authenticated `gh` account must
-have repository administration permission; no administration token enters PR CI.
-
-The security ruleset has no bypass actors. It forbids deletion/force pushes,
-requires the current aggregate gate and blocks new High/Critical CodeQL findings.
-The aggregate itself requires every declared correctness, security and image
-job to succeed; failed, cancelled or skipped dependencies fail it.
-
-The separate review ruleset requires a pull request, one current approval after
-the last reviewable push, stale-review dismissal and resolved conversations.
-This repository currently has one maintainer, who cannot approve their own PR.
-The named owner's numeric GitHub identity therefore has a **pull-request-only**
-bypass of the review ruleset. That exception does not bypass security checks,
-CodeQL, force-push restrictions or deletion protection, and does not authorize
-direct pushes. Remove it when another reviewer is available. It is an explicit
-availability tradeoff, not a claim of independent human review.
-
-Activate the rules only after the new checks have completed successfully on
-main. After activation, publish changes through pull requests; temporary local
-review branches are not themselves release artifacts. Administrators can still
-change repository policy, so ownership of administrative credentials remains a
-separate trust boundary.
+`plan` reports differences; `check` also exits nonzero on drift. `apply` updates
+only the named history ruleset and reads back its complete parameters. It requires
+a clean checkout at the exact remote main revision, successful main CI and all
+five current security CodeQL analyses. It rechecks the remote revision before
+writes and readback. Changed heads, warnings, missing query coverage and open
+High/Critical alerts stop reconciliation. Other repository rules are not changed.
+The operator needs repository administration permission; no administration token
+enters CI. The previous PR-review and pre-push-check rulesets are reported as drift
+if they are still installed, even when history protection matches. They require
+an explicit administrative migration; `apply` refuses to silently retain them.
+The tool has no deletion, disable or bypass mode.
 
 ## Security behavior tests
 

@@ -3,55 +3,24 @@
   "repositoryId": 1155881649,
   "rulesets": [
     {
-      "name": "Main security gates",
+      "name": "Main history protection",
       "target": "branch",
       "enforcement": "active",
       "bypass_actors": [],
-      "conditions": {"ref_name": {"include": ["refs/heads/main"], "exclude": []}},
+      "conditions": {
+        "ref_name": {
+          "include": [
+            "refs/heads/main"
+          ],
+          "exclude": []
+        }
+      },
       "rules": [
-        {"type": "deletion"},
-        {"type": "non_fast_forward"},
         {
-          "type": "required_status_checks",
-          "parameters": {
-            "strict_required_status_checks_policy": true,
-            "do_not_enforce_on_create": false,
-            "required_status_checks": [
-              {"context": "Required security and correctness checks", "integration_id": 15368}
-            ]
-          }
+          "type": "deletion"
         },
         {
-          "type": "code_scanning",
-          "parameters": {
-            "code_scanning_tools": [
-              {"tool": "CodeQL", "security_alerts_threshold": "high_or_higher", "alerts_threshold": "none"}
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Main pull request review",
-      "target": "branch",
-      "enforcement": "active",
-      "bypass_actors": [
-        {"actor_id": 47705353, "actor_type": "User", "bypass_mode": "pull_request"}
-      ],
-      "conditions": {"ref_name": {"include": ["refs/heads/main"], "exclude": []}},
-      "rules": [
-        {
-          "type": "pull_request",
-          "parameters": {
-            "required_approving_review_count": 1,
-            "dismiss_stale_reviews_on_push": true,
-            "require_code_owner_review": false,
-            "require_extra_approval_for_unattributed_changes": true,
-            "require_last_push_approval": true,
-            "required_review_thread_resolution": true,
-            "required_reviewers": [],
-            "allowed_merge_methods": ["merge", "squash", "rebase"]
-          }
+          "type": "non_fast_forward"
         }
       ]
     }

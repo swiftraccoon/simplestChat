@@ -9,7 +9,23 @@ Start with [development setup](docs/development.md), then the
 README a quick introduction; put detailed explanations alongside the system
 they describe. Local agent instructions such as `CLAUDE.md` stay untracked.
 
-## Before requesting review
+## Before publishing
+
+Use focused local commits on `main`; a branch or pull request is optional.
+Run the complete [local CI workflow](docs/testing.md#run-ci-locally) on the clean
+committed tree before pushing directly to `main`:
+
+```sh
+build/ci-local.sh all --base origin/main
+```
+
+The local runner executes the shared correctness and security checks in an
+isolated Linux environment. GitHub checks the published revision and issues the
+release signature only after every required check passes. A failed run cannot
+produce a deployable release. Main remains protected against deletion and
+force pushes.
+
+### Focused checks while iterating
 
 After installing the pinned dependencies and native prerequisites, run:
 
