@@ -815,7 +815,8 @@ jobs:
       # native worker) are reused from this directory until their inputs
       # change, so a source-only push compiles only this crate.
       - name: Restore image layer cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: production-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/buildx-cache
           key: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', 'Cargo.toml', 'Cargo.lock', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'vendor/**', 'security/exceptions.json', 'security/image-policy.json') }}
@@ -875,6 +876,15 @@ jobs:
           # Every following smoke, export and fixture uses this exact image,
           # not the mutable build tag. The exporter never rebuilds it.
           printf 'PRODUCTION_IMAGE=%s\n' "${production_id}" >> "${GITHUB_ENV}"
+
+      # Persist completed layers before later checks can fail. This cache is
+      # build input only; image verification and release gates still run below.
+      - name: Save completed image layer cache
+        if: ${{ success() && steps.production-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/buildx-cache
+          key: ${{ steps.production-cache.outputs.cache-primary-key }}
 
       - name: Verify production image contents and user
         shell: bash

@@ -497,6 +497,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             obj(step, "with")
             for step in steps
             if string(step.get("uses", "")).startswith("actions/cache")
+            and not string(step.get("uses", "")).startswith("actions/cache/save@")
         ]
         self.assertEqual(len(caches), 2)
         for config in caches:
@@ -530,6 +531,20 @@ class SecurityWorkflowTests(unittest.TestCase):
                 ):
                     continue
                 config = obj(step, "with")
+                if string(step, "uses").startswith("actions/cache/save@"):
+                    # A split save must inherit the exact validated restore key;
+                    # resolve it before checking the trust/architecture inputs.
+                    match = re.fullmatch(
+                        r"\$\{\{ steps\.([a-zA-Z0-9_-]+)\.outputs\.cache-primary-key \}\}",
+                        string(config, "key"),
+                    )
+                    self.assertIsNotNone(match)
+                    if match is None:
+                        continue
+                    restore = next(step for step in steps if step.get("id") == match.group(1))
+                    self.assertTrue(string(restore, "uses").startswith("actions/cache/restore@"))
+                    self.assertEqual(config["path"], at(restore, "with", "path"))
+                    config = obj(restore, "with")
                 key = string(config.get("prefix-key", config.get("key", "")))
                 self.assertIn("github.event_name != 'pull_request'", key)
                 self.assertIn("'main' || 'untrusted'", key)

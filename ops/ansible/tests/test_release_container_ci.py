@@ -459,6 +459,36 @@ docker() {
             "Do not upload private release fixture directories or broad runner paths",
         )
 
+    def test_completed_layers_are_saved_before_later_checks_can_fail(self) -> None:
+        """A successful build survives fixture failures without saving partial layers."""
+        restore = self.step("Restore image layer cache")
+        save = self.step("Save completed image layer cache")
+        pin = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+        self.assertEqual(restore["uses"], f"actions/cache/restore@{pin}")
+        self.assertEqual(restore["id"], "production-cache")
+        self.assertEqual(save["uses"], f"actions/cache/save@{pin}")
+        self.assertEqual(
+            save["if"],
+            "${{ success() && steps.production-cache.outputs.cache-hit != 'true' }}",
+        )
+        self.assertEqual(
+            save["with"],
+            {
+                "path": at(restore, "with", "path"),
+                "key": "${{ steps.production-cache.outputs.cache-primary-key }}",
+            },
+        )
+        self.assertEqual(
+            self.steps.index(save), self.steps.index(self.step("Build production container")) + 1
+        )
+        self.assertLess(
+            self.steps.index(save),
+            self.steps.index(self.step("Verify production image contents and user")),
+        )
+        self.assertLess(self.steps.index(save), self.steps.index(self.step(INTEGRATION)))
+        for step in (restore, save):
+            self.assertNotIn("continue-on-error", step)
+
     def test_read_only_permissions_pinned_actions_and_no_remote_deployment(self) -> None:
         """Verify read only permissions pinned actions and no remote deployment."""
         self.assertEqual(self.workflow["permissions"], {"contents": "read"})
@@ -470,7 +500,7 @@ docker() {
                 # the Actions-cache layer store, and artifact retention.
                 self.assertRegex(
                     string(step, "uses"),
-                    r"^actions/(?:checkout|cache|upload-artifact)@[a-f0-9]{40}$",
+                    r"^actions/(?:checkout|cache/(?:restore|save)|upload-artifact)@[a-f0-9]{40}$",
                 )
             self.assertNotIn("permissions", step)
             self.assertNotIn("environment", step)
