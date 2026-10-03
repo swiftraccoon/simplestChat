@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, final, override
@@ -296,15 +297,92 @@ class BackupIntegrityTests(unittest.TestCase):
             _ = release.validated_backup(self.receipt)
 
     def test_digest_cache_invalidates_same_size_rewrites(self) -> None:
-        """Cached hashes bind inode and change timestamps, and corruption cannot reuse them."""
-        cache: JsonObject = {}
-        _ = release.validated_backup(self.receipt, digest_cache=cache)
-        self.assertIn("signature", cache)
-        with patch.object(hashlib, "file_digest", side_effect=AssertionError("unexpected rehash")):
+        """Same-size corruption fails even when filesystem timestamps collide exactly."""
+        metadata = self.dump.stat()
+        current = max(metadata.st_mtime_ns, metadata.st_ctime_ns) / 1_000_000_000
+        frozen = self.frozen_dump_stat()
+        for later in (0, release.BACKUP_HASH_TIMESTAMP_MARGIN_SECONDS + 1):
+            with self.subTest(later=later):
+                _ = self.dump.write_bytes(b"PGDMP-fixture")
+                cache: JsonObject = {}
+                with (
+                    patch.object(os, "fstat", side_effect=frozen),
+                    patch.object(time, "time", return_value=current) as clock,
+                ):
+                    _ = release.validated_backup(self.receipt, digest_cache=cache)
+                    self.assertEqual(cache, {})
+                    _ = self.dump.write_bytes(b"PGDMP-altered")
+                    clock.return_value = current + later
+                    with self.assertRaisesRegex(release.ReleaseError, "digest"):
+                        _ = release.validated_backup(self.receipt, digest_cache=cache)
+
+    def frozen_dump_stat(self) -> Callable[[int], os.stat_result]:
+        """Simulate a coarse filesystem reporting identical metadata after a rewrite."""
+        snapshot = self.dump.stat()
+        actual_fstat = os.fstat
+
+        def metadata(descriptor: int) -> os.stat_result:
+            actual = actual_fstat(descriptor)
+            if (actual.st_dev, actual.st_ino) == (snapshot.st_dev, snapshot.st_ino):
+                return snapshot
+            return actual
+
+        return metadata
+
+    def test_stable_hash_cache_expires_and_rejects_clock_rollback(self) -> None:
+        """Old unchanged dumps reuse hashes, but expiry and backward time force a read."""
+        metadata = self.dump.stat()
+        current = max(metadata.st_mtime_ns, metadata.st_ctime_ns) / 1_000_000_000 + 10
+        for age, hashes in ((1, 1), (release.BACKUP_HASH_CACHE_SECONDS, 2), (-1, 2)):
+            with (
+                self.subTest(age=age),
+                patch.object(time, "time", return_value=current) as clock,
+                patch.object(hashlib, "file_digest", wraps=hashlib.file_digest) as digest,
+            ):
+                cache: JsonObject = {}
+                _ = release.validated_backup(self.receipt, digest_cache=cache)
+                self.assertEqual(cache.get("schemaVersion"), 2)
+                clock.return_value = current + age
+                _ = release.validated_backup(self.receipt, digest_cache=cache)
+                self.assertEqual(digest.call_count, hashes)
+
+    def test_old_contract_and_hashes_checked_while_fresh_cannot_be_reused(self) -> None:
+        """Neither legacy entries nor initially racy signatures become trusted by waiting."""
+        metadata = self.dump.stat()
+        modified = max(metadata.st_mtime_ns, metadata.st_ctime_ns) / 1_000_000_000
+        for change in ("legacy", "fresh"):
+            with (
+                self.subTest(change=change),
+                patch.object(time, "time", return_value=modified + 10),
+                patch.object(hashlib, "file_digest", wraps=hashlib.file_digest) as digest,
+            ):
+                cache: JsonObject = {}
+                _ = release.validated_backup(self.receipt, digest_cache=cache)
+                if change == "legacy":
+                    del cache["schemaVersion"]
+                else:
+                    cache["checkedAt"] = modified
+                _ = release.validated_backup(self.receipt, digest_cache=cache)
+                self.assertEqual(digest.call_count, 2)
+
+    def test_slow_hash_cannot_make_fresh_timestamps_cacheable(self) -> None:
+        """Eligibility is captured before reading, even when hashing spans the margin."""
+        metadata = self.dump.stat()
+        current = max(metadata.st_mtime_ns, metadata.st_ctime_ns) / 1_000_000_000
+        with (
+            patch.object(time, "time", return_value=current) as clock,
+            patch.object(hashlib, "file_digest", wraps=hashlib.file_digest) as digest,
+        ):
+            actual_digest = hashlib.sha256(self.dump.read_bytes())
+
+            def slow_digest(*_arguments: object) -> object:
+                clock.return_value = current + release.BACKUP_HASH_TIMESTAMP_MARGIN_SECONDS + 1
+                return actual_digest
+
+            digest.side_effect = slow_digest
+            cache: JsonObject = {}
             _ = release.validated_backup(self.receipt, digest_cache=cache)
-        _ = self.dump.write_bytes(b"PGDMP-altered")
-        with self.assertRaisesRegex(release.ReleaseError, "digest"):
-            _ = release.validated_backup(self.receipt, digest_cache=cache)
+            self.assertEqual(cache, {})
 
     def test_bad_schema_types_names_and_dates_are_rejected(self) -> None:
         """Boolean versions, traversal, malformed hashes and future dates cannot count."""

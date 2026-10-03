@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -61,7 +62,10 @@ class MonitoringTests(unittest.TestCase):
             good.chmod(0o700)
             (good / "database-before.dump").chmod(0o600)
             (good / "database-before.receipt.json").chmod(0o600)
+            metadata = (good / "database-before.dump").stat()
+            current = max(metadata.st_mtime_ns, metadata.st_ctime_ns) / 1_000_000_000
             with (
+                patch.object(time, "time", return_value=current),
                 patch.object(release, "ROOT_UID", os.getuid()),
                 patch.object(collect, "ROOT", root),
                 patch.object(collect, "STATE", state),
@@ -80,12 +84,20 @@ class MonitoringTests(unittest.TestCase):
                 (good / "database-before.receipt.json").stat().st_mtime,
                 delta=1,
             )
+            cached = obj(decode_json((state / "backup-integrity-cache.json").read_text()))
+            self.assertEqual(cached["schemaVersion"], 1)
+            self.assertEqual(obj(cached, "entries")[str(good / "database-before.receipt.json")], {})
             with (
+                patch.object(time, "time", return_value=current),
                 patch.object(release, "ROOT_UID", os.getuid()),
                 patch.object(collect, "ROOT", root),
                 patch.object(collect, "STATE", state),
                 patch.object(collect, "command", return_value="0\t/tmp"),
             ):
+                _ = (good / "database-before.dump").write_bytes(b"x" * 40)
+                lines = []
+                collect.evidence(lines)
+                self.assertIn("simplestchat_ops_backup_last_success_seconds 0", "\n".join(lines))
                 (good / "database-before.receipt.json").unlink()
                 lines = []
                 collect.evidence(lines)

@@ -43,6 +43,8 @@ ROOT_UID = 0
 MAX_BACKUP_RECEIPT_BYTES = 16384
 BACKUP_PRIVATE_MODE = 0o600
 BACKUP_HASH_CACHE_SECONDS = 86400
+BACKUP_HASH_CACHE_SCHEMA = 2
+BACKUP_HASH_TIMESTAMP_MARGIN_SECONDS = 2
 CONFIG = Path("/etc/simplestchat-public")
 WORK = Path("/run/simplestchat-bench")
 SOURCES = Path("/srv/simplestchat-bench/sources")
@@ -1135,14 +1137,26 @@ def validated_backup(
             before.st_mtime_ns,
             before.st_ctime_ns,
         ]
+        checked_at = time.time()
+        # A same-size rewrite can share a fresh filesystem timestamp. Admit
+        # only timestamps already older than a coarse clock tick before hashing;
+        # time spent hashing must not make an initially racy signature cacheable.
+        stable_after = (
+            max(before.st_mtime_ns, before.st_ctime_ns) / 1_000_000_000
+            + BACKUP_HASH_TIMESTAMP_MARGIN_SECONDS
+        )
         cached_at = digest_cache.get("checkedAt") if digest_cache is not None else None
         cached = (
             digest_cache is not None
+            and digest_cache.get("schemaVersion") == BACKUP_HASH_CACHE_SCHEMA
             and digest_cache.get("signature") == signature
             and type(cached_at) in (int, float)
             and isinstance(cached_at, (int, float))
-            and 0 <= time.time() - cached_at < BACKUP_HASH_CACHE_SECONDS
+            and stable_after < cached_at
+            and 0 <= checked_at - cached_at < BACKUP_HASH_CACHE_SECONDS
         )
+        if digest_cache is not None and not cached:
+            digest_cache.clear()
         actual = digest if cached else hashlib.file_digest(source, "sha256").hexdigest()
         after = os.fstat(source.fileno())
         require(
@@ -1151,8 +1165,14 @@ def validated_backup(
             "Backup changed during validation",
         )
     require(actual == digest, "Backup digest differs")
-    if digest_cache is not None and not cached:
-        digest_cache.update({"signature": signature, "checkedAt": time.time()})
+    if digest_cache is not None and not cached and stable_after < checked_at:
+        digest_cache.update(
+            {
+                "schemaVersion": BACKUP_HASH_CACHE_SCHEMA,
+                "signature": signature,
+                "checkedAt": checked_at,
+            }
+        )
     return backup, record, completed.timestamp()
 
 
