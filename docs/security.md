@@ -132,9 +132,13 @@ all required jobs succeed; a skipped or failed dependency is not release approva
 
 Daily security runs refresh advisory results even when source has not changed.
 The daily deep jobs run finite native checks and selected pure-policy mutations. CodeQL runs
-`security-extended` for ordinary CI and `security-and-quality` in its separately
-categorized scheduled analysis. The broader scheduled category is initially
-advisory; findings still need triage.
+`security-extended` for ordinary CI. Standalone pull-request, scheduled and manual
+CodeQL runs use `security-and-quality` in separate `quality-advisory` categories.
+Running those same configurations on pull requests lets GitHub compare every
+CodeQL configuration already present on the base branch before permitting a merge.
+The broader categories remain advisory; findings still need triage. The reusable
+workflow's `security_gate` input defaults to true, preserving CI's security
+categories and exact High/Critical review enforcement.
 
 CodeQL covers Actions, JavaScript/TypeScript, Python and Rust without a build.
 C/C++ is a separate manual-build job: it compiles the real vendored worker under
