@@ -139,11 +139,13 @@ jobs:
 
       - name: Audit Rust dependencies
         run: |
-          cargo install cargo-audit --locked --version 0.22.2
+          audit_tools="$RUNNER_TEMP/rust-audit-tools"
+          python3 build/security_tools.py install --tools cargo-audit --directory "$audit_tools"
+          cargo_audit="$(python3 build/security_tools.py path cargo-audit --directory "$audit_tools")"
           # SQLx 0.9 removes the old optional rsa lockfile entry. Keep its
           # advisory unsuppressed so a future reintroduction is audited.
           # The atty and rand advisories occur only in mediasoup-sys build tools.
-          cargo audit --deny unsound \
+          "$cargo_audit" audit --deny unsound \
             --ignore RUSTSEC-2021-0145 \
             --ignore RUSTSEC-2026-0097
 
