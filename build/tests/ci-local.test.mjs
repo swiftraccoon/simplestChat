@@ -70,7 +70,24 @@ PY
       init|start|stop) : ;;
       ssh)
         cat > "$CI_FIXTURE_LOG.emulator-script"
-        [[ -z "$CI_FIXTURE_EMULATOR_FAIL" ]] || exit 69 ;;
+        python3 - "$CI_FIXTURE_LOG.emulator-script" <<'PY_CAPABILITY_FIXTURE'
+import ctypes,os,pathlib,sys
+from types import SimpleNamespace
+from unittest.mock import patch
+
+script=pathlib.Path(sys.argv[1]).read_text()
+probe=script.split("<<'PY_CAPABILITIES'\n",1)[1].split("\nPY_CAPABILITIES",1)[0]
+class Auxv:
+    def __call__(self,key):
+        assert key in (16,26)
+        return int(os.environ.get('CI_FIXTURE_HWCAP' if key==16 else 'CI_FIXTURE_HWCAP2','0'),0)
+with patch.object(ctypes,'CDLL',return_value=SimpleNamespace(getauxval=Auxv())):
+    exec(compile(probe,'guest-capabilities','exec'),{})
+PY_CAPABILITY_FIXTURE
+        status=$?
+        [[ "$status" == 0 ]] || exit "$status"
+        [[ -z "$CI_FIXTURE_EMULATOR_FAIL" ]] || exit 69
+        : > "$CI_FIXTURE_LOG.emulator-selected" ;;
       *) exit 95 ;;
     esac ;;
   *) exit 96 ;;
@@ -114,7 +131,9 @@ async function fixture(t) {
       try { summary = JSON.parse(await readFile(path.join(output, 'summary.json'), 'utf8')); } catch { /* preflight may refuse before evidence exists */ }
       let emulatorScript;
       try { emulatorScript = await readFile(`${log}.emulator-script`, 'utf8'); } catch { /* explicit engines do not select an emulator */ }
-      return { ...result, calls, output, summary, emulatorScript };
+      let emulatorSelected = false;
+      try { await readFile(`${log}.emulator-selected`); emulatorSelected = true; } catch { /* failed preflight cannot configure an emulator */ }
+      return { ...result, calls, output, summary, emulatorScript, emulatorSelected };
     },
   };
 }
@@ -159,6 +178,7 @@ test('all runs native ARM suites with bounded resources and explicit AMD64 produ
   assert.match(result.emulatorScript, /test -x \/mnt\/rosetta/);
   assert.match(result.emulatorScript, /grep -qx enabled \/proc\/sys\/fs\/binfmt_misc\/rosetta/);
   assert.match(result.emulatorScript, /grep -qx disabled \/proc\/sys\/fs\/binfmt_misc\/qemu-x86_64/);
+  assert.equal(result.emulatorSelected, true);
 });
 
 test('a selected job can filter its matrix and cannot claim a complete gate', async t => {
@@ -249,6 +269,28 @@ test('failed owned-VM emulator selection stops before workflow execution', async
   assert.equal(result.status, 69);
   assert.equal(result.summary.completeLocalGate, false);
   assert.ok(!result.calls.some(call => call.tool === 'act'));
+});
+
+test('guest capability validation refuses inconsistent SVE2 before emulator or workflow execution', async t => {
+  for (const [hwcap, hwcap2, passed] of [
+    ['0', '0', true],
+    ['0x400000', '2', true],
+    ['0', '2', false],
+    ['0xefb3ffff', '0x201300327383', false],
+  ]) {
+    const f = await fixture(t);
+    const result = await f.run([], { CI_FIXTURE_HWCAP: hwcap, CI_FIXTURE_HWCAP2: hwcap2 });
+    assert.equal(result.status === 0, passed, result.stderr);
+    assert.equal(result.emulatorSelected, passed);
+    assert.equal(result.calls.some(call => call.tool === 'act'), passed);
+    if (!passed) {
+      assert.equal(result.summary.completeLocalGate, false);
+      assert.match(result.stderr, /simplestchat-ci VM advertises SVE2 without SVE/);
+      assert.match(result.stderr, /arm64\.nosve with rpm-ostree/);
+      assert.match(result.stderr, /docs\/testing\.md#recover-inconsistent-arm-cpu-features/);
+      assert.ok(!result.calls.some(call => call.tool === 'podman' && ['set', 'stop', 'start'].includes(call.args[1])));
+    }
+  }
 });
 
 test('only the actual runner ISA needs a pinned read-only CodeQL cache', async t => {

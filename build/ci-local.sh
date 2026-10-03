@@ -150,10 +150,25 @@ with open(sys.argv[1]) as source:
         raise SystemExit("The disposable engine contains existing containers; they were left untouched.")
 PY
 
-# Select the registered production emulator only after refusing existing
-# containers. Job runners and their private Docker daemons stay native ARM64.
+# Check the owned guest's real CPU capabilities before configuring the production
+# emulator. Job runners and their private Docker daemons stay native ARM64.
 if ((!disposable_engine)) && [[ "$runner_platform" == linux/arm64 ]]; then
   podman machine ssh "$machine" 'sudo sh -se' <<'SH'
+python3 - <<'PY_CAPABILITIES'
+import ctypes
+
+libc = ctypes.CDLL(None)
+libc.getauxval.argtypes = [ctypes.c_ulong]
+libc.getauxval.restype = ctypes.c_ulong
+hwcap, hwcap2 = libc.getauxval(16), libc.getauxval(26)
+if hwcap2 & (1 << 1) and not hwcap & (1 << 22):
+    raise SystemExit(
+        "The owned simplestchat-ci VM advertises SVE2 without SVE "
+        f"(HWCAP={hwcap:#x}, HWCAP2={hwcap2:#x}); native tools can crash. "
+        "After owned CI jobs have stopped, apply arm64.nosve with rpm-ostree "
+        "and reboot only this VM. See docs/testing.md#recover-inconsistent-arm-cpu-features."
+    )
+PY_CAPABILITIES
 test -x /mnt/rosetta
 grep -qx 'interpreter /mnt/rosetta' /proc/sys/fs/binfmt_misc/rosetta
 printf '1\n' > /proc/sys/fs/binfmt_misc/rosetta

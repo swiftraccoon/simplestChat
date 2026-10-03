@@ -537,6 +537,36 @@ build/ci-local.sh rust-lint
 build/ci-local.sh browser --matrix group:accounts
 ```
 
+#### Recover inconsistent ARM CPU features
+
+Some Apple Silicon guests advertise SVE2 without the SVE instructions it requires.
+The launcher reads the owned VM's actual Linux auxiliary-vector flags before
+configuring its emulator or starting CI, and refuses that inconsistent combination.
+This caused the pinned `cryptography` wheel to crash during OpenSSL initialization,
+before `ansible-lint --version` could run: the failing instruction was `cntb` in
+`_armv8_sve_get_vl_bytes`. The [upstream cryptography report](https://github.com/pyca/cryptography/issues/14733)
+and [Parallels diagnosis](https://kb.parallels.com/en/131179) describe this guest
+CPU-feature problem. The kernel documents
+[`arm64.nosve`](https://www.kernel.org/doc/html/latest/admin-guide/kernel-parameters.html)
+to disable the unsupported feature exposure.
+
+For the owned Fedora CoreOS VM only, end its CI invocation and verify that
+`podman --connection simplestchat-ci-root ps --all` lists no containers. Then
+apply the kernel argument and restart that VM:
+
+```sh
+podman machine ssh simplestchat-ci 'sudo rpm-ostree kargs --append-if-missing=arm64.nosve'
+podman machine stop simplestchat-ci
+podman machine start simplestchat-ci
+```
+
+[Fedora CoreOS documents kernel-argument changes through rpm-ostree](https://docs.fedoraproject.org/en-US/fedora-coreos/kernel-args/#_modifying_kernel_arguments_on_existing_systems).
+The launcher never changes kernel arguments or restarts an already running VM
+to repair this condition. Rerun `build/ci-local.sh all` after reboot; its preflight
+checks the resulting feature flags, and the unchanged dependencies and lint rules
+must pass normally. These commands apply only to `simplestchat-ci`, not another
+project's VM or a shared engine.
+
 ### Weekly performance and soak
 
 The [Performance workflow](../.github/workflows/performance.yml) (weekly and
