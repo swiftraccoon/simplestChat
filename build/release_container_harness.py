@@ -171,8 +171,10 @@ def fresh_output(value: str) -> Path:
 def host_preflight() -> None:
     """Refuse non-disposable hosts before starting any child process or contacting Docker."""
     require(
-        sys.platform == "linux" and platform.machine() in ("x86_64", "amd64") and os.geteuid() == 0,
-        "Use a fresh disposable Linux/amd64 host as root; never the public VPS",
+        sys.platform == "linux"
+        and platform.machine() in ("x86_64", "amd64", "aarch64", "arm64")
+        and os.geteuid() == 0,
+        "Use a fresh disposable Linux amd64/arm64 host as root; never the public VPS",
     )
     for path in FIXED_PATHS:
         require(

@@ -580,8 +580,9 @@ class HarnessPreflightTests(HarnessTestCase):
         """Reject the wrong host platform or privilege before any external probing."""
         for platform_name, machine, uid in (
             ("darwin", "arm64", 0),
-            ("linux", "aarch64", 0),
+            ("linux", "riscv64", 0),
             ("linux", "x86_64", 501),
+            ("linux", "aarch64", 501),
         ):
             with (
                 self.subTest(platform=platform_name, machine=machine, uid=uid),
@@ -622,17 +623,19 @@ class HarnessPreflightTests(HarnessTestCase):
 
     def test_missing_tooling_fails_before_port_checks(self) -> None:
         """Require all fixed host tools before checking service port availability."""
-        with (
-            patch.object(sys, "platform", "linux"),
-            patch.object(platform, "machine", return_value="x86_64"),
-            patch.object(os, "geteuid", return_value=0),
-            patch.object(harness_module, "FIXED_PATHS", ()),
-            patch.object(os, "access", return_value=False),
-            patch.object(socket, "socket") as sockets,
-        ):
-            with self.assertRaisesRegex(harness_module.CheckError, "tooling is missing"):
-                harness_module.host_preflight()
-            sockets.assert_not_called()
+        for machine in ("x86_64", "amd64", "aarch64", "arm64"):
+            with (
+                self.subTest(machine=machine),
+                patch.object(sys, "platform", "linux"),
+                patch.object(platform, "machine", return_value=machine),
+                patch.object(os, "geteuid", return_value=0),
+                patch.object(harness_module, "FIXED_PATHS", ()),
+                patch.object(os, "access", return_value=False),
+                patch.object(socket, "socket") as sockets,
+            ):
+                with self.assertRaisesRegex(harness_module.CheckError, "tooling is missing"):
+                    harness_module.host_preflight()
+                sockets.assert_not_called()
 
 
 class HarnessOwnershipTests(HarnessTestCase):

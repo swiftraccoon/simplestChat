@@ -755,13 +755,24 @@ jobs:
           set -euo pipefail
           # Match the provisioned host: older config --hash omits env_file values.
           # Digest verified against the official v5.5.1 release asset and checksum.
+          case "$(uname -m)" in
+            x86_64)
+              compose_arch=x86_64
+              compose_sha256=db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576
+              ;;
+            aarch64|arm64)
+              compose_arch=aarch64
+              compose_sha256=732e3a84c1a0f67256ce80bc2598a24546b10ca05f9faa97efceb1171ece2ef7
+              ;;
+            *) echo 'Unsupported Compose controller architecture' >&2; exit 1 ;;
+          esac
           compose_download="$(mktemp -d "${RUNNER_TEMP}/simplestchat-compose.XXXXXXXX")"
           curl --disable --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
             --connect-timeout 10 --max-time 60 \
-            https://github.com/docker/compose/releases/download/v5.5.1/docker-compose-linux-x86_64 \
+            "https://github.com/docker/compose/releases/download/v5.5.1/docker-compose-linux-${compose_arch}" \
             --output "${compose_download}/docker-compose"
           printf '%s  %s\n' \
-            db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576 \
+            "${compose_sha256}" \
             "${compose_download}/docker-compose" | sha256sum --check --strict
           sudo install -d -m 0755 /usr/local/lib/docker/cli-plugins
           sudo install -m 0755 "${compose_download}/docker-compose" /usr/local/lib/docker/cli-plugins/docker-compose

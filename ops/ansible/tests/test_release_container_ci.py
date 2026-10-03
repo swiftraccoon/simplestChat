@@ -1,6 +1,7 @@
 """Offline policy checks for disposable-host release integration in CI."""
 
 import re
+import subprocess
 import unittest
 from functools import cached_property
 from pathlib import Path
@@ -184,7 +185,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         )
         self.assertIn("--connect-timeout 10 --max-time 60", command)
         self.assertIn(
-            "https://github.com/docker/compose/releases/download/v5.5.1/docker-compose-linux-x86_64",
+            "https://github.com/docker/compose/releases/download/v5.5.1/docker-compose-linux-${compose_arch}",
             command,
         )
         self.assertIn("db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576", command)
@@ -212,6 +213,39 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertEqual(command.count('compose version --short)" = 5.5.1'), 2)
         self.assertNotRegex(command, r"\b(?:apt|apt-get|systemctl|service|dockerd)\b")
         self.assertNotRegex(command, r"\b(?:latest|prune|remove|upgrade)\b")
+
+    def test_compose_selects_an_authenticated_native_binary_before_any_download(self) -> None:
+        """Exercise both native controllers and fail closed on unsupported machines."""
+        command = string(self.step(COMPOSE_TOOL), "run")
+        selection, separator, _ = command.partition("compose_download=")
+        self.assertEqual(separator, "compose_download=")
+        script = (
+            'uname() { printf "%s\\n" "$TEST_MACHINE"; }\n'
+            + selection
+            + 'printf "%s %s\\n" "$compose_arch" "$compose_sha256"\n'
+        )
+        digests = {
+            "x86_64": "db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576",
+            "aarch64": "732e3a84c1a0f67256ce80bc2598a24546b10ca05f9faa97efceb1171ece2ef7",
+        }
+        for machine in ("x86_64", "aarch64", "arm64", "riscv64"):
+            with self.subTest(machine=machine):
+                result = subprocess.run(  # noqa: S603 -- Execute only the checked local selection block.
+                    ["/bin/bash", "-c", script],
+                    env={"TEST_MACHINE": machine},
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=5,
+                )
+                if machine == "riscv64":
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("Unsupported Compose controller architecture", result.stderr)
+                    self.assertEqual(result.stdout, "")
+                else:
+                    architecture = "aarch64" if machine == "arm64" else machine
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, f"{architecture} {digests[architecture]}\n")
 
     def test_guest_compose_contract_runs_with_required_pinned_renderer(self) -> None:
         """The real JSON contract regression cannot silently skip in production-image CI."""
