@@ -68,6 +68,30 @@ records the new source review. This is not a claim that the new revision has
 already passed CodeQL: the next original SARIF must independently match the
 complete identity or the gate rejects it. No remote alert state was changed.
 
+## Source re-review: disposable release controller
+
+Alert 32 was re-reviewed against source commit
+`661fbc763030f6b5423232a7be817e1c09872898`. The only change to
+`build/release_container_harness.py` permits the disposable Linux controller to
+run on ARM64 and updates its refusal message. The flagged operation at line 136
+and all eight `write_new` calls are unchanged. Exclusive creation, default mode
+0600, process umask 0077 and private evidence directories remain in place. The
+only public mode 0644 outputs remain the one-day fixture CA certificate and the
+sanitized CI summary; private keys, command output and configuration stay private.
+
+The complete-file SHA-256 changes from
+`05deaeb4565baa51e86758ed9a16a3b46394668656f960e549cfc946d3eee9e0` to
+`3ad8d0f5d1a33a20b78e168117b54cdd770cd016bddb96eb998c9ce6ee063ee9`.
+A fresh CodeQL 2.27.1 Python security-extended analysis of that exact commit ran
+all 50 security rules and independently reproduced the unchanged query, primary
+range and rendered message with the new whole-file identity. The original SARIF
+passed extraction and analysis-health checks; its initial policy failure exposed
+the stale review. The maintained triage helper derives the replacement fingerprint
+`codeql:4276b44b448f6e8c90e2203acf7575dbd7633debbd8a0045333f4ee91307867e`.
+The exact exception is replaced with the original 2026-11-29 expiry. This review
+authorizes no other finding, path or query exclusion, and changes no remote alert
+state. It does not claim a complete passing CI run.
+
 ## Follow-up: canary assertion diagnostic
 
 <a id="alert-102"></a>[Alert 102](https://github.com/swiftraccoon/simplestChat/security/code-scanning/102)
@@ -281,7 +305,7 @@ inherit this decision merely because the alert number is unchanged.
 | <a id="alert-29"></a>[29](https://github.com/swiftraccoon/simplestChat/security/code-scanning/29) | high | false-positive | [`ops/ansible/tests/test_automation.py:395`](../ops/ansible/tests/test_automation.py#L395) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
 | <a id="alert-30"></a>[30](https://github.com/swiftraccoon/simplestChat/security/code-scanning/30) | high | false-positive | [`ops/ansible/tests/test_public_templates.py:82`](../ops/ansible/tests/test_public_templates.py#L82) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
 | <a id="alert-31"></a>[31](https://github.com/swiftraccoon/simplestChat/security/code-scanning/31) | high | false-positive | [`ops/ansible/tests/test_release_playbook.py:76`](../ops/ansible/tests/test_release_playbook.py#L76) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
-| <a id="alert-32"></a>[32](https://github.com/swiftraccoon/simplestChat/security/code-scanning/32) | high | false-positive | [`build/release_container_harness.py:136`](../build/release_container_harness.py#L136) | write_new defaults to mode0600 with O_CREAT\|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets. |
+| <a id="alert-32"></a>[32](https://github.com/swiftraccoon/simplestChat/security/code-scanning/32) | high | false-positive | [`build/release_container_harness.py:136`](../build/release_container_harness.py#L136) | write_new defaults to mode0600 with O_CREAT\|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets. Source and fresh original SARIF were re-reviewed at `661fbc763030f6b5423232a7be817e1c09872898`; only the disposable controller architecture guard changed. |
 | <a id="alert-33"></a>[33](https://github.com/swiftraccoon/simplestChat/security/code-scanning/33) | high | false-positive | [`src/metrics.rs:1153`](../src/metrics.rs#L1153) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |
 | <a id="alert-34"></a>[34](https://github.com/swiftraccoon/simplestChat/security/code-scanning/34) | high | false-positive | [`src/metrics.rs:1157`](../src/metrics.rs#L1157) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |
 | <a id="alert-35"></a>[35](https://github.com/swiftraccoon/simplestChat/security/code-scanning/35) | high | false-positive | [`src/signaling/mod.rs:1667`](../src/signaling/mod.rs#L1667) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |

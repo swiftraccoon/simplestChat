@@ -543,11 +543,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:b0ed7fddcf11b71bf2b5af49ac26a72d5f1f4f266d9ca22061f4959dad971a61",
+      "fingerprint": "codeql:4276b44b448f6e8c90e2203acf7575dbd7633debbd8a0045333f4ee91307867e",
       "scope": "build/release_container_harness.py:136:136:18:75",
       "owner": "swiftraccoon",
-      "rationale": "write_new defaults to mode0600 with O_CREAT|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 05deaeb4565baa51e86758ed9a16a3b46394668656f960e549cfc946d3eee9e0. Changes require a fresh review; no general test, template or path exclusion.",
+      "rationale": "write_new defaults to mode0600 with O_CREAT|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets. Source re-review at 661fbc763030f6b5423232a7be817e1c09872898 confirms that only the disposable controller architecture guard and its refusal message changed; all eight write_new calls and the flagged operation are unchanged. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
+      "reachability": "Exact query, CodeQL version, unchanged primary range/message and re-reviewed whole-file SHA256 3ad8d0f5d1a33a20b78e168117b54cdd770cd016bddb96eb998c9ce6ee063ee9. Original Python security-extended SARIF from 661fbc763030f6b5423232a7be817e1c09872898 independently matches the full identity. Changes require a fresh review; no general test, template or path exclusion, automatic renewal or expiry extension.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-32"
     },

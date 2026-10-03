@@ -699,16 +699,17 @@
         "end_column": 75
       },
       "messageSha256": "535ab3a2aa7b68c36dd4de5f653e5ce0cf41d9f40c326b4394cfef9d0b0b296b",
-      "sourceSha256": "05deaeb4565baa51e86758ed9a16a3b46394668656f960e549cfc946d3eee9e0",
+      "sourceSha256": "3ad8d0f5d1a33a20b78e168117b54cdd770cd016bddb96eb998c9ce6ee063ee9",
       "scope": "build/release_container_harness.py:136:136:18:75",
-      "fingerprint": "codeql:b0ed7fddcf11b71bf2b5af49ac26a72d5f1f4f266d9ca22061f4959dad971a61",
+      "fingerprint": "codeql:4276b44b448f6e8c90e2203acf7575dbd7633debbd8a0045333f4ee91307867e",
       "number": 32,
       "severity": "high",
       "state": "open",
       "disposition": "false-positive",
-      "rationale": "write_new defaults to mode0600 with O_CREAT|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets.",
-      "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/32"
+      "rationale": "write_new defaults to mode0600 with O_CREAT|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets. Source re-review at 661fbc763030f6b5423232a7be817e1c09872898 confirms that only the disposable controller architecture guard and its refusal message changed; all eight write_new calls and the flagged operation are unchanged. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
+      "observedRevision": "661fbc763030f6b5423232a7be817e1c09872898",
+      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/32",
+      "sourceProvenanceRevision": "661fbc763030f6b5423232a7be817e1c09872898"
     },
     {
       "rule": "rust/cleartext-logging",
