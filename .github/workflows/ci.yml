@@ -321,7 +321,7 @@ jobs:
         if: steps.verified.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config
+          sudo apt-get install -y build-essential clang python3-pip cmake curl perl pkg-config
           echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-3.5.9" >> "${GITHUB_ENV}"
 
       - name: Restore checksum-pinned OpenSSL
