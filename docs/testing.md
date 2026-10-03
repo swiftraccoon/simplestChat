@@ -467,8 +467,9 @@ DOCKER_HOST=unix:///path/to/disposable/docker.sock \
 Both paths run the pinned Ubuntu 24.04 **Linux/amd64** image, including on Apple
 silicon. Emulation needs working amd64 support in the VM and can be substantially
 slower than a native amd64 runner. Outer job groups run serially, with up to four
-matrix entries concurrently, each limited to 3 CPUs and 8 GiB RAM. `--jobs 1`
-reduces simultaneous resource use; supported matrix limits are 1 through 4.
+matrix entries concurrently, each limited to 3 CPUs and 8 GiB RAM. The workflows
+declare literal limits of three browser/native entries and four CodeQL entries;
+act cannot evaluate expressions for this setting.
 The privileged job containers are confined to the disposable engine. Each
 Docker-dependent job starts its own bundled, pinned daemon with a fresh storage
 volume and private socket. The outer engine socket is never mounted, and the

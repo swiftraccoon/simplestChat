@@ -33,7 +33,7 @@ jobs:
       security-events: write # Upload only this job's SARIF to code scanning.
     strategy:
       fail-fast: false
-      max-parallel: ${{ github.event.local_ci_parallel || 4 }}
+      max-parallel: 4
       matrix:
         language: [actions, javascript-typescript, python, rust]
     steps:

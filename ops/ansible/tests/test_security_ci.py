@@ -269,9 +269,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         native = obj(workflow("security.yml"), "jobs", "native-security")
         self.assertEqual(strings(native, "strategy", "matrix", "mode"), ["asan", "ubsan", "replay"])
         self.assertEqual(at(native, "strategy", "fail-fast"), "false")
-        self.assertEqual(
-            at(native, "strategy", "max-parallel"), "${{ github.event.local_ci_parallel || 3 }}"
-        )
+        self.assertEqual(at(native, "strategy", "max-parallel"), "3")
         steps = objects(native, "steps")
         command = "\n".join(string(step.get("run", "")) for step in steps)
         for required in (
@@ -318,7 +316,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(at(codeql, "env", "CODEQL_ACTION_DIFF_INFORMED_QUERIES"), "false")
         self.assertEqual(
             at(codeql, "jobs", "source-analysis", "strategy", "max-parallel"),
-            "${{ github.event.local_ci_parallel || 4 }}",
+            "4",
         )
         for name, job in obj(codeql, "jobs").items():
             with self.subTest(job=name):

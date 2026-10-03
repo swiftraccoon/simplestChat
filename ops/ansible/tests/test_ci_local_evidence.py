@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from typing import override
 
-from test_support import obj, strings, yaml_value
+from test_support import obj, string, strings, yaml_value
 
 ROOT = Path(__file__).resolve().parents[3]
 CHECKS = {
@@ -105,6 +105,20 @@ class LocalCiEvidenceTests(unittest.TestCase):
         self.assertEqual(report["gates"], sorted(self.needs))
         self.assertEqual(set(obj(report, "workflows")), {"ci.yml", "security.yml", "codeql.yml"})
         self.assertNotEqual(self.run_helper("complete").returncode, 0)
+
+    def test_matrix_limits_are_numeric_and_cover_each_declared_entry(self) -> None:
+        """Act parses literal limits with Atoi and otherwise silently serializes matrices."""
+        for name, job, dimension, limit in (
+            ("ci.yml", "browser", "group", 3),
+            ("security.yml", "native-security", "mode", 3),
+            ("codeql.yml", "source-analysis", "language", 4),
+        ):
+            workflow = obj(
+                yaml_value((ROOT / ".github/workflows" / name).read_text(), scalars_as_strings=True)
+            )
+            strategy = obj(workflow, "jobs", job, "strategy")
+            self.assertEqual(string(strategy, "max-parallel"), str(limit))
+            self.assertEqual(len(strings(strategy, "matrix", dimension)), limit)
 
     def test_missing_or_extra_matrix_receipts_fail(self) -> None:
         """Filtering any supported matrix family cannot satisfy the final aggregate."""

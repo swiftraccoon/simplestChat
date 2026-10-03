@@ -134,7 +134,7 @@ test('all runs the canonical required DAG with isolated bounded amd64 runners an
   assert.equal(event.before, base);
   assert.equal(event.after, revision);
   assert.equal(event.local_ci, true);
-  assert.equal(event.local_ci_parallel, 4);
+  assert.equal(Object.hasOwn(event, 'local_ci_parallel'), false);
   assert.equal(result.summary.completeLocalGate, true);
   assert.equal(result.summary.revision, revision);
   assert.equal(result.summary.base, base);
@@ -143,7 +143,7 @@ test('all runs the canonical required DAG with isolated bounded amd64 runners an
 
 test('a selected job can filter its matrix and cannot claim a complete gate', async t => {
   const f = await fixture(t);
-  const result = await f.run(['browser', '--matrix', 'group:accounts', '--jobs', '1'], { CI_FIXTURE_DIRTY: '1' });
+  const result = await f.run(['browser', '--matrix', 'group:accounts'], { CI_FIXTURE_DIRTY: '1' });
   assert.equal(result.status, 0, result.stderr);
   const args = result.calls.find(call => call.tool === 'act').args;
   assert.equal(args[args.indexOf('--job') + 1], 'browser');
@@ -151,13 +151,13 @@ test('a selected job can filter its matrix and cannot claim a complete gate', as
   assert.equal(result.summary.completeLocalGate, false);
 });
 
-test('full CI refuses filtered coverage, dirty source, bad base and unbounded jobs before any engine action', async t => {
+test('full CI refuses filtered coverage, dirty source, bad base and unsupported concurrency before any engine action', async t => {
   for (const [args, env] of [
     [['all', '--matrix', 'group:accounts'], {}],
     [[], { CI_FIXTURE_DIRTY: '1' }],
     [[], { CI_FIXTURE_SAME_BASE: '1' }],
     [[], { CI_FIXTURE_NONANCESTOR: '1' }],
-    [['all', '--jobs', '5'], {}],
+    [['all', '--jobs', '1'], {}],
     [['all', '--job', 'web'], {}],
     [['release-security'], {}],
   ]) {

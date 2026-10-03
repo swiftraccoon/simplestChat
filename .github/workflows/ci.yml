@@ -364,7 +364,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: ${{ github.event.local_ci_parallel || 3 }}
+      max-parallel: 3
       # One job definition, three runners: every group repeats the same
       # two-minute build and browser setup, then runs under two minutes of
       # suites instead of five and a half minutes in one sequence.

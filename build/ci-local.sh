@@ -10,7 +10,6 @@ Usage: build/ci-local.sh [all|JOB] [options]
   all                         Run the workflow's required gate and all its needs (default).
   JOB                         Run one job; this is not a complete CI result.
   --base REF                  Changed-source base (default: merge-base with origin/main).
-  --jobs N                    Concurrent matrix entries, 1 through 4 (default: 4).
   --matrix KEY:VALUE          Select a matrix entry for a single job only.
   --codeql DIRECTORY          Reuse an authenticated Linux CodeQL bundle; otherwise install its pin.
   --output NEW_DIRECTORY      Evidence directory (default: a new directory under results/).
@@ -29,7 +28,6 @@ project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${project_root}"
 job=all
 base_ref=''
-concurrency=4
 output=''
 codeql=''
 disposable_engine=0
@@ -39,11 +37,10 @@ while (($#)); do
   case "$1" in
     --help|-h) usage; exit 0 ;;
     --disposable-engine) disposable_engine=1; shift ;;
-    --base|--jobs|--matrix|--codeql|--output)
+    --base|--matrix|--codeql|--output)
       (($# >= 2)) || die "Missing value for $1"
       case "$1" in
         --base) base_ref="$2" ;;
-        --jobs) concurrency="$2" ;;
         --matrix) matrix_args+=(--matrix "$2") ;;
         --codeql) codeql="$2" ;;
         --output) output="$2" ;;
@@ -53,7 +50,6 @@ while (($#)); do
   esac
 done
 [[ "$job" =~ ^[a-z][a-z0-9-]*$ ]] || die 'Invalid job name.'
-[[ "$concurrency" =~ ^[1-4]$ ]] || die '--jobs must be 1 through 4 (each job has 3 CPUs and 8 GiB).'
 [[ "$job" != all || ${#matrix_args[@]} == 0 ]] || die 'A full CI run cannot filter out matrix entries.'
 [[ "$job" != required && "$job" != release-security ]] || die 'Use all for the aggregate gate; release signing runs only on GitHub.'
 for tool in act curl git python3; do command -v "$tool" >/dev/null || die "Missing prerequisite: $tool"; done
@@ -167,14 +163,14 @@ PY
 )"
 
 run_id="$(python3 -c 'import uuid; print(uuid.uuid4().hex)')"
-python3 - "$output/event.json" "$revision" "$base" "$concurrency" <<'PY'
+python3 - "$output/event.json" "$revision" "$base" <<'PY'
 import json
 import pathlib
 import sys
-path, revision, base, concurrency = sys.argv[1:]
+path, revision, base = sys.argv[1:]
 pathlib.Path(path).write_text(json.dumps({
     "ref": "refs/heads/main", "before": base, "after": revision,
-    "head_commit": {"id": revision}, "local_ci": True, "local_ci_parallel": int(concurrency),
+    "head_commit": {"id": revision}, "local_ci": True,
     "repository": {"default_branch": "main", "full_name": "swiftraccoon/simplestChat",
                    "name": "simplestChat", "owner": {"name": "swiftraccoon", "login": "swiftraccoon"}},
 }) + "\n")

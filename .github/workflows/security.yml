@@ -68,7 +68,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      max-parallel: ${{ github.event.local_ci_parallel || 3 }}
+      max-parallel: 3
       matrix:
         mode: [asan, ubsan, replay]
     steps:
