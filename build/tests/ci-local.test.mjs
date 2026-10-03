@@ -67,7 +67,9 @@ PY
         elif [[ "$*" == *'{{.ConnectionInfo.PodmanSocket.Path}}'* ]]; then echo /owned-ci/socket; fi ;;
       list) if [[ -n "$CI_FIXTURE_OTHER_VM" ]]; then echo 'other-project true'; else echo 'simplestchat-ci false'; fi ;;
       init|start|stop) : ;;
-      ssh) [[ -z "$CI_FIXTURE_QEMU_FAIL" ]] || exit 69 ;;
+      ssh)
+        cat > "$CI_FIXTURE_LOG.emulator-script"
+        [[ -z "$CI_FIXTURE_EMULATOR_FAIL" ]] || exit 69 ;;
       *) exit 95 ;;
     esac ;;
   *) exit 96 ;;
@@ -109,7 +111,9 @@ async function fixture(t) {
       const output = result.stdout.match(/Local CI evidence: (.+)/)?.[1];
       let summary;
       try { summary = JSON.parse(await readFile(path.join(output, 'summary.json'), 'utf8')); } catch { /* preflight may refuse before evidence exists */ }
-      return { ...result, calls, output, summary };
+      let emulatorScript;
+      try { emulatorScript = await readFile(`${log}.emulator-script`, 'utf8'); } catch { /* explicit engines do not select an emulator */ }
+      return { ...result, calls, output, summary, emulatorScript };
     },
   };
 }
@@ -148,9 +152,12 @@ test('all runs native ARM suites with bounded resources and explicit AMD64 produ
   assert.equal(result.summary.runnerPlatform, 'linux/arm64');
   assert.equal(result.summary.productionPlatform, 'linux/amd64');
   for (const target of ['nativeSecurityPlatform', 'nativeCodeqlPlatform']) assert.equal(result.summary[target], 'linux/arm64');
-  const qemu = result.calls.findIndex(call => call.tool === 'podman' && call.args[1] === 'ssh');
+  const emulator = result.calls.findIndex(call => call.tool === 'podman' && call.args[1] === 'ssh');
   const empty = result.calls.findIndex(call => call.tool === 'curl' && call.args.includes('http://localhost/containers/json?all=1'));
-  assert.ok(qemu > empty);
+  assert.ok(emulator > empty);
+  assert.match(result.emulatorScript, /test -x \/mnt\/rosetta/);
+  assert.match(result.emulatorScript, /grep -qx enabled \/proc\/sys\/fs\/binfmt_misc\/rosetta/);
+  assert.match(result.emulatorScript, /grep -qx disabled \/proc\/sys\/fs\/binfmt_misc\/qemu-x86_64/);
 });
 
 test('a selected job can filter its matrix and cannot claim a complete gate', async t => {
@@ -223,7 +230,7 @@ test('explicit engines require disposable intent and a local Unix socket', async
 
 test('failed owned-VM emulator selection stops before workflow execution', async t => {
   const f = await fixture(t);
-  const result = await f.run([], { CI_FIXTURE_QEMU_FAIL: '1' });
+  const result = await f.run([], { CI_FIXTURE_EMULATOR_FAIL: '1' });
   assert.equal(result.status, 69);
   assert.equal(result.summary.completeLocalGate, false);
   assert.ok(!result.calls.some(call => call.tool === 'act'));

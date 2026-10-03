@@ -470,8 +470,10 @@ AMD64 Linux uses the pinned Ubuntu 24.04 AMD64 runner and provides the same ISA
 coverage as GitHub. Apple silicon uses its pinned ARM64 counterpart for the same
 suites, including native sanitizers and CodeQL tracing. Production images remain
 explicitly AMD64 on both paths. After checking that the owned VM has no containers,
-the Mac launcher selects its packaged QEMU emulator instead of Rosetta, whose
-missing Fedora syscalls prevent the production build. These ARM64 test runs
+the Mac launcher enables its registered Rosetta interpreter for AMD64 production
+commands and disables the competing QEMU handler. The packaged QEMU crashes when
+querying the pinned AMD64 Rust compiler. Authenticated OpenSSL extraction uses
+Python's filtered tar reader, which works with Rosetta. These ARM64 test runs
 exercise the same checks but do not claim identical ISA coverage to GitHub.
 The hosted AMD64 workflow remains a deployment gate.
 Outer job groups run serially, with up to four

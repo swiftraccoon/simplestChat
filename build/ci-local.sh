@@ -150,18 +150,18 @@ with open(sys.argv[1]) as source:
         raise SystemExit("The disposable engine contains existing containers; they were left untouched.")
 PY
 
-# Select the packaged emulator only after refusing existing containers. Rosetta
-# lacks Fedora 44's required syscalls; the job-owned Docker daemon stays native.
+# Select the registered production emulator only after refusing existing
+# containers. Job runners and their private Docker daemons stay native ARM64.
 if ((!disposable_engine)) && [[ "$runner_platform" == linux/arm64 ]]; then
   podman machine ssh "$machine" 'sudo sh -se' <<'SH'
-test -x /usr/bin/qemu-x86_64-static
-/usr/lib/systemd/systemd-binfmt /usr/lib/binfmt.d/qemu-x86_64-static.conf
-if test -e /proc/sys/fs/binfmt_misc/rosetta; then
-  printf '0\n' > /proc/sys/fs/binfmt_misc/rosetta
-  grep -qx disabled /proc/sys/fs/binfmt_misc/rosetta
+test -x /mnt/rosetta
+grep -qx 'interpreter /mnt/rosetta' /proc/sys/fs/binfmt_misc/rosetta
+printf '1\n' > /proc/sys/fs/binfmt_misc/rosetta
+grep -qx enabled /proc/sys/fs/binfmt_misc/rosetta
+if test -e /proc/sys/fs/binfmt_misc/qemu-x86_64; then
+  printf '0\n' > /proc/sys/fs/binfmt_misc/qemu-x86_64
+  grep -qx disabled /proc/sys/fs/binfmt_misc/qemu-x86_64
 fi
-grep -qx enabled /proc/sys/fs/binfmt_misc/qemu-x86_64
-grep -qx 'interpreter /usr/bin/qemu-x86_64-static' /proc/sys/fs/binfmt_misc/qemu-x86_64
 SH
 fi
 

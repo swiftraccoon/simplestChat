@@ -52,7 +52,7 @@ if [ "$actual_sha256" != "$openssl_sha256" ]; then
     exit 1
 fi
 
-tar -xzf "$archive" -C "$build_dir"
+python3 -m tarfile --filter data --extract "$archive" "$build_dir"
 cd "$build_dir/openssl-${openssl_version}"
 
 # A normalized lib directory makes OPENSSL_DIR and PKG_CONFIG_PATH identical
