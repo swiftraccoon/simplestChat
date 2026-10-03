@@ -191,6 +191,28 @@ test('a selected job can filter its matrix and cannot claim a complete gate', as
   assert.equal(result.summary.completeLocalGate, false);
 });
 
+test('runner tracking uses each run nonce and overrides empty or hostile ambient values', async t => {
+  const f = await fixture(t);
+  const trackingIds = new Set();
+  for (const ambient of ['', 'untrusted:caller/tracking', 'ambient_valid_tracking']) {
+    const result = await f.run([], { RUNNER_TRACKING_ID: ambient });
+    assert.equal(result.status, 0, result.stderr);
+    const args = result.calls.find(call => call.tool === 'act').args;
+    const explicitEnv = args.filter((_, index) => args[index - 1] === '--env');
+    const trackingArgs = explicitEnv.filter(value => value.startsWith('RUNNER_TRACKING_ID='));
+    assert.equal(trackingArgs.length, 1);
+    const tracking = trackingArgs[0].slice('RUNNER_TRACKING_ID='.length);
+    const receipt = JSON.parse(await readFile(path.join(result.output, 'checks/required.json'), 'utf8'));
+    assert.match(receipt.runId, /^[a-f0-9]{32}$/);
+    assert.ok(explicitEnv.includes(`LOCAL_CI_RUN_ID=${receipt.runId}`));
+    assert.equal(tracking, `local-ci-${receipt.runId}`);
+    assert.match(tracking, /^[A-Za-z0-9_-]{1,128}$/);
+    assert.notEqual(tracking, ambient);
+    assert.equal(trackingIds.has(tracking), false);
+    trackingIds.add(tracking);
+  }
+});
+
 test('full CI refuses filtered coverage, dirty source, bad base and unsupported concurrency before any engine action', async t => {
   for (const [args, env] of [
     [['all', '--matrix', 'group:accounts'], {}],

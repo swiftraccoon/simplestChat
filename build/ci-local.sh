@@ -251,7 +251,7 @@ act push --workflows .github/workflows/ci.yml --job "$selected_job" \
   --use-new-action-cache=true --action-cache-path "${state}/actions" --cache-server-path "${state}/cache" \
   --env-file /dev/null --secret-file /dev/null --var-file /dev/null --input-file /dev/null \
   --secret GITHUB_TOKEN= --env LOCAL_CI_DISPOSABLE=1 --env LOCAL_CI_EVIDENCE=/local-ci-evidence \
-  --env "LOCAL_CI_RUN_ID=${run_id}" \
+  --env "LOCAL_CI_RUN_ID=${run_id}" --env "RUNNER_TRACKING_ID=local-ci-${run_id}" \
   ${matrix_args[@]+"${matrix_args[@]}"} \
   2>&1 | tee "$output/act.log"
 statuses=("${PIPESTATUS[@]}")
