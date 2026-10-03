@@ -582,22 +582,23 @@
       "toolVersion": "2.27.1",
       "path": "build/release_container_fixture.py",
       "region": {
-        "start_line": 163,
-        "end_line": 167,
+        "start_line": 164,
+        "end_line": 168,
         "start_column": 19,
         "end_column": 6
       },
       "messageSha256": "67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694",
-      "sourceSha256": "872273a5c7940e95987d967cfe591c39270f7c776e3c854b16527d0e5621d80d",
-      "scope": "build/release_container_fixture.py:163:167:19:6",
-      "fingerprint": "codeql:c4b7ab6b5946d915d75c3ea645644a21b24fab774419d84ccdb4a4b00f2e494d",
+      "sourceSha256": "f4c113823c89c511b8b2f73e82ae4a1ffbf4c0c4b367984bd1139757353f51e9",
+      "scope": "build/release_container_fixture.py:164:168:19:6",
+      "fingerprint": "codeql:53198c10cfe828b706fbe34985132d9b1ed478692f761c2f7ac4b366e19ea663",
       "number": 27,
       "severity": "high",
       "state": "open",
       "disposition": "false-positive",
-      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
-      "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/27"
+      "rationale": "The Jinja Environment renders tracked local dotenv/SQL/Compose/PostgreSQL configuration with StrictUndefined and explicit fixture values; it produces no HTML or browser response. Source re-review at cf941371acc877ed568f84f4e545dd622fe7badd confirms the only file change adds the localhost RP ID. The complete flagged Environment moves from lines 163-167 to 164-168 unchanged; callers and exclusive mode0600 output writes are unchanged. HTML escaping would corrupt these configuration formats. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
+      "observedRevision": "cf941371acc877ed568f84f4e545dd622fe7badd",
+      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/27",
+      "sourceProvenanceRevision": "cf941371acc877ed568f84f4e545dd622fe7badd"
     },
     {
       "rule": "py/jinja2/autoescape-false",
@@ -648,22 +649,23 @@
       "toolVersion": "2.27.1",
       "path": "ops/ansible/tests/test_public_templates.py",
       "region": {
-        "start_line": 82,
-        "end_line": 82,
+        "start_line": 83,
+        "end_line": 83,
         "start_column": 9,
         "end_column": 65
       },
       "messageSha256": "67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694",
-      "sourceSha256": "c9812f1d39fbf073c580220868ba692b93acb440a5ca2428d41c3d0887465619",
-      "scope": "ops/ansible/tests/test_public_templates.py:82:82:9:65",
-      "fingerprint": "codeql:f1c5d0f83d8419a0693936120afd2c2023cc4972f3138ebceea7870b86429307",
+      "sourceSha256": "e21db684ef354217e48922628ab19995335e0ab3a62c8d04bc5ba4efd45bab17",
+      "scope": "ops/ansible/tests/test_public_templates.py:83:83:9:65",
+      "fingerprint": "codeql:e043521afd22fbd565f006745cb0782e6a04d4ac0bc3ee49a08bcd974fc19509",
       "number": 30,
       "severity": "high",
       "state": "open",
       "disposition": "false-positive",
-      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
-      "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/30"
+      "rationale": "The flagged StrictUndefined Environment renders tracked local configuration templates with explicit offline fixture values, never HTML or a browser response. Source re-review at cf941371acc877ed568f84f4e545dd622fe7badd confirms the flagged line moves from 82 to 83 unchanged. The added RP fixture value, hostname derivation and parent-RP tests only render existing dotenv templates and evaluate deployment values; no new template source or HTML sink was introduced. HTML escaping is inappropriate for these formats. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
+      "observedRevision": "cf941371acc877ed568f84f4e545dd622fe7badd",
+      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/30",
+      "sourceProvenanceRevision": "cf941371acc877ed568f84f4e545dd622fe7badd"
     },
     {
       "rule": "py/jinja2/autoescape-false",

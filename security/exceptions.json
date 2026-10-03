@@ -513,11 +513,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:c4b7ab6b5946d915d75c3ea645644a21b24fab774419d84ccdb4a4b00f2e494d",
-      "scope": "build/release_container_fixture.py:163:167:19:6",
+      "fingerprint": "codeql:53198c10cfe828b706fbe34985132d9b1ed478692f761c2f7ac4b366e19ea663",
+      "scope": "build/release_container_fixture.py:164:168:19:6",
       "owner": "swiftraccoon",
-      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 872273a5c7940e95987d967cfe591c39270f7c776e3c854b16527d0e5621d80d. Changes require a fresh review; no general test, template or path exclusion.",
+      "rationale": "The Jinja Environment renders tracked local dotenv/SQL/Compose/PostgreSQL configuration with StrictUndefined and explicit fixture values; it produces no HTML or browser response. Source re-review at cf941371acc877ed568f84f4e545dd622fe7badd confirms the only file change adds the localhost RP ID. The complete flagged Environment moves from lines 163-167 to 164-168 unchanged; callers and exclusive mode0600 output writes are unchanged. HTML escaping would corrupt these configuration formats. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
+      "reachability": "Exact query, CodeQL version, primary range/message and re-reviewed whole-file SHA256 f4c113823c89c511b8b2f73e82ae4a1ffbf4c0c4b367984bd1139757353f51e9. Original Python security-extended SARIF from cf941371acc877ed568f84f4e545dd622fe7badd independently matches the full identity. Changes require a fresh review; no general template/test/path exclusion, automatic renewal or expiry extension.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-27"
     },
@@ -543,11 +543,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:f1c5d0f83d8419a0693936120afd2c2023cc4972f3138ebceea7870b86429307",
-      "scope": "ops/ansible/tests/test_public_templates.py:82:82:9:65",
+      "fingerprint": "codeql:e043521afd22fbd565f006745cb0782e6a04d4ac0bc3ee49a08bcd974fc19509",
+      "scope": "ops/ansible/tests/test_public_templates.py:83:83:9:65",
       "owner": "swiftraccoon",
-      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 c9812f1d39fbf073c580220868ba692b93acb440a5ca2428d41c3d0887465619. Changes require a fresh review; no general test, template or path exclusion.",
+      "rationale": "The flagged StrictUndefined Environment renders tracked local configuration templates with explicit offline fixture values, never HTML or a browser response. Source re-review at cf941371acc877ed568f84f4e545dd622fe7badd confirms the flagged line moves from 82 to 83 unchanged. The added RP fixture value, hostname derivation and parent-RP tests only render existing dotenv templates and evaluate deployment values; no new template source or HTML sink was introduced. HTML escaping is inappropriate for these formats. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
+      "reachability": "Exact query, CodeQL version, primary range/message and re-reviewed whole-file SHA256 e21db684ef354217e48922628ab19995335e0ab3a62c8d04bc5ba4efd45bab17. Original Python security-extended SARIF from cf941371acc877ed568f84f4e545dd622fe7badd independently matches the full identity. Changes require a fresh review; no general template/test/path exclusion, automatic renewal or expiry extension.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-30"
     },

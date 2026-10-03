@@ -92,6 +92,40 @@ The exact exception is replaced with the original 2026-11-29 expiry. This review
 authorizes no other finding, path or query exclusion, and changes no remote alert
 state. It does not claim a complete passing CI run.
 
+## Source re-review: passkey RP configuration fixtures
+
+Alerts 27 and 30 were re-reviewed against source commit
+`cf941371acc877ed568f84f4e545dd622fe7badd`. The only change to
+`build/release_container_fixture.py` adds an explicit `localhost` RP ID. Its
+flagged `Environment` moves from lines 163-167 to 164-168 unchanged. Tracked
+local dotenv, SQL, Compose and PostgreSQL configuration remains its only output;
+`StrictUndefined`, validated fixture identities, callers and exclusive mode 0600
+file creation are unchanged.
+
+In `ops/ansible/tests/test_public_templates.py`, the flagged configuration
+renderer moves from line 82 to 83 unchanged. The added RP fixture value, hostname
+derivation and parent-RP tests render existing local dotenv templates and evaluate
+deployment values. Neither path produces HTML or a browser response, and HTML
+autoescaping would corrupt these configuration formats.
+
+The complete-file SHA-256 changes are:
+
+| Alert | Previous SHA-256 | Reviewed SHA-256 |
+| --- | --- | --- |
+| 27 | `872273a5c7940e95987d967cfe591c39270f7c776e3c854b16527d0e5621d80d` | `f4c113823c89c511b8b2f73e82ae4a1ffbf4c0c4b367984bd1139757353f51e9` |
+| 30 | `c9812f1d39fbf073c580220868ba692b93acb440a5ca2428d41c3d0887465619` | `e21db684ef354217e48922628ab19995335e0ab3a62c8d04bc5ba4efd45bab17` |
+
+A fresh CodeQL 2.27.1 Python security-extended analysis of that exact commit ran
+all 50 security rules. Its original SARIF confirms successful extraction and
+analysis and independently reproduces both complete identities, including the
+shifted ranges. Initial policy evaluation blocked only these two stale reviews;
+nine unchanged findings retained their existing exact reviews. Both
+`observedRevision` and `sourceProvenanceRevision` now record this actual local
+analysis and source review. The exact exceptions replace their superseded
+identities and retain the original 2026-11-29 expiry. No other finding, path or
+query is excluded; no remote alert state changed. This does not claim a complete
+passing CI run.
+
 ## Follow-up: canary assertion diagnostic
 
 <a id="alert-102"></a>[Alert 102](https://github.com/swiftraccoon/simplestChat/security/code-scanning/102)
@@ -300,10 +334,10 @@ inherit this decision merely because the alert number is unchanged.
 | <a id="alert-24"></a>[24](https://github.com/swiftraccoon/simplestChat/security/code-scanning/24) | high | fix-pending | [`ops/ansible/files/monitoring_collect.py:156`](../ops/ansible/files/monitoring_collect.py#L156) | Assigned source remediation; this review authorizes no dismissal or exception. |
 | <a id="alert-25"></a>[25](https://github.com/swiftraccoon/simplestChat/security/code-scanning/25) | high | fix-pending | [`build/release_http_policy.py:273`](../build/release_http_policy.py#L273) | Assigned source remediation; this review authorizes no dismissal or exception. |
 | <a id="alert-26"></a>[26](https://github.com/swiftraccoon/simplestChat/security/code-scanning/26) | high | fix-pending | [`ops/ansible/files/turn_public.py:298`](../ops/ansible/files/turn_public.py#L298) | Assigned source remediation; this review authorizes no dismissal or exception. |
-| <a id="alert-27"></a>[27](https://github.com/swiftraccoon/simplestChat/security/code-scanning/27) | high | false-positive | [`build/release_container_fixture.py:163`](../build/release_container_fixture.py#L163) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
+| <a id="alert-27"></a>[27](https://github.com/swiftraccoon/simplestChat/security/code-scanning/27) | high | false-positive | [`build/release_container_fixture.py:164`](../build/release_container_fixture.py#L164) | The unchanged StrictUndefined renderer produces local configuration only. The RP fixture addition shifts the flagged Environment by one line; callers and exclusive mode0600 writes are unchanged. Source and fresh original SARIF were re-reviewed at `cf941371acc877ed568f84f4e545dd622fe7badd`; HTML escaping would corrupt these formats. |
 | <a id="alert-28"></a>[28](https://github.com/swiftraccoon/simplestChat/security/code-scanning/28) | high | false-positive | [`ops/ansible/tests/test_automation.py:39`](../ops/ansible/tests/test_automation.py#L39) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
 | <a id="alert-29"></a>[29](https://github.com/swiftraccoon/simplestChat/security/code-scanning/29) | high | false-positive | [`ops/ansible/tests/test_automation.py:395`](../ops/ansible/tests/test_automation.py#L395) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
-| <a id="alert-30"></a>[30](https://github.com/swiftraccoon/simplestChat/security/code-scanning/30) | high | false-positive | [`ops/ansible/tests/test_public_templates.py:82`](../ops/ansible/tests/test_public_templates.py#L82) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
+| <a id="alert-30"></a>[30](https://github.com/swiftraccoon/simplestChat/security/code-scanning/30) | high | false-positive | [`ops/ansible/tests/test_public_templates.py:83`](../ops/ansible/tests/test_public_templates.py#L83) | The unchanged StrictUndefined renderer produces local configuration only. Added RP fixture and migration tests introduce no HTML sink. Source and fresh original SARIF were re-reviewed at `cf941371acc877ed568f84f4e545dd622fe7badd`; HTML escaping is inappropriate for these formats. |
 | <a id="alert-31"></a>[31](https://github.com/swiftraccoon/simplestChat/security/code-scanning/31) | high | false-positive | [`ops/ansible/tests/test_release_playbook.py:76`](../ops/ansible/tests/test_release_playbook.py#L76) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
 | <a id="alert-32"></a>[32](https://github.com/swiftraccoon/simplestChat/security/code-scanning/32) | high | false-positive | [`build/release_container_harness.py:136`](../build/release_container_harness.py#L136) | write_new defaults to mode0600 with O_CREAT\|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets. Source and fresh original SARIF were re-reviewed at `661fbc763030f6b5423232a7be817e1c09872898`; only the disposable controller architecture guard changed. |
 | <a id="alert-33"></a>[33](https://github.com/swiftraccoon/simplestChat/security/code-scanning/33) | high | false-positive | [`src/metrics.rs:1153`](../src/metrics.rs#L1153) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |
