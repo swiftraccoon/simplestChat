@@ -8,6 +8,8 @@ reuses that exact application image and pinned PostgreSQL/Caddy images.
 This is the initial/full-maintenance workflow. For routine same-schema updates,
 use [prebuilt app-only releases](RELEASES.md), which keep the database and proxy
 running and do not rebuild on the live VPS.
+For a move to another VPS, use the [migration controller](MIGRATION.md), which
+automates preparation, verified data transfer, cutover and source retirement.
 
 ## Prepare configuration
 

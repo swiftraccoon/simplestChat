@@ -16,6 +16,9 @@ They stage an image while chat is live and leave PostgreSQL/Caddy running during
 application replacement. The routine `build/deploy.py` command selects the image
 normal CI already tested; no second image build or manual artifact IDs are needed.
 The same guide covers explicit, ordered host reboots.
+Use [server migration](MIGRATION.md) to move an existing deployment and its data
+to a fresh VPS through one command, including optional deployment and canary
+target changes.
 [Encrypted offsite backups and isolated restore drills](BACKUPS.md) are a
 separate opt-in after local backups and monitoring are prepared.
 

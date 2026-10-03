@@ -345,7 +345,9 @@ def run_playbook(
         ],
         cwd=target.root,
         env=target.environment,
-        timeout=4500 if name == "release.yml" else 2400,
+        # Migration transfer runs two bounded 1800-second units sequentially,
+        # with additional time for archive transport and source recovery.
+        timeout={"release.yml": 4500, "migration-data.yml": 5400}.get(name, 2400),
         capture=False,
     )
 

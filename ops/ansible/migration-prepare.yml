@@ -1,0 +1,395 @@
+---
+- name: Inspect and prepare the two explicitly selected migration hosts
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  strategy: linear
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  pre_tasks:
+    - name: Require the controller's exact two-host migration selection
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - ansible_play_hosts_all | sort == ['migration_source', 'migration_target']
+          - inventory_hostname in ['migration_source', 'migration_target']
+          - scmig_action in ['inspect', 'bootstrap', 'stage']
+          - scmig_run_id is match('^[a-f0-9]{32}$')
+          - scmig_revision is match('^[a-f0-9]{40}$')
+          - scmig_source_origin is match('^https://[a-z0-9.-]+$')
+          - scmig_destination_origin is match('^https://[a-z0-9.-]+$')
+          - scmig_source_origin != scmig_destination_origin
+          - scmig_evidence is match('^/')
+          - scpub_enabled | bool
+          - scpub_config == '/etc/simplestchat-public'
+          - scpub_root == '/srv/simplestchat-public'
+        fail_msg: Use the migration controller with two frozen hosts and explicit operation identities.
+
+    - name: Require existing private controller evidence before contacting either host
+      ansible.builtin.command:
+        argv:
+          - "{{ ansible_playbook_python }}"
+          - -B
+          - -c
+          - |
+            import os, stat, sys
+            from pathlib import Path
+            path = Path(sys.argv[1])
+            parent = Path(sys.argv[2]).resolve()
+            metadata = path.lstat()
+            if not (path.is_absolute() and path.resolve() == path and path.parent == parent
+                    and stat.S_ISDIR(metadata.st_mode) and metadata.st_uid == os.getuid()
+                    and stat.S_IMODE(metadata.st_mode) == 0o700):
+                raise SystemExit('Invalid private migration evidence')
+          - "{{ scmig_evidence }}"
+          - "{{ playbook_dir }}/../../results"
+      delegate_to: localhost
+      become: false
+      when: inventory_hostname == 'migration_source'
+      changed_when: false
+      timeout: 15
+
+  tasks:
+    - name: Inspect both selected machines without changing services or files
+      when: scmig_action == 'inspect'
+      block:
+        - name: Read the physical identity and source configuration or empty target state
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -B
+              - -c
+              - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/migration_inspect.py', rstrip=false) }}"
+              - "{{ 'source' if inventory_hostname == 'migration_source' else 'target' }}"
+              - "{{ scmig_source_origin if inventory_hostname == 'migration_source' else scmig_destination_origin }}"
+          register: scmig_inspected
+          changed_when: false
+          timeout: 60
+
+        - name: Require two distinct successful physical host inspections
+          ansible.builtin.assert:
+            that:
+              - (hostvars['migration_source'].scmig_inspected.stdout | from_json).passed == true
+              - (hostvars['migration_target'].scmig_inspected.stdout | from_json).passed == true
+              - >-
+                (hostvars['migration_source'].scmig_inspected.stdout | from_json).machineId !=
+                (hostvars['migration_target'].scmig_inspected.stdout | from_json).machineId
+          when: inventory_hostname == 'migration_source'
+
+        - name: Retain only the inspected identities in private controller evidence
+          ansible.builtin.copy:
+            content: >-
+              {{ {'source': hostvars['migration_source'].scmig_inspected.stdout | from_json,
+                  'target': hostvars['migration_target'].scmig_inspected.stdout | from_json} | to_nice_json }}
+            dest: "{{ scmig_evidence }}/inspection.json"
+            mode: '0600'
+            force: false
+          delegate_to: localhost
+          become: false
+          when: inventory_hostname == 'migration_source'
+
+    - name: Install the reviewed helpers and exact source secrets without starting services
+      when: scmig_action == 'bootstrap'
+      block:
+        - name: Refuse unfinished owned work and unsafe existing bootstrap paths
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -B
+              - -c
+              - |
+                import fcntl, json, os, stat, sys
+                from pathlib import Path
+                private = ['/etc/simplestchat-public', '/srv/simplestchat-public',
+                           '/srv/simplestchat-public/releases', '/srv/simplestchat-public/results',
+                           '/srv/simplestchat-public/migrations', '/run/simplestchat-bench']
+                paths = [(Path(name), 0o700) for name in private]
+                paths.append((Path('/usr/local/libexec/simplestchat-public'), 0o755))
+                for path, mode in paths:
+                    if path.exists() or path.is_symlink():
+                        metadata = path.lstat()
+                        if not (stat.S_ISDIR(metadata.st_mode) and metadata.st_uid == 0
+                                and metadata.st_gid == 0 and stat.S_IMODE(metadata.st_mode) == mode):
+                            raise SystemExit('Unsafe migration bootstrap path')
+                lock = Path('/run/simplestchat-bench/workload.lock')
+                if lock.exists() or lock.is_symlink():
+                    descriptor = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                    metadata = os.fstat(descriptor)
+                    if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
+                            and stat.S_IMODE(metadata.st_mode) == 0o600):
+                        raise SystemExit('Unsafe workload lock')
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                for name in ['/run/simplestchat-bench/current.json',
+                             '/srv/simplestchat-public/release-state.json']:
+                    path = Path(name)
+                    if path.exists() or path.is_symlink():
+                        metadata = path.lstat()
+                        if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0
+                                and stat.S_IMODE(metadata.st_mode) == 0o600
+                                and 0 < metadata.st_size <= 16384):
+                            raise SystemExit('Unsafe owned operation journal')
+                        record = json.loads(path.read_text())
+                        if not (isinstance(record, dict) and type(record.get('schemaVersion')) is int
+                                and record['schemaVersion'] == 1 and record.get('finalized') is True):
+                            raise SystemExit('Unfinished owned operation')
+                request = Path('/srv/simplestchat-public/migrations') / sys.argv[1]
+                if request.exists() or request.is_symlink():
+                    raise SystemExit('Migration operation already exists')
+              - "{{ scmig_run_id }}"
+          changed_when: false
+          timeout: 30
+
+        - name: Create private migration and immutable release storage
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+          loop:
+            - /etc/simplestchat-public
+            - /srv/simplestchat-public
+            - /srv/simplestchat-public/releases
+            - /srv/simplestchat-public/results
+            - /srv/simplestchat-public/migrations
+            - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}"
+
+        - name: Create the protected installed-helper directory
+          ansible.builtin.file:
+            path: /usr/local/libexec/simplestchat-public
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: Install the canonical release receiver and migration helpers
+          ansible.builtin.copy:
+            src: "{{ item }}"
+            dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+            owner: root
+            group: root
+            mode: '0644'
+          loop:
+            - bounded_process.py
+            - runtime_profile.py
+            - release-public.py
+            - release_public.py
+            - release_artifact.py
+            - release_json.py
+            - reboot-public.py
+            - reboot_public.py
+            - fetch-release.py
+            - release_fetch_receiver.py
+            - release_trust.py
+            - backup_public.py
+            - migration_snapshot.py
+            - migrate_public.py
+
+        - name: Bind a new private migration request without replacing prior evidence
+          ansible.builtin.copy:
+            content: >-
+              {{ {'operationId': scmig_run_id, 'sourceOrigin': scmig_source_origin,
+                  'destinationOrigin': scmig_destination_origin,
+                  'targetRevision': scmig_revision} | to_nice_json }}
+            dest: "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/request.json"
+            owner: root
+            group: root
+            mode: '0600'
+            force: false
+
+        - name: Inspect source secrets without returning their contents
+          ansible.builtin.stat:
+            path: /etc/simplestchat-public/secrets.json
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          register: scmig_source_secret
+          when: inventory_hostname == 'migration_source'
+          no_log: true
+
+        - name: Require private root-owned source secrets
+          ansible.builtin.assert:
+            that:
+              - scmig_source_secret.stat.isreg | default(false)
+              - not (scmig_source_secret.stat.islnk | default(false))
+              - scmig_source_secret.stat.uid == 0
+              - scmig_source_secret.stat.gid == 0
+              - scmig_source_secret.stat.mode == '0600'
+              - scmig_source_secret.stat.size > 0
+              - scmig_source_secret.stat.size <= 65536
+          when: inventory_hostname == 'migration_source'
+          no_log: true
+
+        - name: Fetch source secrets into the private controller transaction
+          ansible.builtin.fetch:
+            src: /etc/simplestchat-public/secrets.json
+            dest: "{{ scmig_evidence }}/source-secrets.json"
+            flat: true
+            validate_checksum: true
+          when: inventory_hostname == 'migration_source'
+          no_log: true
+
+        - name: Restrict the retained local secret copy
+          ansible.builtin.file:
+            path: "{{ scmig_evidence }}/source-secrets.json"
+            mode: '0600'
+          delegate_to: localhost
+          become: false
+          when: inventory_hostname == 'migration_source'
+          no_log: true
+
+        - name: Inspect the retained private secret copy
+          ansible.builtin.stat:
+            path: "{{ scmig_evidence }}/source-secrets.json"
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          register: scmig_retained_secret
+          delegate_to: localhost
+          become: false
+          when: inventory_hostname == 'migration_source'
+          no_log: true
+
+        - name: Require the source secret bytes to remain unchanged during transfer
+          ansible.builtin.assert:
+            that:
+              - scmig_retained_secret.stat.isreg
+              - scmig_retained_secret.stat.mode == '0600'
+              - scmig_retained_secret.stat.checksum == hostvars['migration_source'].scmig_source_secret.stat.checksum
+          when: inventory_hostname == 'migration_source'
+          no_log: true
+
+        - name: Inspect existing destination secrets without following links
+          ansible.builtin.stat:
+            path: /etc/simplestchat-public/secrets.json
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          register: scmig_target_secret
+          when: inventory_hostname == 'migration_target'
+          no_log: true
+
+        - name: Refuse replacement of different or unsafe destination secrets
+          ansible.builtin.assert:
+            that:
+              - scmig_target_secret.stat.isreg | default(false)
+              - not (scmig_target_secret.stat.islnk | default(false))
+              - scmig_target_secret.stat.uid == 0
+              - scmig_target_secret.stat.gid == 0
+              - scmig_target_secret.stat.mode == '0600'
+              - scmig_target_secret.stat.checksum == hostvars['migration_source'].scmig_source_secret.stat.checksum
+          when:
+            - inventory_hostname == 'migration_target'
+            - scmig_target_secret.stat.exists
+          no_log: true
+
+        - name: Preserve the exact source secrets only on the fresh destination
+          ansible.builtin.copy:
+            src: "{{ scmig_evidence }}/source-secrets.json"
+            dest: /etc/simplestchat-public/secrets.json
+            owner: root
+            group: root
+            mode: '0600'
+            force: false
+          when: inventory_hostname == 'migration_target'
+          no_log: true
+
+        - name: Verify the final destination secret bytes before staging
+          ansible.builtin.stat:
+            path: /etc/simplestchat-public/secrets.json
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          register: scmig_copied_secret
+          when: inventory_hostname == 'migration_target'
+          no_log: true
+
+        - name: Require the exact protected source secrets on the destination
+          ansible.builtin.assert:
+            that:
+              - scmig_copied_secret.stat.isreg
+              - not scmig_copied_secret.stat.islnk
+              - scmig_copied_secret.stat.uid == 0
+              - scmig_copied_secret.stat.gid == 0
+              - scmig_copied_secret.stat.mode == '0600'
+              - scmig_copied_secret.stat.checksum == hostvars['migration_source'].scmig_source_secret.stat.checksum
+          when: inventory_hostname == 'migration_target'
+          no_log: true
+
+    - name: Transfer and stage the exact verified CI artifact only on the destination
+      when:
+        - scmig_action == 'stage'
+        - inventory_hostname == 'migration_target'
+      block:
+        - name: Require exact signed-release selectors and direct key-based SSH
+          ansible.builtin.assert:
+            that:
+              - scpub_release_repository is match('^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$')
+              - scpub_release_artifact_id | string is match('^[1-9][0-9]*$')
+              - scpub_release_expected_revision == scmig_revision
+              - scpub_release_ci_run | string is match('^[1-9][0-9]*$')
+              - scpub_release_verified_directory == scmig_evidence + '/verified'
+              - ansible_connection | default('ssh') == 'ssh'
+              - ansible_host is match('^[A-Za-z0-9][A-Za-z0-9._-]*$')
+              - ansible_user is string
+              - ansible_user | length > 0
+              - ansible_ssh_private_key_file is match('^/')
+              - ansible_port | default(22) | string is match('^[1-9][0-9]*$')
+              - ansible_port | default(22) | int <= 65535
+              - ansible_password is not defined
+              - ansible_ssh_pass is not defined
+              - ansible_ssh_password is not defined
+              - ansible_become_password is not defined
+              - ansible_become_pass is not defined
+              - ansible_ssh_common_args | default('') | length == 0
+              - ansible_ssh_extra_args | default('') | length == 0
+
+        - name: Verify and transfer the signed release through the canonical receiver
+          ansible.builtin.command:
+            argv:
+              - "{{ ansible_playbook_python }}"
+              - -B
+              - "{{ playbook_dir }}/../../build/fetch-release.py"
+              - --repository
+              - "{{ scpub_release_repository }}"
+              - --artifact-id
+              - "{{ scpub_release_artifact_id }}"
+              - --revision
+              - "{{ scmig_revision }}"
+              - --ci-run
+              - "{{ scpub_release_ci_run }}"
+              - --host
+              - "{{ ansible_host }}"
+              - --user
+              - "{{ ansible_user }}"
+              - --port
+              - "{{ ansible_port | default(22) }}"
+              - --identity
+              - "{{ ansible_ssh_private_key_file }}"
+              - --output-parent
+              - "{{ scmig_evidence }}"
+              - --verified-directory
+              - "{{ scpub_release_verified_directory }}"
+          delegate_to: localhost
+          become: false
+          changed_when: true
+          timeout: 1080
+
+        - name: Import the verified production image without launching the app
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - "--unit=simplestchat-migration-stage-{{ scmig_run_id }}"
+              - --property=Type=exec
+              - --property=RuntimeMaxSec=600
+              - --property=TimeoutStopSec=60
+              - --wait
+              - --collect
+              - /usr/bin/python3
+              - -B
+              - /usr/local/libexec/simplestchat-public/release-public.py
+              - stage
+              - "{{ scmig_revision }}"
+          changed_when: true
+          timeout: 720

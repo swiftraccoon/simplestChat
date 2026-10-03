@@ -68,6 +68,8 @@ jobs:
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/reboot.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/turn.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/monitoring.yml --syntax-check
+          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/migration-prepare.yml --syntax-check
+          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/migration-data.yml --syntax-check
           shellcheck ops/ansible/files/*.sh
           python -m unittest discover -s ops/ansible/tests -v
 
@@ -87,6 +89,13 @@ jobs:
           export PATH="${postgres_bindir}:$PATH"
           build/with-test-postgres.sh python -m unittest discover \
             -s ops/ansible/tests -p test_restore_database.py -v
+
+      - name: Verify server migration data preservation in disposable PostgreSQL
+        run: |
+          postgres_bindir="$(pg_config --bindir)"
+          export PATH="${postgres_bindir}:$PATH"
+          build/with-test-postgres.sh python -m unittest discover \
+            -s ops/ansible/tests -p test_migrate_public.py -v
 
       - name: Preserve isolated restore failure diagnostics
         if: ${{ failure() && !env.ACT }}
