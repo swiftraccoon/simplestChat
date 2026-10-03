@@ -26,6 +26,7 @@ VALUES: JsonObject = {
     "scpub_postgres_image": "postgres:18.6-bookworm@sha256:" + "b" * 64,
     "scpub_caddy_image": "caddy:2.11.2-alpine@sha256:" + "c" * 64,
     "scpub_domain": "chat.example.test",
+    "scpub_webauthn_rp_id": "chat.example.test",
     "scpub_announce_ip": "192.0.2.10",
     "scpub_announce_ipv6": "2001:db8::10",
     "scpub_ipv6_network": "fd5c:5c68:a7d1::/64",
@@ -95,7 +96,7 @@ def environment(name: str, **overrides: JsonValue) -> dict[str, str]:
 
 
 def derive_group_vars(facts: JsonObject, overrides: JsonObject) -> dict[str, str]:
-    """Render every templated sizing variable of group_vars from the given facts, in order."""
+    """Render templated public settings from explicit host inputs and facts, in order."""
     group_vars = obj(yaml_value((ROOT / "group_vars/benchmark_hosts.yml").read_text()))
     jinja = NativeEnvironment(undefined=StrictUndefined, autoescape=False)
     # Jinja types only its built-in filters, although this is its public extension API.
@@ -108,7 +109,10 @@ def derive_group_vars(facts: JsonObject, overrides: JsonObject) -> dict[str, str
         and name != "scpub_registration_enabled"
         and (isinstance(source, (int, float)) or source.startswith("{{"))
     ]
-    values: dict[str, object] = dict(facts)
+    values: dict[str, object] = {
+        "scpub_domain": overrides.get("scpub_domain", VALUES["scpub_domain"]),
+        **facts,
+    }
     for name in derived:
         source = overrides.get(name, group_vars[name])
         values[name] = (
@@ -306,6 +310,30 @@ class PublicTemplateTests(unittest.TestCase):
         self.assertNotIn("DATABASE_URL", proxy)
         self.assertNotIn(string(VALUES, "scpub_secrets", "owner_password"), "\n".join(app.values()))
 
+    def test_passkey_identity_can_remain_at_the_parent_without_widening_origins(self) -> None:
+        """Inventory retains an existing RP ID while HTTP and WebAuthn use one new origin."""
+        facts: JsonObject = {
+            "ansible_processor_vcpus": 4,
+            "ansible_memtotal_mb": 11967,
+            **DUAL_STACK,
+        }
+        domain = "the.research.clinic"
+        default = derive_group_vars(facts, {"scpub_domain": domain})
+        self.assertEqual(default["scpub_webauthn_rp_id"], domain)
+        explicit = derive_group_vars(
+            facts, {"scpub_domain": domain, "scpub_webauthn_rp_id": "research.clinic"}
+        )
+        self.assertEqual(explicit["scpub_webauthn_rp_id"], "research.clinic")
+        for selected in (default, explicit):
+            app = environment(
+                "public-app.env.j2",
+                scpub_domain=domain,
+                scpub_webauthn_rp_id=selected["scpub_webauthn_rp_id"],
+            )
+            self.assertEqual(app["WEBAUTHN_RP_ID"], selected["scpub_webauthn_rp_id"])
+            self.assertEqual(app["WEBAUTHN_ORIGIN"], f"https://{domain}")
+            self.assertEqual(app["ALLOWED_ORIGINS"], f"https://{domain}")
+
     def test_sizing_defaults_follow_the_host_and_yield_to_the_inventory(self) -> None:
         """The group_vars sizing expressions size a host the way build/capacity.py does."""
         vps = derive_group_vars(
@@ -431,6 +459,7 @@ class PublicTemplateTests(unittest.TestCase):
             scpub_turn_secret="b" * 64,
             scpub_secrets=other_secrets,
             scpub_domain="other.example.test",
+            scpub_webauthn_rp_id="other.example.test",
             scpub_announce_ip="192.0.2.99",
             scpub_announce_ipv6="2001:db8::99",
             scpub_server_image="sha256:" + "d" * 64,

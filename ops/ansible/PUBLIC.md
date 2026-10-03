@@ -27,6 +27,17 @@ host; `RTC_PORT_END` in the rendered `app.env`) through your provider firewall.
 HTTP port 3000 stays loopback-only; PostgreSQL uses a private Unix socket, not a
 published TCP port. Do not publish Caddy's administrative port.
 
+Passkeys use `scpub_webauthn_rp_id`, which defaults to `scpub_domain`. When moving
+an existing site to a subdomain, retain its original RP ID to preserve enrolled
+passkeys: for example, use `scpub_domain: the.research.clinic` with
+`scpub_webauthn_rp_id: research.clinic`. The RP ID must be the site hostname or a
+registrable parent domain, as required by [WebAuthn](https://www.w3.org/TR/webauthn-3/#rp-id).
+Preflight rejects malformed names and suffixes that do not end at a domain-label
+boundary; browsers also enforce public-suffix restrictions. HTTP/WebSocket and
+WebAuthn origins remain the single new HTTPS origin. Apply hostname changes through
+full maintenance; changing the RP ID would require enrolling new passkeys, and
+host-bound sessions require signing in again at the new hostname.
+
 Sizing follows the host's facts: the app gets all but one vCPU, up to 64 media
 workers, and the memory beyond a quarter (at least 1 GiB) kept for PostgreSQL,
 Caddy, TURN and the system. `MAX_CONNECTIONS` starts from reference workload

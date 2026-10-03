@@ -127,6 +127,7 @@ def render_fixture(
         "scpub_postgres_image": postgres_image,
         "scpub_caddy_image": caddy_image,
         "scpub_domain": "localhost",
+        "scpub_webauthn_rp_id": "localhost",
         "scpub_announce_ip": "127.0.0.1",
         "scpub_announce_ipv6": "",
         "scpub_ipv6_network": "fd5c:5c68:a7d1::/64",

@@ -25,6 +25,15 @@
           - scpub_caddy_image is match('^docker.io/library/caddy:[a-z0-9.-]+@sha256:[a-f0-9]{64}$')
         fail_msg: Explicitly configure the public domain, address and immutable images on the prepared Debian host.
 
+    - name: Require the passkey identity to belong to the public domain
+      ansible.builtin.assert:
+        that:
+          - scpub_webauthn_rp_id is string
+          - scpub_webauthn_rp_id | length <= 253
+          - scpub_webauthn_rp_id is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\Z')
+          - scpub_domain == scpub_webauthn_rp_id or scpub_domain.endswith('.' ~ scpub_webauthn_rp_id)
+        fail_msg: The passkey RP ID must be the public hostname or a parent domain at a label boundary.
+
     - name: Refuse changes while a benchmark or image build is active
       ansible.builtin.command:
         argv: [systemctl, is-active, "simplestchat-{{ item }}.service"]

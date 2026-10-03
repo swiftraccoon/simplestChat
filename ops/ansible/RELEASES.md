@@ -253,7 +253,7 @@ changed), release it through the maintenance launcher instead:
 
 ```sh
 ops/ansible/.venv/bin/python build/deploy.py --inventory ops/ansible/inventory.local.yml \
-  --repository swiftraccoon/simplestChat --origin https://research.clinic \
+  --repository swiftraccoon/simplestChat --origin https://the.research.clinic \
   --limit public_vps --quiet-seconds 0 --maintenance [--install-helpers]
 ```
 

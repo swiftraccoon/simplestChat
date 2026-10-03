@@ -22,6 +22,8 @@ scbench_workload:
 # Public deployment is a separate, explicitly enabled playbook.
 scpub_enabled: false
 scpub_registration_enabled: false
+# Retain the original relying-party identity when moving to one of its subdomains.
+scpub_webauthn_rp_id: "{{ scpub_domain }}"
 # Sizing follows the host unless the inventory says otherwise (the model is
 # build/capacity.py's: the app takes all but one vCPU and the memory beyond a
 # quarter, at least 1 GiB, kept for the database, the proxy and the system;

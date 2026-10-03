@@ -1,10 +1,16 @@
 """Offline deployment ordering and syntax checks; never execute the launcher."""
 
+import re
 import subprocess
 import unittest
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
-from test_support import array, obj, objects, yaml_value
+from jinja2 import Environment, StrictUndefined
+from test_support import array, obj, objects, strings, yaml_value
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
 
 # Only reviewed checkout scripts and syntax-checking tools are executed, without a shell.
 # ruff: noqa: S603, S607
@@ -14,6 +20,60 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class PublicDeploymentTests(unittest.TestCase):
     """Verify the public deployment contract offline."""
+
+    def test_passkey_preflight_rejects_unrelated_and_malformed_domains(self) -> None:
+        """Evaluate the real guard against exact, parent, deceptive suffix and invalid RP IDs."""
+        play = obj(yaml_value((ROOT / "public.yml").read_text()), 0)
+        guards = objects(play, "pre_tasks")
+        guard = next(
+            task
+            for task in guards
+            if task.get("name") == "Require the passkey identity to belong to the public domain"
+        )
+        self.assertNotIn("when", guard)
+        self.assertNotIn("ignore_errors", guard)
+        stopped = next(task for task in guards if task.get("register") == "scpub_active_containers")
+        self.assertLess(guards.index(guard), guards.index(stopped))
+        jinja = Environment(undefined=StrictUndefined, autoescape=True)
+
+        def matches(value: str, pattern: str) -> bool:
+            return re.match(pattern, value) is not None
+
+        cast("MutableMapping[str, object]", jinja.tests)["match"] = matches
+        checks = [
+            jinja.compile_expression(condition)
+            for condition in strings(guard, "ansible.builtin.assert", "that")
+        ]
+        domain = "the.research.clinic"
+        oversized = ".".join(["a" * 63] * 4)
+        cases: list[tuple[str, str | int | None, bool]] = [
+            (domain, domain, True),
+            (domain, "research.clinic", True),
+            ("nested." + domain, "research.clinic", True),
+            (domain, "unrelated.clinic", False),
+            (domain, "search.clinic", False),
+            (domain, "other.research.clinic", False),
+            (domain, "research.clinic.attacker.test", False),
+            (domain, "clinic", False),
+            (domain, "https://research.clinic", False),
+            (domain, "research.clinic:443", False),
+            (domain, "research.clinic.", False),
+            (domain, "research..clinic", False),
+            (domain, "-research.clinic", False),
+            (domain, "research-.clinic", False),
+            (domain, "research_clinic.test", False),
+            (domain, "research.clinic\n", False),
+            (domain, "", False),
+            (domain, None, False),
+            (domain, 123, False),
+            (oversized, oversized, False),
+        ]
+        for origin, rp_id, expected in cases:
+            with self.subTest(origin=origin, rp_id=rp_id):
+                accepted = all(
+                    check(scpub_domain=origin, scpub_webauthn_rp_id=rp_id) for check in checks
+                )
+                self.assertEqual(accepted, expected)
 
     def test_installed_shell_commands_parse_and_pass_shellcheck(self) -> None:
         """Verify installed shell commands parse and pass shellcheck."""
