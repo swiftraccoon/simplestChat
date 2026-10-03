@@ -215,8 +215,20 @@ class SecurityWorkflowTests(unittest.TestCase):
 
     def test_codeql_requires_manual_observed_native_compilation(self) -> None:
         """A source-only or restored compilation cannot satisfy native CodeQL coverage."""
-        native = obj(workflow("codeql.yml"), "jobs", "native-analysis")
+        codeql = workflow("codeql.yml")
+        native = obj(codeql, "jobs", "native-analysis")
+        self.assertEqual(at(codeql, "jobs", "source-analysis", "runs-on"), "ubuntu-24.04")
+        self.assertEqual(
+            native["runs-on"],
+            "${{ github.event.local_ci && 'ubuntu-24.04-amd64' || 'ubuntu-24.04' }}",
+        )
         steps = objects(native, "steps")
+        self.assertEqual(
+            string(steps[0], "run"),
+            'test "$(uname -s)" = Linux && test "$(uname -m)" = x86_64',
+        )
+        self.assertNotIn("if", steps[0])
+        self.assertNotIn("continue-on-error", steps[0])
         init = next(step for step in steps if step.get("id") == "init")
         self.assertEqual(at(init, "with", "build-mode"), "manual")
         build = next(

@@ -287,6 +287,7 @@ def sandbox_args(image: str, run_id: str, digest: str) -> list[str]:
     require(re.fullmatch(r"[0-9a-f]{32}", run_id), "run_identity")
     return [
         "create",
+        "--platform=linux/amd64",
         "--rm",
         "--name",
         "simplestchat-native-security-" + run_id,
@@ -323,6 +324,7 @@ def checked_image(engine: Sequence[str], image: str, digest: str) -> JsonObject:
     labels = object_value(object_value(info["Config"])["Labels"])
     require(labels.get(INPUT_LABEL) == digest, "image_inputs_mismatch")
     require(info.get("Os") == "linux", "native_linux_required")
+    require(info.get("Architecture") == "amd64", "native_amd64_required")
     return info
 
 
@@ -389,6 +391,7 @@ def prepare(engine: Sequence[str], output: Path) -> dict[str, object]:
             [
                 *engine,
                 "build",
+                "--platform=linux/amd64",
                 "--file",
                 str(context / "build/native-security.Dockerfile"),
                 "--label",

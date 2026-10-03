@@ -145,6 +145,7 @@ class NativeSecurityTests(unittest.TestCase):
         """Compile and test containers have immutable image identity and hard resources."""
         argv = native.sandbox_args(IMAGE, RUN_ID, DIGEST)
         for required in (
+            "--platform=linux/amd64",
             "--network=none",
             "--read-only",
             "--cap-drop=ALL",
@@ -171,7 +172,12 @@ class NativeSecurityTests(unittest.TestCase):
 
     def test_image_must_match_current_inputs_and_exact_local_id(self) -> None:
         """An immutable but stale builder cannot silently test earlier source."""
-        valid = {"Id": IMAGE, "Os": "linux", "Config": {"Labels": {native.INPUT_LABEL: DIGEST}}}
+        valid: JsonObject = {
+            "Id": IMAGE,
+            "Os": "linux",
+            "Architecture": "amd64",
+            "Config": {"Labels": {native.INPUT_LABEL: DIGEST}},
+        }
         with patch.object(native, "command", return_value=json.dumps(valid).encode()):
             self.assertEqual(native.checked_image(["engine"], IMAGE, DIGEST)["Id"], IMAGE)
             with self.assertRaisesRegex(native.SecurityError, "image_inputs_mismatch"):
@@ -183,6 +189,51 @@ class NativeSecurityTests(unittest.TestCase):
         for value in ("builder:latest", "a" * 12, "sha256:" + "A" * 64):
             with self.subTest(value=value), self.assertRaises(native.SecurityError):
                 _ = native.canonical_image_id(value)
+        for architecture in ("arm64", "386", "", None):
+            with (
+                self.subTest(architecture=architecture),
+                patch.object(
+                    native,
+                    "command",
+                    return_value=json.dumps({**valid, "Architecture": architecture}).encode(),
+                ),
+                self.assertRaisesRegex(native.SecurityError, "native_amd64_required"),
+            ):
+                _ = native.checked_image(["engine"], IMAGE, DIGEST)
+
+    def test_preparation_requires_amd64_before_accepting_the_builder(self) -> None:
+        """An ARM host cannot silently substitute native compilation for the AMD64 gate."""
+        output = self.root / "prepare"
+        output.mkdir()
+        _ = (output / "image.id").write_text(IMAGE)
+        info: JsonObject = {
+            "Id": IMAGE,
+            "Os": "linux",
+            "Architecture": "amd64",
+            "Config": {"Labels": {native.INPUT_LABEL: DIGEST}},
+        }
+        with (
+            patch.object(native, "inputs_digest", return_value=DIGEST),
+            patch.object(native, "capture", return_value=0) as capture,
+            patch.object(native, "command", return_value=json.dumps(info).encode()),
+        ):
+            result = native.prepare(["engine"], output)
+        self.assertEqual(
+            capture.call_args.args[0][:3], ["engine", "build", "--platform=linux/amd64"]
+        )
+        self.assertEqual(result["imageId"], IMAGE)
+        self.assertEqual(result["architecture"], "amd64")
+        with (
+            patch.object(native, "inputs_digest", return_value=DIGEST),
+            patch.object(native, "capture", return_value=0),
+            patch.object(
+                native,
+                "command",
+                return_value=json.dumps({**info, "Architecture": "arm64"}).encode(),
+            ),
+            self.assertRaisesRegex(native.SecurityError, "native_amd64_required"),
+        ):
+            _ = native.prepare(["engine"], output)
 
     def test_cleanup_revalidates_full_id_image_and_exact_run_label(self) -> None:
         """Unknown or relabelled resources are never removed by name/prefix."""
@@ -217,7 +268,7 @@ class NativeSecurityTests(unittest.TestCase):
         options = native.Options(image=IMAGE, mode="replay")
         with (
             patch.object(native, "inputs_digest", return_value=DIGEST),
-            patch.object(native, "checked_image", return_value={"Architecture": "arm64"}),
+            patch.object(native, "checked_image", return_value={"Architecture": "amd64"}),
             patch.object(native, "command", return_value=CONTAINER.encode()),
             patch.object(
                 native, "capture", side_effect=bounded_process.ProcessError("command_timed_out")
@@ -242,7 +293,7 @@ class NativeSecurityTests(unittest.TestCase):
         )
         with (
             patch.object(native, "inputs_digest", return_value=DIGEST),
-            patch.object(native, "checked_image", return_value={"Architecture": "arm64"}),
+            patch.object(native, "checked_image", return_value={"Architecture": "amd64"}),
             patch.object(native, "command", return_value=CONTAINER.encode()),
             patch.object(native, "capture", return_value=0),
             patch.object(native, "cleanup"),

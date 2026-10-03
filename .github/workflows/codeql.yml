@@ -116,7 +116,7 @@ jobs:
 
   native-analysis:
     name: CodeQL (native C/C++)
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event.local_ci && 'ubuntu-24.04-amd64' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     permissions:
       contents: read
@@ -127,6 +127,8 @@ jobs:
       OPENSSL_STATIC: '1'
       PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
     steps:
+      - name: Require the AMD64 native analysis target
+        run: test "$(uname -s)" = Linux && test "$(uname -m)" = x86_64
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
