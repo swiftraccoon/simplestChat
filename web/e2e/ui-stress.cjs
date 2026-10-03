@@ -117,7 +117,7 @@ class Guest {
         this.received.add(id);
       }
       for (const waiter of this.waiters) {
-        if (waiter.match(message)) {
+        if (waiter.predicate(message)) {
           this.waiters.delete(waiter);
           waiter.resolve(message);
         }
@@ -151,14 +151,14 @@ class Guest {
     if (this.failure) throw this.failure;
   }
 
-  async request(message, match) {
+  async request(message, predicate) {
     if (this.failure) throw this.failure;
     check(this.socket.readyState === WebSocket.OPEN, 'guest_not_open');
     let waiter;
     let timer;
     try {
       return await new Promise((resolve, reject) => {
-        waiter = { match, resolve, reject };
+        waiter = { predicate, resolve, reject };
         this.waiters.add(waiter);
         timer = setTimeout(() => reject(new StressFailure('guest_response_timeout')), 10000);
         this.socket.send(JSON.stringify(message));
