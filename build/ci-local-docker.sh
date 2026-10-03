@@ -14,6 +14,14 @@ umask 077
 [[ ! -e /var/run/docker.sock && ! -L /var/run/docker.sock ]] || {
   echo 'An existing Docker socket was left untouched; disable the outer socket mount.' >&2; exit 2;
 }
+for journal_path in /run/systemd/journal /run/log/journal /run/systemd/journald.conf.d/local-ci.conf; do
+  [[ ! -e "$journal_path" && ! -L "$journal_path" ]] || {
+    echo 'Existing journal state was left untouched; use a fresh disposable job container.' >&2; exit 2;
+  }
+done
+[[ -x /lib/systemd/systemd-journald ]] || {
+  echo 'The pinned act image must supply systemd-journald.' >&2; exit 2;
+}
 # Both architecture-specific runner-image digests include this exact Moby build.
 # Never install a floating replacement or fall back to the host engine.
 [[ "$(dockerd --version)" == 'Docker version 29.7.2-1, build 6a43e3d5afddf4111da0f864bbc7cae5d7e95001' ]] || {
@@ -38,6 +46,32 @@ if [[ -f /sys/fs/cgroup/cgroup.controllers ]]; then
 fi
 docker_state="${RUNNER_TEMP:?}/local-ci-docker"
 mkdir "$docker_state"
+# Production Compose uses journald. Start the image's real daemon in this job's
+# own filesystem; never mount a host journal or substitute a logging driver.
+sudo mkdir -p /run/systemd/journald.conf.d
+printf '%s\n' '[Journal]' 'Storage=volatile' 'RuntimeMaxUse=32M' 'ReadKMsg=no' |
+  sudo tee /run/systemd/journald.conf.d/local-ci.conf > /dev/null
+# Clear inherited socket activation and journal-directory overrides.
+# shellcheck disable=SC2024
+sudo env -i PATH="${PATH}" /lib/systemd/systemd-journald \
+  > "$docker_state/journald.log" 2>&1 < /dev/null &
+journal_pid=$!
+printf '%s\n' "$journal_pid" > "$docker_state/journald.pid"
+journal_ready=0
+for ((attempt = 0; attempt < 30; attempt++)); do
+  kill -0 "$journal_pid" 2>/dev/null || break
+  if [[ -S /run/systemd/journal/socket ]]; then
+    journal_ready=1
+    break
+  fi
+  sleep 0.1
+done
+if [[ "$journal_ready" != 1 ]]; then
+  kill -TERM "$journal_pid" 2>/dev/null || true
+  tail -n 60 "$docker_state/journald.log" >&2
+  echo 'The job-owned journal did not become ready.' >&2
+  exit 1
+fi
 sudo mkdir -p /run/local-ci-docker
 # Logs belong to the caller's private runner directory.
 # shellcheck disable=SC2024
@@ -49,6 +83,9 @@ sudo env -u DOCKER_HOST -u DOCKER_CONTEXT dockerd \
   > "$docker_state/daemon.log" 2>&1 < /dev/null &
 for ((attempt = 0; attempt < 30; attempt++)); do
   if timeout --signal=TERM --kill-after=2s 3s docker --host unix:///var/run/docker.sock info >/dev/null 2>&1; then
+    kill -0 "$journal_pid" 2>/dev/null && [[ -S /run/systemd/journal/socket ]] || {
+      echo 'The job-owned journal exited during Docker startup.' >&2; exit 1;
+    }
     timeout --signal=TERM --kill-after=2s 10s docker --host unix:///var/run/docker.sock version --format '{{json .Server}}' > "$docker_state/server.json"
     python3 - "$docker_state/server.json" <<'PY'
 import json
