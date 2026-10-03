@@ -113,6 +113,26 @@
     },
     {
       "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:e2b9fc895ab19ccc4e010dfe81099d14a1a54d1170519db580416c80b3bd1580",
+      "scope": ".github/workflows/security.yml#jobs/security-fast/steps/2/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The maintained local act image has no rustup; its fast security prerequisites failed with command not found. This existing pinned installer bootstraps rustup and installs the repository's exact Rust toolchain before the shared checks.",
+      "reachability": "Only this exact step and immutable action reference are reviewed. Checkout disables persisted credentials, and the shared source security checks remain blocking.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:e2b9fc895ab19ccc4e010dfe81099d14a1a54d1170519db580416c80b3bd1580",
+      "scope": ".github/workflows/security.yml#jobs/security-deep/steps/2/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The deep security job shares the missing-rustup prerequisite that failed in the maintained local act image's fast job. This existing pinned installer bootstraps rustup and installs the repository's exact Rust toolchain before the shared checks.",
+      "reachability": "Only this exact step and immutable action reference are reviewed. Checkout disables persisted credentials, and the shared source security checks remain blocking.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
       "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
       "scope": ".github/workflows/ci.yml#jobs/rust-lint/steps/1/uses",
       "owner": "swiftraccoon",

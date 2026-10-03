@@ -346,6 +346,47 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertIn('vulnerabilities["total"] == 0', source)
         self.assertIn('"pip_audit"', source)
 
+    def test_source_security_jobs_bootstrap_rust_before_running_shared_checks(self) -> None:
+        """Fresh local images need the same pinned installer used by native CI jobs."""
+        native = obj(
+            yaml_value(
+                (ROOT / ".github/actions/native-toolchain/action.yml").read_text(),
+                scalars_as_strings=True,
+            )
+        )
+        existing = next(
+            step
+            for step in objects(native, "runs", "steps")
+            if string(step.get("uses", "")).startswith("dtolnay/rust-toolchain@")
+        )
+        jobs = obj(workflow("security.yml"), "jobs")
+        for name in ("security-fast", "security-deep"):
+            with self.subTest(job=name):
+                steps = objects(jobs, name, "steps")
+                installers = [
+                    step
+                    for step in steps
+                    if string(step.get("uses", "")).startswith("dtolnay/rust-toolchain@")
+                ]
+                self.assertEqual(len(installers), 1)
+                installer = installers[0]
+                self.assertEqual(installer["uses"], existing["uses"])
+                self.assertEqual(
+                    installer["with"], {"toolchain": at(existing, "with", "toolchain")}
+                )
+                self.assertNotIn("if", installer)
+                self.assertNotIn("continue-on-error", installer)
+                gate = next(
+                    step
+                    for step in steps
+                    if "build/check-security.sh" in string(step.get("run", ""))
+                )
+                self.assertLess(steps.index(installer), steps.index(gate))
+                self.assertNotIn(
+                    "rustup toolchain install",
+                    "\n".join(string(step.get("run", "")) for step in steps),
+                )
+
     def test_local_codeql_runs_full_pinned_analysis_before_recording_success(self) -> None:
         """Local success requires each real language policy; hosted uploads stay on GitHub."""
         codeql = workflow("codeql.yml")

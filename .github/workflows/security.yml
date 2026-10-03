@@ -26,11 +26,14 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 26.8.1
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-09)
+        with:
+          toolchain: 1.98.1
       - name: Install source-check prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-venv shellcheck
-          rustup toolchain install 1.98.1 --profile minimal
       - name: Run the shared blocking gate
         env:
           SECURITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -142,11 +145,14 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 26.8.1
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-09)
+        with:
+          toolchain: 1.98.1
       - name: Install shared gate prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-venv shellcheck
-          rustup toolchain install 1.98.1 --profile minimal
       - name: Start this local job's isolated container engine
         if: ${{ env.ACT }}
         run: build/ci-local-docker.sh

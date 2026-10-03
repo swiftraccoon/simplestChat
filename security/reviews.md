@@ -52,6 +52,18 @@ intervening source replacement. Its separate mutation cache namespace and
 private compiler outputs do not supply production release artifacts. The
 existing local-action syntax rationale applies to this additional call site.
 
+On 2026-10-03, two additional informational `superfluous-actions` findings were
+reviewed for step 2 of `security-fast` and `security-deep` in `security.yml`.
+The actual local fast job at `984c4d8` failed before its shared checks because
+`rustup` was absent; both jobs previously invoked it directly. The existing
+`dtolnay/rust-toolchain` action at
+`6bed0761d98439e5a578e2877258200ad565ba87` bootstraps missing rustup, exports its
+binary path and installs the explicitly selected Rust 1.98.1 toolchain. Its
+bootstrap uses the official HTTPS rustup installer; this review does not claim
+that the installer bytes are independently checksum-pinned. The two records
+bind the action reference and each exact job location, retain the 2026-11-29
+expiry and leave the shared checks blocking.
+
 ## Rust dependency health
 
 The audit distinguishes these health warnings from vulnerability-class results:
