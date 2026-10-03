@@ -19,9 +19,10 @@ the runner user and the root-run release helper.
 
 ## Routine update: use the image CI tested
 
-Merge the validated pull request into `main` under the
-[repository's required checks and review policy](../../docs/security.md#main-branch-rules),
-then run from a clean checkout at that exact main revision:
+Run the [complete local CI gate](../../docs/testing.md#run-ci-locally) on the clean
+committed `main` revision, then push it directly under the
+[main branch policy](../../docs/security.md#main-branch-rules). A pull request is
+optional. From a clean checkout at that exact published revision, run:
 
 ```sh
 python3 build/deploy.py \
