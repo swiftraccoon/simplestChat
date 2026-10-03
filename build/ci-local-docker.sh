@@ -83,9 +83,10 @@ sudo env -u DOCKER_HOST -u DOCKER_CONTEXT dockerd \
   > "$docker_state/daemon.log" 2>&1 < /dev/null &
 for ((attempt = 0; attempt < 30; attempt++)); do
   if timeout --signal=TERM --kill-after=2s 3s docker --host unix:///var/run/docker.sock info >/dev/null 2>&1; then
-    kill -0 "$journal_pid" 2>/dev/null && [[ -S /run/systemd/journal/socket ]] || {
-      echo 'The job-owned journal exited during Docker startup.' >&2; exit 1;
-    }
+    if ! kill -0 "$journal_pid" 2>/dev/null || [[ ! -S /run/systemd/journal/socket ]]; then
+      echo 'The job-owned journal exited during Docker startup.' >&2
+      exit 1
+    fi
     timeout --signal=TERM --kill-after=2s 10s docker --host unix:///var/run/docker.sock version --format '{{json .Server}}' > "$docker_state/server.json"
     python3 - "$docker_state/server.json" <<'PY'
 import json
