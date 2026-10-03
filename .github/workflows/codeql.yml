@@ -7,14 +7,17 @@ on:
         description: Run the security suite and enforce reviewed High and Critical findings.
         type: boolean
         default: true
-  pull_request:
-    branches: [main]
   schedule:
     - cron: '41 4 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  # Local policy evaluates every finding at the exact commit. Keep hosted PR
+  # analysis identical instead of restricting queries/results to changed lines.
+  CODEQL_ACTION_DIFF_INFORMED_QUERIES: 'false'
 
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -30,6 +33,7 @@ jobs:
       security-events: write # Upload only this job's SARIF to code scanning.
     strategy:
       fail-fast: false
+      max-parallel: ${{ github.event.local_ci_parallel || 4 }}
       matrix:
         language: [actions, javascript-typescript, python, rust]
     steps:
@@ -37,19 +41,59 @@ jobs:
         with:
           persist-credentials: false
       - name: Initialize the pinned analyzer
+        if: ${{ !env.ACT }}
+        id: init
         uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           tools: linked
           languages: ${{ matrix.language }}
           build-mode: none
           queries: ${{ inputs.security_gate && 'security-extended' || 'security-and-quality' }}
+      - name: Verify the shared analyzer and query pins
+        if: ${{ !env.ACT }}
+        env:
+          CODEQL_BINARY: ${{ steps.init.outputs.codeql-path }}
+          CODEQL_LANGUAGE: ${{ matrix.language }}
+        run: |
+          python3 build/security_codeql_tools.py --codeql "$CODEQL_BINARY" \
+            --language "$CODEQL_LANGUAGE" --output "$RUNNER_TEMP/codeql-tools"
+      - name: Run complete local analysis and policy checks
+        if: ${{ env.ACT }}
+        env:
+          CODEQL_LANGUAGE: ${{ matrix.language }}
+          CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
+        run: |
+          args=()
+          if [[ -n "${LOCAL_CODEQL_BINARY:-}" ]]; then
+            args+=(--codeql "$LOCAL_CODEQL_BINARY")
+          fi
+          python3 build/security_codeql_local.py "${args[@]}" --revision "$GITHUB_SHA" \
+            --language "$CODEQL_LANGUAGE" --suite "$CODEQL_SUITE" --output "$RUNNER_TEMP/codeql-local"
+      - name: Retain compact local analysis evidence
+        if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
+        env:
+          CODEQL_LANGUAGE: ${{ matrix.language }}
+        run: |
+          destination="$LOCAL_CI_EVIDENCE/codeql-$CODEQL_LANGUAGE"
+          install -d -m 700 "$destination"
+          for name in summary.json failure.json; do
+            if [[ -f "$RUNNER_TEMP/codeql-local/$name" ]]; then
+              install -m 600 "$RUNNER_TEMP/codeql-local/$name" "$destination/$name"
+            fi
+          done
+      - name: Record the successful local language scan
+        if: ${{ env.ACT }}
+        env:
+          CODEQL_LANGUAGE: ${{ matrix.language }}
+        run: python3 build/ci-local-evidence.py record --id "codeql-$CODEQL_LANGUAGE"
       - name: Analyze and upload results
+        if: ${{ !env.ACT }}
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           output: ${{ runner.temp }}/codeql-sarif
           category: /language:${{ matrix.language }}/${{ inputs.security_gate && 'security' || 'quality-advisory' }}
       - name: Enforce exact reviews for High and Critical findings
-        if: ${{ inputs.security_gate }}
+        if: ${{ !env.ACT && inputs.security_gate }}
         run: |
           shopt -s nullglob
           reports=("$RUNNER_TEMP/codeql-sarif/"*.sarif)
@@ -60,7 +104,7 @@ jobs:
           python3 build/security_codeql_triage.py sarif --revision "$GITHUB_SHA" \
             --input "${reports[0]}" --output "$RUNNER_TEMP/codeql-policy-evidence"
       - name: Preserve CodeQL policy evidence
-        if: ${{ always() && inputs.security_gate }}
+        if: ${{ always() && !env.ACT && inputs.security_gate }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: codeql-policy-${{ matrix.language }}
@@ -92,8 +136,30 @@ jobs:
           sudo apt-get install -y build-essential cmake pkg-config python3-pip curl perl
           python3 build/security_vendor.py verify --root "$PWD" \
             --cache "$RUNNER_TEMP/vendor-cache" --output "$RUNNER_TEMP/vendor-integrity"
-          build/install-openssl.sh "$OPENSSL_DIR"
+      - name: Restore checksum-pinned OpenSSL only
+        if: ${{ !env.ACT }}
+        id: openssl
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.OPENSSL_DIR }}
+          key: codeql-openssl-v1-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build/install-openssl.sh') }}
+      - name: Build checksum-pinned OpenSSL
+        if: ${{ env.ACT || steps.openssl.outputs.cache-hit != 'true' }}
+        run: build/install-openssl.sh "$OPENSSL_DIR"
+      - name: Validate static OpenSSL prerequisites
+        run: |
+          test -s "$OPENSSL_DIR/lib/libssl.a"
+          test -s "$OPENSSL_DIR/lib/libcrypto.a"
+          pkg-config --exact-version=3.5.9 openssl
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          disabled = Path(os.environ['OPENSSL_DIR'], 'share/simplestchat/openssl-disabled.txt')
+          if disabled.read_text().splitlines() != ['shared', 'dso', 'module', 'engine']:
+              raise SystemExit('Static OpenSSL build settings do not match the pinned installer.')
+          PY
       - name: Initialize native C/C++ extraction
+        if: ${{ !env.ACT }}
         id: init
         uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
@@ -102,38 +168,50 @@ jobs:
           build-mode: manual
           db-location: ${{ runner.temp }}/codeql-databases
           queries: ${{ inputs.security_gate && 'security-extended' || 'security-and-quality' }}
-      - name: Compile the actual worker under CodeQL tracing
-        timeout-minutes: 25
+      - name: Verify the shared analyzer and native query pins
+        if: ${{ !env.ACT }}
         env:
-          CC: /usr/bin/gcc
-          CXX: /usr/bin/g++
-          PIP_CONFIG_FILE: /dev/null
-          PIP_INDEX_URL: https://pypi.org/simple
-          PYTHONNOUSERSITE: '1'
-          PYTHONDONTWRITEBYTECODE: '1'
-          MEDIASOUP_BUILDTYPE: Release
-          MEDIASOUP_BUILD_JOBS: '2'
+          CODEQL_BINARY: ${{ steps.init.outputs.codeql-path }}
         run: |
-          set -euo pipefail
-          umask 077
-          unset DOCS_RS MESON MESON_ARGS MESON_VERSION NINJA_VERSION PYTHONPATH
-          mkdir -p "$GITHUB_WORKSPACE/target"
-          worker_root="$(mktemp -d "$GITHUB_WORKSPACE/target/codeql-worker.XXXXXXXX")"
-          export MEDIASOUP_OUT_DIR="$worker_root/out"
-          export MEDIASOUP_INSTALL_DIR="$worker_root/install"
-          export BUILD_DIR="$worker_root/build"
-          export PYTHONPATH="$MEDIASOUP_OUT_DIR/pip_invoke"
-          python3 -m pip install --no-user --target "$PYTHONPATH" \
-            --require-hashes --only-binary=:all: \
-            --requirement vendor/mediasoup-sys-0.17.0/python-invoke-requirements.txt
-          python3 -m invoke --search-root vendor/mediasoup-sys-0.17.0 libmediasoup-worker
-          test -s "$MEDIASOUP_INSTALL_DIR/libmediasoup-worker.a"
+          python3 build/security_codeql_tools.py --codeql "$CODEQL_BINARY" \
+            --language c-cpp --output "$RUNNER_TEMP/codeql-tools"
+      - name: Compile the actual worker under CodeQL tracing
+        if: ${{ !env.ACT }}
+        timeout-minutes: 25
+        run: bash build/codeql-native-build.sh
+      - name: Run complete local native analysis and policy checks
+        if: ${{ env.ACT }}
+        env:
+          CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
+        run: |
+          args=()
+          if [[ -n "${LOCAL_CODEQL_BINARY:-}" ]]; then
+            args+=(--codeql "$LOCAL_CODEQL_BINARY")
+          fi
+          python3 build/security_codeql_local.py "${args[@]}" --revision "$GITHUB_SHA" \
+            --language c-cpp --suite "$CODEQL_SUITE" --openssl-prefix "$OPENSSL_DIR" \
+            --output "$RUNNER_TEMP/codeql-local"
+      - name: Retain compact local native analysis evidence
+        if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
+        run: |
+          destination="$LOCAL_CI_EVIDENCE/codeql-c-cpp"
+          install -d -m 700 "$destination"
+          for name in summary.json failure.json; do
+            if [[ -f "$RUNNER_TEMP/codeql-local/$name" ]]; then
+              install -m 600 "$RUNNER_TEMP/codeql-local/$name" "$destination/$name"
+            fi
+          done
+      - name: Record the successful local native scan
+        if: ${{ env.ACT }}
+        run: python3 build/ci-local-evidence.py record --id codeql-c-cpp
       - name: Analyze observed C/C++ translation units
+        if: ${{ !env.ACT }}
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           output: ${{ runner.temp }}/codeql-sarif
           category: /language:c-cpp/${{ inputs.security_gate && 'security' || 'quality-advisory' }}
       - name: Require extraction of the real media protocol implementations
+        if: ${{ !env.ACT }}
         env:
           CODEQL_BINARY: ${{ steps.init.outputs.codeql-path }}
         run: |
@@ -143,7 +221,7 @@ jobs:
             --output "$RUNNER_TEMP/native-coverage.json"
           python3 build/security_codeql.py "$RUNNER_TEMP/native-coverage.json"
       - name: Enforce exact reviews for native High and Critical findings
-        if: ${{ inputs.security_gate }}
+        if: ${{ !env.ACT && inputs.security_gate }}
         run: |
           shopt -s nullglob
           reports=("$RUNNER_TEMP/codeql-sarif/"*.sarif)
@@ -155,7 +233,7 @@ jobs:
             --input "${reports[0]}" --source-cache "$RUNNER_TEMP/vendor-cache" \
             --output "$RUNNER_TEMP/codeql-policy-evidence"
       - name: Preserve native CodeQL policy evidence
-        if: ${{ always() && inputs.security_gate }}
+        if: ${{ always() && !env.ACT && inputs.security_gate }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: codeql-policy-c-cpp

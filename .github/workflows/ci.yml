@@ -38,6 +38,9 @@ jobs:
           persist-credentials: false
           # Include the PR head beneath GitHub's synthetic merge commit.
           fetch-depth: 2
+      - name: Start Docker inside the isolated local runner
+        if: ${{ env.ACT }}
+        run: build/ci-local-docker.sh
       - name: Check the branch tip commit subject
         env:
           COMMIT_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -170,6 +173,7 @@ jobs:
       DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
       TEST_DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
       DISPOSABLE_TEST_DATABASE: "1"
+      CI_LOCAL_POSTGRES_PORT: "5432"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -178,6 +182,10 @@ jobs:
       - uses: ./.github/actions/native-toolchain
         with:
           cache-key: rust-build
+
+      - name: Connect the isolated local runner to its disposable database
+        if: ${{ env.ACT }}
+        run: build/ci-local-postgres.sh
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -356,6 +364,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
+      max-parallel: ${{ github.event.local_ci_parallel || 3 }}
       # One job definition, three runners: every group repeats the same
       # two-minute build and browser setup, then runs under two minutes of
       # suites instead of five and a half minutes in one sequence.
@@ -364,6 +373,10 @@ jobs:
       #   stress: homepage layout, restart recovery, the UI stress harness
       matrix:
         group: [accounts, media, stress]
+        include:
+          - {group: accounts, postgres_port: 5433}
+          - {group: media, postgres_port: 5434}
+          - {group: stress, postgres_port: 5435}
     services:
       postgres:
         # Official image, pinned to the verified PostgreSQL 18.6 manifest.
@@ -373,7 +386,7 @@ jobs:
           POSTGRES_PASSWORD: disposable-ci-password
           POSTGRES_DB: simplestchat_test
         ports:
-          - 5432:5432
+          - "${{ matrix.postgres_port }}:5432"
         options: >-
           --health-cmd "pg_isready -U test_owner -d simplestchat_test"
           --health-interval 5s
@@ -383,9 +396,10 @@ jobs:
       # mediasoup-sys invokes pip from its Cargo build script.
       PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
       OPENSSL_STATIC: "1"
-      DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
-      TEST_DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
+      DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:${{ matrix.postgres_port }}/simplestchat_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:${{ matrix.postgres_port }}/simplestchat_test?sslmode=disable
       DISPOSABLE_TEST_DATABASE: "1"
+      CI_LOCAL_POSTGRES_PORT: ${{ matrix.postgres_port }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -394,6 +408,10 @@ jobs:
       - uses: ./.github/actions/native-toolchain
         with:
           cache-key: rust-build
+
+      - name: Connect the isolated local runner to its disposable database
+        if: ${{ env.ACT }}
+        run: build/ci-local-postgres.sh
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -661,6 +679,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Record successful local browser coverage
+        if: ${{ env.ACT }}
+        env:
+          LOCAL_BROWSER_GROUP: ${{ matrix.group }}
+        run: python3 build/ci-local-evidence.py record --id "browser-$LOCAL_BROWSER_GROUP"
+
   web:
     name: Web lint + format + tests + typecheck + build
     runs-on: ubuntu-24.04
@@ -698,6 +722,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Start Docker inside the isolated local runner
+        if: ${{ env.ACT }}
+        run: build/ci-local-docker.sh
 
       # The release fixture's controller needs about twenty seconds of apt and
       # pip work that shares nothing with the image build. Start it here and
@@ -903,7 +931,7 @@ jobs:
       - name: Retain the verified production release
         # Export precedes the root-owned fixture; publication requires every
         # deployment check above to pass. Fetching also requires whole-CI success.
-        if: ${{ success() && github.event_name == 'push' }}
+        if: ${{ success() && github.event_name == 'push' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: simplestchat-unsigned-${{ github.sha }}
@@ -913,7 +941,7 @@ jobs:
           retention-days: 14
 
       - name: Preserve allowlisted production security evidence
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: production-security-${{ github.sha }}
@@ -934,7 +962,7 @@ jobs:
           retention-days: 14
 
       - name: Preserve sanitized release-container report
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-container
@@ -944,7 +972,7 @@ jobs:
           retention-days: 7
 
       - name: Preserve container diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: container-smoke
@@ -978,6 +1006,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Require healthy stored CodeQL analyses for this exact revision
+        if: ${{ !env.ACT }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -985,7 +1014,7 @@ jobs:
             --repository "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA" --ref "$GITHUB_REF" \
             --output "$RUNNER_TEMP/codeql-analysis-health"
       - name: Retain bounded CodeQL analysis health evidence
-        if: ${{ always() }}
+        if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: codeql-analysis-health-${{ github.sha }}
@@ -994,6 +1023,17 @@ jobs:
             ${{ runner.temp }}/codeql-analysis-health/failure.json
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Require complete local execution evidence
+        if: ${{ env.ACT }}
+        env:
+          GATE_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/local-ci-evidence-tools"
+          python3 build/ci-local-evidence.py requirements > "$RUNNER_TEMP/local-ci-yaml.txt"
+          "$RUNNER_TEMP/local-ci-evidence-tools/bin/pip" install --require-hashes --only-binary=:all: \
+            --no-deps --requirement "$RUNNER_TEMP/local-ci-yaml.txt"
+          "$RUNNER_TEMP/local-ci-evidence-tools/bin/python" build/ci-local-evidence.py complete
 
   release-security:
     name: Attest the verified production release

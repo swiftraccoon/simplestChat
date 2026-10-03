@@ -130,18 +130,19 @@ See [tool inputs](../security/README.md) for exact installation/update commands,
 ## CI topology and scheduling
 
 `ci.yml` invokes the security and CodeQL workflows at the caller's exact source
-revision. No secrets are inherited. Ordinary pull requests run source checks,
-dependency review, native sanitizers/replay and the existing Rust, database,
-browser and production-image suites. A trusted release is eligible only after
+revision. No secrets are inherited. Main pushes and optional pull requests run
+the shared source/dependency checks, native sanitizers/replay and the Rust,
+database, browser and production-image suites. The ASan, UBSan and replay modes
+run independently, retaining every mode's results. A trusted release is eligible only after
 all required jobs succeed; a skipped or failed dependency is not release approval.
 
 Daily security runs refresh advisory results even when source has not changed.
 The daily deep jobs run finite native checks and selected pure-policy mutations. CodeQL runs
-`security-extended` for ordinary CI. Standalone pull-request, scheduled and manual
-CodeQL runs use `security-and-quality` in separate `quality-advisory` categories.
-Running those same configurations on pull requests lets GitHub compare every
-CodeQL configuration already present on the base branch before permitting a merge.
-The broader categories remain advisory; findings still need triage. The reusable
+`security-extended` for ordinary CI, with full reports on both PRs and main;
+diff-informed query filtering is disabled so whole-file review identities are
+checked consistently. Scheduled and manual CodeQL runs use `security-and-quality`
+in separate `quality-advisory` categories. The broader categories remain advisory;
+findings still need triage. The reusable
 workflow's `security_gate` input defaults to true, preserving CI's security
 categories and exact High/Critical review enforcement.
 
@@ -151,7 +152,26 @@ the analyzer, with the actual generated inputs, include paths and definitions.
 A query then requires observed compilation of the DTLS, STUN, SCTP and RTP
 implementations. An empty database or a source-only native scan cannot pass that
 coverage check. This job starts a fresh native build and does not restore a
-previous worker compilation.
+previous worker compilation. Only the pinned OpenSSL prefix is cached; its
+version, static libraries and required disabled settings are checked after
+restoration. Compilation uses up to four workers within the detected CPU and
+memory limits.
+
+The [complete local CI runner](testing.md#run-ci-locally) uses the same five
+languages, pinned analyzer/query packs, native compile command, coverage query
+and original-SARIF policy. `security/codeql-toolchain.json` authenticates the
+platform bundles. For a focused component on a clean committed tree:
+
+```sh
+python3 build/security_codeql_local.py --revision "$(git rev-parse HEAD)" \
+  --language javascript-typescript --output "$PWD/results/codeql-javascript"
+```
+
+Use a fresh output directory. Omitting `--language` runs all five languages;
+`--suite all` also runs advisory queries on the same extracted databases. Local
+health requires real rule coverage and complete reports. GitHub's stored-analysis
+ingestion check and OIDC signing remain hosted publication steps, not local
+security checks or locally fabricated receipts.
 
 After ordinary analysis, every language job validates its original SARIF through
 `build/security_codeql_triage.py`. Unreviewed High and Critical findings fail the

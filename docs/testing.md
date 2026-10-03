@@ -438,27 +438,78 @@ dependency guards and production-image non-root/loader checks.
 The [browser compatibility workflow](../web/e2e/README.md#ci) adds weekly and
 manual Firefox/Linux and WebKit/macOS runs.
 
-### Run one CI job locally
+### Run CI locally
 
-`build/ci-local.sh <job> [act options]` runs a single job of the CI workflow with
-[act](https://github.com/nektos/act) (`brew install act`) in the act Ubuntu 24.04
-image, on this machine's architecture:
+Commit the candidate locally, then run the complete required workflow without a
+push or pull request:
+
+```sh
+build/ci-local.sh all
+```
+
+The launcher uses [act](https://github.com/nektos/act) to execute
+[CI](../.github/workflows/ci.yml)'s `required` job and its actual dependency graph,
+including the reusable security and CodeQL workflows. There is no separate list
+of local checks to drift from the workflow. Install act and Podman on macOS
+(`brew install act podman`). Git, Python 3 and curl are also prerequisites.
+
+On macOS, the launcher creates or reuses only its rootful `simplestchat-ci`
+Podman VM (12 CPUs, 48 GiB RAM, 80 GiB disk). It refuses to stop another running
+VM or select Docker Desktop implicitly. A VM started by the launcher is stopped
+when it exits; an already running VM stays running. On Linux, use an empty engine
+inside a dedicated disposable VM and identify its local socket explicitly:
+
+```sh
+DOCKER_HOST=unix:///path/to/disposable/docker.sock \
+  build/ci-local.sh all --disposable-engine
+```
+
+Both paths run the pinned Ubuntu 24.04 **Linux/amd64** image, including on Apple
+silicon. Emulation needs working amd64 support in the VM and can be substantially
+slower than a native amd64 runner. Outer job groups run serially, with up to four
+matrix entries concurrently, each limited to 3 CPUs and 8 GiB RAM. `--jobs 1`
+reduces simultaneous resource use; supported matrix limits are 1 through 4.
+The privileged job containers are confined to the disposable engine. Each
+Docker-dependent job starts its own bundled, pinned daemon with a fresh storage
+volume and private socket. The outer engine socket is never mounted, and the
+production release fixture keeps its empty-engine and disposable-host checks.
+
+PostgreSQL services use distinct declared ports for the Rust and three browser
+groups. A local-only relay connects each job's loopback address to its published
+service; the existing loopback-only database checks remain active. The launcher
+refuses pre-existing containers. It requests act cleanup and checks for leftover
+containers after execution; an interrupted setup can require inspection of the
+owned VM before another run.
+
+The full gate requires a clean committed checkout and checks its identity again
+after execution. Completion receipts bind every required matrix entry and the
+successful aggregate to the current run and revision; dry runs or filtered
+matrices cannot report a complete local gate. `--base REF` selects the ancestor
+used for changed-source
+checks; by default it uses the merge base with local `origin/main`, or `HEAD^`
+when already at that base. Update the tracking ref before validation when needed.
+Local `.env`, secret, input and variable files are not passed to the workflow.
+CodeQL installs its checksum-pinned bundle automatically; `--codeql DIRECTORY`
+can reuse an authenticated Linux bundle containing the `codeql` executable.
+
+The five local CodeQL scans enforce the same security query suites, exact finding
+reviews, completed-query health and real native compilation coverage. GitHub's
+stored-analysis ingestion check and OIDC release signing/publication remain
+hosted operations; a successful local gate does not claim a GitHub signature.
+Scheduled mutation, performance/soak and macOS WebKit compatibility workflows
+are additional tiers, not part of the required push gate.
+
+Action and build caches persist under `target/act`. Each invocation writes a
+private directory under `results/` containing its event, workflow log, source
+revision/base, exit status and retained compact check summaries. `--output`
+accepts a new directory. A single-job run is available for focused fixes and
+always reports that it is partial:
 
 ```sh
 build/ci-local.sh web
 build/ci-local.sh rust-lint
 build/ci-local.sh browser --matrix group:accounts
 ```
-
-It uses a running Docker Desktop when its socket answers, otherwise its own
-rootful Podman machine `simplestchat-ci` (created on first use; Podman runs one
-VM at a time, so stop another machine first). The workspace is copied into the
-job container honouring `.gitignore`, actions caches and artifacts persist under
-`target/act`, and the first Rust job compiles the native worker from scratch
-before later runs restore it from that cache. This checks workflow wiring, step
-conditions and Linux-only browser behaviour before a push; on Apple silicon the
-jobs run on arm64, so their timings say nothing about the x86 runners, and the
-deployment job (which needs the runner's Docker engine) is not supported.
 
 ### Weekly performance and soak
 

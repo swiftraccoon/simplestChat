@@ -55,12 +55,15 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(gate["permissions"], {"contents": "read", "security-events": "read"})
         self.assertEqual(gate["timeout-minutes"], "7")
         steps = objects(gate, "steps")
-        self.assertEqual(len(steps), 4)
         self.assertTrue(string(steps[1], "uses").startswith("actions/checkout@"))
         self.assertEqual(at(steps[1], "with", "persist-credentials"), "false")
-        health = steps[2]
+        health = next(
+            step
+            for step in steps
+            if "build/security_codeql_triage.py health" in string(step.get("run", ""))
+        )
         self.assertEqual(health["env"], {"GH_TOKEN": "${{ github.token }}"})
-        self.assertNotIn("if", health)
+        self.assertEqual(health["if"], "${{ !env.ACT }}")
         self.assertNotIn("continue-on-error", health)
         command = string(health, "run")
         self.assertIn("python3 build/security_codeql_triage.py health", command)
@@ -71,10 +74,14 @@ class SecurityWorkflowTests(unittest.TestCase):
             '--output "$RUNNER_TEMP/codeql-analysis-health"',
         ):
             self.assertIn(argument, command)
-        self.assertEqual(steps[3]["if"], "${{ always() }}")
-        self.assertTrue(string(steps[3], "uses").startswith("actions/upload-artifact@"))
+        upload = next(
+            step
+            for step in steps
+            if string(step.get("uses", "")).startswith("actions/upload-artifact@")
+        )
+        self.assertEqual(upload["if"], "${{ always() && !env.ACT }}")
         self.assertEqual(
-            string(steps[3], "with", "path").splitlines(),
+            string(upload, "with", "path").splitlines(),
             [
                 "${{ runner.temp }}/codeql-analysis-health/report.json",
                 "${{ runner.temp }}/codeql-analysis-health/failure.json",
@@ -154,15 +161,16 @@ class SecurityWorkflowTests(unittest.TestCase):
             called = workflow(name + ".yml")
             self.assertIn("workflow_call", obj(called, "on"))
             self.assertNotIn("push", obj(called, "on"))
-            if name == "security":
-                self.assertNotIn("pull_request", obj(called, "on"))
+            self.assertNotIn("pull_request", obj(called, "on"))
             self.assertTrue(string(called, "concurrency", "group").startswith(name + "-"))
             self.assertTrue(array(called, "on", "schedule"))
 
-    def test_codeql_advisory_prs_retain_the_scheduled_analysis_identities(self) -> None:
-        """PR merge protection needs each advisory configuration already present on main."""
+    def test_codeql_advisory_runs_are_scheduled_or_manual_and_security_remains_reusable(
+        self,
+    ) -> None:
+        """Direct-main development retains all security scans without duplicate advisory PR jobs."""
         codeql = workflow("codeql.yml")
-        self.assertEqual(obj(codeql, "on", "pull_request"), {"branches": ["main"]})
+        self.assertEqual(set(obj(codeql, "on")), {"workflow_call", "schedule", "workflow_dispatch"})
         gate = obj(codeql, "on", "workflow_call", "inputs", "security_gate")
         self.assertEqual(gate["type"], "boolean")
         self.assertEqual(gate["default"], "true")
@@ -202,7 +210,8 @@ class SecurityWorkflowTests(unittest.TestCase):
                     + language
                     + "/${{ inputs.security_gate && 'security' || 'quality-advisory' }}",
                 )
-                self.assertNotIn("if", analyze)
+                self.assertEqual(init["if"], "${{ !env.ACT }}")
+                self.assertEqual(analyze["if"], "${{ !env.ACT }}")
 
     def test_codeql_requires_manual_observed_native_compilation(self) -> None:
         """A source-only or restored compilation cannot satisfy native CodeQL coverage."""
@@ -216,14 +225,30 @@ class SecurityWorkflowTests(unittest.TestCase):
             if step.get("name") == "Compile the actual worker under CodeQL tracing"
         )
         command = string(build, "run")
+        self.assertEqual(command, "bash build/codeql-native-build.sh")
+        command = (ROOT / "build/codeql-native-build.sh").read_text()
         self.assertIn("libmediasoup-worker", command)
+        self.assertIn('mktemp -d "$project_root/target/codeql-worker.XXXXXXXX"', command)
+        self.assertIn("build/security_codeql_resources.py", command)
         self.assertNotIn("docker", command)
         self.assertNotIn("env -i", command)
         self.assertLess(steps.index(init), steps.index(build))
         self.assertTrue(
             any("build/security_codeql.py" in string(step.get("run", "")) for step in steps)
         )
-        self.assertFalse(any("cache@" in string(step.get("uses", "")) for step in steps))
+        caches = [step for step in steps if "cache@" in string(step.get("uses", ""))]
+        self.assertEqual(len(caches), 1)
+        self.assertEqual(at(caches[0], "with", "path"), "${{ env.OPENSSL_DIR }}")
+        self.assertIn("hashFiles('build/install-openssl.sh')", string(caches[0], "with", "key"))
+        self.assertIn("'main' || 'untrusted'", string(caches[0], "with", "key"))
+        self.assertIn("runner.os", string(caches[0], "with", "key"))
+        self.assertIn("runner.arch", string(caches[0], "with", "key"))
+        self.assertNotIn("restore-keys", obj(caches[0], "with"))
+        validation = next(
+            step for step in steps if step.get("name") == "Validate static OpenSSL prerequisites"
+        )
+        self.assertLess(steps.index(validation), steps.index(build))
+        self.assertIn("pkg-config --exact-version=3.5.9 openssl", string(validation, "run"))
 
     def test_all_workflows_use_unprivileged_pr_events_and_pinned_actions(self) -> None:
         """Pin external action code and prohibit privileged PR execution for all jobs."""
@@ -238,6 +263,96 @@ class SecurityWorkflowTests(unittest.TestCase):
                             self.assertRegex(
                                 uses, r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[a-f0-9]{40}$"
                             )
+
+    def test_native_matrix_keeps_all_modes_with_shared_preparation_and_isolation(self) -> None:
+        """Parallelism must preserve each complete sanitizer/corpus suite and its evidence."""
+        native = obj(workflow("security.yml"), "jobs", "native-security")
+        self.assertEqual(strings(native, "strategy", "matrix", "mode"), ["asan", "ubsan", "replay"])
+        self.assertEqual(at(native, "strategy", "fail-fast"), "false")
+        self.assertEqual(
+            at(native, "strategy", "max-parallel"), "${{ github.event.local_ci_parallel || 3 }}"
+        )
+        steps = objects(native, "steps")
+        command = "\n".join(string(step.get("run", "")) for step in steps)
+        for required in (
+            "build/ci-local-docker.sh",
+            "build/security_vendor.py verify",
+            "build/native_security.py verify",
+            "build/native_security.py prepare",
+            'build/native_security.py run --image "$image_id" --mode "$NATIVE_MODE"',
+        ):
+            self.assertIn(required, command)
+        recorder = next(
+            step for step in steps if "ci-local-evidence.py record" in string(step.get("run", ""))
+        )
+        self.assertEqual(recorder["if"], "${{ env.ACT }}")
+        self.assertEqual(at(recorder, "env", "NATIVE_MODE"), "${{ matrix.mode }}")
+        self.assertIn('--id "native-$NATIVE_MODE"', string(recorder, "run"))
+        self.assertFalse(any("continue-on-error" in step for step in steps))
+
+    def test_dependency_reviews_are_shared_by_direct_main_and_local_source_checks(self) -> None:
+        """Changed npm, Python and Actions dependencies retain policy checks without a PR job."""
+        jobs = obj(workflow("security.yml"), "jobs")
+        self.assertNotIn("dependency-review", jobs)
+        fast = obj(jobs, "security-fast")
+        self.assertNotIn("if", fast)
+        gate = next(
+            step
+            for step in objects(fast, "steps")
+            if "build/check-security.sh fast" in string(step.get("run", ""))
+        )
+        self.assertNotIn("if", gate)
+        self.assertEqual(
+            at(gate, "env", "SECURITY_BASE"),
+            "${{ github.event.pull_request.base.sha || github.event.before }}",
+        )
+        source = (ROOT / "build/security_check.py").read_text()
+        self.assertIn("security_dependency_licenses.check(context, snapshot, base)", source)
+        self.assertIn("security_actions.check(context, snapshot, base)", source)
+        self.assertIn('vulnerabilities["total"] == 0', source)
+        self.assertIn('"pip_audit"', source)
+
+    def test_local_codeql_runs_full_pinned_analysis_before_recording_success(self) -> None:
+        """Local success requires each real language policy; hosted uploads stay on GitHub."""
+        codeql = workflow("codeql.yml")
+        self.assertEqual(at(codeql, "env", "CODEQL_ACTION_DIFF_INFORMED_QUERIES"), "false")
+        self.assertEqual(
+            at(codeql, "jobs", "source-analysis", "strategy", "max-parallel"),
+            "${{ github.event.local_ci_parallel || 4 }}",
+        )
+        for name, job in obj(codeql, "jobs").items():
+            with self.subTest(job=name):
+                steps = objects(job, "steps")
+                local = next(
+                    step
+                    for step in steps
+                    if "build/security_codeql_local.py" in string(step.get("run", ""))
+                )
+                self.assertEqual(local["if"], "${{ env.ACT }}")
+                self.assertNotIn("continue-on-error", local)
+                self.assertIn('--revision "$GITHUB_SHA"', string(local, "run"))
+                self.assertIn('--suite "$CODEQL_SUITE"', string(local, "run"))
+                language = "c-cpp" if name == "native-analysis" else '"$CODEQL_LANGUAGE"'
+                self.assertIn("--language " + language, string(local, "run"))
+                recorder = next(
+                    step
+                    for step in steps
+                    if "ci-local-evidence.py record" in string(step.get("run", ""))
+                )
+                self.assertEqual(recorder["if"], "${{ env.ACT }}")
+                self.assertLess(steps.index(local), steps.index(recorder))
+                hosted_pin = next(
+                    step
+                    for step in steps
+                    if "build/security_codeql_tools.py" in string(step.get("run", ""))
+                )
+                self.assertEqual(hosted_pin["if"], "${{ !env.ACT }}")
+                self.assertIn('--codeql "$CODEQL_BINARY"', string(hosted_pin, "run"))
+        for value in (codeql, workflow("security.yml")):
+            for job in obj(value, "jobs").values():
+                for step in objects(job, "steps"):
+                    if "upload-artifact@" in string(step.get("uses", "")):
+                        self.assertIn("!env.ACT", string(step, "if"))
 
     def test_scheduled_mutations_use_shared_gate_and_never_publish_build_outputs(self) -> None:
         """Test-quality jobs have bounded scope and cannot promote mutated binaries."""
@@ -284,7 +399,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             )
             self.assertLess(steps.index(analyze), steps.index(gate))
             self.assertEqual(at(analyze, "with", "output"), "${{ runner.temp }}/codeql-sarif")
-            self.assertEqual(gate["if"], "${{ inputs.security_gate }}")
+            self.assertEqual(gate["if"], "${{ !env.ACT && inputs.security_gate }}")
             self.assertNotIn("continue-on-error", gate)
             command = string(gate, "run")
             self.assertIn("${#reports[@]} != 1", command)
@@ -293,7 +408,9 @@ class SecurityWorkflowTests(unittest.TestCase):
                 self.assertIn('--source-cache "$RUNNER_TEMP/vendor-cache"', command)
             uploads = [step for step in steps if "upload-artifact@" in string(step.get("uses", ""))]
             self.assertEqual(len(uploads), 1)
-            self.assertEqual(uploads[0]["if"], "${{ always() && inputs.security_gate }}")
+            self.assertEqual(
+                uploads[0]["if"], "${{ always() && !env.ACT && inputs.security_gate }}"
+            )
             self.assertEqual(
                 set(string(uploads[0], "with", "path").splitlines()),
                 {

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "cliVersion": "2.27.1",
+  "actionRevision": "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2",
+  "languages": {
+    "actions": {"extractor": "actions", "queriesVersion": "0.6.36"},
+    "javascript-typescript": {"extractor": "javascript", "queriesVersion": "2.4.6"},
+    "python": {"extractor": "python", "queriesVersion": "1.8.11"},
+    "rust": {"extractor": "rust", "queriesVersion": "0.1.43"},
+    "c-cpp": {"extractor": "cpp", "queriesVersion": "1.9.0"}
+  },
+  "bundles": {
+    "linux-x86_64": {
+      "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux64.tar.zst",
+      "bytes": 557306446,
+      "sha256": "1ec99cfa9420f04c2330784b4ddb8363a0dd67c3e4471cd93963c50e6c433717"
+    },
+    "linux-aarch64": {
+      "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux-arm64.tar.zst",
+      "bytes": 548212714,
+      "sha256": "5e87cf7254bc948b002ae444066ecc6f913960361ac675d049862dcb62d7786a"
+    },
+    "darwin": {
+      "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-osx64.tar.zst",
+      "bytes": 876476743,
+      "sha256": "b63286d8189b90f6045a18797d191603f611f0003216783cade7166ec80ada45"
+    }
+  }
+}

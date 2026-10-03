@@ -40,8 +40,19 @@ jobs:
             args+=(--base "$SECURITY_BASE")
           fi
           build/check-security.sh fast --output "$RUNNER_TEMP/security-fast" "${args[@]}"
+      - name: Retain compact local source-check evidence
+        if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
+        run: |
+          destination="$LOCAL_CI_EVIDENCE/security-fast"
+          install -d -m 700 "$destination"
+          if [[ -f "$RUNNER_TEMP/security-fast/summary.json" ]]; then
+            install -m 600 "$RUNNER_TEMP/security-fast/summary.json" "$destination/summary.json"
+          fi
+      - name: Record successful local source checks
+        if: ${{ env.ACT }}
+        run: python3 build/ci-local-evidence.py record --id security-fast
       - name: Preserve the redacted check summary
-        if: ${{ always() }}
+        if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: security-fast-summary
@@ -50,15 +61,23 @@ jobs:
           retention-days: 14
 
   native-security:
-    name: Native sanitizers and finite corpus replay
+    name: Native security (${{ matrix.mode }})
     # Scheduled/manual runs execute these same checks inside the shared deep tier.
     if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ github.event.local_ci_parallel || 3 }}
+      matrix:
+        mode: [asan, ubsan, replay]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Start this local job's isolated container engine
+        if: ${{ env.ACT }}
+        run: build/ci-local-docker.sh
       - name: Verify upstream source and native seed identities
         run: |
           python3 build/security_vendor.py verify --root "$PWD" \
@@ -66,18 +85,37 @@ jobs:
           python3 build/native_security.py verify
       - name: Prepare the pinned native checker
         run: python3 build/native_security.py prepare --output "$RUNNER_TEMP/native-preparation"
-      - name: Run isolated sanitizer and finite replay suites
+      - name: Run the selected isolated native suite
+        env:
+          NATIVE_MODE: ${{ matrix.mode }}
         run: |
           image_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["imageId"])' "$RUNNER_TEMP/native-preparation/report.json")"
-          for mode in asan ubsan replay; do
-            python3 build/native_security.py run --image "$image_id" --mode "$mode" \
-              --output "$RUNNER_TEMP/native-$mode"
+          python3 build/native_security.py run --image "$image_id" --mode "$NATIVE_MODE" \
+            --output "$RUNNER_TEMP/native-$NATIVE_MODE"
+      - name: Retain compact local native evidence
+        if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
+        env:
+          NATIVE_MODE: ${{ matrix.mode }}
+        run: |
+          for phase in vendor-integrity native-preparation "native-$NATIVE_MODE"; do
+            destination="$LOCAL_CI_EVIDENCE/native-$NATIVE_MODE/$phase"
+            install -d -m 700 "$destination"
+            for name in report.json failure.json; do
+              if [[ -f "$RUNNER_TEMP/$phase/$name" ]]; then
+                install -m 600 "$RUNNER_TEMP/$phase/$name" "$destination/$name"
+              fi
+            done
           done
+      - name: Record the successful local native suite
+        if: ${{ env.ACT }}
+        env:
+          NATIVE_MODE: ${{ matrix.mode }}
+        run: python3 build/ci-local-evidence.py record --id "native-$NATIVE_MODE"
       - name: Preserve bounded native results
-        if: ${{ always() }}
+        if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: native-security-results
+          name: native-security-results-${{ matrix.mode }}
           path: |
             ${{ runner.temp }}/vendor-integrity/report.json
             ${{ runner.temp }}/native-*/report.json
@@ -109,10 +147,28 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3-venv shellcheck
           rustup toolchain install 1.98.1 --profile minimal
+      - name: Start this local job's isolated container engine
+        if: ${{ env.ACT }}
+        run: build/ci-local-docker.sh
       - name: Run the maintained complete tier
         run: build/check-security.sh deep --deep-check native --output "$RUNNER_TEMP/security-deep"
+      - name: Retain compact local deep-tier evidence
+        if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
+        run: |
+          for phase in . vendor native-preparation native-asan native-ubsan native-replay; do
+            destination="$LOCAL_CI_EVIDENCE/security-deep/$phase"
+            install -d -m 700 "$destination"
+            for name in summary.json report.json failure.json; do
+              if [[ -f "$RUNNER_TEMP/security-deep/$phase/$name" ]]; then
+                install -m 600 "$RUNNER_TEMP/security-deep/$phase/$name" "$destination/$name"
+              fi
+            done
+          done
+      - name: Record the successful local deep tier
+        if: ${{ env.ACT }}
+        run: python3 build/ci-local-evidence.py record --id security-deep
       - name: Preserve the redacted check summary
-        if: ${{ always() }}
+        if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: security-deep-summary
@@ -120,7 +176,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Preserve bounded offline native diagnostics
-        if: ${{ always() }}
+        if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: security-deep-native-diagnostics
@@ -164,8 +220,23 @@ jobs:
         run: |
           build/check-security.sh deep --deep-check mutation \
             --openssl-prefix "$OPENSSL_DIR" --output "$RUNNER_TEMP/security-mutation"
+      - name: Retain compact local mutation evidence
+        if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
+        run: |
+          for phase in . mutation; do
+            destination="$LOCAL_CI_EVIDENCE/security-mutation/$phase"
+            install -d -m 700 "$destination"
+            for name in summary.json outcome.json inventory.json failure.json; do
+              if [[ -f "$RUNNER_TEMP/security-mutation/$phase/$name" ]]; then
+                install -m 600 "$RUNNER_TEMP/security-mutation/$phase/$name" "$destination/$name"
+              fi
+            done
+          done
+      - name: Record the successful local mutation tier
+        if: ${{ env.ACT }}
+        run: python3 build/ci-local-evidence.py record --id security-mutation
       - name: Preserve compact test-quality evidence
-        if: ${{ always() }}
+        if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: security-mutation-summary

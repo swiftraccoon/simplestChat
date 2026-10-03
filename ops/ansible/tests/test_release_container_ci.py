@@ -139,7 +139,9 @@ class ReleaseContainerCiTests(unittest.TestCase):
             "Export before root fixture state exists; preserve exporter guards",
         )
         release = self.step(RELEASE)
-        self.assertEqual(release["if"], "${{ success() && github.event_name == 'push' }}")
+        self.assertEqual(
+            release["if"], "${{ success() && github.event_name == 'push' && !env.ACT }}"
+        )
         self.assertRegex(string(release, "uses"), r"^actions/upload-artifact@[a-f0-9]{40}$")
         self.assertEqual(
             release["with"],
@@ -286,7 +288,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         """Verify only sanitized report is retained even on failure."""
         retention = self.step(RETENTION)
         self.assertRegex(string(retention, "uses"), r"^actions/upload-artifact@[a-f0-9]{40}$")
-        self.assertEqual(retention["if"], "${{ !cancelled() }}")
+        self.assertEqual(retention["if"], "${{ !cancelled() && !env.ACT }}")
         self.assertEqual(
             retention["with"],
             {
