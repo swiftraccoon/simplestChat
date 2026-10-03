@@ -17,7 +17,7 @@ const entry = (id, extra = {}) => ({
   ...extra,
 });
 
-async function fixture() {
+async function fixture({ touch = false, touchPoints = 0 } = {}) {
   const f = await uiFixture();
   Object.defineProperties(f.Node.prototype, {
     options: {
@@ -85,10 +85,28 @@ async function fixture() {
     'room-screen',
   ];
   for (const id of ids) {
-    const node = f.ui.el(id === 'chat-input' ? 'input' : 'div');
+    const node = f.ui.el(id === 'chat-input' ? 'textarea' : 'div');
     node.id = id;
     f.document.body.append(node);
   }
+  const input = f.document.getElementById('chat-input');
+  input.clientWidth = 320;
+  Object.defineProperties(input, {
+    scrollHeight: {
+      get: () => Math.max(36, input.value.split('\n').length * 20 + 16),
+    },
+    offsetHeight: {
+      get: () =>
+        Math.min(
+          138,
+          Math.max(38, Number.parseFloat(input.style.getPropertyValue('height')) || 38),
+        ),
+    },
+    clientHeight: { get: () => input.offsetHeight - 2 },
+  });
+  Object.defineProperty(f.document.getElementById('chat-input-row'), 'offsetHeight', {
+    get: () => input.offsetHeight + 16,
+  });
   f.document.getElementById('chat-panel').className = 'active';
   const tab = f.ui.button('Chat', () => {});
   f.document.body.append(tab);
@@ -116,6 +134,14 @@ async function fixture() {
     audioReject: false,
     notices: [],
     noticeAnswer: 'granted',
+    pointerChange: () => {},
+    resize: () => {},
+  };
+  const pointer = {
+    matches: touch,
+    addEventListener: (_name, handler) => {
+      state.pointerChange = handler;
+    },
   };
   class Notification {
     static permission = 'default';
@@ -188,6 +214,14 @@ async function fixture() {
     modules: { './chat-store': chatModule, './ui': f.ui, './avatar-colors': colorModule },
     globals: {
       document: f.document,
+      window: { matchMedia: () => pointer },
+      navigator: { maxTouchPoints: touchPoints },
+      ResizeObserver: class {
+        constructor(callback) {
+          state.resize = callback;
+        }
+        observe() {}
+      },
       TextEncoder,
       structuredClone,
       AudioContext,
@@ -214,7 +248,7 @@ async function fixture() {
       state.actions.push(args);
     },
   });
-  return { ...f, state, http, chat, tab, participants, documentListeners, timers };
+  return { ...f, state, http, chat, tab, participants, documentListeners, timers, pointer };
 }
 
 function snapshot(messages) {
@@ -718,6 +752,110 @@ test('batched replay preserves unread counts, scroll position, input focus and d
   assert.equal(f.chat.store.unread.size, 0);
 });
 
+function composerKey(f, modifiers = {}) {
+  let prevented = false;
+  f.chat.input.emit('keydown', {
+    key: 'Enter',
+    preventDefault() {
+      prevented = true;
+    },
+    stopPropagation() {},
+    ...modifiers,
+  });
+  return prevented;
+}
+
+test('desktop composer sends multiline text with Enter and leaves Shift+Enter to add a line', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  assert.equal(f.chat.sendButton.hidden, true);
+  assert.equal(f.chat.input.getAttribute('enterkeyhint'), 'send');
+  assert.match(f.chat.input.getAttribute('aria-description'), /Shift\+Enter/);
+  f.chat.input.value = 'first line\nsecond line';
+  f.chat.input.emit('input');
+  assert.equal(f.chat.input.style.getPropertyValue('height'), '58px');
+  assert.equal(composerKey(f, { shiftKey: true }), false);
+  assert.deepEqual(f.state.sent, []);
+  assert.equal(composerKey(f), true);
+  assert.equal(f.state.sent[0][1], 'first line\nsecond line');
+  assert.equal(f.chat.input.value, '');
+  assert.equal(f.chat.input.style.getPropertyValue('height'), 'auto');
+});
+
+test('composition confirmation never sends or completes a mention, including Safari key code 229', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  for (const value of ['unfinished message', '@Al']) {
+    f.chat.input.value = value;
+    f.chat.input.selectionStart = f.chat.input.selectionEnd = value.length;
+    f.chat.input.emit('input');
+    assert.equal(composerKey(f, { isComposing: true }), false);
+    assert.equal(composerKey(f, { keyCode: 229 }), false);
+    assert.equal(f.chat.input.value, value);
+  }
+  assert.deepEqual(f.state.sent, []);
+  assert.equal(composerKey(f, { shiftKey: true }), false);
+  assert.equal(f.chat.input.value, '@Al', 'Shift+Enter does not accept an open mention');
+  assert.equal(composerKey(f), true);
+  assert.equal(f.chat.input.value, '@Alice ');
+  assert.deepEqual(f.state.sent, [], 'plain Enter still completes desktop mentions first');
+});
+
+test('touch and hybrid composers keep Send, with newline Enter and an explicit keyboard send', async () => {
+  for (const device of [{ touch: true }, { touchPoints: 1 }]) {
+    const f = await fixture(device);
+    await f.chat.activate();
+    assert.equal(f.chat.sendButton.hidden, false);
+    assert.equal(f.chat.input.getAttribute('enterkeyhint'), 'enter');
+    f.chat.input.value = 'line one\nline two';
+    assert.equal(composerKey(f), false);
+    assert.deepEqual(f.state.sent, []);
+    f.chat.sendButton.click();
+    assert.equal(f.state.sent[0][1], 'line one\nline two');
+    for (const modifier of ['ctrlKey', 'metaKey']) {
+      f.chat.input.value = 'keyboard send';
+      assert.equal(composerKey(f, { [modifier]: true }), true);
+      assert.equal(f.state.sent.at(-1)[1], 'keyboard send');
+    }
+    f.chat.reset();
+  }
+  const f = await fixture();
+  f.pointer.matches = true;
+  f.state.pointerChange();
+  assert.equal(f.chat.sendButton.hidden, false, 'connecting a touch pointer reveals Send');
+});
+
+test('composer height follows draft switches, generated text, recall, width and send reset', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const height = () => f.chat.input.style.getPropertyValue('height');
+  const offset = () =>
+    f.document.getElementById('chat-panel').style.getPropertyValue('--chat-composer-height');
+  f.chat.insertText('public\ndraft\nwith lines', 0, 0);
+  assert.equal(height(), '78px');
+  assert.equal(offset(), '94px');
+  f.chat.openPrivate('alice', 'Alice');
+  assert.equal(height(), 'auto');
+  f.chat.insertText('one\ntwo\nthree\nfour\nfive\nsix\nseven', 0, 0);
+  assert.equal(height(), '158px');
+  assert.equal(offset(), '154px', 'the newest-message button uses the capped composer height');
+  f.chat.switchConversation('public');
+  assert.equal(height(), '78px');
+  f.chat.send();
+  assert.equal(height(), 'auto');
+  composerKey(f, { key: 'ArrowUp' });
+  assert.equal(height(), '78px');
+  f.chat.input.style.setProperty('height', '1px');
+  f.state.resize([{ contentRect: { width: 240 } }]);
+  assert.equal(height(), '78px', 'width changes remeasure the current draft');
+  f.chat.messages.scrollTop = 12;
+  f.chat.seenAtBottom = false;
+  f.chat.insertText('\nmore', f.chat.input.value.length, f.chat.input.value.length);
+  assert.equal(f.chat.messages.scrollTop, 12, 'growing a draft preserves the reading position');
+  f.chat.reset();
+  assert.equal(height(), 'auto');
+});
+
 test('private drafts, generated text, and sent recall stay isolated from public chat', async () => {
   const f = await fixture();
   await f.chat.activate();
@@ -966,6 +1104,73 @@ test('public and PM unread counts survive hidden panels, deduplicate replay, and
   assert.equal(f.document.title, 'simplestChat');
 });
 
+test('conversation pills preserve drafts, unread counts and focused nodes across incoming messages', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const publicChat = f.chat.conversationButtons.get('public').node;
+  assert.equal(publicChat.dataset.conversationId, 'public');
+  assert.equal(publicChat.getAttribute('aria-pressed'), 'true');
+  assert.equal(f.chat.conversations.getAttribute('aria-label'), 'Conversations');
+  f.chat.input.value = 'public draft';
+  f.chat.input.emit('input');
+  f.chat.openPrivate('alice', 'Alice');
+  const privateChat = f.chat.conversationButtons.get('alice').node;
+  assert.equal(privateChat.getAttribute('aria-pressed'), 'true');
+  f.chat.input.value = 'private draft';
+  f.chat.input.emit('input');
+  publicChat.click();
+  assert.equal(f.chat.input.value, 'public draft');
+  publicChat.focus();
+  f.chat.receive(entry('new-pm', { recipientId: 'local' }));
+  assert.equal(f.chat.conversationButtons.get('public').node, publicChat);
+  assert.equal(f.chat.conversationButtons.get('alice').node, privateChat);
+  assert.equal(f.document.activeElement, publicChat);
+  assert.equal(f.chat.input.value, 'public draft');
+  assert.equal(privateChat.querySelector('.conversation-unread').textContent, '1');
+  assert.match(privateChat.getAttribute('aria-label'), /1 unread/);
+  privateChat.click();
+  assert.equal(f.chat.input.value, 'private draft');
+  assert.equal(privateChat.querySelector('.conversation-unread').hidden, true);
+  assert.equal(publicChat.getAttribute('aria-pressed'), 'false');
+  assert.equal(privateChat.getAttribute('aria-pressed'), 'true');
+  f.chat.closeButton.focus();
+  f.chat.closeButton.click();
+  assert.equal(f.chat.conversationButtons.has('alice'), false);
+  assert.equal(f.chat.input.value, 'public draft');
+  assert.equal(f.document.activeElement, publicChat, 'closing PM restores reachable focus');
+  assert.equal(f.chat.closeButton.hidden, true);
+});
+
+test('many conversation pills retain full accessible names and focus without rebuilding the list', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const longName = 'A very long participant name '.repeat(10);
+  for (let index = 0; index < 20; index++) {
+    const id = `person-${index}`;
+    f.participants.set(id, { id, name: `${longName}${index}` });
+    f.chat.openPrivate(id, `${longName}${index}`);
+  }
+  assert.equal(f.chat.conversations.children.length, 21);
+  const focused = f.chat.conversationButtons.get('person-10').node;
+  focused.focus();
+  f.chat.conversations.scrollLeft = 100;
+  f.chat.receive(entry('other-pm', { recipientId: 'local' }));
+  assert.equal(f.document.activeElement, focused);
+  assert.equal(f.chat.conversations.scrollLeft, 100, 'incoming PM does not scroll away from focus');
+  assert.equal(f.chat.conversations.children.length, 22);
+  assert.ok(focused.getAttribute('aria-label').includes(`${longName}10`));
+  assert.match(focused.title, /Participant ID: person-10/);
+  const settings = f.document
+    .getElementById('chat-panel')
+    .querySelectorAll('button')
+    .find((node) => node.getAttribute('aria-label') === 'Chat options');
+  assert.equal(settings.textContent, '⋯');
+  settings.click();
+  assert.equal(f.chat.preferencesDialog.dialog.open, true);
+  f.chat.reset();
+  assert.equal(f.chat.conversations.children.length, 1);
+});
+
 test('saved sound preferences unlock on the next gesture and audio failure is nonfatal', async () => {
   const f = await fixture();
   f.state.storage.set('simplestchat.chat.v1.account-a', JSON.stringify({ sounds: true }));
@@ -1099,11 +1304,11 @@ test('public chat keeps its mention hint in the composer instead of a permanent 
   const f = await fixture();
   await f.chat.activate();
   assert.equal(f.chat.conversationStatus.hidden, true);
-  assert.match(f.chat.input.placeholder, /@name/);
+  assert.equal(f.chat.input.placeholder, 'Message · @mention');
   f.chat.openPrivate('alice', 'Alice');
   assert.equal(f.chat.conversationStatus.hidden, false);
   assert.match(f.chat.conversationStatus.textContent, /Private/);
-  assert.doesNotMatch(f.chat.input.placeholder, /@name/);
+  assert.doesNotMatch(f.chat.input.placeholder, /@mention/);
 });
 
 const look = (row) => ({
@@ -1275,7 +1480,9 @@ test('typing @ offers matching people to mention, chosen by keyboard or pointer 
     ['Alice', 'Alfie', 'Sal'],
     'names that start with the text come before names that contain it',
   );
-  assert.equal(f.chat.input.getAttribute('aria-expanded'), 'true');
+  assert.equal(f.chat.input.getAttribute('role'), null, 'retain the native multiline textbox');
+  assert.equal(f.chat.input.getAttribute('aria-autocomplete'), 'list');
+  assert.equal(f.chat.input.getAttribute('aria-controls'), list.id);
   assert.equal(f.chat.input.getAttribute('aria-activedescendant'), 'mention-option-0');
   key('ArrowDown');
   assert.equal(f.chat.input.getAttribute('aria-activedescendant'), 'mention-option-1');
@@ -1291,7 +1498,7 @@ test('typing @ offers matching people to mention, chosen by keyboard or pointer 
   type('@a');
   key('Escape');
   assert.equal(list.hidden, true);
-  assert.equal(f.chat.input.getAttribute('aria-expanded'), 'false');
+  assert.equal(f.chat.input.getAttribute('aria-activedescendant'), null);
 });
 
 test('opted-in desktop notices announce mentions and private messages only while out of sight', async () => {
@@ -1716,17 +1923,12 @@ test('same-looking display names retain distinct sender and PM identities', asyn
   );
   f.chat.openPrivate(first, 'Sam');
   f.chat.openPrivate(second, 'Sam');
-  assert.match(
-    f.chat.select.options.find((option) => option.value === first).textContent,
-    /^#11111111 · account/,
-  );
-  assert.match(
-    f.chat.select.options.find((option) => option.value === second).textContent,
-    /#22222222 · guest/,
-  );
+  assert.match(f.chat.conversationButtons.get(first).node.textContent, /^#11111111 · account/);
+  assert.match(f.chat.conversationButtons.get(second).node.textContent, /#22222222 · guest/);
   f.participants.delete(first);
   f.chat.render();
-  const offline = f.chat.select.options.find((option) => option.value === first);
+  const offline = f.chat.conversationButtons.get(first).node;
   assert.match(offline.textContent, /#11111111 · ID.*offline/);
-  assert.equal(offline.title, `Participant ID: ${first}`);
+  assert.ok(offline.title.includes(`Participant ID: ${first}`));
+  assert.ok(offline.getAttribute('aria-label').includes(`Participant ID: ${first}`));
 });

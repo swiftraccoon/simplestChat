@@ -3,6 +3,7 @@
  * access-token expiry. Run only through the owned disposable server helper.
  * Smoke validates the harness but can never claim refresh/expiry coverage.
  */
+const { openRoomMenu } = require('./room-menu.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -276,6 +277,7 @@ async function run(env = process.env) {
   async function deleteRoom() {
     if (!roomCreated || roomDeleted || !clients[0] || clients[0].page.isClosed()) return;
     const page = clients[0].page;
+    await openRoomMenu(page);
     await page
       .locator('#community-actions')
       .getByRole('button', { name: 'My rooms', exact: true })
@@ -346,7 +348,7 @@ async function run(env = process.env) {
       });
     const at = performance.now();
     await sender.page.locator('#chat-input').fill(content);
-    await sender.page.locator('#chat-send-btn').click();
+    await sender.page.locator('#chat-input').press('Enter');
     const ack = await poll(
       'message_ack_missing',
       () => sender.page.evaluate((text) => window.__sessionSoak.delivery(text), content),

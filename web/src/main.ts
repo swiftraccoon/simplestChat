@@ -55,7 +55,7 @@ const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
 const videoGrid = document.getElementById('video-grid')!;
 const participantList = document.getElementById('participant-list')!;
 const chatMessages = document.getElementById('chat-messages')!;
-const chatInput = document.getElementById('chat-input') as HTMLInputElement;
+const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
 const chatSendBtn = document.getElementById('chat-send-btn')!;
 const micBtn = document.getElementById('mic-btn')!;
 const camBtn = document.getElementById('cam-btn')!;
@@ -1200,10 +1200,9 @@ if (typeof ResizeObserver !== 'undefined') {
   bars.observe(roomTools);
 }
 
-/** Toasts sit just below the top bars, whatever they wrap to, clear of the room tools. */
+/** Toasts sit below the shared header, clear of its controls. */
 function placeToasts(): void {
-  const bars = roomTools.hidden ? document.querySelector('header')! : roomTools;
-  const top = Math.round(bars.getBoundingClientRect().bottom) + 12;
+  const top = Math.round(document.querySelector('header')!.getBoundingClientRect().bottom) + 12;
   toastContainer.style.setProperty('--toast-top', `${top}px`);
 }
 
@@ -1220,9 +1219,15 @@ function setupRoomMenu(): void {
   toggle.addEventListener('click', () => setOpen(toggle.getAttribute('aria-expanded') !== 'true'));
   // Focus returns to the toggle before a choice runs, so a dialog it opens restores
   // focus there instead of to a menu item that is about to be hidden.
-  menu.addEventListener('click', () => toggle.focus(), true);
+  menu.addEventListener(
+    'click',
+    (event) => {
+      if ((event.target as Element).closest('button, a')) toggle.focus();
+    },
+    true,
+  );
   menu.addEventListener('click', (event) => {
-    if ((event.target as Element).closest('button')) setOpen(false);
+    if ((event.target as Element).closest('button, a')) setOpen(false);
   });
   wrapper.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || menu.hidden) return;
@@ -1265,7 +1270,24 @@ function showKeyboardShortcuts(): void {
   view.body.append(
     el('p', 'Shortcuts work in a room whenever you are not typing in a text box.', 'setting-hint'),
     list,
+    el(
+      'p',
+      'In chat: Enter sends on desktop; Shift+Enter adds a new line. On touch devices, Enter adds a new line and the send button sends. Ctrl+Enter or ⌘+Enter sends on either.',
+      'setting-hint',
+    ),
   );
+}
+
+/** Keep secondary room tools in the header and return home utilities when leaving. */
+function setRoomToolsVisible(visible: boolean): void {
+  roomTools.hidden = !visible;
+  const header = document.querySelector('header')!;
+  header.classList.toggle('in-room', visible);
+  const utilities = document.querySelector('.header-right')!;
+  const target = visible ? document.getElementById('room-more-menu')! : header;
+  if (utilities.parentElement !== target) target.append(utilities);
+  document.getElementById('room-more-menu')!.hidden = true;
+  document.getElementById('room-more-btn')!.setAttribute('aria-expanded', 'false');
 }
 
 /** Clipboard access can be refused; offer the link in a selectable field instead. */
@@ -2536,7 +2558,7 @@ joinBtn.addEventListener(
         },
         onLobbyWaiting: (roomName, topic, count, moderators) => {
           mediaControls.reset();
-          roomTools.hidden = true;
+          setRoomToolsVisible(false);
           joinScreen.hidden = true;
           roomScreen.hidden = true;
           lobbyScreen.hidden = false;
@@ -2660,7 +2682,7 @@ function applyJoinedRoomUI(): void {
 
   roomLabel.textContent = room.roomSettings?.displayName ?? room.currentRoomId ?? '';
   roomLabel.hidden = false;
-  roomTools.hidden = false;
+  setRoomToolsVisible(true);
   placeDiagnosticsButton(true);
 
   const topic = room.roomSettings?.topic;
@@ -2822,7 +2844,7 @@ async function leaveRoomAndShowHome(): Promise<void> {
   camBtn.hidden = false;
 
   roomScreen.hidden = true;
-  roomTools.hidden = true;
+  setRoomToolsVisible(false);
   lobbyScreen.hidden = true;
   joinScreen.hidden = false;
   placeDiagnosticsButton(false);
@@ -3607,14 +3629,14 @@ function renderParticipants(participants: Map<string, Participant>): void {
   if (classic) {
     clearChildren(participantList);
     if (!panel) {
-      panel = el('div');
+      panel = el('aside');
       panel.id = 'classic-users-panel';
-      panel.append(el('div', '', 'panel-title'), el('ul', undefined, 'classic-user-list'));
+      panel.append(el('ul', undefined, 'classic-user-list'));
       roomScreen.insertBefore(panel, roomScreen.firstChild);
       attachPanelResize(panel, 'roster');
       applyPanelPreferences();
     }
-    panel.querySelector('.panel-title')!.textContent = `People (${all.length})`;
+    panel.setAttribute('aria-label', `People (${all.length})`);
     list = panel.querySelector<HTMLElement>('.classic-user-list')!;
   } else panel?.remove();
   const existing = new Map(

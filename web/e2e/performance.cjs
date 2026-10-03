@@ -283,7 +283,7 @@ async function inboundStats(page) {
       const text = `${runId}-message-${i}`;
       await owner.locator('#chat-input').fill(text);
       const start = performance.now();
-      await owner.locator('#chat-send-btn').click();
+      await owner.locator('#chat-input').press('Enter');
       await member.getByText(text, { exact: true }).waitFor({ state: 'visible' });
       report.chatDeliveryMs.push(performance.now() - start);
     }

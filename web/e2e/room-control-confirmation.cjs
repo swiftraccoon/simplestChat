@@ -172,6 +172,7 @@ async function main() {
       await page.locator('#name-input').fill('Owned owner');
       await page.locator('#room-input').fill(id);
       await page.locator('#join-btn').click();
+      await page.locator('#room-screen').waitFor({ state: 'visible' });
       await page.locator('#room-settings-btn').waitFor({ state: 'visible' });
     };
     const count = (value) =>

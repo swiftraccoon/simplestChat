@@ -267,7 +267,7 @@ async function run(env = process.env) {
   async function chat(cycle) {
     const content = `Lifecycle message ${cycle}`;
     await clients[0].page.locator('#chat-input').fill(content);
-    await clients[0].page.locator('#chat-send-btn').click();
+    await clients[0].page.locator('#chat-input').press('Enter');
     await clients[1].page.getByText(content, { exact: true }).waitFor({ state: 'visible' });
   }
   async function retainedRecovery() {

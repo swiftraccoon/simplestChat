@@ -94,21 +94,30 @@ type Options = {
   participantAction: (id: string, name: string, x: number, y: number) => void;
 };
 type MessageRow = { node: HTMLElement; fingerprint: string };
+type ConversationButton = { node: HTMLButtonElement; name: HTMLElement; unread: HTMLElement };
 
 export class SocialChat {
   private readonly store = new ChatStore(300, 256 * 1024);
   private readonly composition = new ConversationInputs();
   private readonly messages = document.getElementById('chat-messages')!;
-  private readonly input = document.getElementById('chat-input') as HTMLInputElement;
+  private readonly input = document.getElementById('chat-input') as HTMLTextAreaElement;
+  private readonly inputRow = document.getElementById('chat-input-row')!;
   private readonly sendButton = document.getElementById('chat-send-btn') as HTMLButtonElement;
-  private readonly select = el('select');
+  private readonly touchPointer = window.matchMedia('(any-pointer: coarse)');
+  private touchComposer = false;
+  private readonly conversations = el('nav', undefined, 'conversation-list');
+  private readonly conversationButtons = new Map<string, ConversationButton>();
+  private visibleConversation = '';
   private readonly conversationStatus = el('span', '', 'conversation-status');
   /** Who is composing in the visible conversation, until each notice expires. */
   private readonly typingLine = el('div', '', 'typing-line');
   private typing = new Map<string, { until: number; target: string | null }>();
   private typingTimer: ReturnType<typeof setTimeout> | null = null;
   private lastTypingSent = 0;
-  private readonly closeButton = button('Close PM', () => this.closePrivate());
+  private readonly closeButton = button('✕', () => {
+    this.closePrivate();
+    this.conversationButtons.get('public')?.node.focus();
+  });
   private readonly emojiPanel = el('div', undefined, 'emoji-panel');
   private readonly pendingStarted = new Map<string, number>();
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
@@ -155,13 +164,13 @@ export class SocialChat {
 
   constructor(private readonly options: Options) {
     const toolbar = el('div', undefined, 'conversation-toolbar');
-    this.select.setAttribute('aria-label', 'Conversation');
-    this.select.addEventListener('change', () => this.switchConversation(this.select.value));
-    toolbar.append(
-      this.select,
-      this.closeButton,
-      button('Chat options', () => this.openPreferences()),
-    );
+    this.conversations.setAttribute('aria-label', 'Conversations');
+    this.closeButton.setAttribute('aria-label', 'Close PM');
+    this.closeButton.title = 'Close PM';
+    const optionsButton = button('⋯', () => this.openPreferences());
+    optionsButton.setAttribute('aria-label', 'Chat options');
+    optionsButton.title = 'Chat options';
+    toolbar.append(this.conversations, this.closeButton, optionsButton);
     document.getElementById('chat-panel')!.prepend(toolbar, this.conversationStatus);
     this.typingLine.hidden = true;
     this.typingLine.setAttribute('aria-live', 'polite');
@@ -202,10 +211,8 @@ export class SocialChat {
     this.mentionList.hidden = true;
     // Choosing with the pointer must leave focus in the message box.
     this.mentionList.addEventListener('mousedown', (event) => event.preventDefault());
-    this.input.setAttribute('role', 'combobox');
     this.input.setAttribute('aria-autocomplete', 'list');
     this.input.setAttribute('aria-controls', 'mention-list');
-    this.input.setAttribute('aria-expanded', 'false');
     document.getElementById('chat-input-row')!.before(this.mentionList);
     this.replyBar.hidden = true;
     document.getElementById('chat-input-row')!.before(this.replyBar);
@@ -216,6 +223,16 @@ export class SocialChat {
     this.input.addEventListener('input', () =>
       this.composition.save(this.store.active, this.input.value),
     );
+    this.input.addEventListener('input', () => this.resizeInput());
+    this.touchPointer.addEventListener('change', () => this.updateComposerMode());
+    this.updateComposerMode();
+    let composerWidth = 0;
+    new ResizeObserver(([entry]) => {
+      const width = entry?.contentRect.width ?? 0;
+      if (width === composerWidth) return;
+      composerWidth = width;
+      this.resizeInput();
+    }).observe(this.input);
     this.sendButton.addEventListener('click', () => this.send());
     this.messages.setAttribute('role', 'log');
     this.messages.setAttribute('aria-label', 'Conversation messages');
@@ -861,6 +878,7 @@ export class SocialChat {
     this.switchConversation(conversation, message.recipientName);
     this.input.value = message.content;
     this.composition.save(conversation, message.content);
+    this.resizeInput();
     this.input.focus();
     if (message.status === 'unknown')
       this.options.notify(
@@ -905,22 +923,6 @@ export class SocialChat {
     for (const id of this.pending.keys()) if (!pendingIds.has(id)) this.clearPending(id);
     const scrollTop = this.messages.scrollTop;
     const atBottom = this.seenAtBottom || forceScroll;
-    this.select.replaceChildren();
-    const publicUnread = this.store.unread.get('public') ?? 0;
-    const publicOption = el('option', `Public chat${publicUnread ? ` (${publicUnread})` : ''}`);
-    publicOption.value = 'public';
-    this.select.append(publicOption);
-    for (const [id, name] of this.store.names) {
-      const online = room?.getParticipants().has(id);
-      const unread = this.store.unread.get(id) ?? 0;
-      const option = el(
-        'option',
-        `${name}${online ? '' : ' · offline'}${unread ? ` (${unread})` : ''}`,
-      );
-      option.value = id;
-      this.select.append(option);
-    }
-    this.select.value = this.store.active;
     const privateChat = this.store.active !== 'public';
     this.closeButton.hidden = !privateChat;
     // Public chat needs no permanent banner; its mention hint lives in the composer.
@@ -943,7 +945,7 @@ export class SocialChat {
         : 'Chat is currently restricted'
       : privateChat
         ? 'Write a private message…'
-        : 'Type a message · @name to mention';
+        : 'Message · @mention';
     this.messages.classList.toggle('large-chat-text', this.preferences.largeText);
     this.messages.classList.toggle('timestamps-always', this.preferences.timestamps !== 'hover');
     const visible = this.store.messages.filter(
@@ -979,6 +981,7 @@ export class SocialChat {
       previousTime = time;
     }
     this.placeDivider();
+    this.resizeInput();
     this.messages.scrollTop = atBottom ? this.messages.scrollHeight : scrollTop;
     if (forceScroll) this.seenAtBottom = true;
     if (this.seenAtBottom && this.isVisible() && this.markActiveRead()) this.placeDivider();
@@ -1269,22 +1272,94 @@ export class SocialChat {
       }
       count.textContent = total ? ` ${total}` : '';
     }
-    for (const option of this.select.options) {
-      const unread = this.store.unread.get(option.value) ?? 0;
-      const name =
-        option.value === 'public'
-          ? 'Public chat'
-          : `${identityLabel(option.value, this.identityStatus(option.value))} · ${this.store.names.get(option.value) ?? 'Conversation'}${this.options.getRoom()?.getParticipants().has(option.value) ? '' : ' · offline'}`;
-      option.textContent = `${name}${unread ? ` (${unread})` : ''}`;
-      if (option.value !== 'public') {
-        option.title = `Participant ID: ${option.value}`;
-        option.setAttribute('aria-label', `${name}. Participant ID: ${option.value}`);
+    this.renderConversations();
+  }
+
+  /** Keep each button in place while labels and unread counts change around keyboard focus. */
+  private renderConversations(): void {
+    const names = new Map([['public', 'Public chat'], ...this.store.names]);
+    for (const [id, entry] of this.conversationButtons) {
+      if (names.has(id)) continue;
+      const focused = document.activeElement === entry.node;
+      entry.node.remove();
+      this.conversationButtons.delete(id);
+      if (focused) this.conversationButtons.get('public')?.node.focus();
+    }
+    for (const [id, name] of names) {
+      let entry = this.conversationButtons.get(id);
+      if (!entry) {
+        const node = button('', () => this.switchConversation(id), 'conversation-tab');
+        node.dataset['conversationId'] = id;
+        entry = {
+          node,
+          name: el('span', '', 'conversation-name'),
+          unread: el('span', '', 'conversation-unread'),
+        };
+        entry.unread.setAttribute('aria-hidden', 'true');
+        node.append(entry.name, entry.unread);
+        this.conversationButtons.set(id, entry);
+        this.conversations.append(node);
       }
+      const privateChat = id !== 'public';
+      const offline = privateChat && !this.options.getRoom()?.getParticipants().has(id);
+      const identity = identityLabel(id, this.identityStatus(id));
+      const duplicate =
+        privateChat && [...names.values()].filter((value) => value === name).length > 1;
+      const label = `${duplicate ? `${identity} · ` : ''}${name}${offline ? ' · offline' : ''}`;
+      if (entry.name.textContent !== label) entry.name.textContent = label;
+      const unread = this.store.unread.get(id) ?? 0;
+      entry.unread.textContent = unread ? String(unread) : '';
+      entry.unread.hidden = !unread;
+      const description = privateChat
+        ? `${identity} · ${name}${offline ? ' · offline' : ''}. Participant ID: ${id}`
+        : name;
+      entry.node.title = description;
+      entry.node.setAttribute('aria-label', `${description}${unread ? `. ${unread} unread` : ''}`);
+      entry.node.setAttribute('aria-pressed', String(id === this.store.active));
+    }
+    if (this.visibleConversation !== this.store.active) {
+      this.visibleConversation = this.store.active;
+      this.conversationButtons
+        .get(this.store.active)
+        ?.node.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }
   }
 
+  private updateComposerMode(): void {
+    this.touchComposer = this.touchPointer.matches || navigator.maxTouchPoints > 0;
+    this.sendButton.hidden = !this.touchComposer;
+    const help = this.touchComposer
+      ? 'Enter adds a new line. Tap Send or press Ctrl/Cmd+Enter to send.'
+      : 'Enter to send. Shift+Enter for a new line.';
+    this.input.title = help;
+    this.input.setAttribute('aria-description', help);
+    this.input.setAttribute('enterkeyhint', this.touchComposer ? 'enter' : 'send');
+    this.resizeInput();
+  }
+
+  /** Let CSS cap the height at six lines; remeasure after every draft or width change. */
+  private resizeInput(): void {
+    if (!this.input.clientWidth) return;
+    this.input.style.setProperty('height', 'auto');
+    if (this.input.value) {
+      const border = this.input.offsetHeight - this.input.clientHeight;
+      this.input.style.setProperty('height', `${this.input.scrollHeight + border}px`);
+    }
+    document
+      .getElementById('chat-panel')!
+      .style.setProperty('--chat-composer-height', `${this.inputRow.offsetHeight}px`);
+    if (this.seenAtBottom) this.messages.scrollTop = this.messages.scrollHeight;
+  }
+
   private onKey(event: KeyboardEvent): void {
-    if (event.isComposing) return;
+    // Safari may finish composition just before dispatching the confirming Enter.
+    // oxlint-disable-next-line typescript/no-deprecated
+    if (event.isComposing || event.keyCode === 229) return;
+    const sendKey =
+      event.key === 'Enter' &&
+      !event.shiftKey &&
+      !event.altKey &&
+      (!this.touchComposer || event.ctrlKey || event.metaKey);
     // Tab completes a typed or pasted "@name" even before the list has opened.
     if (event.key === 'Tab' && !this.mentionOptions.length) this.suggestMentions();
     if (this.mentionOptions.length) {
@@ -1296,7 +1371,7 @@ export class SocialChat {
         this.renderMentions();
         return;
       }
-      if (event.key === 'Enter' || event.key === 'Tab') {
+      if ((sendKey && !event.ctrlKey && !event.metaKey) || event.key === 'Tab') {
         event.preventDefault();
         this.chooseMention(this.mentionActive);
         return;
@@ -1313,8 +1388,9 @@ export class SocialChat {
       this.cancelReply();
       return;
     }
-    if (event.key === 'Enter') {
+    if (sendKey) {
       event.preventDefault();
+      this.closeMentions();
       this.send();
     }
     if (
@@ -1323,9 +1399,11 @@ export class SocialChat {
     ) {
       event.preventDefault();
       this.input.value = this.composition.recall(this.store.active, 'up', this.input.value);
+      this.resizeInput();
     } else if (event.key === 'ArrowDown' && this.composition.isRecalling(this.store.active)) {
       event.preventDefault();
       this.input.value = this.composition.recall(this.store.active, 'down', this.input.value);
+      this.resizeInput();
     }
   }
 
@@ -1354,7 +1432,6 @@ export class SocialChat {
   private renderMentions(): void {
     const open = this.mentionOptions.length > 0;
     this.mentionList.hidden = !open;
-    this.input.setAttribute('aria-expanded', String(open));
     this.mentionList.replaceChildren(
       ...this.mentionOptions.map((person, index) => {
         const option = el('li');
@@ -1394,6 +1471,7 @@ export class SocialChat {
     }
     this.input.setRangeText(text, start, end, 'end');
     this.composition.save(this.store.active, this.input.value);
+    this.resizeInput();
   }
 
   private switchConversation(id: string, name?: string): void {

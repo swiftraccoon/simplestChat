@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { productionAssets } = require('./homepage-layout.cjs');
+const { openRoomMenu } = require('./room-menu.cjs');
 const { closeOwnedBrowser } = require('./lifecycle-cleanup.cjs');
 const { chromium } = require('playwright');
 
@@ -93,10 +94,12 @@ async function run() {
     holdFeatures = false,
     holdRestore = false,
     clock = false,
+    hasTouch = false,
   } = {}) {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
       serviceWorkers: 'block',
+      hasTouch,
     });
     await context.addInitScript((blocked) => {
       window.__captureRequests = 0;
@@ -153,6 +156,19 @@ async function run() {
             yourRole: 'user',
             participants: [person],
             roomSettings: settings,
+          });
+        if (message.type === 'chatMessage')
+          send({
+            type: 'messageAck',
+            clientMessageId: message.clientMessageId,
+            message: {
+              messageId: `fixture-${message.clientMessageId}`,
+              clientMessageId: message.clientMessageId,
+              participantId: 'local-fixture',
+              participantName: 'Fixture guest',
+              content: message.content,
+              sentAt: new Date().toISOString(),
+            },
           });
         if (message.type === 'getRouterRtpCapabilities')
           send({
@@ -331,6 +347,135 @@ async function run() {
           body: JSON.stringify(settings),
         }),
     };
+  }
+
+  async function assertRoomLayout(page, viewport) {
+    const layout = await page.evaluate(() => {
+      const header = document.querySelector('header').getBoundingClientRect();
+      const room = document.querySelector('#room-screen').getBoundingClientRect();
+      const controls = document.querySelector('#controls');
+      const controlsBounds = controls.getBoundingClientRect();
+      const stage = document.querySelector('#main-area');
+      const stageBounds = stage.getBoundingClientRect();
+      const sidebar = document.querySelector('#sidebar').getBoundingClientRect();
+      const roster = document.querySelector('#classic-users-panel');
+      const rosterBounds = roster?.getBoundingClientRect();
+      const desktop =
+        innerWidth > 768 &&
+        !matchMedia('(max-width: 900px) and (max-height: 500px) and (orientation: landscape)')
+          .matches;
+      const brand = document.querySelector('header h1').getBoundingClientRect();
+      const label = document.querySelector('#room-label').getBoundingClientRect();
+      const buttons = [
+        ...controls.querySelectorAll('button'),
+        document.querySelector('#room-more-btn'),
+      ]
+        .filter((node) => node.getClientRects().length)
+        .map((node) => {
+          const box = node.getBoundingClientRect();
+          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+          return {
+            id: node.id,
+            visible:
+              box.left >= 0 &&
+              box.right <= innerWidth + 1 &&
+              box.top >= 0 &&
+              box.bottom <= innerHeight + 1 &&
+              hit !== null &&
+              node.contains(hit),
+          };
+        });
+      return {
+        horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1,
+        headerHeight: header.height,
+        controlsHeight: controlsBounds.height,
+        redundantChatLabelVisible:
+          desktop &&
+          document.querySelector('#room-screen').classList.contains('layout-classic') &&
+          document.querySelector('#lobby-tab').hidden &&
+          document.querySelector('#sidebar-tabs').getClientRects().length > 0,
+        rosterLabelVisible:
+          (roster?.querySelector('.panel-title')?.getClientRects().length ?? 0) > 0,
+        roomTop: room.top,
+        roomBottom: room.bottom,
+        headerBottom: header.bottom,
+        controlsInStage: stage.contains(controls),
+        controlsConfinedToStage:
+          controlsBounds.left >= stageBounds.left - 1 &&
+          controlsBounds.right <= stageBounds.right + 1 &&
+          controlsBounds.top >= stageBounds.top &&
+          Math.abs(controlsBounds.bottom - stageBounds.bottom) <= 1,
+        sidebarReachesBottom: Math.abs(sidebar.bottom - room.bottom) <= 1,
+        desktopPanelsUseFullHeight:
+          !desktop ||
+          (Math.abs(sidebar.top - room.top) <= 1 &&
+            (!rosterBounds?.width ||
+              (Math.abs(rosterBounds.top - room.top) <= 1 &&
+                Math.abs(rosterBounds.bottom - room.bottom) <= 1))),
+        roomLabelCenteredBesideBrand:
+          !brand.width || Math.abs(label.y + label.height / 2 - (brand.y + brand.height / 2)) <= 1,
+        buttons,
+      };
+    });
+    assert.equal(layout.horizontalOverflow, false, `Room overflow at ${viewport.width}`);
+    assert.ok(
+      layout.controlsHeight <= 56,
+      `Compact call bar at ${viewport.width}: ${layout.controlsHeight}`,
+    );
+    assert.equal(
+      layout.redundantChatLabelVisible,
+      false,
+      'The sole desktop Chat label does not take a row',
+    );
+    assert.equal(layout.rosterLabelVisible, false, 'The roster title does not take a row');
+    assert.equal(layout.controlsInStage, true, 'Call controls belong below the video');
+    assert.equal(
+      layout.controlsConfinedToStage,
+      true,
+      'Call controls fit the bottom of the video column',
+    );
+    assert.equal(layout.sidebarReachesBottom, true, 'Chat reaches the bottom of the room');
+    assert.equal(
+      layout.desktopPanelsUseFullHeight,
+      true,
+      'Desktop chat and people use the full room height',
+    );
+    assert.equal(
+      layout.roomLabelCenteredBesideBrand,
+      true,
+      'Room name is centered beside the brand',
+    );
+    assert.ok(
+      layout.headerHeight <= 96,
+      `Compact header at ${viewport.width}: ${layout.headerHeight}`,
+    );
+    assert.ok(
+      Math.abs(layout.roomTop - layout.headerBottom) <= 1,
+      'Room starts immediately below the header',
+    );
+    assert.ok(
+      Math.abs(layout.roomBottom - viewport.height) <= 1,
+      'The room uses the full remaining screen height',
+    );
+    for (const button of layout.buttons)
+      assert.equal(button.visible, true, `${button.id} remains reachable at ${viewport.width}`);
+    await openRoomMenu(page);
+    const menu = page.locator('#room-more-menu');
+    const menuBounds = await menu.boundingBox();
+    assert.ok(
+      menuBounds.x >= 0 &&
+        menuBounds.y >= 0 &&
+        menuBounds.x + menuBounds.width <= viewport.width + 1 &&
+        menuBounds.y + menuBounds.height <= viewport.height + 1,
+      `More menu fits ${viewport.width}x${viewport.height}`,
+    );
+    await menu.locator('button:visible').last().click({ trial: true });
+    if (viewport.width === 320)
+      await page.screenshot({ path: path.join(artifacts, 'room-menu-320x568.png') });
+    await page.keyboard.press('Escape');
+    report.checks.push(
+      `Video-only bottom controls, full-height side panels, and scrolling More menu remain contained at ${viewport.width}x${viewport.height}`,
+    );
   }
 
   async function scenarios() {
@@ -718,12 +863,54 @@ async function run() {
     report.checks.push('Guest-only server exposes available onboarding');
     await guest.context.close();
 
-    const call = await fixture({ room: true });
+    const call = await fixture({ room: true, signedIn: true });
     await call.page.locator('#name-input').fill('Fixture guest');
     await call.page.locator('#room-input').fill('fixture-room');
     await call.page.locator('#join-btn').click();
     await call.page.locator('#room-screen').waitFor({ state: 'visible' });
     assert.equal(await call.page.locator('#participant-list li').count(), 0);
+    const input = call.page.locator('#chat-input');
+    assert.equal(await input.evaluate((node) => node.tagName), 'TEXTAREA');
+    assert.equal(await call.page.locator('#chat-send-btn').isVisible(), false);
+    await input.fill('First line');
+    const oneLineHeight = (await input.boundingBox()).height;
+    await input.press('Shift+Enter');
+    await input.pressSequentially('Second line');
+    assert.equal(await input.inputValue(), 'First line\nSecond line');
+    assert.equal(call.sent.filter((message) => message.type === 'chatMessage').length, 0);
+    assert.ok((await input.boundingBox()).height > oneLineHeight);
+    await input.press('Enter');
+    await call.page.waitForFunction(() => document.querySelector('#chat-input').value === '');
+    assert.equal(
+      call.sent.find((message) => message.type === 'chatMessage').content,
+      'First line\nSecond line',
+    );
+    assert.ok((await input.boundingBox()).height <= oneLineHeight + 1);
+    report.checks.push(
+      'Desktop multiline composer grows, Shift+Enter adds a line, Enter sends and resets its height',
+    );
+    await call.page.locator('.toast').evaluateAll((nodes) => nodes.forEach((node) => node.click()));
+    await assertRoomLayout(call.page, { width: 1440, height: 900 });
+    await call.page.screenshot({ path: path.join(artifacts, 'room-1440x900.png') });
+    await call.page.locator('#settings-btn').click();
+    await call.page.getByRole('dialog', { name: 'Your settings', exact: true }).waitFor();
+    await call.page.keyboard.press('Escape');
+    assert.equal(
+      await call.page.locator('#settings-btn').evaluate((node) => node === document.activeElement),
+      true,
+    );
+    report.checks.push(
+      'Settings remain below the video and Escape returns focus to the settings button',
+    );
+    call.send({
+      type: 'roomSettingsChanged',
+      settings: {
+        ...settings,
+        displayName: 'A very long room name that must fit the compact room header',
+        topic:
+          'A long room topic that should stay accessible without taking height away from chat and people.',
+      },
+    });
     const action = call.page.locator(
       '#classic-users-panel [data-participant-id="remote-fixture"] button',
     );
@@ -745,6 +932,57 @@ async function run() {
     await call.page.locator('#toggle-roster').click();
     assert.equal(await call.page.locator('#classic-users-panel li').count(), 3);
     report.checks.push('Collapsing the roster releases hidden rows and reopening restores members');
+    const publicConversation = call.page.locator(
+      '.conversation-tab[data-conversation-id="public"]',
+    );
+    const privateConversation = call.page.locator(
+      '.conversation-tab[data-conversation-id="remote-fixture"]',
+    );
+    const longName = 'Alexandra with a very long display name for the conversation';
+    const privateDraft = 'Unsent private draft\nwith a second line';
+    call.send({ type: 'nicknameChanged', participantId: 'remote-fixture', nickname: longName });
+    const incomingPrivate = (index, participantId = 'remote-fixture', participantName = longName) =>
+      call.send({
+        type: 'privateMessageReceived',
+        message: {
+          messageId: `private-fixture-${participantId}-${index}`,
+          clientMessageId: `private-fixture-${participantId}-${index}`,
+          participantId,
+          participantName,
+          recipientId: 'local-fixture',
+          recipientName: 'Fixture guest',
+          content: `Private fixture message ${index}`,
+          sentAt: new Date().toISOString(),
+        },
+      });
+    await input.fill('Unsent public draft');
+    incomingPrivate(1);
+    await privateConversation.locator('.conversation-unread').waitFor({ state: 'visible' });
+    assert.match(await privateConversation.getAttribute('aria-label'), /1 unread/);
+    await privateConversation.click();
+    assert.equal(await privateConversation.getAttribute('aria-pressed'), 'true');
+    assert.equal(await input.inputValue(), '');
+    assert.equal(await privateConversation.locator('.conversation-unread').isVisible(), false);
+    await call.page.getByText('Private fixture message 1', { exact: true }).waitFor();
+    await input.fill(privateDraft);
+    await publicConversation.click();
+    assert.equal(await input.inputValue(), 'Unsent public draft');
+    assert.equal(
+      await call.page.getByText('Private fixture message 1', { exact: true }).count(),
+      0,
+    );
+    incomingPrivate(2);
+    await privateConversation.locator('.conversation-unread').waitFor({ state: 'visible' });
+    assert.match(await privateConversation.getAttribute('aria-label'), /1 unread/);
+    await input.fill('');
+    incomingPrivate(1, 'another', 'Another person');
+    await call.page
+      .locator('.conversation-tab[data-conversation-id="another"] .conversation-unread')
+      .waitFor({ state: 'visible' });
+    await call.page.screenshot({ path: path.join(artifacts, 'room-conversations-1440x900.png') });
+    report.checks.push(
+      'Conversation pills preserve independent multiline drafts, unread badges, and private-message isolation',
+    );
     for (const viewport of [
       { width: 320, height: 568 },
       { width: 390, height: 844 },
@@ -760,10 +998,23 @@ async function run() {
         assert.equal(await call.page.locator('#participant-list li').count(), 0);
         report.checks.push('Hidden mobile People tab has no roster rows');
       }
+      await assertRoomLayout(call.page, viewport);
+      await privateConversation.click();
+      assert.equal(await input.inputValue(), privateDraft);
+      await publicConversation.click();
+      assert.equal(await input.inputValue(), '');
+      assert.ok(
+        (await call.page.locator('.conversation-toolbar').boundingBox()).height <= 60,
+        'Long conversation names keep a compact single row',
+      );
+      await call.page
+        .getByRole('button', { name: 'Chat options', exact: true })
+        .click({ trial: true });
+      await input.fill('A multiline draft with enough text to wrap.\n'.repeat(12));
       for (const emoji of [false, true]) {
         if (emoji)
           await call.page.getByRole('button', { name: 'Choose emoji', exact: true }).click();
-        const visible = await call.page.locator('#chat-send-btn').evaluate((node) => {
+        const visible = await call.page.locator('#chat-input').evaluate((node) => {
           const box = node.getBoundingClientRect();
           const panel = document.querySelector('#chat-panel').getBoundingClientRect();
           const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
@@ -785,6 +1036,7 @@ async function run() {
       await call.page.screenshot({
         path: path.join(artifacts, `room-${viewport.width}x${viewport.height}.png`),
       });
+      await input.fill('');
       report.checks.push(
         `Composer remains visible with optional emoji at ${viewport.width}x${viewport.height}`,
       );
@@ -803,6 +1055,42 @@ async function run() {
     );
     assert.equal(await call.page.evaluate(() => window.__captureRequests), 0);
     await call.context.close();
+
+    const touch = await fixture({ room: true, hasTouch: true });
+    await touch.page.setViewportSize({ width: 390, height: 844 });
+    await touch.page.locator('#name-input').fill('Touch guest');
+    await touch.page.locator('#room-input').fill('fixture-room');
+    await touch.page.locator('#join-btn').click();
+    await touch.page.locator('#room-screen').waitFor({ state: 'visible' });
+    const touchInput = touch.page.locator('#chat-input');
+    await touch.page.locator('#chat-send-btn').waitFor({ state: 'visible' });
+    await touchInput.fill('Touch first line');
+    await touchInput.press('Enter');
+    await touchInput.pressSequentially('Touch second line');
+    assert.equal(await touchInput.inputValue(), 'Touch first line\nTouch second line');
+    assert.equal(touch.sent.filter((message) => message.type === 'chatMessage').length, 0);
+    await touch.page.locator('#chat-send-btn').click();
+    await touch.page.waitForFunction(() => document.querySelector('#chat-input').value === '');
+    assert.equal(
+      touch.sent.find((message) => message.type === 'chatMessage').content,
+      'Touch first line\nTouch second line',
+    );
+    await touchInput.fill('Keyboard shortcut on a touch device');
+    await touchInput.press('Control+Enter');
+    await touch.page.waitForFunction(() => document.querySelector('#chat-input').value === '');
+    assert.equal(touch.sent.filter((message) => message.type === 'chatMessage').length, 2);
+    await touch.page
+      .locator('.toast')
+      .evaluateAll((nodes) => nodes.forEach((node) => node.click()));
+    await touchInput.fill('Long touch draft\n'.repeat(12));
+    await touch.page.getByRole('button', { name: 'Choose emoji', exact: true }).click();
+    await touch.page.locator('#chat-send-btn').click({ trial: true });
+    await touch.page.screenshot({ path: path.join(artifacts, 'room-touch-390x844.png') });
+    assert.equal(await touch.page.evaluate(() => window.__captureRequests), 0);
+    await touch.context.close();
+    report.checks.push(
+      'Touch composer keeps Send reachable with a long draft and emoji; Enter adds lines and Ctrl+Enter sends',
+    );
     assert.equal(report.pageErrors, 0, 'No unhandled browser errors');
   }
 }

@@ -50,7 +50,6 @@
 .community-dialog input:not([type='checkbox'], [type='radio']),
 .community-dialog textarea,
 .community-dialog select,
-.conversation-toolbar select,
 .management-entry select {
   width: 100%;
   min-width: 0;
@@ -104,7 +103,7 @@
   flex: none;
 }
 #video-grid:empty::before {
-  content: 'No one is sharing video yet. Turn on your camera or microphone below to be seen.';
+  content: 'No one is sharing video yet. Use the camera or microphone controls to join in.';
   align-self: center;
   justify-self: center;
   max-width: 30rem;
@@ -133,19 +132,51 @@
 }
 .conversation-toolbar {
   display: flex;
-  gap: 0.35rem;
-  padding: 0.5rem;
+  flex-shrink: 0;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
   align-items: center;
-  flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
 }
-.conversation-toolbar select {
-  flex: 1 1 140px;
-  font-size: 0.85rem;
+.conversation-list {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 .conversation-toolbar button {
+  flex-shrink: 0;
+  min-width: 32px;
+  min-height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
   padding: 0.35rem 0.5rem;
-  font-size: 0.75rem;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.conversation-toolbar button:hover,
+.conversation-tab[aria-pressed='true'] {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.conversation-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: min(12rem, 100%);
+}
+.conversation-tab:focus-visible {
+  outline-offset: -2px;
+}
+.conversation-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .conversation-status {
   display: block;
@@ -386,7 +417,7 @@
 .name-tag,
 .room-card-name,
 .mod-menu-target-name,
-.conversation-toolbar option {
+.conversation-name {
   unicode-bidi: isolate;
 }
 .mod-menu-target {
@@ -594,11 +625,21 @@ kbd {
   cursor: pointer;
 }
 .emoji-panel {
+  position: absolute;
+  bottom: calc(var(--chat-composer-height, 52px) + 0.5rem);
+  left: 0.5rem;
+  right: 0.5rem;
+  z-index: 6;
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+  max-height: calc(100% - var(--chat-composer-height, 52px) - 1rem);
+  overflow-y: auto;
   padding: 0.5rem;
-  border-top: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
 }
 .emoji-choice {
   font-size: 1.2rem;

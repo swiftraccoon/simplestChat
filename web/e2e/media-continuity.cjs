@@ -1,5 +1,6 @@
 /** Owned loopback only. Native receive/capture recovery plus controlled device UI.
  * Device IDs and native identities stay inside isolated browser pages. */
+const { openRoomMenu } = require('./room-menu.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -136,12 +137,6 @@ function installDeviceFixtures() {
   };
 }
 
-/** Room tools needed now and then live in the room tools' "More" menu (absent in older builds). */
-async function openRoomMenu(page) {
-  const more = page.locator('#room-more-btn');
-  if ((await more.count()) && (await more.getAttribute('aria-expanded')) !== 'true')
-    await more.click();
-}
 async function join(browser, label) {
   const context = await browser.newContext({
     ...options.contextOptions,

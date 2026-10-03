@@ -154,9 +154,55 @@ class SecurityWorkflowTests(unittest.TestCase):
             called = workflow(name + ".yml")
             self.assertIn("workflow_call", obj(called, "on"))
             self.assertNotIn("push", obj(called, "on"))
-            self.assertNotIn("pull_request", obj(called, "on"))
+            if name == "security":
+                self.assertNotIn("pull_request", obj(called, "on"))
             self.assertTrue(string(called, "concurrency", "group").startswith(name + "-"))
             self.assertTrue(array(called, "on", "schedule"))
+
+    def test_codeql_advisory_prs_retain_the_scheduled_analysis_identities(self) -> None:
+        """PR merge protection needs each advisory configuration already present on main."""
+        codeql = workflow("codeql.yml")
+        self.assertEqual(obj(codeql, "on", "pull_request"), {"branches": ["main"]})
+        gate = obj(codeql, "on", "workflow_call", "inputs", "security_gate")
+        self.assertEqual(gate["type"], "boolean")
+        self.assertEqual(gate["default"], "true")
+        self.assertNotIn("with", obj(workflow("ci.yml"), "jobs", "codeql"))
+        self.assertNotIn("inputs", obj(obj(codeql, "on").get("workflow_dispatch") or {}))
+        self.assertEqual(set(obj(codeql, "jobs")), {"source-analysis", "native-analysis"})
+        self.assertEqual(
+            strings(codeql, "jobs", "source-analysis", "strategy", "matrix", "language"),
+            ["actions", "javascript-typescript", "python", "rust"],
+        )
+        self.assertEqual(
+            string(codeql, "concurrency", "group"),
+            "codeql-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
+        )
+
+    def test_codeql_routes_called_security_and_standalone_advisory_suites(self) -> None:
+        """Called and standalone modes select matching query/category pairs."""
+        for name, job in obj(workflow("codeql.yml"), "jobs").items():
+            with self.subTest(job=name):
+                steps = objects(job, "steps")
+                init = next(
+                    step for step in steps if "codeql-action/init@" in string(step.get("uses", ""))
+                )
+                analyze = next(
+                    step
+                    for step in steps
+                    if "codeql-action/analyze@" in string(step.get("uses", ""))
+                )
+                self.assertEqual(
+                    string(init, "with", "queries"),
+                    "${{ inputs.security_gate && 'security-extended' || 'security-and-quality' }}",
+                )
+                language = "c-cpp" if name == "native-analysis" else "${{ matrix.language }}"
+                self.assertEqual(
+                    string(analyze, "with", "category"),
+                    "/language:"
+                    + language
+                    + "/${{ inputs.security_gate && 'security' || 'quality-advisory' }}",
+                )
+                self.assertNotIn("if", analyze)
 
     def test_codeql_requires_manual_observed_native_compilation(self) -> None:
         """A source-only or restored compilation cannot satisfy native CodeQL coverage."""
@@ -238,7 +284,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             )
             self.assertLess(steps.index(analyze), steps.index(gate))
             self.assertEqual(at(analyze, "with", "output"), "${{ runner.temp }}/codeql-sarif")
-            self.assertEqual(gate["if"], "${{ github.event_name != 'schedule' }}")
+            self.assertEqual(gate["if"], "${{ inputs.security_gate }}")
             self.assertNotIn("continue-on-error", gate)
             command = string(gate, "run")
             self.assertIn("${#reports[@]} != 1", command)
@@ -247,6 +293,7 @@ class SecurityWorkflowTests(unittest.TestCase):
                 self.assertIn('--source-cache "$RUNNER_TEMP/vendor-cache"', command)
             uploads = [step for step in steps if "upload-artifact@" in string(step.get("uses", ""))]
             self.assertEqual(len(uploads), 1)
+            self.assertEqual(uploads[0]["if"], "${{ always() && inputs.security_gate }}")
             self.assertEqual(
                 set(string(uploads[0], "with", "path").splitlines()),
                 {
