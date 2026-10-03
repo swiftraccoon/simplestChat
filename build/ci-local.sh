@@ -17,7 +17,7 @@ Usage: build/ci-local.sh [all|JOB] [options]
 
 Full CI requires a clean committed checkout, but no push or pull request. It runs
 the actual GitHub workflow; hosted signing/publication stays on GitHub. Apple
-silicon uses native ARM64 runners with explicit AMD64 image/native CodeQL targets.
+silicon runs the same suites natively on ARM64; production images remain AMD64.
 macOS uses only the owned simplestchat-ci Podman VM. Linux requires
 --disposable-engine and DOCKER_HOST; never point it at a shared or production engine.
 USAGE
@@ -71,8 +71,7 @@ started_machine=0
 owned_output=0
 machine=simplestchat-ci
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-amd64_image=docker.io/catthehacker/ubuntu@sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b
-runner_image="$amd64_image"
+runner_image=docker.io/catthehacker/ubuntu@sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b
 runner_platform=linux/amd64
 cleanup() {
   local status=$?
@@ -91,8 +90,8 @@ directory, revision, base, job, status, started, image, runner_platform = sys.ar
 report = {
     "schema": 1, "revision": revision, "base": base, "selection": job,
     "runnerPlatform": runner_platform, "runnerImage": image, "exitCode": int(status),
-    "productionPlatform": "linux/amd64", "nativeSecurityPlatform": "linux/amd64",
-    "nativeCodeqlPlatform": "linux/amd64",
+    "productionPlatform": "linux/amd64", "nativeSecurityPlatform": runner_platform,
+    "nativeCodeqlPlatform": runner_platform,
     "status": "passed" if status == "0" else "failed",
     "startedAt": started, "finishedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "completeLocalGate": job == "all" and status == "0",
@@ -199,7 +198,7 @@ PY
 mkdir "$output/checks"
 printf -v evidence_mount '%q' "type=bind,source=${output}/checks,target=/local-ci-evidence"
 container_options="--privileged --cgroupns=private --cpus=3 --memory=8g --pids-limit=2048 --add-host=host.docker.internal:${gateway} --mount type=volume,target=/var/lib/local-ci-docker --mount ${evidence_mount}"
-# Reuse only a complete architecture-aware cache. A fresh checkout still lets
+# Reuse only the pinned cache for this runner. A fresh checkout still lets
 # each job install its authenticated bundle into its disposable workspace.
 if [[ -d "$project_root/target/codeql-tools" ]] && python3 - "$project_root" "$runner_platform" <<'PY'
 import json
@@ -208,15 +207,14 @@ import pathlib
 import sys
 root = pathlib.Path(sys.argv[1])
 bundles = json.loads((root / "security/codeql-toolchain.json").read_text())["bundles"]
-platforms = ["linux-x86_64"] + (["linux-aarch64"] if sys.argv[2] == "linux/arm64" else [])
+platform = "linux-aarch64" if sys.argv[2] == "linux/arm64" else "linux-x86_64"
 try:
-    for platform in platforms:
-        pin = bundles[platform]
-        directory = root / "target/codeql-tools" / pin["sha256"]
-        if (json.loads((directory / "receipt.json").read_text()) != {
-                "archiveSha256": pin["sha256"], "archiveBytes": pin["bytes"]}
-                or not os.access(directory / "codeql/codeql", os.X_OK)):
-            raise SystemExit(1)
+    pin = bundles[platform]
+    directory = root / "target/codeql-tools" / pin["sha256"]
+    if (json.loads((directory / "receipt.json").read_text()) != {
+            "archiveSha256": pin["sha256"], "archiveBytes": pin["bytes"]}
+            or not os.access(directory / "codeql/codeql", os.X_OK)):
+        raise SystemExit(1)
 except (OSError, ValueError, KeyError):
     raise SystemExit(1)
 PY
@@ -229,7 +227,7 @@ selected_job="$job"
 set +e
 act push --workflows .github/workflows/ci.yml --job "$selected_job" \
   --eventpath "$output/event.json" --defaultbranch main \
-  --platform "ubuntu-24.04=${runner_image}" --platform "ubuntu-24.04-amd64=${amd64_image}" \
+  --platform "ubuntu-24.04=${runner_image}" \
   --container-architecture '' \
   --pull=false --rm --network bridge --concurrent-jobs 1 \
   --dryrun=false --list=false --graph=false --validate=false --watch=false --reuse=false \

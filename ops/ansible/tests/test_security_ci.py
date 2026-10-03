@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import shlex
+import subprocess
 import unittest
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -218,14 +219,11 @@ class SecurityWorkflowTests(unittest.TestCase):
         codeql = workflow("codeql.yml")
         native = obj(codeql, "jobs", "native-analysis")
         self.assertEqual(at(codeql, "jobs", "source-analysis", "runs-on"), "ubuntu-24.04")
-        self.assertEqual(
-            native["runs-on"],
-            "${{ github.event.local_ci && 'ubuntu-24.04-amd64' || 'ubuntu-24.04' }}",
-        )
+        self.assertEqual(native["runs-on"], "ubuntu-24.04")
         steps = objects(native, "steps")
         self.assertEqual(
             string(steps[0], "run"),
-            'test "$(uname -s)" = Linux && test "$(uname -m)" = x86_64',
+            'test "$(uname -s)" = Linux && [[ "$(uname -m)" =~ ^(x86_64|aarch64)$ ]]',
         )
         self.assertNotIn("if", steps[0])
         self.assertNotIn("continue-on-error", steps[0])
@@ -261,6 +259,32 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertLess(steps.index(validation), steps.index(build))
         self.assertIn("pkg-config --exact-version=3.5.9 openssl", string(validation, "run"))
+
+    def test_native_codeql_guard_accepts_supported_targets_and_rejects_other_hosts(self) -> None:
+        """Exercise the real guard without starting the compiler or contacting a runner."""
+        native = obj(workflow("codeql.yml"), "jobs", "native-analysis")
+        command = string(objects(native, "steps")[0], "run")
+        script = (
+            'uname() { case "$1" in -s) printf "%s\\n" "$TEST_SYSTEM";; '
+            + '-m) printf "%s\\n" "$TEST_MACHINE";; *) return 1;; esac; }\n'
+            + command
+        )
+        for system, machine, accepted in (
+            ("Linux", "x86_64", True),
+            ("Linux", "aarch64", True),
+            ("Linux", "riscv64", False),
+            ("Darwin", "aarch64", False),
+        ):
+            with self.subTest(system=system, machine=machine):
+                result = subprocess.run(  # noqa: S603 -- Run only the checked local platform guard.
+                    ["/bin/bash", "-c", script],
+                    env={"TEST_SYSTEM": system, "TEST_MACHINE": machine},
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=5,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
 
     def test_all_workflows_use_unprivileged_pr_events_and_pinned_actions(self) -> None:
         """Pin external action code and prohibit privileged PR execution for all jobs."""

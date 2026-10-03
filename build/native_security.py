@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import re
 import shutil
 import signal
@@ -281,13 +282,21 @@ def engine_prefix(name: str) -> list[str]:
     return [executable, "--connection", "podman-machine-default"]
 
 
+def native_architecture() -> str:
+    """Use the runner's real ISA; sanitizer emulation cannot provide a native result."""
+    architectures = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}
+    machine = platform.machine()
+    require(machine in architectures, "native_host_architecture_unsupported")
+    return architectures[machine]
+
+
 def sandbox_args(image: str, run_id: str, digest: str) -> list[str]:
     """No host paths, published ports, network, privileges or unbounded storage."""
     require(re.fullmatch(r"sha256:[0-9a-f]{64}", image), "immutable_image_required")
     require(re.fullmatch(r"[0-9a-f]{32}", run_id), "run_identity")
     return [
         "create",
-        "--platform=linux/amd64",
+        "--platform=linux/" + native_architecture(),
         "--rm",
         "--name",
         "simplestchat-native-security-" + run_id,
@@ -324,7 +333,7 @@ def checked_image(engine: Sequence[str], image: str, digest: str) -> JsonObject:
     labels = object_value(object_value(info["Config"])["Labels"])
     require(labels.get(INPUT_LABEL) == digest, "image_inputs_mismatch")
     require(info.get("Os") == "linux", "native_linux_required")
-    require(info.get("Architecture") == "amd64", "native_amd64_required")
+    require(info.get("Architecture") == native_architecture(), "native_image_architecture_mismatch")
     return info
 
 
@@ -391,7 +400,7 @@ def prepare(engine: Sequence[str], output: Path) -> dict[str, object]:
             [
                 *engine,
                 "build",
-                "--platform=linux/amd64",
+                "--platform=linux/" + native_architecture(),
                 "--file",
                 str(context / "build/native-security.Dockerfile"),
                 "--label",

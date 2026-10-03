@@ -114,7 +114,7 @@ async function fixture(t) {
   };
 }
 
-test('all maps native ARM and explicit AMD64 runners with bounded resources and exact source event', async t => {
+test('all runs native ARM suites with bounded resources and explicit AMD64 production coverage', async t => {
   const f = await fixture(t);
   const result = await f.run();
   assert.equal(result.status, 0, result.stderr);
@@ -124,7 +124,7 @@ test('all maps native ARM and explicit AMD64 runners with bounded resources and 
   assert.equal(value('--workflows'), '.github/workflows/ci.yml');
   assert.equal(value('--container-architecture'), '');
   assert.ok(act.args.includes('ubuntu-24.04=docker.io/catthehacker/ubuntu@sha256:84e94c96278dd26b8feb71226a521d259f8160cf6b1dd08e51fd42be43a82e56'));
-  assert.ok(act.args.includes('ubuntu-24.04-amd64=docker.io/catthehacker/ubuntu@sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b'));
+  assert.equal(act.args.filter(value => value === '--platform').length, 1);
   assert.equal(value('--container-daemon-socket'), '-');
   assert.equal(value('--network'), 'bridge');
   assert.equal(value('--concurrent-jobs'), '1');
@@ -146,7 +146,8 @@ test('all maps native ARM and explicit AMD64 runners with bounded resources and 
   assert.equal(result.summary.base, base);
   assert.equal(result.summary.hostedOnly.length, 2);
   assert.equal(result.summary.runnerPlatform, 'linux/arm64');
-  for (const target of ['productionPlatform', 'nativeSecurityPlatform', 'nativeCodeqlPlatform']) assert.equal(result.summary[target], 'linux/amd64');
+  assert.equal(result.summary.productionPlatform, 'linux/amd64');
+  for (const target of ['nativeSecurityPlatform', 'nativeCodeqlPlatform']) assert.equal(result.summary[target], 'linux/arm64');
   const qemu = result.calls.findIndex(call => call.tool === 'podman' && call.args[1] === 'ssh');
   const empty = result.calls.findIndex(call => call.tool === 'curl' && call.args.includes('http://localhost/containers/json?all=1'));
   assert.ok(qemu > empty);
@@ -217,6 +218,7 @@ test('explicit engines require disposable intent and a local Unix socket', async
   assert.equal(result.status, 0, result.stderr);
   assert.ok(!result.calls.some(call => call.tool === 'podman'));
   assert.equal(result.summary.runnerPlatform, 'linux/amd64');
+  for (const target of ['productionPlatform', 'nativeSecurityPlatform', 'nativeCodeqlPlatform']) assert.equal(result.summary[target], 'linux/amd64');
 });
 
 test('failed owned-VM emulator selection stops before workflow execution', async t => {
@@ -227,7 +229,7 @@ test('failed owned-VM emulator selection stops before workflow execution', async
   assert.ok(!result.calls.some(call => call.tool === 'act'));
 });
 
-test('only a complete pinned dual-ISA CodeQL cache is mounted read-only', async t => {
+test('only the actual runner ISA needs a pinned read-only CodeQL cache', async t => {
   const f = await fixture(t);
   const pin = JSON.parse(await readFile(new URL('../../security/codeql-toolchain.json', import.meta.url), 'utf8'));
   await mkdir(path.join(f.checkout, 'security'));
@@ -246,6 +248,7 @@ test('only a complete pinned dual-ISA CodeQL cache is mounted read-only', async 
     assert.equal(options.includes('target/codeql-tools'), platform === 'linux-aarch64');
     if (platform === 'linux-aarch64') assert.match(options.replaceAll('\\,', ','), /codeql-tools,readonly/);
     assert.ok(!args.some(value => value.startsWith('LOCAL_CODEQL_BINARY=')));
+    await rm(directory, { recursive: true });
   }
 });
 

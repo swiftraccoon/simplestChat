@@ -466,13 +466,14 @@ DOCKER_HOST=unix:///path/to/disposable/docker.sock \
   build/ci-local.sh all --disposable-engine
 ```
 
-Linux uses the pinned Ubuntu 24.04 AMD64 runner. Apple silicon uses its pinned
-ARM64 counterpart for native Docker networking and most checks; native C/C++
-CodeQL uses an explicitly mapped AMD64 runner. Production and sanitizer images
-remain AMD64 on both paths. After checking that the owned VM has no containers,
+AMD64 Linux uses the pinned Ubuntu 24.04 AMD64 runner and provides the same ISA
+coverage as GitHub. Apple silicon uses its pinned ARM64 counterpart for the same
+suites, including native sanitizers and CodeQL tracing. Production images remain
+explicitly AMD64 on both paths. After checking that the owned VM has no containers,
 the Mac launcher selects its packaged QEMU emulator instead of Rosetta, whose
 missing Fedora syscalls prevent the production build. These ARM64 test runs
 exercise the same checks but do not claim identical ISA coverage to GitHub.
+The hosted AMD64 workflow remains a deployment gate.
 Outer job groups run serially, with up to four
 matrix entries concurrently, each limited to 3 CPUs and 8 GiB RAM. The workflows
 declare literal limits of three browser/native entries and four CodeQL entries;
@@ -499,8 +500,8 @@ used for changed-source checks; by default it uses the merge base with local
 when already at that base. Update the tracking ref before validation when needed.
 Local `.env`, secret, input and variable files are not passed to the workflow.
 CodeQL installs the checksum-pinned bundle for each job's actual architecture.
-If `target/codeql-tools` already contains the pinned bundles and receipts for all
-required architectures, the launcher mounts that cache read-only; every scan
+If `target/codeql-tools` already contains the pinned bundle and receipt for the
+actual runner architecture, the launcher mounts that cache read-only; every scan
 still verifies its CLI and query pins. An incomplete cache is left unused.
 
 The five local CodeQL scans enforce the same security query suites, exact finding
@@ -512,7 +513,7 @@ are additional tiers, not part of the required push gate.
 
 Action and build caches persist under `target/act`. Each invocation writes a
 private directory under `results/` containing its event, workflow log, source
-revision/base, actual default runner platform, explicit AMD64 target platforms,
+revision/base, actual runner and native-suite platforms, AMD64 production target,
 exit status and retained compact check summaries. `--output`
 accepts a new directory. A single-job run is available for focused fixes and
 always reports that it is partial:

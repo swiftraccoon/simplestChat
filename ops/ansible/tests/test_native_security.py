@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
 import shutil
 import tempfile
 import unittest
@@ -37,6 +38,9 @@ class NativeSecurityTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         _ = shutil.copytree(ROOT / "security/native", self.root / "security/native")
+        machine = patch.object(platform, "machine", return_value="x86_64")
+        _ = machine.start()
+        self.addCleanup(machine.stop)
 
     def manifest(self) -> JsonObject:
         """Read a fixture as the maintained strict JSON domain."""
@@ -197,12 +201,12 @@ class NativeSecurityTests(unittest.TestCase):
                     "command",
                     return_value=json.dumps({**valid, "Architecture": architecture}).encode(),
                 ),
-                self.assertRaisesRegex(native.SecurityError, "native_amd64_required"),
+                self.assertRaisesRegex(native.SecurityError, "native_image_architecture_mismatch"),
             ):
                 _ = native.checked_image(["engine"], IMAGE, DIGEST)
 
-    def test_preparation_requires_amd64_before_accepting_the_builder(self) -> None:
-        """An ARM host cannot silently substitute native compilation for the AMD64 gate."""
+    def test_preparation_and_execution_require_the_real_runner_architecture(self) -> None:
+        """Both supported native targets are explicit and reject mismatched builder images."""
         output = self.root / "prepare"
         output.mkdir()
         _ = (output / "image.id").write_text(IMAGE)
@@ -212,28 +216,48 @@ class NativeSecurityTests(unittest.TestCase):
             "Architecture": "amd64",
             "Config": {"Labels": {native.INPUT_LABEL: DIGEST}},
         }
-        with (
-            patch.object(native, "inputs_digest", return_value=DIGEST),
-            patch.object(native, "capture", return_value=0) as capture,
-            patch.object(native, "command", return_value=json.dumps(info).encode()),
+        for machine, architecture in (
+            ("x86_64", "amd64"),
+            ("aarch64", "arm64"),
+            ("arm64", "arm64"),
         ):
-            result = native.prepare(["engine"], output)
-        self.assertEqual(
-            capture.call_args.args[0][:3], ["engine", "build", "--platform=linux/amd64"]
-        )
-        self.assertEqual(result["imageId"], IMAGE)
-        self.assertEqual(result["architecture"], "amd64")
+            with (
+                self.subTest(machine=machine),
+                patch.object(platform, "machine", return_value=machine),
+                patch.object(native, "inputs_digest", return_value=DIGEST),
+                patch.object(native, "capture", return_value=0) as capture,
+                patch.object(
+                    native,
+                    "command",
+                    return_value=json.dumps({**info, "Architecture": architecture}).encode(),
+                ),
+            ):
+                result = native.prepare(["engine"], output)
+                target = "--platform=linux/" + architecture
+                self.assertEqual(capture.call_args.args[0][:3], ["engine", "build", target])
+                self.assertIn(target, native.sandbox_args(IMAGE, RUN_ID, DIGEST))
+                self.assertEqual(result["imageId"], IMAGE)
+                self.assertEqual(result["architecture"], architecture)
+                other = "arm64" if architecture == "amd64" else "amd64"
+                with (
+                    patch.object(
+                        native,
+                        "command",
+                        return_value=json.dumps({**info, "Architecture": other}).encode(),
+                    ),
+                    self.assertRaisesRegex(
+                        native.SecurityError, "native_image_architecture_mismatch"
+                    ),
+                ):
+                    _ = native.prepare(["engine"], output)
+
+    def test_unsupported_runner_architecture_is_rejected(self) -> None:
+        """A target without an authenticated native toolchain cannot run the suite."""
         with (
-            patch.object(native, "inputs_digest", return_value=DIGEST),
-            patch.object(native, "capture", return_value=0),
-            patch.object(
-                native,
-                "command",
-                return_value=json.dumps({**info, "Architecture": "arm64"}).encode(),
-            ),
-            self.assertRaisesRegex(native.SecurityError, "native_amd64_required"),
+            patch.object(platform, "machine", return_value="riscv64"),
+            self.assertRaisesRegex(native.SecurityError, "native_host_architecture_unsupported"),
         ):
-            _ = native.prepare(["engine"], output)
+            _ = native.sandbox_args(IMAGE, RUN_ID, DIGEST)
 
     def test_cleanup_revalidates_full_id_image_and_exact_run_label(self) -> None:
         """Unknown or relabelled resources are never removed by name/prefix."""
