@@ -166,7 +166,7 @@ export async function runRestartBrowserSmoke(options, dependencies = {}) {
     report.phase = 'before_restart';
     const before = `Local restart smoke before ${randomUUID()}`;
     await pages[0].locator('#chat-input').fill(before);
-    await pages[0].locator('#chat-send-btn').click();
+    await pages[0].locator('#chat-input').press('Enter');
     await pages[1].locator('#chat-messages').getByText(before, { exact: true }).waitFor();
     const draft = 'Unsent local restart test draft';
     await pages[0].locator('#chat-input').fill(draft);
@@ -184,7 +184,7 @@ export async function runRestartBrowserSmoke(options, dependencies = {}) {
     report.phase = 'after_restart';
     const after = `Local restart smoke after ${randomUUID()}`;
     await pages[1].locator('#chat-input').fill(after);
-    await pages[1].locator('#chat-send-btn').click();
+    await pages[1].locator('#chat-input').press('Enter');
     await pages[0].locator('#chat-messages').getByText(after, { exact: true }).waitFor();
     for (const page of pages) {
       await page.locator('#leave-btn').click();
