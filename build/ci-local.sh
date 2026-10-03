@@ -196,7 +196,7 @@ act push --workflows .github/workflows/ci.yml --job "$selected_job" \
   --dryrun=false --list=false --graph=false --validate=false --watch=false --reuse=false \
   --bind=false --no-skip-checkout=false --list-options=false --bug-report=false --man-page=false \
   --container-daemon-socket - --container-options "$container_options" \
-  --action-cache-path "${state}/actions" --cache-server-path "${state}/cache" \
+  --use-new-action-cache=true --action-cache-path "${state}/actions" --cache-server-path "${state}/cache" \
   --env-file /dev/null --secret-file /dev/null --var-file /dev/null --input-file /dev/null \
   --secret GITHUB_TOKEN= --env LOCAL_CI_DISPOSABLE=1 --env LOCAL_CI_EVIDENCE=/local-ci-evidence \
   --env "LOCAL_CI_RUN_ID=${run_id}" \

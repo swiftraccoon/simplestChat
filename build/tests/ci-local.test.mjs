@@ -128,6 +128,7 @@ test('all runs the canonical required DAG with isolated bounded amd64 runners an
   assert.match(value('--container-options'), /--privileged/);
   assert.match(value('--container-options'), /host\.docker\.internal:10\.88\.0\.1/);
   assert.ok(act.args.includes('--rm'));
+  assert.ok(act.args.includes('--use-new-action-cache=true'));
   for (const option of ['--env-file', '--secret-file', '--var-file', '--input-file']) assert.equal(value(option), '/dev/null');
   assert.equal(act.dockerHost, 'unix:///owned-ci/socket');
   const event = JSON.parse(await readFile(value('--eventpath'), 'utf8'));

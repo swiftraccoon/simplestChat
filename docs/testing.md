@@ -452,6 +452,8 @@ The launcher uses [act](https://github.com/nektos/act) to execute
 including the reusable security and CodeQL workflows. There is no separate list
 of local checks to drift from the workflow. Install act and Podman on macOS
 (`brew install act podman`). Git, Python 3 and curl are also prerequisites.
+The launcher enables act's shallow action cache so pinned actions fetch their
+exact revision without downloading full repository history.
 
 On macOS, the launcher creates or reuses only its rootful `simplestchat-ci`
 Podman VM (12 CPUs, 48 GiB RAM, 80 GiB disk). It refuses to stop another running
