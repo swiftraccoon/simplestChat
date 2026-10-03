@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,6 +16,7 @@ from test_support import ROOT
 
 # isort: split
 import security_codeql_local as local
+import security_codeql_resources as resources
 import security_codeql_tools as tools
 from security_context import Context
 from security_tools import ToolError
@@ -95,6 +97,7 @@ class LocalCodeqlTests(unittest.TestCase):
         original = metadata.read_text()
         for before, after in (
             ("buildMode: manual", "buildMode: none"),
+            ("buildMode: manual\n", ""),
             ("finalised: true", "finalised: false"),
             ("overlayDatabase: false", "overlayDatabase: true"),
             ("cliVersion: 2.27.1", "cliVersion: 2.27.0"),
@@ -104,6 +107,44 @@ class LocalCodeqlTests(unittest.TestCase):
                 _ = metadata.write_text(original.replace(before, after))
                 with self.assertRaisesRegex(ToolError, "codeql_metadata_"):
                     local.database_health(database, "c-cpp")
+
+    def test_native_creation_declares_manual_mode_with_the_real_traced_build(self) -> None:
+        """A command alone does not make the pinned CLI record buildMode: manual."""
+        output = self.directory / "output"
+        output.mkdir()
+        context = Context(ROOT, output)
+        source = self.directory / "source"
+        source.mkdir()
+        args = local.Options()
+        args.openssl_prefix = self.directory / "openssl"
+        (args.openssl_prefix / "lib").mkdir(parents=True)
+        for archive in ("libssl.a", "libcrypto.a"):
+            _ = (args.openssl_prefix / "lib" / archive).write_bytes(b"fixture")
+        calls: list[tuple[str, list[str]]] = []
+
+        def record(name: str, argv: Sequence[str], **_kwargs: object) -> tuple[int, bytes]:
+            """Capture the real invocation boundary without claiming analyzer execution."""
+            calls.append((name, list(argv)))
+            return 0, b""
+
+        with (
+            patch.object(sys, "platform", "linux"),
+            patch.object(resources, "detect", return_value=resources.Budget(2, 4096)),
+            patch.object(context, "run", side_effect=record),
+            patch.object(local, "database_health", side_effect=ToolError("fixture_after_create")),
+            self.assertRaisesRegex(ToolError, "fixture_after_create"),
+        ):
+            _ = local.analyze_language(context, args, source, self.directory / "codeql", "c-cpp")
+        self.assertEqual(
+            [name for name, _command in calls], ["codeql-vendor-integrity", "codeql-create-c-cpp"]
+        )
+        command = calls[-1][1]
+        self.assertEqual(
+            [argument for argument in command if argument.startswith("--build-mode=")],
+            ["--build-mode=manual"],
+        )
+        self.assertIn("--command=bash build/codeql-native-build.sh", command)
+        self.assertIn("--source-root=" + str(source), command)
 
     def test_report_health_rejects_wrong_category_version_empty_queries_and_incremental_mode(
         self,

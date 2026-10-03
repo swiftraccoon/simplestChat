@@ -203,7 +203,7 @@ def analyze_language(
             ],
             timeout=900,
         )
-        create.append("--command=bash build/codeql-native-build.sh")
+        create.extend(["--build-mode=manual", "--command=bash build/codeql-native-build.sh"])
     else:
         create.append("--build-mode=none")
     _ = context.run(
