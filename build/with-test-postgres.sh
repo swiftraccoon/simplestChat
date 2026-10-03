@@ -20,6 +20,21 @@ for postgres_tool in initdb pg_ctl createdb node; do
   fi
 done
 
+postgres_root_runner=0
+if [[ "$(id -u)" == 0 ]]; then
+  if [[ "${ACT:-}" != true || "${LOCAL_CI_DISPOSABLE:-}" != 1 || "$(uname -s)" != Linux ]] ||
+    [[ ! -f /.dockerenv && ! -f /run/.containerenv ]]; then
+    echo 'Root PostgreSQL setup is only supported inside a disposable build/ci-local.sh runner.' >&2
+    exit 2
+  fi
+  if ! command -v runuser >/dev/null || ! postgres_uid="$(id -u postgres)" ||
+    ! postgres_gid="$(id -g postgres)" || [[ ! "${postgres_uid}" =~ ^[1-9][0-9]*$ || ! "${postgres_gid}" =~ ^[1-9][0-9]*$ ]]; then
+    echo 'The disposable runner must provide runuser and a non-root postgres account/group.' >&2
+    exit 2
+  fi
+  postgres_root_runner=1
+fi
+
 # The real server still owns its final bind; it cannot fall back to a Unix socket.
 env -i PATH="${PATH}" node --input-type=module - "${postgres_port}" <<'JS'
 import net from 'node:net';
@@ -48,7 +63,17 @@ test_pid=''
 
 postgres_command() {
   # Ignore all PG*, service files, user configuration and inherited locale.
-  env -i PATH="${PATH}" LC_ALL=C "$@"
+  if [[ "${postgres_root_runner}" == 1 ]]; then
+    # Only the owned database changes identity. The test child retains access to
+    # its private Docker daemon. Clear both inherited and PAM-added environment.
+    (
+      cd "${postgres_cluster}"
+      env -i PATH="${PATH}" LC_ALL=C runuser -u postgres -- \
+        env -i PATH="${PATH}" LC_ALL=C "$@"
+    )
+  else
+    env -i PATH="${PATH}" LC_ALL=C "$@"
+  fi
 }
 
 cleanup() {
@@ -86,6 +111,15 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+if [[ "${postgres_root_runner}" == 1 ]]; then
+  # Transfer only this newly created private directory, never its shared parent.
+  chown "${postgres_uid}:${postgres_gid}" "${postgres_cluster}"
+  if ! postgres_command test -w "${postgres_cluster}"; then
+    echo 'The postgres account cannot access its cluster; use a traversable RUNNER_TEMP/TMPDIR parent.' >&2
+    exit 2
+  fi
+fi
 
 postgres_command initdb -D "${postgres_data}" -U test_owner \
   --auth-local=reject --auth-host=trust --encoding=UTF8 --no-locale >"${postgres_cluster}/initdb.log" 2>&1

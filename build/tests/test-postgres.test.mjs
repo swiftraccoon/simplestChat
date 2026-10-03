@@ -29,9 +29,17 @@ async function fixture(t, options = {}) {
   const bin = path.join(directory, 'fake bin');
   const temporary = path.join(directory, 'runner temp');
   const log = path.join(directory, 'commands.jsonl');
+  const identityLog = path.join(directory, 'identity.jsonl');
   const stateFile = path.join(directory, 'state.json');
   const dispatcher = path.join(directory, 'postgres-tool.cjs');
-  await Promise.all([mkdir(bin), mkdir(temporary), writeFile(log, ''), writeFile(stateFile, '{}')]);
+  const fixtureHelper = path.join(directory, 'with-test-postgres.sh');
+  const containerMarker = path.join(directory, 'container-marker');
+  // Keep the real shell guards, redirecting only their fixed marker paths.
+  // All account/ownership tools are fixtures; no test changes OS identities.
+  await Promise.all([mkdir(bin), mkdir(temporary), writeFile(log, ''), writeFile(identityLog, ''), writeFile(stateFile, '{}'),
+    writeFile(fixtureHelper, (await readFile(helper, 'utf8')).replaceAll('/.dockerenv', quote(containerMarker))
+      .replaceAll('/run/.containerenv', quote(`${containerMarker}-other`)))]);
+  if (options.container !== false) await writeFile(containerMarker, 'fixture only');
   await writeFile(dispatcher, `
     const fs = require('node:fs');
     const path = require('node:path');
@@ -40,7 +48,7 @@ async function fixture(t, options = {}) {
     const stateFile = ${JSON.stringify(stateFile)};
     const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
     const save = () => fs.writeFileSync(stateFile, JSON.stringify(state));
-    fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, args, env: process.env }) + '\\n');
+    fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, args, env: process.env, identity: state.identity || 'caller' }) + '\\n');
     const value = name => args[args.indexOf(name) + 1];
     const fail = phase => { if (settings.fail === phase) process.exit(37); };
     if (command === 'initdb') {
@@ -67,19 +75,57 @@ async function fixture(t, options = {}) {
       if (!state.running) process.exit(93);
     } else process.exit(94);
   `);
+  const identityDispatcher = path.join(directory, 'identity-tool.cjs');
+  await writeFile(identityDispatcher, `
+    const fs = require('node:fs');
+    const { spawnSync } = require('node:child_process');
+    const [command, ...args] = process.argv.slice(2);
+    const settings = ${JSON.stringify(options)};
+    const stateFile = ${JSON.stringify(stateFile)};
+    if (command === 'id') {
+      if (args.length === 1 && args[0] === '-u') console.log(settings.root ? '0' : '1001');
+      else if (args[1] === 'postgres' && ['-u', '-g'].includes(args[0])) {
+        if (settings.missingAccount) process.exit(1);
+        console.log(settings.postgresId ?? '999');
+      } else process.exit(95);
+    } else if (command === 'uname') console.log(settings.os || 'Linux');
+    else {
+      fs.appendFileSync(${JSON.stringify(identityLog)}, JSON.stringify({ command, args, env: process.env }) + '\\n');
+      if (command === 'chown') {
+        if (settings.failChown) process.exit(38);
+        if (args.length !== 2 || args[0] !== '999:999' || !fs.statSync(args[1]).isDirectory()) process.exit(96);
+      } else if (command === 'runuser') {
+        if (args[0] !== '-u' || args[1] !== 'postgres' || args[2] !== '--') process.exit(97);
+        if (settings.inaccessibleParent && args.includes('test')) process.exit(1);
+        const state = JSON.parse(fs.readFileSync(stateFile));
+        state.identity = 'postgres'; fs.writeFileSync(stateFile, JSON.stringify(state));
+        // Simulate PAM introducing settings; the inner env -i must clear them.
+        const result = spawnSync(args[3], args.slice(4), { stdio: 'inherit', env: { ...process.env, PGHOST: 'pam.invalid' } });
+        const after = JSON.parse(fs.readFileSync(stateFile));
+        delete after.identity; fs.writeFileSync(stateFile, JSON.stringify(after));
+        process.exit(result.status ?? 98);
+      } else process.exit(99);
+    }
+  `);
   for (const tool of ['initdb', 'pg_ctl', 'createdb']) {
     const file = path.join(bin, tool);
     await writeFile(file, `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(dispatcher)} ${quote(tool)} "$@"\n`);
+    await chmod(file, 0o755);
+  }
+  for (const tool of ['id', 'uname', 'chown', 'runuser']) {
+    const file = path.join(bin, tool);
+    await writeFile(file, `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(identityDispatcher)} ${quote(tool)} "$@"\n`);
     await chmod(file, 0o755);
   }
   const port = await unusedPort();
   return {
     directory, temporary, log, stateFile, port,
     async records() { return (await readFile(log, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); },
+    async identities() { return (await readFile(identityLog, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); },
     async state() { return JSON.parse(await readFile(stateFile, 'utf8')); },
     async run({ env = {}, command = [process.execPath, '-e', 'process.exit(0)'], signal } = {}) {
       // /bin/bash is Bash 3.2 on macOS, exercising the oldest supported shell.
-      const child = spawn('/bin/bash', [helper, ...command], {
+      const child = spawn('/bin/bash', [fixtureHelper, ...command], {
         cwd: root,
         env: { PATH: `${bin}:${process.env.PATH}`, RUNNER_TEMP: temporary, TEST_POSTGRES_PORT: String(port), ...env },
       });
@@ -146,6 +192,97 @@ test('PostgreSQL wrapper starts a private cluster and exports only its local dat
   assert.deepEqual(records.find(record => record.command === 'createdb').args,
     ['-h', '127.0.0.1', '-p', String(f.port), '-U', 'test_owner', '--maintenance-db=postgres', 'simplestchat_test']);
   assert.match(result.output, /Disposable PostgreSQL logs:/);
+  assert.deepEqual(await f.identities(), []);
+});
+
+const disposableRoot = { ACT: 'true', LOCAL_CI_DISPOSABLE: '1' };
+
+test('disposable root runner changes only PostgreSQL identity and newly created cluster ownership', async t => {
+  const f = await fixture(t, { root: true });
+  const parentBefore = await stat(f.temporary);
+  const result = await f.run({
+    env: { ...disposableRoot, PGHOST: 'inherited.invalid', PGSERVICE: 'production', DOCKER_HOST: 'unix:///private/docker.sock' },
+    command: [process.execPath, '-e', `
+      const assert = require('node:assert/strict');
+      const state = JSON.parse(require('node:fs').readFileSync(${JSON.stringify(f.stateFile)}));
+      assert.equal(state.identity, undefined);
+      assert.equal(process.getuid(), ${process.getuid()});
+      assert.equal(process.env.DOCKER_HOST, 'unix:///private/docker.sock');
+      assert.deepEqual(Object.keys(process.env).filter(key => key.startsWith('PG')), []);
+      assert.match(process.env.DATABASE_URL, /127\\.0\\.0\\.1:${f.port}/);
+    `],
+  });
+  assert.equal(result.status, 0, result.output);
+  const state = await f.state();
+  assert.equal(state.running, false);
+  const cluster = path.dirname(state.data);
+  const identityCalls = await f.identities();
+  assert.deepEqual(identityCalls.filter(call => call.command === 'chown').map(call => call.args), [['999:999', cluster]]);
+  const parentAfter = await stat(f.temporary);
+  assert.deepEqual([parentAfter.uid, parentAfter.gid, parentAfter.mode], [parentBefore.uid, parentBefore.gid, parentBefore.mode]);
+  assert.equal((await stat(cluster)).mode & 0o777, 0o700);
+  for (const call of identityCalls.filter(call => call.command === 'runuser')) {
+    assert.deepEqual(call.args.slice(0, 5), ['-u', 'postgres', '--', 'env', '-i']);
+    assert.deepEqual(Object.keys(call.env).filter(key => key.startsWith('PG')), []);
+    assert.equal(call.env.DOCKER_HOST, undefined);
+  }
+  const commands = await f.records();
+  assert.ok(commands.some(call => call.command === 'initdb'));
+  assert.ok(commands.some(call => call.command === 'createdb'));
+  assert.ok(commands.some(call => call.args.includes('stop')));
+  for (const call of commands) {
+    assert.equal(call.identity, 'postgres');
+    assert.deepEqual(Object.keys(call.env).filter(key => key.startsWith('PG')), []);
+    assert.equal(call.env.DOCKER_HOST, undefined);
+    assert.equal(call.env.LC_ALL, 'C');
+  }
+});
+
+test('root database setup refuses unapproved hosts and invalid service identities before creating a cluster', async t => {
+  const scenarios = [
+    [{}, {}],
+    [{}, { ACT: 'true' }],
+    [{}, { ...disposableRoot, ACT: 'false' }],
+    [{ os: 'Darwin' }, disposableRoot],
+    [{ container: false }, disposableRoot],
+    [{ postgresId: '0' }, disposableRoot],
+    [{ missingAccount: true }, disposableRoot],
+  ];
+  for (const [settings, env] of scenarios) {
+    const f = await fixture(t, { root: true, ...settings });
+    const result = await f.run({ env });
+    assert.equal(result.status, 2, result.output);
+    assert.deepEqual(await f.records(), []);
+    assert.deepEqual(await f.identities(), []);
+    assert.deepEqual(await readdir(f.temporary), []);
+  }
+});
+
+test('root runner refuses inaccessible temporary parents without changing parent permissions', async t => {
+  const f = await fixture(t, { root: true, inaccessibleParent: true });
+  const before = await stat(f.temporary);
+  const result = await f.run({ env: disposableRoot });
+  assert.equal(result.status, 2, result.output);
+  assert.match(result.output, /use a traversable RUNNER_TEMP\/TMPDIR parent/);
+  assert.deepEqual(await f.records(), []);
+  const after = await stat(f.temporary);
+  assert.deepEqual([after.uid, after.gid, after.mode], [before.uid, before.gid, before.mode]);
+  assert.equal((await f.identities()).filter(call => call.command === 'chown').length, 1);
+});
+
+test('root database identity preserves startup, child and shutdown failures with exact owned cleanup', async t => {
+  for (const [phase, childStatus, expected, expectedStops] of [
+    ['initdb', 0, 37, 0], ['start', 0, 37, 0], ['start-partial', 0, 37, 1], ['createdb', 0, 37, 1],
+    [undefined, 23, 23, 1], ['stop-fast', 0, 1, 2], ['stop-fast', 23, 23, 2],
+  ]) {
+    const f = await fixture(t, { root: true, fail: phase });
+    const result = await f.run({ env: disposableRoot, command: [process.execPath, '-e', `process.exit(${childStatus})`] });
+    assert.equal(result.status, expected, result.output);
+    const commands = await f.records();
+    assert.equal(commands.filter(call => call.args.includes('stop')).length, expectedStops, phase);
+    assert.notEqual((await f.state()).running, true);
+    for (const call of commands) assert.equal(call.identity, 'postgres');
+  }
 });
 
 test('PostgreSQL wrapper rejects missing commands and invalid ports before touching PostgreSQL', async t => {
