@@ -1,5 +1,8 @@
 # Pinned native CodeQL review
 
+This dated review preserves the observed analysis and later source revalidation;
+it is not a statement of the current GitHub alert inventory or current CI status.
+
 This review covers alerts 70–101 from the real worker compilation analyzed by
 CodeQL 2.27.1 in run `36709013559`, revision
 `407ec7e96ee9e57c593ac367142e1016e4dbeac5`. These 32 locations are in the pinned
@@ -62,8 +65,11 @@ python3 build/security_codeql_triage.py sarif \
 
 The complete API `plan`, `check` and authorized `apply` commands likewise require
 `--source-cache` while native findings are active. The source reader is offline;
-missing inputs fail explicitly. The original analyzer report stays private. CI
-uploads only explicit policy `report.json` or `failure.json` outputs.
+missing inputs fail explicitly. CI submits validated original or regenerated
+SARIF to GitHub code scanning. Downloadable artifacts contain only explicit
+policy `report.json`, fixed `failure.json` or compact analysis summaries; raw
+working directories remain private. Query reuse and the original evaluation
+revision remain explicit in cached native analyses.
 
 ## Scope of the decisions
 

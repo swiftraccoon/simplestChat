@@ -31,8 +31,8 @@ published TCP port. Do not publish Caddy's administrative port.
 
 Passkeys use `scpub_webauthn_rp_id`, which defaults to `scpub_domain`. When moving
 an existing site to a subdomain, retain its original RP ID to preserve enrolled
-passkeys: for example, use `scpub_domain: the.research.clinic` with
-`scpub_webauthn_rp_id: research.clinic`. The RP ID must be the site hostname or a
+passkeys: for example, use `scpub_domain: next.chat.example.com` with
+`scpub_webauthn_rp_id: chat.example.com`. The RP ID must be the site hostname or a
 registrable parent domain, as required by [WebAuthn](https://www.w3.org/TR/webauthn-3/#rp-id).
 Preflight rejects malformed names and suffixes that do not end at a domain-label
 boundary; browsers also enforce public-suffix restrictions. HTTP/WebSocket and
@@ -117,8 +117,9 @@ Do not print resolved Compose configuration: it contains secrets.
 
 The image comes from the host's own build of `scbench_revision` by default. To
 apply configuration changes with the image CI tested instead, stage it while
-chat is live (`release.yml` with `scpub_release_deploy: false`, as
-`build/deploy.py` does), stop the project, and pass the same revision as
+chat is live (`release.yml` with `scpub_release_deploy: false`; see
+[stage-only releases](RELEASES.md#stage-while-chat-stays-online)), stop the project,
+and pass the same revision as
 `-e scpub_release_revision=<rev> -e scbench_revision=<rev>`: the playbook then
 selects the staged image, checks its revision label, and the launcher below
 starts it.

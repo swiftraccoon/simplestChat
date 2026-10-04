@@ -1,9 +1,10 @@
 # Single-host releases
 
-Build before maintenance, keep the database and proxy running, and replace only
-the application. This path is for an already deployed public site with unchanged
-SQL migrations and runtime configuration. Use [public deployment](PUBLIC.md) for
-initial setup or reviewed schema/configuration changes.
+For routine updates, build before deployment, keep the database and proxy running,
+and replace only the application. App-only releases require unchanged SQL
+migrations and runtime configuration. Use the [maintenance release](#schema-and-configuration-changes-the-maintenance-release)
+for migrations and supported settings changes, and [public deployment](PUBLIC.md)
+for initial setup or changes to deployment identity.
 
 CI exercises this path using the real release helper, public templates and an
 already built production image on a disposable Linux host. It checks successful
@@ -244,10 +245,11 @@ To measure your own run, set `ANSIBLE_CALLBACKS_ENABLED=release_timing` alongsid
 bounded JSON task/playbook durations and completion status, without arguments,
 command output, inventory names or credentials. Timings include controller and
 transport overhead; they are not service downtime or an availability guarantee.
-Check mode performs the read-only host/helper checks but skips download, staging
-and deployment. Local-archive check mode requires an already-retained matching
-artifact, since it does not copy files. Normal prepared mode still stages only
-unless deployment is explicitly enabled.
+Check mode still verifies the signed artifact on the controller, downloading it
+there unless `scpub_release_verified_directory` supplies an existing candidate.
+It performs read-only host/helper checks but skips transfer to the host, image
+staging and deployment. Normal prepared mode still stages only unless deployment
+is explicitly enabled.
 
 ## Deploy explicitly
 
@@ -256,7 +258,7 @@ the exact staged 40-character commit on the VPS:
 
 ```sh
 sudo systemd-run --unit=simplestchat-app-release \
-  --property=Type=exec --property=RuntimeMaxSec=900 \
+  --property=Type=exec --property=RuntimeMaxSec=1800 \
   --property=TimeoutStopSec=240 --wait \
   /usr/bin/python3 -B /usr/local/libexec/simplestchat-public/release-public.py \
   deploy <40-character-commit>
@@ -299,9 +301,12 @@ changed), release it through the maintenance launcher instead:
 
 ```sh
 ops/ansible/.venv/bin/python build/deploy.py --inventory ops/ansible/inventory.local.yml \
-  --repository swiftraccoon/simplestChat --origin https://the.research.clinic \
-  --limit public_vps --quiet-seconds 0 --maintenance [--install-helpers]
+  --repository OWNER/REPOSITORY --origin https://chat.example.com \
+  --limit public_vps --quiet-seconds 0 --maintenance
 ```
+
+Add `--install-helpers` after reviewing helper changes when the installed helpers
+do not match this checkout.
 
 Migration `022_require_current_sessions.sql` deliberately deletes all existing
 refresh sessions before requiring a nonnullable refresh-family hash. Release it
@@ -311,8 +316,9 @@ There is no compatibility parser for older refresh formats or sessionless access
 tokens. Review this sign-in impact alongside the usual pre-release backup; do not
 edit the already-published migrations 010 or 013 to avoid the reset.
 
-The controller waits for the commit's CI and stages the image while chat stays
-online, exactly as a routine release does, then runs `ops/ansible/maintenance.yml`:
+By default, the controller waits for the commit's CI and stages the image while
+chat stays online, exactly as a routine release does, then runs
+`ops/ansible/maintenance.yml`:
 it checks out the revision's source under `/srv/simplestchat-bench/sources/`
 (the launcher checks the packaged SQL against it), renders `app.env.candidate`
 from the current template with the host's facts (sizing and new settings may

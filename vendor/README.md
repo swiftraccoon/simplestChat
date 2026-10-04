@@ -108,7 +108,11 @@ bytes, Cargo messages, Cargo lockfile, vendor source/patch records, compiler
 identity and builder RPM/source-RPM inventory. The static C++ runtime must belong
 to the recorded `libstdc++-static` package.
 
-`rust_licenses` covers the packages in that actual Cargo invocation. Registry
+`rust_licenses` covers the union of packages in that actual Cargo invocation and
+the dependency graph embedded in the final executable. Each record distinguishes
+compiler-artifact evidence from embedded-metadata evidence; embedded-only
+packages remain subject to policy without claiming they contributed machine code.
+Registry
 license declarations come from checksum-authenticated crate manifests; a
 `license-file` retains its exact content hash. Local patched packages must belong
 to verified vendor trees. No license is guessed from a filename or package name.
@@ -399,14 +403,16 @@ Catch2 uses the published WrapDB `3.16.0-1` wrap unchanged. It is used only when
 the native worker's `ms_build_tests` option is enabled, not by the production
 worker. Its upstream native tests must be built separately from Cargo tests.
 
-Two native source pins intentionally remain compatibility exceptions:
+Two native source pins intentionally remain compatibility exceptions. The newer
+release comparisons below record the 2026-09-09 refresh review, not a live
+upstream-version check:
 
 - Abseil stays on the security-fixed `20240722.2` LTS branch, although the
-  [latest standalone release is `20260817.0`](https://github.com/abseil/abseil-cpp/releases/tag/20260817.0).
+  [reviewed newer standalone release is `20260817.0`](https://github.com/abseil/abseil-cpp/releases/tag/20260817.0).
   Its newer hash-container APIs include breaking changes; updating the adapted
   libwebrtc dependency and the Meson overlay requires a coordinated native port.
 - FlatBuffers stays on the worker's `24.3.25` source/tool version. Upstream's
-  [latest normal release is `25.12.19`](https://github.com/google/flatbuffers/releases/tag/v25.12.19),
+  [reviewed newer normal release is `25.12.19`](https://github.com/google/flatbuffers/releases/tag/v25.12.19),
   with an additional `v25.12.19-2026-02-06-03fffb2` release tag whose status
   [upstream has questioned](https://github.com/google/flatbuffers/issues/8922).
   Advancing the schema compiler and C++ serialization headers is a separate

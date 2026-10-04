@@ -1,5 +1,12 @@
 # Performance results
 
+These are historical measurements for the dates, revisions, host shapes and
+workloads stated in each section. Terms such as "current" or "now" refer to
+that section's measurement date. They are not guarantees for the latest build
+or the current test VPS. Use the [performance guide](performance.md) to run a
+new comparison and the [deployment guide](deployment.md#capacity-planning-and-scaling)
+for current sizing rules.
+
 ## Thirty active microphones per room on an OVH VPS — 2026-09-30
 
 The automated private-host workflow passed its first live acceptance: the

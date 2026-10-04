@@ -92,5 +92,6 @@ python3 -m unittest discover -s ops/ansible/tests -p test_release_container_harn
 ```
 
 These tests mock the transport and Docker inspection; they do not contact a
-network endpoint. The real check runs only as part of the existing disposable
-Linux/amd64 release-container harness described in [testing.md](testing.md).
+network endpoint. The real check runs only as part of the disposable Linux
+release-container harness described in [testing.md](testing.md). Its controller
+supports AMD64 and ARM64; the production image under test remains AMD64.

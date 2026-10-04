@@ -12,8 +12,8 @@
 | `DATABASE_ACQUIRE_TIMEOUT_SECS` | `3` | Maximum wait to acquire a pool connection (1–60 seconds); independent of statement and request deadlines |
 | `RUN_MIGRATIONS` | `false` | Apply migrations from `./migrations` at startup; intended only for local development |
 | `JWT_SECRET` | (none) | HS256 secret of at least 32 bytes; **auth endpoints return 503 without it** |
-| `WEBAUTHN_RP_ID` | (none) | Passkey relying-party ID (domain); passkeys disabled without it |
-| `WEBAUTHN_ORIGIN` | (none) | Expected origin for passkey ceremonies (e.g. `https://chat.example.com`) |
+| `WEBAUTHN_RP_ID` | (none) | Passkey relying-party ID (domain); configure together with `WEBAUTHN_ORIGIN`, or leave both unset to disable passkeys |
+| `WEBAUTHN_ORIGIN` | (none) | Expected HTTPS origin for passkey ceremonies (e.g. `https://chat.example.com`), without a path; HTTP loopback origins are allowed for development |
 | `ALLOWED_ORIGINS` | same host only | Exact WebSocket origin allowlist; required for non-loopback binds, such as Compose |
 | `MAX_CONNECTIONS` | `10000` | Separate ceilings on concurrent WebSocket permits and retained reconnect-grace sessions; each can reach this count, so their combined retained state can approach twice the setting |
 | `MAX_CONNECTIONS_PER_IP` | `50` | Max concurrent WebSocket connections accepted from one client IP |
@@ -96,14 +96,15 @@ For core integer admission limits and pool settings, only an absent variable
 selects the default. Explicit empty, malformed, negative and out-of-range values
 fail with the variable's name rather than silently selecting a larger limit.
 The optional room participant/broadcaster ceilings retain their documented
-empty-means-unset convention. Compose's `${NAME:-default}` interpolation can
-replace an empty value before the application sees it; inspect the private input
+empty-means-unset convention; room-join rate limits treat blank as the default.
+Compose's `${NAME:-default}` interpolation can replace an empty value before the
+application sees it; inspect the private input
 file and use explicit positive values when a finite limit is intended.
 
 Core connection, room-count, concurrency and request-rate controls accept
 1–1,000,000; `MAX_USERS` accepts 1–10,000,000; producer and consumer caps accept
 1–10,000. These are syntax bounds, not recommended operating capacities. Media,
-room participant/broadcaster, password-worker and retention controls have the
+room-join, participant/broadcaster, password-worker and retention controls have the
 narrower ranges documented in the table.
 
 ## Public feature discovery
@@ -263,14 +264,14 @@ Keep a supervisor hard-stop deadline (Compose uses 30 seconds). Timed-out HTTP
 tasks and unfinished blocking jobs may be abandoned when the runtime/process
 exits; a shutdown does not guarantee every in-flight write or message completed.
 
-## Additional fixed admission limits
+## Room-join admission limits
 
-Room joins also have code-level limits in `src/room/mod.rs`: 30 attempts per
-client IP per 60 seconds and 10 attempts per room/IP per 60 seconds. These apply
-to authenticated and guest joins. They are separate from WebSocket connection
-and upgrade limits; raising those environment settings does not raise room-join
-limits. Reconnect attempts and multiple people behind one address share these
-budgets. They currently have no environment override.
+Room joins default to 30 attempts per client IP per 60 seconds and 10 attempts
+per room/IP per 60 seconds. Set `JOIN_ATTEMPTS_PER_IP_PER_MINUTE` and
+`JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE` to change these budgets (1–100000 each;
+unset or blank selects the default). They apply to authenticated and guest joins,
+independently of WebSocket connection and upgrade limits. Reconnect attempts and
+multiple people behind one address share these budgets.
 
 Plan local load ramps and room distributions around these protections; a rejected
 join is an admission-policy outcome, not a media throughput measurement. Do not

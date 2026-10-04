@@ -26,7 +26,8 @@ build/run-local.sh        # http://localhost:3000, guest rooms; --skip-web reuse
 ```
 
 On a Debian 13 VPS, sized from the host's facts ([details](ops/ansible/PUBLIC.md)).
-DNS points at the host; TCP 80/443, UDP 443 and UDP 40000 + one port per CPU are open.
+DNS points at the host; TCP 80/443, UDP 443 and one UDP port per configured media
+worker, starting at 40000, are open.
 
 ```sh
 # Controller
@@ -51,6 +52,10 @@ Update after pushing to `main` ([releases](ops/ansible/RELEASES.md); add `--main
 ```sh
 ops/ansible/.venv/bin/python build/deploy.py --inventory ops/ansible/inventory.local.yml --repository OWNER/REPO --origin https://chat.example.com
 ```
+
+This default update waits for successful CI and verifies its signed artifact.
+An explicitly requested deployment without that wait uses
+[`--force`](ops/ansible/RELEASES.md#explicit-force-deployment).
 
 Preview host sizing before provisioning. For a plain Compose deployment, follow
 the [deployment guide](docs/deployment.md#production-setup), which covers the private

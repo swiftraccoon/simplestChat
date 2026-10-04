@@ -1,5 +1,11 @@
 # Exact CodeQL review and enforcement
 
+The dated findings and source re-reviews below are historical evidence, not the
+current GitHub alert inventory. Preserve their observed revisions and decisions;
+current runs must independently satisfy the maintained policy and exact active
+records in `exceptions.json`. The command contract below describes the maintained
+triage helper.
+
 This review covers the first 69 GitHub CodeQL alerts observed for revision
 `407ec7e96ee9e57c593ac367142e1016e4dbeac5`, run `36709013559`, using CodeQL
 `2.27.1`. Each alert was read with its surrounding source and relevant callers.
@@ -232,10 +238,13 @@ source exists, its bytes must match. The fingerprint additionally binds archive,
 manifest, wrap and applicable overlay identities. Missing archives, unsupported
 source and unexpected local changes fail rather than being skipped.
 
-Raw SARIF stays private on the runner. CI should upload only the explicit policy
-`report.json` or `failure.json`, which contain no source text or raw diagnostic
-messages. Fixed validation codes identify rejected report shapes without exposing
-report content.
+CI submits validated original or regenerated SARIF to GitHub code scanning.
+Downloadable artifacts contain only the explicit policy `report.json`, fixed
+`failure.json` or compact analysis summary; raw reports and working directories
+are not uploaded as artifacts. The policy reports contain no source text or raw
+diagnostic messages. Fixed validation codes identify rejected report shapes
+without exposing report content. Native/Rust cache hits retain their original
+evaluation revision and declare query reuse; current policy is always reapplied.
 
 For CodeQL line/column locations, the helper expands absent `endLine` to
 `startLine` and absent `startColumn` to 1, as required by

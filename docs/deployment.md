@@ -392,12 +392,14 @@ Review Dockerfile image digests and the
 advisories. Verify replacement multi-architecture digests with
 `docker buildx imagetools inspect <image-tag>` before updating them. When refreshing
 Fedora packages, update `FEDORA_REFRESH_EPOCH` and rebuild builder/runtime layers
-together. Changes to `security/image-policy.json` or `security/exceptions.json`
-also invalidate both package-install layers automatically: each instruction
-mounts the current public files read-only as cache inputs, without copying them
-into the image. Production and load-generator CI caches include those inputs
-while preserving separate main/PR and architecture namespaces. Restoring an
-older cache cannot reuse a package-install layer from a different policy.
+together. Both package-install layers mount `security/image-policy.json` and a
+deterministic projection of the complete `grype`, `image-license` and `gitleaks`
+records from `security/exceptions.json` as read-only cache inputs. These inputs
+do not enter the Fedora image layers. Image-policy or image-review changes
+invalidate those layers; unrelated scanner-review changes do not change the
+projection. CI caches retain separate main/PR and architecture namespaces. The
+independent image audit still validates the complete current exception policy
+against the exact exported image, including after package-layer cache reuse.
 
 Repository-resolved packages are still mutable; cache invalidation is not a
 package-repository snapshot or a guarantee that a later rebuild contains the
@@ -421,18 +423,23 @@ and [development](development.md) for native build requirements.
 - Email addresses are self-asserted login identifiers, not verified identity or
   a recovery channel. Email-based trust/recovery requires verification and mail
   delivery first.
-- Secret rooms are unlisted, not access-controlled. Use high-entropy IDs plus
-  password/registration requirements for sensitive rooms, or add invitations/ACLs.
+- A room's secret flag hides it from public listings; it does not control
+  admission. Configure password or registration requirements and invite-only
+  admission as appropriate. Invite-only rooms hold participants without an
+  existing Member-or-higher role for explicit moderator admission; the room's
+  ordinary lobby rules still apply as well.
 - Access tokens are bound to the refresh session they were issued with, so
   logging that session out retires them: HTTP requests fail on the next call and
   authenticated sockets within their revalidation interval (about 5 s). A logout
   affects only its own session; other devices stay signed in. Refresh-token replay outside the multi-tab race
   window revokes the token family. Password changes and saved-key recovery revoke
-  existing tokens and active account connections; higher-risk deployments may
-  need immediate session-backed revocation for ordinary logout too.
+  existing tokens and active account connections. Ordinary logout relies on
+  the socket revalidation interval rather than an immediate disconnect broadcast.
 - Public/private chat replay is in memory, limited to current membership and
   300 entries / 256 KiB per room. Restart loses it; this is not a durable inbox.
-  Preferences are browser-local and guest ignore entries are temporary.
+  Signed-in chat preferences and ignored accounts sync across devices;
+  guest-participant ignores are temporary. Device, layout, talk-mode and
+  notification choices remain local to the browser.
 - Private messages and SFU media are not application-layer end-to-end encrypted.
   DTLS/SRTP protects media hops, but the server terminates them and is inside the
   trust boundary.
@@ -748,8 +755,10 @@ the same four-native-request bound. Regular quality uploads retain their
 
 Keep `Authorization`, `Cookie`, `Set-Cookie` and `Sec-WebSocket-Protocol` headers,
 query strings and URL fragments out of custom proxy/APM/access logs. The supplied
-proxy does not enable raw access logging. The WebSocket subprotocol carries an
-access token.
+proxy does not enable raw access logging. The WebSocket subprotocol carries a
+short-lived, single-use upgrade ticket issued through authenticated HTTP. It
+remains a credential until consumed or expired; reusable access JWTs are rejected
+in the upgrade subprotocol.
 
 Passkey login starts with an empty JSON object and no account lookup or credential
 allowlist. The browser selects a discoverable credential; the server binds its

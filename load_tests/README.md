@@ -8,12 +8,14 @@ The client negotiates `nack`, `nack pli`, `ccm fir` and transport-wide
 congestion control (`transport-cc` feedback with its header extension) in both
 directions, so the SFU's uplink and downlink estimators run; the summary's
 `bandwidthEstimates` and `clientsWithBandwidthEstimate` count the downlink
-estimates the server reported. What the client still does not do: its send
-rate is a fixed timer that never adapts to an estimate, and it offers a single
-encoding with no `goog-remb`, `abs-send-time`, simulcast (`rid`) or SVC layers,
-so bitrate adaptation and preferred-layer selection remain unexercised. Results
-cannot support or reject a layer-selection change; browsers negotiate those
-paths and the browser suites measure them. Under packet loss the client's own
+estimates the server reported. Both profiles send on fixed timers without
+adapting an encoder to those estimates. The default `synthetic` profile offers a
+single encoding with no `goog-remb`, `abs-send-time`, simulcast or SVC layers, so
+it does not exercise preferred-layer selection. The optional
+[`browser` profile](#the-browser-profile) adds three simulcast encodings, DTX and
+modeled tile-size layer requests. Neither profile measures real browser encoding,
+decoding or visual quality; use browser suites for those paths.
+Under packet loss the client's own
 ICE and DTLS establishment is fragile (with five percent loss in both
 directions on a Linux loopback, several of thirty clients time out or never
 receive media while browsers join in about two seconds), so loss runs
@@ -80,7 +82,7 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 | `--audio-only`, `--video-only` | Generate only the selected media kind |
 | `--chat-interval-ms MS` | Optional public text message per media client every 1,000–600,000 ms, staggered within each room; disabled by default. Restricted to owned loopback servers, stable clients and at most five messages/s per room |
 | `--quality PRESET`, `--fps FPS` | `480p`/`720p`/`1080p`, 15/30/60 fps; defaults 480p/30 (synthetic profile only) |
-| `--profile NAME` | `synthetic` (default: the fixed stream every historical result used) or `browser` (what the web client costs; see below) |
+| `--profile NAME` | `synthetic` (default: fixed single-encoding streams) or `browser` (modeled browser media and subscriptions; see below). Historical reports must be interpreted using their recorded profile. |
 | `--capture 720p\|1080p` | Browser camera; 720p (100/300/900 kbit/s layers), 1080p raises the top layer to 2.5 Mbit/s |
 | `--speakers N` | Browser talkers per room at a time, rotating every 10 s; 1 |
 | `--viewport-width PX`, `--pixel-ratio F`, `--layout classic\|modern` | The screen each browser viewer has, which decides the simulcast layer it asks for; 1440, 2, classic |
@@ -142,8 +144,9 @@ and publisher offered-load checks. Historical single-speaker and video-profile
 verdicts are unchanged; generator throttling and scheduling delay still require
 separate inspection before interpreting a failure as server capacity.
 
-`--profile browser` makes each client cost the server what the web client
-costs, so capacity figures measured with it hold for real rooms:
+`--profile browser` models the following browser settings to make synthetic
+forwarding workloads more representative. Its capacity figures apply to the
+recorded host and workload; they still need validation with real clients:
 
 - **Camera**: three simulcast layers as `web/src/media.ts` publishes them
   (a quarter, half and full capture size at 100, 300 and 900 kbit/s), each on
@@ -180,7 +183,8 @@ costs, so capacity figures measured with it hold for real rooms:
   can climb to its cap and layer allocation behaves as it does for browsers.
 
 Not modelled: the audio-level header extension (speaking highlights), VP8
-temporal layers (encodings are L1T1), screen sharing, and mobile layouts.
+temporal layers (encodings are L1T1), screen sharing, pinned video layouts,
+mobile layouts, or device-specific capture and encoding behavior.
 
 ### Fixed subscription graphs
 
@@ -290,14 +294,16 @@ packet buckets. `load_test_summary.json` aggregates them (`schemaVersion: 2`):
 - Per-client `consumerDelivery[].attempt` is the immutable one-based connection
   attempt; `isAudio` identifies its media kind. Older artifacts may omit both.
 - `keyframesGenerated` / `keyframesRequested`: lifetime counts per client and in
-  the summary. A requested keyframe is 19 packets in place of 4, so a build
+  the summary. At the default synthetic 480p/30 setting, a requested keyframe is
+  19 packets in place of 4, so a build
   that requests more repair raises the offered packet rate; compare these
   alongside `measurement.packetsReceived`. A browser-profile camera counts one
   keyframe per layer.
 - `consumerDelivery[].firstPacketMs` and the summary's `videoStart`: from the
   client's resume request to the consumer's first packet, ramp included. A new
-  video consumer forwards nothing before a keyframe, so for video this is the
-  keyframe wait; audio consumers give the signaling round trip beside it.
+  video consumer waits for a keyframe before forwarding. This interval includes
+  signaling, scheduling and first-packet delivery; it does not isolate encoder
+  keyframe latency or browser decoding.
 - The per-client validated-consumer floor counts stable (non-churning)
   publishers in the client's room only, matching the coverage contract above.
 - `run`: completion, failures, timestamps, workload configuration, revision
@@ -399,9 +405,11 @@ not establish a working receive path for every subscriber.
 Match consumer IDs within an attempt, then use SSRC mappings to locate first RTP.
 The SDP event describes a batch, not individual consumers. Compare elapsed times
 only within the same collector; server operation clocks are independent.
-Synthetic video keeps a periodic keyframe every five seconds of generated frames
+The default synthetic profile keeps a periodic keyframe every five seconds of generated frames
 and responds to PLI/FIR on scheduled frames, with additional keyframes spaced by
-at least one second of generated frames after the preceding keyframe. Diagnostic
+at least one second of generated frames after the preceding keyframe. The
+browser profile instead uses a 3,000-frame periodic interval and 300 ms request
+cooldown shared across its three layers. Diagnostic
 `keyframe-requested` marks a newly pending request; repeated requests coalesce.
 `video-keyframe-queued` records the frame index, RTP timestamp, SSRC and whether a
 request was satisfied, only after all frame packets enter the local writer.

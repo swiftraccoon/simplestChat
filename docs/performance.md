@@ -2,8 +2,9 @@
 
 Use the synthetic load test to compare server forwarding and resource use, and
 the browser test to measure UI startup, API requests, chat, and decoded video.
-See [recorded results](performance-results.md) for current-build baselines and
-measured before/after comparisons.
+See [recorded results](performance-results.md) for dated, revision-specific
+baselines and measured before/after comparisons. They do not establish the
+capacity or timing of the current checkout.
 
 ## Web asset budgets
 
@@ -30,7 +31,10 @@ startup latency, memory use, media quality or server capacity. Images, fonts,
 source maps and other non-JS/CSS/HTML files are not covered by these budgets.
 Measure runtime performance separately with the workflows below.
 
-The September 2026 account-security and complete-call-outcome additions raised
+The following September 2026 measurements explain historical budget changes;
+the table and linked JSON above define the current limits.
+
+The account-security and complete-call-outcome additions raised
 the raw JavaScript ceiling from 450 to 480 KiB, retaining the 100 KiB gzip limit.
 Isolated builds measured 450,677 bytes at `4216538` and 469,222 bytes in the first
 candidate (95,541 and 100,698 gzip bytes). Source-map attribution assigned about
@@ -40,7 +44,7 @@ mediasoup dependencies were unchanged. Subsequent lifecycle race fixes are
 included in the same ceiling. These figures explain the reviewed feature growth,
 not a runtime-performance guarantee.
 
-The subsequent seven product improvements raise the JavaScript ceiling to
+The subsequent seven product improvements raised the JavaScript ceiling to
 512 KiB raw and 112 KiB gzip: shared-account synchronization, confirmed room
 controls, duplicate-safe chat reconciliation, incoming-media repair, screen-share
 results, live audio-device controls, and explicit room navigation. The previous
@@ -52,25 +56,25 @@ keeping a bounded margin for final correctness fixes; it is not evidence of
 unchanged runtime performance.
 
 Moderation history, account preferences, invitations and the typing indicator
-raise the JavaScript ceiling to 560 KiB raw and 128 KiB gzip: a History tab and
+raised the JavaScript ceiling to 560 KiB raw and 128 KiB gzip: a History tab and
 report outcomes in the management dialog, preference sync, room and registration
 invitation dialogs with their decoders, the invitation link flow, and the
 composing notices. The build before them (`0c2d268`) measured 536,629 bytes raw
-/ 119,593 gzip against 544/120 KiB; this build measures 543,523 / 121,472.
+/ 119,593 gzip against 544/120 KiB; that build measured 543,523 / 121,472.
 
-Chat timestamps and personal chat colors raise the gzip ceiling to 116 KiB and
-keep 512 KiB raw: timestamp formats chosen per viewer, a sixteen-color palette
+Chat timestamps and personal chat colors previously raised the gzip ceiling to
+116 KiB and kept 512 KiB raw: timestamp formats chosen per viewer, a sixteen-color palette
 with three message styles and a live preview, the same colors on people lists and
 video tags, and the decoders that carry a look on the wire. The previous build
-(`3d5406a`) measured 512,719 bytes raw / 112,320 gzip; this build measures
+(`3d5406a`) measured 512,719 bytes raw / 112,320 gzip; that build measured
 520,019 / 114,794. No runtime dependency was added.
 
 The simplified room tools with their "More" menu, toasts below the top bars, the
 New messages divider, the mention picker, desktop notifications, replies,
-reactions and pinned video raise the JavaScript ceiling to 544 KiB raw and 120 KiB
-gzip, and their help text raises the HTML gzip ceiling from 10 to 11 KiB (the help
+reactions and pinned video raised the JavaScript ceiling to 544 KiB raw and 120 KiB
+gzip, and their help text raised the HTML gzip ceiling from 10 to 11 KiB (the help
 page and the app page each compress to about 5 KiB). The previous build (`9ef9088`)
-measured 520,019 bytes raw / 114,794 gzip of JavaScript; this build measures
+measured 520,019 bytes raw / 114,794 gzip of JavaScript; that build measured
 532,165 / 118,310. No runtime dependency was added.
 
 ## Controlled local comparison
@@ -125,9 +129,9 @@ of the same graph, not ring and hotspot as equivalent workloads.
 
 Start with the ten-client example. For 30 clients, use `--scenarios multi-room`.
 For churn, start with `--clients 3 --scenarios churn --duration 120`.
-Room admission allows 30 joins per IP and 10 per room/IP in 60 seconds, including
+By default, room admission allows 30 joins per IP and 10 per room/IP in 60 seconds, including
 reconnects. Larger runs need a slower ramp; the runner checks the initial ramp
-before starting. See [admission limits](configuration.md#additional-fixed-admission-limits).
+before starting. See [admission limits](configuration.md#room-join-admission-limits).
 
 Churn is not retained-session signaling recovery. Each selected churner needs a
 passing, eligible second or later join with measured delivery from stable peers.
@@ -193,10 +197,11 @@ the full window. Missing peers cannot be substituted or skipped. See
 for bounds and report fields.
 
 Synthetic RTP exercises forwarding, not browser encoding or visual quality.
-The generator negotiates transport-wide congestion control, so the server's
-bandwidth estimators run and the summary counts their reports, but it never
-adapts its fixed send rate and offers no simulcast, so bitrate adaptation and
-layer selection stay unexercised; see
+The local comparison runner uses the default `synthetic` profile: it negotiates
+transport-wide congestion control but sends a fixed-rate single encoding, so it
+does not exercise simulcast layer selection. The separate `browser` profile used
+by capacity calibration supplies simulcast, DTX and modeled tile-size requests;
+it still does not adapt an encoder's send rate to congestion. See
 [what the generator does not model](../load_tests/README.md).
 Receive/send totals are not a packet-loss estimate because streams fan out to
 multiple subscribers. See [report definitions](../load_tests/README.md#reports-and-metric-definitions)
@@ -266,8 +271,8 @@ server carries and what each costs, on any Linux host with Docker or Podman and
 Python 3.10 or later (Podman's VM on a Mac works for trials). `run` starts the
 production image as an owned, loopback-only container under a CPU quota and the
 load-test image in its network namespace with the [browser
-profile](../load_tests/README.md#the-browser-profile), so every synthetic
-participant sends and receives what the web client does. It grows three
+profile](../load_tests/README.md#the-browser-profile), which models the web
+client's media and subscription settings without real encoding or decoding. It grows three
 workloads until the server's own signals say stop, then prints the settings to
 use and writes `calibration.json`:
 
@@ -314,11 +319,15 @@ podman build --target production -t localhost/simplestchat-production:dev .
 podman build --target loadtest -t localhost/simplestchat-loadtest:dev .
 python3 build/capacity.py run --server-image localhost/simplestchat-production:dev \
   --generator-image localhost/simplestchat-loadtest:dev \
-  --label cx32 --monthly-price 6.80 [--egress-price-per-gb 0.01 --included-egress-tb 20]
+  --label example-vps --monthly-price 6.80 \
+  --egress-price-per-gb 0.01 --included-egress-tb 20
 python3 build/capacity.py compare results/capacity.*/calibration.json
-python3 build/capacity.py suggest --vcpus 8 --memory-gib 16 [--port-mbps 1000] \
-  [--calibration results/capacity.<time>/calibration.json]
+python3 build/capacity.py suggest --vcpus 8 --memory-gib 16 --port-mbps 1000
 ```
+
+Prices and transfer allowances above are illustrative inputs. Substitute the
+host's actual plan. Add `--calibration /path/to/calibration.json` to `suggest`
+to use a compatible measured report instead of the reference figures.
 
 The default remains five-person audio/video meetings with one active speaker
 per room and no chat traffic. To measure thirty continuously active microphones
@@ -416,8 +425,10 @@ decode or visual quality.
 
 ## Production shape and impaired networks
 
-Production runs two media workers under a 2-CPU, 2 GiB container. The Mac
-runner above has neither the quota nor Linux, so
+The historical production-shape benchmark uses two media workers under a
+2-CPU, 2 GiB container. Managed deployments derive their actual quotas and worker
+counts from host facts; this is a reproducible test shape, not a deployment default.
+The native Mac runner above has neither the quota nor Linux, so
 [`load_tests/benchmark-podman.mjs`](../load_tests/benchmark-podman.mjs) runs
 the same workloads inside the Podman Linux VM: the production image gets
 `--cpus` and `--memory`, the load-test image shares its network namespace over
@@ -447,13 +458,13 @@ would), so the per-address limits do not shape the ramp and a room of several
 hundred viewers fills in minutes. Viewers spread across workers once the room's
 primary worker carries 64 consumers, so the per-worker gauges in
 `metrics-finish.txt` show how far the room spread. The quota is the
-production shape; the cores are Apple silicon, so absolute figures do not
+selected test shape; the cores are Apple silicon, so absolute figures do not
 transfer to the VPS, while the per-client cost, throttling and the
 worker/runtime split do inform limits.
 `--netem "loss 5% delay 50ms 10ms"` adds a NET_ADMIN sidecar built from
 [`load_tests/netem.Containerfile`](../load_tests/netem.Containerfile) that
 impairs UDP inside the server's namespace, when the VM kernel ships `sch_netem`
-(the pinned Podman 5.5 machine image does not; the CI runner does).
+(the historical Podman 5.5 VM lacked it; verify the kernel used for a new run).
 
 `--server-env "KEY=VALUE;KEY=VALUE"` passes experiment settings to the server
 container (the wiring keys the script owns cannot be overridden), for example
@@ -470,13 +481,14 @@ neither the capture nor any log shows. Every run also samples the server's
 memory every five seconds into `resources.json` (`memory`: `smaps_rollup`
 totals, every mapping of 2 MiB or more, and the cgroup's anonymous, file,
 kernel and socket charges), which is how a growth was traced to one heap and
-one cause rather than to "the worker". The VM's `net.core.rmem_max` and
-`wmem_max` are the Linux default of 208 KiB and cap the workers' socket
-buffers at that size whatever the server requests; a measurement of the
-configured buffers (1 MiB by default) needs
+one cause rather than to "the worker". Inspect the benchmark VM's
+`net.core.rmem_max` and `net.core.wmem_max`; the historical VM used 208 KiB ceilings
+and clamped the workers' requested buffers. If those ceilings are below the
+configured buffers (1 MiB by default), the owned test VM needs
 `podman machine ssh -- sudo sysctl -w net.core.rmem_max=2097152 net.core.wmem_max=2097152`
-first, or larger for a buffer experiment (the setting lasts until the machine
-restarts).
+before measurement, or larger values for a buffer experiment. Select the intended
+benchmark machine explicitly if more than one is configured. Runtime sysctl
+changes are not persistent provisioning.
 
 [`build/impair.sh`](../build/impair.sh) applies the same profiles to an owned
 native server on Linux (netem on loopback, sudo), and

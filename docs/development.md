@@ -27,6 +27,11 @@ Run commands from the repository root.
   macOS before updating the shared environment. The native worker has separate
   [reviewed tool locks](../vendor/README.md); do not bypass either hash policy.
 
+- The [complete local CI runner](testing.md#run-ci-locally) additionally needs
+  Go 1.25 or newer, Git, `patch`, and the documented disposable container runtime.
+  It builds its checksum-pinned, patched `act` locally; an ambient `act`
+  installation is not used.
+
 ## Guest-only local UI
 
 ```sh

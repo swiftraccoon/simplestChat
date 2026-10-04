@@ -4,24 +4,34 @@ Image evidence applies to the exported production artifact. Source dependency
 checks alone cannot establish which native code or operating-system packages
 were included in that image. Each check must retain the exact image/platform,
 archive and file hashes it examined; a rebuilt image is a different artifact.
+This page describes the signed release evidence contract. The separately
+authorized [force deployment](../ops/ansible/RELEASES.md#explicit-force-deployment)
+can bypass CI and attestation; an unsigned force artifact must not be represented
+as having passed these image checks.
 
 ## Fedora package refresh and review caches
 
 Both Fedora package-install instructions in `Dockerfile` mount the current
-`security/image-policy.json` and `security/exceptions.json` read-only.
-Their bytes participate in the
+`security/image-policy.json` and a deterministic projection of
+`security/exceptions.json` read-only. The `image-review-inputs` stage selects
+`grype`, `image-license` and `gitleaks` records, sorts their fields and records,
+and preserves every selected value. Source-only review edits, such as CodeQL
+exceptions, leave that projection unchanged. These mounted bytes participate in the
 [RUN bind-mount cache checksum](https://docs.docker.com/build/cache/invalidation/),
-so changing either file invalidates both the builder and runtime package layers.
-The files are admitted individually by `.dockerignore` and are not copied into
+so changing image policy or projected reviews invalidates both the builder and
+runtime package layers. The source files are admitted individually by
+`.dockerignore`; the mounted policy/projection are not copied into the production
 image layers. `FEDORA_REFRESH_EPOCH` remains the explicit refresh control for
 package/security updates that do not change policy.
 
-The production and load-generator Actions cache keys include these same policy
-files. Their existing trusted-main/untrusted-PR and architecture separation
+The production and load-generator Actions cache keys include the complete source
+policy files. Their existing trusted-main/untrusted-PR and architecture separation
 remains intact. Prefix fallback can recover reusable build layers, but the
-Dockerfile's policy-dependent inputs prevent an obsolete package-install layer
-from matching. Updating only an outer Actions cache key would not provide that
-guarantee, because a restored BuildKit cache independently matches instructions.
+Dockerfile's projected review inputs prevent an obsolete package-install layer
+from matching while permitting unchanged image reviews to reuse a layer.
+Updating only an outer Actions cache key would not provide that guarantee,
+because a restored BuildKit cache independently matches instructions. The image
+scanner still validates the complete current exception ledger on every scan.
 
 This dependency prevents a new package review from silently reusing packages
 cached under the superseded policy. It does not pin mutable Fedora repositories:
@@ -594,11 +604,14 @@ records `required: false` and the VEX statement list is empty.
 `release-attestation.jsonl` contains the signer's bundle. Signing a rebuilt image, a PR artifact, or a failed security
 outcome is outside this contract.
 
-Deployment verifies the bundle with GitHub's maintained cryptographic verifier
+Default deployment verifies the bundle with GitHub's maintained cryptographic verifier
 before any remote action, then checks its exact source, workflow, run, attempt
 and file relationships. The receiver rehashes the downloaded bytes against that
 verified claim. The separate manual build workflow and unsigned local builds
-are not deployable. See [release verification](../ops/ansible/RELEASES.md#trusted-artifact-requirements).
+do not satisfy that signed path. Explicit force deployment has its own
+exact-revision artifact checks and records the missing CI/attestation evidence;
+it does not create a signed image-policy verdict. See
+[release verification](../ops/ansible/RELEASES.md#trusted-artifact-requirements).
 
 Run the archive, ELF, policy, lifecycle and evidence-join fixtures with the
 maintained environment:

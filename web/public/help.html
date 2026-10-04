@@ -67,11 +67,11 @@
           <strong>Save settings</strong> applies device preferences. It can switch a camera or
           microphone you are already using, but never turns on an inactive one. Layout and talk-mode
           choices apply immediately. Turning on the camera or microphone in the room requests
-          permission directly and starts that device. You do not need to save Settings first.
+          permission directly and starts that device.
         </p>
         <p>
-          While the room has focus and you are not typing, <kbd>M</kbd> turns your microphone on or
-          off, <kbd>V</kbd> your camera and <kbd>S</kbd> screen sharing. The full list is under
+          Outside text fields, focused controls and dialogs, <kbd>M</kbd> turns your microphone on
+          or off, <kbd>V</kbd> your camera and <kbd>S</kbd> screen sharing. The full list is under
           <strong>More</strong> in the room tools, with Mic setup, your nickname, room management,
           Refresh incoming media and Diagnostics.
         </p>
@@ -86,8 +86,8 @@
           restart; the app does not silently open it again.
         </p>
         <p>
-          In push-to-talk mode, hold the microphone control or Space to speak and release it to
-          stop. Space does not activate push-to-talk while you are typing or using a dialog.
+          In push-to-talk mode, hold the microphone control, Space or <kbd>T</kbd> to speak; release
+          it to stop. These keys do not activate it while you are typing or using a dialog.
         </p>
         <p>
           Each person's viewing controls include volume, mute and hide. Those choices affect only
@@ -102,9 +102,13 @@
       <section aria-labelledby="messages">
         <h2 id="messages">Messages and privacy</h2>
         <p>
-          The room conversation is public to eligible room participants. Choose a person's
-          private-message action to start a separate conversation, and check the selected
-          conversation before sending. Drafts and sent-message recall stay with that conversation.
+          Public chat is visible to eligible room participants. Choose a person's private-message
+          action for a separate conversation. Buttons above chat switch conversations and show
+          unread counts. Each conversation keeps its draft.
+        </p>
+        <p>
+          The message box grows as you type. Enter sends; Shift+Enter adds a line. On touch devices,
+          Enter adds a line and <strong>Send</strong> sends. Ctrl+Enter or ⌘+Enter sends on either.
         </p>
         <p>
           A pending message has not yet been confirmed. If it stays unconfirmed, use
@@ -164,15 +168,15 @@
           them broadcast or speak in a moderated room.
         </p>
         <p>
-          Room admins can invite people with a link (My rooms → Invites…) offering a member,
-          moderator or admin role; nobody is demoted by accepting one. An account can also hand out
-          registration invite codes while registration is closed. Review and explicitly accept a
-          room invitation, then choose Join. Creating an invitation shows its private link only
-          once. Use membership roles to delegate moderation carefully. Moderation actions are not
-          the same as your personal viewing controls. Check the target and duration before banning
-          someone, and use the management views to review bans, reports and the room's moderation
-          history. Kicking or banning from a report resolves it and records what it led to; the
-          owner's history also shows the address a sanction applied to.
+          Room admins and owners can offer roles below their own through My rooms → Invites…;
+          accepting never demotes someone. An account can also hand out registration invite codes
+          while registration is closed. Review and explicitly accept a room invitation, then choose
+          Join. Creating an invitation shows its private link only once. Use membership roles to
+          delegate moderation carefully. Moderation actions are not the same as your personal
+          viewing controls. Check the target and duration before banning someone, and use the
+          management views to review bans, reports and the room's moderation history. Kicking or
+          banning from a report resolves it and records what it led to; the owner's history also
+          shows the address a sanction applied to.
         </p>
         <p>The people list marks roles with a symbol before the name:</p>
         <ul class="legend">
@@ -182,10 +186,10 @@
           <li><b>+</b> member</li>
         </ul>
         <p>
-          A blank participant or broadcaster limit removes that room-specific cap; a limit of zero
-          allows no one. Server-wide capacity limits still apply. Room settings show whether a
-          password is set; <strong>Remove password</strong> clears it. Deleting a room disconnects
-          its current participants; the confirmation asks for its room name.
+          A blank participant or broadcaster limit removes that room-specific cap. Set a positive
+          limit; zero is rejected. Server-wide capacity limits still apply. Room settings show
+          whether a password is set; <strong>Remove password</strong> clears it. Deleting a room
+          disconnects its current participants; the confirmation asks for its room name.
         </p>
       </section>
       <section aria-labelledby="account">
@@ -233,20 +237,16 @@
           your browser or password manager lets you choose the account.
         </p>
         <p>
-          To save in Bitwarden, use its browser extension. If the system prompt opens instead,
-          cancel it before checking the extension. In Bitwarden's
-          <strong>Settings → Notifications</strong>, enable
-          <strong>Ask to save and use passkeys</strong> and check that this site is not in the
-          excluded or blocked domains. Reload the page and try again.
+          To use Bitwarden's browser extension, cancel an unwanted system prompt and check the
+          extension's passkey settings and excluded sites. Follow
           <a href="https://bitwarden.com/help/storing-passkeys/" target="_blank" rel="noopener"
             >Bitwarden's passkey instructions (new tab)</a
-          >
+          >.
         </p>
         <p>
-          A passkey QR code in the browser's system prompt is for continuing on a nearby phone. Use
-          that phone's camera when choosing this route. Bitwarden's screen scanner for verification
-          codes does not import a passkey from this QR code. Cancel the system prompt to return to
-          the browser and use the extension instead.
+          A passkey QR code in the system prompt continues on a nearby phone. Use that phone's
+          camera, not a verification-code scanner. Cancel the prompt to use the browser extension
+          instead.
         </p>
       </section>
       <section aria-labelledby="trouble">

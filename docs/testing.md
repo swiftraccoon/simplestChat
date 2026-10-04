@@ -400,13 +400,20 @@ limits and existing complementary coverage.
 Push CI retains that same immutable production image for deployment. Offline
 operations tests cover export without rebuilding, commit/run/artifact identity,
 bounded CI waiting, single-host selection and stopping after a failed deployment
-or public smoke. Deploying a retained image does not rerun the full suite; it
+or verification. Deploying a retained image does not rerun the full suite; it
 checks artifact integrity, runtime compatibility and readiness, then runs the
-bounded public chat smoke. See the [release workflow](../ops/ansible/RELEASES.md).
+bounded anonymous HTTP checks of `/health`, `/ready` and `/`. The separate
+`--public-chat-smoke` option explicitly opts into creating guests and sending a
+public chat message; it is disabled by default. The supported `--force` path
+accepts an exact-revision unsigned build without waiting for CI, while retaining
+the runtime safeguards and recording that override. See the
+[release workflow](../ops/ansible/RELEASES.md).
 
-Run it only as root on a fresh, disposable Linux/amd64 host with a local Docker
-Engine (API 1.48+), Compose, OpenSSL, curl, `nsenter`, `update-ca-certificates`, and the
-[controller Python environment](../ops/ansible/README.md):
+Run it only as root on a fresh, disposable Linux AMD64 or ARM64 host with a local
+Docker Engine (API 1.48+), Compose, OpenSSL, curl, `nsenter`,
+`update-ca-certificates`, and the
+[controller Python environment](../ops/ansible/README.md). The production image
+remains Linux/AMD64; an ARM64 fixture host needs AMD64 emulation:
 
 ```sh
 sudo ops/ansible/.venv/bin/python -B build/test-release-container.py \
@@ -425,11 +432,16 @@ never private logs, credentials or database dumps. This does not reboot a host,
 exercise real users/media or establish production outage duration.
 
 Rust linting, native/PostgreSQL tests, the memoized native DTLS check and three
-browser suite groups (accounts, media, stress) run as parallel CI jobs. The build
-jobs share one dependency cache keyed by the vendored sources, whose files are
-given a fixed mtime so cached native-worker artifacts stay valid across
-checkouts, and every Rust target is built with the same feature set so the
-worker compiles once. The production image reuses cached layers up to a warmed
+browser suite groups (accounts, media, stress) run as parallel CI jobs. Their
+native toolchain caches bind the vendored sources, whose files receive a fixed
+mtime so reusable worker artifacts stay valid across checkouts. Rust lint,
+native/PostgreSQL tests and browser backends use separate `rust-check`,
+`rust-test` and `rust-build` dependency-cache namespaces. The test job primes
+all targets with `cargo build --locked --all-features --all-targets --profile test`,
+including development dependencies and test harnesses; it then runs the complete
+test command with ignored tests included and one test thread. A browser-only
+binary cache cannot substitute for that test graph. The production image reuses
+cached layers up to a warmed
 dependency build, and the release fixture's controller installs in the
 background while the image builds.
 [CI](../.github/workflows/ci.yml) also runs formatting, locked Rust builds/tests,
@@ -563,7 +575,7 @@ are additional tiers, not part of the required push gate.
 Verified successes for Rust checks and native sanitizer/replay suites are reused
 only when their exact input key and private receipt match. Keys bind file modes,
 workflow/tool/security policy, runner image identity, architecture and the
-main-versus-untrusted cache namespace. Native keys include the complete vendor,
+main-versus-untrusted cache namespace. Native sanitizer/replay keys include the complete vendor,
 security, build, workflow and operations-helper trees; unrelated Rust application
 or documentation edits do not invalidate them. Rust keys include every tracked
 non-web input and web JSON configuration and shared fixtures such as

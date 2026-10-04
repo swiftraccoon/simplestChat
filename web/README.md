@@ -109,16 +109,31 @@ current server state. A connected lobby moderator is availability information,
 not a promise of admission.
 
 Output selection is feature-detected and applies to owned playback elements.
-Device IDs remain tab-local; browsers without output routing use the system
-output. Speaker testing plays a short local tone and releases its URL/timer on
+Output device selection remains tab-local; saved camera/microphone IDs and capture
+preferences use browser-local storage. Browsers without output routing use the
+system output. Speaker testing plays a short local tone and releases its URL/timer on
 completion or dialog departure. Device-list changes never request capture.
 The camera and microphone controls request access directly when explicitly
 activated; opening Settings or joining a room does not capture. Settings offers
 separate private **Test camera** and **Test microphone** actions beside the
 selectors to grant access and refresh device names before saving preferences.
 Saving settings changes active devices but does not turn an inactive device on.
+Camera publication, recapture and preview share `captureMedia`: a
+`NotReadableError` with requested resolution/frame-rate preferences permits one
+retry without those quality constraints. The retry preserves an exact selected
+camera and any audio constraints. Permission denial and other errors do not
+trigger it; cancelled work cannot begin a retry, and late streams are stopped.
 Screen sharing distinguishes cancellation/permission failure from setup errors,
 and reports whether optional screen audio is included, unavailable or ended.
+
+The room uses one header; call controls sit below the video column so the desktop
+People and chat panels retain their full height. Conversation buttons above chat
+switch between Public chat and private messages, with unread counts and separate
+drafts. The composer grows to six lines on desktop and three at phone widths,
+then scrolls. On devices without touch input, Enter sends and Shift+Enter adds a
+line. Touch-capable devices show Send and use Enter for new lines; Ctrl/Cmd+Enter
+sends in either mode. An open mention picker can use Enter to complete a name
+before sending.
 
 ## Availability, request ownership and large rooms
 

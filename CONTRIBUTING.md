@@ -11,7 +11,7 @@ they describe. Local agent instructions such as `CLAUDE.md` stay untracked.
 
 ## Before publishing
 
-Use focused local commits on `main`; a branch or pull request is optional.
+Use focused local commits on `main`; a pull request is not required.
 Run the focused checks relevant to the change before pushing directly to `main`.
 The complete [local CI workflow](docs/testing.md#run-ci-locally) is available on
 the clean committed tree when full verification is needed:
@@ -22,9 +22,9 @@ build/ci-local.sh all --base origin/main
 
 The local runner executes the same correctness and security workflows in an
 isolated Linux environment. Do not automatically run the entire suite both locally
-and on GitHub for every change. CI should finish within five minutes, with one
-minute the target for ordinary changes; record measured runtimes and address
-overruns rather than treating long waits as acceptable.
+and on GitHub for every change. The CI performance targets are a five-minute
+ceiling and one minute for ordinary changes; these are not established runtime
+guarantees. Record measured runtimes and address overruns.
 
 GitHub issues a release signature only after every required check passes. The
 default deployment requires that signed artifact. When the operator explicitly
@@ -45,7 +45,7 @@ build/check-security.sh fast
 
 CI also uses `build/check.sh`. It stops on the first failure and does not install
 dependencies, start the application, or create a database. You can run
-`--web`, `--rust`, or `--helpers` separately while iterating.
+`--web`, `--rust`, `--python`, or `--helpers` separately while iterating.
 
 The separate [security gate](docs/security.md) installs checksum-pinned scanners
 and audits current source, workflow policy and dependency locks. Run it before
@@ -56,6 +56,7 @@ or exact-image tier. Keep full scanner evidence private.
 | --- | --- | --- |
 | Web | Type-aware lint, formatting, source-level tests, TypeScript, production build and asset-size budgets | Real-browser rendering, device permission behavior or media delivery |
 | Rust | Formatting, every first-party target/feature with Clippy, warning-free public/private Rustdoc | Database correctness, native runtime behavior or shutdown reliability |
+| Python | Pinned Ruff lint/format and strict basedpyright over maintained sources and stubs | Runtime behavior, deployment or database correctness |
 | Helpers | Shell syntax, ShellCheck and helper/benchmark regression tests | Production deployment or an actual performance comparison |
 
 Run the additional checks relevant to the change, using the commands in

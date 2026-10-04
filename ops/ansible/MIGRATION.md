@@ -54,10 +54,11 @@ starts a new time-series store. Database-backed operational history is migrated.
 
 ## Run one migration
 
-Run the complete local CI gate on a clean committed `main`, push directly to
-`main`, and run this command from that same checkout. The controller waits for
-its exact successful main-push CI and verifies the artifact's attestation before
-any remote mutation.
+Run the focused checks relevant to the change, push the clean committed `main`
+revision directly, and run this command from that same checkout. The complete
+local CI gate remains available but is not required before every push. Migration
+still requires its exact successful main-push CI and verifies the artifact's
+attestation before any remote mutation; it has no force mode.
 
 ```sh
 ops/ansible/.venv/bin/python build/migrate.py \

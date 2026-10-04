@@ -665,6 +665,8 @@ These are three separate messages: change only chat availability; clear the
 participant cap/password; set two caps. Other fields remain unchanged. Use an
 explicit boolean to set a toggle, not `null`. Read-side `passwordProtected` is a
 status flag, not a writable password. Topics use `setTopic` separately.
+Non-null participant limits must be 1–10000 and broadcaster limits 1–1000;
+broadcasters cannot exceed a configured participant limit. Zero is rejected.
 
 ## Runtime validation and evolution
 

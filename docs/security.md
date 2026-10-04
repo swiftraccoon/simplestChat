@@ -133,15 +133,17 @@ See [tool inputs](../security/README.md) for exact installation/update commands,
 revision. No secrets are inherited. Main pushes and optional pull requests run
 the shared source/dependency checks, native sanitizers/replay and the Rust,
 database, browser and production-image suites. The ASan, UBSan and replay modes
-run independently, retaining every mode's results. A trusted release is eligible only after
+run independently, retaining every mode's results. A signed release is eligible only after
 all required jobs succeed; a skipped or failed dependency is not release approval.
 
 Daily security runs refresh advisory results even when source has not changed.
 The daily deep jobs run finite native checks and selected pure-policy mutations. CodeQL runs
 `security-extended` for ordinary CI, with full reports on both PRs and main;
 diff-informed query filtering is disabled so whole-file review identities are
-checked consistently. Scheduled and manual CodeQL runs use `security-and-quality`
-in separate `quality-advisory` categories. The broader categories remain advisory;
+checked consistently. Scheduled and manual CodeQL runs add `security-and-quality`
+in separate `quality-advisory` categories. Native and Rust also retain their
+security reports and current policy checks in those runs; the other three
+languages select the advisory suite. The broader categories remain advisory;
 findings still need triage. The reusable
 workflow's `security_gate` input defaults to true, preserving CI's security
 categories and exact High/Critical review enforcement.
@@ -151,11 +153,17 @@ C/C++ is a separate manual-build job: it compiles the real vendored worker under
 the analyzer, with the actual generated inputs, include paths and definitions.
 A query then requires observed compilation of the DTLS, STUN, SCTP and RTP
 implementations. An empty database or a source-only native scan cannot pass that
-coverage check. This job starts a fresh native build and does not restore a
-previous worker compilation. Only the pinned OpenSSL prefix is cached; its
-version, static libraries and required disabled settings are checked after
-restoration. Compilation uses up to four workers within the detected CPU and
-memory limits.
+coverage check. Native and Rust jobs can restore a complete evaluated CodeQL
+database only when its exact source, tool/query, build-environment and path
+identities match. Bundle integrity, extraction metadata and archived source
+bytes are validated before use. On a hit, the pinned CLI reuses its own query
+results and regenerates SARIF; evidence identifies the original evaluation
+revision and query reuse. Current finding policy and native compilation coverage
+are checked on every run. A miss performs real extraction and query evaluation;
+an invalid restored entry fails. See the [cache contract](testing.md#run-ci-locally).
+The pinned OpenSSL prefix is cached separately; its version, static libraries and
+required disabled settings are checked after restoration. Compilation uses up to
+four workers within the detected CPU and memory limits.
 
 The [complete local CI runner](testing.md#run-ci-locally) uses the same five
 languages, pinned analyzer/query packs, native compile command, coverage query
@@ -199,8 +207,10 @@ credential fallback or a fork-specific skip.
 The [exact review procedure](../security/codeql-review-2026-09-30.md) separates
 local enforcement, read-only GitHub plans and authorized false-positive dismissal.
 Remote dismissal alone never exempts a finding from the repository gate. CI
-retains only the compact policy report or fixed failure code; complete SARIF and
-scanner working data remain private. Scheduled quality analysis stays advisory.
+publishes compact policy reports, analysis summaries or fixed failure codes as
+downloadable artifacts. Valid original or regenerated SARIF is submitted to
+GitHub code scanning, including when current finding policy fails; raw scanner
+working directories are not published. Scheduled quality analysis stays advisory.
 
 Only SARIF jobs receive `security-events: write`. PR jobs receive no deployment
 credentials or signing permission. Native, Rust and image caches include explicit
@@ -210,11 +220,15 @@ only trusted changes inside the documented disposable engine.
 
 After the aggregate gate succeeds, the main-push signer attests four subjects:
 the original image archive, SPDX SBOM, runtime proof and OpenVEX disposition.
-The signed predicate binds the remaining release metadata. Deployment verifies
+The signed predicate binds the remaining release metadata. Default deployment verifies
 the signatures against the exact repository, workflow, source revision, run and
 attempt before remote operations; required runtime source reviews must also
-remain unexpired. Unsigned development builds are not eligible. See the
-[release procedure](../ops/ansible/RELEASES.md) for acquisition and verification.
+remain unexpired. Unsigned builds are ineligible for that default path. An
+explicit operator-requested [force deployment](../ops/ansible/RELEASES.md#explicit-force-deployment)
+can use a verified exact-revision unsigned artifact without waiting for CI or
+attestation. It records the override and retains artifact, workload-lock,
+backup, readiness and rollback safeguards; it does not report skipped checks as
+passed. See the [release procedure](../ops/ansible/RELEASES.md).
 
 The daily [disposable Debian VM check](../security/vm/README.md) acquires that
 same signed release, applies the real host and application configuration twice,
@@ -225,16 +239,20 @@ TURN and encrypted off-host backup delivery remain separate operational checks.
 
 ## Main-branch rules
 
-Publish directly to `main` after the complete [local CI gate](testing.md#run-ci-locally)
-passes. Pull requests and another person's approval are optional. The maintained
+Publish directly to `main` after focused checks relevant to the change. The
+complete [local CI gate](testing.md#run-ci-locally) remains available when full
+verification is needed; running it before every push is not mandatory. Report
+unrun checks rather than implying full verification. Pull requests and another
+person's approval are not required. The maintained
 `Main history protection` ruleset prevents deletion and force pushes, with no
 bypass actors. It does not require a GitHub check before accepting a push.
 
 Correctness and security remain release requirements. Every main push runs the
-shared CI checks, including full CodeQL analysis, exact finding reviews and the
+shared CI checks, including all five CodeQL categories, exact finding reviews and the
 production-image policy. The release signer requires the successful aggregate;
-deployment accepts only its verified artifact for that exact main revision.
-A failed main run cannot publish a deployable release. Local results cannot
+default deployment accepts only its verified artifact for that exact main revision.
+A failed main run cannot publish a signed passing release. The explicit force
+path above is the separate unsigned deployment override. Local results cannot
 substitute for GitHub's OIDC signature or manufacture hosted analysis receipts.
 
 `security/rulesets.json` is the desired history policy; GitHub's API records the

@@ -11,9 +11,13 @@ For commands, options, and report definitions, see the
 | --- | --- |
 | `webrtc_client.rs` | `WebRtcSession`, peer connections, SDP, track readers, cleanup |
 | `media_generator.rs` | Synthetic Opus/VP8 RTP packets |
+| `browser_profile.rs` | Simulcast, speaking rotation, desktop grid and layer-cap model |
+| `chat_load.rs` | Scheduled public chat, acknowledgments and complete room fanout checks |
+| `datagram_counter.rs` | Actual UDP datagram counts for socket-drop measurements |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
 | `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill |
+| `subscription_plan.rs` | Deterministic ring/hotspot publisher graphs and graph identity |
 | `receiver_stall.rs` | Opt-in bucket monitoring, shared capture budget, and scoped native capture |
 | `keyframe_tests.rs` | Native startup/stall controls and bounded owned cleanup (tests only) |
 | `mod.rs` | Module exports |
@@ -53,10 +57,12 @@ Keep these invariants when changing the client:
   RTCP, then preserve that chain's processing. Only requests targeting the owned
   video SSRC can set the single pending bit; repeated latest FIR identities
   (sender and sequence) are ignored without an unbounded sender registry.
-- Satisfy feedback on a scheduled video frame, coalescing requests through a
-  cooldown of `video_fps` frames after the preceding keyframe. Periodic keyframes
-  retain their five-second frame phase and also satisfy pending requests. Extra
-  keyframes increase synthetic traffic; comparisons require the same generator.
+- Satisfy feedback on a scheduled video frame using the selected profile's
+  timing. The default synthetic profile has a one-second request cooldown and
+  five-second periodic interval. Browser-profile layers share requests, with a
+  300 ms cooldown and a 3,000-frame periodic interval. Periodic frames keep their
+  phase and also satisfy pending requests. Extra keyframes increase traffic;
+  comparisons require the same generator and profile.
 - Return promptly from `on_track`; run cancellable `TrackRemote::poll()` readers
   separately. Only `OnRtpPacket` counts as received media. Close readers and the
   peer driver with the transport; feedback observation adds no polling task.
