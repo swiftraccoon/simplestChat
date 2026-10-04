@@ -515,6 +515,14 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0
         directory = Path(tempfile.mkdtemp(prefix="deploy.", dir=parent))
         report["evidence"] = str(directory)
         runner = BUILD.Runner(directory)
+        if args.force and args.maintenance:
+            status, remote_main = runner.run(
+                ["git", "ls-remote", "origin", "refs/heads/main"], cwd=root, allow_failure=True
+            )
+            require(
+                status == 0 and remote_main.split() == [revision, "refs/heads/main"],
+                "force_maintenance_requires_published_main",
+            )
         release_playbook, artifact_extra = select_artifact(args, directory, root, revision, report)
         require(
             selected_host(args, inventory_tool, root, environment) == target,
@@ -618,6 +626,11 @@ def main(argv: list[str] | None = None) -> int:
             print(  # noqa: T201 -- Intentional CLI status output.
                 "No push CI exists for this clean HEAD on main. "
                 + "Push the reviewed commit explicitly, then rerun."
+            )
+        elif report["failureClass"] == "force_maintenance_requires_published_main":
+            print(  # noqa: T201 -- Intentional CLI status output.
+                "Force maintenance requires clean HEAD to match published origin/main "
+                + "because the host fetches its source. App-only force does not require a push."
             )
         else:
             print(  # noqa: T201 -- Intentional CLI status output.

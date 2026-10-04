@@ -141,7 +141,7 @@ class FakeRunner:
         self.fixture: DeployTests = fixture
         self.output: Path | None = output
 
-    def run(  # noqa: C901, PLR0913, PLR0911 -- Explicit boundary options preserve the subprocess contract.
+    def run(  # noqa: C901, PLR0911, PLR0912, PLR0913 -- Model each supported subprocess command explicitly.
         self,
         argv: Sequence[str],
         *,
@@ -172,6 +172,8 @@ class FakeRunner:
             return 0, " M changed-file" if state.dirty else ""
         if argv[:3] == ["git", "remote", "get-url"]:
             return 0, state.remote
+        if argv == ["git", "ls-remote", "origin", "refs/heads/main"]:
+            return state.remote_main
         if argv[:2] == ["git", "check-ignore"]:
             return 0, argv[-1]
         if argv == ["/node", "--version"]:
@@ -220,6 +222,7 @@ class DeployTests(unittest.TestCase):
         self.revision_reads: int = 0
         self.final_revision: str = REVISION
         self.remote: str = ""
+        self.remote_main: tuple[int, str] = (0, f"{REVISION}\trefs/heads/main")
         self.dirty: bool = False
         self.release_error: BaseException | None = None
         self.smoke_passed: bool = True
@@ -687,6 +690,7 @@ class DeployTests(unittest.TestCase):
         """An explicit unsigned release uses one force playbook and honest evidence."""
         self.args.force = True
         self.args.public_chat_smoke = False
+        self.remote_main = (0, "")
         with patch.object(
             force_deploy,
             "prepare",
@@ -711,6 +715,22 @@ class DeployTests(unittest.TestCase):
         self.assertEqual(self.revision_reads, 2)
         self.assertEqual(self.inventory_reads, 2)
 
+    def test_force_maintenance_rejects_unpublished_head_before_build_or_host_actions(self) -> None:
+        """A maintenance source fetch must be possible before building or staging its image."""
+        self.args.force = self.args.maintenance = True
+        for result in ((0, "b" * 40 + "\trefs/heads/main"), (0, ""), (128, "unavailable")):
+            self.remote_main = result
+            with self.subTest(result=result), patch.object(force_deploy, "prepare") as prepare:
+                report, api = self.execute()
+                self.assertFalse(report["passed"])
+                self.assertEqual(
+                    report["failureClass"], "force_maintenance_requires_published_main"
+                )
+                self.assertEqual(report["remoteOutcome"], "not_started")
+                self.assertEqual(self.deployments(), [])
+                prepare.assert_not_called()
+                api.assert_not_called()
+
     def test_force_maintenance_stages_then_uses_explicit_maintenance(self) -> None:
         """Force does not silently promote app-only replacement into schema maintenance."""
         self.args.force = self.args.maintenance = True
@@ -724,6 +744,9 @@ class DeployTests(unittest.TestCase):
         ) as prepare:
             report, api = self.execute()
         self.assertTrue(report["passed"])
+        self.assertIn(
+            ["git", "ls-remote", "origin", "refs/heads/main"], [call[0] for call in self.calls]
+        )
         api.assert_not_called()
         self.assertEqual(len(self.deployments()), 2)
         prepare.assert_called_once_with(

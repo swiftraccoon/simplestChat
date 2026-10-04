@@ -104,6 +104,10 @@ checks. Schema changes still require the separate explicit `--maintenance` optio
 failed maintenance retains its selection for inspection instead of rolling back a
 possibly changed schema. No failed operation is retried automatically.
 
+`--force --maintenance` requires clean HEAD to equal the published `origin/main`
+tip, checked before building or staging, because the maintenance launcher fetches
+that source revision. App-only `--force` supports unpushed commits.
+
 Controller and host outcomes record `forced: true`, `githubAttested: false`, and
 `ciVerification: skipped-explicit-force`. This does not certify CI, image scanning,
 or signature verification. The host retains the authorization and exact build
