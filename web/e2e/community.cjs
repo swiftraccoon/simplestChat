@@ -1144,10 +1144,7 @@ async function setRole(owner, name, role) {
         const conversation = member.locator(`.conversation-tab[data-conversation-id="${ownerId}"]`);
         await conversation.click();
         assert.equal(await conversation.getAttribute('aria-pressed'), 'true');
-        assert.match(
-          await conversation.getAttribute('aria-label'),
-          /^#[0-9a-f]{8} · account · E2E Owner\. Participant ID:/,
-        );
+        assert.equal(await conversation.getAttribute('aria-label'), 'E2E Owner');
         await visible(member, 'Private owner hello');
         await visible(owner, 'Private owner hello');
         assert.equal(

@@ -610,6 +610,7 @@ test('mutable acknowledgement and failure fields update the retained row without
   assert.equal(row.dataset.messageId, 'confirmed');
   assert.doesNotMatch(row.textContent, /Delivery rejected|Edit & resend|Sending/);
   assert.equal(row.querySelector('.delivery-error'), null);
+  assert.equal(row.querySelector('.sender').textContent, 'Updated local name');
   assert.equal(f.chat.input.value, 'original draft');
   assert.equal(f.document.activeElement, f.chat.input);
   row.querySelector('.sender').click();
@@ -1159,7 +1160,7 @@ test('many conversation pills retain full accessible names and focus without reb
   assert.equal(f.chat.conversations.scrollLeft, 100, 'incoming PM does not scroll away from focus');
   assert.equal(f.chat.conversations.children.length, 22);
   assert.ok(focused.getAttribute('aria-label').includes(`${longName}10`));
-  assert.match(focused.title, /Participant ID: person-10/);
+  assert.equal(focused.title, `${longName}10`);
   const settings = f.document
     .getElementById('chat-panel')
     .querySelectorAll('button')
@@ -1634,7 +1635,7 @@ test('reaction chips toggle your own, count what arrives, and leave out ignored 
     action: 'reactToMessage',
     data: { messageId: 'server-1', emoji: '🎉' },
   });
-  assert.deepEqual(chips(), [['🎉 1', 'true', 'You']]);
+  assert.deepEqual(chips(), [['🎉 1', 'true', 'Local']]);
   f.chat.handleEvent({
     type: 'messageReactions',
     messageId: 'server-1',
@@ -1644,7 +1645,7 @@ test('reaction chips toggle your own, count what arrives, and leave out ignored 
     ],
   });
   assert.deepEqual(chips(), [
-    ['🎉 2', 'true', 'You, Bob'],
+    ['🎉 2', 'true', 'Local, Bob'],
     ['👍 2', 'false', 'Bob, someone who left'],
   ]);
   row().querySelectorAll('.reaction-chip')[1].click();
@@ -1669,17 +1670,14 @@ test('a reply quotes what it answers, travels with the send, and a quote finds t
       .find((node) => node.getAttribute('aria-label') === 'Reply');
   replyButton().click();
   assert.equal(f.chat.replyBar.hidden, false);
-  assert.match(
-    f.chat.replyBar.textContent,
-    /^Replying to Alice \(#alice · ID\)Where are the slides\?/,
-  );
+  assert.match(f.chat.replyBar.textContent, /^Replying to AliceWhere are the slides\?/);
   f.chat.input.value = 'Linked above';
   f.chat.send();
   assert.equal(f.state.sent.at(-1)[0], 'public');
   assert.equal(f.state.sent.at(-1).at(-1), 'server-1', 'the send names the message it answers');
   assert.equal(
     rows(f).at(-1).querySelector('.msg-reply').textContent,
-    'Alice (#alice · ID): Where are the slides?',
+    'Alice: Where are the slides?',
   );
   assert.equal(f.chat.replyBar.hidden, true, 'sending clears the reply');
   replyButton().click();
@@ -1730,8 +1728,8 @@ test('a reply quotes what it answers, travels with the send, and a quote finds t
     rows(f)
       .find((node) => node.querySelector('.msg-text').textContent === 'yes you')
       .querySelector('.msg-reply').textContent,
-    'You (#local · guest): q',
-    'a quote of your own message says You, like the rest of the chat',
+    'Local: q',
+    'a quote of your own message keeps its sender name',
   );
 });
 
@@ -1905,7 +1903,7 @@ test("a peer's typing shows in its own conversation only and expires on its own"
   }
 });
 
-test('same-looking display names retain distinct sender and PM identities', async () => {
+test('same-looking display names hide IDs and account status but keep distinct action and PM targets', async () => {
   const f = await fixture();
   await f.chat.activate();
   const first = '11111111-1111-4111-8111-111111111111';
@@ -1915,20 +1913,57 @@ test('same-looking display names retain distinct sender and PM identities', asyn
   f.chat.receive(entry('one', { participantId: first, participantName: 'Sam' }));
   f.chat.receive(entry('two', { participantId: second, participantName: 'Sam' }));
   const messages = rows(f);
-  assert.equal(messages[0].querySelector('.identity-badge').textContent, '#11111111 · account');
-  assert.equal(messages[1].querySelector('.identity-badge').textContent, '#22222222 · guest');
-  assert.match(
-    messages[0].querySelector('.chat-sender-button').getAttribute('aria-label'),
-    new RegExp(first),
+  for (const message of messages) {
+    assert.equal(message.querySelector('.identity-badge'), null);
+    assert.equal(message.querySelector('.chat-sender-button').textContent, 'Sam');
+    assert.doesNotMatch(message.textContent, /11111111|22222222|account|guest/);
+    message.querySelector('.chat-sender-button').click();
+  }
+  assert.deepEqual(
+    f.state.actions.map((action) => action.slice(0, 2)),
+    [
+      [first, 'Sam'],
+      [second, 'Sam'],
+    ],
   );
   f.chat.openPrivate(first, 'Sam');
   f.chat.openPrivate(second, 'Sam');
-  assert.match(f.chat.conversationButtons.get(first).node.textContent, /^#11111111 · account/);
-  assert.match(f.chat.conversationButtons.get(second).node.textContent, /#22222222 · guest/);
+  for (const id of [first, second]) {
+    const conversation = f.chat.conversationButtons.get(id).node;
+    assert.equal(conversation.textContent, 'Sam');
+    assert.equal(conversation.title, 'Sam');
+    assert.equal(conversation.getAttribute('aria-label'), 'Sam');
+    conversation.click();
+    f.chat.input.value = `Hello ${id}`;
+    f.chat.send();
+    assert.equal(f.state.sent.at(-1)[0], 'private');
+    assert.equal(f.state.sent.at(-1)[1], id);
+  }
   f.participants.delete(first);
   f.chat.render();
   const offline = f.chat.conversationButtons.get(first).node;
-  assert.match(offline.textContent, /#11111111 · ID.*offline/);
-  assert.ok(offline.title.includes(`Participant ID: ${first}`));
-  assert.ok(offline.getAttribute('aria-label').includes(`Participant ID: ${first}`));
+  assert.equal(offline.textContent, 'Sam · offline');
+  assert.equal(offline.title, 'Sam · offline');
+  assert.equal(offline.getAttribute('aria-label'), 'Sam · offline');
+});
+
+test('own messages and the reply composer keep the recorded room nickname', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.state.room.nickname = 'Current nickname';
+  f.chat.receive(entry('self', { participantId: 'local', participantName: 'Earlier nickname' }));
+  const message = rows(f)[0];
+  assert.equal(message.querySelector('.chat-sender-button').textContent, 'Earlier nickname');
+  assert.equal(message.querySelector('.identity-badge'), null);
+  message
+    .querySelectorAll('button')
+    .find((node) => node.getAttribute('aria-label') === 'Reply')
+    .click();
+  assert.equal(
+    f.chat.replyBar.querySelector('.reply-bar-label').textContent,
+    'Replying to Earlier nickname',
+  );
+  f.chat.input.value = 'New message';
+  f.chat.send();
+  assert.equal(rows(f).at(-1).querySelector('.chat-sender-button').textContent, 'Current nickname');
 });

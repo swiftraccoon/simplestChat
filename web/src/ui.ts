@@ -46,18 +46,6 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-/** Names are mutable; this server-issued ID distinguishes people even when names look alike. */
-export function identityLabel(id: string, authenticated?: boolean): string {
-  const kind = authenticated === true ? 'account' : authenticated === false ? 'guest' : 'ID';
-  return `#${id.slice(0, 8)} · ${kind}`;
-}
-
-export function identityBadge(id: string, authenticated?: boolean): HTMLElement {
-  const badge = el('span', identityLabel(id, authenticated), 'identity-badge');
-  badge.title = `Participant ID: ${id}`;
-  return badge;
-}
-
 export function button(
   text: string,
   action: () => void,

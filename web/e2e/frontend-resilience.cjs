@@ -656,18 +656,25 @@ async function run() {
     await invited.page
       .locator('#room-screen')
       .evaluate((node) => node.style.setProperty('--roster-width', '160px'));
-    const marker = invited.page.locator('#classic-users-panel .identity-badge').first();
-    await marker.waitFor({ state: 'visible' });
+    const rosterName = invited.page
+      .locator('#classic-users-panel .classic-participant-name')
+      .first();
+    await rosterName.waitFor({ state: 'visible' });
+    assert.equal(await invited.page.locator('#classic-users-panel .identity-badge').count(), 0);
+    assert.doesNotMatch(
+      await invited.page.locator('#classic-users-panel').innerText(),
+      /#local-fi|#remote-f| · account| · guest/,
+    );
     assert.equal(
-      await marker.evaluate((node) => {
-        const markerBounds = node.getBoundingClientRect();
+      await rosterName.evaluate((node) => {
+        const nameBounds = node.getBoundingClientRect();
         const rowBounds = node.closest('li').getBoundingClientRect();
-        return markerBounds.left >= rowBounds.left && markerBounds.right <= rowBounds.right + 1;
+        return nameBounds.left >= rowBounds.left && nameBounds.right <= rowBounds.right + 1;
       }),
       true,
-      'identity marker remains visible in the minimum-width roster',
+      'the display name remains within the minimum-width roster',
     );
-    await invited.page.screenshot({ path: path.join(artifacts, 'identity-roster.png') });
+    await invited.page.screenshot({ path: path.join(artifacts, 'compact-roster.png') });
     report.checks.push(
       'An invitation requires explicit acceptance and a separate join even when signaling becomes ready later',
     );

@@ -23,7 +23,6 @@ import {
   ApiOutcomeUnknownError,
   button,
   el,
-  identityBadge,
   modal,
   safeRasterUrl,
   validatePassword,
@@ -3688,7 +3687,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
       if (badge) name.append(badge);
       name.append(document.createTextNode(p.name));
       if (local) name.append(el('span', ' (you)', 'you-tag'));
-      name.title = `Participant ID: ${p.id}`;
+      name.title = p.name;
       row.append(avatar);
       if (classic) row.append(name);
       else {
@@ -3709,7 +3708,6 @@ function renderParticipants(participants: Map<string, Participant>): void {
         row.append(info, media);
       }
       if (!local) row.append(participantActionButton(p.id, p.name));
-      row.append(identityBadge(p.id, p.authenticated));
     }
     retained.add(row);
     if (row === position) position = position.nextSibling;

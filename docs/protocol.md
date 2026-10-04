@@ -523,9 +523,10 @@ Names are not authorization identifiers and this comparison does not promise to
 detect all cross-script confusables. The server-issued full participant UUID is
 the identity used for chat, replies, private-message targeting and moderation.
 An account uses its stable user UUID; a guest uses a random connection identity
-retained across grace reconnection. The browser displays a short discriminator
-and makes the full ID available; the shortened form is a visual aid, never a
-lookup key or proof of identity.
+retained across grace reconnection. The browser displays names without participant
+IDs or account/guest labels in the roster and chat, including private conversation
+tabs and quoted replies. Identity details remain available in moderation
+confirmations; the full UUID is always the action and conversation lookup key.
 
 A send may name the retained message it answers with `replyTo` (a `messageId`).
 The server quotes that message itself as `ChatEntry.replyTo` (`ChatReplyRef`: its
