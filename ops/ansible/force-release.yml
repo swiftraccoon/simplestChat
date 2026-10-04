@@ -1,0 +1,148 @@
+---
+- name: Deploy an explicitly authorized unsigned off-host artifact
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  serial: 1
+  vars:
+    ansible_pipelining: true
+    scpub_force_helpers:
+      - bounded_process.py
+      - runtime_profile.py
+      - release-public.py
+      - release_public.py
+      - release_artifact.py
+      - release_json.py
+      - reboot-public.py
+      - reboot_public.py
+      - force_release.py
+  pre_tasks:
+    - name: Require explicit force authorization and one prepared public host
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - ansible_play_hosts_all | length == 1
+          - scpub_force_release is sameas true
+          - scpub_enabled | bool
+          - scpub_config == '/etc/simplestchat-public'
+          - scpub_root == '/srv/simplestchat-public'
+          - scpub_release_revision is match('^[a-f0-9]{40}$')
+          - scpub_force_directory is match('^/')
+          - scpub_force_request is match('^/')
+          - scpub_release_artifact_id is not defined
+          - scpub_release_ci_run is not defined
+        fail_msg: Use build/deploy.py --force with one prepared inventory host and an exact local artifact.
+
+    - name: Reverify the exact controller artifact and clean source before remote operations
+      ansible.builtin.command:
+        argv:
+          - "{{ ansible_playbook_python }}"
+          - -B
+          - -c
+          - >-
+            import sys; from pathlib import Path;
+            root=Path(sys.argv[1]);
+            sys.path[:0]=[str(root/'build'),str(root/'ops/ansible/files')];
+            import force_deploy;
+            force_deploy.verify(Path(sys.argv[2]),Path(sys.argv[3]),root,sys.argv[4])
+          - "{{ (playbook_dir ~ '/../..') | realpath }}"
+          - "{{ scpub_force_directory }}"
+          - "{{ scpub_force_request }}"
+          - "{{ scpub_release_revision }}"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      timeout: 300
+
+    - name: Assemble the complete reviewed helper hashes
+      ansible.builtin.set_fact:
+        scpub_force_hashes: >-
+          {{ scpub_force_hashes | default({}) | combine({item:
+            lookup('ansible.builtin.file', playbook_dir ~ '/files/' ~ item, rstrip=false) | hash('sha256')}) }}
+      loop: "{{ scpub_force_helpers }}"
+
+    - name: Verify the prepared host and complete release helper identity
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/release_preflight.py', rstrip=false) }}"
+          - "{{ (scpub_force_hashes if scpub_release_prepared | default(true) | bool else {}) | to_json }}"
+      register: scpub_force_preflight
+      changed_when: false
+      timeout: 60
+
+    - name: Require the preflight's fresh operation identity
+      ansible.builtin.assert:
+        that:
+          - (scpub_force_preflight.stdout | from_json).schemaVersion == 1
+          - (scpub_force_preflight.stdout | from_json).runId is match('^[a-f0-9]{32}$')
+
+  tasks:
+    - name: Install the isolated release helper directory when explicitly requested
+      ansible.builtin.file:
+        path: /usr/local/libexec/simplestchat-public
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      when: not (scpub_release_prepared | default(true) | bool)
+
+    - name: Install the complete reviewed force and release helpers
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: "{{ scpub_force_helpers }}"
+      when: not (scpub_release_prepared | default(true) | bool)
+
+    - name: Create private storage without overwriting a retained release
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - "{{ scpub_root }}/releases"
+        - "{{ scpub_root }}/forced"
+        - "{{ scpub_root }}/forced/{{ (scpub_force_preflight.stdout | from_json).runId }}"
+
+    - name: Transfer only the four validated build artifact files
+      ansible.builtin.copy:
+        src: "{{ scpub_force_directory }}/{{ item }}"
+        dest: "{{ scpub_root }}/forced/{{ (scpub_force_preflight.stdout | from_json).runId }}/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      loop: [image.tar, release.json, source.json, outcome.json]
+
+    - name: Retain the exact explicit unsigned authorization and file hashes
+      ansible.builtin.copy:
+        src: "{{ scpub_force_request }}"
+        dest: "{{ scpub_root }}/forced/{{ (scpub_force_preflight.stdout | from_json).runId }}/force.json"
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+
+    - name: Stage or deploy once through the ordinary locked release primitives
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - "--unit=simplestchat-force-{{ (scpub_force_preflight.stdout | from_json).runId }}"
+          - --property=Type=exec
+          - --property=RuntimeMaxSec=1800
+          - --property=TimeoutStopSec=240
+          - --wait
+          - /usr/bin/python3
+          - -B
+          - /usr/local/libexec/simplestchat-public/force_release.py
+          - --force
+          - --request
+          - "{{ scpub_root }}/forced/{{ (scpub_force_preflight.stdout | from_json).runId }}/force.json"
+      changed_when: true

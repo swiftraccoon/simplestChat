@@ -161,6 +161,18 @@ class ReleasePreflightTests(unittest.TestCase):
             code = PREFLIGHT.main()
         return code, output.getvalue()
 
+    def test_complete_force_set_requires_its_exact_additional_helper(self) -> None:
+        """Force uses the same base identities plus the reviewed unsigned admission helper."""
+        helper = self.helpers / "force_release.py"
+        _ = helper.write_bytes(self.contents)
+        helper.chmod(0o644)
+        expected = {name: self.expected[name] for name in PREFLIGHT.BASE_HELPERS}
+        expected[helper.name] = hashlib.sha256(self.contents).hexdigest()
+        self.assertTrue(PREFLIGHT.check(expected)["prepared"])
+        _ = helper.write_bytes(b"changed\n")
+        with self.assertRaisesRegex(PREFLIGHT.PreflightError, "helper_digest_mismatch"):
+            _ = PREFLIGHT.check(expected)
+
     def test_complete_base_and_github_sets_accept_exact_raw_source_bytes(self) -> None:
         """Verify complete base and github sets accept exact raw source bytes."""
         for expected in (

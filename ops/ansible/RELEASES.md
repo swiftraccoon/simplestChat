@@ -37,13 +37,13 @@ Normal CI builds the production image once, tests it by immutable image ID, and
 retains that same image. Deployment does not rebuild it or rerun the test suite.
 The command does not commit, push, dispatch builds, or retry failed operations.
 
-The controller needs Python 3.12+, authenticated GitHub CLI, Ansible, Node 22.12+,
+The controller needs Python 3.12+, authenticated GitHub CLI, Ansible, curl,
 and trusted SSH access. Select exactly one inventory host; use `--limit` if needed.
 Its `scpub_domain` must match `--origin` so verification targets the deployed site.
 The default CI wait is one hour; `--wait-seconds` changes that bound. Changed
 checkout state, failed CI, expired/missing artifacts, or mismatched helpers stop
-the command before deployment. Every deployable artifact must carry the current
-trusted CI attestation; unsigned and manually built artifacts are rejected.
+the command before deployment. This default path requires the current trusted CI
+attestation. The explicit force path below admits a local build without it.
 
 Prepared-host checks are enabled by default. After reviewing helper changes,
 `--install-helpers` explicitly installs the current helpers instead of requiring
@@ -51,7 +51,10 @@ an exact existing match. It does not run host provisioning or database migration
 
 The existing release playbook transfers and validates the image while chat stays
 online, takes the backup, and replaces only the application. After readiness,
-the command runs the public smoke, which writes one labeled message in `lobby`.
+the command makes anonymous HTTPS GETs to `/health`, `/ready`, and `/`; it does
+not join guests or write chat messages. `--public-chat-smoke` explicitly opts into
+the Node 22.12+ smoke that joins two guests and writes one labeled message in
+`--room` (default `lobby`). Do not select that option without authorization to post.
 Private command logs and the selected revision/run/artifact identities are kept
 under `results/deploy.*`; remote deployment evidence remains on the VPS.
 
@@ -72,15 +75,52 @@ unfinished-operation checks remain authoritative; inspect evidence before retryi
 A failed post-deployment smoke does not trigger another restart or rollback; the
 report distinguishes a successful release from failed public verification.
 
+## Explicit force deployment
+
+When the operator explicitly requests deployment without waiting for CI, use:
+
+```sh
+python3 build/deploy.py \
+  --inventory ops/ansible/inventory.local.yml \
+  --repository OWNER/REPOSITORY \
+  --origin https://chat.example.com \
+  --force --quiet-seconds 0
+```
+
+`--force` builds the clean current commit off-host through the existing production
+Dockerfile and `build/build-release.py` implementation. Docker/Buildx must already
+be available on the controller; the command does not start a VM or install tools.
+It uses the builder's caches and bounded one-hour build/export deadline. To reuse
+an already built exact-HEAD export, add `--artifact-dir results/YOUR-RELEASE`.
+That option is rejected without `--force`. On first use or after reviewed helper
+changes, add `--install-helpers` to install the complete force helper set.
+
+Force skips CI waiting and GitHub attestation verification only. A clean checkout,
+matching repository/revision, source input and migration hashes, successful build
+evidence, archive digest, production image identity, and packaged migrations are
+still required. The host rechecks the transferred bytes and uses the same workload
+lock, checked backup, readiness, application rollback, and database/proxy continuity
+checks. Schema changes still require the separate explicit `--maintenance` option;
+failed maintenance retains its selection for inspection instead of rolling back a
+possibly changed schema. No failed operation is retried automatically.
+
+Controller and host outcomes record `forced: true`, `githubAttested: false`, and
+`ciVerification: skipped-explicit-force`. This does not certify CI, image scanning,
+or signature verification. The host retains the authorization and exact build
+evidence alongside the canonical release and in its private operation directory.
+Existing release bytes are immutable: a different local or CI build of the same
+revision is refused. Use a new reviewed commit for a later differing signed build;
+never overwrite retained artifacts or relabel the forced deployment as signed.
+
 ## Trusted artifact requirements
 
-The deployment artifact is produced only by `.github/workflows/ci.yml` on a
+The default signed deployment artifact is produced only by `.github/workflows/ci.yml` on a
 `push` to `refs/heads/main`. Its signing job waits for the release smoke and all
 required CI, security and CodeQL jobs. Pull-request caches or artifacts are never
 promoted. The separate manual image-build workflow is useful for diagnostics;
 its output has no deployment eligibility, even if another run passed for the
-same commit. Local `build/build-release.py` output likewise cannot be staged as a
-public release without the trusted signer contract.
+same commit. Local `build/build-release.py` output requires the explicit force path
+above; it does not satisfy the trusted signer contract.
 
 The controller downloads and verifies the exact API-digested artifact locally
 before SSH, helper installation, remote preflight, image import or service

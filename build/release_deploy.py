@@ -1,9 +1,9 @@
-"""Deploy clean HEAD using its successful push CI image, then run public smoke.
+"""Deploy clean HEAD and verify it with anonymous HTTPS requests.
 
-Requires Python 3.12+, authenticated GitHub CLI, Ansible and Node 22.12+ on the
-controller. This command deploys to ONE prepared inventory host and writes one
-labeled public smoke message. It never pushes, dispatches CI, builds an image,
-retries a failed release, or bypasses the existing release helper's checks.
+Requires Python 3.12+, Ansible, curl and trusted SSH access on the controller.
+Signed CI artifacts also require authenticated GitHub CLI; --force admits an
+off-host build without waiting for CI or requiring its attestation. Chat-writing
+verification requires --public-chat-smoke. Runtime release safeguards remain.
 """
 
 # Failure codes are intentionally fixed literals at validation boundaries.
@@ -23,6 +23,7 @@ from pathlib import Path
 from types import FrameType
 from urllib.parse import urlsplit
 
+import force_deploy
 import release_attestation
 import release_build as BUILD  # noqa: N812 -- Keep established helper aliases.
 import release_fetch_controller as FETCH  # noqa: N812 -- Keep established helper aliases.
@@ -57,6 +58,9 @@ class DeployOptions(argparse.Namespace):
     install_helpers: bool = False
     maintenance: bool = False
     ansible_playbook: str | None = None
+    force: bool = False
+    artifact_dir: str | None = None
+    public_chat_smoke: bool = False
 
 
 def object_record(value: JsonValue, code: str) -> JsonObject:
@@ -74,6 +78,19 @@ def options(argv: list[str] | None = None) -> DeployOptions:
     _ = parser.add_argument("--origin", required=True)
     _ = parser.add_argument("--limit", help="Exact inventory hostname; patterns are not supported")
     _ = parser.add_argument("--room", default="lobby")
+    _ = parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Explicitly deploy an unsigned off-host build without waiting for CI",
+    )
+    _ = parser.add_argument(
+        "--artifact-dir", help="With --force, reuse an exact-HEAD local build/export directory"
+    )
+    _ = parser.add_argument(
+        "--public-chat-smoke",
+        action="store_true",
+        help="Explicitly join guests and write one public test chat message",
+    )
     _ = parser.add_argument("--wait-seconds", type=int, default=3600)
     _ = parser.add_argument(
         "--quiet-seconds",
@@ -101,6 +118,14 @@ def options(argv: list[str] | None = None) -> DeployOptions:
         "--ansible-playbook", help="Controller executable; defaults to local .venv, then PATH"
     )
     args = parser.parse_args(argv, namespace=DeployOptions())
+    require(args.force or args.artifact_dir is None, "artifact_directory_requires_force")
+    if args.artifact_dir is not None:
+        artifact = Path(args.artifact_dir).expanduser().absolute()
+        require(
+            not artifact.is_symlink() and artifact.is_dir() and artifact.resolve() == artifact,
+            "invalid_artifact_directory",
+        )
+        args.artifact_dir = str(artifact)
     require(
         re.fullmatch(
             r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", args.repository
@@ -152,10 +177,10 @@ def controller_tools(args: DeployOptions, root: Path) -> tuple[str, str, str]:
         and os.access(inventory, os.X_OK),
         "ansible_not_found",
     )
-    node = shutil.which("node")
-    if node is None:
-        raise DeployError("node_not_found")
-    return str(playbook), str(inventory), node
+    verifier = shutil.which("node" if args.public_chat_smoke else "curl")
+    if verifier is None:
+        raise DeployError("verification_tool_not_found")
+    return str(playbook), str(inventory), verifier
 
 
 def ansible_environment(root: Path) -> dict[str, str]:
@@ -347,12 +372,109 @@ def run_playbook(
         env=target.environment,
         # Migration transfer runs two bounded 1800-second units sequentially,
         # with additional time for archive transport and source recovery.
-        timeout={"release.yml": 4500, "migration-data.yml": 5400}.get(name, 2400),
+        timeout={"release.yml": 4500, "force-release.yml": 4500, "migration-data.yml": 5400}.get(
+            name, 2400
+        ),
         capture=False,
     )
 
 
-def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0915 - one release transaction: identity, CI, staging, optional maintenance, smoke.
+def anonymous_verification(runner: BUILD.Runner, curl: str, root: Path, origin: str) -> None:
+    """Make bounded anonymous GETs without redirects, guests or public chat writes."""
+    for path, expected in (("/health", "ok"), ("/ready", "ready"), ("/", None)):
+        _, output = runner.run(
+            [
+                curl,
+                "--disable",
+                "--silent",
+                "--show-error",
+                "--fail",
+                "--noproxy",
+                "*",
+                "--proto",
+                "=https",
+                "--tlsv1.2",
+                "--connect-timeout",
+                "5",
+                "--max-time",
+                "10",
+                "--max-filesize",
+                "1048576",
+                "--request",
+                "GET",
+                "--write-out",
+                "\n%{http_code}",
+                origin + path,
+            ],
+            cwd=root,
+            env=FETCH.ssh_environment(),
+            timeout=15,
+        )
+        body, separator, status = output.rpartition("\n")
+        require(separator and status == "200", "public_http_verification_failed")
+        if expected is None:
+            require("<!doctype html>" in body[:256].lower(), "public_homepage_verification_failed")
+        else:
+            value = object_record(FETCH.decoded(body), "public_http_verification_failed")
+            require(value.get("status") == expected, "public_http_verification_failed")
+
+
+def select_artifact(
+    args: DeployOptions, directory: Path, root: Path, revision: str, report: JsonObject
+) -> tuple[str, JsonObject]:
+    """Keep unsigned authorization separate from the unchanged signed artifact flow."""
+    if args.force:
+        report.update(
+            phase="force_artifact", githubAttested=False, ciVerification="skipped-explicit-force"
+        )
+        artifact, request = force_deploy.prepare(
+            directory,
+            root,
+            revision,
+            {
+                "artifactDirectory": args.artifact_dir,
+                "repository": args.repository,
+                "deploy": not args.maintenance,
+                "quietSeconds": args.quiet_seconds,
+            },
+        )
+        report["fileDigests"] = request["fileDigests"]
+        return "force-release.yml", {
+            "scpub_force_release": True,
+            "scpub_force_directory": str(artifact),
+            "scpub_force_request": str(directory / "force.json"),
+            "scpub_release_revision": revision,
+        }
+    report["phase"] = "ci"
+    envelope = select_ci_artifact(args, revision)
+    report["phase"] = "attestation"
+    selection = FETCH.ReleaseSelection(
+        args.repository,
+        integer_value(envelope["artifactId"]),
+        revision,
+        integer_value(envelope["ciRunId"]),
+    )
+    verified_directory = directory / "verified"
+    envelope = release_attestation.fetch_verify(
+        FETCH.download_url(selection), verified_directory, envelope
+    )
+    BUILD.write_json(directory / "selection.json", envelope)
+    report.update(
+        ciRunId=envelope["ciRunId"],
+        artifactId=envelope["artifactId"],
+        githubAttested=True,
+        ciVerification="passed",
+    )
+    return "release.yml", {
+        "scpub_release_repository": args.repository,
+        "scpub_release_artifact_id": envelope["artifactId"],
+        "scpub_release_expected_revision": revision,
+        "scpub_release_ci_run": envelope["ciRunId"],
+        "scpub_release_verified_directory": str(verified_directory),
+    }
+
+
+def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0915 - one release transaction: identity, artifact, staging, optional maintenance, verification.
     """Deploy the pinned artifact once to a frozen host, then run public verification."""
     report: JsonObject = {
         "schemaVersion": 1,
@@ -363,20 +485,26 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0
         "remoteOutcome": "not_started",
         "failureClass": None,
         "startedAt": datetime.now(UTC).isoformat(),
+        "forced": args.force,
+        "verification": "public-chat-smoke" if args.public_chat_smoke else "anonymous-http",
     }
     directory = None
     started = time.monotonic()
     try:
         inspector = BUILD.Runner()
+        require(args.force or args.artifact_dir is None, "artifact_directory_requires_force")
         revision = checkout_identity(inspector, root, args.repository)
         report.update(repository=args.repository, revision=revision)
-        playbook, inventory_tool, node = controller_tools(args, root)
+        playbook, inventory_tool, verifier = controller_tools(args, root)
         environment = ansible_environment(root)
         target = selected_host(args, inventory_tool, root, environment)
         host, hostvars = target
-        _, version = inspector.run([node, "--version"], cwd=root)
-        match = re.fullmatch(r"v(\d+)\.(\d+)\.\d+", version)
-        require(match and (int(match[1]), int(match[2])) >= (22, 12), "node_version_unsupported")
+        if args.public_chat_smoke:
+            _, version = inspector.run([verifier, "--version"], cwd=root)
+            match = re.fullmatch(r"v(\d+)\.(\d+)\.\d+", version)
+            require(
+                match and (int(match[1]), int(match[2])) >= (22, 12), "node_version_unsupported"
+            )
         _, ignored = inspector.run(
             ["git", "check-ignore", "--", str(root / "results/deploy.evidence")], cwd=root
         )
@@ -387,21 +515,7 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0
         directory = Path(tempfile.mkdtemp(prefix="deploy.", dir=parent))
         report["evidence"] = str(directory)
         runner = BUILD.Runner(directory)
-        report["phase"] = "ci"
-        envelope = select_ci_artifact(args, revision)
-        report["phase"] = "attestation"
-        selection = FETCH.ReleaseSelection(
-            args.repository,
-            integer_value(envelope["artifactId"]),
-            revision,
-            integer_value(envelope["ciRunId"]),
-        )
-        verified_directory = directory / "verified"
-        envelope = release_attestation.fetch_verify(
-            FETCH.download_url(selection), verified_directory, envelope
-        )
-        BUILD.write_json(directory / "selection.json", envelope)
-        report.update(ciRunId=envelope["ciRunId"], artifactId=envelope["artifactId"])
+        release_playbook, artifact_extra = select_artifact(args, directory, root, revision, report)
         require(
             selected_host(args, inventory_tool, root, environment) == target,
             "inventory_target_changed",
@@ -412,11 +526,7 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0
         frozen_inventory = directory / "inventory.json"
         BUILD.write_json(frozen_inventory, {"benchmark_hosts": {"hosts": {host: hostvars}}})
         extra: JsonObject = {
-            "scpub_release_repository": args.repository,
-            "scpub_release_artifact_id": envelope["artifactId"],
-            "scpub_release_expected_revision": revision,
-            "scpub_release_ci_run": envelope["ciRunId"],
-            "scpub_release_verified_directory": str(verified_directory),
+            **artifact_extra,
             "scpub_release_prepared": not args.install_helpers,
             "scpub_release_deploy": not args.maintenance,
             "scpub_release_quiet_seconds": args.quiet_seconds,
@@ -430,15 +540,20 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0
             root=root,
             environment=environment,
         )
-        run_playbook(runner, target, "release.yml", extra)
+        run_playbook(runner, target, release_playbook, extra)
         if args.maintenance:
             # Staged while live; the launcher now migrates, grants and restarts.
             report.update(phase="maintenance", remoteOutcome="inspect_if_interrupted")
             run_playbook(runner, target, "maintenance.yml", {"scpub_release_revision": revision})
         report.update(deployed=True, remoteOutcome="release_succeeded", phase="public_smoke")
+        if not args.public_chat_smoke:
+            report["phase"] = "anonymous_verification"
+            anonymous_verification(runner, verifier, root, args.origin)
+            report.update(passed=True, phase="complete")
+            return report
         _, output = runner.run(
             [
-                node,
+                verifier,
                 str(root / "build/public-smoke.mjs"),
                 "--origin",
                 args.origin,

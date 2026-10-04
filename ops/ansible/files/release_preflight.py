@@ -36,6 +36,7 @@ BASE_HELPERS = {
     "reboot_public.py",
 }
 FETCH_HELPERS = {"fetch-release.py", "release_fetch_receiver.py", "release_trust.py"}
+FORCE_HELPERS = {"force_release.py"}
 MAX_HELPER = 1024 * 1024
 MAX_REQUEST = 4096
 REQUEST_ARGUMENTS = 2
@@ -81,7 +82,11 @@ def _expected_helpers(value: object) -> dict[str, str]:
     # This standalone controller-supplied preflight must not import host helpers
     # before their identities have been checked. Validate its tiny input locally.
     raw = cast("dict[object, object]", value)
-    require(set(raw) in (set(), BASE_HELPERS, BASE_HELPERS | FETCH_HELPERS), "invalid_helper_set")
+    require(
+        set(raw)
+        in (set(), BASE_HELPERS, BASE_HELPERS | FETCH_HELPERS, BASE_HELPERS | FORCE_HELPERS),
+        "invalid_helper_set",
+    )
     result: dict[str, str] = {}
     for name, digest in raw.items():
         if (

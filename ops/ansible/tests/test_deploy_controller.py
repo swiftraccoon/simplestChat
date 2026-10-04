@@ -22,6 +22,7 @@ from test_support import ROOT
 
 # Bootstrap flat checkout imports before loading helpers.
 # isort: split
+import force_deploy
 import release_attestation
 import release_build as BUILD  # noqa: N812 -- Keep established helper aliases.
 import release_deploy as DEPLOY  # noqa: N812 -- Keep established helper aliases.
@@ -140,7 +141,7 @@ class FakeRunner:
         self.fixture: DeployTests = fixture
         self.output: Path | None = output
 
-    def run(  # noqa: PLR0913, PLR0911 -- Explicit boundary options preserve the subprocess contract.
+    def run(  # noqa: C901, PLR0913, PLR0911 -- Explicit boundary options preserve the subprocess contract.
         self,
         argv: Sequence[str],
         *,
@@ -191,6 +192,15 @@ class FakeRunner:
                     "room": "lobby",
                 }
             )
+        if argv[0] == "/curl":
+            path = argv[-1]
+            if path.endswith("/health"):
+                return 0, '{"status":"ok"}\n200'
+            if path.endswith("/ready"):
+                return 0, json.dumps(
+                    {"status": "ready" if state.smoke_passed else "unready"}
+                ) + "\n200"
+            return 0, "<!doctype html><html></html>\n200"
         raise AssertionError(f"Unexpected test command: {argv}")
 
 
@@ -231,6 +241,7 @@ class DeployTests(unittest.TestCase):
             install_helpers=False,
             maintenance=False,
             ansible_playbook=None,
+            public_chat_smoke=True,
         )
         self.calls = []
         self.inventory = inventory()
@@ -263,7 +274,11 @@ class DeployTests(unittest.TestCase):
             patch.object(
                 DEPLOY,
                 "controller_tools",
-                return_value=("/ansible-playbook", "/ansible-inventory", "/node"),
+                return_value=(
+                    "/ansible-playbook",
+                    "/ansible-inventory",
+                    "/node" if self.args.public_chat_smoke else "/curl",
+                ),
             ),
             patch.object(
                 FETCH, "api", side_effect=records if records is not None else api_records()
@@ -608,6 +623,120 @@ class DeployTests(unittest.TestCase):
             self.assertEqual(DEPLOY.main(["--help"]), 0)
         execute.assert_not_called()
         self.assertIn("--install-helpers", output.getvalue())
+
+    def test_default_verification_is_anonymous_http_without_node_or_chat(self) -> None:
+        """The ordinary deploy command never joins guests or writes a public message."""
+        self.args.public_chat_smoke = False
+        report, _ = self.execute()
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["verification"], "anonymous-http")
+        self.assertEqual(self.smokes(), [])
+        self.assertFalse(any(command[0][0] == "/node" for command in self.calls))
+        requests = [command[0] for command in self.calls if command[0][0] == "/curl"]
+        self.assertEqual(
+            [command[-1] for command in requests],
+            [
+                "https://chat.example.test/health",
+                "https://chat.example.test/ready",
+                "https://chat.example.test/",
+            ],
+        )
+        self.assertTrue(
+            all(command[command.index("--request") + 1] == "GET" for command in requests)
+        )
+
+    def test_artifact_directory_without_force_is_refused_before_commands(self) -> None:
+        """An artifact path alone cannot opt an ordinary deployment out of signed CI."""
+        self.args.artifact_dir = str(self.root)
+        report, api = self.execute()
+        self.assertEqual(report["failureClass"], "artifact_directory_requires_force")
+        self.assertEqual(self.calls, [])
+        api.assert_not_called()
+
+    def test_cli_defaults_never_authorize_unsigned_input_or_chat_messages(self) -> None:
+        """Force and public-message verification require their separate explicit flags."""
+        arguments = [
+            "--inventory",
+            str(self.inventory_path),
+            "--repository",
+            "owner/repo",
+            "--origin",
+            "https://chat.example.test",
+        ]
+        default = DEPLOY.options(arguments)
+        self.assertFalse(default.force or default.public_chat_smoke)
+        selected = DEPLOY.options([*arguments, "--force", "--artifact-dir", str(self.root)])
+        self.assertTrue(selected.force)
+        self.assertFalse(selected.public_chat_smoke)
+        with self.assertRaisesRegex(DEPLOY.DeployError, "artifact_directory_requires_force"):
+            _ = DEPLOY.options([*arguments, "--artifact-dir", str(self.root)])
+
+    def test_failed_anonymous_readiness_preserves_successful_release_without_retry(self) -> None:
+        """Public verification cannot silently pass or trigger another application restart."""
+        self.args.public_chat_smoke = self.smoke_passed = False
+        report, _ = self.execute()
+        self.assertFalse(report["passed"])
+        self.assertTrue(report["deployed"])
+        self.assertEqual(report["failureClass"], "public_http_verification_failed")
+        self.assertEqual(len(self.deployments()), 1)
+        self.assertEqual(self.smokes(), [])
+
+    def test_force_skips_ci_and_attestation_but_preserves_frozen_target_and_verification(
+        self,
+    ) -> None:
+        """An explicit unsigned release uses one force playbook and honest evidence."""
+        self.args.force = True
+        self.args.public_chat_smoke = False
+        with patch.object(
+            force_deploy,
+            "prepare",
+            return_value=(
+                self.root / "artifact",
+                {"fileDigests": {"image.tar": "b" * 64}},
+            ),
+        ) as prepare:
+            report, api = self.execute(attestation_error=AssertionError("attestation was called"))
+        self.assertTrue(report["passed"] and report["forced"])
+        self.assertIs(report["githubAttested"], expr2=False)
+        self.assertEqual(report["ciVerification"], "skipped-explicit-force")
+        self.assertNotIn("ciRunId", report)
+        api.assert_not_called()
+        prepare.assert_called_once()
+        self.assertEqual(len(self.deployments()), 1)
+        command = self.deployments()[0][0]
+        self.assertTrue(any(value.endswith("/force-release.yml") for value in command))
+        extra = object_value(decode_json(command[command.index("--extra-vars") + 1]))
+        self.assertIs(extra["scpub_force_release"], expr2=True)
+        self.assertNotIn("scpub_release_ci_run", extra)
+        self.assertEqual(self.revision_reads, 2)
+        self.assertEqual(self.inventory_reads, 2)
+
+    def test_force_maintenance_stages_then_uses_explicit_maintenance(self) -> None:
+        """Force does not silently promote app-only replacement into schema maintenance."""
+        self.args.force = self.args.maintenance = True
+        with patch.object(
+            force_deploy,
+            "prepare",
+            return_value=(
+                self.root / "artifact",
+                {"fileDigests": {}},
+            ),
+        ) as prepare:
+            report, api = self.execute()
+        self.assertTrue(report["passed"])
+        api.assert_not_called()
+        self.assertEqual(len(self.deployments()), 2)
+        prepare.assert_called_once_with(
+            Path(string_value(report["evidence"])),
+            self.root,
+            REVISION,
+            {
+                "artifactDirectory": None,
+                "repository": "owner/repo",
+                "deploy": False,
+                "quietSeconds": 600,
+            },
+        )
 
 
 if __name__ == "__main__":
