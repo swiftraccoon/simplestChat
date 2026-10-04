@@ -78,17 +78,76 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Fingerprint the exact native-${{ matrix.mode }} inputs
+        id: verified-inputs
+        env:
+          CI_CACHE_SCOPE: native-${{ matrix.mode }}
+        run: |
+          key="$(python3 build/ci_verified.py key --scope "$CI_CACHE_SCOPE")"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+      - name: Restore a verified native-${{ matrix.mode }} result
+        id: verified
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-native-${{ matrix.mode }}
+          key: ${{ steps.verified-inputs.outputs.key }}
+      - name: Validate the restored native-${{ matrix.mode }} receipt
+        if: steps.verified.outputs.cache-hit == 'true'
+        env:
+          CI_CACHE_SCOPE: native-${{ matrix.mode }}
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-native-${{ matrix.mode }}
+        run: |
+          python3 build/ci_verified.py verify --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+
       - name: Start this local job's isolated container engine
-        if: ${{ env.ACT }}
+        if: ${{ env.ACT && steps.verified.outputs.cache-hit != 'true' }}
         run: build/ci-local-docker.sh
       - name: Verify upstream source and native seed identities
+        if: steps.verified.outputs.cache-hit != 'true'
         run: |
           python3 build/security_vendor.py verify --root "$PWD" \
             --cache "$RUNNER_TEMP/vendor-cache" --output "$RUNNER_TEMP/vendor-integrity"
           python3 build/native_security.py verify
+      - name: Fingerprint the prepared native image
+        if: steps.verified.outputs.cache-hit != 'true'
+        id: native-image-inputs
+        run: |
+          key="$(python3 build/native_security_cache.py key)"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+      - name: Restore the exact prepared native image
+        if: steps.verified.outputs.cache-hit != 'true'
+        id: native-image
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/native-image-cache
+          key: ${{ steps.native-image-inputs.outputs.key }}
+      - name: Validate and load the prepared native image
+        if: steps.verified.outputs.cache-hit != 'true' && steps.native-image.outputs.cache-hit == 'true'
+        env:
+          NATIVE_IMAGE_KEY: ${{ steps.native-image-inputs.outputs.key }}
+        run: |
+          python3 build/native_security_cache.py load --key "$NATIVE_IMAGE_KEY" \
+            --directory "$RUNNER_TEMP/native-image-cache" --output "$RUNNER_TEMP/native-preparation"
       - name: Prepare the pinned native checker
+        if: steps.verified.outputs.cache-hit != 'true' && steps.native-image.outputs.cache-hit != 'true'
         run: python3 build/native_security.py prepare --output "$RUNNER_TEMP/native-preparation"
+      - name: Export the checked prepared native image
+        if: steps.verified.outputs.cache-hit != 'true' && steps.native-image.outputs.cache-hit != 'true'
+        env:
+          NATIVE_IMAGE_KEY: ${{ steps.native-image-inputs.outputs.key }}
+        run: |
+          python3 build/native_security_cache.py save --key "$NATIVE_IMAGE_KEY" \
+            --directory "$RUNNER_TEMP/native-image-cache" --output "$RUNNER_TEMP/native-preparation"
+      - name: Save the exact prepared native image before running its selected suite
+        if: steps.verified.outputs.cache-hit != 'true' && steps.native-image.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/native-image-cache
+          key: ${{ steps.native-image-inputs.outputs.key }}
       - name: Run the selected isolated native suite
+        if: steps.verified.outputs.cache-hit != 'true'
         env:
           NATIVE_MODE: ${{ matrix.mode }}
         run: |
@@ -115,7 +174,7 @@ jobs:
           NATIVE_MODE: ${{ matrix.mode }}
         run: python3 build/ci-local-evidence.py record --id "native-$NATIVE_MODE"
       - name: Preserve bounded native results
-        if: ${{ always() && !env.ACT }}
+        if: ${{ always() && !env.ACT && steps.verified.outputs.cache-hit != 'true' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-security-results-${{ matrix.mode }}
@@ -131,6 +190,22 @@ jobs:
             ${{ runner.temp }}/native-replay/native.stderr.log
           if-no-files-found: error
           retention-days: 14
+
+      - name: Record the successful native-${{ matrix.mode }} verification
+        if: steps.verified.outputs.cache-hit != 'true'
+        env:
+          CI_CACHE_SCOPE: native-${{ matrix.mode }}
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-native-${{ matrix.mode }}
+        run: |
+          python3 build/ci_verified.py save --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+      - name: Save the exact native-${{ matrix.mode }} success
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-native-${{ matrix.mode }}
+          key: ${{ steps.verified.outputs.cache-primary-key }}
 
   security-deep:
     name: Scheduled complete security tier

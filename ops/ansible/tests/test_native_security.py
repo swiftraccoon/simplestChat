@@ -7,17 +7,19 @@ import json
 import os
 import platform
 import shutil
+import stat
 import tempfile
 import unittest
 from pathlib import Path
 from typing import override
 from unittest.mock import Mock, patch
 
-from test_support import ROOT, obj, objects, string
+from test_support import ROOT, obj, objects, string, yaml_value
 
 # isort: split
 import bounded_process
 import native_security as native
+import native_security_cache as image_cache
 from release_json import JsonObject, decode_json, object_value
 
 IMAGE = "sha256:" + "a" * 64
@@ -153,7 +155,7 @@ class NativeSecurityTests(unittest.TestCase):
             "--network=none",
             "--read-only",
             "--cap-drop=ALL",
-            "--cpus=2",
+            "--cpus=3",
             "--memory=6g",
             "--memory-swap=6g",
             "--pids-limit=256",
@@ -344,6 +346,189 @@ class NativeSecurityTests(unittest.TestCase):
         dockerfile = (ROOT / "build/native-security.Dockerfile").read_text()
         self.assertIn("digest.hexdigest() != asset['sha256']", dockerfile)
         self.assertIn("CC=/opt/llvm/bin/clang CXX=/opt/llvm/bin/clang++", dockerfile)
+
+    def preparation(self) -> Path:
+        """Write a successful preparation receipt for an immutable fixture image."""
+        output = self.root / "prepare-cache"
+        output.mkdir()
+        native.write_json(
+            output / "report.json",
+            {
+                "schemaVersion": 1,
+                "status": "passed",
+                "imageId": IMAGE,
+                "inputsSha256": DIGEST,
+                "architecture": "amd64",
+            },
+        )
+        return output
+
+    def test_prepared_image_key_tracks_build_inputs_and_modes_not_unrelated_changes(self) -> None:
+        """Tool/source bytes and chmod invalidate preparation while unrelated docs do not."""
+        context = self.root / "context"
+        context.mkdir()
+        _ = native.inputs_digest(ROOT, context)
+        original = image_cache.cache_key(context)
+        _ = (context / "unrelated-operations.md").write_text("Unrelated documentation changed\n")
+        self.assertEqual(image_cache.cache_key(context), original)
+        pin = context / "security/native/toolchain.json"
+        mode = stat.S_IMODE(pin.stat().st_mode)
+        content_digest = native.inputs_digest(context)
+        pin.chmod(mode | stat.S_IXUSR)
+        self.assertEqual(native.inputs_digest(context), content_digest)
+        self.assertNotEqual(image_cache.cache_key(context), original)
+        pin.chmod(mode)
+        _ = pin.write_text(pin.read_text() + "\n")
+        changed = image_cache.cache_key(context)
+        self.assertNotEqual(changed, original)
+        with patch.object(platform, "machine", return_value="aarch64"):
+            self.assertNotEqual(image_cache.cache_key(context), changed)
+        with patch.dict(os.environ, {"GITHUB_REF": "refs/heads/main", "GITHUB_EVENT_NAME": "push"}):
+            trusted = image_cache.cache_key(context)
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "pull_request"}):
+            self.assertNotEqual(image_cache.cache_key(context), trusted)
+
+    def test_prepared_image_roundtrip_checks_exact_id_inputs_and_architecture(self) -> None:
+        """A Docker-save archive is loaded only after its receipt and hash are checked."""
+        preparation = self.preparation()
+        directory = self.root / "image-cache"
+        output = self.root / "loaded-preparation"
+        info: JsonObject = {
+            "Id": IMAGE,
+            "Os": "linux",
+            "Architecture": "amd64",
+            "Config": {"Labels": {native.INPUT_LABEL: DIGEST}},
+        }
+
+        def command(argv: list[str], *, timeout: int = 30) -> bytes:
+            self.assertGreater(timeout, 0)
+            if argv[1:3] == ["image", "save"]:
+                self.assertEqual(argv[-1], IMAGE)
+                _ = Path(argv[4]).write_bytes(b"owned-image-archive")
+                return b""
+            if argv[1:3] == ["image", "load"]:
+                return b"loaded"
+            self.assertEqual(argv[-1], IMAGE)
+            return json.dumps(info).encode()
+
+        with (
+            patch.object(native, "inputs_digest", return_value=DIGEST),
+            patch.object(
+                native, "source_files", return_value=[self.root / "security/native/corpus.json"]
+            ),
+            patch.object(native, "command", side_effect=command) as engine,
+        ):
+            key = image_cache.cache_key(self.root)
+            image_cache.save(["engine"], self.root, preparation, directory, key)
+            image_cache.load(["engine"], self.root, directory, output, key)
+            info["Architecture"] = "arm64"
+            with self.assertRaisesRegex(native.SecurityError, "native_image_architecture_mismatch"):
+                image_cache.load(["engine"], self.root, directory, self.root / "wrong-isa", key)
+        self.assertEqual(engine.call_count, 6)
+        self.assertFalse((self.root / "wrong-isa/report.json").exists())
+        self.assertEqual(
+            (output / "report.json").read_bytes(), (preparation / "report.json").read_bytes()
+        )
+        self.assertEqual({path.name for path in directory.iterdir()}, {"image.tar", "receipt.json"})
+
+    def test_prepared_cache_rejects_tampering_before_engine_load(self) -> None:
+        """Changing any bound metadata or archive bytes prevents the engine from seeing it."""
+        report = object_value(decode_json((self.preparation() / "report.json").read_bytes()))
+        directory = self.root / "cache"
+        directory.mkdir()
+        archive = directory / "image.tar"
+        _ = archive.write_bytes(b"archive")
+        with (
+            patch.object(native, "inputs_digest", return_value=DIGEST),
+            patch.object(
+                native, "source_files", return_value=[self.root / "security/native/corpus.json"]
+            ),
+        ):
+            key = image_cache.cache_key(self.root)
+            valid: JsonObject = {
+                "key": key,
+                "preparation": report,
+                "archiveBytes": 7,
+                "archiveSha256": hashlib.sha256(b"archive").hexdigest(),
+            }
+            variants = (
+                {**valid, "key": "another-key"},
+                {**valid, "archiveSha256": "0" * 64},
+                {**valid, "archiveBytes": 8},
+                {**valid, "preparation": {**report, "inputsSha256": "0" * 64}},
+                {**valid, "preparation": {**report, "architecture": "arm64"}},
+                {**valid, "preparation": {**report, "imageId": "mutable:tag"}},
+                {**valid, "preparation": {**report, "status": "failed"}},
+            )
+            for receipt in variants:
+                _ = (directory / "receipt.json").write_text(json.dumps(receipt))
+                with (
+                    self.subTest(receipt=receipt),
+                    patch.object(native, "command") as engine,
+                    self.assertRaises(native.SecurityError),
+                ):
+                    image_cache.load(["engine"], self.root, directory, self.root / "output", key)
+                engine.assert_not_called()
+
+    def test_interrupted_prepared_export_never_publishes_a_partial_cache(self) -> None:
+        """Cancellation before the receipt is complete cannot expose a reusable archive."""
+        preparation = self.preparation()
+        directory = self.root / "image-cache"
+        with (
+            patch.object(native, "inputs_digest", return_value=DIGEST),
+            patch.object(
+                native, "source_files", return_value=[self.root / "security/native/corpus.json"]
+            ),
+            patch.object(native, "checked_image"),
+            patch.object(native, "command", side_effect=KeyboardInterrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            image_cache.save(
+                ["engine"], self.root, preparation, directory, image_cache.cache_key(self.root)
+            )
+        self.assertFalse(directory.exists())
+        self.assertEqual(list(self.root.glob("native-image-*")), [])
+
+    def test_prepared_archive_limits_reject_empty_large_and_symlink_inputs(self) -> None:
+        """Restored archives must be ordinary bounded files before hashing or engine access."""
+        archive = self.root / "archive"
+        for size in (0, image_cache.MAX_ARCHIVE + 1):
+            with archive.open("wb") as stream:
+                _ = stream.truncate(size)
+            with (
+                self.subTest(size=size),
+                self.assertRaisesRegex(native.SecurityError, "cache_archive_size"),
+            ):
+                _ = image_cache.archive_identity(archive)
+        archive.unlink()
+        archive.symlink_to(self.root / "security/native/corpus.json")
+        with self.assertRaises(OSError):
+            _ = image_cache.archive_identity(archive)
+
+    def test_workflow_image_cache_is_saved_before_all_selected_modes_execute(self) -> None:
+        """Prepared image reuse skips only preparation, never a requested sanitizer/replay."""
+        workflow = yaml_value(
+            (ROOT / ".github/workflows/security.yml").read_text(), scalars_as_strings=True
+        )
+        job = obj(workflow, "jobs", "native-security")
+        self.assertEqual(obj(job, "strategy", "matrix")["mode"], list(native.MODES))
+        steps = objects(job, "steps")
+        prepare = next(
+            step for step in steps if "native_security.py prepare" in str(step.get("run", ""))
+        )
+        run = next(step for step in steps if "native_security.py run" in str(step.get("run", "")))
+        restore = next(step for step in steps if step.get("id") == "native-image")
+        save = next(
+            step
+            for step in steps
+            if step.get("name")
+            == "Save the exact prepared native image before running its selected suite"
+        )
+        self.assertIn("steps.native-image.outputs.cache-hit != 'true'", string(prepare, "if"))
+        self.assertEqual(run["if"], "steps.verified.outputs.cache-hit != 'true'")
+        self.assertLess(steps.index(save), steps.index(run))
+        self.assertEqual(obj(restore, "with")["key"], obj(save, "with")["key"])
+        self.assertNotIn("restore-keys", obj(restore, "with"))
 
 
 if __name__ == "__main__":

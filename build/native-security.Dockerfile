@@ -79,7 +79,7 @@ ENV PATH=/opt/llvm/bin:/usr/bin:/bin \
     PIP_CONSTRAINT=/opt/check/build/pip-constraints.txt \
     MEDIASOUP_OUT_DIR=/opt/native-tools \
     MEDIASOUP_INSTALL_DIR=/work/install BUILD_DIR=/work/build \
-    MEDIASOUP_BUILD_JOBS=2 \
+    MEDIASOUP_BUILD_JOBS=3 \
     PYTHONPATH=/opt/native-tools/pip_invoke:/opt/native-tools/pip_meson_ninja \
     ASAN_SYMBOLIZER_PATH=/opt/llvm/bin/llvm-symbolizer \
     UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1

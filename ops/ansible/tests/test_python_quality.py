@@ -333,7 +333,15 @@ class PythonPolicyTests(unittest.TestCase):
         )
         for scope in (job, gate):
             self.assertNotIn("continue-on-error", scope)
-            self.assertNotIn("if", scope)
+        self.assertNotIn("if", job)
+        self.assertEqual(gate["if"], "steps.verified.outputs.cache-hit != 'true'")
+        verified = next(
+            step for step in steps if "ci_verified.py verify" in string(step.get("run", ""))
+        )
+        self.assertEqual(verified["if"], "steps.verified.outputs.cache-hit == 'true'")
+        self.assertEqual(string(verified, "env", "CI_CACHE_SCOPE"), "automation")
+        self.assertLess(steps.index(verified), steps.index(gate))
+        self.assertNotIn("continue-on-error", verified)
 
 
 if __name__ == "__main__":

@@ -8,10 +8,12 @@ import json
 import os
 import re
 import sys
+import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import security_codeql
+import security_codeql_cache as cache
 import security_codeql_resources as resources
 import security_codeql_tools as tools
 import security_codeql_triage as triage
@@ -34,6 +36,7 @@ class Options(argparse.Namespace):
     language: str | None = None
     suite: str = "security"
     openssl_prefix: Path = ROOT / "target/openssl-3.5.9"
+    database_cache: Path | None = None
 
 
 def source_identity(context: Context, revision: str) -> None:
@@ -138,6 +141,21 @@ def complete_health(reports: Sequence[JsonObject], languages: Sequence[str], sui
     require(observed == expected, "codeql_local_incomplete_languages")
 
 
+def upload_ready(output: Path, revision: str, category: str, language: str) -> bool:
+    """Expose valid fresh SARIF even when current findings fail the policy gate."""
+    report = output / (language + "-" + category + ".sarif")
+    marker = report.with_suffix(".validated.json")
+    if not marker.exists():
+        return False
+    expected = object_value(decode_json(bounded_file(marker, 4096)))
+    identity = report_health(report, language, category)
+    require(
+        expected == {"revision": revision, "sarifSha256": identity["sarifSha256"]},
+        "codeql_upload_identity",
+    )
+    return True
+
+
 def native_coverage(context: Context, codeql: Path, database: Path) -> int:
     """Retain the same real DTLS/STUN/SCTP/RTP compilation requirement as hosted CI."""
     output = context.output
@@ -167,12 +185,14 @@ def native_coverage(context: Context, codeql: Path, database: Path) -> int:
     return security_codeql.verify(output / "native-coverage.json")
 
 
-def analyze_language(
+def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in their required order.
     context: Context, args: Options, source: Path, codeql: Path, language: str
 ) -> list[JsonObject]:
-    """Extract once, run full suites, and enforce each original unfiltered SARIF."""
+    """Analyze exact databases, regenerate full SARIF, and enforce current finding policy."""
     budget = resources.detect(os.environ.get("CODEQL_BUILD_JOBS"))
     database = context.output / "databases" / language
+    extraction: JsonObject | None = None
+    cache_key: str | None = None
     create = [
         str(codeql),
         "database",
@@ -206,18 +226,26 @@ def analyze_language(
         create.extend(["--build-mode=manual", "--command=bash build/codeql-native-build.sh"])
     else:
         create.append("--build-mode=none")
-    _ = context.run(
-        "codeql-create-" + language,
-        create,
-        cwd=source,
-        timeout=2100,
-        env_updates={
-            "OPENSSL_DIR": str(args.openssl_prefix),
-            "CODEQL_BUILD_JOBS": str(budget.workers),
-        },
-    )
+    if args.database_cache is not None:
+        cache_key = cache.cache_key(context.root, source, args.openssl_prefix, language, args.suite)
+        extraction = cache.restore(context, codeql, args.database_cache, cache_key, database)
+    if extraction is None:
+        _ = context.run(
+            "codeql-create-" + language,
+            create,
+            cwd=source,
+            timeout=2100,
+            env_updates={
+                "OPENSSL_DIR": str(args.openssl_prefix),
+                "CODEQL_BUILD_JOBS": str(budget.workers),
+            },
+        )
     database_health(database, language)
+    if cache_key is not None:
+        manifest = object_value(decode_json((context.output / "source-manifest.json").read_bytes()))
+        cache.source_integrity(database, source, manifest, language)
     coverage = native_coverage(context, codeql, database) if language == "c-cpp" else None
+    evaluation_revision = string_value(extraction["revision"]) if extraction else args.revision
     reports: list[JsonObject] = []
     categories = ("security", "quality-advisory") if args.suite == "all" else ("security",)
     for category in categories:
@@ -228,6 +256,7 @@ def analyze_language(
                 str(codeql),
                 "database",
                 "analyze",
+                *([] if extraction is not None else ["--rerun"]),
                 str(database),
                 str(tools.suite(codeql, language, category)),
                 "--format=sarifv2.1.0",
@@ -235,10 +264,20 @@ def analyze_language(
                 "--threads=" + str(budget.workers),
                 "--ram=" + str(budget.ram_mib),
                 "--sarif-category=/language:" + language + "/" + category,
+                "--sarif-run-property=queryReuseEnabled=" + str(extraction is not None).lower(),
+                "--sarif-run-property=originalEvaluationRevision=" + evaluation_revision,
             ],
             timeout=2100,
         )
         identity = report_health(report, language, category)
+        write_private(
+            report.with_suffix(".validated.json"),
+            (
+                json.dumps({"revision": args.revision, "sarifSha256": identity["sarifSha256"]})
+                + "\n"
+            ).encode(),
+            0o600,
+        )
         policy = context.output / (language + "-" + category + "-policy")
         command = [
             sys.executable,
@@ -263,13 +302,31 @@ def analyze_language(
                 "nativeCompiledFiles": coverage,
                 "threads": budget.workers,
                 "ramMiB": budget.ram_mib,
+                "extraction": extraction,
+                "queryReuse": {
+                    "enabled": extraction is not None,
+                    "originalRevision": evaluation_revision,
+                },
             }
         )
+    if cache_key is not None:
+        source_identity(context, args.revision)
+        require(
+            cache_key
+            == cache.cache_key(context.root, source, args.openssl_prefix, language, args.suite),
+            "codeql_cache_inputs_changed",
+        )
+        if extraction is None and args.database_cache is not None:
+            extraction = cache.save(
+                context, codeql, args.database_cache, cache_key, args.revision, language=language
+            )
+            for report in reports:
+                report["extraction"] = extraction
     return reports
 
 
 def execute(context: Context, args: Options) -> list[JsonObject]:
-    """Complete the selected inventory with no cached extraction or diff restriction."""
+    """Produce complete current reports with fresh or exactly verified evaluated databases."""
     source_identity(context, args.revision)
     source = snapshot(context)
     (context.output / "databases").mkdir(mode=0o700)
@@ -299,6 +356,7 @@ def main() -> int:
     _ = parser.add_argument("--language", choices=tools.LANGUAGES)
     _ = parser.add_argument("--suite", choices=("security", "all"), default="security")
     _ = parser.add_argument("--openssl-prefix", type=Path, default=ROOT / "target/openssl-3.5.9")
+    _ = parser.add_argument("--database-cache", type=Path)
     args = parser.parse_args(namespace=Options())
     _ = os.umask(0o077)
     require(args.output.is_absolute(), "codeql_output_absolute")
@@ -310,7 +368,7 @@ def main() -> int:
     try:
         reports = execute(context, args)
         passed = True
-    except (ToolError, OSError, ValueError, KeyError, RuntimeError) as error:
+    except (ToolError, OSError, ValueError, KeyError, RuntimeError, zipfile.BadZipFile) as error:
         failure = str(error) if isinstance(error, ToolError) else type(error).__name__
     write_private(
         args.output / "summary.json",

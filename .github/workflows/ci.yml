@@ -47,7 +47,31 @@ jobs:
         run: |
           git log -1 --format=%B "$COMMIT_REVISION" > "${RUNNER_TEMP}/commit-message"
           .githooks/commit-msg "${RUNNER_TEMP}/commit-message"
+      - name: Fingerprint the exact automation inputs
+        id: verified-inputs
+        env:
+          CI_CACHE_SCOPE: automation
+        run: |
+          key="$(python3 build/ci_verified.py key --scope "$CI_CACHE_SCOPE")"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+      - name: Restore a verified automation result
+        id: verified
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-automation
+          key: ${{ steps.verified-inputs.outputs.key }}
+      - name: Validate the restored automation receipt
+        if: steps.verified.outputs.cache-hit == 'true'
+        env:
+          CI_CACHE_SCOPE: automation
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-automation
+        run: |
+          python3 build/ci_verified.py verify --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+
       - name: Install isolated controller checks
+        if: steps.verified.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-venv shellcheck jq postgresql
@@ -55,6 +79,7 @@ jobs:
           "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r build/python-requirements.txt
           echo "${RUNNER_TEMP}/ansible-controller/bin" >> "${GITHUB_PATH}"
       - name: Validate automation without contacting any host
+        if: steps.verified.outputs.cache-hit != 'true'
         env:
           ANSIBLE_CONFIG: ${{ github.workspace }}/ops/ansible/ansible.cfg
           PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
@@ -74,6 +99,7 @@ jobs:
           python -m unittest discover -s ops/ansible/tests -v
 
       - name: Verify operational alert history in disposable PostgreSQL
+        if: steps.verified.outputs.cache-hit != 'true'
         run: |
           postgres_bindir="$(pg_config --bindir)"
           export PATH="${postgres_bindir}:$PATH"
@@ -81,6 +107,7 @@ jobs:
             -s ops/ansible/tests -p test_monitoring_database.py -v
 
       - name: Verify isolated backup restoration with pinned PostgreSQL
+        if: steps.verified.outputs.cache-hit != 'true'
         env:
           RESTORE_CONTAINER_E2E: "1"
         run: |
@@ -91,6 +118,7 @@ jobs:
             -s ops/ansible/tests -p test_restore_database.py -v
 
       - name: Verify server migration data preservation in disposable PostgreSQL
+        if: steps.verified.outputs.cache-hit != 'true'
         run: |
           postgres_bindir="$(pg_config --bindir)"
           export PATH="${postgres_bindir}:$PATH"
@@ -107,6 +135,7 @@ jobs:
           retention-days: 7
 
       - name: Verify production alert rule behavior with pinned Prometheus
+        if: steps.verified.outputs.cache-hit != 'true'
         run: |
           docker run --rm --network=none --read-only --cap-drop=ALL \
             --security-opt=no-new-privileges:true --memory=128m --cpus=0.25 --pids-limit=64 \
@@ -115,6 +144,22 @@ jobs:
             --entrypoint /bin/promtool \
             quay.io/prometheus/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0 \
             test rules monitoring-rules.test.yml
+
+      - name: Record the successful automation verification
+        if: steps.verified.outputs.cache-hit != 'true'
+        env:
+          CI_CACHE_SCOPE: automation
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-automation
+        run: |
+          python3 build/ci_verified.py save --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+      - name: Save the exact automation success
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-automation
+          key: ${{ steps.verified.outputs.cache-primary-key }}
 
   rust-lint:
     name: Rust format, lints and documentation
@@ -127,6 +172,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Fingerprint the exact rust-lint inputs
+        id: verified-inputs
+        env:
+          CI_CACHE_SCOPE: rust-lint
+        run: |
+          key="$(python3 build/ci_verified.py key --scope "$CI_CACHE_SCOPE")"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+      - name: Restore a verified rust-lint result
+        id: verified
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-rust-lint
+          key: ${{ steps.verified-inputs.outputs.key }}
+      - name: Validate the restored rust-lint receipt
+        if: steps.verified.outputs.cache-hit == 'true'
+        env:
+          CI_CACHE_SCOPE: rust-lint
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-lint
+        run: |
+          python3 build/ci_verified.py verify --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
 
       - uses: ./.github/actions/native-toolchain
         with:
@@ -144,6 +212,7 @@ jobs:
         run: build/check.sh --helpers
 
       - name: Check Rust formatting, lints and documentation
+        if: steps.verified.outputs.cache-hit != 'true'
         run: build/check.sh --rust
 
       - name: Audit Rust dependencies
@@ -157,6 +226,22 @@ jobs:
           "$cargo_audit" audit --deny unsound \
             --ignore RUSTSEC-2021-0145 \
             --ignore RUSTSEC-2026-0097
+
+      - name: Record the successful rust-lint verification
+        if: steps.verified.outputs.cache-hit != 'true'
+        env:
+          CI_CACHE_SCOPE: rust-lint
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-lint
+        run: |
+          python3 build/ci_verified.py save --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+      - name: Save the exact rust-lint success
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-rust-lint
+          key: ${{ steps.verified.outputs.cache-primary-key }}
 
   rust-test:
     name: Rust build, native and PostgreSQL tests
@@ -190,15 +275,40 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Fingerprint the exact rust-test inputs
+        id: verified-inputs
+        env:
+          CI_CACHE_SCOPE: rust-test
+        run: |
+          key="$(python3 build/ci_verified.py key --scope "$CI_CACHE_SCOPE")"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+      - name: Restore a verified rust-test result
+        id: verified
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-rust-test
+          key: ${{ steps.verified-inputs.outputs.key }}
+      - name: Validate the restored rust-test receipt
+        if: steps.verified.outputs.cache-hit == 'true'
+        env:
+          CI_CACHE_SCOPE: rust-test
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-test
+        run: |
+          python3 build/ci_verified.py verify --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+
       - uses: ./.github/actions/native-toolchain
+        if: steps.verified.outputs.cache-hit != 'true'
         with:
           cache-key: rust-build
 
       - name: Connect the isolated local runner to its disposable database
-        if: ${{ env.ACT }}
+        if: ${{ env.ACT && steps.verified.outputs.cache-hit != 'true' }}
         run: build/ci-local-postgres.sh
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.verified.outputs.cache-hit != 'true'
         with:
           node-version: 26.8.1
           cache: npm
@@ -212,15 +322,19 @@ jobs:
       # load-test feature only adds the generator's dependencies and binary;
       # the server code is identical.
       - name: Build server and load generator
+        if: steps.verified.outputs.cache-hit != 'true'
         run: cargo build --locked --all-features --bins
 
       - name: Verify readiness and graceful shutdown
+        if: steps.verified.outputs.cache-hit != 'true'
         run: node build/shutdown-smoke.mjs --binary "$PWD/target/debug/simplestChat"
 
       - name: Verify bounded local operation diagnostics
+        if: steps.verified.outputs.cache-hit != 'true'
         run: node build/diagnostics-smoke.mjs --binary "$PWD/target/debug/simplestChat"
 
       - name: Verify native security patches
+        if: steps.verified.outputs.cache-hit != 'true'
         run: |
           cargo tree --locked -i lru | grep -F 'lru v0.18.4'
           cargo tree --locked -i mediasoup-sys \
@@ -272,14 +386,17 @@ jobs:
           fi
 
       - name: Migrate disposable test database with the real server
+        if: steps.verified.outputs.cache-hit != 'true'
         run: build/with-test-server.sh true
 
       # Include all PostgreSQL tests, not only the default unit suite.
       # Serialize native media-worker and room-session integration tests.
       - name: Test (including PostgreSQL recovery, refresh and moderation)
+        if: steps.verified.outputs.cache-hit != 'true'
         run: cargo test --locked --all-features -- --include-ignored --test-threads=1
 
       - name: Synthetic media delivery correctness smoke
+        if: steps.verified.outputs.cache-hit != 'true'
         timeout-minutes: 2
         env:
           RUST_LOG: warn
@@ -301,6 +418,22 @@ jobs:
           path: ${{ runner.temp }}/media-smoke
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Record the successful rust-test verification
+        if: steps.verified.outputs.cache-hit != 'true'
+        env:
+          CI_CACHE_SCOPE: rust-test
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-test
+        run: |
+          python3 build/ci_verified.py save --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+      - name: Save the exact rust-test success
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-rust-test
+          key: ${{ steps.verified.outputs.cache-primary-key }}
 
   native-dtls:
     name: Native worker DTLS closure and media diagnostics
@@ -416,7 +549,31 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Fingerprint the exact backend inputs
+        id: verified-inputs
+        env:
+          CI_CACHE_SCOPE: backend
+        run: |
+          key="$(python3 build/ci_verified.py key --scope "$CI_CACHE_SCOPE")"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+      - name: Restore a verified backend result
+        id: verified
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-backend
+          key: ${{ steps.verified-inputs.outputs.key }}
+      - name: Validate the restored backend receipt
+        if: steps.verified.outputs.cache-hit == 'true'
+        env:
+          CI_CACHE_SCOPE: backend
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-backend
+        run: |
+          python3 build/ci_verified.py verify --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+
       - uses: ./.github/actions/native-toolchain
+        if: steps.verified.outputs.cache-hit != 'true'
         with:
           cache-key: rust-build
 
@@ -438,7 +595,24 @@ jobs:
       # load-test feature only adds the generator's dependencies and binary;
       # the server code is identical.
       - name: Build server and load generator
+        if: steps.verified.outputs.cache-hit != 'true'
         run: cargo build --locked --all-features --bins
+
+      - name: Record the successful backend verification
+        if: steps.verified.outputs.cache-hit != 'true'
+        env:
+          CI_CACHE_SCOPE: backend
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-backend
+        run: |
+          python3 build/ci_verified.py save --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+      - name: Save the exact backend success
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-backend
+          key: ${{ steps.verified.outputs.cache-primary-key }}
 
       - name: Migrate disposable test database with the real server
         run: build/with-test-server.sh true

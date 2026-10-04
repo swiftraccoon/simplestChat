@@ -189,7 +189,9 @@ class SecurityWorkflowTests(unittest.TestCase):
 
     def test_codeql_routes_called_security_and_standalone_advisory_suites(self) -> None:
         """Called and standalone modes select matching query/category pairs."""
-        for name, job in obj(workflow("codeql.yml"), "jobs").items():
+        for name, job in [
+            ("source-analysis", obj(workflow("codeql.yml"), "jobs", "source-analysis"))
+        ]:
             with self.subTest(job=name):
                 steps = objects(job, "steps")
                 init = next(
@@ -211,54 +213,45 @@ class SecurityWorkflowTests(unittest.TestCase):
                     + language
                     + "/${{ inputs.security_gate && 'security' || 'quality-advisory' }}",
                 )
-                self.assertEqual(init["if"], "${{ !env.ACT }}")
-                self.assertEqual(analyze["if"], "${{ !env.ACT }}")
+                self.assertEqual(init["if"], "${{ !env.ACT && matrix.language != 'rust' }}")
+                self.assertEqual(analyze["if"], "${{ !env.ACT && matrix.language != 'rust' }}")
 
-    def test_codeql_requires_manual_observed_native_compilation(self) -> None:
-        """A source-only or restored compilation cannot satisfy native CodeQL coverage."""
-        codeql = workflow("codeql.yml")
-        native = obj(codeql, "jobs", "native-analysis")
-        self.assertEqual(at(codeql, "jobs", "source-analysis", "runs-on"), "ubuntu-24.04")
+    def test_codeql_requires_verified_native_database_and_current_policy(self) -> None:
+        """Only exact evaluated databases are reusable; current coverage and policy always run."""
+        native = obj(workflow("codeql.yml"), "jobs", "native-analysis")
         self.assertEqual(native["runs-on"], "ubuntu-24.04")
         steps = objects(native, "steps")
         self.assertEqual(
             string(steps[0], "run"),
             'test "$(uname -s)" = Linux && [[ "$(uname -m)" =~ ^(x86_64|aarch64)$ ]]',
         )
-        self.assertNotIn("if", steps[0])
-        self.assertNotIn("continue-on-error", steps[0])
-        init = next(step for step in steps if step.get("id") == "init")
-        self.assertEqual(at(init, "with", "build-mode"), "manual")
-        build = next(
+        runner = next(
             step
             for step in steps
-            if step.get("name") == "Compile the actual worker under CodeQL tracing"
+            if "build/security_codeql_local.py" in string(step.get("run", ""))
         )
-        command = string(build, "run")
-        self.assertEqual(command, "bash build/codeql-native-build.sh")
+        self.assertNotIn("if", runner)
+        self.assertNotIn("continue-on-error", runner)
+        self.assertIn(
+            '--database-cache "$RUNNER_TEMP/codeql-native-database"', string(runner, "run")
+        )
+        restore = next(step for step in steps if step.get("id") == "native-database")
+        self.assertIn("actions/cache/restore@", string(restore, "uses"))
+        self.assertNotIn("restore-keys", obj(restore, "with"))
+        self.assertLess(steps.index(restore), steps.index(runner))
+        caches = [step for step in steps if "cache@" in string(step.get("uses", ""))]
+        openssl = next(step for step in caches if step.get("id") == "openssl")
+        self.assertNotIn("if", openssl)
+        self.assertEqual(at(openssl, "with", "path"), "${{ env.OPENSSL_DIR }}")
+        self.assertIn("hashFiles('build/install-openssl.sh')", string(openssl, "with", "key"))
+        self.assertIn("'main' || 'untrusted'", string(openssl, "with", "key"))
+        analyzer = next(step for step in caches if step.get("id") != "openssl")
+        self.assertEqual(analyzer["if"], "${{ !env.ACT }}")
         command = (ROOT / "build/codeql-native-build.sh").read_text()
         self.assertIn("libmediasoup-worker", command)
         self.assertIn('mktemp -d "$project_root/target/codeql-worker.XXXXXXXX"', command)
         self.assertIn("build/security_codeql_resources.py", command)
         self.assertNotIn("docker", command)
-        self.assertNotIn("env -i", command)
-        self.assertLess(steps.index(init), steps.index(build))
-        self.assertTrue(
-            any("build/security_codeql.py" in string(step.get("run", "")) for step in steps)
-        )
-        caches = [step for step in steps if "cache@" in string(step.get("uses", ""))]
-        self.assertEqual(len(caches), 1)
-        self.assertEqual(at(caches[0], "with", "path"), "${{ env.OPENSSL_DIR }}")
-        self.assertIn("hashFiles('build/install-openssl.sh')", string(caches[0], "with", "key"))
-        self.assertIn("'main' || 'untrusted'", string(caches[0], "with", "key"))
-        self.assertIn("runner.os", string(caches[0], "with", "key"))
-        self.assertIn("runner.arch", string(caches[0], "with", "key"))
-        self.assertNotIn("restore-keys", obj(caches[0], "with"))
-        validation = next(
-            step for step in steps if step.get("name") == "Validate static OpenSSL prerequisites"
-        )
-        self.assertLess(steps.index(validation), steps.index(build))
-        self.assertIn("pkg-config --exact-version=3.5.9 openssl", string(validation, "run"))
 
     def test_native_codeql_guard_accepts_supported_targets_and_rejects_other_hosts(self) -> None:
         """Exercise the real guard without starting the compiler or contacting a runner."""
@@ -403,7 +396,10 @@ class SecurityWorkflowTests(unittest.TestCase):
                     for step in steps
                     if "build/security_codeql_local.py" in string(step.get("run", ""))
                 )
-                self.assertEqual(local["if"], "${{ env.ACT }}")
+                if name == "native-analysis":
+                    self.assertNotIn("if", local)
+                else:
+                    self.assertEqual(local["if"], "${{ env.ACT || matrix.language == 'rust' }}")
                 self.assertNotIn("continue-on-error", local)
                 self.assertIn('--revision "$GITHUB_SHA"', string(local, "run"))
                 self.assertIn('--suite "$CODEQL_SUITE"', string(local, "run"))
@@ -416,12 +412,14 @@ class SecurityWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(recorder["if"], "${{ env.ACT }}")
                 self.assertLess(steps.index(local), steps.index(recorder))
+                if name == "native-analysis":
+                    continue  # The shared runner verifies the same pin for both environments.
                 hosted_pin = next(
                     step
                     for step in steps
                     if "build/security_codeql_tools.py" in string(step.get("run", ""))
                 )
-                self.assertEqual(hosted_pin["if"], "${{ !env.ACT }}")
+                self.assertEqual(hosted_pin["if"], "${{ !env.ACT && matrix.language != 'rust' }}")
                 self.assertIn('--codeql "$CODEQL_BINARY"', string(hosted_pin, "run"))
         for value in (codeql, workflow("security.yml")):
             for job in obj(value, "jobs").values():
@@ -462,7 +460,9 @@ class SecurityWorkflowTests(unittest.TestCase):
 
     def test_codeql_success_requires_original_report_policy_enforcement(self) -> None:
         """An analyzer success or remote dismissal cannot substitute for the local verdict."""
-        for name, job in obj(workflow("codeql.yml"), "jobs").items():
+        for name, job in [
+            ("source-analysis", obj(workflow("codeql.yml"), "jobs", "source-analysis"))
+        ]:
             steps = objects(job, "steps")
             analyze = next(
                 step for step in steps if "codeql-action/analyze@" in string(step.get("uses", ""))
@@ -474,7 +474,9 @@ class SecurityWorkflowTests(unittest.TestCase):
             )
             self.assertLess(steps.index(analyze), steps.index(gate))
             self.assertEqual(at(analyze, "with", "output"), "${{ runner.temp }}/codeql-sarif")
-            self.assertEqual(gate["if"], "${{ !env.ACT && inputs.security_gate }}")
+            self.assertEqual(
+                gate["if"], "${{ !env.ACT && matrix.language != 'rust' && inputs.security_gate }}"
+            )
             self.assertNotIn("continue-on-error", gate)
             command = string(gate, "run")
             self.assertIn("${#reports[@]} != 1", command)
@@ -491,8 +493,64 @@ class SecurityWorkflowTests(unittest.TestCase):
                 {
                     "${{ runner.temp }}/codeql-policy-evidence/report.json",
                     "${{ runner.temp }}/codeql-policy-evidence/failure.json",
+                    "${{ runner.temp }}/codeql-local/rust-security-policy/report.json",
+                    "${{ runner.temp }}/codeql-local/summary.json",
                 },
             )
+
+    def test_native_uploads_fresh_valid_reports_even_when_current_policy_fails(self) -> None:
+        """Findings reach GitHub while failed policy still blocks the signed aggregate gate."""
+        steps = objects(workflow("codeql.yml"), "jobs", "native-analysis", "steps")
+        validator = next(step for step in steps if step.get("id") == "native-reports")
+        self.assertEqual(validator["if"], "${{ always() && !env.ACT }}")
+        self.assertIn(
+            "upload_ready(output, os.environ['GITHUB_SHA'], category, 'c-cpp')",
+            string(validator, "run"),
+        )
+        uploads = [
+            step for step in steps if "codeql-action/upload-sarif@" in string(step.get("uses", ""))
+        ]
+        self.assertEqual(len(uploads), 2)
+        self.assertEqual(
+            {string(step, "with", "category") for step in uploads},
+            {"/language:c-cpp/security", "/language:c-cpp/quality-advisory"},
+        )
+        for upload in uploads:
+            self.assertIn(
+                "always() && !env.ACT && steps.native-reports.outputs.", string(upload, "if")
+            )
+            self.assertEqual(at(upload, "with", "wait-for-processing"), "true")
+            self.assertEqual(
+                at(upload, "with", "checkout_path"), "${{ runner.temp }}/codeql-local/source"
+            )
+            self.assertLess(steps.index(validator), steps.index(upload))
+            self.assertNotIn("continue-on-error", upload)
+
+    def test_rust_uses_exact_database_cache_and_current_upload_categories(self) -> None:
+        """Rust alone leaves the source matrix's action analyzer for the shared pinned runner."""
+        steps = objects(workflow("codeql.yml"), "jobs", "source-analysis", "steps")
+        restore = next(step for step in steps if step.get("id") == "rust-database")
+        self.assertEqual(restore["if"], "matrix.language == 'rust'")
+        self.assertNotIn("restore-keys", obj(restore, "with"))
+        validator = next(step for step in steps if step.get("id") == "rust-reports")
+        self.assertEqual(
+            validator["if"], "${{ always() && !env.ACT && matrix.language == 'rust' }}"
+        )
+        self.assertIn(
+            "upload_ready(output, os.environ['GITHUB_SHA'], category, 'rust')",
+            string(validator, "run"),
+        )
+        uploads = [
+            step for step in steps if "codeql-action/upload-sarif@" in string(step.get("uses", ""))
+        ]
+        self.assertEqual(
+            {string(step, "with", "category") for step in uploads},
+            {"/language:rust/security", "/language:rust/quality-advisory"},
+        )
+        for upload in uploads:
+            self.assertIn("always() && !env.ACT && matrix.language == 'rust'", string(upload, "if"))
+            self.assertEqual(at(upload, "with", "wait-for-processing"), "true")
+            self.assertNotIn("continue-on-error", upload)
 
     def test_fedora_package_layers_require_current_read_only_policy_inputs(self) -> None:
         """A restored layer cannot bypass changed reviews in either Fedora install stage."""

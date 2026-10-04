@@ -310,7 +310,7 @@ def sandbox_args(image: str, run_id: str, digest: str) -> list[str]:
         "--cap-drop=ALL",
         "--security-opt=no-new-privileges:true",
         "--user=65532:65532",
-        "--cpus=2",
+        "--cpus=3",
         "--memory=6g",
         "--memory-swap=6g",
         "--pids-limit=256",

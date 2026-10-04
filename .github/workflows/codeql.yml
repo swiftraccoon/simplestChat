@@ -41,7 +41,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Initialize the pinned analyzer
-        if: ${{ !env.ACT }}
+        if: ${{ !env.ACT && matrix.language != 'rust' }}
         id: init
         uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
@@ -50,21 +50,53 @@ jobs:
           build-mode: none
           queries: ${{ inputs.security_gate && 'security-extended' || 'security-and-quality' }}
       - name: Verify the shared analyzer and query pins
-        if: ${{ !env.ACT }}
+        if: ${{ !env.ACT && matrix.language != 'rust' }}
         env:
           CODEQL_BINARY: ${{ steps.init.outputs.codeql-path }}
           CODEQL_LANGUAGE: ${{ matrix.language }}
         run: |
           python3 build/security_codeql_tools.py --codeql "$CODEQL_BINARY" \
             --language "$CODEQL_LANGUAGE" --output "$RUNNER_TEMP/codeql-tools"
-      - name: Run complete local analysis and policy checks
-        if: ${{ env.ACT }}
+      - name: Fingerprint the exact Rust analysis inputs
+        if: matrix.language == 'rust'
+        id: rust-inputs
+        env:
+          CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
+        run: |
+          key="$(python3 build/security_codeql_cache.py --language rust --suite "$CODEQL_SUITE" \
+            --source-root "$RUNNER_TEMP/codeql-local/source")"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - name: Restore the exact evaluated Rust database
+        if: matrix.language == 'rust'
+        id: rust-database
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/codeql-rust-database
+          key: ${{ steps.rust-inputs.outputs.key }}
+      - name: Restore the authenticated Rust analyzer bundle
+        if: ${{ !env.ACT && matrix.language == 'rust' }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/codeql-tools
+          key: codeql-cli-v1-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('security/codeql-toolchain.json') }}
+      - name: Run shared analysis and current policy checks
+        if: ${{ env.ACT || matrix.language == 'rust' }}
         env:
           CODEQL_LANGUAGE: ${{ matrix.language }}
           CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
         run: |
+          cache=()
+          if [[ "$CODEQL_LANGUAGE" == rust ]]; then
+            cache=(--database-cache "$RUNNER_TEMP/codeql-rust-database")
+          fi
           python3 build/security_codeql_local.py --revision "$GITHUB_SHA" \
-            --language "$CODEQL_LANGUAGE" --suite "$CODEQL_SUITE" --output "$RUNNER_TEMP/codeql-local"
+            --language "$CODEQL_LANGUAGE" --suite "$CODEQL_SUITE" --output "$RUNNER_TEMP/codeql-local" "${cache[@]}"
+      - name: Save the successfully evaluated Rust database
+        if: matrix.language == 'rust' && steps.rust-database.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/codeql-rust-database
+          key: ${{ steps.rust-database.outputs.cache-primary-key }}
       - name: Retain compact local analysis evidence
         if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
         env:
@@ -83,13 +115,13 @@ jobs:
           CODEQL_LANGUAGE: ${{ matrix.language }}
         run: python3 build/ci-local-evidence.py record --id "codeql-$CODEQL_LANGUAGE"
       - name: Analyze and upload results
-        if: ${{ !env.ACT }}
+        if: ${{ !env.ACT && matrix.language != 'rust' }}
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           output: ${{ runner.temp }}/codeql-sarif
           category: /language:${{ matrix.language }}/${{ inputs.security_gate && 'security' || 'quality-advisory' }}
       - name: Enforce exact reviews for High and Critical findings
-        if: ${{ !env.ACT && inputs.security_gate }}
+        if: ${{ !env.ACT && matrix.language != 'rust' && inputs.security_gate }}
         run: |
           shopt -s nullglob
           reports=("$RUNNER_TEMP/codeql-sarif/"*.sarif)
@@ -99,6 +131,38 @@ jobs:
           fi
           python3 build/security_codeql_triage.py sarif --revision "$GITHUB_SHA" \
             --input "${reports[0]}" --output "$RUNNER_TEMP/codeql-policy-evidence"
+      - name: Identify valid current Rust reports even when policy failed
+        if: ${{ always() && !env.ACT && matrix.language == 'rust' }}
+        id: rust-reports
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'build')
+          from security_codeql_local import upload_ready
+          output = Path(os.environ['RUNNER_TEMP']) / 'codeql-local'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as destination:
+              for category in ('security', 'quality-advisory'):
+                  if upload_ready(output, os.environ['GITHUB_SHA'], category, 'rust'):
+                      destination.write(f'{category}=true\n')
+          PY
+      - name: Upload the current Rust security analysis
+        if: ${{ always() && !env.ACT && matrix.language == 'rust' && steps.rust-reports.outputs.security == 'true' }}
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          sarif_file: ${{ runner.temp }}/codeql-local/rust-security.sarif
+          checkout_path: ${{ runner.temp }}/codeql-local/source
+          category: /language:rust/security
+          wait-for-processing: true
+      - name: Upload the current Rust advisory analysis
+        if: ${{ always() && !env.ACT && matrix.language == 'rust' && steps.rust-reports.outputs.quality-advisory == 'true' }}
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          sarif_file: ${{ runner.temp }}/codeql-local/rust-quality-advisory.sarif
+          checkout_path: ${{ runner.temp }}/codeql-local/source
+          category: /language:rust/quality-advisory
+          wait-for-processing: true
       - name: Preserve CodeQL policy evidence
         if: ${{ always() && !env.ACT && inputs.security_gate }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -107,6 +171,8 @@ jobs:
           path: |
             ${{ runner.temp }}/codeql-policy-evidence/report.json
             ${{ runner.temp }}/codeql-policy-evidence/failure.json
+            ${{ runner.temp }}/codeql-local/rust-security-policy/report.json
+            ${{ runner.temp }}/codeql-local/summary.json
           if-no-files-found: warn
           retention-days: 14
 
@@ -133,17 +199,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake pkg-config python3-pip curl perl
-          python3 build/security_vendor.py verify --root "$PWD" \
-            --cache "$RUNNER_TEMP/vendor-cache" --output "$RUNNER_TEMP/vendor-integrity"
       - name: Restore checksum-pinned OpenSSL only
-        if: ${{ !env.ACT }}
         id: openssl
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.OPENSSL_DIR }}
           key: codeql-openssl-v1-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build/install-openssl.sh') }}
       - name: Build checksum-pinned OpenSSL
-        if: ${{ env.ACT || steps.openssl.outputs.cache-hit != 'true' }}
+        if: steps.openssl.outputs.cache-hit != 'true'
         run: build/install-openssl.sh "$OPENSSL_DIR"
       - name: Validate static OpenSSL prerequisites
         run: |
@@ -157,35 +220,40 @@ jobs:
           if disabled.read_text().splitlines() != ['shared', 'dso', 'module', 'engine']:
               raise SystemExit('Static OpenSSL build settings do not match the pinned installer.')
           PY
-      - name: Initialize native C/C++ extraction
-        if: ${{ !env.ACT }}
-        id: init
-        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
-        with:
-          tools: linked
-          languages: c-cpp
-          build-mode: manual
-          db-location: ${{ runner.temp }}/codeql-databases
-          queries: ${{ inputs.security_gate && 'security-extended' || 'security-and-quality' }}
-      - name: Verify the shared analyzer and native query pins
-        if: ${{ !env.ACT }}
+      - name: Fingerprint the exact native analysis inputs
+        id: native-inputs
         env:
-          CODEQL_BINARY: ${{ steps.init.outputs.codeql-path }}
+          CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
         run: |
-          python3 build/security_codeql_tools.py --codeql "$CODEQL_BINARY" \
-            --language c-cpp --output "$RUNNER_TEMP/codeql-tools"
-      - name: Compile the actual worker under CodeQL tracing
+          key="$(python3 build/security_codeql_cache.py --language c-cpp --suite "$CODEQL_SUITE" \
+            --source-root "$RUNNER_TEMP/codeql-local/source" --openssl-prefix "$OPENSSL_DIR")"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - name: Restore the exact evaluated native database
+        id: native-database
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/codeql-native-database
+          key: ${{ steps.native-inputs.outputs.key }}
+      - name: Restore the authenticated native analyzer bundle
         if: ${{ !env.ACT }}
-        timeout-minutes: 25
-        run: bash build/codeql-native-build.sh
-      - name: Run complete local native analysis and policy checks
-        if: ${{ env.ACT }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/codeql-tools
+          key: codeql-cli-v1-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('security/codeql-toolchain.json') }}
+      - name: Analyze the exact native database, check coverage and current policy
         env:
           CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
         run: |
           python3 build/security_codeql_local.py --revision "$GITHUB_SHA" \
             --language c-cpp --suite "$CODEQL_SUITE" --openssl-prefix "$OPENSSL_DIR" \
+            --database-cache "$RUNNER_TEMP/codeql-native-database" \
             --output "$RUNNER_TEMP/codeql-local"
+      - name: Save the successfully evaluated native database
+        if: steps.native-database.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/codeql-native-database
+          key: ${{ steps.native-database.outputs.cache-primary-key }}
       - name: Retain compact local native analysis evidence
         if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
         run: |
@@ -199,41 +267,46 @@ jobs:
       - name: Record the successful local native scan
         if: ${{ env.ACT }}
         run: python3 build/ci-local-evidence.py record --id codeql-c-cpp
-      - name: Analyze observed C/C++ translation units
-        if: ${{ !env.ACT }}
-        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+      - name: Identify valid current native reports even when policy failed
+        if: ${{ always() && !env.ACT }}
+        id: native-reports
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'build')
+          from security_codeql_local import upload_ready
+          output = Path(os.environ['RUNNER_TEMP']) / 'codeql-local'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as destination:
+              for category in ('security', 'quality-advisory'):
+                  if upload_ready(output, os.environ['GITHUB_SHA'], category, 'c-cpp'):
+                      destination.write(f'{category}=true\n')
+          PY
+      - name: Upload the current native security analysis
+        if: ${{ always() && !env.ACT && steps.native-reports.outputs.security == 'true' }}
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
-          output: ${{ runner.temp }}/codeql-sarif
-          category: /language:c-cpp/${{ inputs.security_gate && 'security' || 'quality-advisory' }}
-      - name: Require extraction of the real media protocol implementations
-        if: ${{ !env.ACT }}
-        env:
-          CODEQL_BINARY: ${{ steps.init.outputs.codeql-path }}
-        run: |
-          "$CODEQL_BINARY" query run security/codeql/native-coverage/compilations.ql \
-            --database "$RUNNER_TEMP/codeql-databases/cpp" --output "$RUNNER_TEMP/native-coverage.bqrs"
-          "$CODEQL_BINARY" bqrs decode --format=json "$RUNNER_TEMP/native-coverage.bqrs" \
-            --output "$RUNNER_TEMP/native-coverage.json"
-          python3 build/security_codeql.py "$RUNNER_TEMP/native-coverage.json"
-      - name: Enforce exact reviews for native High and Critical findings
-        if: ${{ !env.ACT && inputs.security_gate }}
-        run: |
-          shopt -s nullglob
-          reports=("$RUNNER_TEMP/codeql-sarif/"*.sarif)
-          if ((${#reports[@]} != 1)); then
-            echo 'Exactly one original CodeQL report is required.' >&2
-            exit 1
-          fi
-          python3 build/security_codeql_triage.py sarif --revision "$GITHUB_SHA" \
-            --input "${reports[0]}" --source-cache "$RUNNER_TEMP/vendor-cache" \
-            --output "$RUNNER_TEMP/codeql-policy-evidence"
+          sarif_file: ${{ runner.temp }}/codeql-local/c-cpp-security.sarif
+          checkout_path: ${{ runner.temp }}/codeql-local/source
+          category: /language:c-cpp/security
+          wait-for-processing: true
+      - name: Upload the current native advisory analysis
+        if: ${{ always() && !env.ACT && steps.native-reports.outputs.quality-advisory == 'true' }}
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          sarif_file: ${{ runner.temp }}/codeql-local/c-cpp-quality-advisory.sarif
+          checkout_path: ${{ runner.temp }}/codeql-local/source
+          category: /language:c-cpp/quality-advisory
+          wait-for-processing: true
       - name: Preserve native CodeQL policy evidence
         if: ${{ always() && !env.ACT && inputs.security_gate }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: codeql-policy-c-cpp
           path: |
-            ${{ runner.temp }}/codeql-policy-evidence/report.json
-            ${{ runner.temp }}/codeql-policy-evidence/failure.json
+            ${{ runner.temp }}/codeql-local/c-cpp-security-policy/report.json
+            ${{ runner.temp }}/codeql-local/c-cpp-security-policy/failure.json
+            ${{ runner.temp }}/codeql-local/summary.json
           if-no-files-found: warn
           retention-days: 14
