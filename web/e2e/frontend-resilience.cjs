@@ -7,6 +7,10 @@ const { productionAssets } = require('./homepage-layout.cjs');
 const { openRoomMenu } = require('./room-menu.cjs');
 const { closeOwnedBrowser } = require('./lifecycle-cleanup.cjs');
 const { mediaLayout } = require('./media-layout.cjs');
+const {
+  participantHovercardChecks,
+  participantHovercardTouchChecks,
+} = require('./participant-hovercard-checks.cjs');
 const playwright = require('playwright');
 
 const origin = 'http://127.0.0.1:39879';
@@ -100,6 +104,7 @@ async function run() {
     holdRestore = false,
     clock = false,
     hasTouch = false,
+    holdProfiles = false,
   } = {}) {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -144,6 +149,9 @@ async function run() {
     context.on('close', () => socketGate.resolve());
     let socket;
     const creations = [];
+    const profiles = new Map();
+    const profileResponses = new Map();
+    const profileWaiters = new Map();
     let account = signedIn
       ? { id: 'fixture-account', email: 'fixture@example.test', display_name: 'Fixture owner' }
       : null;
@@ -252,6 +260,15 @@ async function run() {
           avatar_url: null,
           bio: '',
         });
+      if (holdProfiles && url.pathname.startsWith('/api/auth/profiles/')) {
+        const id = url.pathname.split('/').pop();
+        if (profileResponses.has(id)) return json(profileResponses.get(id));
+        assert.ok(!profiles.has(id), 'The fixture receives one cached profile request per person');
+        profiles.set(id, route);
+        profileWaiters.get(id)?.();
+        profileWaiters.delete(id);
+        return;
+      }
       if (url.pathname === '/api/rooms/invites/preview') {
         previews.push(route);
         assert.equal(route.request().method(), 'POST');
@@ -316,6 +333,14 @@ async function run() {
       context,
       page,
       sent,
+      finishProfile: async (id, bio) => {
+        if (!profiles.has(id)) await new Promise((resolve) => profileWaiters.set(id, resolve));
+        const profile = { id, display_name: `Profile for ${id}`, avatar_url: null, bio };
+        profileResponses.set(id, profile);
+        await profiles.get(id).fulfill({
+          json: profile,
+        });
+      },
       requests,
       previews,
       featureRequests,
@@ -506,6 +531,7 @@ async function run() {
 
   async function scenarios() {
     await mediaScenarios();
+    await hovercardProfileScenarios();
     const discovering = await fixture({
       signedIn: true,
       holdFeatures: true,
@@ -902,6 +928,14 @@ async function run() {
     await call.page.locator('#room-input').fill('fixture-room');
     await call.page.locator('#join-btn').click();
     await call.page.locator('#room-screen').waitFor({ state: 'visible' });
+    call.send(publicMessage('remote-fixture', 'Other person', 'Hovercard fixture message'));
+    await participantHovercardChecks(call.page, {
+      name: 'Other person',
+      message: 'Hovercard fixture message',
+    });
+    report.checks.push(
+      'Roster and chat names share hovercards with pointer traversal, keyboard focus, Escape, and direct message actions',
+    );
     assert.equal(await call.page.locator('#participant-list li').count(), 0);
     const input = call.page.locator('#chat-input');
     assert.equal(await input.evaluate((node) => node.tagName), 'TEXTAREA');
@@ -920,8 +954,22 @@ async function run() {
       'First line\nSecond line',
     );
     assert.ok((await input.boundingBox()).height <= oneLineHeight + 1);
+    const ownSender = call.page
+      .locator('.chat-msg')
+      .filter({ hasText: 'First line' })
+      .locator('[data-participant-hovercard]');
+    await ownSender.hover();
+    const ownCard = call.page.locator('.participant-hovercard');
+    await ownCard.waitFor({ state: 'visible' });
+    assert.equal(
+      await ownCard.locator('.participant-hovercard-name').textContent(),
+      'Fixture guest',
+    );
+    assert.equal(await ownCard.getByRole('button', { name: 'Message', exact: true }).count(), 0);
+    await call.page.keyboard.press('Escape');
+    await ownCard.waitFor({ state: 'hidden' });
     report.checks.push(
-      'Desktop multiline composer grows, Shift+Enter adds a line, Enter sends and resets its height',
+      'Desktop multiline composer grows, sends on Enter, and the local sender opens a card with the actual nickname',
     );
     await call.page.locator('.toast').evaluateAll((nodes) => nodes.forEach((node) => node.click()));
     await assertRoomLayout(call.page, { width: 1440, height: 900 });
@@ -946,7 +994,7 @@ async function run() {
       },
     });
     const action = call.page.locator(
-      '#classic-users-panel [data-participant-id="remote-fixture"] button',
+      '#classic-users-panel [data-participant-id="remote-fixture"] button[aria-label="Actions for Other person"]',
     );
     await action.focus();
     call.send({
@@ -1096,6 +1144,14 @@ async function run() {
     await touch.page.locator('#room-input').fill('fixture-room');
     await touch.page.locator('#join-btn').click();
     await touch.page.locator('#room-screen').waitFor({ state: 'visible' });
+    touch.send(publicMessage('remote-fixture', 'Other person', 'Touch hovercard fixture message'));
+    await participantHovercardTouchChecks(touch.page, {
+      message: 'Touch hovercard fixture message',
+      screenshot: path.join(artifacts, 'participant-hovercard-touch.png'),
+    });
+    report.checks.push(
+      'Tapping a chat sender opens a reachable hovercard within a mobile viewport',
+    );
     const touchInput = touch.page.locator('#chat-input');
     await touch.page.locator('#chat-send-btn').waitFor({ state: 'visible' });
     await touchInput.fill('Touch first line');
@@ -1127,6 +1183,128 @@ async function run() {
     );
     assert.equal(report.pageErrors, 0, 'No unhandled browser errors');
   }
+
+  async function hovercardProfileScenarios() {
+    const f = await fixture({ room: true, holdProfiles: true });
+    try {
+      await f.page.locator('#name-input').fill('Profile fixture guest');
+      await f.page.locator('#room-input').fill('fixture-room');
+      await f.page.locator('#join-btn').click();
+      await f.page.locator('#room-screen').waitFor({ state: 'visible' });
+      await f.page.evaluate(() => {
+        const parse = Response.prototype.json;
+        window.__hovercardProfilesRead = [];
+        Response.prototype.json = async function () {
+          const value = await parse.call(this);
+          if (this.url.includes('/api/auth/profiles/'))
+            setTimeout(() => window.__hovercardProfilesRead.push(value.id), 0);
+          return value;
+        };
+      });
+      for (const id of ['delayed-profile', 'leaving-profile'])
+        f.send({
+          type: 'participantJoined',
+          participantId: id,
+          participantName: id,
+          role: 'user',
+          authenticated: true,
+        });
+      const delayed = f.page.locator(
+        '#classic-users-panel [data-participant-hovercard="delayed-profile"]',
+      );
+      const other = f.page.locator(
+        '#classic-users-panel [data-participant-hovercard="remote-fixture"]',
+      );
+      const card = f.page.locator('.participant-hovercard');
+      await delayed.hover();
+      await card.waitFor({ state: 'visible' });
+      await card.getByText('delayed-profile', { exact: true }).waitFor();
+      await f.page.mouse.move(700, 300);
+      await card.waitFor({ state: 'hidden' });
+      await other.hover();
+      await card.getByText('Other person', { exact: true }).waitFor();
+      await f.finishProfile('delayed-profile', 'This belongs only to the first profile.');
+      await f.page.waitForFunction(() =>
+        window.__hovercardProfilesRead.includes('delayed-profile'),
+      );
+      assert.equal(await card.locator('.participant-hovercard-name').textContent(), 'Other person');
+      assert.equal(await card.getByText('This belongs only to the first profile.').count(), 0);
+      assert.equal(await f.page.locator('.participant-hovercard:visible').count(), 1);
+      await f.page.mouse.move(700, 300);
+      await card.waitFor({ state: 'hidden' });
+      await delayed.hover();
+      await card.getByText('This belongs only to the first profile.', { exact: true }).waitFor();
+      assert.equal(
+        await card.locator('.participant-hovercard-profile-name').textContent(),
+        'Profile for delayed-profile',
+      );
+      await f.page.screenshot({ path: path.join(artifacts, 'participant-hovercard-profile.png') });
+      await card.getByRole('button', { name: 'Profile', exact: true }).click();
+      const profile = f.page.getByRole('dialog', { name: 'Profile', exact: true });
+      await profile.getByText('This belongs only to the first profile.', { exact: true }).waitFor();
+      assert.equal(
+        f.requests.filter((url) => url === '/api/auth/profiles/delayed-profile').length,
+        2,
+        'Opening the full profile refreshes the correct account',
+      );
+      await f.page.keyboard.press('Escape');
+      await profile.waitFor({ state: 'hidden' });
+      await f.page.locator('#chat-input').focus();
+      await f.page.mouse.move(700, 300);
+      await card.waitFor({ state: 'hidden' });
+      await other.hover();
+      await card.getByText('Other person', { exact: true }).waitFor();
+
+      f.send(publicMessage('remote-fixture', 'Other person', 'Historical hovercard message'));
+      f.send({ type: 'participantLeft', participantId: 'remote-fixture' });
+      await other.waitFor({ state: 'hidden' });
+      await card.waitFor({ state: 'hidden' });
+      await f.page
+        .locator('.chat-msg')
+        .filter({ hasText: 'Historical hovercard message' })
+        .locator('[data-participant-hovercard]')
+        .click();
+      await card.getByText('Offline', { exact: true }).waitFor();
+      assert.equal(await card.getByRole('button', { name: 'Message', exact: true }).count(), 0);
+      assert.equal(await card.getByRole('button', { name: 'More', exact: true }).count(), 0);
+      await f.page
+        .locator('.chat-msg')
+        .filter({ hasText: 'Historical hovercard message' })
+        .evaluate((node) => node.remove());
+      await card.waitFor({ state: 'hidden' });
+
+      await f.page
+        .locator('#classic-users-panel [data-participant-hovercard="leaving-profile"]')
+        .hover();
+      await card.getByText('leaving-profile', { exact: true }).waitFor();
+      await f.page.locator('#leave-btn').click();
+      await f.page.locator('#join-screen').waitFor({ state: 'visible' });
+      await card.waitFor({ state: 'hidden' });
+      await f.finishProfile('leaving-profile', 'An obsolete room must not show this.');
+      await f.page.waitForFunction(() =>
+        window.__hovercardProfilesRead.includes('leaving-profile'),
+      );
+      assert.equal(await card.isVisible(), false);
+      assert.equal(await f.page.getByText('An obsolete room must not show this.').count(), 0);
+      report.checks.push(
+        'Delayed profiles cannot replace another card or reopen it after leaving; departed senders remain readable without live actions',
+      );
+    } finally {
+      await f.context.close();
+    }
+  }
+}
+
+function publicMessage(participantId, participantName, content) {
+  return {
+    type: 'chatReceived',
+    messageId: `hovercard-${participantId}`,
+    clientMessageId: `hovercard-${participantId}`,
+    participantId,
+    participantName,
+    content,
+    sentAt: new Date().toISOString(),
+  };
 }
 run().catch((error) => {
   console.error(error);

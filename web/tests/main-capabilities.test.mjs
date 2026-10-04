@@ -206,6 +206,7 @@ function authUiFixture(capabilities, signedIn) {
         observeUiTask() {},
         updateJoinBtn: () => effects.push('join-controls'),
         community: { refresh: () => effects.push('community') },
+        participantHovercard: { refresh() {} },
       },
     },
   );

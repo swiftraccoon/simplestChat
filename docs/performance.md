@@ -15,7 +15,7 @@ not avoid the limit. The initial budgets leave room for small product changes:
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
 | JavaScript  | 560 KiB            | 128 KiB    |
-| CSS         | 64 KiB             | 12 KiB     |
+| CSS         | 64 KiB             | 12.5 KiB   |
 | HTML        | 48 KiB             | 11 KiB     |
 
 Limits are defined in [bundle-budget.json](../web/bundle-budget.json). Gzip uses
@@ -30,6 +30,13 @@ These gates constrain delivery and parsing size; they do **not** establish
 startup latency, memory use, media quality or server capacity. Images, fonts,
 source maps and other non-JS/CSS/HTML files are not covered by these budgets.
 Measure runtime performance separately with the workflows below.
+
+Participant hovercards added a shared, dependency-free card and keyboard/touch
+name controls. The CSS gzip budget increased from 12 to 12.5 KiB after removing
+redundant hidden-state and reset rules; the 64 KiB raw limit is unchanged. The
+preceding name-label cleanup measured 62,259 bytes raw / 12,047 gzip. The hovercard
+build measured 63,800 bytes raw / 12,294 gzip. The added styles cover one shared
+card rather than separate roster and chat implementations.
 
 The following September 2026 measurements explain historical budget changes;
 the table and linked JSON above define the current limits.

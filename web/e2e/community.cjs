@@ -6,6 +6,7 @@
  * PLAYWRIGHT_BROWSERS_PATH can point at an isolated browser installation.
  */
 const { openRoomMenu } = require('./room-menu.cjs');
+const { participantHovercardChecks } = require('./participant-hovercard-checks.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -953,6 +954,9 @@ async function setRole(owner, name, role) {
         .getByRole('button', { name: 'Actions for E2E Member', exact: true })
         .first()
         .waitFor({ state: 'visible' });
+    });
+    await step('participant hovercards work from roster and chat names', async () => {
+      await participantHovercardChecks(owner, { name: 'E2E Guest', message: 'Public hello' });
     });
     await step('personal settings share one capture-free keyboard-accessible dialog', async () => {
       const captures = await guest.evaluate(() => window.__communityCaptureRequests);

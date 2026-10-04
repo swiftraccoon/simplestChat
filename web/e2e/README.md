@@ -155,6 +155,8 @@ skip in the report.
 `community.cjs` covers accounts/owned rooms, private-message
 isolation and preferences, mentions, profiles/images, moderation, recovery,
 preview, decoded video/audio, viewer controls, capture restart and mobile layout.
+Participant hovercards open from roster and chat names; pointer movement into
+the card, keyboard navigation, Escape, and Message/More actions use real room data.
 Audio must be unmuted at positive volume with advancing playback. A separately
 simulated autoplay rejection checks the visible retry button.
 
@@ -403,12 +405,18 @@ hidden roster removal. Joined-room checks cover the compact header, video-column
 call controls, full-height side panels, conversation pills and private drafts,
 focus restoration, and long chat drafts at 320×568, 390×844 and 844×390 with the emoji
 picker open. Desktop keyboard and emulated touch contexts check multiline
-composition and sending. Unexpected page errors or any capture request fail.
+composition and sending. Participant hovercards share those interaction checks,
+stay within the viewport on touch, and keep the local nickname visible. Delayed
+profile responses cannot overwrite another card or reopen one after leaving;
+departed chat senders show their offline identity without live actions. The full
+profile action refreshes the selected account, and detaching a chat name closes
+its open card. Tab and Shift+Tab preserve the surrounding keyboard order.
+Unexpected page errors or any capture request fail.
 
 Set `E2E_ARTIFACTS` to an output directory, or allow a fresh temporary directory.
-The runner saves a JSON result, small-screen screenshots and owned Chromium
+The runner saves a JSON result, small-screen screenshots and owned browser
 cleanup evidence. Its 60-second work deadline and existing browser cleanup
-deadlines bound failures. These mocked backend and resized desktop Chromium
+deadlines bound failures. These mocked backend and resized desktop browser
 checks complement the real community suite; they do not prove native mobile,
 screen-reader, backend or media behavior.
 

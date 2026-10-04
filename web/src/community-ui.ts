@@ -184,6 +184,11 @@ export class CommunityUI {
     view.body.append(el('p', 'Account profile · room nicknames may differ', 'setting-hint'));
   }
 
+  /** Share bounded roster profile reads with the name hovercard. */
+  participantProfile(id: string): Promise<PublicProfile | null> {
+    return this.profile(id);
+  }
+
   report(id: string, name: string): void {
     const room = this.options.getRoom();
     if (!room) return;

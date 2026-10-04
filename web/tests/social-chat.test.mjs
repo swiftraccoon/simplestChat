@@ -244,8 +244,8 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
     getViewerKey: () => state.viewer,
     getToken: () => state.token,
     notify: (text) => state.notifications.push(text),
-    participantAction(...args) {
-      state.actions.push(args);
+    bindParticipantName(anchor, id, name) {
+      anchor.addEventListener('click', () => state.actions.push([id, name]));
     },
   });
   return { ...f, state, http, chat, tab, participants, documentListeners, timers, pointer };

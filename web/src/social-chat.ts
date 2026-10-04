@@ -81,7 +81,7 @@ type Options = {
   /** The account's bearer token, when the viewer has one: its preferences then follow it. */
   getToken?: () => string | null;
   notify: (message: string) => void;
-  participantAction: (id: string, name: string, x: number, y: number) => void;
+  bindParticipantName: (anchor: HTMLButtonElement, id: string, name: string) => void;
 };
 type MessageRow = { node: HTMLElement; fingerprint: string };
 type ConversationButton = { node: HTMLButtonElement; name: HTMLElement; unread: HTMLElement };
@@ -1049,14 +1049,9 @@ export class SocialChat {
     node.dataset['messageId'] = messageId;
     node.replaceChildren();
     if (participantId) {
-      const sender = button(
-        participantName,
-        () => {
-          const rect = sender.getBoundingClientRect();
-          this.options.participantAction(participantId, participantName, rect.left, rect.bottom);
-        },
-        'sender chat-sender-button',
-      );
+      const sender = el('button', participantName, 'sender chat-sender-button');
+      sender.type = 'button';
+      this.options.bindParticipantName(sender, participantId, participantName);
       node.append(sender);
     }
     if (message.replyTo) {

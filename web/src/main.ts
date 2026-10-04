@@ -17,6 +17,7 @@ import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './
 import { MediaControls } from './media-controls';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
+import { ParticipantHovercard } from './participant-hovercard';
 import {
   api,
   ApiError,
@@ -32,6 +33,7 @@ import { avatarColors, chatColor } from './avatar-colors';
 import { spatialLayerForRenderedWidth } from './layer-cap';
 import { observeVideoLayout } from './video-layout';
 import './community.css';
+import './participant-hovercard.css';
 import type { CreateRoomRequest, RoomSettingsPatch } from './protocol';
 import type { ServerCapabilities } from './api-validation';
 
@@ -201,6 +203,7 @@ function updateAuthUI(): void {
   if (!roomBrowser.hidden) observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory');
   updateJoinBtn();
   community.refresh();
+  participantHovercard.refresh();
 }
 
 // Invitation secrets stay in the fragment and are removed before room navigation.
@@ -540,6 +543,7 @@ function showActionToast(
 
 // --- Moderation Context Menu ---
 function showModerationMenu(targetId: string, targetName: string, x: number, y: number): void {
+  participantHovercard.close();
   document.getElementById('mod-menu')?.remove();
 
   const role = room?.role ?? 'user';
@@ -1406,6 +1410,7 @@ window.addEventListener('pagehide', (event) => {
   mediaTelemetry.dispose();
   callTelemetry.dispose();
   telemetry.dispose();
+  participantHovercard.destroy();
 });
 const socialChat = new SocialChat({
   telemetry: telemetry.record,
@@ -1413,7 +1418,7 @@ const socialChat = new SocialChat({
   getViewerKey: () => auth.userId ?? 'guest',
   getToken: () => auth.jwt,
   notify: (message) => showToast(message),
-  participantAction: showModerationMenu,
+  bindParticipantName: (anchor, id, name) => participantHovercard.bind(anchor, id, name),
 });
 const community = new CommunityUI({
   auth,
@@ -1432,6 +1437,61 @@ const community = new CommunityUI({
   onSignedOut: async () => {
     await leaveCurrentRoom();
     auth.forgetSession();
+  },
+});
+
+let hovercardOwner: RoomClient | null = null;
+let hovercardMembership = -1;
+let hovercardViewer: string | null = null;
+let hovercardSession = {};
+const participantHovercard = new ParticipantHovercard({
+  getSession: () => {
+    if (
+      hovercardOwner !== room ||
+      hovercardMembership !== (room?.membershipVersion ?? -1) ||
+      hovercardViewer !== auth.userId
+    ) {
+      hovercardOwner = room;
+      hovercardMembership = room?.membershipVersion ?? -1;
+      hovercardViewer = auth.userId;
+      hovercardSession = {};
+    }
+    return hovercardSession;
+  },
+  getParticipant: (id, fallbackName) => {
+    if (!room?.localParticipantId || !room.connected) return null;
+    const self = id === room.localParticipantId;
+    const person = room.getParticipants().get(id);
+    const online = self || !!person;
+    const role = self ? room.role : person?.role;
+    const color = self ? room.chatStyle?.color : person?.chatStyle?.color;
+    return {
+      id,
+      name: self ? room.nickname : (person?.name ?? fallbackName),
+      online,
+      self,
+      ...(role && ROLE_NAMES[role] && { role: ROLE_NAMES[role] }),
+      ...(color && { color }),
+      profileAvailable: self ? auth.isLoggedIn : person?.authenticated === true,
+      canMessage: online && !self && room.canChat,
+      canMore: online && !self,
+    };
+  },
+  loadProfile: async (id) => {
+    const profile = await community.participantProfile(id);
+    return profile
+      ? {
+          displayName: profile.display_name,
+          bio: profile.bio,
+          ...(profile.avatar_url && { avatarUrl: profile.avatar_url }),
+        }
+      : null;
+  },
+  onMessage: (id, name) => socialChat.openPrivate(id, name),
+  onProfile: (id) => observeUiTask(community.showProfile(id), 'Could not open the profile'),
+  onMore: (id, name, anchor) => {
+    const bounds = anchor.getBoundingClientRect();
+    showModerationMenu(id, name, bounds.left, bounds.bottom);
   },
 });
 
@@ -2781,6 +2841,7 @@ function leaveCurrentRoom(): Promise<void> {
 }
 
 async function leaveRoomAndShowHome(): Promise<void> {
+  participantHovercard.reset();
   retireRoomSettingsAction();
   roomPasswordView?.cancel();
   roomPasswordView = null;
@@ -3601,6 +3662,7 @@ function updateVideoGridCount(): void {
 // --- Rendering ---
 /** Reconcile only the visible roster; unchanged rows retain focus and their avatars. */
 function renderParticipants(participants: Map<string, Participant>): void {
+  participantHovercard.refresh();
   const all = Array.from(participants.values());
   const localId = room?.localParticipantId;
   if (localId && room) {
@@ -3628,6 +3690,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
     clearChildren(participantList);
     if (classic) panel?.querySelector('.classic-user-list')?.replaceChildren();
     else panel?.remove();
+    participantHovercard.refresh();
     return;
   }
   let list: HTMLElement = participantList;
@@ -3682,12 +3745,17 @@ function renderParticipants(participants: Map<string, Participant>): void {
       const avatar = el('div', p.name.charAt(0).toUpperCase(), 'participant-avatar');
       avatar.dataset['initial'] = p.name.charAt(0).toUpperCase();
       Object.assign(avatar.style, avatarColors(p.name, p.chatStyle?.color));
-      const name = el('span', undefined, classic ? 'classic-participant-name' : 'participant-name');
+      const name = el(
+        'button',
+        undefined,
+        `${classic ? 'classic-participant-name' : 'participant-name'} participant-name-button`,
+      );
+      name.type = 'button';
       const badge = getRoleBadgeSpan(p.role);
       if (badge) name.append(badge);
       name.append(document.createTextNode(p.name));
       if (local) name.append(el('span', ' (you)', 'you-tag'));
-      name.title = p.name;
+      participantHovercard.bind(name, p.id, p.name);
       row.append(avatar);
       if (classic) row.append(name);
       else {
@@ -3720,6 +3788,7 @@ function renderParticipants(participants: Map<string, Participant>): void {
   }
   for (const node of Array.from(list.children))
     if (!retained.has(node as HTMLElement)) node.remove();
+  participantHovercard.refresh();
   if (focusedId && document.activeElement === document.body) {
     Array.from(retained)
       .find((node) => node.dataset['participantId'] === focusedId)
