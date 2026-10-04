@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import gzip
 import hashlib
+import io
 import json
 import os
+import posixpath
+import re
 import sys
 import tarfile
 import tempfile
 import urllib.request
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, cast
 
 from security_context import executable
@@ -24,6 +28,11 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[1]
 PATCH = ROOT / "build/ci-local-act.patch"
 PIN = ROOT / "build/ci-local-act.json"
+MAX_SOURCE_BYTES = 256 * 1024**2
+MAX_SOURCE_MEMBER = 16 * 1024**2
+MAX_SOURCE_MEMBERS = 10000
+MAX_SOURCE_PATH = 4096
+FIRST_PRINTABLE = 32
 
 
 def digest(path: Path) -> str:
@@ -53,6 +62,92 @@ def publish(staging: Path, target: Path, key: str) -> None:
     )
     receipt.chmod(0o600)
     _ = staging.rename(target)
+
+
+def source_members(source: tarfile.TarFile, root: str) -> dict[str, tarfile.TarInfo]:
+    """Validate the entire bounded source tree before writing any member."""
+    members: dict[str, tarfile.TarInfo] = {}
+    for member in source:
+        name = member.name.rstrip("/") if member.isdir() else member.name
+        path = PurePosixPath(name)
+        require(
+            len(members) < MAX_SOURCE_MEMBERS
+            and 0 < len(name) <= MAX_SOURCE_PATH
+            and not path.is_absolute()
+            and str(path) == name
+            and bool(path.parts)
+            and path.parts[0] == root
+            and ".." not in path.parts
+            and "\\" not in name
+            and all(ord(character) >= FIRST_PRINTABLE for character in name),
+            "local_act_source_path",
+        )
+        require(name not in members, "local_act_source_duplicate")
+        require(
+            (member.isfile() or member.isdir() or member.issym()) and member.sparse is None,
+            "local_act_source_type",
+        )
+        require(
+            0 <= member.size <= MAX_SOURCE_MEMBER and (member.isfile() or member.size == 0),
+            "local_act_source_size",
+        )
+        members[name] = member
+    require(root in members and members[root].isdir(), "local_act_source_root")
+    for name, member in members.items():
+        for parent in PurePosixPath(name).parents:
+            if parent != PurePosixPath("."):
+                require(
+                    str(parent) in members and members[str(parent)].isdir(),
+                    "local_act_source_parent",
+                )
+        if member.issym():
+            target = posixpath.normpath(str(PurePosixPath(name).parent / member.linkname))
+            require(
+                0 < len(member.linkname) <= MAX_SOURCE_PATH
+                and not PurePosixPath(member.linkname).is_absolute()
+                and "\\" not in member.linkname
+                and target in members
+                and members[target].isfile(),
+                "local_act_source_link",
+            )
+    return members
+
+
+def extract_source(archive: Path, workspace: Path, revision: str) -> Path:
+    """Write only validated files/directories and internal regular-file symlinks."""
+    require(re.fullmatch(r"[a-f0-9]{40}", revision), "local_act_source_revision")
+    with gzip.open(archive, "rb") as compressed:
+        expanded = compressed.read(MAX_SOURCE_BYTES + 1)
+    require(len(expanded) <= MAX_SOURCE_BYTES, "local_act_source_expansion")
+    root = "act-" + revision
+    with tarfile.open(fileobj=io.BytesIO(expanded), mode="r:") as source:
+        members = source_members(source, root)
+        for name, member in sorted(
+            members.items(), key=lambda item: len(PurePosixPath(item[0]).parts)
+        ):
+            if member.isdir():
+                (workspace / name).mkdir(mode=0o755)
+        for name, member in members.items():
+            if not member.isfile():
+                continue
+            stream = source.extractfile(member)
+            require(stream is not None, "local_act_source_missing")
+            if stream is None:
+                raise ToolError("local_act_source_missing")  # noqa: EM101 -- Fixed diagnostic.
+            with stream:
+                data = stream.read(MAX_SOURCE_MEMBER + 1)
+            require(len(data) == member.size, "local_act_source_truncated")
+            target = workspace / name
+            with target.open("xb") as output:
+                _ = output.write(data)
+            mode = member.mode & 0o755
+            if not mode & 0o100:
+                mode &= ~0o111
+            target.chmod(mode | 0o600)
+        for name, member in members.items():
+            if member.issym():
+                (workspace / name).symlink_to(member.linkname)
+    return workspace / root
 
 
 def prepare() -> Path:
@@ -111,9 +206,7 @@ def prepare() -> Path:
             require(len(data) == expected_bytes, "local_act_archive_size")
             _ = output.write(data)
         require(digest(archive) == pin["archiveSha256"], "local_act_archive_digest")
-        with tarfile.open(archive) as source:
-            source.extractall(workspace, filter="data")
-        source_root = workspace / f"act-{revision}"
+        source_root = extract_source(archive, workspace, revision)
         published = workspace / "published"
         published.mkdir(mode=0o700)
         commands = [
@@ -149,7 +242,15 @@ def main() -> int:
     """Print the authenticated local executable, without changing global tools."""
     try:
         _ = sys.stdout.write(str(prepare()) + "\n")
-    except (ToolError, OSError, ValueError, KeyError, bounded_process.ProcessError) as error:
+    except (
+        ToolError,
+        OSError,
+        ValueError,
+        KeyError,
+        EOFError,
+        tarfile.TarError,
+        bounded_process.ProcessError,
+    ) as error:
         _ = sys.stderr.write(f"Local act preparation failed: {error}\n")
         return 1
     return 0

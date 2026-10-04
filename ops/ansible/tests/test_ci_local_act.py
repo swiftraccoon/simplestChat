@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
+import stat
 import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +19,8 @@ import ci_local_act as local
 from security_tools import ToolError
 
 ROOT = Path(__file__).resolve().parents[3]
+REVISION = "a" * 40
+SOURCE_ROOT = "act-" + REVISION
 
 
 class LocalActTests(unittest.TestCase):
@@ -110,3 +115,66 @@ class LocalActTests(unittest.TestCase):
             with self.assertRaisesRegex(ToolError, "local_act_cache_integrity"):
                 _ = local.prepare()
         network.assert_not_called()
+
+    def archive(self, root: Path, members: list[tarfile.TarInfo]) -> Path:
+        """Create a tiny owned source archive with explicit member types and source bytes."""
+        path = root / "source.tar.gz"
+        with tarfile.open(path, "w:gz") as archive:
+            directory = tarfile.TarInfo(SOURCE_ROOT)
+            directory.type = tarfile.DIRTYPE
+            archive.addfile(directory)
+            for member in members:
+                member.name = SOURCE_ROOT + "/" + member.name
+                if member.isfile():
+                    member.size = 2
+                archive.addfile(member, io.BytesIO(b"ok") if member.isfile() else None)
+        return path
+
+    def test_source_extraction_preserves_internal_links_and_executable_modes(self) -> None:
+        """Legitimate pinned fixture symlinks work without writable or special file modes."""
+        root = self.directory()
+        executable = tarfile.TarInfo("tool")
+        executable.mode = 0o6775
+        link = tarfile.TarInfo("tool-link")
+        link.type, link.linkname = tarfile.SYMTYPE, "tool"
+        archive = self.archive(root, [executable, link, tarfile.TarInfo("plain")])
+        source = local.extract_source(archive, root, REVISION)
+        self.assertEqual((source / "tool-link").read_bytes(), b"ok")
+        self.assertTrue((source / "tool-link").is_symlink())
+        self.assertEqual(stat.S_IMODE((source / "tool").stat().st_mode), 0o755)
+        self.assertEqual(stat.S_IMODE((source / "plain").stat().st_mode), 0o644)
+
+    def test_source_extraction_rejects_escape_links_types_and_collisions_before_writes(
+        self,
+    ) -> None:
+        """No malformed archive member can redirect or overwrite a source-tree member."""
+        escape = tarfile.TarInfo("escape")
+        escape.type, escape.linkname = tarfile.SYMTYPE, "../../outside"
+        special = tarfile.TarInfo("device")
+        special.type = tarfile.CHRTYPE
+        fixtures = (
+            [tarfile.TarInfo("../escape")],
+            [escape],
+            [special],
+            [tarfile.TarInfo("same"), tarfile.TarInfo("same")],
+            [tarfile.TarInfo("parent"), tarfile.TarInfo("parent/child")],
+        )
+        for members in fixtures:
+            root = self.directory()
+            archive = self.archive(root, members)
+            with self.subTest(member=members[0].name), self.assertRaises(ToolError):
+                _ = local.extract_source(archive, root, REVISION)
+            self.assertFalse((root / SOURCE_ROOT).exists())
+
+    def test_source_extraction_bounds_expansion_count_and_individual_files(self) -> None:
+        """Budgets apply before source files or link metadata reach the filesystem."""
+        root = self.directory()
+        archive = self.archive(root, [tarfile.TarInfo("file")])
+        for limit in ("MAX_SOURCE_BYTES", "MAX_SOURCE_MEMBERS", "MAX_SOURCE_MEMBER"):
+            with (
+                self.subTest(limit=limit),
+                patch.object(local, limit, 1),
+                self.assertRaises(ToolError),
+            ):
+                _ = local.extract_source(archive, root, REVISION)
+            self.assertFalse((root / SOURCE_ROOT).exists())
