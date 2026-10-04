@@ -15,10 +15,14 @@ import json
 import os
 import re
 import shutil
+import signal
 import stat
 import sys
+import threading
+import time
 import uuid
-from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -39,7 +43,8 @@ import release_build
 from release_json import JsonObject, JsonValue, array_value, decode_json, object_value, string_value
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
+    from types import FrameType
 
     from security_policy import ExceptionRecord
 
@@ -211,6 +216,9 @@ class Sandbox:
     platform: str
     runner: release_build.Runner = field(default_factory=release_build.Runner)
     sequence: int = 0
+    diagnostic_prefix: str = ""
+    scanner_limit: int = MAX_SCANNERS
+    cancelled: threading.Event = field(default_factory=threading.Event)
 
     def command(
         self, argv: Sequence[str], *, timeout: int = 30, allow_failure: bool = False
@@ -270,7 +278,8 @@ class Sandbox:
             not online or (tool == "grype" and list(arguments) == ["db", "update"] and not mounts),
             "image_online_artifact_mount",
         )
-        policy.require(self.sequence < MAX_SCANNERS, "image_scanner_count")
+        policy.require(not self.cancelled.is_set(), "image_scan_cancelled")
+        policy.require(self.sequence < self.scanner_limit, "image_scanner_count")
         self.sequence += 1
         owner = uuid.uuid4().hex
         name = "simplestchat-security-" + owner
@@ -341,13 +350,16 @@ class Sandbox:
             policy.require(target in {"/input", "/layers", "/db"}, "image_scanner_mount")
             args += ["--mount", f"type=bind,src={source},dst={target},readonly"]
         args += ["--entrypoint", "/tools/" + tool, self.base, *arguments]
-        self.runner.healthy = lambda: directory_size(destination, limit)
+        self.runner.healthy = lambda: (
+            not self.cancelled.is_set() and directory_size(destination, limit)
+        )
         command_log = (
             self.runner.output / f"{self.runner.sequence + 1:02d}-{Path(self.engine[0]).name}.log"
             if self.runner.output is not None
             else None
         )
         result = None
+        started = time.monotonic()
         owned = None
         cleanup_verified = False
         try:
@@ -370,7 +382,10 @@ class Sandbox:
                 )
                 policy.require(not remaining, "image_container_cleanup_failed")
                 cleanup_verified = True
-                write(self.output / f"container-{self.sequence:02d}.json", owned)
+                write(
+                    self.output / f"container-{self.diagnostic_prefix}{self.sequence:02d}.json",
+                    owned,
+                )
             finally:
                 diagnostic = scanner_diagnostic(
                     tool,
@@ -380,7 +395,12 @@ class Sandbox:
                     scratch_bytes=scratch_bytes,
                     command_log=command_log,
                 )
-                write(self.output / f"scanner-result-{self.sequence:02d}.json", diagnostic)
+                diagnostic["elapsedSeconds"] = round(time.monotonic() - started, 3)
+                write(
+                    self.output
+                    / f"scanner-result-{self.diagnostic_prefix}{self.sequence:02d}.json",
+                    diagnostic,
+                )
             policy.require(diagnostic["containerStateValid"], "image_scanner_container_state")
             policy.require(directory_size(destination, limit), "image_scanner_output_limit")
 
@@ -481,10 +501,8 @@ def selected_image(sandbox: Sandbox, args: Options, tree: Path) -> JsonObject:
     return value
 
 
-def scan_reports(
-    sandbox: Sandbox, args: Options, tree: Path, native: JsonObject, elf: JsonObject
-) -> tuple[Path, Path, Path, JsonObject]:
-    """Download only DB bytes online, then perform every artifact scan without network."""
+def prepare_database(sandbox: Sandbox) -> JsonObject:
+    """Fetch a fresh database without artifact mounts and verify its status and bytes."""
     database = sandbox.output / "database"
     status, _ = sandbox.run(
         "grype",
@@ -509,6 +527,13 @@ def scan_reports(
     db_status["databaseSha256"] = digest(database / "cache/6/vulnerability.db")
     db_status["importReceiptSha256"] = digest(database / "cache/6/import.json")
     write(sandbox.output / "database-status.json", db_status)
+    return db_status
+
+
+def scan_artifacts(
+    sandbox: Sandbox, args: Options, tree: Path, native: JsonObject, elf: JsonObject
+) -> tuple[Path, Path]:
+    """Catalog and scan the current archive offline, independently of DB preparation."""
     # This mount contains only the exact archive, not the checkout or unrelated evidence.
     inputs = sandbox.output / "scanner-input"
     inputs.mkdir(mode=0o700)
@@ -550,16 +575,7 @@ def scan_reports(
         mounts={"/input": sbom_dir},
     )
     policy.require(status == 0, "image_spdx_conversion_failed")
-    grype_dir = sandbox.output / "vulnerabilities"
-    status, _ = sandbox.run(
-        "grype",
-        ["sbom:/input/sbom.syft.json", "-o", "json", "--file", "/output/grype.json"],
-        destination=grype_dir,
-        mounts={"/input": sbom_dir, "/db": database},
-        extra_env={"GRYPE_DB_CACHE_DIR": "/db/cache"},
-    )
-    policy.require(status == 0, "image_vulnerability_scan_failed")
-    secret_inputs = secret_bundle(tree / "layers", sandbox.output)
+    secret_inputs = secret_bundle(tree / "layers", sandbox.output, cancelled=sandbox.cancelled)
     secret_dir = sandbox.output / "secrets"
     status, _ = sandbox.run(
         "gitleaks",
@@ -568,6 +584,103 @@ def scan_reports(
         mounts={"/layers": secret_inputs},
     )
     policy.require(status in (0, FINDINGS_EXIT), "image_secret_scan_failed")
+    return sbom_dir, secret_dir
+
+
+def scan_phase[T](sandbox: Sandbox, name: str, operation: Callable[[], T]) -> T:
+    """Retain safe timings and both independent failures, including cancellation."""
+    started = time.monotonic()
+    passed = False
+    failure: str | None = None
+    try:
+        result = operation()
+    except BaseException as error:
+        failure = (
+            str(error) if isinstance(error, security_tools.ToolError) else type(error).__name__
+        )
+        raise
+    else:
+        passed = True
+        return result
+    finally:
+        write(
+            sandbox.output / f"scanner-result-phase-{name}.json",
+            {
+                "schemaVersion": 1,
+                "phase": name,
+                "passed": passed,
+                "failure": failure,
+                "elapsedSeconds": round(time.monotonic() - started, 3),
+                "cancelled": sandbox.cancelled.is_set(),
+            },
+        )
+
+
+def scan_reports(
+    sandbox: Sandbox, args: Options, tree: Path, native: JsonObject, elf: JsonObject
+) -> tuple[Path, Path, Path, JsonObject]:
+    """Overlap only independent checks and join before current-DB vulnerability matching."""
+    # Reserve two invocations for database work, preserving the global ceiling
+    # of eight, including the already completed detector self-test.
+    sandbox.scanner_limit = MAX_SCANNERS - 2
+    policy.require(sandbox.sequence <= sandbox.scanner_limit, "image_scanner_count")
+    logs = sandbox.output / "database-commands"
+    logs.mkdir(mode=0o700)
+    database = replace(
+        sandbox,
+        runner=release_build.Runner(output=logs),
+        sequence=0,
+        diagnostic_prefix="database-",
+        scanner_limit=2,
+    )
+
+    def cancel(_number: int, _frame: FrameType | None) -> None:
+        sandbox.cancelled.set()
+
+    previous = {number: signal.signal(number, cancel) for number in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            database_future = executor.submit(
+                scan_phase, database, "database", lambda: prepare_database(database)
+            )
+            artifact_future = executor.submit(
+                scan_phase,
+                sandbox,
+                "artifacts",
+                lambda: scan_artifacts(sandbox, args, tree, native, elf),
+            )
+            failed = False
+            try:
+                for future in (database_future, artifact_future):
+                    try:
+                        _ = future.result()
+                    except (
+                        OSError,
+                        ValueError,
+                        KeyError,
+                        release_build.BuildError,
+                        security_tools.ToolError,
+                    ):
+                        failed = True
+            except BaseException:
+                sandbox.cancelled.set()
+                raise
+        policy.require(not sandbox.cancelled.is_set(), "image_scan_cancelled")
+        policy.require(not failed, "image_parallel_scan_failed")
+    finally:
+        for number, handler in previous.items():
+            _ = signal.signal(number, handler)
+    db_status = database_future.result()
+    sbom_dir, secret_dir = artifact_future.result()
+    grype_dir = sandbox.output / "vulnerabilities"
+    status, _ = sandbox.run(
+        "grype",
+        ["sbom:/input/sbom.syft.json", "-o", "json", "--file", "/output/grype.json"],
+        destination=grype_dir,
+        mounts={"/input": sbom_dir, "/db": sandbox.output / "database"},
+        extra_env={"GRYPE_DB_CACHE_DIR": "/db/cache"},
+    )
+    policy.require(status == 0, "image_vulnerability_scan_failed")
     return sbom_dir, grype_dir, secret_dir, db_status
 
 
@@ -649,11 +762,14 @@ def secret_selftest(sandbox: Sandbox) -> None:
     )
 
 
-def secret_inventory(layers: Path, output: Path) -> list[tuple[Path, int]]:
+def secret_inventory(
+    layers: Path, output: Path, *, cancelled: threading.Event | None = None
+) -> list[tuple[Path, int]]:
     """Budget every regular input and fixed prefix before writing any projection."""
     sources: list[tuple[Path, int]] = []
     total = 0
     for source in layers.rglob("*"):
+        policy.require(cancelled is None or not cancelled.is_set(), "image_scan_cancelled")
         metadata = source.lstat()
         if stat.S_ISDIR(metadata.st_mode):
             continue
@@ -671,13 +787,14 @@ def secret_inventory(layers: Path, output: Path) -> list[tuple[Path, int]]:
     return sorted(sources)
 
 
-def secret_bundle(layers: Path, output: Path) -> Path:
+def secret_bundle(layers: Path, output: Path, *, cancelled: threading.Event | None = None) -> Path:
     """Scan bounded printable projections under neutral names, retaining original identity."""
-    sources = secret_inventory(layers, output)
+    sources = secret_inventory(layers, output, cancelled=cancelled)
     inputs = output / "secret-input"
     inputs.mkdir(mode=0o700)
     paths: JsonObject = {}
     for index, (source, expected_bytes) in enumerate(sources):
+        policy.require(cancelled is None or not cancelled.is_set(), "image_scan_cancelled")
         name = f"content-{index:06d}"
         view = projection.project(source, inputs / name, max_bytes=security_archive.MAX_FILE)
         policy.require(view.source_bytes == expected_bytes, "image_secret_input_changed")

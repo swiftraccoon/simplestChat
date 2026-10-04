@@ -338,10 +338,11 @@ archive fits Syft's smaller working storage. Exhaustion, OOM, timeout or partial
 scanner output fails the check; there is no automatic larger or unbounded retry.
 This follows Syft's documented [archive source caching](https://github.com/anchore/syft/wiki/supported-sources).
 
-Each of at most eight scanner invocations retains `scanner-result-NN.json`.
+Each of at most eight scanner invocations retains `scanner-result-NN.json` or
+`scanner-result-database-NN.json` for the independent database branch.
 These small public-safe receipts contain the fixed tool/failure classification,
 command and container exit statuses, OOM/time/output-limit flags, cleanup
-verification, declared resource limits, and the byte count/SHA-256 of the bounded
+verification, elapsed seconds, declared resource limits, and the byte count/SHA-256 of the bounded
 private command log. They contain no log excerpts, environment, command arguments
 or artifact-derived paths. A diagnostic identifies the observed failure; it does
 not replace a successful complete scanner report. Full command logs remain private.
@@ -354,6 +355,15 @@ requires Grype's valid current v6 status, the expected HTTPS provider/checksum,
 Fedora/GitHub/NVD provider coverage and a build age of at most 120 hours. Database
 and import-receipt hashes bind the recorded status to the bytes used. Missing or
 stale databases fail; they are never treated as zero vulnerabilities.
+
+Fresh database preparation overlaps the offline SBOM and secret scans, using
+two independent command ledgers and container lifecycles. Each branch retains
+a `scanner-result-phase-*.json` receipt with its elapsed time, failure code and
+cancellation status. Both branches must finish successfully before vulnerability
+matching starts; the final policy still checks the current database against the
+current image. Cancellation stops both owned scanner processes, verifies their
+container cleanup and checks for interruption between projected files. At most
+two scanner containers run concurrently, each retaining its two-CPU/two-GiB cap.
 
 Cleanup rechecks each randomly named container's exact immutable ID, image and
 ownership label before removal, and confirms its ID is absent afterward. A name

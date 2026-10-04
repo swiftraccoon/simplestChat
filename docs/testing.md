@@ -583,8 +583,10 @@ Production CI downloads and authenticates its pinned image-scanner tools while
 the disposable release/rollback fixture runs. Both bounded results must pass;
 their private logs stay separate. The later image scan rechecks tool hashes and
 runs every image policy against the same exported image. Scanner containers run
-only after the fixture has cleaned its engine. This overlaps tool preparation,
-not the Docker checks, and does not establish a measured five-minute job budget.
+only after the fixture has cleaned its engine. Within the image gate, fresh
+database preparation overlaps offline SBOM/secret scanning in two bounded
+branches; vulnerability matching waits for both. Timing receipts measure the
+actual phases. Neither overlap establishes a measured five-minute job budget.
 
 Action and build caches persist under `target/act`. Each invocation writes a
 private directory under `results/` containing its event, workflow log, source

@@ -282,15 +282,14 @@ class ImageRunnerTests(unittest.TestCase):
             raw.mkdir()
             image.write(raw / "sbom.syft.json", {"partial": True})
             with (
-                patch.object(sandbox, "run", side_effect=[(0, ""), (0, "{}"), (1, "")]) as run,
-                patch.object(policy, "database_status"),
+                patch.object(sandbox, "run", return_value=(1, "")) as run,
                 patch.object(policy, "enrich_sbom") as enrich,
                 self.assertRaisesRegex(ToolError, "image_sbom_failed"),
             ):
-                _ = image.scan_reports(
+                _ = image.scan_artifacts(
                     sandbox, image.Options(artifact_dir=artifact), root / "tree", {}, {}
                 )
-            self.assertEqual(run.call_count, 3)
+            self.assertEqual(run.call_count, 1)
             enrich.assert_not_called()
             self.assertFalse((root / "sbom").exists())
 
