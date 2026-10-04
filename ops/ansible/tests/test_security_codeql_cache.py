@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, override
 from unittest.mock import patch
@@ -29,6 +30,35 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from release_json import JsonObject
+
+
+@dataclass(kw_only=True)
+class AnalysisFixture:
+    """Record external commands and control analyzer/policy outcomes without running CodeQL."""
+
+    directory: Path
+    language: str
+    passed: bool
+    failure: str | None
+    calls: list[tuple[str, list[str]]] = field(default_factory=list)
+
+    def run(self, name: str, argv: Sequence[str], **_kwargs: object) -> tuple[int, bytes]:
+        """Produce fixture report files or stop at the selected failed analysis command."""
+        self.calls.append((name, list(argv)))
+        if name == self.failure:
+            raise ToolError("fixture_command_failed")  # noqa: EM101 -- Fixed safe code.
+        if name.startswith("codeql-analyze-"):
+            _ = (self.directory / (self.language + "-security.sarif")).write_text("fixture")
+        if name.startswith("codeql-policy-"):
+            policy = self.directory / (self.language + "-security-policy")
+            policy.mkdir()
+            _ = (policy / "report.json").write_text(json.dumps({"passed": self.passed}))
+        return 0, b""
+
+    def publish(self, *_args: object, **_kwargs: object) -> JsonObject:
+        """Record atomic cache publication alongside analysis and policy commands."""
+        self.calls.append(("cache-save", []))
+        return {"revision": "b" * 40, "reused": False}
 
 
 class NativeCacheTests(unittest.TestCase):
@@ -96,6 +126,17 @@ class NativeCacheTests(unittest.TestCase):
         manifest["web/tests/shared.json"] = "0" * 64
         with self.assertRaisesRegex(ToolError, "codeql_cache_source_changed"):
             cache.source_integrity(database, source, manifest, "rust")
+
+    def test_source_archives_reject_policy_data_excluded_from_analysis_keys(self) -> None:
+        """Review-only reuse fails closed if extraction actually consumed an excluded file."""
+        database, source, manifest = self.database()
+        for language in ("rust", "c-cpp"):
+            for name in ci_verified.CODEQL_POLICY_DATA:
+                with self.subTest(language=language, source=name):
+                    with zipfile.ZipFile(database / "src.zip", "w") as archive:
+                        archive.writestr(str(source / name).lstrip("/"), b"review data")
+                    with self.assertRaisesRegex(ToolError, "codeql_cache_unkeyed_source"):
+                        cache.source_integrity(database, source, manifest, language)
 
     def test_native_source_archive_refuses_unkeyed_tracked_inputs_but_allows_generated_sources(
         self,
@@ -222,7 +263,12 @@ class NativeCacheTests(unittest.TestCase):
             run.assert_not_called()
 
     def run_analysis(
-        self, *, hit: bool = True, passed: bool = True, language: str = "c-cpp"
+        self,
+        *,
+        hit: bool = True,
+        passed: bool = True,
+        language: str = "c-cpp",
+        failure: str | None = None,
     ) -> list[JsonObject]:
         """Exercise the real orchestration with controlled external analyzer and policy outcomes."""
         context = Context(ROOT, self.directory)
@@ -231,27 +277,21 @@ class NativeCacheTests(unittest.TestCase):
         _ = (self.directory / "source-manifest.json").write_text("{}")
         args = local.Options()
         args.revision = "b" * 40
+        args.suite = "all" if failure and failure.endswith("quality-advisory") else "security"
         args.database_cache = self.directory / "cache"
         args.openssl_prefix = self.directory / "openssl"
         (args.openssl_prefix / "lib").mkdir(parents=True)
         for name in ("libssl.a", "libcrypto.a"):
             _ = (args.openssl_prefix / "lib" / name).write_bytes(b"fixture")
-        calls: list[tuple[str, list[str]]] = []
-
-        def run(name: str, argv: Sequence[str], **_kwargs: object) -> tuple[int, bytes]:
-            calls.append((name, list(argv)))
-            if name.startswith("codeql-analyze-"):
-                _ = (self.directory / (language + "-security.sarif")).write_text("fixture")
-            if name.startswith("codeql-policy-"):
-                policy = self.directory / (language + "-security-policy")
-                policy.mkdir()
-                _ = (policy / "report.json").write_text(json.dumps({"passed": passed}))
-            return 0, b""
+        fixture = AnalysisFixture(
+            directory=self.directory, language=language, passed=passed, failure=failure
+        )
+        calls = fixture.calls
 
         with (
             patch.object(sys, "platform", "linux"),
             patch.object(resources, "detect", return_value=resources.Budget(2, 4096, 7168)),
-            patch.object(context, "run", side_effect=run),
+            patch.object(context, "run", side_effect=fixture.run),
             patch.object(cache, "cache_key", return_value="key"),
             patch.object(
                 cache,
@@ -259,15 +299,28 @@ class NativeCacheTests(unittest.TestCase):
                 return_value={"revision": "a" * 40, "reused": True} if hit else None,
             ),
             patch.object(cache, "source_integrity") as integrity,
-            patch.object(
-                cache, "save", return_value={"revision": args.revision, "reused": False}
-            ) as save,
+            patch.object(cache, "save", side_effect=fixture.publish) as save,
             patch.object(local, "database_health") as health,
             patch.object(local, "source_identity"),
             patch.object(local, "native_coverage", return_value=200) as coverage,
             patch.object(tools, "suite", return_value=Path("/queries.qls")),
-            patch.object(local, "report_health", return_value={"sarifSha256": "c" * 64}),
+            patch.object(
+                local,
+                "report_health",
+                return_value={
+                    "language": language,
+                    "category": "security",
+                    "sarifSha256": "c" * 64,
+                },
+            ),
         ):
+            if failure:
+                with self.assertRaisesRegex(ToolError, "fixture_command_failed"):
+                    _ = local.analyze_language(context, args, source, Path("/codeql"), language)
+                save.assert_not_called()
+                self.assertFalse((self.directory / (language + "-cache-ready.json")).exists())
+                self.assertFalse(any(name.startswith("codeql-policy-") for name, _ in calls))
+                return []
             if passed:
                 reports = local.analyze_language(context, args, source, Path("/codeql"), language)
             else:
@@ -283,29 +336,38 @@ class NativeCacheTests(unittest.TestCase):
             coverage.assert_called_once()
         else:
             coverage.assert_not_called()
-        if hit or not passed:
+        if hit:
             save.assert_not_called()
         else:
             save.assert_called_once()
+        self.assertEqual((self.directory / (language + "-cache-ready.json")).exists(), not hit)
+        self.check_analysis_calls(calls, language=language, hit=hit)
+        if passed:
+            self.assertEqual(reports[0]["ramMiB"], 7168)
+        return reports
+
+    def check_analysis_calls(
+        self, calls: list[tuple[str, list[str]]], *, language: str, hit: bool
+    ) -> None:
+        """Check query reuse and fresh policy run in the required publication order."""
         self.assertEqual(
             [name for name, _ in calls],
             [
                 *(["codeql-vendor-integrity"] if language == "c-cpp" else []),
                 *([] if hit else ["codeql-create-" + language]),
                 "codeql-analyze-" + language + "-security",
+                *([] if hit else ["cache-save"]),
                 "codeql-policy-" + language + "-security",
             ],
         )
-        self.assertEqual("--rerun" in calls[-2][1], not hit)
-        self.assertIn("--ram=7168", calls[-2][1])
-        if passed:
-            self.assertEqual(reports[0]["ramMiB"], 7168)
-        self.assertIn("--sarif-run-property=queryReuseEnabled=" + str(hit).lower(), calls[-2][1])
+        analyze = next(command for name, command in calls if name.startswith("codeql-analyze-"))
+        self.assertEqual("--rerun" in analyze, not hit)
+        self.assertIn("--ram=7168", analyze)
+        self.assertIn("--sarif-run-property=queryReuseEnabled=" + str(hit).lower(), analyze)
         self.assertIn(
             "--sarif-run-property=originalEvaluationRevision=" + ("a" if hit else "b") * 40,
-            calls[-2][1],
+            analyze,
         )
-        return reports
 
     def test_hit_regenerates_sarif_and_reruns_coverage_and_policy(self) -> None:
         """CodeQL may reuse exact evaluated results while current coverage and policy always run."""
@@ -329,9 +391,39 @@ class NativeCacheTests(unittest.TestCase):
         """Current high findings fail the runner without hiding their original SARIF from GitHub."""
         self.assertEqual(self.run_analysis(passed=False), [])
 
-    def test_new_query_results_are_not_published_after_policy_failure(self) -> None:
-        """A failed cold policy result must not create a reusable analyzed database."""
+    def test_healthy_query_results_survive_policy_failure_without_passing_the_gate(self) -> None:
+        """Complete evaluated data is reusable even when fresh policy still blocks the job."""
         self.assertEqual(self.run_analysis(hit=False, passed=False), [])
+
+    def test_extraction_failure_never_publishes_analysis_or_runs_policy(self) -> None:
+        """An incomplete database cannot acquire a reusable query cache or ready marker."""
+        self.assertEqual(
+            self.run_analysis(hit=False, language="rust", failure="codeql-create-rust"), []
+        )
+
+    def test_later_query_suite_failure_never_publishes_partial_analysis(self) -> None:
+        """Security success cannot hide an unfinished requested advisory suite in the cache."""
+        self.assertEqual(
+            self.run_analysis(
+                hit=False, language="rust", failure="codeql-analyze-rust-quality-advisory"
+            ),
+            [],
+        )
+
+    def test_stale_ready_marker_is_rejected_before_analysis(self) -> None:
+        """A previous invocation's marker cannot authorize this attempt's cache publication."""
+        context = Context(ROOT, self.directory)
+        _ = (self.directory / "rust-cache-ready.json").write_text("stale")
+        with (
+            patch.object(context, "run") as run,
+            patch.object(cache, "save") as save,
+            self.assertRaisesRegex(ToolError, "codeql_cache_ready_exists"),
+        ):
+            _ = local.analyze_language(
+                context, local.Options(), self.directory / "source", Path("/codeql"), "rust"
+            )
+        run.assert_not_called()
+        save.assert_not_called()
 
     def test_bundle_requires_language_bound_bqrs_and_forbids_cached_sarif(self) -> None:
         """The CLI may reuse evaluated data, but cannot inherit a previous uploaded report."""

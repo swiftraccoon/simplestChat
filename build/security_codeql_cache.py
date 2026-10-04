@@ -152,6 +152,7 @@ def source_integrity(database: Path, source: Path, manifest: JsonObject, languag
             if member.is_dir() or not member.filename.startswith(prefix):
                 continue
             name = member.filename.removeprefix(prefix)
+            require(name not in ci_verified.CODEQL_POLICY_DATA, "codeql_cache_unkeyed_source")
             # Rust includes shared JSON fixtures; other frontend bytes are outside both keys.
             require(
                 not name.startswith("web/") or (language == "rust" and name.endswith(".json")),
@@ -229,7 +230,7 @@ def restore(
 def save(  # noqa: PLR0913 -- Preserve distinct runtime, artifact and source identity arguments.
     context: Context, codeql: Path, directory: Path, key: str, revision: str, *, language: str
 ) -> JsonObject:
-    """Publish evaluated database results only after all requested queries and policy pass."""
+    """Publish complete evaluated queries; current policy verdicts are never cached."""
     require(not directory.exists() and not directory.is_symlink(), "codeql_cache_exists")
     directory.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".codeql-analyzed-", dir=directory.parent))

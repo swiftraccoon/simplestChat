@@ -561,9 +561,13 @@ CodeQL workflow/query/policy files and the analysis helpers' local import closur
 unrelated CI, deployment and image tooling edits do not invalidate that database.
 The restored bundle hash, extraction metadata and archived source bytes must
 match. A miss performs real extraction and query evaluation; a corrupt entry
-fails. The cache is saved only after all requested reports and current policy
-pass. On a hit, CodeQL reuses its own BQRS results and regenerates original SARIF;
-raw SARIF is never cached or relabeled. Evidence records the original evaluation
+fails. Complete healthy query results are saved before current policy runs, so
+a finding that needs review does not discard successful analysis. Policy failure
+still fails the job and blocks signing. The five exact review data/document files
+are outside the analysis-only cache key; archived source must not reference them.
+Successful-check caches keep their separate input rules. On a hit, CodeQL reuses
+its own BQRS results and regenerates original SARIF; raw SARIF is never cached
+or relabeled. Evidence records the original evaluation
 revision and explicitly enables `queryReuse`. The CLI also writes
 `queryReuseEnabled` and `originalEvaluationRevision` into each generated SARIF,
 including reports whose current policy fails. Every run checks native compilation

@@ -302,6 +302,66 @@ class SecurityWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode == 0, accepted, result.stderr)
 
+    def test_codeql_cache_publication_preserves_policy_failure_and_rejects_stale_markers(
+        self,
+    ) -> None:
+        """Execute both workflow wrappers with failed commands and fresh or stale evidence."""
+        codeql = workflow("codeql.yml")
+        for job, language, runner_id in (
+            ("source-analysis", "rust", "source-analysis"),
+            ("native-analysis", "c-cpp", "native-analysis"),
+        ):
+            steps = objects(codeql, "jobs", job, "steps")
+            runner = next(step for step in steps if step.get("id") == runner_id)
+            save = next(
+                step
+                for step in steps
+                if string(step.get("uses", "")).startswith("actions/cache/save@")
+            )
+            condition = string(save, "if")
+            self.assertIn("always() && !cancelled()", condition)
+            self.assertIn(f"steps.{runner_id}.outputs.database-cache-ready == 'true'", condition)
+            self.assertIn("outputs.cache-hit != 'true'", condition)
+            for fresh in (False, True):
+                with (
+                    self.subTest(language=language, fresh=fresh),
+                    tempfile.TemporaryDirectory(prefix="codeql-step-", dir=ROOT / "results") as tmp,
+                ):
+                    directory = Path(tmp)
+                    (directory / "codeql-local").mkdir()
+                    marker = directory / "codeql-local" / (language + "-cache-ready.json")
+                    _ = marker.write_text("stale")
+                    output = directory / "outputs"
+                    script = (
+                        'python3() { if [[ "$TEST_FRESH" == true ]]; then '
+                        + ': > "$RUNNER_TEMP/codeql-local/$CODEQL_LANGUAGE-cache-ready.json"; '
+                        + "fi; return 7; }\n"
+                        + string(runner, "run")
+                    )
+                    result = subprocess.run(  # noqa: S603 -- Owned fixture of the checked wrapper.
+                        ["/bin/bash", "-e", "-c", script],
+                        env={
+                            "PATH": "/usr/bin:/bin",
+                            "RUNNER_TEMP": tmp,
+                            "GITHUB_OUTPUT": str(output),
+                            "GITHUB_SHA": "a" * 40,
+                            "CODEQL_LANGUAGE": language,
+                            "CODEQL_SUITE": "security",
+                            "OPENSSL_DIR": str(directory / "openssl"),
+                            "TEST_FRESH": str(fresh).lower(),
+                        },
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    self.assertEqual(result.returncode, 7, result.stderr)
+                    self.assertEqual(marker.exists(), fresh)
+                    self.assertEqual(
+                        output.read_text() if output.exists() else "",
+                        "database-cache-ready=true\n" if fresh else "",
+                    )
+
     def test_all_workflows_use_unprivileged_pr_events_and_pinned_actions(self) -> None:
         """Pin external action code and prohibit privileged PR execution for all jobs."""
         for path in (ROOT / ".github/workflows").glob("*.yml"):

@@ -120,6 +120,25 @@ class VerifiedCacheTests(unittest.TestCase):
             self.assertEqual(cache.cache_key(self.root, scope), key)
         self.assertNotEqual(cache.cache_key(self.root, "codeql-rust"), rust)
 
+    def test_codeql_review_data_changes_do_not_invalidate_evaluated_databases(self) -> None:
+        """Finding reviews rerun against reports; they cannot alter extraction or queries."""
+        for name in cache.CODEQL_POLICY_DATA:
+            self.assertTrue((ROOT / name).is_file(), name)
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _ = path.write_text("original\n")
+        self.git("add", ".")
+        originals = {scope: cache.cache_key(self.root, scope) for scope in cache.SCOPES}
+        for name in cache.CODEQL_POLICY_DATA:
+            path = self.root / name
+            _ = path.write_text("new exact finding review\n")
+            for scope, original in originals.items():
+                if scope.startswith("codeql-"):
+                    self.assertEqual(cache.cache_key(self.root, scope), original, name)
+                else:
+                    self.assertNotEqual(cache.cache_key(self.root, scope), original, name)
+            _ = path.write_text("original\n")
+
     def test_native_codeql_binds_its_actual_build_analysis_and_policy_inputs(self) -> None:
         """Traced worker setup, query identity and runtime helpers must still invalidate reuse."""
         names = (

@@ -185,12 +185,38 @@ def native_coverage(context: Context, codeql: Path, database: Path) -> int:
     return security_codeql.verify(output / "native-coverage.json")
 
 
+def enforce_policy(context: Context, args: Options, identity: JsonObject) -> None:
+    """Apply current exact reviews to every fresh or regenerated language report."""
+    language = string_value(identity["language"])
+    category = string_value(identity["category"])
+    policy = context.output / (language + "-" + category + "-policy")
+    command = [
+        sys.executable,
+        str(ROOT / "build/security_codeql_triage.py"),
+        "sarif",
+        "--revision",
+        args.revision,
+        "--input",
+        str(context.output / (language + "-" + category + ".sarif")),
+        "--output",
+        str(policy),
+    ]
+    if language == "c-cpp":
+        command.extend(["--source-cache", str(context.output / "vendor-cache")])
+    _ = context.run("codeql-policy-" + language + "-" + category, command, timeout=600)
+    verdict = object_value(decode_json(bounded_file(policy / "report.json", triage.MAX_REPORT)))
+    require(verdict["passed"] is True, "codeql_local_policy_failed")
+    identity["policyPassed"] = True
+
+
 def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in their required order.
     context: Context, args: Options, source: Path, codeql: Path, language: str
 ) -> list[JsonObject]:
     """Analyze exact databases, regenerate full SARIF, and enforce current finding policy."""
     budget = resources.detect(os.environ.get("CODEQL_BUILD_JOBS"))
     database = context.output / "databases" / language
+    ready = context.output / (language + "-cache-ready.json")
+    require(not ready.exists() and not ready.is_symlink(), "codeql_cache_ready_exists")
     extraction: JsonObject | None = None
     cache_key: str | None = None
     create = [
@@ -278,27 +304,10 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
             ).encode(),
             0o600,
         )
-        policy = context.output / (language + "-" + category + "-policy")
-        command = [
-            sys.executable,
-            str(ROOT / "build/security_codeql_triage.py"),
-            "sarif",
-            "--revision",
-            args.revision,
-            "--input",
-            str(report),
-            "--output",
-            str(policy),
-        ]
-        if language == "c-cpp":
-            command.extend(["--source-cache", str(context.output / "vendor-cache")])
-        _ = context.run("codeql-policy-" + language + "-" + category, command, timeout=600)
-        verdict = object_value(decode_json(bounded_file(policy / "report.json", triage.MAX_REPORT)))
-        require(verdict["passed"] is True, "codeql_local_policy_failed")
         reports.append(
             {
                 **identity,
-                "policyPassed": True,
+                "policyPassed": False,
                 "nativeCompiledFiles": coverage,
                 "threads": budget.workers,
                 "ramMiB": budget.query_ram_mib,
@@ -322,6 +331,13 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
             )
             for report in reports:
                 report["extraction"] = extraction
+            write_private(
+                ready,
+                (json.dumps({"revision": args.revision, "key": cache_key}) + "\n").encode(),
+                0o600,
+            )
+    for report in reports:
+        enforce_policy(context, args, report)
     return reports
 
 

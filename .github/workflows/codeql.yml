@@ -81,6 +81,7 @@ jobs:
           key: codeql-cli-v1-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('security/codeql-toolchain.json') }}
       - name: Run shared analysis and current policy checks
         if: ${{ env.ACT || matrix.language == 'rust' }}
+        id: source-analysis
         env:
           CODEQL_LANGUAGE: ${{ matrix.language }}
           CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
@@ -89,10 +90,18 @@ jobs:
           if [[ "$CODEQL_LANGUAGE" == rust ]]; then
             cache=(--database-cache "$RUNNER_TEMP/codeql-rust-database")
           fi
+          rm -f "$RUNNER_TEMP/codeql-local/$CODEQL_LANGUAGE-cache-ready.json"
+          status=0
           python3 build/security_codeql_local.py --revision "$GITHUB_SHA" \
-            --language "$CODEQL_LANGUAGE" --suite "$CODEQL_SUITE" --output "$RUNNER_TEMP/codeql-local" "${cache[@]}"
+            --language "$CODEQL_LANGUAGE" --suite "$CODEQL_SUITE" --output "$RUNNER_TEMP/codeql-local" "${cache[@]}" || status=$?
+          if [[ -f "$RUNNER_TEMP/codeql-local/$CODEQL_LANGUAGE-cache-ready.json" ]]; then
+            echo 'database-cache-ready=true' >> "$GITHUB_OUTPUT"
+          fi
+          exit "$status"
       - name: Save the successfully evaluated Rust database
-        if: matrix.language == 'rust' && steps.rust-database.outputs.cache-hit != 'true'
+        if: >-
+          ${{ always() && !cancelled() && matrix.language == 'rust' &&
+          steps.rust-database.outputs.cache-hit != 'true' && steps.source-analysis.outputs.database-cache-ready == 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/codeql-rust-database
@@ -241,15 +250,24 @@ jobs:
           path: .cache/codeql-tools
           key: codeql-cli-v1-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('security/codeql-toolchain.json') }}
       - name: Analyze the exact native database, check coverage and current policy
+        id: native-analysis
         env:
           CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
         run: |
+          rm -f "$RUNNER_TEMP/codeql-local/c-cpp-cache-ready.json"
+          status=0
           python3 build/security_codeql_local.py --revision "$GITHUB_SHA" \
             --language c-cpp --suite "$CODEQL_SUITE" --openssl-prefix "$OPENSSL_DIR" \
             --database-cache "$RUNNER_TEMP/codeql-native-database" \
-            --output "$RUNNER_TEMP/codeql-local"
+            --output "$RUNNER_TEMP/codeql-local" || status=$?
+          if [[ -f "$RUNNER_TEMP/codeql-local/c-cpp-cache-ready.json" ]]; then
+            echo 'database-cache-ready=true' >> "$GITHUB_OUTPUT"
+          fi
+          exit "$status"
       - name: Save the successfully evaluated native database
-        if: steps.native-database.outputs.cache-hit != 'true'
+        if: >-
+          ${{ always() && !cancelled() && steps.native-database.outputs.cache-hit != 'true' &&
+          steps.native-analysis.outputs.database-cache-ready == 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/codeql-native-database

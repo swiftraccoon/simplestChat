@@ -32,6 +32,15 @@ SCOPES = (
 BINARIES = ("simplestChat", "load_test")
 NATIVE_PREFIXES = ("vendor/", "security/", "build/", ".github/", "ops/ansible/files/")
 CODEQL_NATIVE_PREFIXES = ("vendor/", "security/codeql/")
+CODEQL_POLICY_DATA = frozenset(
+    {
+        "security/codeql-review-2026-09-30.json",
+        "security/codeql-native-review-2026-09-30.json",
+        "security/codeql-review-2026-09-30.md",
+        "security/codeql-native-review-2026-09-30.md",
+        "security/exceptions.json",
+    }
+)
 CODEQL_NATIVE_FILES = frozenset(
     {
         ".github/workflows/codeql.yml",
@@ -54,9 +63,6 @@ CODEQL_NATIVE_FILES = frozenset(
         "ops/ansible/files/bounded_process.py",
         "ops/ansible/files/release_json.py",
         "security/codeql-toolchain.json",
-        "security/codeql-review-2026-09-30.json",
-        "security/codeql-native-review-2026-09-30.json",
-        "security/exceptions.json",
     }
 )
 
@@ -135,6 +141,10 @@ def cache_key(root: Path, scope: str) -> str:
         # Sanitizers retain their full input roots. CodeQL's standalone worker
         # uses a smaller explicit closure; its complete local imports are tested.
         if scope.startswith("native-") and not name.startswith(NATIVE_PREFIXES):
+            continue
+        # A database stores evaluated queries, never a successful policy verdict.
+        # Current exact reviews are checked after every fresh or reused analysis.
+        if scope.startswith("codeql-") and name in CODEQL_POLICY_DATA:
             continue
         if scope == "codeql-native" and not native_codeql_input(name):
             continue
