@@ -14,7 +14,7 @@ import unittest
 from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Unpack, cast
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from test_public_release import FixtureRunner
 from test_public_templates import environment, render
@@ -164,6 +164,15 @@ class TurnTemplateTests(unittest.TestCase):
                 turn.activate(runner, "relay.example.test", report)
                 self.assertTrue(report["alreadyConfigured"])
                 self.assertEqual(runner.ups, 0)
+                turn.activate(runner, "relay.example.test", {}, verify_address="192.0.2.45")
+                self.assertEqual(
+                    runner.calls[-1][1][-3:],
+                    (
+                        "--resolve",
+                        "relay.example.test:443:192.0.2.45",
+                        "https://relay.example.test/ready",
+                    ),
+                )
                 runner.config_hash_mismatch = "simplestchat"
                 with self.assertRaisesRegex(release.ReleaseError, "Running configuration differs"):
                     turn.activate(runner, "relay.example.test", {})
@@ -254,41 +263,57 @@ class TurnCertificateTests(unittest.TestCase):
 
     def test_metrics_transition_preserves_configuration_and_rolls_back(self) -> None:
         """Only fixed metrics settings change; failed readiness restores previous bytes."""
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            config = root / "config"
-            config.mkdir()
-            source = config / "turnserver.conf"
-            original = b"static-auth-secret=fixture-secret\nlistening-port=3478\n"
-            _ = source.write_bytes(original)
-            metadata = config / "settings.json"
-            before = json.dumps(
-                {"configurationSha256": hashlib.sha256(original).hexdigest()}
-            ).encode()
-            _ = metadata.write_bytes(before)
-            runner = FixtureRunner(root, config)
-            with (
-                patch.object(turn, "CONFIG", config),
-                patch.object(turn, "relay_container", return_value="a" * 64),
-                patch.object(runner, "docker", return_value=b" ".join(turn.METRICS_HELP_OPTIONS)),
-                patch.object(turn, "verify_tls"),
-                patch.object(turn, "verify_metrics"),
-                patch.object(os, "chown"),
-            ):
-                self.assertTrue(turn.enable_metrics(runner, "relay.example.test"))
-                self.assertEqual(source.read_bytes(), original + turn.METRICS_OPTIONS.encode())
-                self.assertFalse(turn.enable_metrics(runner, "relay.example.test"))
-                release.atomic(source, original)
+        for address in (None, "192.0.2.45"):
+            with self.subTest(address=address), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                config = root / "config"
+                config.mkdir()
+                source = config / "turnserver.conf"
+                original = b"static-auth-secret=fixture-secret\nlistening-port=3478\n"
+                _ = source.write_bytes(original)
+                metadata = config / "settings.json"
+                before = json.dumps(
+                    {"configurationSha256": hashlib.sha256(original).hexdigest()}
+                ).encode()
                 _ = metadata.write_bytes(before)
+                runner = FixtureRunner(root, config)
                 with (
+                    patch.object(turn, "CONFIG", config),
+                    patch.object(turn, "relay_container", return_value="a" * 64),
                     patch.object(
-                        turn, "verify_metrics", side_effect=release.ReleaseError("fixture")
+                        runner, "docker", return_value=b" ".join(turn.METRICS_HELP_OPTIONS)
                     ),
-                    self.assertRaises(release.ReleaseError),
+                    patch.object(turn, "verify_tls") as verify,
+                    patch.object(turn, "verify_metrics"),
+                    patch.object(os, "chown"),
                 ):
-                    _ = turn.enable_metrics(runner, "relay.example.test")
-                self.assertEqual(source.read_bytes(), original)
-                self.assertEqual(metadata.read_bytes(), before)
+                    self.assertTrue(
+                        turn.enable_metrics(runner, "relay.example.test", address=address)
+                    )
+                    self.assertEqual(source.read_bytes(), original + turn.METRICS_OPTIONS.encode())
+                    self.assertFalse(
+                        turn.enable_metrics(runner, "relay.example.test", address=address)
+                    )
+                    expected = (
+                        call("relay.example.test")
+                        if address is None
+                        else call("relay.example.test", address=address)
+                    )
+                    self.assertEqual(verify.call_args_list, [expected])
+                    verify.reset_mock()
+                    release.atomic(source, original)
+                    _ = metadata.write_bytes(before)
+                    with (
+                        patch.object(
+                            turn, "verify_metrics", side_effect=release.ReleaseError("fixture")
+                        ),
+                        self.assertRaises(release.ReleaseError),
+                    ):
+                        _ = turn.enable_metrics(runner, "relay.example.test", address=address)
+                    self.assertEqual(source.read_bytes(), original)
+                    self.assertEqual(metadata.read_bytes(), before)
+
+                    self.assertEqual(verify.call_args_list, [expected, expected])
 
     def test_publication_selects_a_complete_private_pair_and_is_repeatable(self) -> None:
         """New pairs are readable by the relay group even under the root helper's 077 umask."""

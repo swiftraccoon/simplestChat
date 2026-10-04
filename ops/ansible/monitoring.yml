@@ -143,7 +143,11 @@
 
     - name: Enable native relay metrics through the reviewed relay-only transaction
       ansible.builtin.command:
-        argv: [/usr/bin/python3, -E, -B, /usr/local/libexec/simplestchat-public/turn_public.py, enable-metrics]
+        argv: >-
+          {{ ['/usr/bin/python3', '-E', '-B', '/usr/local/libexec/simplestchat-public/turn_public.py',
+              'enable-metrics'] +
+             (['--verify-address', scpub_turn_verify_address]
+              if scpub_turn_verify_address | default('') | length > 0 else []) }}
       register: scmon_turn
       changed_when: "'Relay metrics enabled' in scmon_turn.stdout"
 

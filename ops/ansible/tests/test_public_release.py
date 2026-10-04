@@ -1259,6 +1259,82 @@ class PublicReleaseTests(unittest.TestCase):
             "a" * 64, repr(public.TurnConfiguration(domain="chat.example", secret="a" * 64))
         )
 
+    def test_https_readiness_override_preserves_hostname_and_tls_verification(self) -> None:
+        """Only curl's destination changes for migration checks before DNS cutover."""
+        for address, selected in (("192.0.2.45", "192.0.2.45"), ("2001:db8::45", "[2001:db8::45]")):
+            with self.subTest(address=address):
+                public.ready(self.runner, origin="https://fixture.invalid", address=address)
+                args = self.runner.calls[-1][1]
+                self.assertEqual(
+                    args[-3:],
+                    (
+                        "--resolve",
+                        f"fixture.invalid:443:{selected}",
+                        "https://fixture.invalid/ready",
+                    ),
+                )
+                self.assertIn("=https", args)
+                self.assertNotIn("--insecure", args)
+                self.assertNotIn("-k", args)
+        previous = len(self.runner.calls)
+        with self.assertRaises(ValueError):
+            public.ready(self.runner, origin="https://fixture.invalid", address="other.invalid")
+        with self.assertRaises(public.ReleaseError):
+            public.ready(self.runner, address="192.0.2.45")
+        self.assertEqual(len(self.runner.calls), previous)
+
+    def test_destination_override_covers_deploy_preflight_replacement_and_rollback(self) -> None:
+        """Every public readiness request stays on the new host, including failed replacement."""
+        for failed in (False, True):
+            with self.subTest(failed=failed):
+                self.runner.calls.clear()
+                self.runner.attempt = self.root / f"override-{failed}"
+                self.runner.attempt.mkdir(mode=0o700)
+                self.runner.ups = 0
+                self.runner.candidate_unready = failed
+                self.runner.app_image = OLD_IMAGE
+                for name, data in self.before.items():
+                    _ = (self.config / name).write_bytes(data)
+                report: JsonObject = {}
+                if failed:
+                    with self.assertRaises(public.ReleaseError):
+                        public.deploy(
+                            self.runner,
+                            self.manifest,
+                            {"serverImage": NEW_IMAGE},
+                            report,
+                            verify_address="192.0.2.45",
+                        )
+                    self.assertTrue(report["rollbackPassed"])
+                else:
+                    public.deploy(
+                        self.runner,
+                        self.manifest,
+                        {"serverImage": NEW_IMAGE},
+                        report,
+                        verify_address="192.0.2.45",
+                    )
+                    self.assertEqual(report["phase"], "complete")
+                checks = [
+                    args
+                    for kind, args, _ in self.runner.calls
+                    if kind == "run" and args[-1] == "https://fixture.invalid/ready"
+                ]
+                self.assertEqual(len(checks), 2)
+                self.assertTrue(
+                    all(
+                        args[-3:-1] == ("--resolve", "fixture.invalid:443:192.0.2.45")
+                        for args in checks
+                    )
+                )
+                local = [
+                    args
+                    for kind, args, _ in self.runner.calls
+                    if kind == "run" and args[-1] == "http://127.0.0.1:3000/ready"
+                ]
+                self.assertTrue(local)
+                self.assertTrue(all("--resolve" not in args for args in local))
+
     def test_malformed_readiness_shapes_are_retried_only_until_the_deadline(self) -> None:
         """A non-object or ambiguous readiness response cannot pass or escape the deadline."""
         for response in (b"[]", b"null", b'{"status":"ready","status":"ready"}'):

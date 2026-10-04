@@ -386,7 +386,9 @@ def require_metrics_support(runner: release.RunnerProtocol, identity: str) -> No
     )
 
 
-def enable_metrics(runner: release.RunnerProtocol, domain: str) -> bool:
+def enable_metrics(
+    runner: release.RunnerProtocol, domain: str, *, address: str | None = None
+) -> bool:
     """Replace only the relay with three reviewed metrics options and bounded rollback."""
     identity = relay_container(runner)
     original = (CONFIG / "turnserver.conf").read_bytes()
@@ -426,7 +428,10 @@ def enable_metrics(runner: release.RunnerProtocol, domain: str) -> bool:
             "turn",
         )
         _ = relay_container(runner)
-        verify_tls(domain)
+        if address is None:
+            verify_tls(domain)
+        else:
+            verify_tls(domain, address=address)
 
     try:
         release.atomic(CONFIG / "turnserver.conf", updated)
@@ -445,7 +450,13 @@ def enable_metrics(runner: release.RunnerProtocol, domain: str) -> bool:
     return True
 
 
-def activate(runner: release.RunnerProtocol, domain: str, report: JsonObject) -> None:
+def activate(
+    runner: release.RunnerProtocol,
+    domain: str,
+    report: JsonObject,
+    *,
+    verify_address: str | None = None,
+) -> None:
     """Enable the already verified relay through the bounded app replacement."""
     release.protected(CONFIG / "secret", limit=64)
     turn = release.TurnConfiguration(domain=domain, secret=(CONFIG / "secret").read_text())
@@ -463,7 +474,7 @@ def activate(runner: release.RunnerProtocol, domain: str, report: JsonObject) ->
             "Running configuration differs from disk",
         )
         report["alreadyConfigured"] = True
-        release.ready(runner, origin=f"https://{domain}", seconds=3)
+        release.ready(runner, origin=f"https://{domain}", seconds=3, address=verify_address)
         return
     selected = object_value(decode_json((release.CONFIG / "images.json").read_bytes()))
     revision = string_value(selected["revision"])
@@ -473,7 +484,15 @@ def activate(runner: release.RunnerProtocol, domain: str, report: JsonObject) ->
     manifest = validate_manifest(manifest_path)
     release.require(manifest["revision"] == revision, "Deployed release identity differs")
     report["revision"] = revision
-    release.deploy(runner, manifest, selected, report, quiet_seconds=600, turn=turn)
+    release.deploy(
+        runner,
+        manifest,
+        selected,
+        report,
+        quiet_seconds=600,
+        turn=turn,
+        verify_address=verify_address,
+    )
 
 
 class _Arguments(argparse.Namespace):
@@ -495,7 +514,7 @@ def main() -> None:
     if arguments.verify_address is not None:
         _ = ipaddress.ip_address(arguments.verify_address)
         release.require(
-            arguments.action in ("refresh-certificate", "activate"),
+            arguments.action in ("refresh-certificate", "activate", "enable-metrics"),
             "An address override requires a relay TLS verification action",
         )
     release.require(os.geteuid() == 0, "Run as root on the prepared public host")
@@ -519,7 +538,9 @@ def main() -> None:
         }
         try:
             if arguments.action == "enable-metrics":
-                report["metricsChanged"] = enable_metrics(runner, domain)
+                report["metricsChanged"] = enable_metrics(
+                    runner, domain, address=arguments.verify_address
+                )
                 if report["metricsChanged"]:
                     _ = sys.stdout.write("Relay metrics enabled\n")
             elif arguments.action == "prepare-certificate":
@@ -529,7 +550,7 @@ def main() -> None:
                     runner, domain, address=arguments.verify_address
                 )
                 if arguments.action == "activate":
-                    activate(runner, domain, report)
+                    activate(runner, domain, report, verify_address=arguments.verify_address)
             report["passed"] = True
         finally:
             report["finishedAt"] = release.timestamp()

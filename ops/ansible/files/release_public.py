@@ -13,6 +13,7 @@ moved. Successful recovery never converts a failed release into a passed one.
 import argparse
 import fcntl
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -780,8 +781,27 @@ def observe_replacement_rooms(runner: RunnerProtocol, report: JsonObject) -> Non
     report["roomsObservedBeforeStopAt"] = timestamp()
 
 
-def ready(runner: RunnerProtocol, *, origin: str | None = None, seconds: float = 30) -> None:
+def ready(
+    runner: RunnerProtocol,
+    *,
+    origin: str | None = None,
+    seconds: float = 30,
+    address: str | None = None,
+) -> None:
     """Require bounded readiness on loopback or trusted public HTTPS."""
+    resolve: list[str] = []
+    if address is not None:
+        require(
+            origin is not None and re.fullmatch(r"https://[a-z0-9.-]+", origin),
+            "An address override requires a canonical HTTPS origin",
+        )
+        destination = ipaddress.ip_address(address)
+        selected = (
+            f"[{destination}]"
+            if isinstance(destination, ipaddress.IPv6Address)
+            else str(destination)
+        )
+        resolve = ["--resolve", f"{str(origin).removeprefix('https://')}:443:{selected}"]
     deadline = time.monotonic() + seconds
     url = (origin or "http://127.0.0.1:3000") + "/ready"
     while True:
@@ -801,6 +821,7 @@ def ready(runner: RunnerProtocol, *, origin: str | None = None, seconds: float =
                             "--show-error",
                             "--max-time",
                             "2",
+                            *resolve,
                             url,
                         ],
                         timeout=5,
@@ -1184,6 +1205,7 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
     quiet_seconds: int = 0,
     *,
     turn: TurnConfiguration | None = None,
+    verify_address: str | None = None,
 ) -> None:
     """Replace only the app, preserving backup evidence and one bounded rollback."""
     for filename in SELECTION:
@@ -1236,7 +1258,7 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
     )
     origin = string_value(environment["WEBAUTHN_ORIGIN"])
     require(re.fullmatch(r"https://[a-z0-9.-]+", origin), "Unexpected public origin")
-    ready(runner, origin=origin, seconds=3)
+    ready(runner, origin=origin, seconds=3, address=verify_address)
     quiet(runner, report, quiet_seconds)
     backup = runner.attempt / "database-before.dump"
     partial = runner.attempt / "database-before.dump.partial"
@@ -1314,7 +1336,7 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
             "Replacement is not the staged image",
         )
         ready(runner)
-        ready(runner, origin=origin)
+        ready(runner, origin=origin, address=verify_address)
         require(
             stable_container(runner.container("postgres")) == stable_container(database)
             and stable_container(runner.container("caddy")) == stable_container(proxy),
@@ -1359,7 +1381,7 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
                     "Rollback image mismatch",
                 )
                 ready(runner)
-                ready(runner, origin=origin)
+                ready(runner, origin=origin, address=verify_address)
                 require(
                     stable_container(runner.container("postgres")) == stable_container(database)
                     and stable_container(runner.container("caddy")) == stable_container(proxy),
