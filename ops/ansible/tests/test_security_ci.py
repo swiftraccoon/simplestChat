@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import shlex
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -579,7 +581,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         stages = re.split(r"^FROM .+ AS (\S+)\n", recipe, flags=re.MULTILINE)
         expected = {
             # These are read-only image build mounts, not temporary host files.
-            "security/exceptions.json": "/tmp/simplestchat-image-exceptions.json",  # noqa: S108
+            "/image-exceptions.json": "/tmp/simplestchat-image-exceptions.json",  # noqa: S108
             "security/image-policy.json": "/tmp/simplestchat-image-policy.json",  # noqa: S108
         }
         checked: set[str] = set()
@@ -597,9 +599,12 @@ class SecurityWorkflowTests(unittest.TestCase):
             mounts = [token.removeprefix("--mount=") for token in tokens[1:3]]
             self.assertEqual(len(mounts), 2)
             for mount, (source, target) in zip(mounts, expected.items(), strict=True):
+                origin: set[str] = (
+                    {"from=image-review-inputs"} if source == "/image-exceptions.json" else set()
+                )
                 self.assertEqual(
                     set(mount.split(",")),
-                    {"type=bind", f"source={source}", f"target={target}", "readonly"},
+                    {"type=bind", f"source={source}", f"target={target}", "readonly"} | origin,
                 )
                 self.assertLess(command.index(f"test -s {target}"), command.index("dnf upgrade"))
                 self.assertNotRegex(body, rf"(?m)^COPY .*{re.escape(source)}")
@@ -608,6 +613,56 @@ class SecurityWorkflowTests(unittest.TestCase):
             self.assertIn("dnf install -y", command)
             checked.add(stage)
         self.assertEqual(checked, {"builder", "runtime-base"})
+
+    def project_image_reviews(self, records: list[JsonObject]) -> bytes:
+        """Execute the exact Dockerfile projection with local Node and private fixture files."""
+        recipe = (ROOT / "Dockerfile").read_text()
+        source = recipe.split("<<'IMAGE_REVIEWS'\n", 1)[1].split("\nIMAGE_REVIEWS", 1)[0]
+        self.assertFalse((ROOT / "results").is_symlink())
+        (ROOT / "results").mkdir(mode=0o700, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix="image-review-projection-", dir=ROOT / "results"
+        ) as temporary:
+            input_path, output = (
+                Path(temporary) / "reviews.json",
+                Path(temporary) / "projected.json",
+            )
+            _ = input_path.write_text(json.dumps({"schemaVersion": 1, "exceptions": records}))
+            _ = subprocess.run(  # noqa: S603 -- Exact maintained projection; fixture paths only.
+                ["node", "--input-type=module", "-", str(input_path), str(output)],  # noqa: S607 -- Node is a required CI tool.
+                input=source,
+                text=True,
+                check=True,
+                capture_output=True,
+                timeout=10,
+            )
+            return output.read_bytes()
+
+    def test_image_review_projection_ignores_unrelated_reviews_and_preserves_complete_records(
+        self,
+    ) -> None:
+        """Only the image audit's three review families affect Fedora package refreshes."""
+        records = objects(yaml_value((ROOT / "security/exceptions.json").read_text()), "exceptions")
+        projected = self.project_image_reviews(records)
+        selected = objects(yaml_value(projected.decode()), "exceptions")
+        expected = [
+            row for row in records if row["scanner"] in {"grype", "image-license", "gitleaks"}
+        ]
+        self.assertCountEqual(selected, expected)
+        changed = [dict(row) for row in records]
+        for row in changed:
+            if row["scanner"] == "zizmor":
+                row["scope"] = string(row, "scope") + "-moved"
+        self.assertEqual(self.project_image_reviews(changed), projected)
+        reordered = [dict(reversed(list(row.items()))) for row in reversed(records)]
+        self.assertEqual(self.project_image_reviews(reordered), projected)
+        for scanner in ("grype", "image-license", "gitleaks"):
+            modified = [{**records[0], "scanner": scanner}]
+            original = self.project_image_reviews(modified)
+            row = modified[0]
+            row["rationale"] = string(row, "rationale") + " Updated review."
+            with self.subTest(scanner=scanner):
+                self.assertNotEqual(self.project_image_reviews(modified), original)
 
     def test_image_cache_keys_include_both_current_policy_inputs(self) -> None:
         """Saving under a policy-specific key complements the Dockerfile layer dependency."""

@@ -2,8 +2,28 @@
 # refresh epoch also advances for security updates between base-digest reviews.
 ARG FEDORA_REFRESH_EPOCH=2026-09-30
 
-# Node is only a frontend build tool, never part of the deployed Rust image.
+# Node builds the frontend and projects image reviews; it is never deployed.
 # Pin the latest stable Current release and its verified multi-arch manifest.
+FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e AS image-review-inputs
+COPY security/exceptions.json /reviews.json
+# Only image-relevant reviews invalidate package layers. The complete current
+# policy is still validated by the independent image audit on every release.
+RUN node --input-type=module - /reviews.json /image-exceptions.json <<'IMAGE_REVIEWS'
+import { readFileSync, writeFileSync } from 'node:fs';
+const [input, output] = process.argv.slice(2);
+const policy = JSON.parse(readFileSync(input, 'utf8'));
+if (policy.schemaVersion !== 1 || !Array.isArray(policy.exceptions) ||
+    !policy.exceptions.every(row => row && typeof row === 'object' &&
+      !Array.isArray(row) && typeof row.scanner === 'string')) {
+  throw new Error('Invalid image review input');
+}
+const scanners = new Set(['grype', 'image-license', 'gitleaks']);
+const records = policy.exceptions.filter(row => scanners.has(row.scanner))
+  .map(row => JSON.stringify(Object.fromEntries(Object.keys(row).sort().map(key => [key, row[key]]))))
+  .sort().map(row => JSON.parse(row));
+writeFileSync(output, JSON.stringify({ schemaVersion: 1, exceptions: records }) + '\n', { mode: 0o644 });
+IMAGE_REVIEWS
+
 FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e AS web-builder
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
@@ -20,8 +40,8 @@ RUN npm run build
 # requires a C++ toolchain and the static C/C++ runtime libraries.
 FROM docker.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80 AS builder
 ARG FEDORA_REFRESH_EPOCH
-# Public review inputs invalidate package caches without entering image layers.
-RUN --mount=type=bind,source=security/exceptions.json,target=/tmp/simplestchat-image-exceptions.json,readonly \
+# Relevant public reviews invalidate package caches without entering image layers.
+RUN --mount=type=bind,from=image-review-inputs,source=/image-exceptions.json,target=/tmp/simplestchat-image-exceptions.json,readonly \
     --mount=type=bind,source=security/image-policy.json,target=/tmp/simplestchat-image-policy.json,readonly \
     test -n "${FEDORA_REFRESH_EPOCH}" \
     && test -s /tmp/simplestchat-image-exceptions.json \
@@ -132,7 +152,7 @@ RUN cargo build --locked --release --features load-test --bin load_test
 
 FROM docker.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80 AS runtime-base
 ARG FEDORA_REFRESH_EPOCH
-RUN --mount=type=bind,source=security/exceptions.json,target=/tmp/simplestchat-image-exceptions.json,readonly \
+RUN --mount=type=bind,from=image-review-inputs,source=/image-exceptions.json,target=/tmp/simplestchat-image-exceptions.json,readonly \
     --mount=type=bind,source=security/image-policy.json,target=/tmp/simplestchat-image-policy.json,readonly \
     test -n "${FEDORA_REFRESH_EPOCH}" \
     && test -s /tmp/simplestchat-image-exceptions.json \
