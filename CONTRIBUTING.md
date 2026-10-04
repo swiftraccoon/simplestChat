@@ -12,18 +12,27 @@ they describe. Local agent instructions such as `CLAUDE.md` stay untracked.
 ## Before publishing
 
 Use focused local commits on `main`; a branch or pull request is optional.
-Run the complete [local CI workflow](docs/testing.md#run-ci-locally) on the clean
-committed tree before pushing directly to `main`:
+Run the focused checks relevant to the change before pushing directly to `main`.
+The complete [local CI workflow](docs/testing.md#run-ci-locally) is available on
+the clean committed tree when full verification is needed:
 
 ```sh
 build/ci-local.sh all --base origin/main
 ```
 
-The local runner executes the shared correctness and security checks in an
-isolated Linux environment. GitHub checks the published revision and issues the
-release signature only after every required check passes. A failed run cannot
-produce a deployable release. Main remains protected against deletion and
-force pushes.
+The local runner executes the same correctness and security workflows in an
+isolated Linux environment. Do not automatically run the entire suite both locally
+and on GitHub for every change. CI should finish within five minutes, with one
+minute the target for ordinary changes; record measured runtimes and address
+overruns rather than treating long waits as acceptable.
+
+GitHub issues a release signature only after every required check passes. The
+default deployment requires that signed artifact. When the operator explicitly
+requests deployment without waiting for CI, use the supported
+[force deployment](ops/ansible/RELEASES.md#explicit-force-deployment); record
+unrun or failed checks honestly. Force retains artifact integrity, backup,
+readiness and rollback checks without claiming a CI signature. Main remains
+protected against deletion and force pushes.
 
 ### Focused checks while iterating
 

@@ -450,8 +450,11 @@ build/ci-local.sh all
 The launcher uses [act](https://github.com/nektos/act) to execute
 [CI](../.github/workflows/ci.yml)'s `required` job and its actual dependency graph,
 including the reusable security and CodeQL workflows. There is no separate list
-of local checks to drift from the workflow. Install act and Podman on macOS
-(`brew install act podman`). Git, Python 3 and curl are also prerequisites.
+of local checks to drift from the workflow. Install Go 1.25.0 or newer and Podman on
+macOS (`brew install go podman`). Git, Python 3, curl and `patch` are also
+prerequisites. The launcher builds its checksum-pinned act 0.2.89 with the
+repository's shared concurrency limit, then verifies and reuses that executable
+under `.cache/ci-act`. It does not use an ambient act installation.
 The launcher enables act's shallow action cache so pinned actions fetch their
 exact revision without downloading full repository history.
 
@@ -489,11 +492,15 @@ so build commands use the kernel's Rosetta registration. The existing container
 builder and exported layer cache remain in use. Authenticated OpenSSL extraction uses
 Python's filtered tar reader, which works with Rosetta. These ARM64 test runs
 exercise the same checks but do not claim identical ISA coverage to GitHub.
-The hosted AMD64 workflow remains a deployment gate.
-Outer job groups run serially, with up to four
-matrix entries concurrently, each limited to 3 CPUs and 16 GiB RAM. The workflows
-declare literal limits of three browser/native entries and four CodeQL entries;
-act cannot evaluate expressions for this setting.
+The default signed deployment requires the hosted AMD64 workflow. An explicit
+owner-requested [`--force` deployment](../ops/ansible/RELEASES.md) is a separate,
+recorded override and does not report skipped CI as passed.
+At most four actual jobs run concurrently across the entire graph, including
+matrix entries and reusable workflows. Each is limited to 3 CPUs and 16 GiB RAM,
+leaving 16 GiB of the owned VM's memory for services and the engine. The maintained
+act patch shares one limit across nested workflows; changing the unpatched
+`--concurrent-jobs` alone would multiply independent matrix pools. The canonical
+workflow matrices and their coverage remain unchanged.
 The privileged job containers are confined to the disposable engine. Each
 Docker-dependent job starts its own bundled, pinned daemon with a fresh storage
 volume, private cgroup namespace and private socket. The outer engine socket is
@@ -528,8 +535,56 @@ The five local CodeQL scans enforce the same security query suites, exact findin
 reviews, completed-query health and real native compilation coverage. GitHub's
 stored-analysis ingestion check and OIDC release signing/publication remain
 hosted operations; a successful local gate does not claim a GitHub signature.
+Native and Rust CodeQL use the same pinned CLI runner locally and on GitHub.
+They can reuse a complete evaluated database only for identical source, suite,
+analyzer and query pins, runner generation/architecture/trust, and absolute
+source paths. Rust includes shared web JSON inputs. Native also binds compiler
+and installed package identity plus actual OpenSSL headers/libraries/settings.
+The restored bundle hash, extraction metadata and archived source bytes must
+match. A miss performs real extraction and query evaluation; a corrupt entry
+fails. The cache is saved only after all requested reports and current policy
+pass. On a hit, CodeQL reuses its own BQRS results and regenerates original SARIF;
+raw SARIF is never cached or relabeled. Evidence records the original evaluation
+revision and explicitly enables `queryReuse`. The CLI also writes
+`queryReuseEnabled` and `originalEvaluationRevision` into each generated SARIF,
+including reports whose current policy fails. Every run checks native compilation
+coverage and applies current finding reviews. Valid regenerated SARIF still
+uploads when findings fail policy; that failure continues to block signing.
 Scheduled mutation, performance/soak and macOS WebKit compatibility workflows
 are additional tiers, not part of the required push gate.
+
+Verified successes for Rust checks and native sanitizer/replay suites are reused
+only when their exact input key and private receipt match. Keys bind file modes,
+workflow/tool/security policy, runner image identity, architecture and the
+main-versus-untrusted cache namespace. Native keys include the complete vendor,
+security, build, workflow and operations-helper trees; unrelated Rust application
+or documentation edits do not invalidate them. Rust keys include every tracked
+non-web input and web JSON configuration and shared fixtures such as
+`web/tests/layer-cap-cases.json`. Operations checks conservatively include every
+tracked file because they inspect frontend configuration and test helpers.
+A missing cache runs the original checks; an invalid restored receipt fails.
+Logs identify the original checked revision rather than claiming reexecution.
+Dependency/advisory audits and JavaScript helper regressions still run each time.
+
+When native suites must rerun, they can reuse a prepared checker image keyed by
+its actual source/tool/corpus inputs, file modes, architecture and cache trust
+namespace. Restores verify the archive size and hash, then the loaded image's
+exact ID, input label and architecture. This skips image preparation only; each
+selected sanitizer or replay suite still executes.
+
+Browser jobs reuse backend executables only for the same bound inputs and after
+checking both executable hashes. Every browser suite still runs against the
+current frontend. Cache entries are saved only after their corresponding build
+or check succeeds, without prefix fallback. A warm frontend change avoids
+unchanged backend compilation; cold caches and toolchain changes still require
+the complete affected work and are not represented as a fast-path success.
+
+Production CI downloads and authenticates its pinned image-scanner tools while
+the disposable release/rollback fixture runs. Both bounded results must pass;
+their private logs stay separate. The later image scan rechecks tool hashes and
+runs every image policy against the same exported image. Scanner containers run
+only after the fixture has cleaned its engine. This overlaps tool preparation,
+not the Docker checks, and does not establish a measured five-minute job budget.
 
 Action and build caches persist under `target/act`. Each invocation writes a
 private directory under `results/` containing its event, workflow log, source
