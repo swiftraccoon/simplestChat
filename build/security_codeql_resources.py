@@ -21,10 +21,11 @@ CONTROLLER_MOUNTS = {"": ("",), "cpu": ("cpu", "cpu,cpuacct", "cpuacct,cpu"), "m
 
 @dataclass(frozen=True)
 class Budget:
-    """Conservative limits shared by hosted traced compilation and local analysis."""
+    """Keep traced compilation bounded while giving queries the official RAM allocation."""
 
     workers: int
     ram_mib: int
+    query_ram_mib: int
 
 
 def optional_text(path: Path) -> str | None:
@@ -82,7 +83,7 @@ def cgroup_limits(root: Path, membership: Path) -> tuple[list[int], list[int]]:
 
 
 def budget(cpus: int, memory_bytes: int, override: str | None = None) -> Budget:
-    """Reserve one GiB for the runner, two per compiler, and 40% during queries."""
+    """Bound compilers separately from the pinned action's Linux/macOS query reserve."""
     memory_mib = memory_bytes // MIB
     require(cpus > 0 and memory_mib >= MIN_MEMORY_MIB, "codeql_insufficient_resources")
     workers = min(MAX_WORKERS, cpus, max(1, (memory_mib - 1024) // 2048))
@@ -90,7 +91,11 @@ def budget(cpus: int, memory_bytes: int, override: str | None = None) -> Budget:
         require(re.fullmatch(r"[1-4]", override), "codeql_build_jobs_range")
         require(int(override) <= workers, "codeql_build_jobs_budget")
         workers = int(override)
-    return Budget(workers, min(6144, memory_mib * 3 // 5))
+    # Match github/codeql-action's pinned src/util.ts: reserve one GiB plus
+    # five percent of memory above eight GiB. detect() already applies cgroups.
+    total_mib = memory_bytes / MIB
+    query_ram = int(total_mib - 1024 - max(total_mib - 8192, 0) / 20)
+    return Budget(workers, min(6144, memory_mib * 3 // 5), query_ram)
 
 
 def detect(override: str | None = None) -> Budget:

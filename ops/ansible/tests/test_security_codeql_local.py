@@ -131,7 +131,7 @@ class LocalCodeqlTests(unittest.TestCase):
 
         with (
             patch.object(sys, "platform", "linux"),
-            patch.object(resources, "detect", return_value=resources.Budget(2, 4096)),
+            patch.object(resources, "detect", return_value=resources.Budget(2, 4096, 7168)),
             patch.object(context, "run", side_effect=record),
             patch.object(local, "database_health", side_effect=ToolError("fixture_after_create")),
             self.assertRaisesRegex(ToolError, "fixture_after_create"),
@@ -147,6 +147,7 @@ class LocalCodeqlTests(unittest.TestCase):
         )
         self.assertIn("--command=bash build/codeql-native-build.sh", command)
         self.assertIn("--source-root=" + str(source), command)
+        self.assertIn("--ram=4096", command)
 
     def test_report_health_rejects_wrong_category_version_empty_queries_and_incremental_mode(
         self,

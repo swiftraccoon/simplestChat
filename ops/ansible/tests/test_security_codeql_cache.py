@@ -234,7 +234,7 @@ class NativeCacheTests(unittest.TestCase):
 
         with (
             patch.object(sys, "platform", "linux"),
-            patch.object(resources, "detect", return_value=resources.Budget(2, 4096)),
+            patch.object(resources, "detect", return_value=resources.Budget(2, 4096, 7168)),
             patch.object(context, "run", side_effect=run),
             patch.object(cache, "cache_key", return_value="key"),
             patch.object(
@@ -281,6 +281,9 @@ class NativeCacheTests(unittest.TestCase):
             ],
         )
         self.assertEqual("--rerun" in calls[-2][1], not hit)
+        self.assertIn("--ram=7168", calls[-2][1])
+        if passed:
+            self.assertEqual(reports[0]["ramMiB"], 7168)
         self.assertIn("--sarif-run-property=queryReuseEnabled=" + str(hit).lower(), calls[-2][1])
         self.assertIn(
             "--sarif-run-property=originalEvaluationRevision=" + ("a" if hit else "b") * 40,

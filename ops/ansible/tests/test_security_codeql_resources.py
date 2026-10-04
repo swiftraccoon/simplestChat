@@ -29,10 +29,16 @@ class CodeqlResourceTests(unittest.TestCase):
         self.directory = Path(temporary.name)
 
     def test_hosted_and_local_resources_bound_both_compile_and_queries(self) -> None:
-        """Four hosted workers fit; a five-GiB container gets two and three-GiB RAM."""
-        self.assertEqual(resources.budget(4, 16 * 1024**3), resources.Budget(4, 6144))
-        self.assertEqual(resources.budget(3, 5 * 1024**3), resources.Budget(2, 3072))
-        self.assertEqual(resources.budget(3, 8 * 1024**3), resources.Budget(3, 4915))
+        """Queries use the official reserve without increasing compiler/extractor limits."""
+        self.assertEqual(resources.budget(4, 16 * 1024**3), resources.Budget(4, 6144, 14950))
+        self.assertEqual(resources.budget(3, 5 * 1024**3), resources.Budget(2, 3072, 4096))
+        self.assertEqual(resources.budget(3, 8 * 1024**3), resources.Budget(3, 4915, 7168))
+        self.assertEqual(resources.budget(4, 2 * 1024**3), resources.Budget(1, 1228, 1024))
+        self.assertEqual(resources.budget(4, 8193 * resources.MIB).query_ram_mib, 7168)
+        self.assertEqual(
+            resources.budget(4, 8193 * resources.MIB + resources.MIB // 2).query_ram_mib,
+            7169,
+        )
         self.assertEqual(resources.budget(1, 16 * 1024**3).workers, 1)
         with self.assertRaisesRegex(ToolError, "codeql_insufficient_resources"):
             _ = resources.budget(4, 1024**3)
@@ -64,6 +70,7 @@ class CodeqlResourceTests(unittest.TestCase):
         cpus, memory = resources.cgroup_limits(root, membership)
         self.assertEqual(min(cpus), 2)
         self.assertEqual(memory, [5 * 1024**3])
+        self.assertEqual(resources.budget(min(cpus), min(memory)), resources.Budget(2, 3072, 4096))
 
     def test_v1_limits_apply_with_host_relative_membership(self) -> None:
         """Containers may expose their own controller root and a nonresolvable host path."""

@@ -262,7 +262,7 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
                 "--format=sarifv2.1.0",
                 "--output=" + str(report),
                 "--threads=" + str(budget.workers),
-                "--ram=" + str(budget.ram_mib),
+                "--ram=" + str(budget.query_ram_mib),
                 "--sarif-category=/language:" + language + "/" + category,
                 "--sarif-run-property=queryReuseEnabled=" + str(extraction is not None).lower(),
                 "--sarif-run-property=originalEvaluationRevision=" + evaluation_revision,
@@ -301,7 +301,7 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
                 "policyPassed": True,
                 "nativeCompiledFiles": coverage,
                 "threads": budget.workers,
-                "ramMiB": budget.ram_mib,
+                "ramMiB": budget.query_ram_mib,
                 "extraction": extraction,
                 "queryReuse": {
                     "enabled": extraction is not None,
