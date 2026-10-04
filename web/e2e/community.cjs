@@ -1449,7 +1449,9 @@ async function setRole(owner, name, role) {
             ),
           audioTime,
         );
-        await owner.locator('.personal-media-controls summary').first().click();
+        const viewingControls = owner.locator('.personal-media-controls').first();
+        const viewingTrigger = viewingControls.locator('summary');
+        await viewingTrigger.click();
         // Deterministic UI recovery control: inject a policy rejection on this one
         // element, then restore native play() before the real user-gesture retry.
         // This is separate from the unmodified native playback assertion above.
@@ -1476,6 +1478,10 @@ async function setRole(owner, name, role) {
           });
           await retry.click();
           await retry.waitFor({ state: 'hidden' });
+          // Playback recovery is outside the viewing popover, so its click
+          // light-dismisses the menu before the next viewing action.
+          await viewingControls.locator('.personal-media-panel').waitFor({ state: 'hidden' });
+          assert.equal(await viewingTrigger.getAttribute('aria-expanded'), 'false');
           const previous = await remoteAudio.evaluate((audio) => audio.currentTime);
           await owner.waitForFunction(
             (time) =>
@@ -1497,6 +1503,7 @@ async function setRole(owner, name, role) {
             }),
           ).catch(() => {});
         }
+        await viewingTrigger.click();
         await owner
           .getByRole('combobox', { name: 'Video quality for E2ERenamed', exact: true })
           .selectOption('low');
