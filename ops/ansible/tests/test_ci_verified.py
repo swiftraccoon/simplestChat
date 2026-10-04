@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import os
 import platform
+import re
 import shlex
 import subprocess
 import tempfile
@@ -43,8 +44,11 @@ class VerifiedCacheTests(unittest.TestCase):
             "docs/example.md",
             "vendor/worker.cpp",
             "build/check.sh",
+            "build/native_security.py",
             "security/exceptions.json",
+            "security/native/toolchain.json",
             ".github/workflows/ci.yml",
+            ".github/workflows/security.yml",
             "web/src/media.ts",
             "web/tests/media.test.mjs",
             "web/tests/layer-cap-cases.json",
@@ -95,12 +99,16 @@ class VerifiedCacheTests(unittest.TestCase):
     def test_changed_source_policy_workflow_mode_and_deleted_inputs_invalidate(self) -> None:
         """Content and tracked executable modes both belong to every proof."""
         key = cache.cache_key(self.root, "native-asan")
-        for name in ("vendor/worker.cpp", "security/exceptions.json", ".github/workflows/ci.yml"):
+        for name in (
+            "vendor/worker.cpp",
+            "security/native/toolchain.json",
+            ".github/workflows/security.yml",
+        ):
             path = self.root / name
             _ = path.write_text("changed\n")
             self.assertNotEqual(cache.cache_key(self.root, "native-asan"), key)
             _ = path.write_text("original\n")
-        self.git("update-index", "--chmod=+x", "build/check.sh")
+        self.git("update-index", "--chmod=+x", "build/native_security.py")
         self.assertNotEqual(cache.cache_key(self.root, "native-asan"), key)
         (self.root / "vendor/worker.cpp").unlink()
         with self.assertRaisesRegex(ToolError, "ci_cache_source_missing"):
@@ -109,7 +117,7 @@ class VerifiedCacheTests(unittest.TestCase):
     def test_native_keys_cover_all_real_build_inputs_without_unrelated_rust_or_docs(self) -> None:
         """Every actual native build input stays bound as unrelated application work changes."""
         for source in native_security.source_files(ROOT):
-            self.assertTrue(str(source.relative_to(ROOT)).startswith(cache.NATIVE_PREFIXES))
+            self.assertTrue(cache.native_security_input(str(source.relative_to(ROOT))))
         originals = {
             scope: cache.cache_key(self.root, scope) for scope in ("native-asan", "codeql-native")
         }
@@ -119,6 +127,76 @@ class VerifiedCacheTests(unittest.TestCase):
         for scope, key in originals.items():
             self.assertEqual(cache.cache_key(self.root, scope), key)
         self.assertNotEqual(cache.cache_key(self.root, "codeql-rust"), rust)
+
+    def test_native_security_binds_each_helper_and_ignores_unrelated_review_changes(self) -> None:
+        """Reviewing another analyzer must not rerun unchanged sanitizer and replay suites."""
+        unrelated = (
+            *cache.CODEQL_POLICY_DATA,
+            ".github/workflows/ci.yml",
+            ".github/workflows/codeql.yml",
+            "security/authorization/operations.json",
+            "security/image-policy.json",
+            "build/security_codeql_local.py",
+            "build/security_codeql_cache.py",
+            "build/security_image.py",
+            "ops/ansible/files/release_public.py",
+        )
+        native = (
+            *cache.NATIVE_FILES,
+            "vendor/integrity.json",
+            "vendor/native-components.json",
+            "security/native/corpus.json",
+            "security/native/corpus/rtp/header-short.hex",
+        )
+        for name in (*native, *unrelated):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _ = path.write_text("original\n")
+        self.git("add", ".")
+        originals = {
+            scope: cache.cache_key(self.root, scope)
+            for scope in ("native-asan", "native-ubsan", "native-replay")
+        }
+        for name in unrelated:
+            _ = (self.root / name).write_text("changed\n")
+            for scope, original in originals.items():
+                self.assertEqual(cache.cache_key(self.root, scope), original, name)
+        for name in native:
+            path = self.root / name
+            _ = path.write_text("changed\n")
+            for scope, original in originals.items():
+                self.assertNotEqual(cache.cache_key(self.root, scope), original, name)
+            _ = path.write_text("original\n")
+
+    def test_native_security_closure_covers_all_local_python_imports(self) -> None:
+        """New transitive imports cannot silently bypass native success invalidation."""
+        modules = {
+            path.stem: path
+            for directory in (ROOT / "build", ROOT / "ops/ansible/files")
+            for path in directory.glob("*.py")
+        }
+        pending = [
+            "native_security",
+            "native_security_cache",
+            "security_vendor",
+            "ci_verified",
+            "ci_local_act",
+        ]
+        visited: set[str] = set()
+        while pending:
+            name = pending.pop()
+            if name in visited:
+                continue
+            visited.add(name)
+            path = modules[name]
+            self.assertTrue(cache.native_security_input(str(path.relative_to(ROOT))), name)
+            for node in ast.walk(ast.parse(path.read_text())):
+                imports: list[str] = []
+                if isinstance(node, ast.Import):
+                    imports = [alias.name.split(".")[0] for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imports = [node.module.split(".")[0]]
+                pending.extend(imported for imported in imports if imported in modules)
 
     def test_codeql_review_data_changes_do_not_invalidate_evaluated_databases(self) -> None:
         """Finding reviews rerun against reports; they cannot alter extraction or queries."""
@@ -133,7 +211,7 @@ class VerifiedCacheTests(unittest.TestCase):
             path = self.root / name
             _ = path.write_text("new exact finding review\n")
             for scope, original in originals.items():
-                if scope.startswith("codeql-"):
+                if scope.startswith(("codeql-", "native-")):
                     self.assertEqual(cache.cache_key(self.root, scope), original, name)
                 else:
                     self.assertNotEqual(cache.cache_key(self.root, scope), original, name)
@@ -303,6 +381,24 @@ class VerifiedCacheTests(unittest.TestCase):
 
 class VerifiedWorkflowTests(unittest.TestCase):
     """Keep volatile audits/browser behavior fresh and publish only completed successes."""
+
+    def test_native_success_key_covers_every_executed_workflow_helper(self) -> None:
+        """New helper entrypoints must join the proven native input closure."""
+        jobs = obj(
+            yaml_value(
+                (ROOT / ".github/workflows/security.yml").read_text(), scalars_as_strings=True
+            ),
+            "jobs",
+        )
+        steps = objects(obj(jobs, "native-security"), "steps")
+        for step in steps:
+            for match in re.finditer(r"\bbuild/[A-Za-z0-9._/-]+", string(step.get("run", ""))):
+                helper = match.group()
+                if helper == "build/ci-local-evidence.py":
+                    # The current run's receipt is always recorded, even on a cache hit.
+                    self.assertEqual(step["if"], "${{ env.ACT }}")
+                    continue
+                self.assertTrue(cache.native_security_input(helper), helper)
 
     def test_rust_tests_prime_their_own_complete_graph_before_executing_every_test(self) -> None:
         """A binary-only cache must not prevent the test dependency graph being retained."""

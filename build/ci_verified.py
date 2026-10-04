@@ -30,7 +30,28 @@ SCOPES = (
     "codeql-rust",
 )
 BINARIES = ("simplestChat", "load_test")
-NATIVE_PREFIXES = ("vendor/", "security/", "build/", ".github/", "ops/ansible/files/")
+NATIVE_PREFIXES = ("vendor/", "security/native/")
+NATIVE_FILES = frozenset(
+    {
+        ".github/workflows/security.yml",
+        "build/ci-local-act.json",
+        "build/ci-local-act.patch",
+        "build/ci-local-docker.sh",
+        "build/ci-local.sh",
+        "build/ci_local_act.py",
+        "build/ci_verified.py",
+        "build/install-openssl.sh",
+        "build/native-security.Dockerfile",
+        "build/native_security.py",
+        "build/native_security_cache.py",
+        "build/pip-constraints.txt",
+        "build/security_context.py",
+        "build/security_tools.py",
+        "build/security_vendor.py",
+        "ops/ansible/files/bounded_process.py",
+        "ops/ansible/files/release_json.py",
+    }
+)
 CODEQL_NATIVE_PREFIXES = ("vendor/", "security/codeql/")
 CODEQL_POLICY_DATA = frozenset(
     {
@@ -65,6 +86,11 @@ CODEQL_NATIVE_FILES = frozenset(
         "security/codeql-toolchain.json",
     }
 )
+
+
+def native_security_input(name: str) -> bool:
+    """Bind native sources, corpus, provenance checks and their actual execution helpers."""
+    return name.startswith(NATIVE_PREFIXES) or name in NATIVE_FILES
 
 
 def native_codeql_input(name: str) -> bool:
@@ -138,9 +164,9 @@ def cache_key(root: Path, scope: str) -> str:
         mode, _, stage = metadata.decode().split()
         name = raw_name.decode()
         require(stage == "0" and mode in {"100644", "100755"}, "ci_cache_tracked_type")
-        # Sanitizers retain their full input roots. CodeQL's standalone worker
-        # uses a smaller explicit closure; its complete local imports are tested.
-        if scope.startswith("native-") and not name.startswith(NATIVE_PREFIXES):
+        # Each native closure covers its complete sources and transitive helpers;
+        # unrelated application and CodeQL review changes cannot alter these checks.
+        if scope.startswith("native-") and not native_security_input(name):
             continue
         # A database stores evaluated queries, never a successful policy verdict.
         # Current exact reviews are checked after every fresh or reused analysis.

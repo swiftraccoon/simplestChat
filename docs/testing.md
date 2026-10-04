@@ -579,10 +579,13 @@ are additional tiers, not part of the required push gate.
 Verified successes for Rust checks and native sanitizer/replay suites are reused
 only when their exact input key and private receipt match. Keys bind file modes,
 workflow/tool/security policy, runner image identity, architecture and the
-main-versus-untrusted cache namespace. Native sanitizer/replay keys include the complete vendor,
-security, build, workflow and operations-helper trees; unrelated Rust application
-or documentation edits do not invalidate them. Rust keys include every tracked
-non-web input and web JSON configuration and shared fixtures such as
+main-versus-untrusted cache namespace. Native sanitizer/replay keys include the
+complete vendor and native corpus/toolchain trees, native execution and provenance
+helpers with their local imports, the security workflow, and isolated local
+runner helpers and pins. Unrelated CodeQL reviews and tooling, application
+authorization, deployment and image tooling do not invalidate native successes.
+Source, executable mode, runner and trust changes still invalidate them. Rust
+keys include every tracked non-web input and web JSON configuration and shared fixtures such as
 `web/tests/layer-cap-cases.json`. Operations checks conservatively include every
 tracked file because they inspect frontend configuration and test helpers.
 A missing cache runs the original checks; an invalid restored receipt fails.
