@@ -84,7 +84,7 @@ function verifyLocalCopySources(rules = ignoreRules) {
 
 // RUN bind inputs need the same context closure as COPY, but must stay
 // read-only and outside committed image layers. Keep this deliberately narrow;
-// other mount types and cross-stage sources require an explicit guard update.
+// only the exact reviewed projection may come from another build stage.
 function verifyLocalRunSources(rules = ignoreRules, recipe = dockerfile) {
   const sources = [];
   for (const line of recipe.split('\n').filter(value => value.startsWith('RUN '))) {
@@ -97,9 +97,17 @@ function verifyLocalRunSources(rules = ignoreRules, recipe = dockerfile) {
         return [parts[0], parts[1] ?? true];
       }));
       assert.equal(options.size, fields.length, 'Duplicate RUN mount option');
-      assert.deepEqual([...options.keys()].toSorted(), ['readonly', 'source', 'target', 'type']);
       assert.equal(options.get('type'), 'bind', 'RUN review inputs must use bind mounts');
       assert.equal(options.get('readonly'), true, 'RUN review inputs must be read-only');
+      if (options.has('from')) {
+        assert.deepEqual(Object.fromEntries(options), {
+          type: 'bind', from: 'image-review-inputs', source: '/image-exceptions.json',
+          target: '/tmp/simplestchat-image-exceptions.json', readonly: true,
+        }, 'Only the exact reviewed projection mount may cross stages');
+        sources.push('image-review-inputs:/image-exceptions.json');
+        continue;
+      }
+      assert.deepEqual([...options.keys()].toSorted(), ['readonly', 'source', 'target', 'type']);
       const source = options.get('source');
       const target = options.get('target');
       assert.ok(typeof source === 'string' && /^[\w./-]+$/.test(source)
@@ -122,22 +130,30 @@ test('all explicit local COPY inputs are admitted by the Docker context', () => 
     /security_elf\.py is explicitly copied but excluded/);
   assert.throws(() => verifyLocalCopySources(ignoreRules.filter(rule => rule !== '!web/scripts/mediasoup-runtime.mjs')),
     /mediasoup-runtime\.mjs is explicitly copied but excluded/);
+  assert.throws(() => verifyLocalCopySources(ignoreRules.filter(rule => rule !== '!security/exceptions.json')),
+    /exceptions\.json is explicitly copied but excluded/);
 });
 
 test('both Fedora stages mount only admitted read-only public policy files', () => {
   assert.deepEqual(verifyLocalRunSources(), [
-    'security/exceptions.json', 'security/image-policy.json',
-    'security/exceptions.json', 'security/image-policy.json',
+    'image-review-inputs:/image-exceptions.json', 'security/image-policy.json',
+    'image-review-inputs:/image-exceptions.json', 'security/image-policy.json',
   ]);
-  for (const source of ['security/exceptions.json', 'security/image-policy.json']) {
-    assert.throws(() => verifyLocalRunSources(ignoreRules.filter(rule => rule !== `!${source}`)),
-      /explicitly mounted but excluded/);
-  }
+  assert.throws(() => verifyLocalRunSources(ignoreRules.filter(rule => rule !== '!security/image-policy.json')),
+    /explicitly mounted but excluded/);
   assert.throws(() => verifyLocalRunSources(ignoreRules, dockerfile.replace(',readonly', ',readwrite')),
-    /readonly|readwrite/);
+    /read-only/);
   assert.throws(() => verifyLocalRunSources(ignoreRules,
-    dockerfile.replace('source=security/exceptions.json', 'source=security')),
+    dockerfile.replace('source=security/image-policy.json', 'source=security')),
   /RUN source must be a regular file/);
+  for (const [before, after] of [
+    ['from=image-review-inputs', 'from=unreviewed-stage'],
+    ['source=/image-exceptions.json', 'source=/other.json'],
+    ['target=/tmp/simplestchat-image-exceptions.json', 'target=/tmp/other.json'],
+  ]) {
+    assert.throws(() => verifyLocalRunSources(ignoreRules, dockerfile.replace(before, after)),
+      /Only the exact reviewed projection mount may cross stages/);
+  }
   assert.throws(() => verifyLocalRunSources(ignoreRules,
     dockerfile.replace('type=bind', 'type=secret')), /RUN review inputs must use bind mounts/);
   const securityRules = ignoreRules.filter(rule => rule.replace(/^!/, '').startsWith('security'));
