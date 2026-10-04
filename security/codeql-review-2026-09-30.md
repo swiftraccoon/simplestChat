@@ -132,6 +132,40 @@ identities and retain the original 2026-11-29 expiry. No other finding, path or
 query is excluded; no remote alert state changed. This does not claim a complete
 passing CI run.
 
+## Source re-review: TURN migration fixtures
+
+Alerts 19–23 were re-reviewed on 2026-10-04 against source commit
+`9eaabb7b5ab586ca694283afc1550055ef2c3136`. The five flagged writes in
+`ops/ansible/tests/test_turn_public.py` still contain only the public repeated-a
+and repeated-c fixture values and configuration text derived from them. They
+remain inside disposable `TemporaryDirectory` instances; the activation test
+uses `FixtureRunner`, and both tests replace the production configuration root.
+Neither test reads deployment credentials or contacts a remote relay.
+
+Changes since the previous review add TLS and target-address regression coverage.
+Two imports and the synthetic TLS peer fixture move the flagged operations from
+lines 112, 119, 123, 126 and 140 to 127, 134, 138, 141 and 155. Their expressions
+and fixed inputs are unchanged. The remaining changes exercise a fixed
+documentation address with mocked network calls and add no sensitive input to
+the reviewed writes.
+
+The complete-file SHA-256 changes from
+`ccd57287b97b59e5a7fb089201af29597eae8e7749d1b10c6047e0aaea941c56` to
+`3a87423b1955d1f11e87b9ff048411e5186614fad914092cd86da0b20bb8f5de`.
+The original hosted policy artifacts from runs
+[37222426376](https://github.com/swiftraccoon/simplestChat/actions/runs/37222426376)
+and [37237511980](https://github.com/swiftraccoon/simplestChat/actions/runs/37237511980)
+report the same five exact identities. Their Python analyses succeeded; the
+policy gate correctly rejected the obsolete source reviews. Current GitHub
+alert locations and messages independently match those artifacts and the
+reviewed checkout.
+
+The five replacement exceptions retain the original 2026-11-29 expiry and exact
+query, analyzer version, complete-file hash, primary range and message binding.
+No gate, query or path is excluded, and no remote alert state is changed. Replaying
+the two hosted finding reports against the updated policy is policy validation,
+not a claim that a new full CodeQL or CI run has completed.
+
 ## Follow-up: canary assertion diagnostic
 
 <a id="alert-102"></a>[Alert 102](https://github.com/swiftraccoon/simplestChat/security/code-scanning/102)
@@ -259,6 +293,40 @@ GitHub's converted analysis SARIF is useful for comparing location identities,
 but lacks the original invocation evidence and cannot establish a passing local
 analysis. No invocation, suppression or result-completeness check is bypassed.
 
+## Source re-review: Rust authorization and room validation fixtures
+
+Alerts 36–37 and 59–62 were re-reviewed against revision
+`9eaabb7b5ab586ca694283afc1550055ef2c3136`. The original hosted policy evidence
+from runs `37222426376` and `37237511980` confirms that Rust extraction and
+query evaluation completed successfully. The first run rejected two stale
+exact reviews; the second also rejected four reviews whose source changed with
+room appearance support.
+
+The authorization module remains included only through `#[cfg(test)]` in
+`src/signaling/connection.rs`. New nickname tests and removal of the former
+account-name argument move the unchanged assertion diagnostics from lines
+250/298 to 359/406. The reviewed function still creates synthetic participants,
+uses a test-owned room manager with no database, and prints only fixture role
+and operation results when assertions fail. It has no production logging sink
+or real account credential.
+
+The room settings changes add name/topic appearance fields and serialization
+checks. They move the unchanged password-validation boundary literals from
+598/603/605/608 to 613/618/620/623. All four remain inside `#[cfg(test)]`, exercise
+only `validate_create_request`, and neither create rooms nor authenticate users.
+The full source changes and the two test boundaries were inspected; identical
+flagged-line bytes were checked against the previously reviewed revisions.
+
+| Alerts | Previous whole-file SHA-256 | Reviewed whole-file SHA-256 |
+| --- | --- | --- |
+| 36–37 | `9f56f0c82a12603884ef7839f1d1560e10313a5a36a141ff8f77516b8c90df7b` | `2219caa33ed0862fffde8a9dccef20d3f37c7078e5cf870ca922e990a0027e28` |
+| 59–62 | `0d2fd66e20b10a82ec16d43aef5a18050c4dd0fa75b131d7925d48cf128cfa26` | `baa741a3f3f5d880569fe94b1789ad9d4964b502fb86720d99350a4876be57aa` |
+
+Only these six identities are replaced with the fingerprints from the current
+hosted policy report. Queries, severity thresholds, exact matching and the
+original 2026-11-29 expiry remain unchanged. This source re-review does not
+claim that the complete CI run passed and does not change remote alert states.
+
 ## Explicitly authorized dismissal
 
 Review the exact plan under the repository maintenance authorization before running:
@@ -335,11 +403,11 @@ inherit this decision merely because the alert number is unchanged.
 | <a id="alert-16"></a>[16](https://github.com/swiftraccoon/simplestChat/security/code-scanning/16) | medium | false-positive | [`load_tests/benchmark-local.mjs:587`](../load_tests/benchmark-local.mjs#L587) | The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code. |
 | <a id="alert-17"></a>[17](https://github.com/swiftraccoon/simplestChat/security/code-scanning/17) | medium | false-positive | [`load_tests/benchmark-local.mjs:599`](../load_tests/benchmark-local.mjs#L599) | The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code. |
 | <a id="alert-18"></a>[18](https://github.com/swiftraccoon/simplestChat/security/code-scanning/18) | medium | false-positive | [`load_tests/benchmark-local.mjs:635`](../load_tests/benchmark-local.mjs#L635) | The response is metrics/diagnostic data from the harness-owned loopback server. It is serialized as text/JSON in a newly created private evidence directory, using fixed filenames and exclusive writes. HTTP response data does not choose a pathname and is never executed or loaded as code. |
-| <a id="alert-19"></a>[19](https://github.com/swiftraccoon/simplestChat/security/code-scanning/19) | high | false-positive | [`ops/ansible/tests/test_turn_public.py:112`](../ops/ansible/tests/test_turn_public.py#L112) | The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture. |
-| <a id="alert-20"></a>[20](https://github.com/swiftraccoon/simplestChat/security/code-scanning/20) | high | false-positive | [`ops/ansible/tests/test_turn_public.py:119`](../ops/ansible/tests/test_turn_public.py#L119) | The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture. |
-| <a id="alert-21"></a>[21](https://github.com/swiftraccoon/simplestChat/security/code-scanning/21) | high | false-positive | [`ops/ansible/tests/test_turn_public.py:123`](../ops/ansible/tests/test_turn_public.py#L123) | The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture. |
-| <a id="alert-22"></a>[22](https://github.com/swiftraccoon/simplestChat/security/code-scanning/22) | high | false-positive | [`ops/ansible/tests/test_turn_public.py:126`](../ops/ansible/tests/test_turn_public.py#L126) | The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture. |
-| <a id="alert-23"></a>[23](https://github.com/swiftraccoon/simplestChat/security/code-scanning/23) | high | false-positive | [`ops/ansible/tests/test_turn_public.py:140`](../ops/ansible/tests/test_turn_public.py#L140) | The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture. |
+| <a id="alert-19"></a>[19](https://github.com/swiftraccoon/simplestChat/security/code-scanning/19) | high | false-positive | [`ops/ansible/tests/test_turn_public.py:127`](../ops/ansible/tests/test_turn_public.py#L127) | The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture. |
+| <a id="alert-20"></a>[20](https://github.com/swiftraccoon/simplestChat/security/code-scanning/20) | high | false-positive | [`ops/ansible/tests/test_turn_public.py:134`](../ops/ansible/tests/test_turn_public.py#L134) | The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture. |
+| <a id="alert-21"></a>[21](https://github.com/swiftraccoon/simplestChat/security/code-scanning/21) | high | false-positive | [`ops/ansible/tests/test_turn_public.py:138`](../ops/ansible/tests/test_turn_public.py#L138) | The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture. |
+| <a id="alert-22"></a>[22](https://github.com/swiftraccoon/simplestChat/security/code-scanning/22) | high | false-positive | [`ops/ansible/tests/test_turn_public.py:141`](../ops/ansible/tests/test_turn_public.py#L141) | The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture. |
+| <a id="alert-23"></a>[23](https://github.com/swiftraccoon/simplestChat/security/code-scanning/23) | high | false-positive | [`ops/ansible/tests/test_turn_public.py:155`](../ops/ansible/tests/test_turn_public.py#L155) | The test writes public repeated-a/repeated-c synthetic TURN values inside TemporaryDirectory to exercise configuration-drift rejection. No live credential, production account or remote relay is used; cleanup removes the fixture. |
 | <a id="alert-24"></a>[24](https://github.com/swiftraccoon/simplestChat/security/code-scanning/24) | high | fix-pending | [`ops/ansible/files/monitoring_collect.py:156`](../ops/ansible/files/monitoring_collect.py#L156) | Assigned source remediation; this review authorizes no dismissal or exception. |
 | <a id="alert-25"></a>[25](https://github.com/swiftraccoon/simplestChat/security/code-scanning/25) | high | fix-pending | [`build/release_http_policy.py:273`](../build/release_http_policy.py#L273) | Assigned source remediation; this review authorizes no dismissal or exception. |
 | <a id="alert-26"></a>[26](https://github.com/swiftraccoon/simplestChat/security/code-scanning/26) | high | fix-pending | [`ops/ansible/files/turn_public.py:298`](../ops/ansible/files/turn_public.py#L298) | Assigned source remediation; this review authorizes no dismissal or exception. |
@@ -352,8 +420,8 @@ inherit this decision merely because the alert number is unchanged.
 | <a id="alert-33"></a>[33](https://github.com/swiftraccoon/simplestChat/security/code-scanning/33) | high | false-positive | [`src/metrics.rs:1153`](../src/metrics.rs#L1153) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |
 | <a id="alert-34"></a>[34](https://github.com/swiftraccoon/simplestChat/security/code-scanning/34) | high | false-positive | [`src/metrics.rs:1157`](../src/metrics.rs#L1157) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |
 | <a id="alert-35"></a>[35](https://github.com/swiftraccoon/simplestChat/security/code-scanning/35) | high | false-positive | [`src/signaling/mod.rs:1667`](../src/signaling/mod.rs#L1667) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |
-| <a id="alert-36"></a>[36](https://github.com/swiftraccoon/simplestChat/security/code-scanning/36) | high | false-positive | [`src/signaling/connection_authorization_tests.rs:250`](../src/signaling/connection_authorization_tests.rs#L250) | The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages. |
-| <a id="alert-37"></a>[37](https://github.com/swiftraccoon/simplestChat/security/code-scanning/37) | high | false-positive | [`src/signaling/connection_authorization_tests.rs:298`](../src/signaling/connection_authorization_tests.rs#L298) | The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages. |
+| <a id="alert-36"></a>[36](https://github.com/swiftraccoon/simplestChat/security/code-scanning/36) | high | false-positive | [`src/signaling/connection_authorization_tests.rs:359`](../src/signaling/connection_authorization_tests.rs#L359) | The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages. |
+| <a id="alert-37"></a>[37](https://github.com/swiftraccoon/simplestChat/security/code-scanning/37) | high | false-positive | [`src/signaling/connection_authorization_tests.rs:406`](../src/signaling/connection_authorization_tests.rs#L406) | The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages. |
 | <a id="alert-38"></a>[38](https://github.com/swiftraccoon/simplestChat/security/code-scanning/38) | critical | false-positive | [`src/auth/common_passwords.rs:266`](../src/auth/common_passwords.rs#L266) | All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials. |
 | <a id="alert-39"></a>[39](https://github.com/swiftraccoon/simplestChat/security/code-scanning/39) | critical | false-positive | [`src/auth/common_passwords.rs:267`](../src/auth/common_passwords.rs#L267) | All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials. |
 | <a id="alert-40"></a>[40](https://github.com/swiftraccoon/simplestChat/security/code-scanning/40) | critical | false-positive | [`src/auth/common_passwords.rs:268`](../src/auth/common_passwords.rs#L268) | All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials. |
@@ -375,10 +443,10 @@ inherit this decision merely because the alert number is unchanged.
 | <a id="alert-56"></a>[56](https://github.com/swiftraccoon/simplestChat/security/code-scanning/56) | critical | false-positive | [`src/auth/password.rs:105`](../src/auth/password.rs#L105) | All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential. |
 | <a id="alert-57"></a>[57](https://github.com/swiftraccoon/simplestChat/security/code-scanning/57) | critical | false-positive | [`src/auth/password.rs:106`](../src/auth/password.rs#L106) | All literals are inside cfg(test) password hashing/verification tests, including public RustCrypto known-answer values, NFC-equivalence fixtures, fresh-salt assertions and negative/empty inputs. Production password selection obtains values from requests; none of these constants is an operational credential. |
 | <a id="alert-58"></a>[58](https://github.com/swiftraccoon/simplestChat/security/code-scanning/58) | critical | false-positive | [`src/auth/routes.rs:930`](../src/auth/routes.rs#L930) | This cfg(test) assertion verifies the timing-equalization dummy password hash does not match an arbitrary public input. It provisions no account and is outside runtime credential selection. |
-| <a id="alert-59"></a>[59](https://github.com/swiftraccoon/simplestChat/security/code-scanning/59) | critical | false-positive | [`src/room/settings.rs:598`](../src/room/settings.rs#L598) | These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room. |
-| <a id="alert-60"></a>[60](https://github.com/swiftraccoon/simplestChat/security/code-scanning/60) | critical | false-positive | [`src/room/settings.rs:603`](../src/room/settings.rs#L603) | These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room. |
-| <a id="alert-61"></a>[61](https://github.com/swiftraccoon/simplestChat/security/code-scanning/61) | critical | false-positive | [`src/room/settings.rs:605`](../src/room/settings.rs#L605) | These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room. |
-| <a id="alert-62"></a>[62](https://github.com/swiftraccoon/simplestChat/security/code-scanning/62) | critical | false-positive | [`src/room/settings.rs:608`](../src/room/settings.rs#L608) | These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room. |
+| <a id="alert-59"></a>[59](https://github.com/swiftraccoon/simplestChat/security/code-scanning/59) | critical | false-positive | [`src/room/settings.rs:613`](../src/room/settings.rs#L613) | These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room. |
+| <a id="alert-60"></a>[60](https://github.com/swiftraccoon/simplestChat/security/code-scanning/60) | critical | false-positive | [`src/room/settings.rs:618`](../src/room/settings.rs#L618) | These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room. |
+| <a id="alert-61"></a>[61](https://github.com/swiftraccoon/simplestChat/security/code-scanning/61) | critical | false-positive | [`src/room/settings.rs:620`](../src/room/settings.rs#L620) | These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room. |
+| <a id="alert-62"></a>[62](https://github.com/swiftraccoon/simplestChat/security/code-scanning/62) | critical | false-positive | [`src/room/settings.rs:623`](../src/room/settings.rs#L623) | These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room. |
 | <a id="alert-63"></a>[63](https://github.com/swiftraccoon/simplestChat/security/code-scanning/63) | critical | false-positive | [`src/signaling/mod.rs:2032`](../src/signaling/mod.rs#L2032) | This fixed passphrase is inside the cfg(test) disposable-database registration enumeration-limiter test. It is used only with a unique fixture account and test-owned state, never a production identity. |
 | <a id="alert-64"></a>[64](https://github.com/swiftraccoon/simplestChat/security/code-scanning/64) | critical | false-positive | [`src/turn.rs:155`](../src/turn.rs#L155) | This fixed TURN secret belongs only to cfg(test) credential-generation and non-disclosure fixtures, with a fictional turn.example endpoint. Runtime TURN credentials use configured secrets; this test value cannot be issued by the production path. |
 | <a id="alert-65"></a>[65](https://github.com/swiftraccoon/simplestChat/security/code-scanning/65) | critical | false-positive | [`src/turn.rs:187`](../src/turn.rs#L187) | This fixed TURN secret belongs only to cfg(test) credential-generation and non-disclosure fixtures, with a fictional turn.example endpoint. Runtime TURN credentials use configured secrets; this test value cannot be issued by the production path. |
