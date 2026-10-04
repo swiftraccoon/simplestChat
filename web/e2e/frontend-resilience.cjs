@@ -130,6 +130,7 @@ async function run() {
     const sent = [];
     const requests = [];
     const featureRequests = [];
+    const featureWaiters = new Map();
     const featureSeen = Promise.withResolvers();
     const refreshRequests = [];
     const previews = [];
@@ -229,6 +230,8 @@ async function run() {
       if (url.pathname === '/favicon.ico') return route.fulfill({ status: 204 });
       if (url.pathname === '/api/capabilities') {
         featureRequests.push(route);
+        featureWaiters.get(featureRequests.length - 1)?.();
+        featureWaiters.delete(featureRequests.length - 1);
         featureSeen.resolve();
         if (holdFeatures) return;
         return json(features);
@@ -316,8 +319,12 @@ async function run() {
       requests,
       previews,
       featureRequests,
-      finishFeatures: (index, body = features, status = 200) =>
-        featureRequests[index].fulfill({ status, json: body }),
+      finishFeatures: async (index, body = features, status = 200) => {
+        // Firefox can emit the request event before the interception handler runs.
+        if (!featureRequests[index])
+          await new Promise((resolve) => featureWaiters.set(index, resolve));
+        await featureRequests[index].fulfill({ status, json: body });
+      },
       finishRestore: () =>
         refreshRequests[0].fulfill({ json: { token: 'owned-fixture', user: account } }),
       redemptions,
