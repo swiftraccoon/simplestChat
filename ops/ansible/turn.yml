@@ -241,7 +241,11 @@
 
         - name: Verify trusted relay TLS before scheduling certificate maintenance
           ansible.builtin.command:
-            argv: [/usr/bin/python3, -B, /usr/local/libexec/simplestchat-public/turn_public.py, refresh-certificate]
+            argv: >-
+              {{ ['/usr/bin/python3', '-B', '/usr/local/libexec/simplestchat-public/turn_public.py',
+                  'refresh-certificate'] +
+                 (['--verify-address', scpub_turn_verify_address]
+                  if scpub_turn_verify_address | default('') | length > 0 else []) }}
           changed_when: true
 
         - name: Install hourly certificate maintenance
@@ -263,17 +267,12 @@
     - name: Activate the externally verified relay with bounded application rollback
       when: scpub_turn_activate | bool
       ansible.builtin.command:
-        argv:
-          - systemd-run
-          - --wait
-          - --collect
-          - --unit=simplestchat-turn-activate
-          - --property=Type=exec
-          - --property=RuntimeMaxSec=900
-          - --property=TimeoutStopSec=90
-          - /usr/bin/python3
-          - -B
-          - /usr/local/libexec/simplestchat-public/turn_public.py
-          - activate
+        argv: >-
+          {{ ['systemd-run', '--wait', '--collect', '--unit=simplestchat-turn-activate',
+              '--property=Type=exec', '--property=RuntimeMaxSec=900', '--property=TimeoutStopSec=90',
+              '/usr/bin/python3', '-B', '/usr/local/libexec/simplestchat-public/turn_public.py',
+              'activate'] +
+             (['--verify-address', scpub_turn_verify_address]
+              if scpub_turn_verify_address | default('') | length > 0 else []) }}
       changed_when: true
       timeout: 1050

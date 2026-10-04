@@ -2,7 +2,7 @@
 
 `build/migrate.py` moves the supported public deployment between two explicitly
 selected Debian 13 x86_64 hosts. It preserves the database and deployment secrets,
-uses the exact signed image from successful main CI, and prepares the destination
+uses a verified immutable release image, and prepares the destination
 while the source remains live. The source is stopped only for the final database
 archive and cutover. No image is built on either server.
 
@@ -21,11 +21,13 @@ set `ansible_host`, `ansible_user`, an absolute `ansible_ssh_private_key_file`,
 SSH access first. Non-root users need passwordless sudo. The controller requires
 Python 3.12+, the maintained Ansible environment, GitHub CLI authentication and curl.
 
-Point the new HTTPS hostname at the destination before running the command, and
-open its public HTTP/media/TURN ports as described in the public guide. This first
-migration workflow requires different source and destination HTTPS origins; it
-does not edit DNS or orchestrate a same-hostname DNS cutover. To preserve existing
-passkeys, the new hostname must belong to the source's actual WebAuthn RP ID,
+Open the destination's public HTTP/media/TURN ports as described in the public
+guide. For a new hostname, point its DNS at the destination before running the
+command. To keep the existing hostname, leave DNS on the source until the
+controller reports `awaiting_dns_cutover`; use distinct literal IP addresses for
+both inventories' `ansible_host`, and set the destination's `scpub_announce_ip`
+explicitly. The controller never edits DNS. To preserve existing
+passkeys, the destination hostname must belong to the source's actual WebAuthn RP ID,
 normally the existing hostname or one of its subdomains. The controller reads and
 retains that identity rather than trusting an inventory guess.
 
@@ -55,10 +57,20 @@ starts a new time-series store. Database-backed operational history is migrated.
 ## Run one migration
 
 Run the focused checks relevant to the change, push the clean committed `main`
-revision directly, and run this command from that same checkout. The complete
-local CI gate remains available but is not required before every push. Migration
-still requires its exact successful main-push CI and verifies the artifact's
-attestation before any remote mutation; it has no force mode.
+revision directly, and run this command from that same checkout. The controller
+checks that the tools match published `main`. The complete local CI gate remains
+available but is not required before every push. By default, migration requires
+successful main-push CI and verifies the release artifact's attestation before
+any remote mutation.
+
+`--revision FULL_COMMIT` selects an ancestor application release independently
+of the migration tools, so moving servers need not also upgrade the application.
+When explicitly authorized, `--force --artifact-dir /absolute/path/to/export`
+instead validates a retained unsigned release against that exact commit's build
+inputs and migration checksums. Both flags are required together; no image is
+built or pulled as a substitute. Evidence records skipped CI and absence of
+GitHub attestation. Artifact identity, data comparison, source sealing and
+readiness safeguards remain in effect.
 
 ```sh
 ops/ansible/.venv/bin/python build/migrate.py \
@@ -82,6 +94,35 @@ in the active inventory. `--update-canary` optionally changes GitHub's existing
 `CANARY_ROOM` unchanged. Both options are off by default, and their individual
 outcomes are retained if either final selector update fails.
 
+## Keep the existing hostname
+
+Lower the A/AAAA records' TTL before the migration and allow the previous TTL
+to expire. Keep their addresses on the source during preparation. The controller
+copies the existing valid hostname certificate, private key and issuer metadata
+into protected destination storage, then verifies HTTPS and TURN using the
+destination IP with the original hostname and certificate validation intact.
+Existing differing destination certificate files are refused.
+
+Pass the same HTTPS URL as `--source-origin` and `--origin`. The controller
+preserves the owner email, WebAuthn RP ID and complete database unchanged. After
+restoration, it durably seals the old server, disables its managed timers and
+container restart policies, and stops its database before the destination starts.
+Once destination checks pass, it prints `awaiting_dns_cutover` with the required
+addresses. Change the A record and any AAAA record to those addresses. An old
+AAAA record also prevents completion. `--dns-wait-seconds` bounds the wait
+(default 600, maximum 1800); zero performs one bounded observation.
+
+The controller checks both DNS address families and performs ordinary public
+HTTPS verification before activating the destination inventory. The controller
+requires `dig` for this mode. The old server stays stopped while cached DNS
+records expire; existing calls disconnect at cutover. No canary-origin change is
+needed when the hostname stays the same.
+
+If the DNS wait expires, the destination remains the writable deployment and
+the source remains sealed. Inspect the retained evidence, finish the DNS change
+and verify the destination before updating the active inventory; never rerun the
+data transfer or restart the old database to handle a DNS delay.
+
 The migration preserves all database tables, including accounts, passkey
 credentials, rooms, roles, invitations and private operational history. It compares
 deterministic complete-row hashes and counts, sequences, migration checksums,
@@ -90,11 +131,12 @@ The source and destination must use the same pinned PostgreSQL image and server
 version. The bounded archive limit is 512 MiB; oversized or unsupported contents
 fail before restoration rather than being skipped.
 
-The managed owner email changes from `owner@<source-domain>` to
+When the hostname changes, the managed owner email changes from `owner@<source-domain>` to
 `owner@<destination-domain>` in one destination-only transaction. Every other
 owner field, including UUID, password hash and authentication version, must remain
 identical. Other accounts retain their existing email addresses. Users sign in
-again because browser session cookies belong to the original hostname. Live calls
+again because browser session cookies belong to the original hostname. When the
+hostname stays the same, existing session cookies retain their origin. Live calls
 and chat history held only in application memory cannot migrate; they are not
 stored in the database archive.
 

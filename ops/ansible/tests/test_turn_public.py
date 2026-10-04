@@ -6,10 +6,12 @@ import os
 import re
 import shlex
 import shutil
+import socket
 import ssl
 import subprocess
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Unpack, cast
 from unittest.mock import patch
@@ -24,6 +26,19 @@ import turn_public as turn
 
 if TYPE_CHECKING:
     from release_json import JsonObject
+
+
+class TlsPeerFixture:
+    """Return a controlled leaf while the test keeps a real verification context."""
+
+    certificate: bytes = b"expected"
+
+    def getpeercert(self, *, binary_form: bool) -> bytes:
+        """Match the single DER certificate lookup used by the relay verifier."""
+        if not binary_form:
+            message = "The verifier must request DER bytes"
+            raise ValueError(message)
+        return self.certificate
 
 
 class TurnTemplateTests(unittest.TestCase):
@@ -356,6 +371,40 @@ class TurnCertificateTests(unittest.TestCase):
                 with self.assertRaises(ssl.SSLError):
                     _ = turn.publish_certificate(runner, "relay.example.test")
                 self.assertEqual(selected.readlink(), selection)
+
+    def test_address_override_keeps_trusted_domain_sni_and_exact_leaf(self) -> None:
+        """Before DNS cutover only the TCP destination changes; TLS verification stays strict."""
+        with tempfile.TemporaryDirectory(prefix="simplestchat-turn-address.") as directory:
+            config = Path(directory)
+            current = config / "tls/current"
+            current.mkdir(parents=True)
+            _ = (current / "certificate.pem").write_text("fixture certificate")
+            context = ssl.create_default_context()
+            peer = TlsPeerFixture()
+            connection = object()
+            with (
+                patch.object(turn, "CONFIG", config),
+                patch.object(ssl, "PEM_cert_to_DER_cert", return_value=b"expected"),
+                patch.object(ssl, "create_default_context", return_value=context),
+                patch.object(ssl.SSLContext, "wrap_socket", return_value=nullcontext(peer)) as wrap,
+                patch.object(
+                    socket, "create_connection", return_value=nullcontext(connection)
+                ) as connect,
+            ):
+                turn.verify_tls("relay.example.test", address="192.0.2.45")
+                connect.assert_called_once_with(("192.0.2.45", 5349), timeout=3)
+                wrap.assert_called_once_with(connection, server_hostname="relay.example.test")
+                self.assertTrue(context.check_hostname)
+                self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+                self.assertEqual(context.minimum_version, ssl.TLSVersion.TLSv1_2)
+                peer.certificate = b"wrong"
+                with self.assertRaises(release.ReleaseError):
+                    turn.verify_tls("relay.example.test", address="192.0.2.45", seconds=0)
+                wrap.side_effect = ssl.SSLCertVerificationError("fixture")
+                with self.assertRaises(release.ReleaseError):
+                    turn.verify_tls("relay.example.test", address="192.0.2.45", seconds=0)
+        with self.assertRaises(ValueError):
+            turn.verify_tls("relay.example.test", address="unrelated.example.test")
 
     def test_refresh_retries_the_signal_even_when_the_pair_was_already_published(self) -> None:
         """A failed previous reload must not leave the old certificate indefinitely installed."""

@@ -78,6 +78,7 @@ RETIRE_UNITS = (
 CONTAINER_FORMAT = (
     '{"id":{{json .Id}},"name":{{json .Name}},"image":{{json .Image}},'
     '"running":{{json .State.Running}},"oom":{{json .State.OOMKilled}},'
+    '"restartPolicy":{{json .HostConfig.RestartPolicy.Name}},'
     '"project":{{json (index .Config.Labels "com.docker.compose.project")}},'
     '"service":{{json (index .Config.Labels "com.docker.compose.service")}},'
     '"configHash":{{json (index .Config.Labels "com.docker.compose.config-hash")}}}'
@@ -141,7 +142,8 @@ def parse_request(value: JsonValue) -> Request:
     )
     public.require(re.fullmatch("[a-f0-9]{32}", operation), "invalid_operation_id")
     public.require(re.fullmatch("[a-f0-9]{40}", revision), "invalid_target_revision")
-    public.require(domain(source) != domain(destination), "identical_migration_origins")
+    _ = domain(source)
+    _ = domain(destination)
     return Request(
         operation_id=operation,
         source_origin=source,
@@ -738,7 +740,7 @@ def expected_owner_snapshot(database: str, request: Request, restored: JsonObjec
 
 
 def restore(runner: public.RunnerProtocol, request: Request) -> JsonObject:
-    """Restore into an empty owned database, prove equivalence, then rename only its owner."""
+    """Prove an empty-target restore, renaming its owner only when the origin changes."""
     public.require(state(request) is None, "migration_already_started")
     archive, snapshot = verified_archive(request)
     before = inspect(runner, request, source=False)
@@ -810,17 +812,20 @@ def restore(runner: public.RunnerProtocol, request: Request) -> JsonObject:
     restored = migration_snapshot.collect(database_id)
     public.atomic(request.directory / "database-restored.json", restored)
     migration_snapshot.equivalent(snapshot, restored)
-    expected = expected_owner_snapshot(database_id, request, restored)
-    _ = sql(
-        runner,
-        database_id,
-        owner_sql(
-            request.source_origin,
-            request.destination_origin,
-            string_value(identity["systemIdentifier"]),
-        ),
-        readonly=False,
-    )
+    owner_changed = request.source_origin != request.destination_origin
+    expected = restored
+    if owner_changed:
+        expected = expected_owner_snapshot(database_id, request, restored)
+        _ = sql(
+            runner,
+            database_id,
+            owner_sql(
+                request.source_origin,
+                request.destination_origin,
+                string_value(identity["systemIdentifier"]),
+            ),
+            readonly=False,
+        )
     retain_destination_owner(request)
     stopped(runner)
     renamed = migration_snapshot.collect(database_id)
@@ -833,6 +838,7 @@ def restore(runner: public.RunnerProtocol, request: Request) -> JsonObject:
             **details,
             "databaseSystemIdentifier": identity["systemIdentifier"],
             "databaseEquivalentBeforeOwnerRename": True,
+            "ownerEmailChanged": owner_changed,
             "ownerFieldsPreserved": True,
             "renamedSnapshotSha256": sha256_file(request.directory / "database-renamed.json"),
         },
@@ -880,28 +886,31 @@ def verify_target(runner: public.RunnerProtocol, request: Request, prior: JsonOb
 
 
 def seal(runner: public.RunnerProtocol, request: Request, prior: JsonObject) -> JsonObject:
-    """Irreversibly remove source recovery before destination startup is attempted."""
-    public.require(prior.get("phase") == "frozen", "source_not_frozen")
-    stopped(runner)
-    _archive, snapshot = verified_archive(request)
-    database = owned_container(runner, "postgres")
-    if database is None:
-        message = "source_database_missing"
-        raise public.ReleaseError(message)
-    no_clients(runner, string_value(database["id"]))
+    """Seal recovery durably, then stop source writers and their automatic restart paths."""
     public.require(
-        migration_snapshot.collect(string_value(database["id"])) == snapshot,
-        "frozen_source_changed",
+        prior.get("phase") in ("frozen", "sealing", "cutover-sealed"), "source_not_frozen"
     )
+    if prior.get("phase") == "frozen":
+        stopped(runner)
+        _archive, snapshot = verified_archive(request)
+        database = owned_container(runner, "postgres")
+        if database is None:
+            message = "source_database_missing"
+            raise public.ReleaseError(message)
+        no_clients(runner, string_value(database["id"]))
+        public.require(
+            migration_snapshot.collect(string_value(database["id"])) == snapshot,
+            "frozen_source_changed",
+        )
+        # The global journal is written first. Even a later local-journal or
+        # shutdown failure must never permit automatic source recovery.
+        prior = record(request, "sealing", prior)
+    stop_source_writers(runner)
     return record(request, "cutover-sealed", prior)
 
 
-def retire(runner: public.RunnerProtocol, request: Request, prior: JsonObject) -> JsonObject:
-    """Stop only old deployment resources, disable its timers, and retain every volume."""
-    public.require(
-        prior.get("phase") in ("cutover-sealed", "retiring", "retired"), "source_not_sealed"
-    )
-    _ = record(request, "retiring", prior)
+def stop_source_writers(runner: public.RunnerProtocol) -> None:
+    """Disable managed timers and restart policies before stopping the owned database."""
     selected = units(RETIRE_UNITS)
     stop_units(runner, selected)
     timers = [name for name in unit_names(selected) if name.endswith(".timer")]
@@ -911,6 +920,7 @@ def retire(runner: public.RunnerProtocol, request: Request, prior: JsonObject) -
         value = owned_container(runner, service)
         public.require(value is not None, "retired_container_missing")
         if value is not None:
+            _ = runner.docker("update", "--restart=no", string_value(value["id"]), timeout=15)
             _ = runner.docker(
                 "stop",
                 "--time",
@@ -918,7 +928,30 @@ def retire(runner: public.RunnerProtocol, request: Request, prior: JsonObject) -
                 string_value(value["id"]),
                 timeout=45,
             )
-            _ = runner.docker("update", "--restart=no", string_value(value["id"]), timeout=15)
+            actual = owned_container(runner, service)
+            public.require(
+                actual is not None
+                and actual.get("id") == value["id"]
+                and actual.get("running") is False
+                and actual.get("restartPolicy") == "no",
+                "source_writer_not_disabled",
+            )
+    after = units(RETIRE_UNITS)
+    for name in unit_names(after):
+        value = object_value(after[name])
+        public.require(value.get("active") is False, "source_unit_still_active")
+        if name.endswith(".timer"):
+            public.require(value.get("enabled") == "disabled", "source_timer_still_enabled")
+
+
+def retire(runner: public.RunnerProtocol, request: Request, prior: JsonObject) -> JsonObject:
+    """Stop only old deployment resources, disable its timers, and retain every volume."""
+    public.require(
+        prior.get("phase") in ("sealing", "cutover-sealed", "retiring", "retired"),
+        "source_not_sealed",
+    )
+    _ = record(request, "retiring", prior)
+    stop_source_writers(runner)
     for project, service in (
         ("simplestchat-turn", "turn"),
         ("simplestchat-monitoring", "prometheus"),

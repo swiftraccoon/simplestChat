@@ -35,9 +35,11 @@ REQUEST: JsonObject = {
 class MigrationPolicyTests(unittest.TestCase):
     """Reject ambiguous inputs and unsafe lifecycle transitions before commands run."""
 
-    def test_request_has_exact_fields_and_canonical_distinct_origins(self) -> None:
+    def test_request_has_exact_fields_and_canonical_origins(self) -> None:
         """Credentials, paths, shell fragments and silent transport extensions are refused."""
         self.assertEqual(migration.parse_request(REQUEST).json(), REQUEST)
+        same_origin = {**REQUEST, "destinationOrigin": REQUEST["sourceOrigin"]}
+        self.assertEqual(migration.parse_request(same_origin).json(), same_origin)
         for field, value in (
             ("operationId", "../escape"),
             ("operationId", "A" * 32),
@@ -46,7 +48,8 @@ class MigrationPolicyTests(unittest.TestCase):
             ("sourceOrigin", "https://old.example.test/"),
             ("sourceOrigin", "https://user:password@old.example.test"),
             ("sourceOrigin", "https://old.example.test:443"),
-            ("sourceOrigin", "https://new.example.test"),
+            ("destinationOrigin", "https://new.example.test/path"),
+            ("destinationOrigin", "https://new.example.test:443"),
             ("sourceOrigin", "https://x';select.example.test"),
         ):
             with self.subTest(field=field, value=value), self.assertRaises(release.ReleaseError):
@@ -83,7 +86,7 @@ class MigrationPolicyTests(unittest.TestCase):
         """Recovery refusal precedes filesystem reads and service starts."""
         request = migration.parse_request(REQUEST)
         runner = Mock(spec=release.RunnerProtocol)
-        for phase in ("cutover-sealed", "retiring", "retired", "restored"):
+        for phase in ("sealing", "cutover-sealed", "retiring", "retired", "restored"):
             with self.subTest(phase=phase), self.assertRaises(release.ReleaseError):
                 _ = migration.recover(runner, request, {"phase": phase})
         self.assertEqual(runner.mock_calls, [])
@@ -151,22 +154,33 @@ class MigrationPolicyTests(unittest.TestCase):
         with (
             patch.object(migration, "record", return_value={}),
             patch.object(migration, "units", return_value={}),
-            patch.object(migration, "owned_container", return_value={"id": "1" * 64}) as owned,
+            patch.object(
+                migration,
+                "owned_container",
+                return_value={"id": "1" * 64, "running": False, "restartPolicy": "no"},
+            ) as owned,
         ):
             _ = migration.retire(
                 runner, migration.parse_request(REQUEST), {"phase": "cutover-sealed"}
             )
-        self.assertEqual(owned.call_count, 6)
+        self.assertEqual(owned.call_count, 9)
         for service in ("prometheus", "node-exporter"):
             owned.assert_any_call(runner, service, optional=True, project="simplestchat-monitoring")
         expected = [
             operation
-            for duration, timeout in (("30", 45), ("3", 45), ("30", 45), *(3 * (("10", 20),)))
+            for duration in ("30", "3", "30")
             for operation in (
-                call("stop", "--time", duration, "1" * 64, timeout=timeout),
                 call("update", "--restart=no", "1" * 64, timeout=15),
+                call("stop", "--time", duration, "1" * 64, timeout=45),
             )
         ]
+        expected.extend(
+            3
+            * [
+                call("stop", "--time", "10", "1" * 64, timeout=20),
+                call("update", "--restart=no", "1" * 64, timeout=15),
+            ]
+        )
         self.assertEqual(cast("Mock", runner.docker).call_args_list, expected)
         cast("Mock", runner.compose).assert_not_called()
         cast("Mock", runner.run).assert_not_called()
@@ -375,6 +389,202 @@ class MigrationPolicyTests(unittest.TestCase):
             object_value(cast("list[JsonValue]", original["tables"])[0])["sha256"], "old"
         )
 
+    def test_same_origin_restore_keeps_exact_rows_without_owner_sql_or_projection(self) -> None:
+        """Host relocation preserves the owner and still refuses any unexpected data change."""
+        request = migration.parse_request({**REQUEST, "destinationOrigin": REQUEST["sourceOrigin"]})
+        image = "sha256:" + "c" * 64
+        source: JsonObject = {
+            "passed": True,
+            "systemIdentifier": "1",
+            "postgresVersion": "180006",
+            "tables": [{"schema": "public", "name": "users", "rows": 6, "sha256": "original"}],
+        }
+        restored: JsonObject = {**source, "systemIdentifier": "2"}
+        archive: JsonObject = {
+            "source": {"machineId": "source", "rpId": "old.example.test"},
+            "systemIdentifier": "1",
+            "postgresSelector": "pin",
+            "postgresImage": image,
+        }
+        for changed in (False, True):
+            runner = Mock(spec=release.RunnerProtocol)
+            final = {**restored, "unexpected": True} if changed else restored
+
+            def record(
+                _request: migration.Request,
+                phase: str,
+                details: JsonObject,
+                *,
+                finalized: bool = False,
+            ) -> JsonObject:
+                return {**details, "phase": phase, "finalized": finalized}
+
+            with (
+                self.subTest(changed=changed),
+                patch.object(migration, "state", return_value=None),
+                patch.object(migration, "verified_archive", return_value=(archive, source)),
+                patch.object(
+                    migration,
+                    "inspect",
+                    return_value={
+                        "machineId": "target",
+                        "rpId": "old.example.test",
+                        "postgresSelector": "pin",
+                    },
+                ),
+                patch.object(migration, "record", side_effect=record),
+                patch.object(
+                    migration, "owned_container", return_value={"id": "1" * 64, "image": image}
+                ),
+                patch.object(
+                    migration,
+                    "database_identity",
+                    return_value={
+                        "emptyDatabase": True,
+                        "systemIdentifier": "2",
+                        "serverVersion": "180006",
+                    },
+                ),
+                patch.object(migration, "pinned_postgres"),
+                patch.object(migration, "stopped"),
+                patch.object(migration, "no_clients"),
+                patch.object(snapshot, "collect", side_effect=[restored, final]),
+                patch.object(release, "atomic") as atomic,
+                patch.object(migration, "sha256_file", return_value="d" * 64),
+                patch.object(migration, "expected_owner_snapshot") as projection,
+                patch.object(migration, "owner_sql") as owner_statement,
+                patch.object(migration, "sql") as query,
+                patch.object(migration, "retain_destination_owner") as owner_file,
+            ):
+                if changed:
+                    with self.assertRaisesRegex(
+                        release.ReleaseError, "unexpected_owner_rename_changes"
+                    ):
+                        _ = migration.restore(runner, request)
+                else:
+                    result = migration.restore(runner, request)
+                    self.assertEqual(result["phase"], "restored")
+                    self.assertIs(result["ownerEmailChanged"], expr2=False)
+                    atomic.assert_called_with(request.directory / "database-renamed.json", restored)
+                projection.assert_not_called()
+                owner_statement.assert_not_called()
+                query.assert_not_called()
+                owner_file.assert_called_once_with(request)
+            self.assertEqual(
+                cast("Mock", runner.docker).call_count, 1, "only pg_restore writes data"
+            )
+
+    def test_seal_records_recovery_barrier_before_disabling_source_writers(self) -> None:
+        """A failed shutdown cannot claim a completed seal or reopen recovery."""
+        request = migration.parse_request(REQUEST)
+        for failed in (False, True):
+            events: list[str] = []
+
+            def record(
+                _request: migration.Request,
+                phase: str,
+                details: JsonObject,
+                captured: list[str] = events,
+            ) -> JsonObject:
+                captured.append(phase)
+                return {**details, "phase": phase}
+
+            def stop(
+                _runner: release.RunnerProtocol,
+                captured: list[str] = events,
+                *,
+                fail: bool = failed,
+            ) -> None:
+                captured.append("stop-writers")
+                if fail:
+                    message = "shutdown_failed"
+                    raise release.ReleaseError(message)
+
+            with (
+                self.subTest(failed=failed),
+                patch.object(migration, "stopped"),
+                patch.object(
+                    migration, "verified_archive", return_value=({}, {"rows": "original"})
+                ),
+                patch.object(migration, "owned_container", return_value={"id": "1" * 64}),
+                patch.object(migration, "no_clients"),
+                patch.object(snapshot, "collect", return_value={"rows": "original"}),
+                patch.object(migration, "record", side_effect=record),
+                patch.object(migration, "stop_source_writers", side_effect=stop),
+            ):
+                if failed:
+                    with self.assertRaisesRegex(release.ReleaseError, "shutdown_failed"):
+                        _ = migration.seal(
+                            Mock(spec=release.RunnerProtocol), request, {"phase": "frozen"}
+                        )
+                else:
+                    _ = migration.seal(
+                        Mock(spec=release.RunnerProtocol), request, {"phase": "frozen"}
+                    )
+            self.assertEqual(
+                events, ["sealing", "stop-writers"] + ([] if failed else ["cutover-sealed"])
+            )
+
+    def test_source_writer_shutdown_checks_restart_policies_and_disabled_timers(self) -> None:
+        """Successful commands alone cannot authorize startup while an old writer can restart."""
+        name = "simplestchat-backup.timer"
+        before: JsonObject = {name: {"loaded": True, "active": False, "enabled": "enabled"}}
+        disabled: JsonObject = {name: {"loaded": True, "active": False, "enabled": "disabled"}}
+        container: JsonObject = {"id": "1" * 64, "running": False, "restartPolicy": "no"}
+        for unchanged in ("none", "timer", "restart", "running"):
+            runner = Mock(spec=release.RunnerProtocol)
+            actual = {
+                **container,
+                "running": unchanged == "running",
+                "restartPolicy": "unless-stopped" if unchanged == "restart" else "no",
+            }
+            with (
+                self.subTest(unchanged=unchanged),
+                patch.object(
+                    migration,
+                    "units",
+                    side_effect=[before, before if unchanged == "timer" else disabled],
+                ),
+                patch.object(migration, "owned_container", side_effect=[container, actual] * 3),
+            ):
+                if unchanged == "none":
+                    migration.stop_source_writers(runner)
+                else:
+                    with self.assertRaises(release.ReleaseError):
+                        migration.stop_source_writers(runner)
+            self.assertEqual(
+                cast("Mock", runner.run).call_args_list,
+                [
+                    call(["/usr/bin/systemctl", "stop", name], timeout=120),
+                    call(["/usr/bin/systemctl", "disable", name], timeout=30),
+                ],
+            )
+            self.assertEqual(
+                cast("Mock", runner.docker).call_args_list[:2],
+                [
+                    call("update", "--restart=no", "1" * 64, timeout=15),
+                    call("stop", "--time", "30", "1" * 64, timeout=45),
+                ],
+            )
+
+    def test_partial_seal_can_finish_without_querying_a_stopped_database(self) -> None:
+        """A shutdown retry never requires restarting the old database to prove the seal."""
+        with (
+            patch.object(migration, "verified_archive") as archive,
+            patch.object(snapshot, "collect") as collect,
+            patch.object(migration, "stop_source_writers") as stop,
+            patch.object(migration, "record", return_value={"phase": "cutover-sealed"}),
+        ):
+            result = migration.seal(
+                Mock(spec=release.RunnerProtocol),
+                migration.parse_request(REQUEST),
+                {"phase": "sealing"},
+            )
+        self.assertEqual(result["phase"], "cutover-sealed")
+        stop.assert_called_once()
+        archive.assert_not_called()
+        collect.assert_not_called()
+
 
 class MigrationPrivatePathsTests(unittest.TestCase):
     """Private evidence and shared journals bind one operation without following links."""
@@ -453,7 +663,7 @@ class MigrationPrivatePathsTests(unittest.TestCase):
                     patch.object(release, "atomic", side_effect=interrupted_write),
                     self.assertRaises(OSError),
                 ):
-                    _ = migration.record(request, "cutover-sealed", frozen)
+                    _ = migration.record(request, "sealing", frozen)
                 self.assertEqual(object_value(migration.state(request))["phase"], "frozen")
                 runner = Mock(spec=release.RunnerProtocol)
                 with self.assertRaises(release.ReleaseError):

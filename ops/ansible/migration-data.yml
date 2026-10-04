@@ -14,7 +14,8 @@
           - scmig_run_id is match('^[a-f0-9]{32}$')
           - scmig_revision is match('^[a-f0-9]{40}$')
           - scmig_action in ['transfer', 'launch', 'stop-target', 'resume-source', 'finalize-source']
-          - scmig_source_origin != scmig_destination_origin
+          - scmig_source_origin is match('^https://[a-z0-9.-]+$')
+          - scmig_destination_origin is match('^https://[a-z0-9.-]+$')
           - scmig_evidence is match('^/')
         fail_msg: Use the maintained migration controller with its frozen inventories and private evidence.
 

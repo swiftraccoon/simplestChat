@@ -7,6 +7,7 @@ Certificate reloads use coturn SIGUSR2 and do not replace active allocations.
 
 import argparse
 import hashlib
+import ipaddress
 import os
 import re
 import signal
@@ -69,7 +70,7 @@ def settings() -> JsonObject:
     return result
 
 
-def _source_directory(path: Path) -> int:
+def certificate_directory(path: Path) -> int:
     """Open each directory component without following Caddy-controlled links."""
     descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     try:
@@ -126,7 +127,7 @@ def certificate_source(domain: str) -> tuple[bytes, bytes]:
     """Snapshot the newest exact-hostname pair using bounded descriptor reads."""
     # The configured domain has already passed TurnConfiguration validation.
     _ = release.TurnConfiguration(domain=domain, secret="0" * 64).environment()
-    root = _source_directory(CERTIFICATES)
+    root = certificate_directory(CERTIFICATES)
     newest: tuple[int, bytes, bytes] | None = None
     try:
         with os.scandir(root) as entries:
@@ -168,6 +169,32 @@ def certificate_source(domain: str) -> tuple[bytes, bytes]:
     return newest[1], newest[2]
 
 
+def validate_certificate(
+    runner: release.RunnerProtocol, domain: str, certificate: Path, key: Path
+) -> None:
+    """Require a matching key, trusted hostname and at least one day of validity."""
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(certificate, key)
+    _ = runner.run(
+        ["/usr/bin/openssl", "x509", "-in", str(certificate), "-checkend", "86400", "-noout"]
+    )
+    _ = runner.run(
+        [
+            "/usr/bin/openssl",
+            "verify",
+            "-purpose",
+            "sslserver",
+            "-verify_hostname",
+            domain,
+            "-CAfile",
+            "/etc/ssl/certs/ca-certificates.crt",
+            "-untrusted",
+            str(certificate),
+            str(certificate),
+        ]
+    )
+
+
 def publish_certificate(runner: release.RunnerProtocol, domain: str) -> bool:
     """Validate private immutable snapshots and publish those exact same bytes."""
     certificate_data, key_data = certificate_source(domain)
@@ -178,26 +205,7 @@ def publish_certificate(runner: release.RunnerProtocol, domain: str) -> bool:
         certificate, key = snapshot / "certificate.pem", snapshot / "key.pem"
         release.atomic(certificate, certificate_data)
         release.atomic(key, key_data)
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(certificate, key)
-        _ = runner.run(
-            ["/usr/bin/openssl", "x509", "-in", str(certificate), "-checkend", "86400", "-noout"]
-        )
-        _ = runner.run(
-            [
-                "/usr/bin/openssl",
-                "verify",
-                "-purpose",
-                "sslserver",
-                "-verify_hostname",
-                domain,
-                "-CAfile",
-                "/etc/ssl/certs/ca-certificates.crt",
-                "-untrusted",
-                str(certificate),
-                str(certificate),
-            ]
-        )
+        validate_certificate(runner, domain, certificate, key)
     generation = hashlib.sha256(certificate_data).hexdigest()
     tls = CONFIG / "tls"
     release.protected(tls, directory=True, modes=(0o750,))
@@ -285,8 +293,9 @@ def relay_container(runner: release.RunnerProtocol) -> str:
     return identity
 
 
-def verify_tls(domain: str, *, seconds: float = 10) -> None:
+def verify_tls(domain: str, *, seconds: float = 10, address: str | None = None) -> None:
     """Require trusted TLS and the exact currently published leaf certificate."""
+    destination = domain if address is None else str(ipaddress.ip_address(address))
     certificate = (CONFIG / "tls/current/certificate.pem").read_text()
     leaf = certificate.partition("-----END CERTIFICATE-----")[0] + "-----END CERTIFICATE-----\n"
     expected = ssl.PEM_cert_to_DER_cert(leaf)
@@ -296,7 +305,7 @@ def verify_tls(domain: str, *, seconds: float = 10) -> None:
     while True:
         try:
             with (
-                socket.create_connection((domain, 5349), timeout=3) as connection,
+                socket.create_connection((destination, 5349), timeout=3) as connection,
                 context.wrap_socket(connection, server_hostname=domain) as tls,
             ):
                 release.require(
@@ -311,14 +320,19 @@ def verify_tls(domain: str, *, seconds: float = 10) -> None:
             return
 
 
-def refresh_certificate(runner: release.RunnerProtocol, domain: str) -> bool:
+def refresh_certificate(
+    runner: release.RunnerProtocol, domain: str, *, address: str | None = None
+) -> bool:
     """Reload the validated certificate without interrupting relayed calls."""
     identity = relay_container(runner)
     changed = publish_certificate(runner, domain)
     # Signal even when the copy already matches: a previous reload may have
     # failed after publishing the pair. Repeating SIGUSR2 is nondestructive.
     _ = runner.docker("kill", "--signal", "SIGUSR2", identity)
-    verify_tls(domain)
+    if address is None:
+        verify_tls(domain)
+    else:
+        verify_tls(domain, address=address)
     return changed
 
 
@@ -464,6 +478,7 @@ def activate(runner: release.RunnerProtocol, domain: str, report: JsonObject) ->
 
 class _Arguments(argparse.Namespace):
     action: str = ""
+    verify_address: str | None = None
 
 
 def main() -> None:
@@ -473,7 +488,16 @@ def main() -> None:
         "action",
         choices=("prepare-certificate", "refresh-certificate", "activate", "enable-metrics"),
     )
+    _ = parser.add_argument(
+        "--verify-address", help="Connect to this IP while verifying domain SNI"
+    )
     arguments = parser.parse_args(namespace=_Arguments())
+    if arguments.verify_address is not None:
+        _ = ipaddress.ip_address(arguments.verify_address)
+        release.require(
+            arguments.action in ("refresh-certificate", "activate"),
+            "An address override requires a relay TLS verification action",
+        )
     release.require(os.geteuid() == 0, "Run as root on the prepared public host")
     _ = os.umask(0o077)
 
@@ -501,7 +525,9 @@ def main() -> None:
             elif arguments.action == "prepare-certificate":
                 report["certificateChanged"] = publish_certificate(runner, domain)
             else:
-                report["certificateChanged"] = refresh_certificate(runner, domain)
+                report["certificateChanged"] = refresh_certificate(
+                    runner, domain, address=arguments.verify_address
+                )
                 if arguments.action == "activate":
                     activate(runner, domain, report)
             report["passed"] = True

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import stat
 import tempfile
 import time
@@ -18,7 +19,9 @@ from urllib.parse import urlsplit
 from test_support import ROOT, array, obj, objects, yaml_value
 
 # isort: split
+import migration_artifact
 import migration_controller as migration
+import migration_dns
 import release_attestation
 import release_build
 import release_deploy
@@ -94,6 +97,8 @@ class FakeRunner:
             return 0, state.repository_url
         if argv[:2] == ["git", "symbolic-ref"]:
             return 0, state.branch
+        if argv[:2] == ["git", "ls-remote"]:
+            return 0, state.published_revision + "\trefs/heads/main"
         if argv[:2] == ["git", "check-ignore"]:
             if argv[-1] == state.args.source_inventory and not state.activation_ignored:
                 return 1, ""
@@ -167,6 +172,7 @@ class MigrationTests(unittest.TestCase):
         self.change_inventory: bool = False
         self.dirty: bool = False
         self.branch: str = "main"
+        self.published_revision: str = REVISION
         self.repository_url: str = "https://github.com/owner/repo.git"
         self.activation_ignored: bool = True
         self.change_active_inventory: bool = False
@@ -342,6 +348,43 @@ class MigrationTests(unittest.TestCase):
                 self.assertFalse(report["passed"])
                 self.assertEqual(self.actions, [])
 
+    def test_explicit_force_stages_selected_artifact_without_ci_selection(self) -> None:
+        """Unsigned selection remains explicit and cannot enter the signed transfer path."""
+        self.args.force = True
+        self.args.artifact_dir = str(self.root / "retained-artifact")
+        with patch.object(
+            migration_artifact, "prepare", return_value=(Path(self.args.artifact_dir), {})
+        ) as prepare:
+            report = self.execute(ci_error=True, attestation_error=True)
+        self.assertTrue(report["passed"])
+        self.assertFalse(report["githubAttested"])
+        self.assertEqual(report["ciVerification"], "skipped-explicit-force")
+        self.assertEqual(prepare.call_count, 1)
+        stage = next(
+            call
+            for call in self.calls
+            if call.argv[0] == "/ansible-playbook"
+            and obj(decode_json(call.argv[call.argv.index("--extra-vars") + 1])).get("scmig_action")
+            == "stage"
+        )
+        extra = obj(decode_json(stage.argv[stage.argv.index("--extra-vars") + 1]))
+        self.assertTrue(extra["scmig_force_release"])
+        self.assertEqual(extra["scmig_force_directory"], self.args.artifact_dir)
+        self.assertEqual(extra["scmig_tool_revision"], REVISION)
+        self.assertNotIn("scpub_release_artifact_id", extra)
+        self.assertNotIn("scpub_release_ci_run", extra)
+
+    def test_force_and_artifact_must_be_selected_together(self) -> None:
+        """Neither an artifact path nor a force flag alone can bypass release validation."""
+        for force, artifact in ((True, None), (False, "/retained/artifact")):
+            self.args.force = force
+            self.args.artifact_dir = artifact
+            with self.subTest(force=force):
+                report = self.execute()
+                self.assertFalse(report["passed"])
+                self.assertEqual(report["failureClass"], "migration_force_artifact_required")
+                self.assertEqual(self.actions, [])
+
     def test_wrong_inventory_origin_and_same_address_fail_before_host_calls(self) -> None:
         """The inventory target must match its explicit origin and be a different host."""
         target = obj(self.inventories[self.args.inventory], "_meta", "hostvars", "public")
@@ -470,7 +513,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(self.actions[-1], "finalize-source")
 
     def test_cli_reuses_strict_origin_and_inventory_validation(self) -> None:
-        """Explicit selectors normalize canonical origins and reject same origins and patterns."""
+        """Explicit selectors normalize canonical origins and reject ambiguous patterns."""
         values = [
             "--source-inventory",
             self.args.source_inventory,
@@ -486,8 +529,10 @@ class MigrationTests(unittest.TestCase):
         selected = migration.options(values)
         self.assertEqual(selected.source_origin, SOURCE_ORIGIN)
         self.assertEqual(selected.origin, TARGET_ORIGIN)
+        self.assertEqual(
+            migration.options([*values, "--origin", SOURCE_ORIGIN]).origin, SOURCE_ORIGIN
+        )
         for extra in (
-            ["--origin", SOURCE_ORIGIN],
             ["--source-limit", "*"],
             ["--origin", "https://user:password@next.chat.example.test"],
             ["--origin", "https://bad..example.test"],
@@ -497,6 +542,72 @@ class MigrationTests(unittest.TestCase):
                 self.assertRaises((migration.MigrationError, release_deploy.DeployError)),
             ):
                 _ = migration.options([*values, *extra])
+
+    def test_same_origin_probes_destination_before_dns_and_keeps_public_tls(self) -> None:
+        """The old public DNS response cannot stand in for destination readiness."""
+        self.args.origin = SOURCE_ORIGIN
+        target = obj(self.inventories[self.args.inventory], "_meta", "hostvars", "public")
+        target["scpub_domain"] = "chat.example.test"
+        target["scpub_announce_ip"] = "192.0.2.11"
+        with (
+            patch.object(shutil, "which", return_value="/dig"),
+            patch.object(migration_dns, "wait_for_cutover") as cutover,
+        ):
+            report = self.execute()
+        self.assertTrue(report["passed"])
+        self.assertTrue(report["dnsCutoverVerified"])
+        cutover.assert_called_once_with(SOURCE_ORIGIN, "192.0.2.11", "", 600)
+        calls = [call for call in self.calls if call.argv[0] == "/curl"]
+        self.assertEqual(len(calls), 2 * (len(migration.GET_PATHS) + 1))
+        for call in calls[:5]:
+            self.assertEqual(
+                call.argv[call.argv.index("--resolve") + 1], "chat.example.test:443:192.0.2.11"
+            )
+            self.assertNotIn("--insecure", call.argv)
+        self.assertTrue(all("--resolve" not in call.argv for call in calls[5:]))
+        turn = next(
+            call
+            for call in self.calls
+            if call.argv[0] == "/ansible-playbook" and Path(call.argv[3]).name == "turn.yml"
+        )
+        variables = obj(decode_json(turn.argv[turn.argv.index("--extra-vars") + 1]))
+        self.assertEqual(variables["scpub_turn_verify_address"], "192.0.2.11")
+
+    def test_same_origin_requires_ip_pinning_before_any_host_call(self) -> None:
+        """Moving DNS must not silently redirect the migration's SSH source."""
+        self.args.origin = SOURCE_ORIGIN
+        source = obj(self.inventories[self.args.source_inventory], "_meta", "hostvars", "public")
+        target = obj(self.inventories[self.args.inventory], "_meta", "hostvars", "public")
+        target["scpub_domain"] = "chat.example.test"
+        target["scpub_announce_ip"] = "192.0.2.11"
+        source["ansible_host"] = "chat.example.test"
+        report = self.execute()
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["failureClass"], "migration_literal_addresses_required")
+        self.assertEqual(self.actions, [])
+
+    def test_dns_timeout_never_restarts_source(self) -> None:
+        """After verified destination startup, DNS delay cannot trigger source recovery."""
+        self.args.origin = SOURCE_ORIGIN
+        target = obj(self.inventories[self.args.inventory], "_meta", "hostvars", "public")
+        target["scpub_domain"] = "chat.example.test"
+        target["scpub_announce_ip"] = "192.0.2.11"
+        with (
+            patch.object(shutil, "which", return_value="/dig"),
+            patch.object(
+                migration_dns,
+                "wait_for_cutover",
+                side_effect=migration_dns.CutoverError(
+                    "migration_dns_cutover_timeout_source_remains_sealed"
+                ),
+            ),
+        ):
+            report = self.execute()
+        self.assertFalse(report["passed"])
+        self.assertTrue(report["destinationStarted"])
+        self.assertEqual(report["failedPhase"], "awaiting_dns_cutover")
+        self.assertIn("finalize-source", self.actions)
+        self.assertNotIn("resume-source", self.actions)
 
     def test_dirty_wrong_repository_or_nonmain_checkout_cannot_contact_hosts(self) -> None:
         """The shared checkout gate plus main selection precedes migration work."""
@@ -510,6 +621,13 @@ class MigrationTests(unittest.TestCase):
             with self.subTest(dirty=dirty, repository=repository_url, branch=branch):
                 self.assertFalse(self.execute()["passed"])
                 self.assertEqual(self.actions, [])
+
+    def test_unpublished_tools_cannot_contact_hosts(self) -> None:
+        """Migration never deploys local-only controller changes to either server."""
+        self.published_revision = "b" * 40
+        report = self.execute()
+        self.assertEqual(report["failureClass"], "migration_publish_tools_required")
+        self.assertEqual(self.actions, [])
 
     def test_selector_changes_require_explicit_flags(self) -> None:
         """An ordinary migration does not modify the user's inventory or GitHub variable."""

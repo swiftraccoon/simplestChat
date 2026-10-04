@@ -1,0 +1,122 @@
+---
+- name: Require explicit unsigned migration staging selectors
+  ansible.builtin.assert:
+    that:
+      - not ansible_check_mode
+      - inventory_hostname == 'migration_target'
+      - scmig_action == 'stage'
+      - scmig_force_release is sameas true
+      - scmig_revision is match('^[a-f0-9]{40}$')
+      - scmig_tool_revision is match('^[a-f0-9]{40}$')
+      - scmig_run_id is match('^[a-f0-9]{32}$')
+      - scmig_force_directory is match('^/')
+      - scmig_force_request == scmig_evidence + '/force.json'
+      - scpub_root == '/srv/simplestchat-public'
+      - scpub_config == '/etc/simplestchat-public'
+      - scpub_release_artifact_id is not defined
+      - scpub_release_ci_run is not defined
+
+- name: Reverify the ancestor release and clean migration tools before transfer
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_playbook_python }}"
+      - -B
+      - -c
+      - >-
+        import sys; from pathlib import Path;
+        root=Path(sys.argv[1]);
+        sys.path[:0]=[str(root/'build'),str(root/'ops/ansible/files')];
+        import migration_artifact;
+        migration_artifact.verify(Path(sys.argv[2]),Path(sys.argv[3]),root,sys.argv[4])
+      - "{{ (playbook_dir ~ '/../..') | realpath }}"
+      - "{{ scmig_force_directory }}"
+      - "{{ scmig_force_request }}"
+      - "{{ scmig_tool_revision }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  timeout: 300
+
+- name: Create one private force operation under the ordinary workload guard
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -B
+      - -c
+      - |
+        import sys
+        sys.path.insert(0, '/usr/local/libexec/simplestchat-public')
+        import release_public as release
+        with release.workload_lock():
+            for name in ('releases', 'results'):
+                release.protected(release.ROOT/name, directory=True, modes=(0o700,))
+            parent = release.ROOT/'forced'
+            parent.mkdir(mode=0o700, exist_ok=True)
+            release.protected(parent, directory=True, modes=(0o700,))
+            (parent/sys.argv[1]).mkdir(mode=0o700)
+      - "{{ scmig_run_id }}"
+  changed_when: true
+  timeout: 30
+
+- name: Transfer only the exact validated release files
+  ansible.builtin.copy:
+    src: "{{ scmig_force_directory }}/{{ item }}"
+    dest: "{{ scpub_root }}/forced/{{ scmig_run_id }}/{{ item }}"
+    owner: root
+    group: root
+    mode: '0600'
+    force: false
+  loop: [image.tar, release.json, source.json, outcome.json]
+
+- name: Retain the explicit unsigned staging authorization
+  ansible.builtin.copy:
+    src: "{{ scmig_force_request }}"
+    dest: "{{ scpub_root }}/forced/{{ scmig_run_id }}/force.json"
+    owner: root
+    group: root
+    mode: '0600'
+    force: false
+
+- name: Require staging only and the exact migration release on the destination
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -B
+      - -c
+      - |
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, '/usr/local/libexec/simplestchat-public')
+        import force_release, release_public
+        path = Path(sys.argv[1])
+        release_public.protected(path)
+        request = force_release.read_object(path)
+        force_release.validate_request(request)
+        release_public.require(request['deploy'] is False and request['quietSeconds'] == 0
+                               and request['revision'] == sys.argv[2]
+                               and request['repository'] == sys.argv[3],
+                               'migration_artifact_must_only_stage')
+      - "{{ scpub_root }}/forced/{{ scmig_run_id }}/force.json"
+      - "{{ scmig_revision }}"
+      - "{{ scpub_release_repository }}"
+  changed_when: false
+  timeout: 30
+
+- name: Stage the unsigned artifact through the official locked release primitives
+  ansible.builtin.command:
+    argv:
+      - systemd-run
+      - "--unit=simplestchat-migration-force-stage-{{ scmig_run_id }}"
+      - --property=Type=exec
+      - --property=RuntimeMaxSec=600
+      - --property=TimeoutStopSec=60
+      - --wait
+      - --collect
+      - /usr/bin/python3
+      - -B
+      - /usr/local/libexec/simplestchat-public/force_release.py
+      - --force
+      - --request
+      - "{{ scpub_root }}/forced/{{ scmig_run_id }}/force.json"
+  changed_when: true
+  timeout: 720

@@ -19,7 +19,6 @@
           - scmig_revision is match('^[a-f0-9]{40}$')
           - scmig_source_origin is match('^https://[a-z0-9.-]+$')
           - scmig_destination_origin is match('^https://[a-z0-9.-]+$')
-          - scmig_source_origin != scmig_destination_origin
           - scmig_evidence is match('^/')
           - scpub_enabled | bool
           - scpub_config == '/etc/simplestchat-public'
@@ -185,6 +184,9 @@
             - backup_public.py
             - migration_snapshot.py
             - migrate_public.py
+            - migration_tls.py
+            - turn_public.py
+            - force_release.py
 
         - name: Bind a new private migration request without replacing prior evidence
           ansible.builtin.copy:
@@ -317,10 +319,71 @@
           when: inventory_hostname == 'migration_target'
           no_log: true
 
+    - name: Preserve the unchanged hostname certificate before DNS cutover
+      when:
+        - scmig_action == 'bootstrap'
+        - scmig_source_origin == scmig_destination_origin
+      block:
+        - name: Export only the validated source hostname certificate and metadata
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -B
+              - /usr/local/libexec/simplestchat-public/migration_tls.py
+              - export
+              - "{{ scmig_run_id }}"
+          when: inventory_hostname == 'migration_source'
+          changed_when: true
+          timeout: 90
+          no_log: true
+
+        - name: Fetch the private hostname certificate envelope
+          ansible.builtin.fetch:
+            src: "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/tls.json"
+            dest: "{{ scmig_evidence }}/tls.json"
+            flat: true
+            validate_checksum: true
+          when: inventory_hostname == 'migration_source'
+          no_log: true
+
+        - name: Restrict the controller certificate envelope
+          ansible.builtin.file:
+            path: "{{ scmig_evidence }}/tls.json"
+            mode: '0600'
+          delegate_to: localhost
+          become: false
+          when: inventory_hostname == 'migration_source'
+          no_log: true
+
+        - name: Copy the protected certificate envelope to the fresh destination
+          ansible.builtin.copy:
+            src: "{{ scmig_evidence }}/tls.json"
+            dest: "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/tls.json"
+            owner: root
+            group: root
+            mode: '0600'
+            force: false
+          when: inventory_hostname == 'migration_target'
+          no_log: true
+
+        - name: Validate and install the exact hostname subtree without replacing existing bytes
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -B
+              - /usr/local/libexec/simplestchat-public/migration_tls.py
+              - import
+              - "{{ scmig_run_id }}"
+          when: inventory_hostname == 'migration_target'
+          changed_when: true
+          timeout: 90
+          no_log: true
+
     - name: Transfer and stage the exact verified CI artifact only on the destination
       when:
         - scmig_action == 'stage'
         - inventory_hostname == 'migration_target'
+        - not (scmig_force_release | default(false) | bool)
       block:
         - name: Require exact signed-release selectors and direct key-based SSH
           ansible.builtin.assert:
@@ -393,3 +456,10 @@
               - "{{ scmig_revision }}"
           changed_when: true
           timeout: 720
+
+    - name: Stage the explicitly selected force artifact only on the destination
+      ansible.builtin.include_tasks: tasks/migration-artifact.yml
+      when:
+        - scmig_action == 'stage'
+        - inventory_hostname == 'migration_target'
+        - scmig_force_release | default(false) | bool

@@ -64,6 +64,12 @@ class MigrationPrepareTests(unittest.TestCase):
             "scpub_root": "/srv/simplestchat-public",
         }
         self.assertTrue(all(check(**baseline) for check in checks))
+        self.assertTrue(
+            all(
+                check(**(baseline | {"scmig_destination_origin": baseline["scmig_source_origin"]}))
+                for check in checks
+            )
+        )
         for change in (
             {"ansible_check_mode": True},
             {"ansible_play_hosts_all": ["migration_source", "migration_target", "other"]},
@@ -72,7 +78,6 @@ class MigrationPrepareTests(unittest.TestCase):
             {"scmig_action": "deploy"},
             {"scmig_run_id": "../elsewhere"},
             {"scmig_revision": "main"},
-            {"scmig_destination_origin": "https://chat.example.test"},
         ):
             with self.subTest(change=change):
                 try:
@@ -150,6 +155,36 @@ class MigrationPrepareTests(unittest.TestCase):
         self.assertTrue(all(task["no_log"] for task in guards))
         self.assertLess(tasks.index(guards[1]), tasks.index(target))
         self.assertGreater(tasks.index(guards[2]), tasks.index(target))
+
+    def test_same_origin_tls_transfer_is_private_and_precedes_staging(self) -> None:
+        """The exact hostname subtree is validated on both hosts without logging its payload."""
+        tasks = objects(self.play, "tasks")
+        tls = next(
+            task
+            for task in tasks
+            if task["name"] == "Preserve the unchanged hostname certificate before DNS cutover"
+        )
+        self.assertEqual(
+            tls["when"],
+            ["scmig_action == 'bootstrap'", "scmig_source_origin == scmig_destination_origin"],
+        )
+        steps = objects(tls, "block")
+        self.assertTrue(all(step["no_log"] for step in steps))
+        self.assertEqual(steps[0]["when"], "inventory_hostname == 'migration_source'")
+        self.assertEqual(steps[-1]["when"], "inventory_hostname == 'migration_target'")
+        self.assertIn("export", strings(steps[0], "ansible.builtin.command", "argv"))
+        self.assertIn("import", strings(steps[-1], "ansible.builtin.command", "argv"))
+        copy = next(step for step in steps if "ansible.builtin.copy" in step)
+        self.assertFalse(obj(copy, "ansible.builtin.copy")["force"])
+        self.assertEqual(string(copy, "ansible.builtin.copy", "mode"), "0600")
+        stage = next(
+            task
+            for task in tasks
+            if task["name"]
+            == "Transfer and stage the exact verified CI artifact only on the destination"
+        )
+        self.assertLess(tasks.index(tls), tasks.index(stage))
+        self.assertIn("not (scmig_force_release | default(false) | bool)", strings(stage, "when"))
 
     def test_stage_uses_verified_receiver_then_only_bounded_image_import(self) -> None:
         """Fresh hosts use the signed receiver and real stage action without builds or startup."""

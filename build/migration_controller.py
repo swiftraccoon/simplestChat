@@ -1,4 +1,4 @@
-"""Move a public deployment to one empty host using its signed main CI image.
+"""Move a public deployment to one empty host while preserving its data and identity.
 
 Both inventories and HTTPS origins must be explicit. The controller preserves
 private evidence, never builds an image or sends chat, and never automatically
@@ -8,6 +8,7 @@ restarts the source once destination startup has been attempted.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import re
@@ -23,6 +24,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, override
 from urllib.parse import urlsplit
 
+import migration_artifact
+import migration_dns
 import release_attestation
 import release_build as BUILD  # noqa: N812 -- Reuse the maintained release boundary.
 import release_deploy as DEPLOY  # noqa: N812 -- Reuse exact inventory and CI validation.
@@ -41,6 +44,7 @@ ASSET_PATH = re.compile(r"/assets/index-[A-Za-z0-9_-]+\.js")
 MAX_INSPECTION = 64 * 1024
 MAX_HOSTNAME = 253
 MAX_INVENTORY = 1024 * 1024
+MAX_DNS_WAIT_SECONDS = 1800
 PRIVATE_FILE_MODE = 0o600
 HOSTNAME = re.compile(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}")
 GET_PATHS = ("/health", "/ready", "/", "/api/capabilities")
@@ -65,6 +69,8 @@ class MigrationOptions(DEPLOY.DeployOptions):
     source_limit: str | None = None
     activate_inventory: str | None = None
     update_canary: bool = False
+    revision: str | None = None
+    dns_wait_seconds: int = 600
 
 
 def source_options(args: MigrationOptions) -> DEPLOY.DeployOptions:
@@ -87,6 +93,23 @@ def options(argv: list[str] | None = None) -> MigrationOptions:
     for name in ("source-limit", "limit"):
         _ = parser.add_argument("--" + name, help="Exact inventory hostname; no patterns")
     _ = parser.add_argument("--wait-seconds", type=int, default=3600)
+    _ = parser.add_argument(
+        "--revision", help="Exact ancestor application revision; defaults to HEAD"
+    )
+    _ = parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Explicitly migrate an unsigned retained release without waiting for CI",
+    )
+    _ = parser.add_argument(
+        "--artifact-dir", help="With --force, an existing exact-revision release export"
+    )
+    _ = parser.add_argument(
+        "--dns-wait-seconds",
+        type=int,
+        default=600,
+        help="Same-hostname cutover DNS deadline (0-1800 seconds)",
+    )
     _ = parser.add_argument("--ansible-playbook", help="Existing Ansible controller executable")
     _ = parser.add_argument(
         "--activate-inventory", help="Replace this existing private source inventory after cutover"
@@ -123,7 +146,12 @@ def options(argv: list[str] | None = None) -> MigrationOptions:
             and HOSTNAME.fullmatch(hostname),
             "migration_invalid_hostname",
         )
-    require(args.source_origin != args.origin, "migration_origins_must_differ")
+    require(
+        args.revision is None or re.fullmatch(r"[a-f0-9]{40}", args.revision),
+        "migration_invalid_revision",
+    )
+    require(0 <= args.dns_wait_seconds <= MAX_DNS_WAIT_SECONDS, "migration_invalid_dns_deadline")
+    require(bool(args.force) == bool(args.artifact_dir), "migration_force_artifact_required")
     return args
 
 
@@ -186,8 +214,14 @@ def frontend_revision(script: str, revision: str) -> None:
     require(len(matches) == 1 and matches[0][1] == revision, "migration_frontend_revision")
 
 
-def verify_https(
-    runner: BUILD.RunnerProtocol, root: Path, curl: str, origin: str, revision: str
+def verify_https(  # noqa: PLR0913 -- Explicit optional address retains the TLS hostname independently.
+    runner: BUILD.RunnerProtocol,
+    root: Path,
+    curl: str,
+    origin: str,
+    revision: str,
+    *,
+    address: str | None = None,
 ) -> None:
     """Make at most five bounded anonymous GETs with one shared certificate-startup deadline."""
     require(runner.output is not None, "migration_https_private_evidence_required")
@@ -195,6 +229,12 @@ def verify_https(
     deadline = time.monotonic() + HTTP_SECONDS
     environment = {"PATH": os.defpath, "LC_ALL": "C"}
     requests = 0
+    resolution: list[str] = []
+    if address is not None:
+        selected = ipaddress.ip_address(address)
+        host = urlsplit(origin).hostname
+        connect = f"[{selected}]" if isinstance(selected, ipaddress.IPv6Address) else str(selected)
+        resolution = ["--resolve", f"{host}:443:{connect}"]
 
     def get(path: str, limit: int) -> str:
         nonlocal requests
@@ -239,6 +279,7 @@ def verify_https(
                 str(output),
                 "--write-out",
                 "\n%{http_code}",
+                *resolution,
                 origin + path,
             ],
             cwd=root,
@@ -406,6 +447,52 @@ def canary_origin(repository: str, expected: str) -> None:
     )
 
 
+def release_selection(  # noqa: PLR0913 -- Keep the controller and application identities explicit at this trust boundary.
+    args: MigrationOptions,
+    root: Path,
+    directory: Path,
+    report: JsonObject,
+    *,
+    tool_revision: str,
+    revision: str,
+) -> JsonObject:
+    """Verify one signed release or an explicitly selected retained unsigned artifact."""
+    if args.force:
+        report.update(
+            phase="force_artifact", githubAttested=False, ciVerification="skipped-explicit-force"
+        )
+        require(args.artifact_dir is not None, "migration_force_artifact_required")
+        artifact, _ = migration_artifact.prepare(
+            directory, root, tool_revision, revision, Path(str(args.artifact_dir)), args.repository
+        )
+        return {
+            "scmig_force_release": True,
+            "scmig_force_directory": str(artifact),
+            "scmig_force_request": str(directory / "force.json"),
+            "scmig_tool_revision": tool_revision,
+        }
+    report["phase"] = "ci"
+    envelope = DEPLOY.select_ci_artifact(args, revision)
+    report["phase"] = "attestation"
+    selection = FETCH.ReleaseSelection(
+        args.repository,
+        integer_value(envelope["artifactId"]),
+        revision,
+        integer_value(envelope["ciRunId"]),
+    )
+    verified = directory / "verified"
+    envelope = release_attestation.fetch_verify(FETCH.download_url(selection), verified, envelope)
+    BUILD.write_json(directory / "selection.json", envelope)
+    report.update(
+        ciRunId=envelope["ciRunId"], artifactId=envelope["artifactId"], githubAttested=True
+    )
+    return {
+        "scpub_release_artifact_id": envelope["artifactId"],
+        "scpub_release_ci_run": envelope["ciRunId"],
+        "scpub_release_verified_directory": str(verified),
+    }
+
+
 @dataclass
 class Migration:
     """One transaction with durable startup boundaries and bounded recovery."""
@@ -478,6 +565,9 @@ class Migration:
             curl,
             args.origin,
             string_value(self.extra["scmig_revision"]),
+            address=string_value(self.extra["scmig_destination_address"])
+            if args.source_origin == args.origin
+            else None,
         )
         if services["scpub_turn_enabled"]:
             self.play("turn.yml", extra={"scpub_turn_activate": False})
@@ -489,6 +579,23 @@ class Migration:
             if services[enabled]:
                 self.play(name)
         self.play("migration-data.yml", action="finalize-source")
+        if args.source_origin == args.origin:
+            self.checkpoint("awaiting_dns_cutover")
+            migration_dns.wait_for_cutover(
+                args.origin,
+                string_value(self.extra["scmig_destination_address"]),
+                string_value(self.extra.get("scmig_destination_ipv6", "")),
+                args.dns_wait_seconds,
+            )
+            self.checkpoint("public_https")
+            verify_https(
+                self.runner,
+                self.target.root,
+                curl,
+                args.origin,
+                string_value(self.extra["scmig_revision"]),
+            )
+            self.report["dnsCutoverVerified"] = True
         self.report.update(recovery="source_retained_stopped", phase="destination_ready")
 
     def activate_selectors(
@@ -572,6 +679,41 @@ def frozen_targets(  # noqa: PLR0913 -- Both independently selected hosts share 
     )
 
 
+def target_transport(args: MigrationOptions, source: JsonObject, target: JsonObject) -> JsonObject:
+    """Select IP-directed probes only when the public hostname remains unchanged."""
+    if args.source_origin != args.origin:
+        return {}
+    migration_dns.validate_addresses(source, target)
+    return {
+        "scmig_destination_address": target["ansible_host"],
+        "scmig_destination_ipv6": target.get("scpub_announce_ipv6", ""),
+        "scpub_turn_verify_address": target["ansible_host"],
+    }
+
+
+def release_identity(
+    runner: BUILD.RunnerProtocol, args: MigrationOptions, root: Path
+) -> tuple[str, str]:
+    """Require published clean main tools and an explicitly selected ancestor application."""
+    tool_revision = DEPLOY.checkout_identity(runner, root, args.repository)
+    _, branch = runner.run(["git", "symbolic-ref", "--short", "HEAD"], cwd=root)
+    require(branch == "main", "migration_main_checkout_required")
+    _, published = runner.run(
+        ["git", "ls-remote", "--exit-code", "origin", "refs/heads/main"], cwd=root
+    )
+    require(published == tool_revision + "\trefs/heads/main", "migration_publish_tools_required")
+    revision = args.revision or tool_revision
+    require(re.fullmatch(r"[a-f0-9]{40}", revision), "migration_invalid_revision")
+    if revision != tool_revision:
+        status, _ = runner.run(
+            ["git", "merge-base", "--is-ancestor", revision, tool_revision],
+            cwd=root,
+            allow_failure=True,
+        )
+        require(status == 0, "migration_release_not_tool_ancestor")
+    return tool_revision, revision
+
+
 def execute(args: MigrationOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0915 -- Keep trust acquisition and one recovery boundary explicit.
     """Verify a clean signed main release before any remote writes, then migrate once."""
     report: JsonObject = {
@@ -598,11 +740,14 @@ def execute(args: MigrationOptions, root: Path = ROOT) -> JsonObject:  # noqa: P
     started = time.monotonic()
     try:
         inspector = BUILD.Runner()
-        revision = DEPLOY.checkout_identity(inspector, root, args.repository)
-        _, branch = inspector.run(["git", "symbolic-ref", "--short", "HEAD"], cwd=root)
-        require(branch == "main", "migration_main_checkout_required")
-        report.update(repository=args.repository, revision=revision)
-        require(args.source_origin != args.origin, "migration_origins_must_differ")
+        tool_revision, revision = release_identity(inspector, args, root)
+        report.update(
+            repository=args.repository,
+            revision=revision,
+            toolRevision=tool_revision,
+            forced=args.force,
+        )
+        require(bool(args.force) == bool(args.artifact_dir), "migration_force_artifact_required")
         playbook, inventory_tool, curl = controller_tools(args, root)
         environment = DEPLOY.ansible_environment(root)
         source_args = source_options(args)
@@ -618,6 +763,7 @@ def execute(args: MigrationOptions, root: Path = ROOT) -> JsonObject:  # noqa: P
             and source_address.casefold().rstrip(".") != target_address.casefold().rstrip("."),
             "migration_distinct_hosts_required",
         )
+        transport = target_transport(args, source[1], target[1])
         services: dict[str, bool] = {}
         for name in ("scpub_turn_enabled", "scpub_backup_enabled", "scmon_enabled"):
             value = target[1].get(name, False)
@@ -638,28 +784,16 @@ def execute(args: MigrationOptions, root: Path = ROOT) -> JsonObject:  # noqa: P
             report["activationInventory"] = str(activation.path)
         if args.update_canary:
             canary_origin(args.repository, args.source_origin)
-        report["phase"] = "ci"
-        envelope = DEPLOY.select_ci_artifact(args, revision)
-        report["phase"] = "attestation"
-        selection = FETCH.ReleaseSelection(
-            args.repository,
-            integer_value(envelope["artifactId"]),
-            revision,
-            integer_value(envelope["ciRunId"]),
+        release_variables = release_selection(
+            args, root, directory, report, tool_revision=tool_revision, revision=revision
         )
-        verified = directory / "verified"
-        envelope = release_attestation.fetch_verify(
-            FETCH.download_url(selection), verified, envelope
-        )
-        BUILD.write_json(directory / "selection.json", envelope)
-        report.update(ciRunId=envelope["ciRunId"], artifactId=envelope["artifactId"])
         require(
             DEPLOY.selected_host(source_args, inventory_tool, root, environment) == source
             and DEPLOY.selected_host(args, inventory_tool, root, environment) == target,
             "inventory_target_changed",
         )
         require(
-            DEPLOY.checkout_identity(inspector, root, args.repository) == revision,
+            DEPLOY.checkout_identity(inspector, root, args.repository) == tool_revision,
             "checkout_changed",
         )
         combined, destination = frozen_targets(
@@ -677,10 +811,9 @@ def execute(args: MigrationOptions, root: Path = ROOT) -> JsonObject:  # noqa: P
             "scbench_repository": f"https://github.com/{args.repository}.git",
             "scpub_release_revision": revision,
             "scpub_release_repository": args.repository,
-            "scpub_release_artifact_id": envelope["artifactId"],
             "scpub_release_expected_revision": revision,
-            "scpub_release_ci_run": envelope["ciRunId"],
-            "scpub_release_verified_directory": str(verified),
+            **release_variables,
+            **transport,
         }
         migration = Migration(runner, combined, destination, directory, extra, report)
         migration.perform(args, curl, services)
@@ -689,7 +822,10 @@ def execute(args: MigrationOptions, root: Path = ROOT) -> JsonObject:  # noqa: P
         report["passed"] = False
         report["failureClass"] = (
             str(error)
-            if isinstance(error, (MigrationError, DEPLOY.DeployError, FETCH.FetchError))
+            if isinstance(
+                error,
+                (MigrationError, migration_dns.CutoverError, DEPLOY.DeployError, FETCH.FetchError),
+            )
             else "migration_step_failed"
         )
         report["failedPhase"] = report["phase"]
