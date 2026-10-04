@@ -87,7 +87,8 @@ own) and reads a stored object leniently, so a build that adds a field never
 locks a client out of its settings. Desktop notification consent stays on the
 device and the chat look on the profile. `PUT` replaces the whole object; the
 newest write wins. A guest, or a viewer without a token, keeps everything in
-the browser.
+the browser. The timestamp default is `time` (visible hours and minutes); stored
+timestamp choices, including `hover`, remain unchanged.
 
 Invitations are 32-character random codes with 160 bits of entropy
 (`src/invite_codes.rs`). Stored rows contain only a SHA-256 digest and a separate

@@ -1166,6 +1166,7 @@ test('many conversation pills retain full accessible names and focus without reb
     .querySelectorAll('button')
     .find((node) => node.getAttribute('aria-label') === 'Chat options');
   assert.equal(settings.textContent, '⋯');
+  assert.equal(settings.classList.contains('chat-options-button'), true);
   settings.click();
   assert.equal(f.chat.preferencesDialog.dialog.open, true);
   f.chat.reset();
@@ -1213,7 +1214,7 @@ test('preferences dialog unlocks audio before awaiting, and leave prevents late 
   assert.equal(f.state.storage.size, 0);
 });
 
-test('timestamps follow the chosen format and stay visible once chosen', async () => {
+test('timestamps are visible by default and follow the chosen format', async () => {
   const f = await fixture();
   await f.chat.activate();
   // Local-time parts, so the expected text holds in every timezone.
@@ -1221,7 +1222,8 @@ test('timestamps follow the chosen format and stay visible once chosen', async (
   f.chat.handleEvent(snapshot([entry('1', { sentAt })]));
   const time = () => rows(f)[0].querySelector('.msg-time').textContent;
   const always = () => f.chat.messages.classList.contains('timestamps-always');
-  assert.equal(always(), false, 'timestamps appear on hover until chosen');
+  assert.equal(always(), true, 'timestamps appear without hovering by default');
+  assert.equal(time(), '14:05');
   for (const [format, expected] of [
     ['time', '14:05'],
     ['seconds', '14:05:09'],
@@ -1249,7 +1251,7 @@ test('the preferences dialog offers every timestamp format and saves the chosen 
     select.options.map((option) => option.value),
     ['hover', 'time', 'time12', 'seconds', 'datetime'],
   );
-  assert.equal(select.value, 'hover');
+  assert.equal(select.value, 'time');
   select.value = 'seconds';
   view.dialog
     .querySelectorAll('button')
@@ -1269,10 +1271,38 @@ test('the timestamp format is remembered with the chat preferences, and nonsense
   f.chat.reset();
   await f.chat.activate();
   assert.equal(f.chat.preferences.timestamps, 'seconds');
+  f.state.storage.set(key, JSON.stringify({ timestamps: 'hover' }));
+  f.chat.reset();
+  await f.chat.activate();
+  assert.equal(f.chat.preferences.timestamps, 'hover', 'an explicit saved choice is preserved');
   f.state.storage.set(key, JSON.stringify({ timestamps: '<script>' }));
   f.chat.reset();
   await f.chat.activate();
-  assert.equal(f.chat.preferences.timestamps, 'hover');
+  assert.equal(f.chat.preferences.timestamps, 'time');
+});
+
+test('join and leave notices show their own timestamp and follow the viewer format', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.system('Alice joined');
+  f.chat.system('Alice left');
+  assert.deepEqual(contents(f), ['Alice joined', 'Alice left']);
+  assert.equal(f.chat.messages.classList.contains('timestamps-always'), true);
+  for (const [index, row] of rows(f).entries()) {
+    const time = row.querySelector('.msg-time');
+    assert.equal(row.classList.contains('system'), true);
+    assert.equal(time.tagName, 'TIME');
+    assert.equal(time.getAttribute('datetime'), f.chat.store.messages[index].sentAt);
+    assert.match(time.textContent, /^\d{2}:\d{2}$/);
+    assert.equal(row.querySelector('.sender'), null);
+    assert.equal(row.querySelector('.msg-actions'), null);
+  }
+  f.chat.setTimestampFormat('seconds');
+  for (const row of rows(f))
+    assert.match(row.querySelector('.msg-time').textContent, /^\d{2}:\d{2}:\d{2}$/);
+  f.chat.setTimestampFormat('hover');
+  assert.equal(f.chat.messages.classList.contains('timestamps-always'), false);
+  assert.equal(rows(f).length, 2);
 });
 
 test('delivery state renders outside the hover-revealed timestamp so failures stay visible', async () => {

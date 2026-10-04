@@ -79,6 +79,30 @@ test('concurrent home and leave actions share cleanup until it finishes', async 
   await retry;
 });
 
+test('departure UI announces a named peer without a media tile and keeps recovery cleanup silent', async () => {
+  const messages = [];
+  const detached = [];
+  let gridUpdates = 0;
+  const { handleParticipantLeft } = evaluateTypeScript(
+    `${await functionSource('handleParticipantLeft')} export { handleParticipantLeft };`,
+    {
+      globals: {
+        mediaControls: { detachParticipant: (id) => detached.push(id) },
+        lobbyWaiters: new Map([['no-media', 'Nickname']]),
+        remoteTiles: new Map(),
+        stopObservingTileSize() {},
+        updateVideoGridCount: () => gridUpdates++,
+        appendSystemMessage: (text) => messages.push(text),
+      },
+    },
+  );
+  handleParticipantLeft('no-media', 'Nickname');
+  handleParticipantLeft('recovery-cleanup');
+  assert.deepEqual(messages, ['Nickname left']);
+  assert.deepEqual(detached, ['no-media', 'recovery-cleanup']);
+  assert.equal(gridUpdates, 2);
+});
+
 async function cameraUiFixture() {
   const state = { pending: deferred(), captures: 0, updates: [], toasts: [] };
   const activeRoom = {

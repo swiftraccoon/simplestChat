@@ -3945,11 +3945,10 @@ function removeRemoteTrack(
   }
 }
 
-function handleParticipantLeft(participantId: string): void {
+function handleParticipantLeft(participantId: string, participantName?: string): void {
   mediaControls.detachParticipant(participantId);
   lobbyWaiters.delete(participantId);
   const tile = remoteTiles.get(participantId);
-  const name = tile?.querySelector('.name-tag')?.textContent;
   if (tile) {
     stopObservingTileSize(participantId);
     tile.remove();
@@ -3962,7 +3961,7 @@ function handleParticipantLeft(participantId: string): void {
     remoteTiles.delete(`${participantId}:screen`);
   }
   updateVideoGridCount();
-  if (name) appendSystemMessage(`${name} left`);
+  if (participantName) appendSystemMessage(`${participantName} left`);
 }
 
 function handleParticipantJoined(participantId: string, participantName: string): void {

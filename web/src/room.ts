@@ -75,7 +75,7 @@ export type RoomEventHandler = {
     source: string | undefined,
     reason: string,
   ) => void;
-  onParticipantLeft: (participantId: string) => void;
+  onParticipantLeft: (participantId: string, participantName?: string) => void;
   onParticipantJoined: (participantId: string, participantName: string) => void;
   onChatMessage: (participantId: string, participantName: string, content: string) => void;
   onConnectionQuality: (quality: ConnectionQuality) => void;
@@ -1456,7 +1456,7 @@ export class RoomClient {
           }
         }
         this.participants.delete(msg.participantId);
-        this.events.onParticipantLeft(msg.participantId);
+        this.events.onParticipantLeft(msg.participantId, leaving?.name);
         this.events.onParticipantsChanged(this.participants);
         break;
       }
@@ -1753,7 +1753,7 @@ export class RoomClient {
         this.hiddenParticipants.delete(id);
         this.videoQualities.delete(id);
         this.videoSizeCaps.delete(id);
-        this.events.onParticipantLeft(id);
+        this.events.onParticipantLeft(id, previous.name);
       }
     }
     for (const info of incoming.values()) {

@@ -700,6 +700,11 @@ header h1 {
 
 /* System messages (join/leave) */
 .chat-msg.system {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0 0.4rem;
   background: none;
   text-align: center;
   padding: 0.25rem 0;
@@ -2049,10 +2054,6 @@ header.in-room .room-topic {
   align-items: center;
   gap: 0.4rem;
   flex-shrink: 0;
-}
-.room-tools-right {
-  padding-left: 0.4rem;
-  border-left: 1px solid var(--border);
 }
 .room-navigation,
 #community-actions {

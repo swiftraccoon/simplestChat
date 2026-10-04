@@ -82,7 +82,7 @@ impl Default for ChatPreferences {
             allow_private_messages: true,
             sounds: false,
             large_text: false,
-            timestamps: "hover".to_string(),
+            timestamps: "time".to_string(),
             ignored: Vec::new(),
         }
     }
@@ -716,6 +716,7 @@ mod tests {
         let serialized = serde_json::to_value(ChatPreferences::default()).unwrap();
         assert_eq!(serialized["allowPrivateMessages"], true);
         assert_eq!(serialized["largeText"], false);
+        assert_eq!(serialized["timestamps"], "time");
     }
 
     #[test]

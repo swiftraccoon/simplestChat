@@ -121,7 +121,7 @@ export class SocialChat {
     sounds: false,
     notifications: false,
     notificationPreviews: false,
-    timestamps: 'hover',
+    timestamps: 'time',
     look: null,
     largeText: false,
     ignored: [],
@@ -157,7 +157,7 @@ export class SocialChat {
     this.conversations.setAttribute('aria-label', 'Conversations');
     this.closeButton.setAttribute('aria-label', 'Close PM');
     this.closeButton.title = 'Close PM';
-    const optionsButton = button('⋯', () => this.openPreferences());
+    const optionsButton = button('⋯', () => this.openPreferences(), 'chat-options-button');
     optionsButton.setAttribute('aria-label', 'Chat options');
     optionsButton.title = 'Chat options';
     toolbar.append(this.conversations, this.closeButton, optionsButton);
@@ -384,7 +384,7 @@ export class SocialChat {
       notifications: false,
       notificationPreviews: false,
       largeText: false,
-      timestamps: 'hover',
+      timestamps: 'time',
       look: null,
       ignored: [],
     };
@@ -1071,13 +1071,14 @@ export class SocialChat {
     node.append(text);
     this.appendReactions(node, message);
     if (participantId && status === 'sent') this.appendActions(node, message);
+    const meta = el('time', undefined, 'msg-time');
+    const date = new Date(sentAt);
+    meta.textContent = formatChatTime(date, this.preferences.timestamps);
+    meta.setAttribute('datetime', sentAt);
+    meta.title = date.toLocaleString();
+    node.append(meta);
     if (participantId) {
-      const meta = el('div', undefined, 'msg-time');
-      const date = new Date(sentAt);
-      meta.textContent = formatChatTime(date, this.preferences.timestamps);
-      meta.title = date.toLocaleString();
-      node.append(meta);
-      // The timestamp is revealed on hover; delivery state must stay visible on its own.
+      // Delivery state stays visible even when the viewer chooses hover-only timestamps.
       if (status === 'pending' || status === 'failed' || status === 'unknown') {
         const state = el(
           'div',
@@ -1497,7 +1498,7 @@ export class SocialChat {
       notifications: false,
       notificationPreviews: false,
       largeText: false,
-      timestamps: 'hover',
+      timestamps: 'time',
       look: null,
       ignored: [],
     };
@@ -1589,7 +1590,7 @@ export class SocialChat {
       largeText: saved.largeText,
       timestamps: TIMESTAMP_FORMATS.includes(saved.timestamps as TimestampFormat)
         ? (saved.timestamps as TimestampFormat)
-        : 'hover',
+        : 'time',
       ignored: [...ignored.values()],
     };
     this.storePreferences(viewer);

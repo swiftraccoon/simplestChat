@@ -164,6 +164,15 @@
   background: var(--surface-2);
   color: var(--text);
 }
+.conversation-toolbar .chat-options-button {
+  min-width: 40px;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.15rem 0.5rem;
+}
 .conversation-tab {
   display: flex;
   align-items: center;
@@ -609,6 +618,7 @@ kbd {
 }
 /* A chosen format stays on every message, at the bubble's foot. */
 .timestamps-always .chat-msg .msg-time {
+  display: block;
   opacity: 1;
   text-align: right;
 }

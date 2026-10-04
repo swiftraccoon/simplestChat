@@ -22,7 +22,14 @@ async function harness(options = {}) {
     tracks = [],
     removed = [],
     recovery = [];
-  const records = { admissions: 0, localChanges: 0, publicChats: [], departures: [], retries: 0 };
+  const records = {
+    admissions: 0,
+    localChanges: 0,
+    publicChats: [],
+    departures: [],
+    departureNames: [],
+    retries: 0,
+  };
   const timers = new Map();
   let timerId = 0;
   class Media {
@@ -134,8 +141,9 @@ async function harness(options = {}) {
     onRemoteTrackRemoved(...args) {
       removed.push(args);
     },
-    onParticipantLeft(id) {
+    onParticipantLeft(id, name) {
       records.departures.push(id);
+      if (name !== undefined) records.departureNames.push({ id, name });
     },
     onParticipantJoined() {},
     onChatMessage(...args) {
@@ -741,6 +749,65 @@ test('moderated-room chat is gated before any snapshot, and nickname broadcasts 
   h.reply({ type: 'roleChanged', participantId: 'local', newRole: 'member' });
   h.room.sendChat('allowed', 'draft');
   assert.equal(h.sent.at(-1).type, 'chatMessage');
+});
+
+test('a media-free departure carries the latest nickname only once, even after duplicate notices', async () => {
+  const h = await harness();
+  await h.room.join('room', 'Local');
+  h.reply({
+    type: 'participantJoined',
+    participantId: 'remote',
+    participantName: 'Original name',
+    role: 'user',
+    authenticated: true,
+  });
+  h.reply({ type: 'nicknameChanged', participantId: 'remote', nickname: 'Room nickname' });
+  assert.equal(h.room.getParticipants().get('remote').producers.size, 0);
+  h.reply({ type: 'participantLeft', participantId: 'remote' });
+  h.reply({ type: 'participantLeft', participantId: 'remote' });
+  assert.deepEqual(h.records.departureNames, [{ id: 'remote', name: 'Room nickname' }]);
+  assert.equal(h.room.getParticipants().has('remote'), false);
+  assert.deepEqual(h.tracks, []);
+  await h.room.leave();
+});
+
+test('retained reconnect reports a missing peer once while fresh-session cleanup stays silent', async () => {
+  let expired = false;
+  const h = await harness({
+    reconnect: () =>
+      expired ? { type: 'reconnectResult', success: false, participantId: 'local' } : undefined,
+  });
+  await h.room.join('room', 'Local');
+  const joinPeer = (id) =>
+    h.reply({
+      type: 'participantJoined',
+      participantId: id,
+      participantName: `Name of ${id}`,
+      role: 'user',
+      authenticated: false,
+    });
+  joinPeer('departed');
+  const resume = h.room.attemptReconnect();
+  await flush();
+  const request = h.sent.at(-1);
+  assert.equal(request.type, 'getRoomSnapshot');
+  h.respond(request, snapshot());
+  await resume;
+  assert.deepEqual(h.records.departureNames, [{ id: 'departed', name: 'Name of departed' }]);
+  const repeat = h.room.requestSocial('getRoomSnapshot');
+  h.respond(h.sent.at(-1), snapshot());
+  await repeat;
+  assert.equal(h.records.departureNames.length, 1, 'the same empty roster adds no duplicate');
+  joinPeer('still-present');
+  expired = true;
+  await h.room.attemptReconnect();
+  assert.ok(h.records.departures.includes('still-present'), 'fresh joining cleans up old tiles');
+  assert.deepEqual(
+    h.records.departureNames,
+    [{ id: 'departed', name: 'Name of departed' }],
+    'fresh-session cleanup does not announce that an otherwise present peer left',
+  );
+  await h.room.leave();
 });
 
 test('snapshot reconciles paused tracks and removes departed participants without duplicate consumers', async () => {

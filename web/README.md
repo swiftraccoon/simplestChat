@@ -246,6 +246,11 @@ belong to the current card and room membership, so leaving or changing users can
 populate a later card. The existing actions menu remains available through More
 and the roster's actions button.
 
+Chat timestamps are visible by default; an explicitly saved timestamp preference
+is retained. Join and leave notices include timestamps, including departures by
+people without a camera or microphone. Reconnect cleanup does not announce false
+departures. The highlighted ellipsis opens Chat options.
+
 Ordinary sign-out revokes the session before clearing saved app data from this
 browser and reloading. A failed revocation preserves the active session; a late
 completion cannot clear a replacement identity. Blocked storage cleanup is reported.
