@@ -443,6 +443,7 @@ class Options(argparse.Namespace):
     output: Path | None = None
     engine: str = "docker"
     artifact_dir: Path | None = None
+    image_tools: Path | None = None
     deep_check: str = "all"
     openssl_prefix: Path | None = None
     mutation_tool_platform: str | None = None
@@ -466,9 +467,18 @@ def image(context: Context, args: Options) -> None:
             ],
             timeout=1800,
         )
+    if args.image_tools is not None:
+        require(
+            args.image_tools.is_absolute()
+            and args.image_tools.is_dir()
+            and not args.image_tools.is_symlink(),
+            "invalid_prepared_image_tools",
+        )
+    # Existing installations are reauthenticated against the committed tool
+    # lock, including every executable hash; a prepared directory is not trust.
     scanner_directory = install(
         ["syft", "grype", "gitleaks"],
-        context.output / "image-tools",
+        args.image_tools if args.image_tools is not None else context.output / "image-tools",
         target_platform="linux-x86_64",
     )
     _ = context.run(
@@ -499,6 +509,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ = parser.add_argument("--output", type=Path)
     _ = parser.add_argument("--engine", choices=("docker", "podman"), default="docker")
     _ = parser.add_argument("--artifact-dir", type=Path)
+    _ = parser.add_argument("--image-tools", type=Path)
     _ = parser.add_argument("--deep-check", choices=("all", "native", "mutation"), default="all")
     _ = parser.add_argument("--openssl-prefix", type=Path)
     _ = parser.add_argument("--mutation-tool-platform", choices=("linux-x86_64", "darwin-x86_64"))
@@ -517,6 +528,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     failure: str | None = None
     try:
         require((args.tier == "image") == (args.image is not None), "security_image_argument")
+        require(args.tier == "image" or args.image_tools is None, "security_image_tools_argument")
         require(
             args.tier == "deep"
             or (

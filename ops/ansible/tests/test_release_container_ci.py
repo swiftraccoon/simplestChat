@@ -23,9 +23,11 @@ LOCAL_DIAGNOSTICS = "Preserve private local release-container diagnostics"
 EXPORT = "Export the tested immutable production image"
 RELEASE = "Retain the verified production release"
 RUN_COMMAND = (
-    'sudo "${RUNNER_TEMP}/release-container-controller/bin/python" -B \\\n'
-    "  build/test-release-container.py --disposable-host \\\n"
-    '  --image "${PRODUCTION_IMAGE}" --output "${RUNNER_TEMP}/release-container"\n'
+    "python3 -B build/ci_release_checks.py \\\n"
+    '  --controller "${RUNNER_TEMP}/release-container-controller/bin/python" \\\n'
+    '  --image "${PRODUCTION_IMAGE}" \\\n'
+    '  --fixture-output "${RUNNER_TEMP}/release-container" \\\n'
+    '  --output "${RUNNER_TEMP}/release-checks"\n'
 )
 
 
@@ -262,6 +264,9 @@ docker() {
         self.assertIn(
             '--artifact-dir "${RUNNER_TEMP}/simplestchat-release"', string(image_check, "run")
         )
+        self.assertIn(
+            '--image-tools "${RUNNER_TEMP}/release-checks/tools"', string(image_check, "run")
+        )
         self.assertNotIn("continue-on-error", release)
 
     def test_compose_is_verified_before_install_and_matches_both_execution_users(self) -> None:
@@ -406,7 +411,7 @@ docker() {
         """Verify root disposable opt in is explicit bounded and preserves failure."""
         integration = self.step(INTEGRATION)
         self.assertEqual(integration["run"], RUN_COMMAND)
-        self.assertEqual(integration["timeout-minutes"], "10")
+        self.assertEqual(integration["timeout-minutes"], "11")
         self.assertNotIn("continue-on-error", integration)
         self.assertNotIn("if", integration, "Do not silently skip a required release check")
         self.assertNotIn(

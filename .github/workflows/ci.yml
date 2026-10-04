@@ -1140,11 +1140,13 @@ jobs:
             -s ops/ansible/tests -p test_security_vm_guest.py -k ComposeSerializationTests -v
 
       - name: App-only release and rollback on a disposable host
-        timeout-minutes: 10
+        timeout-minutes: 11
         run: |
-          sudo "${RUNNER_TEMP}/release-container-controller/bin/python" -B \
-            build/test-release-container.py --disposable-host \
-            --image "${PRODUCTION_IMAGE}" --output "${RUNNER_TEMP}/release-container"
+          python3 -B build/ci_release_checks.py \
+            --controller "${RUNNER_TEMP}/release-container-controller/bin/python" \
+            --image "${PRODUCTION_IMAGE}" \
+            --fixture-output "${RUNNER_TEMP}/release-container" \
+            --output "${RUNNER_TEMP}/release-checks"
 
       - name: Preserve private local release-container diagnostics
         if: ${{ always() && env.ACT == 'true' }}
@@ -1166,11 +1168,27 @@ jobs:
             done
           fi
 
+      - name: Preserve private local release-check preparation diagnostics
+        if: ${{ always() && env.ACT == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="${RUNNER_TEMP}/release-checks"
+          [[ -d "${source}" && ! -L "${source}" ]] || exit 0
+          destination="${LOCAL_CI_EVIDENCE:?}/release-checks"
+          umask 077
+          mkdir -m 700 "${destination}"
+          for name in summary.json release-fixture.stdout release-fixture.stderr scanner-tools.stdout scanner-tools.stderr; do
+            [[ -f "${source}/${name}" && ! -L "${source}/${name}" ]] || continue
+            install -m 600 "${source}/${name}" "${destination}/${name}"
+          done
+
       - name: Scan the same exported production image
         timeout-minutes: 25
         run: |
           build/check-security.sh image "${PRODUCTION_IMAGE}" \
             --artifact-dir "${RUNNER_TEMP}/simplestchat-release" \
+            --image-tools "${RUNNER_TEMP}/release-checks/tools" \
             --output "${RUNNER_TEMP}/production-security"
 
       - name: Retain the verified production release
