@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shlex
 import subprocess
@@ -10,6 +11,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from test_support import array, at, obj, objects, string, strings, yaml_value
+
+# isort: split
+import security_policy
 
 if TYPE_CHECKING:
     from release_json import JsonObject
@@ -35,6 +39,23 @@ def workflow(name: str) -> JsonObject:
 
 class SecurityWorkflowTests(unittest.TestCase):
     """Require actual dependencies and restricted credentials, not just job names."""
+
+    def test_reviewed_workflow_locations_still_identify_the_same_feature(self) -> None:
+        """Moving a reviewed action must update its exact review location before CI runs."""
+        reviews = [
+            entry for entry in security_policy.read_exceptions() if entry.scanner == "zizmor"
+        ]
+        self.assertTrue(reviews)
+        for review in reviews:
+            with self.subTest(scope=review.scope):
+                name, route = review.scope.split("#", 1)
+                document = yaml_value((ROOT / name).read_text(), scalars_as_strings=True)
+                components = [int(part) if part.isdecimal() else part for part in route.split("/")]
+                feature = string(at(document, *components))
+                self.assertEqual(
+                    review.fingerprint.split(":", 1)[1],
+                    hashlib.sha256(feature.encode()).hexdigest(),
+                )
 
     def test_aggregate_rejects_missing_skipped_and_failed_jobs(self) -> None:
         """Every maintained correctness/security job must be in the always-run aggregate."""

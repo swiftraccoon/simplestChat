@@ -22,6 +22,8 @@ class CodeqlResourceTests(unittest.TestCase):
     @override
     def setUp(self) -> None:
         """Keep synthetic controller trees private and inside the checkout."""
+        self.assertFalse((ROOT / "results").is_symlink())
+        (ROOT / "results").mkdir(mode=0o700, exist_ok=True)
         temporary = tempfile.TemporaryDirectory(prefix="codeql-resources-", dir=ROOT / "results")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)

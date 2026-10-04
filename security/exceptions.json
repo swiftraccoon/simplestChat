@@ -134,7 +134,7 @@
     {
       "scanner": "zizmor",
       "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
-      "scope": ".github/workflows/ci.yml#jobs/rust-lint/steps/1/uses",
+      "scope": ".github/workflows/ci.yml#jobs/rust-lint/steps/4/uses",
       "owner": "swiftraccoon",
       "rationale": "act 0.2.89 only recognizes ./ local actions; immutable $/ syntax is unsupported by the maintained local runner.",
       "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
@@ -144,7 +144,7 @@
     {
       "scanner": "zizmor",
       "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
-      "scope": ".github/workflows/ci.yml#jobs/rust-test/steps/1/uses",
+      "scope": ".github/workflows/ci.yml#jobs/rust-test/steps/4/uses",
       "owner": "swiftraccoon",
       "rationale": "act 0.2.89 only recognizes ./ local actions; immutable $/ syntax is unsupported by the maintained local runner.",
       "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
@@ -154,7 +154,7 @@
     {
       "scanner": "zizmor",
       "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
-      "scope": ".github/workflows/ci.yml#jobs/browser/steps/1/uses",
+      "scope": ".github/workflows/ci.yml#jobs/browser/steps/4/uses",
       "owner": "swiftraccoon",
       "rationale": "act 0.2.89 only recognizes ./ local actions; immutable $/ syntax is unsupported by the maintained local runner.",
       "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",

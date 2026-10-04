@@ -39,6 +39,8 @@ class NativeCacheTests(unittest.TestCase):
     @override
     def setUp(self) -> None:
         """Keep all source, database and cache fixtures inside the ignored repository results."""
+        self.assertFalse((ROOT / "results").is_symlink())
+        (ROOT / "results").mkdir(mode=0o700, exist_ok=True)
         temporary = tempfile.TemporaryDirectory(prefix="native-cache-", dir=ROOT / "results")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)

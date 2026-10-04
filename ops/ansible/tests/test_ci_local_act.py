@@ -23,9 +23,20 @@ class LocalActTests(unittest.TestCase):
 
     def directory(self) -> Path:
         """Create one owned disposable fixture directory."""
+        self.assertFalse((ROOT / "results").is_symlink())
+        (ROOT / "results").mkdir(mode=0o700, exist_ok=True)
         temporary = tempfile.TemporaryDirectory(prefix="local-act-test.", dir=ROOT / "results")
         self.addCleanup(temporary.cleanup)
         return Path(temporary.name)
+
+    def test_fixture_creates_results_on_a_fresh_checkout(self) -> None:
+        """No earlier test or workflow step must create this ignored fixture parent."""
+        root = self.directory()
+        self.assertFalse((root / "results").exists())
+        with patch(__name__ + ".ROOT", root):
+            directory = self.directory()
+        self.assertEqual(directory.parent, root / "results")
+        self.assertTrue(directory.is_dir())
 
     def test_publish_exposes_binary_and_receipt_together(self) -> None:
         """The final cache is absent until both required artifacts are complete."""

@@ -60,6 +60,8 @@ class ForceArtifactTests(unittest.TestCase):
 
     @override
     def setUp(self) -> None:
+        self.assertFalse((ROOT / "results").is_symlink())
+        (ROOT / "results").mkdir(mode=0o700, exist_ok=True)
         temporary = tempfile.TemporaryDirectory(dir=ROOT / "results")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()

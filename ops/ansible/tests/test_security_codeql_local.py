@@ -46,6 +46,8 @@ class LocalCodeqlTests(unittest.TestCase):
     @override
     def setUp(self) -> None:
         """Own every fixture beneath the repository's ignored results directory."""
+        self.assertFalse((ROOT / "results").is_symlink())
+        (ROOT / "results").mkdir(mode=0o700, exist_ok=True)
         temporary = tempfile.TemporaryDirectory(prefix="codeql-unit-", dir=ROOT / "results")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
