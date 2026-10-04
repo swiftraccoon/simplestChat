@@ -8,6 +8,120 @@ use super::*;
 mod secret_canary_tests;
 
 #[tokio::test]
+async fn authenticated_join_uses_requested_room_name_without_changing_identity() {
+    use crate::room::roles::Role;
+
+    let metrics = ServerMetrics::new();
+    let manager = Arc::new(RoomManager::new_for_connection_tests(metrics.clone()).await);
+    let mut participants = Vec::new();
+    for (index, settled_name) in ["Room nickname", "Room nickname (2)"]
+        .into_iter()
+        .enumerate()
+    {
+        let participant = Uuid::new_v4().to_string();
+        let (sender, mut receiver) = mpsc::channel(128);
+        let mut room = None;
+        let mut reconnect = String::new();
+        let lobby = Arc::new(AtomicBool::new(false));
+        let reply = ReplySender {
+            metrics: &metrics,
+            sender: &sender,
+            request_id: None,
+        };
+        let join = ClientMessage::JoinRoom {
+            room_id: "account-names".into(),
+            participant_name: "Room nickname".into(),
+            password: None,
+            chat_style: None,
+        };
+        handle_client_message(
+            &join,
+            &participant,
+            &mut room,
+            &lobby,
+            &reply,
+            &manager,
+            &None,
+            &mut reconnect,
+            &None,
+            true,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(room.as_deref(), Some("account-names"));
+        let state = manager.room_for_connection_tests("account-names");
+        let state = state.read().await;
+        let joined = &state.participants[&participant];
+        assert_eq!(joined.id, participant);
+        assert_eq!(joined.name, settled_name);
+        assert!(joined.authenticated);
+        assert_eq!(
+            joined.role,
+            if index == 0 { Role::Owner } else { Role::User }
+        );
+        let response: serde_json::Value =
+            serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
+        assert_eq!(response["type"], "roomJoined");
+        assert_eq!(response["yourName"], settled_name);
+        assert_eq!(response["participantId"], participant);
+        participants.push((sender, receiver));
+    }
+    manager.drain_signal().begin_draining();
+}
+
+#[tokio::test]
+async fn authenticated_join_validates_the_requested_room_name() {
+    let metrics = ServerMetrics::new();
+    let manager = Arc::new(RoomManager::new_for_connection_tests(metrics.clone()).await);
+    let (sender, mut receiver) = mpsc::channel(8);
+    let reply = ReplySender {
+        metrics: &metrics,
+        sender: &sender,
+        request_id: None,
+    };
+    let participant = Uuid::new_v4().to_string();
+    let lobby = Arc::new(AtomicBool::new(false));
+    let mut room = None;
+    let mut reconnect = "unchanged".to_string();
+    for name in [
+        "",
+        " ",
+        "You",
+        "Ｙｏｕ",
+        "hidden\u{202e}name",
+        &"a".repeat(65),
+    ] {
+        let join = ClientMessage::JoinRoom {
+            room_id: "account-names".into(),
+            participant_name: name.to_string(),
+            password: None,
+            chat_style: None,
+        };
+        let error = handle_client_message(
+            &join,
+            &participant,
+            &mut room,
+            &lobby,
+            &reply,
+            &manager,
+            &None,
+            &mut reconnect,
+            &None,
+            true,
+            None,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().starts_with("Invalid participant_name:"));
+        assert!(room.is_none());
+        assert_eq!(reconnect, "unchanged");
+        assert!(receiver.try_recv().is_err());
+    }
+    manager.drain_signal().begin_draining();
+}
+
+#[tokio::test]
 async fn authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes() {
     let metrics = ServerMetrics::new();
     let manager = Arc::new(RoomManager::new_for_connection_tests(metrics.clone()).await);
@@ -34,7 +148,6 @@ async fn authorization_dispatch_rejects_every_room_operation_after_sender_or_mem
         &mut reconnect,
         &None,
         false,
-        None,
         None,
     )
     .await
@@ -75,7 +188,6 @@ async fn authorization_dispatch_rejects_every_room_operation_after_sender_or_mem
                 &mut reconnect,
                 &None,
                 false,
-                None,
                 None,
             )
             .await
@@ -137,7 +249,6 @@ async fn authorization_dispatch_lobby_policy_covers_every_decoded_operation() {
             &None,
             false,
             None,
-            None,
         )
         .await
         .unwrap_err();
@@ -186,7 +297,6 @@ async fn authorization_dispatch_moderation_checks_actor_and_target_roles() {
             &mut Uuid::new_v4().to_string(),
             &None,
             false,
-            None,
             None,
         )
         .await
@@ -241,7 +351,6 @@ async fn authorization_dispatch_moderation_checks_actor_and_target_roles() {
                     &None,
                     false,
                     None,
-                    None,
                 )
                 .await;
                 assert_eq!(
@@ -288,7 +397,6 @@ async fn authorization_dispatch_moderation_checks_actor_and_target_roles() {
                 &mut String::new(),
                 &None,
                 false,
-                None,
                 None,
             )
             .await;

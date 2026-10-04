@@ -70,7 +70,6 @@ async fn runtime_canary_dispatch_keeps_messages_and_credentials_out_of_observati
                         &None,
                         false,
                         None,
-                        None,
                     ),
                 ))
                 .await;

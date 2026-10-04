@@ -503,6 +503,9 @@ join, and treats an unknown style as `accent`. The browser shows a color token i
 does not know as the automatic color and an unknown style as `accent`; neither
 drops the message.
 
+`joinRoom.participantName` is the requested room-local name for both guests and
+accounts. The browser uses the account profile name as a default when no name
+has been entered; an edited name takes precedence without changing the profile.
 `roomJoined.yourName` is the room-local label assigned to a joining participant.
 Guests and accounts both receive the smallest free numeric suffix when another
 participant or lobby entry holds an equivalent label, for example `Maya (2)`.

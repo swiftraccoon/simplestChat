@@ -922,11 +922,37 @@ async function setRole(owner, name, role) {
       await owner.locator('#create-room-submit').click();
       recordJoin();
       await connected(owner);
-      await join(member, 'E2E Member');
+      await join(member, 'E2E Room Nickname');
       await join(guest, 'E2E Guest');
       await send(guest, 'Public hello');
       await visible(owner, 'Public hello');
       await visible(member, 'Public hello');
+    });
+    await step('direct join respects the entered name without renaming the account', async () => {
+      await owner
+        .getByRole('button', { name: 'Actions for E2E Room Nickname', exact: true })
+        .first()
+        .waitFor({ state: 'visible' });
+      const account = await header(member, 'Account');
+      assert.equal(
+        await account.getByLabel('Account display name', { exact: true }).inputValue(),
+        'E2E Member',
+        'the direct-join nickname leaves the account profile unchanged',
+      );
+      await close(account);
+      await header(member, 'Nickname');
+      const dialog = member.getByRole('dialog', { name: 'Room nickname', exact: true });
+      assert.equal(
+        await dialog.getByLabel('Nickname', { exact: true }).inputValue(),
+        'E2E Room Nickname',
+      );
+      await dialog.getByLabel('Nickname', { exact: true }).fill('E2E Member');
+      await dialog.getByRole('button', { name: 'Change nickname', exact: true }).click();
+      await dialog.waitFor({ state: 'hidden' });
+      await owner
+        .getByRole('button', { name: 'Actions for E2E Member', exact: true })
+        .first()
+        .waitFor({ state: 'visible' });
     });
     await step('personal settings share one capture-free keyboard-accessible dialog', async () => {
       const captures = await guest.evaluate(() => window.__communityCaptureRequests);

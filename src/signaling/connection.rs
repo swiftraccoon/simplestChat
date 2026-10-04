@@ -927,7 +927,6 @@ async fn handle_connection_with_timing(
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
     let is_authenticated = authenticated_user.is_some();
-    let mut authenticated_display_name = authenticated_user.as_ref().map(|c| c.name.clone());
     let mut auth_exp = authenticated_user.as_ref().map(|claims| claims.exp as u64);
     let mut auth_deadline = auth_exp.map(credential_expiry_deadline);
 
@@ -1409,8 +1408,6 @@ async fn handle_connection_with_timing(
                                     let expires_at = claims.exp as u64;
                                     auth_exp = Some(expires_at);
                                     auth_deadline = Some(credential_expiry_deadline(expires_at));
-                                    // Later joins on this socket use the renewed profile name.
-                                    authenticated_display_name = Some(claims.name.clone());
                                     authenticated_user = Some(claims);
                                     next_auth_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
                                     ServerMessage::AuthenticationRenewed {
@@ -1720,7 +1717,6 @@ async fn handle_connection_with_timing(
                                     &mut reconnect_token,
                                     &bwe_sender,
                                     is_authenticated,
-                                    authenticated_display_name.as_deref(),
                                     client_ip,
                                 ),
                             ))
@@ -2322,7 +2318,6 @@ async fn handle_client_message(
     reconnect_token: &mut String,
     bwe_sender: &Option<mpsc::Sender<u32>>,
     is_authenticated: bool,
-    authenticated_display_name: Option<&str>,
     client_ip: Option<std::net::IpAddr>,
 ) -> anyhow::Result<()> {
     let sender = reply.sender;
@@ -2364,7 +2359,6 @@ async fn handle_client_message(
                     "Invalid room_id: use 1-128 letters, numbers, hyphens, or underscores"
                 );
             }
-            let participant_name = authenticated_display_name.unwrap_or(participant_name);
             if participant_name.trim().is_empty()
                 || participant_name.len() > MAX_PARTICIPANT_NAME_LEN
                 || !crate::labels::is_plain(participant_name)
