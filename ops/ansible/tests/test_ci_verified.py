@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import os
 import platform
 import shlex
@@ -152,6 +153,66 @@ class VerifiedCacheTests(unittest.TestCase):
                 _ = path.write_text("changed\n")
                 self.assertNotEqual(cache.cache_key(self.root, "codeql-native"), original)
                 _ = path.write_text("original\n")
+
+    def test_native_codeql_closure_covers_all_local_python_imports(self) -> None:
+        """A new transitive helper cannot silently become an unkeyed extraction input."""
+        modules = {
+            path.stem: path
+            for directory in (ROOT / "build", ROOT / "ops/ansible/files")
+            for path in directory.glob("*.py")
+        }
+        pending = ["security_codeql_local", "security_codeql_cache", "security_vendor"]
+        visited: set[str] = set()
+        while pending:
+            name = pending.pop()
+            if name in visited:
+                continue
+            visited.add(name)
+            path = modules[name]
+            self.assertTrue(cache.native_codeql_input(str(path.relative_to(ROOT))), name)
+            for node in ast.walk(ast.parse(path.read_text())):
+                imports: list[str] = []
+                if isinstance(node, ast.Import):
+                    imports = [alias.name.split(".")[0] for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imports = [node.module.split(".")[0]]
+                pending.extend(imported for imported in imports if imported in modules)
+
+    def test_native_codeql_ignores_unrelated_ci_tools_but_binds_native_data_and_modes(self) -> None:
+        """Application/deployment/image tooling does not alter standalone native extraction."""
+        unrelated = (
+            ".github/workflows/ci.yml",
+            ".github/actions/native-toolchain/action.yml",
+            "build/security_image.py",
+            "build/ci_local_act.py",
+            "ops/ansible/files/release_public.py",
+            "security/image-policy.json",
+            "Dockerfile",
+        )
+        native = (
+            "vendor/native-components.json",
+            "vendor/integrity.json",
+            "vendor/mediasoup-sys-0.17.0/subprojects/libuv.wrap",
+            "vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/libuv/meson.build",
+            "security/codeql/native-coverage/qlpack.yml",
+            "build/codeql-native-build.sh",
+        )
+        for name in (*unrelated, *native):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _ = path.write_text("original\n")
+        self.git("add", ".")
+        original = cache.cache_key(self.root, "codeql-native")
+        for name in unrelated:
+            _ = (self.root / name).write_text("changed\n")
+            self.assertEqual(cache.cache_key(self.root, "codeql-native"), original, name)
+        for name in native:
+            path = self.root / name
+            _ = path.write_text("changed\n")
+            self.assertNotEqual(cache.cache_key(self.root, "codeql-native"), original, name)
+            _ = path.write_text("original\n")
+        self.git("update-index", "--chmod=+x", native[-1])
+        self.assertNotEqual(cache.cache_key(self.root, "codeql-native"), original)
 
     def test_runner_architecture_trust_and_hosted_image_generation_are_bound(self) -> None:
         """A local result cannot cross into hosted, another ISA, or trusted main."""

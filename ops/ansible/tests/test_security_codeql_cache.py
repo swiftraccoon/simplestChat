@@ -97,6 +97,22 @@ class NativeCacheTests(unittest.TestCase):
         with self.assertRaisesRegex(ToolError, "codeql_cache_source_changed"):
             cache.source_integrity(database, source, manifest, "rust")
 
+    def test_native_source_archive_refuses_unkeyed_tracked_inputs_but_allows_generated_sources(
+        self,
+    ) -> None:
+        """Generated/external compiler inputs remain valid; tracked source must be in the key."""
+        database, source, manifest = self.database()
+        with zipfile.ZipFile(database / "src.zip", "a") as archive:
+            archive.writestr(str(source / "target/generated.cpp").lstrip("/"), b"generated")
+            archive.writestr("usr/include/stdlib.h", b"external")
+        cache.source_integrity(database, source, manifest, "c-cpp")
+        name = "build/unrelated.cpp"
+        manifest[name] = hashlib.sha256(b"unkeyed").hexdigest()
+        with zipfile.ZipFile(database / "src.zip", "a") as archive:
+            archive.writestr(str(source / name).lstrip("/"), b"unkeyed")
+        with self.assertRaisesRegex(ToolError, "codeql_cache_unkeyed_source"):
+            cache.source_integrity(database, source, manifest, "c-cpp")
+
     def test_archive_rejects_escapes_links_duplicates_and_expansion(self) -> None:
         """Never hand a dangerous or oversized cached ZIP to the analyzer's unpacker."""
         for name, mode in (("../escape", 0), ("/absolute", 0), ("link", stat.S_IFLNK)):

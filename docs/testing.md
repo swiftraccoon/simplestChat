@@ -544,6 +544,9 @@ They can reuse a complete evaluated database only for identical source, suite,
 analyzer and query pins, runner generation/architecture/trust, and absolute
 source paths. Rust includes shared web JSON inputs. Native also binds compiler
 and installed package identity plus actual OpenSSL headers/libraries/settings.
+Its tracked inputs cover the complete vendor tree, native build configuration,
+CodeQL workflow/query/policy files and the analysis helpers' local import closure;
+unrelated CI, deployment and image tooling edits do not invalidate that database.
 The restored bundle hash, extraction metadata and archived source bytes must
 match. A miss performs real extraction and query evaluation; a corrupt entry
 fails. The cache is saved only after all requested reports and current policy

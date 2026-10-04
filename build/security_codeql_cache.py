@@ -158,6 +158,10 @@ def source_integrity(database: Path, source: Path, manifest: JsonObject, languag
                 "codeql_cache_unkeyed_source",
             )
             if name in manifest:
+                require(
+                    language != "c-cpp" or ci_verified.native_codeql_input(name),
+                    "codeql_cache_unkeyed_source",
+                )
                 require(member.file_size <= 16 * 1024**2, "codeql_cache_source_size")
                 actual = hashlib.sha256(archive.read(member)).hexdigest()
                 require(actual == manifest[name], "codeql_cache_source_changed")

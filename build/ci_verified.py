@@ -31,6 +31,39 @@ SCOPES = (
 )
 BINARIES = ("simplestChat", "load_test")
 NATIVE_PREFIXES = ("vendor/", "security/", "build/", ".github/", "ops/ansible/files/")
+CODEQL_NATIVE_PREFIXES = ("vendor/", "security/codeql/")
+CODEQL_NATIVE_FILES = frozenset(
+    {
+        ".github/workflows/codeql.yml",
+        "build/ci_verified.py",
+        "build/codeql-native-build.sh",
+        "build/install-openssl.sh",
+        "build/pip-constraints.txt",
+        "build/security_codeql.py",
+        "build/security_codeql_cache.py",
+        "build/security_codeql_local.py",
+        "build/security_codeql_resources.py",
+        "build/security_codeql_sources.py",
+        "build/security_codeql_tools.py",
+        "build/security_codeql_triage.py",
+        "build/security_context.py",
+        "build/security_findings.py",
+        "build/security_policy.py",
+        "build/security_tools.py",
+        "build/security_vendor.py",
+        "ops/ansible/files/bounded_process.py",
+        "ops/ansible/files/release_json.py",
+        "security/codeql-toolchain.json",
+        "security/codeql-review-2026-09-30.json",
+        "security/codeql-native-review-2026-09-30.json",
+        "security/exceptions.json",
+    }
+)
+
+
+def native_codeql_input(name: str) -> bool:
+    """Bind the complete worker and its analysis helpers without unrelated CI tooling."""
+    return name.startswith(CODEQL_NATIVE_PREFIXES) or name in CODEQL_NATIVE_FILES
 
 
 class Options(argparse.Namespace):
@@ -99,11 +132,11 @@ def cache_key(root: Path, scope: str) -> str:
         mode, _, stage = metadata.decode().split()
         name = raw_name.decode()
         require(stage == "0" and mode in {"100644", "100755"}, "ci_cache_tracked_type")
-        # Native suites consume the complete vendored tree plus these maintained
-        # tool/policy roots. Rust application and documentation edits do not alter
-        # that standalone worker check. Keep every helper in those roots bound.
-        native_scope = scope.startswith("native-") or scope == "codeql-native"
-        if native_scope and not name.startswith(NATIVE_PREFIXES):
+        # Sanitizers retain their full input roots. CodeQL's standalone worker
+        # uses a smaller explicit closure; its complete local imports are tested.
+        if scope.startswith("native-") and not name.startswith(NATIVE_PREFIXES):
+            continue
+        if scope == "codeql-native" and not native_codeql_input(name):
             continue
         # Rust tests embed shared JSON fixtures from web/tests. Include all web
         # JSON configuration and data for Rust scopes; JS helper tests stay fresh.
