@@ -549,6 +549,61 @@ class MigrationDatabaseTests(unittest.TestCase):
             finally:
                 session.close()
 
+    def canonical_constraint(self, definition: str, kind: str = "c") -> str:
+        """Evaluate the production SQL normalizer on synthetic catalog expressions only."""
+        literal = "'" + definition.replace("'", "''") + "'"
+        return (
+            self.sql(
+                os.environ["TEST_DATABASE_URL"],
+                "BEGIN READ ONLY; SET search_path=pg_catalog; SELECT "  # noqa: S608 -- synthetic test literals, with SQL quote escaping.
+                + snapshot.CONSTRAINT_DEFINITION_SQL
+                + " FROM (VALUES ('"
+                + kind
+                + "')) c(contype)"
+                + " CROSS JOIN (VALUES ("
+                + literal
+                + ")) d(definition); ROLLBACK;",
+            )
+            .decode()
+            .removesuffix("\n")
+        )
+
+    def test_enum_check_normalization_preserves_every_other_expression(self) -> None:
+        """Only the proven lossless array-cast relocation is canonicalized."""
+        original = (
+            "CHECK (kind::text = ANY (ARRAY['registration'::character varying, "
+            + "'room'::character varying]::text[]))"
+        )
+        canonical = (
+            "CHECK (kind::text = ANY (ARRAY['registration'::character varying::text, "
+            + "'room'::character varying::text]))"
+        )
+        self.assertEqual(self.canonical_constraint(original), canonical)
+        self.assertEqual(self.canonical_constraint(canonical), canonical)
+        self.assertEqual(self.canonical_constraint(original, "f"), original)
+        for expression in (
+            original.replace("character varying", "character varying(1)"),
+            original.replace(" = ANY ", " <> ALL "),
+            original.replace("kind::text", "lower(kind::text)"),
+            original.replace("'room'::character varying", "NULL::character varying"),
+            original.replace("'room'", "'room''s'"),
+            original.replace("'room'", "'room::character varying'"),
+            original.replace("'room'::character varying", "room::character varying"),
+            original + " NOT VALID",
+            "prefix " + original,
+        ):
+            with self.subTest(expression=expression):
+                self.assertEqual(self.canonical_constraint(expression), expression)
+        for changed in (
+            original.replace("kind::text", "other::text"),
+            original.replace("'room'", "'private'"),
+            original.replace("'registration'", "'room'").replace(
+                "'room'::character varying]", "'registration'::character varying]"
+            ),
+        ):
+            with self.subTest(changed=changed):
+                self.assertNotEqual(self.canonical_constraint(changed), canonical)
+
     def test_real_restore_preserves_rows_partitions_acl_and_schema_digest(self) -> None:
         """Physical layout changes and dropped-column holes do not disguise logical drift."""
         base = os.environ["TEST_DATABASE_URL"]
@@ -586,7 +641,9 @@ END $$;""",
 CREATE SCHEMA operations;
 REVOKE ALL ON SCHEMA operations FROM PUBLIC;
 CREATE TABLE public.users(id uuid PRIMARY KEY,email text UNIQUE NOT NULL,password_hash text,
- auth_version bigint NOT NULL,removed text, payload jsonb);
+ auth_version bigint NOT NULL,removed text, payload jsonb,
+ chat_style varchar(16) NOT NULL CONSTRAINT users_chat_style_value
+ CHECK (chat_style IN ('accent','text','bubble')));
 ALTER TABLE public.users DROP COLUMN removed;
 CREATE TABLE public.rooms(id text PRIMARY KEY,owner_id uuid REFERENCES public.users(id));
 CREATE TABLE public.partitioned(id int,payload text) PARTITION BY RANGE(id);
@@ -595,7 +652,7 @@ CREATE TABLE public.second_partition PARTITION OF public.partitioned FOR VALUES 
 CREATE TABLE operations.events(id bigserial PRIMARY KEY,payload text);
 GRANT SELECT,UPDATE ON public.users TO simplestchat_app;
 INSERT INTO public.users VALUES('11111111-1111-4111-8111-111111111111',
- 'owner@old.example.test','fixture-password-hash',9,'{"text":"line\\nnext\\tpart"}');
+ 'owner@old.example.test','fixture-password-hash',9,'{"text":"line\\nnext\\tpart"}','accent');
 INSERT INTO public.rooms VALUES('lobby','11111111-1111-4111-8111-111111111111');
 INSERT INTO public.partitioned VALUES(1,E'a\\nb'),(11,'last');
 INSERT INTO operations.events(payload) VALUES('fixture incident');""",
@@ -644,6 +701,7 @@ INSERT INTO operations.events(payload) VALUES('fixture incident');""",
                 )
                 self.fail("Fixture restore differs: " + difference[:8192])
             self.verify_owner_update(adapter, destination, original)
+            self.verify_enum_change(adapter, destination, original)
             _ = self.sql(destination, "UPDATE public.users SET auth_version=10;")
             self.assertNotEqual(self.snapshot(adapter, destination), original)
             _ = self.sql(destination, "UPDATE public.users SET auth_version=9;")
@@ -651,6 +709,24 @@ INSERT INTO operations.events(payload) VALUES('fixture incident');""",
             changed = self.snapshot(adapter, destination)
             self.assertEqual(changed["tables"], original["tables"])
             self.assertNotEqual(changed["metadata"], original["metadata"])
+
+    def verify_enum_change(self, adapter: Path, destination: str, original: JsonObject) -> None:
+        """Detect a changed allowed enum value even when every stored row is identical."""
+        for allowed in ("balloon", "bubble"):
+            _ = self.sql(
+                destination,
+                "ALTER TABLE public.users DROP CONSTRAINT users_chat_style_value; "
+                + "ALTER TABLE public.users ADD CONSTRAINT users_chat_style_value "
+                + "CHECK (chat_style IN ('accent','text','"
+                + allowed
+                + "'));",
+            )
+            changed = self.snapshot(adapter, destination)
+            self.assertEqual(changed["tables"], original["tables"])
+            if allowed == "balloon":
+                self.assertNotEqual(changed["metadata"], original["metadata"])
+            else:
+                self.assertEqual(changed, original)
 
     def verify_owner_update(self, adapter: Path, destination: str, original: JsonObject) -> None:
         """Run the real guarded transaction and compare its precise permitted row delta."""

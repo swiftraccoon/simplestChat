@@ -239,6 +239,14 @@ SELECT jsonb_build_object(
 );
 """  # noqa: S608 -- only a fixed module-owned namespace predicate is interpolated.
 
+# Logical restore can move a varchar enum's array-to-text cast onto its literals.
+# Normalize only this complete grammar; preserve every literal and all other casts.
+CONSTRAINT_DEFINITION_SQL = r"""CASE WHEN c.contype='c' AND d.definition ~
+ '^CHECK \([a-z_][a-z0-9_]*::text = ANY \(ARRAY\[''[a-z_][a-z0-9_]*''::character varying(, ''[a-z_][a-z0-9_]*''::character varying)*\]::text\[\]\)\)$'
+ THEN replace(replace(d.definition,'::character varying','::character varying::text'),
+              ']::text[]))',']))')
+ ELSE d.definition END"""  # noqa: E501 -- keep the complete anchored SQL grammar reviewable as one expression.
+
 # No catalog OIDs, heap statistics, dropped-column holes or cluster-local IDs:
 # they necessarily differ after a logical restore. All object definitions remain
 # inside the process and are reduced directly to a digest.
@@ -286,9 +294,10 @@ WITH relations AS (
  WHERE a.attnum>0 AND NOT a.attisdropped
  UNION ALL
  SELECT jsonb_build_object('type','constraint','schema',r.nspname,'relation',r.relname,
-   'name',c.conname,'definition',pg_get_constraintdef(c.oid,true),
+   'name',c.conname,'definition',{CONSTRAINT_DEFINITION_SQL},
    'validated',c.convalidated,'deferrable',c.condeferrable,'deferred',c.condeferred)
  FROM relations r JOIN pg_constraint c ON c.conrelid=r.oid
+ CROSS JOIN LATERAL (SELECT pg_get_constraintdef(c.oid,true) AS definition) d
  UNION ALL
  SELECT jsonb_build_object('type','index','schema',r.nspname,'relation',r.relname,
    'name',ci.relname,'definition',pg_get_indexdef(i.indexrelid),
