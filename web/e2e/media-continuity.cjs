@@ -51,6 +51,8 @@ function installDeviceFixtures() {
     captures: 0,
     captureRequests: [],
     captureStreams: [],
+    rejectCameraQuality: false,
+    qualityRejections: 0,
     revealInputs: false,
     screenCaptures: 0,
     chooserGestures: [],
@@ -67,6 +69,17 @@ function installDeviceFixtures() {
     evidence.captures++;
     const requested = { video: Boolean(constraints.video), audio: Boolean(constraints.audio) };
     evidence.captureRequests.push(requested);
+    if (
+      evidence.rejectCameraQuality &&
+      constraints.video &&
+      typeof constraints.video === 'object' &&
+      ('width' in constraints.video ||
+        'height' in constraints.video ||
+        'frameRate' in constraints.video)
+    ) {
+      evidence.qualityRejections++;
+      throw new DOMException('Starting videoinput failed', 'NotReadableError');
+    }
     const stream = await capture(constraints);
     evidence.captureStreams.push(stream);
     if (evidence.revealInputs) {
@@ -262,6 +275,7 @@ async function privatePermissionPreview(page) {
   await page.evaluate(() => {
     window.__mediaProduct.devices = [];
     window.__mediaProduct.revealInputs = true;
+    window.__mediaProduct.rejectCameraQuality = true;
   });
   let dialog = await settings(page);
   assert.equal(await dialog.locator('select[name=cameraDeviceId] option').count(), 1);
@@ -292,7 +306,10 @@ async function privatePermissionPreview(page) {
     true,
   );
   assert.deepEqual(await observation(), {
-    requests: [{ video: true, audio: false }],
+    requests: [
+      { video: true, audio: false },
+      { video: true, audio: false },
+    ],
     liveKinds: ['video'],
     sending: false,
     cameraEnabled: false,
@@ -308,6 +325,10 @@ async function privatePermissionPreview(page) {
     await dialog.locator('.media-preview-video').evaluate((video) => video.srcObject === null),
     true,
   );
+  assert.equal(await page.evaluate(() => window.__mediaProduct.qualityRejections), 1);
+  await page.evaluate(() => {
+    window.__mediaProduct.rejectCameraQuality = false;
+  });
 
   await dialog.getByRole('button', { name: 'Test microphone', exact: true }).click();
   await dialog
@@ -320,6 +341,7 @@ async function privatePermissionPreview(page) {
   );
   assert.deepEqual(await observation(), {
     requests: [
+      { video: true, audio: false },
       { video: true, audio: false },
       { video: false, audio: true },
     ],
@@ -335,10 +357,11 @@ async function privatePermissionPreview(page) {
     ),
   );
   dialog = await settings(page);
-  assert.equal(await page.evaluate(() => window.__mediaProduct.captures), 2);
+  assert.equal(await page.evaluate(() => window.__mediaProduct.captures), 3);
   await dialog.getByRole('button', { name: 'Save settings', exact: true }).click();
   assert.deepEqual(await observation(), {
     requests: [
+      { video: true, audio: false },
       { video: true, audio: false },
       { video: false, audio: true },
     ],
@@ -348,9 +371,9 @@ async function privatePermissionPreview(page) {
     microphoneEnabled: false,
   });
   report.checks.push({
-    name: 'private-per-kind-preview-reveals-devices-before-save',
+    name: 'private-preview-quality-fallback-reveals-devices-before-save',
     passed: true,
-    captures: 2,
+    captures: 3,
     cameraOnly: true,
     microphoneOnly: true,
     stoppedAndClosed: true,
@@ -441,14 +464,21 @@ async function main() {
     await publisher.waitForFunction(
       () => !document.querySelector('#cam-btn').classList.contains('active'),
     );
+    await publisher.evaluate(() => {
+      window.__mediaProduct.rejectCameraQuality = true;
+    });
     await publisher.locator('#cam-btn').click();
-    await progressing(viewer, 'camera-off-on-decoding');
+    await progressing(viewer, 'camera-off-on-quality-fallback-decoding');
     assert.equal(
       await publisher.locator('#mic-btn').evaluate((button) => button.classList.contains('muted')),
       true,
     );
     const captureCounts = await publisher.evaluate(() => window.__mediaProduct.captures);
-    assert.equal(captureCounts, 2, 'only the two explicit camera activations capture');
+    assert.equal(captureCounts, 3, 'two explicit camera activations plus one quality fallback');
+    assert.equal(await publisher.evaluate(() => window.__mediaProduct.qualityRejections), 1);
+    await publisher.evaluate(() => {
+      window.__mediaProduct.rejectCameraQuality = false;
+    });
     if (options.name === 'chromium') {
       stage = 'native-freeze-resume';
       const session = await viewer.context().newCDPSession(viewer);

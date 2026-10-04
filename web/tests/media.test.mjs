@@ -180,6 +180,126 @@ async function settleControls() {
   for (let index = 0; index < 12; index++) await Promise.resolve();
 }
 
+test('camera activation and off/on retry preferred quality without changing the selected device', async (t) => {
+  const { media, state, newTrack } = await fixture(t);
+  const selected = {
+    ...media.capturePreferences,
+    cameraDeviceId: 'selected-camera',
+    resolution: '1080p',
+    frameRate: 60,
+  };
+  media.setCapturePreferences(selected);
+  const failure = new DOMException('Starting videoinput failed', 'NotReadableError');
+  state.capture = async (constraints) => {
+    if ('width' in constraints.video) throw failure;
+    return new Stream([newTrack('video')]);
+  };
+  assert.equal(await media.toggleVideo(), true);
+  const producer = media.videoProducer;
+  const firstTrack = producer.track;
+  assert.equal(await media.toggleVideo(), false);
+  assert.equal(firstTrack.readyState, 'ended');
+  assert.equal(await media.toggleVideo(), true);
+  assert.equal(media.videoProducer, producer, 'resume reuses the existing producer');
+  assert.equal(state.producers.length, 1);
+  assert.notEqual(producer.track, firstTrack);
+  assert.equal(producer.track.readyState, 'live');
+  assert.equal(state.captureCalls.length, 4);
+  for (const offset of [0, 2]) {
+    assert.deepEqual(state.captureCalls[offset], {
+      video: {
+        deviceId: { exact: 'selected-camera' },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        frameRate: { ideal: 60 },
+      },
+    });
+    assert.deepEqual(state.captureCalls[offset + 1], {
+      video: { deviceId: { exact: 'selected-camera' } },
+    });
+  }
+  assert.deepEqual(media.capturePreferences, selected, 'fallback does not overwrite preferences');
+  assert.equal(state.warnings.length, 2);
+});
+
+test('camera permission, missing-device, constraint and abort errors are not retried', async (t) => {
+  const { media, state } = await fixture(t);
+  for (const name of ['NotAllowedError', 'NotFoundError', 'OverconstrainedError', 'AbortError']) {
+    const failure = new DOMException('Owned capture failure', name);
+    const callsBefore = state.captureCalls.length;
+    state.capture = async () => {
+      throw failure;
+    };
+    await assert.rejects(media.toggleVideo(), (error) => error === failure);
+    assert.equal(state.captureCalls.length, callsBefore + 1, name);
+    assert.equal(media.videoEnabled, false);
+    assert.equal(media.videoStarting, false);
+  }
+  assert.equal(state.producers.length, 0);
+});
+
+test('camera default-quality failure stops after one retry and allows a later explicit activation', async (t) => {
+  const { media, state, newTrack } = await fixture(t);
+  const first = new DOMException('Preferred format failed', 'NotReadableError');
+  const fallback = new DOMException('Camera remains unavailable', 'NotReadableError');
+  state.capture = async () => {
+    throw state.captureCalls.length === 1 ? first : fallback;
+  };
+  await assert.rejects(media.toggleVideo(), (error) => error === fallback);
+  assert.deepEqual(state.captureCalls[1], { video: true });
+  assert.equal(state.captureCalls.length, 2);
+  assert.equal(state.producers.length, 0);
+  assert.equal(media.videoStarting, false);
+  assert.equal(state.warnings.length, 2);
+  state.capture = async () => new Stream([newTrack('video')]);
+  assert.equal(await media.toggleVideo(), true);
+  assert.equal(state.captureCalls.length, 3);
+});
+
+test('cancelling camera activation before capture fails prevents a fallback request', async (t) => {
+  const { media, state } = await fixture(t);
+  const pending = deferred();
+  state.capture = () => pending.promise;
+  const starting = media.toggleVideo();
+  media.pauseVideo();
+  const failure = new DOMException('Starting videoinput failed', 'NotReadableError');
+  pending.reject(failure);
+  await assert.rejects(starting, (error) => error === failure);
+  assert.equal(state.captureCalls.length, 1);
+  assert.equal(state.producers.length, 0);
+  assert.equal(media.videoEnabled, false);
+});
+
+test('cancelling camera resume during fallback stops its late track without resuming the producer', async (t) => {
+  const { media, state, newTrack } = await fixture(t);
+  await media.toggleVideo();
+  media.pauseVideo();
+  const producer = media.videoProducer;
+  const fallbackStarted = deferred();
+  const pending = deferred();
+  state.capture = async (constraints) => {
+    if (typeof constraints.video === 'object') {
+      throw new DOMException('Starting videoinput failed', 'NotReadableError');
+    }
+    fallbackStarted.resolve();
+    return pending.promise;
+  };
+  const starting = media.toggleVideo();
+  await fallbackStarted.promise;
+  media.pauseVideo();
+  const lateTrack = newTrack('video');
+  pending.resolve(new Stream([lateTrack]));
+  assert.equal(await starting, false);
+  assert.equal(lateTrack.readyState, 'ended');
+  assert.equal(producer.paused, true);
+  assert.equal(state.producers.length, 1);
+  assert.equal(state.captureCalls.length, 3);
+  assert.equal(
+    state.sent.some((message) => message.type === 'resumeProducer'),
+    false,
+  );
+});
+
 for (const outcome of ['resolve', 'reject']) {
   test(`an old control ${outcome} cannot retire a replacement request after socket loss`, async (t) => {
     const { media, signaling, state } = await fixture(t);

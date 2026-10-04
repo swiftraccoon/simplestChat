@@ -1,5 +1,6 @@
 import {
   captureConstraints,
+  captureMedia,
   loadCapturePreferences,
   normalizeCapturePreferences,
   saveCapturePreferences,
@@ -177,10 +178,13 @@ export class MediaPreview {
     try {
       if (!navigator.mediaDevices?.getUserMedia)
         throw new Error('Media preview requires localhost or a secure connection.');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: video ? captureConstraints(preferences, 'video') : false,
-        audio: audio ? captureConstraints(preferences, 'audio') : false,
-      });
+      const stream = await captureMedia(
+        {
+          video: video ? captureConstraints(preferences, 'video') : false,
+          audio: audio ? captureConstraints(preferences, 'audio') : false,
+        },
+        () => generation === this.generation,
+      );
       if (generation !== this.generation) {
         stream.getTracks().forEach((track) => track.stop());
         return false;

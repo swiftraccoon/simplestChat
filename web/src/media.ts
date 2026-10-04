@@ -162,6 +162,49 @@ export function captureConstraints(
   };
 }
 
+/** Some cameras cannot start in the browser's preferred format, even with ideal constraints. */
+export async function captureMedia(
+  constraints: MediaStreamConstraints,
+  isCurrent: () => boolean,
+): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (error) {
+    const video = constraints.video;
+    if (
+      !isCurrent() ||
+      !error ||
+      typeof error !== 'object' ||
+      !('name' in error) ||
+      error.name !== 'NotReadableError' ||
+      !video ||
+      typeof video !== 'object' ||
+      !('width' in video || 'height' in video || 'frameRate' in video)
+    ) {
+      console.warn('[media] capture failed', error);
+      throw error;
+    }
+    // Retain the selected device and audio request; only relax camera quality.
+    const fallback = { ...video };
+    delete fallback.width;
+    delete fallback.height;
+    delete fallback.frameRate;
+    console.warn(
+      '[media] camera could not start at preferred quality; trying browser defaults',
+      error,
+    );
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        ...constraints,
+        video: Object.keys(fallback).length ? fallback : true,
+      });
+    } catch (fallbackError) {
+      console.warn('[media] camera capture failed with browser defaults', fallbackError);
+      throw fallbackError;
+    }
+  }
+}
+
 export class MediaManager {
   private signaling: SignalingClient;
   private lifecycle = 0;
@@ -773,9 +816,10 @@ export class MediaManager {
     let videoTrack: MediaStreamTrack | undefined;
     let unwatchCapture: (() => void) | undefined;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: captureConstraints(this.capturePreferences, 'video'),
-      });
+      const stream = await captureMedia(
+        { video: captureConstraints(this.capturePreferences, 'video') },
+        isCurrent,
+      );
       videoTrack = stream.getVideoTracks()[0];
       if (!videoTrack || !isCurrent()) return false;
       this.pendingVideoTrack = videoTrack;
@@ -1116,12 +1160,15 @@ export class MediaManager {
     let track: MediaStreamTrack | undefined;
     let unwatchCapture: (() => void) | undefined;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          ...captureConstraints(this.capturePreferences, 'video'),
-          ...(deviceId && { deviceId: { exact: deviceId } }),
+      const stream = await captureMedia(
+        {
+          video: {
+            ...captureConstraints(this.capturePreferences, 'video'),
+            ...(deviceId && { deviceId: { exact: deviceId } }),
+          },
         },
-      });
+        isCurrent,
+      );
       track = stream.getVideoTracks()[0];
       if (!track || !isCurrent()) return false;
       this.pendingVideoTrack = track;

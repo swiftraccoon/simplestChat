@@ -45,13 +45,6 @@ async function fixture(t) {
     getItem: (key) => stored.get(key) ?? null,
     setItem: (key, value) => stored.set(key, value),
   };
-  const media = await loadTypeScript('src/media.ts', {
-    modules: {
-      '../node_modules/mediasoup-client/lib/Device.js': {},
-      './signaling': signalingModule,
-    },
-    globals: { localStorage: storage },
-  });
   const state = {
     capture: () => Promise.resolve(stream()),
     streams: [],
@@ -59,7 +52,24 @@ async function fixture(t) {
     contexts: [],
     frames: new Map(),
     captures: [],
+    warnings: [],
   };
+  const navigator = {
+    mediaDevices: {
+      getUserMedia: (constraints) => {
+        state.captures.push(constraints);
+        return state.capture(constraints);
+      },
+    },
+  };
+  const captureConsole = { warn: (...values) => state.warnings.push(values) };
+  const media = await loadTypeScript('src/media.ts', {
+    modules: {
+      '../node_modules/mediasoup-client/lib/Device.js': {},
+      './signaling': signalingModule,
+    },
+    globals: { localStorage: storage, navigator, console: captureConsole },
+  });
   class AudioContext {
     state = 'running';
     closed = false;
@@ -98,14 +108,8 @@ async function fixture(t) {
     },
     globals: {
       localStorage: storage,
-      navigator: {
-        mediaDevices: {
-          getUserMedia: (constraints) => {
-            state.captures.push(constraints);
-            return state.capture(constraints);
-          },
-        },
-      },
+      navigator,
+      console: captureConsole,
       window: { AudioContext },
       AudioContext,
       requestAnimationFrame: (callback) => {
@@ -216,6 +220,88 @@ for (const kind of ['camera', 'microphone']) {
     assert.equal(stored.size, 0, 'testing never saves settings');
   });
 }
+
+test('preview camera fallback preserves camera selection and all microphone constraints and cleans up', async (t) => {
+  const { preview, state, stored } = await fixture(t);
+  const selected = {
+    ...preferences,
+    cameraDeviceId: 'selected-camera',
+    microphoneDeviceId: 'selected-mic',
+    echoCancellation: false,
+    autoGainControl: false,
+  };
+  const captured = stream();
+  state.capture = async () => {
+    if (state.captures.length === 1) {
+      throw new DOMException('Starting videoinput failed', 'NotReadableError');
+    }
+    return captured;
+  };
+  assert.equal(await preview.start(selected), true);
+  assert.equal(state.captures.length, 2);
+  assert.deepEqual(state.captures[1].video, { deviceId: { exact: 'selected-camera' } });
+  assert.deepEqual(state.captures[1].audio, state.captures[0].audio);
+  assert.equal(state.captures[1].audio.deviceId.exact, 'selected-mic');
+  assert.equal(state.captures[1].audio.echoCancellation, false);
+  assert.equal(state.captures[1].audio.autoGainControl, false);
+  assert.equal(state.captures[1].audio.noiseSuppression, true);
+  assert.equal(state.streams.at(-1), captured);
+  assert.equal(state.warnings.length, 1);
+  assert.equal(stored.size, 0);
+  preview.stop();
+  assert.ok(captured.getTracks().every((track) => track.readyState === 'ended'));
+  assert.equal(state.contexts[0].closed, true);
+  assert.equal(state.frames.size, 0);
+});
+
+test('microphone-only NotReadableError is not retried by camera fallback', async (t) => {
+  const { preview, state } = await fixture(t);
+  const failure = new DOMException('Starting audioinput failed', 'NotReadableError');
+  state.capture = async () => {
+    throw failure;
+  };
+  await assert.rejects(preview.start(preferences, false, true), (error) => error === failure);
+  assert.equal(state.captures.length, 1);
+  assert.equal(state.captures[0].video, false);
+  assert.equal(preview.pending, false);
+  assert.equal(state.contexts.length, 0);
+});
+
+test('preview cancellation suppresses retry or disposes a late fallback stream without attachment', async (t) => {
+  for (const stage of ['before retry', 'during retry']) {
+    await t.test(stage, async (t) => {
+      const { preview, state } = await fixture(t);
+      const pending = deferred();
+      const fallbackStarted = deferred();
+      state.capture = async () => {
+        if (stage === 'during retry' && state.captures.length === 1) {
+          throw new DOMException('Starting videoinput failed', 'NotReadableError');
+        }
+        fallbackStarted.resolve();
+        return pending.promise;
+      };
+      const opening = preview.start(preferences, true, false);
+      await fallbackStarted.promise;
+      preview.stop();
+      assert.equal(await preview.start(preferences, false, true), false);
+      const captured = stream();
+      if (stage === 'before retry') {
+        pending.reject(new DOMException('Starting videoinput failed', 'NotReadableError'));
+      } else {
+        assert.deepEqual(state.captures[1], { video: true, audio: false });
+        pending.resolve(captured);
+      }
+      assert.equal(await opening, false);
+      assert.equal(state.captures.length, stage === 'before retry' ? 1 : 2);
+      assert.equal(preview.pending, false);
+      assert.ok(state.streams.every((value) => value === null));
+      assert.equal(state.contexts.length, 0);
+      if (stage === 'during retry') {
+        assert.ok(captured.getTracks().every((track) => track.readyState === 'ended'));
+      }
+    });
+  }
+});
 
 test('preview capture errors clear resources and allow a microphone-only retry', async (t) => {
   const { preview, state } = await fixture(t);
