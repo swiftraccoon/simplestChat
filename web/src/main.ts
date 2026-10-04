@@ -31,6 +31,7 @@ import {
 import { configureSettingsDialog } from './settings-dialog';
 import { avatarColors, chatColor } from './avatar-colors';
 import { spatialLayerForRenderedWidth } from './layer-cap';
+import { observeVideoLayout } from './video-layout';
 import './community.css';
 import type { CreateRoomRequest, RoomSettingsPatch } from './protocol';
 import type { ServerCapabilities } from './api-validation';
@@ -53,6 +54,7 @@ const nameInput = document.getElementById('name-input') as HTMLInputElement;
 const roomInput = document.getElementById('room-input') as HTMLInputElement;
 const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
 const videoGrid = document.getElementById('video-grid')!;
+observeVideoLayout(videoGrid);
 const participantList = document.getElementById('participant-list')!;
 const chatMessages = document.getElementById('chat-messages')!;
 const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
@@ -3578,7 +3580,11 @@ function setPinnedTile(key: string | null): void {
   for (const [tileKey, tile] of remoteTiles) {
     const pinned = tileKey === pinnedTileKey;
     tile.classList.toggle('pinned', pinned);
-    tile.querySelector('.tile-pin')?.setAttribute('aria-pressed', String(pinned));
+    const pin = tile.querySelector('.tile-pin');
+    if (pin) {
+      pin.setAttribute('aria-pressed', String(pinned));
+      pin.textContent = pinned ? 'Unpin' : 'Pin';
+    }
   }
   videoGrid.classList.toggle('has-pinned', pinnedTileKey !== null);
 }
@@ -3865,6 +3871,7 @@ function removeRemoteTrack(
   // Remove tile entirely if no active media remains
   if (!tile.querySelector('video') && !tile.querySelector('audio')) {
     stopObservingTileSize(tileKey);
+    mediaControls.detachTile(tile);
     tile.remove();
     remoteTiles.delete(tileKey);
     updateVideoGridCount();
@@ -3929,7 +3936,7 @@ function shortcutsBlocked(event: KeyboardEvent): boolean {
     event.target instanceof Element &&
     Boolean(
       event.target.closest(
-        'input, textarea, select, button, a, summary, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="separator"]',
+        'input, textarea, select, button, a, summary, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="separator"], [role="dialog"]',
       ),
     )
   );
@@ -3939,7 +3946,7 @@ document.addEventListener('keydown', (e) => {
   const key = e.key.toLowerCase();
   if (key === 'escape') {
     // Native dialogs handle Escape themselves, including preview cleanup and focus restoration.
-    if (document.querySelector('dialog[open]')) return;
+    if (document.querySelector('dialog[open], [popover]:popover-open')) return;
     dismissAuth();
     dismissCreateRoom();
     document.getElementById('mod-menu')?.remove();

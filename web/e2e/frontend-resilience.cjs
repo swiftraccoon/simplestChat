@@ -6,7 +6,8 @@ const path = require('node:path');
 const { productionAssets } = require('./homepage-layout.cjs');
 const { openRoomMenu } = require('./room-menu.cjs');
 const { closeOwnedBrowser } = require('./lifecycle-cleanup.cjs');
-const { chromium } = require('playwright');
+const { mediaLayout } = require('./media-layout.cjs');
+const playwright = require('playwright');
 
 const origin = 'http://127.0.0.1:39879';
 const capabilities = {
@@ -45,6 +46,8 @@ const person = {
 };
 
 async function run() {
+  const browserName = process.env.E2E_BROWSER || 'chromium';
+  assert.ok(['chromium', 'firefox'].includes(browserName), 'Unsupported E2E_BROWSER');
   const artifacts = process.env.E2E_ARTIFACTS
     ? path.resolve(process.env.E2E_ARTIFACTS)
     : fs.mkdtempSync(path.join(os.tmpdir(), 'simplestchat-frontend-resilience-'));
@@ -53,17 +56,19 @@ async function run() {
     scope:
       'Isolated production UI with mocked HTTP/signaling; no backend, native device or mobile-browser claim.',
     checks: [],
+    browserName,
     pageErrors: 0,
   };
   const save = () =>
     fs.writeFileSync(path.join(artifacts, 'results.json'), JSON.stringify(report, null, 2));
   const assets = productionAssets();
-  const server = await chromium.launchServer({ headless: true });
-  const browser = await chromium.connect(server.wsEndpoint());
+  report.assets = [...assets].map(([url, asset]) => ({ url, sha256: asset.sha256 }));
+  const server = await playwright[browserName].launchServer({ headless: true });
+  const browser = await playwright[browserName].connect(server.wsEndpoint());
   let deadline;
   try {
     await Promise.race([
-      scenarios(),
+      process.env.E2E_MEDIA_LAYOUT_ONLY === '1' ? mediaScenarios() : scenarios(),
       new Promise((_, reject) => {
         deadline = setTimeout(
           () => reject(new Error('Frontend resilience deadline exceeded')),
@@ -349,6 +354,20 @@ async function run() {
     };
   }
 
+  async function mediaScenarios() {
+    const call = await fixture({ room: true });
+    try {
+      await call.page.locator('#name-input').fill('Layout guest');
+      await call.page.locator('#room-input').fill('fixture-room');
+      await call.page.locator('#join-btn').click();
+      await call.page.locator('#room-screen').waitFor({ state: 'visible' });
+      await mediaLayout(call.page, artifacts, report);
+      assert.equal(await call.page.evaluate(() => window.__captureRequests), 0);
+    } finally {
+      await call.context.close();
+    }
+  }
+
   async function assertRoomLayout(page, viewport) {
     const layout = await page.evaluate(() => {
       const header = document.querySelector('header').getBoundingClientRect();
@@ -479,6 +498,7 @@ async function run() {
   }
 
   async function scenarios() {
+    await mediaScenarios();
     const discovering = await fixture({
       signedIn: true,
       holdFeatures: true,

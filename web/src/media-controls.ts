@@ -41,6 +41,7 @@ interface TilePlayback {
   participantId: string;
   participantName: string;
   controls: HTMLDetailsElement;
+  disposeControls: () => void;
   blockedNotice: HTMLElement;
   stallNotice: HTMLElement;
   blocked: Map<HTMLMediaElement, HTMLMediaElement['srcObject']>;
@@ -60,6 +61,7 @@ interface FrameWatch {
 }
 
 const MASTER_VOLUME_KEY = 'simplestchat.masterVolume';
+let tileMenuSequence = 0;
 
 function readStored(key: string): string | null {
   try {
@@ -79,6 +81,76 @@ function writeStored(key: string, value: string): void {
 
 function volumeValue(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
+}
+
+/** Keep tile actions in the top layer, with viewport listeners owned only while open. */
+function configureTileMenu(
+  details: HTMLDetailsElement,
+  summary: HTMLElement,
+  panel: HTMLElement,
+): () => void {
+  let viewportListeners: AbortController | null = null;
+  const position = () => {
+    const viewport = window.visualViewport;
+    const left = viewport?.offsetLeft ?? 0;
+    const top = viewport?.offsetTop ?? 0;
+    const width = viewport?.width ?? window.innerWidth;
+    const height = viewport?.height ?? window.innerHeight;
+    panel.style.maxWidth = `${Math.max(0, width - 16)}px`;
+    panel.style.maxHeight = `min(28rem, ${Math.max(0, height - 16)}px)`;
+    const anchor = summary.getBoundingClientRect();
+    const bounds = panel.getBoundingClientRect();
+    panel.style.left = `${Math.max(left + 8, Math.min(anchor.right - bounds.width, left + width - bounds.width - 8))}px`;
+    const below = anchor.bottom + 4;
+    const preferred =
+      below + bounds.height <= top + height - 8 ? below : anchor.top - bounds.height - 4;
+    panel.style.top = `${Math.max(top + 8, Math.min(preferred, top + height - bounds.height - 8))}px`;
+  };
+  const close = () => {
+    if (panel.matches(':popover-open')) panel.hidePopover();
+    viewportListeners?.abort();
+    viewportListeners = null;
+    details.open = false;
+    summary.setAttribute('aria-expanded', 'false');
+  };
+  panel.addEventListener('beforetoggle', (event) => {
+    // Escape, outside taps and another tile's auto-popover also close the disclosure.
+    if (event.newState === 'closed') {
+      viewportListeners?.abort();
+      viewportListeners = null;
+      details.open = false;
+      summary.setAttribute('aria-expanded', 'false');
+    }
+  });
+  summary.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (!details.isConnected) return;
+    if (panel.matches(':popover-open')) {
+      close();
+      return;
+    }
+    details.open = true;
+    summary.setAttribute('aria-expanded', 'true');
+    panel.showPopover({ source: summary });
+    position();
+    viewportListeners = new AbortController();
+    const options = { signal: viewportListeners.signal, passive: true };
+    window.addEventListener('resize', position, options);
+    window.addEventListener('scroll', position, { ...options, capture: true });
+    window.visualViewport?.addEventListener('resize', position, options);
+    window.visualViewport?.addEventListener('scroll', position, options);
+    panel.focus({ preventScroll: true });
+  });
+  const dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'personal-media-dismiss';
+  dismiss.textContent = 'Close';
+  dismiss.addEventListener('click', () => {
+    close();
+    summary.focus({ preventScroll: true });
+  });
+  panel.append(dismiss);
+  return close;
 }
 
 /** Apply explicit device edits without opening inactive capture or crossing room lifecycles. */
@@ -689,17 +761,40 @@ export class MediaControls {
   /** Call after each added/replaced remote audio/video element, including screen shares. */
   attachTile(tile: HTMLElement, participantId: string, participantName: string): void {
     // Removed tiles can be replaced when a producer pauses/resumes.
-    for (const [element] of this.tiles) if (!element.isConnected) this.tiles.delete(element);
+    for (const [element, info] of this.tiles) {
+      if (!element.isConnected) {
+        info.disposeControls();
+        this.tiles.delete(element);
+      }
+    }
     if (!this.playback.has(participantId))
       this.playback.set(participantId, { volume: 1, muted: false, hidden: false, quality: 'auto' });
     if (!this.tiles.has(tile)) {
       const details = document.createElement('details');
       details.className = 'personal-media-controls';
       const summary = document.createElement('summary');
-      summary.textContent = 'Controls';
-      summary.setAttribute('aria-label', `Viewing controls for ${participantName}`);
+      summary.setAttribute('aria-label', `Controls for ${participantName}`);
+      summary.setAttribute('aria-haspopup', 'dialog');
+      summary.setAttribute('aria-expanded', 'false');
+      summary.title = `Controls for ${participantName}`;
+      const icon = document.createElement('span');
+      icon.textContent = '⋯';
+      icon.setAttribute('aria-hidden', 'true');
+      summary.append(icon);
       const panel = document.createElement('div');
       panel.className = 'personal-media-panel';
+      panel.id = `personal-media-panel-${++tileMenuSequence}`;
+      panel.setAttribute('popover', 'auto');
+      panel.setAttribute('role', 'dialog');
+      panel.setAttribute('aria-label', `Viewing controls for ${participantName}`);
+      panel.tabIndex = -1;
+      summary.setAttribute('aria-controls', panel.id);
+      const heading = document.createElement('strong');
+      heading.className = 'personal-media-title';
+      heading.textContent = participantName;
+      panel.append(heading);
+      const pin = tile.querySelector<HTMLButtonElement>('.tile-pin');
+      if (pin) panel.append(pin);
       const volumeLabel = document.createElement('label');
       volumeLabel.textContent = 'Volume';
       const volume = document.createElement('input');
@@ -747,6 +842,7 @@ export class MediaControls {
       });
       qualityLabel.append(quality);
       const fullscreen = this.button('Fullscreen', () => {
+        disposeControls();
         tile
           .requestFullscreen()
           .catch(() => this.options.notify('Fullscreen is unavailable for this video.'));
@@ -756,6 +852,7 @@ export class MediaControls {
       const pip = this.button('Picture in picture', () => {
         const video = tile.querySelector('video');
         if (!video || typeof video.requestPictureInPicture !== 'function') return;
+        disposeControls();
         const action =
           document.pictureInPictureElement === video
             ? document.exitPictureInPicture()
@@ -767,6 +864,8 @@ export class MediaControls {
       pip.dataset['control'] = 'pip';
       panel.append(volumeLabel, mute, hide, qualityLabel, fullscreen, pip);
       details.append(summary, panel);
+      const disposeControls = configureTileMenu(details, summary, panel);
+      pin?.addEventListener('click', disposeControls);
       // Keep viewing controls from opening the tile's moderation context menu.
       details.addEventListener('contextmenu', (event) => event.stopPropagation());
       const hiddenNotice = document.createElement('div');
@@ -799,6 +898,7 @@ export class MediaControls {
         participantId,
         participantName,
         controls: details,
+        disposeControls,
         blockedNotice,
         stallNotice,
         blocked: new Map(),
@@ -814,16 +914,21 @@ export class MediaControls {
       this.options.getRoom()?.setRemoteVideoQuality(participantId, state.quality);
   }
 
+  /** Retire one camera/screen tile without clearing its owner's playback preferences. */
+  detachTile(tile: HTMLElement): void {
+    const info = this.tiles.get(tile);
+    if (!info) return;
+    info.disposeControls();
+    info.controls.remove();
+    info.blockedNotice.remove();
+    info.stallNotice.remove();
+    tile.querySelector('.personal-media-hidden-notice')?.remove();
+    this.tiles.delete(tile);
+  }
+
   detachParticipant(participantId: string): void {
-    for (const [tile, info] of this.tiles) {
-      if (info.participantId === participantId) {
-        info.controls.remove();
-        info.blockedNotice.remove();
-        info.stallNotice.remove();
-        tile.querySelector('.personal-media-hidden-notice')?.remove();
-        this.tiles.delete(tile);
-      }
-    }
+    for (const [tile, info] of this.tiles)
+      if (info.participantId === participantId) this.detachTile(tile);
     this.playback.delete(participantId);
   }
 

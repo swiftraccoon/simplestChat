@@ -166,13 +166,14 @@ recorded host and workload; they still need validation with real clients:
   server's default cap of 64 consumers: 32 audio and 32 video when rooms
   publish both (`--audio-only` or `--video-only` rooms get all 64 for their
   kind). `--max-audio` and `--max-video` still override them.
-- **Layers**: each time a batch of consumers is resumed, the client lays out
-  its grid as the web client does (`#video-grid` in `web/src/style.css`: its
-  own tile when it publishes and one per remote participant whose media it
-  consumes) and asks for the layer the tile-size cap would
+- **Layers**: each time a batch of consumers is resumed, the client approximates
+  tile widths using the earlier count-based desktop grid: its own tile when it
+  publishes and one per remote participant whose media it consumes. It asks for
+  the layer the tile-size cap would
   (`web/src/layer-cap.ts`), re-evaluating earlier tiles with the same
-  hysteresis. A webinar viewer sees one large presenter tile and asks for the
-  top layer. A 1440 px laptop at 2x in the classic layout gives a fresh tile the
+  hysteresis. This model does not include the browser's aspect-aware row fitting
+  or available stage height. A modeled webinar viewer sees one large presenter
+  tile and asks for the top layer. A modeled 1440 px laptop at 2x in the classic layout gives a fresh tile the
   top layer with up to four tiles and the middle layer beyond, but a tile that
   appeared while the grid was smaller keeps the top layer in a room of five (it
   steps down only below 85 % of the lower layer), so early arrivals cost the
@@ -183,8 +184,9 @@ recorded host and workload; they still need validation with real clients:
   can climb to its cap and layer allocation behaves as it does for browsers.
 
 Not modelled: the audio-level header extension (speaking highlights), VP8
-temporal layers (encodings are L1T1), screen sharing, pinned video layouts,
-mobile layouts, or device-specific capture and encoding behavior.
+temporal layers (encodings are L1T1), screen sharing, aspect-aware or
+height-constrained rows, pinned video layouts, mobile layouts, or device-specific
+capture and encoding behavior.
 
 ### Fixed subscription graphs
 

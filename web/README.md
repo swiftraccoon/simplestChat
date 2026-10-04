@@ -60,6 +60,7 @@ For complete guest/account setup and LAN ICE addressing see
 | Module | Responsibility |
 | --- | --- |
 | `src/main.ts` | Application wiring, room shell and layout |
+| `src/video-layout.ts` | Aspect-aware video rows, available-stage sizing and explicit pinning |
 | `src/ui.ts` | Text-safe controls, dialogs and named HTTP API methods |
 | `src/auth.ts`, `account-session-sync.ts`, `community-ui.ts` | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management |
 | `src/signaling.ts`, `protocol.ts` | WebSocket lifecycle and typed server protocol |
@@ -134,6 +135,13 @@ then scrolls. On devices without touch input, Enter sends and Shift+Enter adds a
 line. Touch-capable devices show Send and use Enter for new lines; Ctrl/Cmd+Enter
 sends in either mode. An open mention picker can use Enter to complete a name
 before sending.
+
+Camera and screen-share tiles use the same layout: each keeps its video's aspect
+ratio, and rows fit the available stage. Crowded layouts scroll from the top.
+Metadata changes and rotation resize the tiles. Only explicit pinning enlarges
+one video. A compact viewing-controls button opens each remote tile's actions,
+including Pin, volume and fullscreen, without covering the tile with separate
+permanent buttons.
 
 ## Availability, request ownership and large rooms
 

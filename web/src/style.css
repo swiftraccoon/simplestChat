@@ -386,49 +386,21 @@ header h1 {
 #video-grid {
   flex: 1;
   min-height: 0;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px;
   overflow-y: auto;
-  align-content: center;
+  scrollbar-gutter: stable;
+  align-content: start;
+  align-items: flex-start;
   justify-content: center;
 }
 
-/* Adaptive grid based on participant count — set via data-count on #video-grid */
-#video-grid {
-  grid-template-columns: 1fr;
-}
-#video-grid[data-count='2'] {
-  grid-template-columns: 1fr 1fr;
-}
-#video-grid[data-count='3'],
-#video-grid[data-count='4'] {
-  grid-template-columns: 1fr 1fr;
-}
-#video-grid[data-count='5'],
-#video-grid[data-count='6'] {
-  grid-template-columns: 1fr 1fr 1fr;
-}
-#video-grid[data-count='many'] {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  align-content: start;
-}
-
-/* A pinned tile fills the stage; the rest line up below it, small. */
-#video-grid.has-pinned {
-  grid-template-columns: repeat(var(--strip-columns, 4), minmax(0, 1fr));
-  align-content: start;
-}
-#video-grid.has-pinned .video-tile.pinned {
-  grid-column: 1 / -1;
+/* The pin keeps its actual width while its margins reserve a separate row. */
+#video-grid.has-pinned .video-tile.pinned:not(:fullscreen) {
   order: -1;
-  justify-self: center;
-  width: min(100%, calc(68dvh * 16 / 9));
-}
-@media (max-width: 768px) {
-  #video-grid.has-pinned {
-    --strip-columns: 2;
-  }
+  margin-inline: calc((100% - var(--video-tile-width)) / 2);
 }
 .tile-pin {
   position: absolute;
@@ -464,25 +436,24 @@ header h1 {
 
 .video-tile {
   position: relative;
+  flex: 0 0 auto;
+  width: var(--video-tile-width, 160px);
+  height: var(--video-tile-height, 90px);
   background: var(--surface-2);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  aspect-ratio: 16/9;
-  transition:
-    box-shadow var(--transition-normal),
-    transform var(--transition-fast);
+  transition: box-shadow var(--transition-normal);
   animation: fadeIn 300ms ease;
 }
 
 .video-tile:hover {
   box-shadow: var(--shadow-panel);
-  transform: scale(1.01);
 }
 
 .video-tile video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 
@@ -515,7 +486,6 @@ header h1 {
   box-shadow:
     0 0 0 3px var(--accent),
     0 0 16px var(--accent-glow);
-  transform: scale(1.01);
 }
 
 /* Dominant speaker — thicker border + glow, wins over .speaking */
@@ -524,18 +494,13 @@ header h1 {
   box-shadow:
     0 0 0 4px var(--accent),
     0 0 20px var(--accent-glow);
-  transform: scale(1.01);
 }
 
-/* Screen share tile — spans wider in grid */
-.video-tile.screen-share {
-  grid-column: span 2;
-  grid-row: span 2;
-}
-
-/* Screen share video should use contain not cover (to show full screen) */
-.video-tile.screen-share video {
-  object-fit: contain;
+.video-tile:fullscreen {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
   background: black;
 }
 
@@ -2411,20 +2376,6 @@ header.in-room .room-topic {
   }
   #room-screen.mobile-panel-collapsed #sidebar-content {
     display: none;
-  }
-  /* Tiles keep a readable minimum width instead of splitting the screen three ways. */
-  #video-grid,
-  #video-grid[data-count] {
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
-    align-content: start;
-  }
-  #video-grid[data-count='1'] {
-    grid-template-columns: minmax(0, 1fr);
-    align-content: center;
-  }
-  .video-tile.screen-share {
-    grid-column: 1 / -1;
-    grid-row: auto;
   }
   .panel-resize-handle {
     display: none;
