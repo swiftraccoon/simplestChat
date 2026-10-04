@@ -1,0 +1,134 @@
+--- a/pkg/runner/runner.go
++++ b/pkg/runner/runner.go
+@@ -20,6 +20,8 @@
+ 
+ // Config contains the config for a new runner
+ type Config struct {
++	// Shared by reusable workflows; wrappers do not consume a leaf-job slot.
++	jobSlots                           chan struct{}
+ 	Actor                              string                       // the user that triggered the event
+ 	Workdir                            string                       // path to working directory
+ 	ActionCacheDir                     string                       // path used for caching action contents
+@@ -89,6 +91,7 @@
+ 
+ // New Creates a new Runner
+ func New(runnerConfig *Config) (Runner, error) {
++	runnerConfig.jobSlots = make(chan struct{}, runnerConfig.GetConcurrentJobs())
+ 	runner := &runnerImpl{
+ 		config: runnerConfig,
+ 	}
+@@ -204,7 +207,7 @@
+ 							return err
+ 						}
+ 
+-						return executor(common.WithJobErrorContainer(WithJobLogger(ctx, rc.Run.JobID, jobName, rc.Config, &rc.Masks, matrix)))
++						return runner.limitLeafJob(job.Uses != "", executor)(common.WithJobErrorContainer(WithJobLogger(ctx, rc.Run.JobID, jobName, rc.Config, &rc.Masks, matrix)))
+ 					})
+ 				}
+ 				pipeline = append(pipeline, common.NewParallelExecutor(maxParallel, stageExecutor...))
+@@ -264,3 +267,20 @@
+ 
+ 	return rc
+ }
++
++// limitLeafJob bounds actual jobs across matrix pools and reusable workflows.
++// The slot covers setup, steps, post actions and cleanup, including failures.
++func (runner *runnerImpl) limitLeafJob(reusable bool, executor common.Executor) common.Executor {
++	if reusable {
++		return executor
++	}
++	return func(ctx context.Context) error {
++		select {
++		case runner.config.jobSlots <- struct{}{}:
++			defer func() { <-runner.config.jobSlots }()
++		case <-ctx.Done():
++			return ctx.Err()
++		}
++		return executor(ctx)
++	}
++}
+--- /dev/null
++++ b/pkg/runner/local_job_limit_test.go
+@@ -0,0 +1,82 @@
++package runner
++
++import (
++	"context"
++	"errors"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/nektos/act/pkg/common"
++)
++
++func TestLocalGlobalLeafLimitNestedMatrices(t *testing.T) {
++	parent, err := New(&Config{ConcurrentJobs: 4})
++	if err != nil {
++		t.Fatal(err)
++	}
++	root := parent.(*runnerImpl)
++	var active, peak, completed atomic.Int32
++	leaf := func(context.Context) error {
++		count := active.Add(1)
++		for old := peak.Load(); count > old && !peak.CompareAndSwap(old, count); old = peak.Load() {
++		}
++		defer active.Add(-1)
++		time.Sleep(10 * time.Millisecond)
++		completed.Add(1)
++		return nil
++	}
++	wrappers := make([]common.Executor, 0, 4)
++	for range 4 {
++		child, err := NewReusableWorkflowRunner(&RunContext{Config: root.config, EventJSON: "{}"})
++		if err != nil {
++			t.Fatal(err)
++		}
++		nested := child.(*runnerImpl)
++		matrix := make([]common.Executor, 0, 3)
++		for range 3 {
++			matrix = append(matrix, nested.limitLeafJob(false, leaf))
++		}
++		wrappers = append(wrappers, root.limitLeafJob(true, common.NewParallelExecutor(3, matrix...)))
++	}
++	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
++	defer cancel()
++	if err := common.NewParallelExecutor(4, wrappers...)(ctx); err != nil {
++		t.Fatal(err)
++	}
++	if peak.Load() != 4 || completed.Load() != 12 || active.Load() != 0 || len(root.config.jobSlots) != 0 {
++		t.Fatalf("peak=%d completed=%d active=%d held=%d", peak.Load(), completed.Load(), active.Load(), len(root.config.jobSlots))
++	}
++}
++
++func TestLocalGlobalLeafLimitCancellationAndFailure(t *testing.T) {
++	parent, err := New(&Config{ConcurrentJobs: 1})
++	if err != nil {
++		t.Fatal(err)
++	}
++	root := parent.(*runnerImpl)
++	started, release, finished := make(chan struct{}), make(chan struct{}), make(chan error, 1)
++	go func() {
++		finished <- root.limitLeafJob(false, func(context.Context) error { close(started); <-release; return nil })(context.Background())
++	}()
++	<-started
++	ctx, cancel := context.WithCancel(context.Background())
++	cancel()
++	called := false
++	err = root.limitLeafJob(false, func(context.Context) error { called = true; return nil })(ctx)
++	if !errors.Is(err, context.Canceled) || called {
++		t.Fatalf("canceled waiter ran: %v %v", called, err)
++	}
++	close(release)
++	if err := <-finished; err != nil {
++		t.Fatal(err)
++	}
++	failure := errors.New("fixture job failed")
++	err = root.limitLeafJob(false, func(context.Context) error { return failure })(context.Background())
++	if !errors.Is(err, failure) || len(root.config.jobSlots) != 0 {
++		t.Fatalf("failure leaked slot: %v", err)
++	}
++	if err := root.limitLeafJob(false, func(context.Context) error { return nil })(context.Background()); err != nil {
++		t.Fatal(err)
++	}
++}

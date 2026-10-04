@@ -106,6 +106,7 @@ async function fixture(t) {
   await Promise.all([mkdir(path.join(checkout, 'build'), { recursive: true }), mkdir(path.join(checkout, '.github/workflows'), { recursive: true }), mkdir(bin), writeFile(tool, dispatcher)]);
   for (const name of ['ci.yml', 'security.yml', 'codeql.yml']) await writeFile(path.join(checkout, '.github/workflows', name), `name: ${name}\n`);
   await copyFile(new URL('../ci-local.sh', import.meta.url), path.join(checkout, 'build/ci-local.sh'));
+  await writeFile(path.join(checkout, 'build/ci_local_act.py'), `import os, shutil\nwith open(os.environ['CI_FIXTURE_LOG'], 'a') as log:\n    log.write('local-act\\t' + os.environ.get('DOCKER_HOST', '') + '\\t\\n')\nprint(shutil.which('act'))\n`);
   for (const name of ['git', 'act', 'curl', 'podman', 'uname']) {
     const executable = path.join(bin, name);
     await writeFile(executable, `#!/bin/sh\nexec /bin/bash ${quote(tool)} ${quote(name)} "$@"\n`);
@@ -151,7 +152,9 @@ test('all runs native ARM suites with bounded resources and explicit AMD64 produ
   assert.equal(act.args.filter(value => value === '--platform').length, 1);
   assert.equal(value('--container-daemon-socket'), '-');
   assert.equal(value('--network'), 'bridge');
-  assert.equal(value('--concurrent-jobs'), '1');
+  assert.equal(value('--concurrent-jobs'), '4');
+  assert.ok(result.calls.some(call => call.tool === 'local-act'));
+  assert.ok(act.args.includes('LOCAL_CI_RUNNER_IMAGE=docker.io/catthehacker/ubuntu@sha256:84e94c96278dd26b8feb71226a521d259f8160cf6b1dd08e51fd42be43a82e56'));
   assert.match(value('--container-options'), /--cpus=3 --memory=16g/);
   assert.match(value('--container-options'), /--privileged/);
   assert.match(value('--container-options'), /--cgroupns=private/);

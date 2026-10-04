@@ -50,7 +50,7 @@ done
 [[ "$job" =~ ^[a-z][a-z0-9-]*$ ]] || die 'Invalid job name.'
 [[ "$job" != all || ${#matrix_args[@]} == 0 ]] || die 'A full CI run cannot filter out matrix entries.'
 [[ "$job" != required && "$job" != release-security ]] || die 'Use all for the aggregate gate; release signing runs only on GitHub.'
-for tool in act curl git python3; do command -v "$tool" >/dev/null || die "Missing prerequisite: $tool"; done
+for tool in curl git python3; do command -v "$tool" >/dev/null || die "Missing prerequisite: $tool"; done
 
 revision="$(git rev-parse --verify HEAD)"
 if [[ "$job" == all && -n "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
@@ -115,6 +115,7 @@ else
 fi
 owned_output=1
 printf 'Local CI evidence: %s\n' "$output"
+act_executable="$(python3 build/ci_local_act.py)"
 
 if ((disposable_engine)); then
   [[ "${DOCKER_HOST:-}" == unix:///* ]] || die '--disposable-engine requires an explicit local unix:// DOCKER_HOST.'
@@ -240,17 +241,18 @@ fi
 selected_job="$job"
 [[ "$job" != all ]] || selected_job=required
 set +e
-act push --workflows .github/workflows/ci.yml --job "$selected_job" \
+"$act_executable" push --workflows .github/workflows/ci.yml --job "$selected_job" \
   --eventpath "$output/event.json" --defaultbranch main \
   --platform "ubuntu-24.04=${runner_image}" \
   --container-architecture '' \
-  --pull=false --rm --network bridge --concurrent-jobs 1 \
+  --pull=false --rm --network bridge --concurrent-jobs 4 \
   --dryrun=false --list=false --graph=false --validate=false --watch=false --reuse=false \
   --bind=false --no-skip-checkout=false --list-options=false --bug-report=false --man-page=false \
   --container-daemon-socket - --container-options "$container_options" \
   --use-new-action-cache=true --action-cache-path "${state}/actions" --cache-server-path "${state}/cache" \
   --env-file /dev/null --secret-file /dev/null --var-file /dev/null --input-file /dev/null \
   --secret GITHUB_TOKEN= --env LOCAL_CI_DISPOSABLE=1 --env LOCAL_CI_EVIDENCE=/local-ci-evidence \
+  --env "LOCAL_CI_RUNNER_IMAGE=${runner_image}" \
   --env "LOCAL_CI_RUN_ID=${run_id}" --env "RUNNER_TRACKING_ID=local-ci-${run_id}" \
   ${matrix_args[@]+"${matrix_args[@]}"} \
   2>&1 | tee "$output/act.log"
