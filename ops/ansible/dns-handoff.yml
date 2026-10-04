@@ -1,0 +1,146 @@
+---
+# Temporary same-origin DNS propagation bridge. Apply only to the frozen source
+# inventory with explicit schandoff_source_ip, schandoff_target_ip, schandoff_domain,
+# scmig_run_id and schandoff_ttl_seconds=7200. Never starts the old application/DB.
+- name: Forward cached DNS traffic from one sealed migration source
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  pre_tasks:
+    - name: Require one explicitly selected source and a bounded migration handoff
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - ansible_play_hosts_all | length == 1
+          - ansible_host == schandoff_source_ip
+          - schandoff_source_ip != schandoff_target_ip
+          - scmig_run_id is match('^[a-f0-9]{32}$')
+          - schandoff_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+          - schandoff_ttl_seconds | int == 7200
+        fail_msg: Select only the sealed source with an exact migration ID and a two-hour handoff.
+  tasks:
+    - name: Validate the sealed source and start an independently expiring TLS forwarder
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import ipaddress
+            import json
+            import os
+            import re
+            import socket
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, '/usr/local/libexec/simplestchat-public')
+            import migrate_public as migration
+            import migration_tls as tls
+            import release_public as public
+
+            def verify_source(request, runner, source, domain):
+                prior = migration.state(request)
+                public.require(prior is not None and prior.get('role') == 'source', 'handoff_source_required')
+                public.require(prior.get('phase') in ('cutover-sealed', 'retired'), 'handoff_source_not_sealed')
+                journal = migration.read_object(public.ROOT / 'release-state.json')
+                public.require(journal.get('operation') == 'server_migration'
+                               and journal.get('request') == request.json()
+                               and journal.get('phase') in ('cutover-sealed', 'retired'), 'handoff_global_seal_required')
+                public.require(prior['before']['machineId'] == migration.machine_id(), 'handoff_source_identity')
+                images, environment = migration.configuration()
+                public.require(request.source_origin == request.destination_origin == 'https://' + domain
+                               and environment['ALLOWED_ORIGINS'] == request.source_origin
+                               and environment['ANNOUNCE_IP'] == source, 'handoff_origin_or_address_mismatch')
+                for service in ('simplestchat', 'caddy', 'postgres'):
+                    value = migration.owned_container(runner, service)
+                    public.require(value is not None and value['running'] is False
+                                   and value['restartPolicy'] == 'no', 'handoff_source_writer_not_disabled')
+                    public.require(value['id'] == prior['before']['containers'][service]['id'], 'handoff_source_container_changed')
+                return images
+
+            def configuration(domain, target):
+                return ('{\n admin off\n auto_https off\n servers {\n  protocols h1 h2\n }\n}\n'
+                        + 'http://' + domain + ' {\n redir https://' + domain + '{uri} permanent\n}\n'
+                        + 'https://' + domain + ' {\n tls /tls/certificate.pem /tls/key.pem\n'
+                        + ' reverse_proxy https://' + target + ' {\n  header_up Host ' + domain
+                        + '\n  transport http {\n   tls_server_name ' + domain + '\n  }\n }\n}\n')
+
+            def main():
+                operation, source, target, domain, lifetime = sys.argv[1:]
+                public.require(os.geteuid() == 0 and lifetime == '7200', 'handoff_identity_or_lifetime')
+                os.umask(0o077)
+                for value in (source, target):
+                    address = ipaddress.IPv4Address(value)
+                    public.require(str(address) == value and address.is_global, 'handoff_public_ipv4_required')
+                public.require(source != target, 'handoff_distinct_addresses_required')
+                directory, actual_domain = tls.operation(operation)
+                public.require(actual_domain == domain, 'handoff_domain_mismatch')
+                request = migration.request_file(directory / 'request.json')
+                with migration.workload(request):
+                    attempt = directory / 'dns-handoff'
+                    public.require(not attempt.exists() and not attempt.is_symlink(), 'handoff_already_prepared')
+                    # The sealed journals are read before creating even the private evidence directory.
+                    prior = migration.state(request)
+                    public.require(prior is not None and prior.get('role') == 'source'
+                                   and prior.get('phase') in ('cutover-sealed', 'retired'), 'handoff_source_not_sealed')
+                    attempt.mkdir(mode=0o700)
+                    runner = public.Runner(attempt)
+                    images = verify_source(request, runner, source, domain)
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                        probe.bind((source, 0))
+                    selector = images['caddyImage']
+                    public.require(re.fullmatch(r'docker.io/library/caddy:[a-z0-9.-]+@sha256:[a-f0-9]{64}', selector),
+                                   'handoff_pinned_caddy_required')
+                    image = runner.docker('image', 'inspect', '--format', '{{ '{{.Id}}' }}', selector, timeout=15).decode().strip()
+                    public.require(public.ID.fullmatch(image), 'handoff_image_identity')
+                    issuer, files = tls.snapshot(domain)
+                    tls.validate(attempt, domain, files)
+                    for name, data in (('certificate.pem', files['crt']), ('key.pem', files['key']),
+                                       ('Caddyfile', configuration(domain, target).encode())):
+                        path = attempt / name
+                        with path.open('xb') as output:
+                            os.fchmod(output.fileno(), 0o600)
+                            os.fchown(output.fileno(), 10001, 10001)
+                            output.write(data)
+                            output.flush()
+                            os.fsync(output.fileno())
+                    name = 'simplestchat-dns-handoff-' + operation
+                    command = ['create', '--name', name, '--pull=never', '--restart=no', '--read-only',
+                               '--user', '10001:10001', '--cap-drop=ALL', '--cap-add=NET_BIND_SERVICE',
+                               '--security-opt=no-new-privileges', '--memory=256m', '--cpus=0.5', '--pids-limit=128',
+                               '--label', 'simplestchat.migration.handoff=' + operation,
+                               '--label', 'com.docker.compose.project=' + name,
+                               '--log-driver=local', '--log-opt=max-size=10m', '--log-opt=max-file=2',
+                               '--publish', source + ':80:80/tcp', '--publish', source + ':443:443/tcp',
+                               '--tmpfs', '/data:rw,noexec,nosuid,uid=10001,gid=10001,size=8m',
+                               '--tmpfs', '/config:rw,noexec,nosuid,uid=10001,gid=10001,size=8m']
+                    for filename, destination in (('certificate.pem', '/tls/certificate.pem'), ('key.pem', '/tls/key.pem'),
+                                                  ('Caddyfile', '/etc/caddy/Caddyfile')):
+                        command += ['--mount', 'type=bind,source=' + str(attempt / filename) + ',target=' + destination + ',readonly']
+                    command += [image, 'caddy', 'run', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile']
+                    container = runner.docker(*command, timeout=30).decode().strip()
+                    public.require(re.fullmatch('[a-f0-9]{64}', container), 'handoff_container_identity')
+                    public.atomic(attempt / 'ownership.json', {'containerId': container, 'operationId': operation,
+                                  'source': source, 'target': target, 'domain': domain, 'issuer': issuer, 'lifetimeSeconds': 7200})
+                    # Schedule the exact immutable container ID before it can accept connections.
+                    runner.run(['/usr/bin/systemd-run', '--unit=' + name + '-expiry', '--on-active=7200',
+                                '--timer-property=AccuracySec=1s', '--property=TimeoutStartSec=45', '--collect',
+                                '/usr/bin/docker', '--host', 'unix:///var/run/docker.sock', 'stop', '--time', '10', container], timeout=30)
+                    runner.docker('start', container, timeout=30)
+                    running = runner.docker('inspect', '--format', '{{ '{{.State.Running}}' }}', container, timeout=15).decode().strip()
+                    public.require(running == 'true', 'handoff_not_running')
+                    runner.run(['/usr/bin/curl', '--fail', '--silent', '--show-error', '--noproxy', '*',
+                                '--resolve', domain + ':443:' + source, '--connect-timeout', '5', '--max-time', '10',
+                                '--retry', '3', '--retry-delay', '1', '--retry-connrefused', '--retry-max-time', '20',
+                                'https://' + domain + '/health'], timeout=35)
+                    print(json.dumps({'passed': True, 'containerId': container, 'expiresAfterSeconds': 7200}))
+
+            if __name__ == '__main__':
+                main()
+          - "{{ scmig_run_id }}"
+          - "{{ schandoff_source_ip }}"
+          - "{{ schandoff_target_ip }}"
+          - "{{ schandoff_domain }}"
+          - "{{ schandoff_ttl_seconds }}"
+      changed_when: true

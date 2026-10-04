@@ -25,8 +25,9 @@ Open the destination's public HTTP/media/TURN ports as described in the public
 guide. For a new hostname, point its DNS at the destination before running the
 command. To keep the existing hostname, leave DNS on the source until the
 controller reports `awaiting_dns_cutover`; use distinct literal IP addresses for
-both inventories' `ansible_host`, and set the destination's `scpub_announce_ip`
-explicitly. The controller never edits DNS. To preserve existing
+both inventories' `ansible_host`, and explicitly set both destination
+`scpub_announce_ip` and `scpub_announce_ipv6` (use `''` when IPv6 is absent).
+The controller never edits DNS. To preserve existing
 passkeys, the destination hostname must belong to the source's actual WebAuthn RP ID,
 normally the existing hostname or one of its subdomains. The controller reads and
 retains that identity rather than trusting an inventory guess.
@@ -93,6 +94,34 @@ in the active inventory. `--update-canary` optionally changes GitHub's existing
 `CANARY_ORIGIN` from the source origin to the destination after cutover. It leaves
 `CANARY_ROOM` unchanged. Both options are off by default, and their individual
 outcomes are retained if either final selector update fails.
+
+## Bridge cached DNS after a same-hostname move
+
+If resolvers still return the old address after the destination is healthy and
+the source is sealed, an explicitly requested temporary handoff can forward HTTP
+and HTTPS to the destination. Use the retained **source** inventory, not the
+activated destination inventory, and the exact migration operation ID:
+
+```sh
+ANSIBLE_CONFIG=ops/ansible/ansible.cfg ops/ansible/.venv/bin/ansible-playbook \
+  -i ops/ansible/inventory.local.source.yml --limit public_vps \
+  ops/ansible/dns-handoff.yml \
+  -e scmig_run_id=EXACT_32_HEX_OPERATION_ID \
+  -e schandoff_source_ip=OLD_PUBLIC_IPV4 \
+  -e schandoff_target_ip=NEW_PUBLIC_IPV4 \
+  -e schandoff_domain=chat.example.com \
+  -e schandoff_ttl_seconds=7200
+```
+
+The playbook requires the original app, proxy and database to remain stopped with
+restart disabled. A separate read-only Caddy container uses a private snapshot of
+the existing hostname certificate, preserves the upstream Host and TLS SNI, and
+verifies the destination's certificate. It binds only the old IPv4 TCP ports 80
+and 443; media uses the destination addresses announced by the application.
+A systemd timer stops only that exact container ID after two hours. The original
+application and database remain sealed. Private command logs, certificate copies
+and `ownership.json` stay under the source transaction's `dns-handoff/` directory;
+the playbook refuses to overwrite an existing handoff attempt.
 
 ## Keep the existing hostname
 
