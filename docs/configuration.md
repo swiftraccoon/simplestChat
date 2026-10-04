@@ -21,7 +21,7 @@
 | `JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE` | `10` | Room joins one client IP may start per minute into one room (1–100000) |
 | `WS_HANDSHAKES_PER_MINUTE` | `120` | Per-client IP (IPv6 `/64`) rate limit for WebSocket upgrade attempts |
 | `AUTH_REQUESTS_PER_MINUTE` | `60` | Per-IP rate limit for authentication endpoints |
-| `PROFILE_REQUESTS_PER_MINUTE` | `600` | Per-IP rate limit for public profile reads (`/api/auth/profiles/:id`, one per avatar a viewer sees), kept apart from the sign-in and refresh budget |
+| `PROFILE_REQUESTS_PER_MINUTE` | `600` | Per-IP rate limit for public profile reads (`/api/auth/profiles/:id`, used by avatars and freshly opened participant cards), kept apart from the sign-in and refresh budget |
 | `AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE` | `20` | Per-account limit on signed-in password checks (password change, recovery key, passkey management) and WebSocket-ticket issuance |
 | `AUTH_MAX_CONCURRENCY` | `16` | Global cap on concurrent expensive authentication operations |
 | `REGISTRATION_ENABLED` | `false` | Allow new password/passkey accounts; must be explicitly enabled on every bind address |

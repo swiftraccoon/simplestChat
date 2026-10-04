@@ -4079,6 +4079,8 @@ impl RoomManager {
             id: room_id.to_string(),
             owner_id: uuid::Uuid::nil(),
             display_name: room_id.to_string(),
+            name_style: ChatStyle::default(),
+            topic_style: ChatStyle::default(),
             password_protected: false,
             require_registration: false,
             max_participants: None,

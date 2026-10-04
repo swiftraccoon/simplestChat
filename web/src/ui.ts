@@ -1,4 +1,4 @@
-import type { CreateRoomRequest } from './protocol';
+import type { AccountProfile, CreateRoomRequest, RoomListItem } from './protocol';
 import {
   type ChatPreferences,
   decodeAccountProfile,
@@ -355,7 +355,7 @@ export const api = {
     apiJson(decodeAccountProfile, '/api/auth/profile', token),
   updateProfile: (
     token: string | null,
-    data: { display_name: string; bio: string; avatar_url: string | null },
+    data: Pick<AccountProfile, 'display_name' | 'bio' | 'avatar_url' | 'profile_style'>,
     signal?: AbortSignal,
   ) => apiJson(decodeAccountProfile, '/api/auth/profile', token, 'PATCH', data, signal),
   changePassword: (
@@ -420,6 +420,8 @@ export const api = {
       topic: string | null;
       description: string;
       image_url: string | null;
+      name_style: RoomListItem['name_style'];
+      topic_style: RoomListItem['topic_style'];
     },
   ) =>
     apiJson(

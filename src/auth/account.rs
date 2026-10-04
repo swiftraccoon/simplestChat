@@ -17,6 +17,7 @@ use super::{
     jwt, routes, session,
     types::{AuthError, Claims},
 };
+use crate::signaling::protocol::{ChatStyle, deserialize_appearance_style};
 use crate::signaling::{ClientIp, SignalingServer};
 use axum::{
     Extension, Json,
@@ -43,6 +44,8 @@ pub struct AccountProfile {
     pub display_name: String,
     pub avatar_url: Option<String>,
     pub bio: String,
+    #[sqlx(json)]
+    pub profile_style: ChatStyle,
     pub recovery_enabled: bool,
 }
 
@@ -52,6 +55,8 @@ pub struct PublicProfile {
     pub display_name: String,
     pub avatar_url: Option<String>,
     pub bio: String,
+    #[sqlx(json)]
+    pub profile_style: ChatStyle,
 }
 
 #[derive(Deserialize)]
@@ -60,6 +65,8 @@ pub struct UpdateProfileRequest {
     pub display_name: String,
     pub avatar_url: Option<String>,
     pub bio: String,
+    #[serde(deserialize_with = "deserialize_appearance_style")]
+    pub profile_style: ChatStyle,
 }
 
 /// Chat preferences that follow an account across devices, in the browser's
@@ -366,7 +373,7 @@ pub fn validate_image_data_url(value: Option<&str>) -> Result<(), AuthError> {
 }
 
 async fn load_profile(pool: &PgPool, id: Uuid) -> Result<AccountProfile, AuthError> {
-    sqlx::query_as("SELECT id, email, display_name, avatar_url, bio, recovery_key_hash IS NOT NULL AS recovery_enabled FROM users WHERE id = $1")
+    sqlx::query_as("SELECT id, email, display_name, avatar_url, bio, profile_style, recovery_key_hash IS NOT NULL AS recovery_enabled FROM users WHERE id = $1")
         .bind(id).fetch_optional(pool).await.map_err(routes::database_error)?.ok_or(AuthError::UserNotFound)
 }
 
@@ -399,11 +406,11 @@ pub async fn update_profile(
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
     let profile: AccountProfile = sqlx::query_as(
-        "UPDATE users SET display_name = $2, avatar_url = $3, bio = $4, updated_at = now()
+        "UPDATE users SET display_name = $2, avatar_url = $3, bio = $4, profile_style = $6, updated_at = now()
          WHERE id = $1 AND auth_version = $5
-         RETURNING id, email, display_name, avatar_url, bio, recovery_key_hash IS NOT NULL AS recovery_enabled",
+         RETURNING id, email, display_name, avatar_url, bio, profile_style, recovery_key_hash IS NOT NULL AS recovery_enabled",
     )
-    .bind(id).bind(request.display_name.trim()).bind(request.avatar_url).bind(request.bio).bind(claims.auth_version)
+    .bind(id).bind(request.display_name.trim()).bind(request.avatar_url).bind(request.bio).bind(claims.auth_version).bind(sqlx::types::Json(request.profile_style))
     .fetch_optional(pool).await.map_err(routes::database_error)?
     .ok_or(AuthError::InvalidToken)?;
     Ok((routes::no_store_headers(), Json(profile)))
@@ -415,13 +422,14 @@ pub async fn public_profile(
 ) -> Result<(HeaderMap, Json<PublicProfile>), AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let profile =
-        sqlx::query_as("SELECT id, display_name, avatar_url, bio FROM users WHERE id = $1")
-            .bind(id)
-            .fetch_optional(pool)
-            .await
-            .map_err(routes::database_error)?
-            .ok_or(AuthError::UserNotFound)?;
+    let profile = sqlx::query_as(
+        "SELECT id, display_name, avatar_url, bio, profile_style FROM users WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(routes::database_error)?
+    .ok_or(AuthError::UserNotFound)?;
     Ok((routes::no_store_headers(), Json(profile)))
 }
 
@@ -717,6 +725,26 @@ mod tests {
         assert_eq!(serialized["allowPrivateMessages"], true);
         assert_eq!(serialized["largeText"], false);
         assert_eq!(serialized["timestamps"], "time");
+    }
+
+    #[test]
+    fn profile_appearance_requires_known_color_and_treatment() {
+        let mut request = serde_json::json!({
+            "display_name": "Account name", "avatar_url": null, "bio": "",
+            "profile_style": {"color": "teal", "style": "bubble"}
+        });
+        assert!(serde_json::from_value::<UpdateProfileRequest>(request.clone()).is_ok());
+        for appearance in [
+            serde_json::json!({"color": "invented", "style": "accent"}),
+            serde_json::json!({"color": null, "style": "invented"}),
+            serde_json::json!({"color": null, "style": "text", "css": "extra"}),
+            serde_json::Value::Null,
+        ] {
+            request["profile_style"] = appearance;
+            assert!(serde_json::from_value::<UpdateProfileRequest>(request.clone()).is_err());
+        }
+        request.as_object_mut().unwrap().remove("profile_style");
+        assert!(serde_json::from_value::<UpdateProfileRequest>(request).is_err());
     }
 
     #[test]

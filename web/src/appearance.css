@@ -1,0 +1,21 @@
+.appearance-custom[data-appearance='accent'] {
+  box-shadow: inset 3px 0 var(--appearance-color);
+  padding-inline-start: 0.6rem;
+}
+.appearance-custom[data-appearance='text'],
+:is(.room-label, .room-topic).appearance-custom[data-appearance='text'] {
+  color: var(--appearance-color);
+}
+.appearance-custom[data-appearance='bubble'] {
+  background: var(--appearance-tint);
+  border-radius: var(--radius-md);
+  padding: 0.3rem 0.55rem;
+}
+.appearance-picker {
+  display: grid;
+  gap: 0.65rem;
+}
+.appearance-preview {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

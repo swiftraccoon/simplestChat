@@ -1,5 +1,6 @@
 import type { AuthManager } from './auth';
 import { mountAccountSecurity, type AccountSecurityFlow } from './account-security';
+import { appearancePicker } from './appearance';
 import type { RoomClient } from './room';
 import type { AccountProfile, PublicProfile, RoomListItem } from './protocol';
 import type { RegistrationInvite, RoomInvite } from './api-validation';
@@ -184,9 +185,10 @@ export class CommunityUI {
     view.body.append(el('p', 'Account profile · room nicknames may differ', 'setting-hint'));
   }
 
-  /** Share bounded roster profile reads with the name hovercard. */
+  /** Explicit card visits refresh profile edits while sharing the bounded read queue. */
   participantProfile(id: string): Promise<PublicProfile | null> {
-    return this.profile(id);
+    this.profiles.delete(id);
+    return this.loadProfile(id, false);
   }
 
   report(id: string, name: string): void {
@@ -333,11 +335,19 @@ export class CommunityUI {
       bio.maxLength = 1000;
       bio.rows = 3;
       const avatar = this.imagePicker(profile.avatar_url, view.error);
+      const appearance = appearancePicker({
+        label: 'Hovercard appearance',
+        initial: profile.profile_style,
+        name: () => name.value.trim(),
+        description: 'Customize your hovercard independently of your chat messages.',
+      });
+      name.addEventListener('input', appearance.refreshPreview);
       view.body.append(
         el('p', profile.email),
         field('Account display name', name),
         field('Bio', bio),
         avatar.wrapper,
+        appearance.element,
       );
       const save = asyncButton(
         'Save profile',
@@ -347,6 +357,7 @@ export class CommunityUI {
             display_name: name.value.trim(),
             bio: bio.value.trim(),
             avatar_url: avatar.value(),
+            profile_style: appearance.chosen(),
           };
           await security.change(
             (currentToken, signal) => api.updateProfile(currentToken, update, signal),
@@ -796,6 +807,18 @@ export class CommunityUI {
     const generation = this.generation;
     const name = input(room.display_name, 'text', 100);
     const topic = input(room.topic ?? '', 'text', 500);
+    const nameAppearance = appearancePicker({
+      label: 'Room name appearance',
+      initial: room.name_style,
+      name: () => name.value,
+    });
+    const topicAppearance = appearancePicker({
+      label: 'Header description appearance',
+      initial: room.topic_style,
+      name: () => topic.value,
+    });
+    name.addEventListener('input', nameAppearance.refreshPreview);
+    topic.addEventListener('input', topicAppearance.refreshPreview);
     const description = el('textarea');
     description.value = room.description ?? '';
     description.maxLength = 1024;
@@ -803,7 +826,9 @@ export class CommunityUI {
     const image = this.imagePicker(room.image_url ?? null, view.error, true);
     view.body.append(
       field('Room display name', name),
-      field('Topic', topic),
+      nameAppearance.element,
+      field('Header description', topic),
+      topicAppearance.element,
       field('Description / room rules', description),
       image.wrapper,
       el(
@@ -822,6 +847,8 @@ export class CommunityUI {
             topic: topic.value.trim() || null,
             description: description.value.trim(),
             image_url: image.value(),
+            name_style: nameAppearance.chosen(),
+            topic_style: topicAppearance.chosen(),
           });
           view.close();
           this.options.onRoomsChanged();
@@ -867,6 +894,31 @@ export class CommunityUI {
     const room = this.options.getRoom();
     if (!room) return;
     const view = modal('Manage room');
+    if (room.role === 'owner' && this.options.auth.isLoggedIn) {
+      const membership = room.membershipVersion;
+      const generation = this.generation;
+      const edit = asyncButton(
+        'Room appearance',
+        () =>
+          busy(edit, view.error, async () => {
+            const rooms = await api.ownRooms(this.options.auth.jwt);
+            if (
+              !view.dialog.open ||
+              this.generation !== generation ||
+              this.options.getRoom() !== room ||
+              room.membershipVersion !== membership ||
+              room.role !== 'owner'
+            )
+              return;
+            const owned = rooms.find((entry) => entry.id === room.currentRoomId);
+            if (!owned) throw new Error('This room is not in your owned rooms.');
+            view.close();
+            this.editRoom(owned, () => {});
+          }),
+        (error) => this.showError(view.error, error),
+      );
+      view.body.append(edit);
+    }
     const tabs = el('div', undefined, 'community-row');
     const content = el('div');
     let current: 'members' | 'bans' | 'reports' | 'history' = 'members';

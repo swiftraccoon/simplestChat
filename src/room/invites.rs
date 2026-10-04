@@ -308,6 +308,8 @@ type MembershipRow = (
     String,
     Option<String>,
     bool,
+    sqlx::types::Json<crate::signaling::protocol::ChatStyle>,
+    sqlx::types::Json<crate::signaling::protocol::ChatStyle>,
     i16,
 );
 
@@ -325,7 +327,7 @@ pub async fn memberships(
 ) -> Result<MembershipBatch, sqlx::Error> {
     let mut rows: Vec<MembershipRow> = sqlx::query_as(
         "SELECT r.id, r.display_name, r.topic, r.password_hash IS NOT NULL, r.moderated,
-                    r.description, r.image_url, r.secret, rr.role
+                    r.description, r.image_url, r.secret, r.name_style, r.topic_style, rr.role
              FROM room_roles rr JOIN rooms r ON r.id = rr.room_id
              WHERE rr.user_id = $1 AND r.owner_id <> $1
                AND ($3::text IS NULL OR r.id > $3)
@@ -344,7 +346,19 @@ pub async fn memberships(
         rows: rows
             .into_iter()
             .map(
-                |(id, name, topic, password, moderated, description, image, secret, role)| {
+                |(
+                    id,
+                    name,
+                    topic,
+                    password,
+                    moderated,
+                    description,
+                    image,
+                    secret,
+                    name_style,
+                    topic_style,
+                    role,
+                )| {
                     (
                         (
                             id,
@@ -355,6 +369,8 @@ pub async fn memberships(
                             description,
                             image,
                             secret,
+                            name_style,
+                            topic_style,
                         ),
                         role,
                     )

@@ -262,7 +262,11 @@
       "body": {
         "display_name": "Policy fixture",
         "avatar_url": null,
-        "bio": ""
+        "bio": "",
+        "profile_style": {
+          "color": null,
+          "style": "accent"
+        }
       },
       "unauthenticated_status": null,
       "checks": [
@@ -449,7 +453,15 @@
         "display_name": "Policy room",
         "topic": null,
         "description": "",
-        "image_url": null
+        "image_url": null,
+        "name_style": {
+          "color": null,
+          "style": "accent"
+        },
+        "topic_style": {
+          "color": null,
+          "style": "accent"
+        }
       },
       "unauthenticated_status": null,
       "checks": [

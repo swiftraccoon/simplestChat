@@ -84,6 +84,8 @@ const chat = {
   reactions: [{ emoji: '🎉', participantIds: ['participant'] }],
 };
 const settings = {
+  nameStyle: { color: null, style: 'accent' },
+  topicStyle: { color: null, style: 'accent' },
   id: 'room',
   ownerId: 'owner',
   displayName: 'Room',

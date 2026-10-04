@@ -71,6 +71,7 @@ export async function checkContracts(
     display_name: 'Name',
     bio: '',
     avatar_url: null,
+    profile_style: { color: null, style: 'accent' },
   });
   expectType<AccountProfile>(updated);
   expectType<void>(await api.deleteRoom('room', 'token'));

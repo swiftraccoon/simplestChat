@@ -268,6 +268,8 @@ async fn quiet_lobby_socket_survives_without_gaining_room_admission() {
         id: "heartbeat-test".into(),
         owner_id: Uuid::nil(),
         display_name: "Heartbeat fixture".into(),
+        name_style: Default::default(),
+        topic_style: Default::default(),
         password_protected: false,
         require_registration: false,
         max_participants: None,

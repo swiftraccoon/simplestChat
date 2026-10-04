@@ -30,6 +30,8 @@ async function main() {
       const fixture = { commands: [], captures: 0, socket: null };
       window.__roomControlFixture = fixture;
       const settings = (id) => ({
+        nameStyle: { color: null, style: 'accent' },
+        topicStyle: { color: null, style: 'accent' },
         id,
         displayName: id,
         passwordProtected: false,

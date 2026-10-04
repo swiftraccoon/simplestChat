@@ -523,6 +523,8 @@ export interface RoomSettings {
   guestsAllowed: boolean;
   guestsCanBroadcast: boolean;
   topic?: string;
+  nameStyle: ChatStyle;
+  topicStyle: ChatStyle;
 }
 
 export interface ProducerMetadata {
@@ -588,6 +590,8 @@ export interface RoomListItem {
   description: string;
   image_url: string | null;
   secret: boolean;
+  name_style: ChatStyle;
+  topic_style: ChatStyle;
 }
 
 export interface PublicProfile {
@@ -595,6 +599,7 @@ export interface PublicProfile {
   display_name: string;
   avatar_url: string | null;
   bio: string;
+  profile_style: ChatStyle;
 }
 
 export interface AccountProfile extends PublicProfile {

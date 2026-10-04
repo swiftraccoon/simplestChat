@@ -55,11 +55,14 @@
 .participant-hovercard p {
   overflow-wrap: anywhere;
 }
-.participant-hovercard-profile-name,
+.participant-hovercard-label,
 .participant-hovercard-status {
   font-size: 0.75rem;
   line-height: 1.5;
   color: var(--text-dim);
+}
+.participant-hovercard-profile-name {
+  font-size: 0.85rem;
 }
 .participant-hovercard-bio {
   padding-top: 0.65rem;

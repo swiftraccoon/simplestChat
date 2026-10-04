@@ -3,7 +3,7 @@
 use super::{RoomManager, control, settings};
 use crate::auth::account::{validate_image_data_url, validate_text};
 use crate::auth::types::AuthError;
-use crate::signaling::protocol::ServerMessage;
+use crate::signaling::protocol::{ChatStyle, ServerMessage, deserialize_appearance_style};
 use serde::Deserialize;
 use std::time::Duration;
 use uuid::Uuid;
@@ -15,6 +15,10 @@ pub struct RoomIdentityUpdate {
     pub topic: Option<String>,
     pub description: String,
     pub image_url: Option<String>,
+    #[serde(deserialize_with = "deserialize_appearance_style")]
+    pub name_style: ChatStyle,
+    #[serde(deserialize_with = "deserialize_appearance_style")]
+    pub topic_style: ChatStyle,
 }
 
 impl RoomIdentityUpdate {
@@ -125,6 +129,8 @@ impl RoomManager {
                 let mut settings = settings.clone();
                 settings.display_name = identity.display_name.trim().to_owned();
                 settings.topic = identity.topic.clone();
+                settings.name_style = identity.name_style.clone();
+                settings.topic_style = identity.topic_style.clone();
                 let mut value = serde_json::to_value(&settings)
                     .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
                 value["description"] = serde_json::json!(identity.description);
@@ -154,9 +160,10 @@ impl RoomManager {
                 sqlx::query("SET LOCAL lock_timeout = '5s'")
                     .execute(&mut *transaction)
                     .await?;
-                let updated = sqlx::query("UPDATE rooms SET display_name = $3, topic = $4, description = $5, image_url = $6, updated_at = now() WHERE id = $1 AND owner_id = $2")
+                let updated = sqlx::query("UPDATE rooms SET display_name = $3, topic = $4, description = $5, image_url = $6, name_style = $7, topic_style = $8, updated_at = now() WHERE id = $1 AND owner_id = $2")
                     .bind(&room_id).bind(owner_id).bind(identity.display_name.trim()).bind(&identity.topic)
-                    .bind(&identity.description).bind(&identity.image_url).execute(&mut *transaction).await?;
+                    .bind(&identity.description).bind(&identity.image_url)
+                    .bind(sqlx::types::Json(&identity.name_style)).bind(sqlx::types::Json(&identity.topic_style)).execute(&mut *transaction).await?;
                 if updated.rows_affected() == 0 {
                     // A live room already verified this owner under control.
                     // Its missing durable row cannot leave cached policy live.
@@ -231,6 +238,8 @@ mod tests {
             topic: None,
             description: "A place to talk".into(),
             image_url: None,
+            name_style: ChatStyle::default(),
+            topic_style: ChatStyle::default(),
         };
         assert!(identity.validate().is_ok());
         identity.display_name = " ".into();
@@ -245,5 +254,31 @@ mod tests {
         identity.topic = None;
         identity.image_url = Some("data:image/svg+xml;base64,PHN2Zz4=".into());
         assert!(identity.validate().is_err());
+    }
+
+    #[test]
+    fn room_appearance_requires_both_known_styles() {
+        let request = serde_json::json!({
+            "display_name": "Our room", "topic": "Description", "description": "",
+            "image_url": null,
+            "name_style": {"color": "teal", "style": "text"},
+            "topic_style": {"color": null, "style": "accent"}
+        });
+        assert!(serde_json::from_value::<RoomIdentityUpdate>(request.clone()).is_ok());
+        for field in ["name_style", "topic_style"] {
+            for appearance in [
+                serde_json::json!({"color": "invented", "style": "accent"}),
+                serde_json::json!({"color": null, "style": "invented"}),
+                serde_json::json!({"color": null, "style": "text", "css": "extra"}),
+                serde_json::Value::Null,
+            ] {
+                let mut invalid = request.clone();
+                invalid[field] = appearance;
+                assert!(serde_json::from_value::<RoomIdentityUpdate>(invalid).is_err());
+            }
+            let mut missing = request.clone();
+            missing.as_object_mut().unwrap().remove(field);
+            assert!(serde_json::from_value::<RoomIdentityUpdate>(missing).is_err());
+        }
     }
 }

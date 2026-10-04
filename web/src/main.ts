@@ -18,6 +18,7 @@ import { MediaControls } from './media-controls';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
 import { ParticipantHovercard } from './participant-hovercard';
+import { applyAppearance } from './appearance';
 import {
   api,
   ApiError,
@@ -1425,6 +1426,7 @@ const community = new CommunityUI({
   getRoom: () => room,
   notify: (message) => showToast(message),
   onProfileChanged: (profile) => {
+    participantHovercard.reset();
     auth.updateDisplayName(profile.display_name);
     if (room) renderParticipants(room.getParticipants());
   },
@@ -1483,6 +1485,7 @@ const participantHovercard = new ParticipantHovercard({
       ? {
           displayName: profile.display_name,
           bio: profile.bio,
+          profileStyle: profile.profile_style,
           ...(profile.avatar_url && { avatarUrl: profile.avatar_url }),
         }
       : null;
@@ -2587,6 +2590,8 @@ joinBtn.addEventListener(
         },
         onRoomSettingsChanged: (settings) => {
           roomLabel.textContent = settings.displayName;
+          applyAppearance(roomLabel, settings.nameStyle, settings.displayName);
+          applyAppearance(roomTopic, settings.topicStyle, settings.topic ?? '');
           socialChat.participantsChanged();
           updateRoomModeUI();
           applyRoomSettingsToUI();
@@ -2595,6 +2600,7 @@ joinBtn.addEventListener(
         },
         onTopicChanged: (topic, changedBy) => {
           roomTopic.textContent = topic;
+          applyAppearance(roomTopic, room?.roomSettings?.topicStyle, topic);
           roomTopic.hidden = !topic;
           showToast(`Topic changed by ${changedBy}: ${topic}`);
         },
@@ -2742,6 +2748,8 @@ function applyJoinedRoomUI(): void {
   setLayout(getLayout());
 
   roomLabel.textContent = room.roomSettings?.displayName ?? room.currentRoomId ?? '';
+  applyAppearance(roomLabel, room.roomSettings?.nameStyle, roomLabel.textContent);
+  applyAppearance(roomTopic, room.roomSettings?.topicStyle, room.roomSettings?.topic ?? '');
   roomLabel.hidden = false;
   setRoomToolsVisible(true);
   placeDiagnosticsButton(true);

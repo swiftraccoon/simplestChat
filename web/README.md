@@ -63,6 +63,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/video-layout.ts` | Aspect-aware video rows, available-stage sizing and explicit pinning |
 | `src/ui.ts` | Text-safe controls, dialogs and named HTTP API methods |
 | `src/participant-hovercard.ts` | Shared participant cards for roster and chat names, profile loading ownership and pointer/keyboard/touch interaction |
+| `src/appearance.ts` | Independent profile-card and room-heading appearance controls, previews and palette-only rendering |
 | `src/auth.ts`, `account-session-sync.ts`, `community-ui.ts` | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management |
 | `src/signaling.ts`, `protocol.ts` | WebSocket lifecycle and typed server protocol |
 | `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts` | Shared decoder primitives and HTTP/WebSocket response validation |
@@ -239,12 +240,19 @@ reconnect, while account IDs are stable. Moderation confirmations retain identit
 details to help identify the selected participant.
 
 Hover or focus a name in the user list or chat to open a compact participant card;
-clicking or tapping the name keeps it open. Cards show the room nickname, optional
-public avatar/bio and relevant message/profile actions. Tab enters the card actions,
+clicking or tapping the name keeps it open. Cards label the room nickname and account
+name separately, with an optional public avatar/bio and relevant message/profile actions. Tab enters the card actions,
 Escape dismisses it, and touch users can tap outside to close it. Profile responses
 belong to the current card and room membership, so leaving or changing users cannot
 populate a later card. The existing actions menu remains available through More
 and the roster's actions button.
+
+Account settings save profile-card color and treatment separately from chat styling.
+Room owners can choose independent styles for the room name and header description
+(the topic) through My rooms → Edit room or Manage room → Room appearance. The
+palette and accent/text/tinted-background choices have live previews. Saved room
+styles update the heading for current participants and survive reconnects. These
+public styles accept palette tokens, not arbitrary CSS.
 
 Chat timestamps are visible by default; an explicitly saved timestamp preference
 is retained. Join and leave notices include timestamps, including departures by

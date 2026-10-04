@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { loadTypeScript } from './source-loader.mjs';
 
+const automaticStyle = { color: null, style: 'accent' };
+
 function deferred() {
   let resolve, reject;
   const promise = new Promise((yes, no) => {
@@ -114,7 +116,11 @@ async function harness(options = {}) {
           participants: [],
           yourRole: options.role ?? 'user',
           reconnectToken: 'reconnect-token',
-          roomSettings: options.settings,
+          roomSettings: options.settings && {
+            nameStyle: automaticStyle,
+            topicStyle: automaticStyle,
+            ...options.settings,
+          },
         };
         queueMicrotask(() => this.onMessage(reply));
       }
@@ -733,7 +739,13 @@ test('snapshot restores nickname, role, sanctions and server permissions before 
   h.reply({ type: 'roleChanged', participantId: 'local', newRole: 'user' });
   h.reply({
     type: 'roomSettingsChanged',
-    settings: { moderated: true, allowChat: true, guestsCanBroadcast: true },
+    settings: {
+      moderated: true,
+      allowChat: true,
+      guestsCanBroadcast: true,
+      nameStyle: automaticStyle,
+      topicStyle: automaticStyle,
+    },
   });
   assert.equal(h.room.canChat, false);
   h.reply({ type: 'roleChanged', participantId: 'local', newRole: 'member' });

@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { uiFixture } from './ui-fixture.mjs';
 
-const profile = { id: 'account', display_name: 'Person', avatar_url: null, bio: '' };
+const appearance = { color: null, style: 'accent' };
+const profile = {
+  id: 'account',
+  display_name: 'Person',
+  avatar_url: null,
+  bio: '',
+  profile_style: appearance,
+};
 const account = { ...profile, email: 'person@example.test', recovery_enabled: false };
 const room = {
   id: 'room',
@@ -15,6 +22,8 @@ const room = {
   description: '',
   image_url: null,
   secret: false,
+  name_style: appearance,
+  topic_style: appearance,
 };
 const settings = {
   id: 'room',
@@ -35,6 +44,8 @@ const settings = {
   guestsAllowed: true,
   guestsCanBroadcast: true,
   topic: null,
+  nameStyle: appearance,
+  topicStyle: appearance,
 };
 const invite = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -380,6 +391,9 @@ test('all serialized profile and directory fields remain required, including nul
     { description: null },
     { image_url: {} },
     { secret: 0 },
+    { name_style: { color: '#fff', style: 'text' } },
+    { topic_style: { color: 'green', style: 'script' } },
+    { name_style: undefined },
   ]) {
     state.response = { ok: true, status: 200, json: async () => [{ ...room, ...patch }] };
     await assert.rejects(ui.api.ownRooms(null), /server returned invalid data/);
@@ -389,6 +403,9 @@ test('all serialized profile and directory fields remain required, including nul
     { recovery_enabled: 'false' },
     { bio: null },
     { email: 42 },
+    { profile_style: { color: 'url(javascript:alert(1))', style: 'accent' } },
+    { profile_style: { color: 'rose', style: 'unknown' } },
+    { profile_style: undefined },
   ]) {
     state.response = { ok: true, status: 200, json: async () => ({ ...account, ...patch }) };
     await assert.rejects(ui.api.accountProfile(null), /server returned invalid data/);

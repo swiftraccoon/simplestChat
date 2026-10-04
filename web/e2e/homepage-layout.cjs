@@ -29,6 +29,8 @@ const rooms = Array.from({ length: 21 }, (_, index) => ({
   password_protected: index % 2 === 0,
   moderated: true,
   broadcaster_count: 999,
+  name_style: { color: null, style: 'accent' },
+  topic_style: { color: null, style: 'accent' },
   description: 'Description'.repeat(24),
   image_url: index % 3 ? null : thumbnail,
   secret: false,

@@ -14,6 +14,7 @@ const {
 const playwright = require('playwright');
 
 const origin = 'http://127.0.0.1:39879';
+const automaticStyle = { color: null, style: 'accent' };
 const capabilities = {
   version: 1,
   accounts: true,
@@ -28,6 +29,8 @@ const capabilities = {
 const settings = {
   id: 'fixture-room',
   displayName: 'Fixture room',
+  nameStyle: automaticStyle,
+  topicStyle: automaticStyle,
   passwordProtected: false,
   requireRegistration: false,
   allowScreenSharing: true,
@@ -259,12 +262,14 @@ async function run() {
           display_name: 'Fixture owner',
           avatar_url: null,
           bio: '',
+          profile_style: automaticStyle,
         });
       if (holdProfiles && url.pathname.startsWith('/api/auth/profiles/')) {
         const id = url.pathname.split('/').pop();
         if (profileResponses.has(id)) return json(profileResponses.get(id));
-        assert.ok(!profiles.has(id), 'The fixture receives one cached profile request per person');
-        profiles.set(id, route);
+        const pending = profiles.get(id) ?? [];
+        pending.push(route);
+        profiles.set(id, pending);
         profileWaiters.get(id)?.();
         profileWaiters.delete(id);
         return;
@@ -313,7 +318,7 @@ async function run() {
           allowPrivateMessages: true,
           sounds: false,
           largeText: false,
-          timestamps: 'hover',
+          timestamps: 'time',
           ignored: [],
         });
       throw new Error(`Unexpected fixture path ${url.pathname}`);
@@ -333,13 +338,20 @@ async function run() {
       context,
       page,
       sent,
-      finishProfile: async (id, bio) => {
+      finishProfile: async (id, bio, details = {}) => {
         if (!profiles.has(id)) await new Promise((resolve) => profileWaiters.set(id, resolve));
-        const profile = { id, display_name: `Profile for ${id}`, avatar_url: null, bio };
+        const profile = {
+          id,
+          display_name: `Profile for ${id}`,
+          avatar_url: null,
+          bio,
+          profile_style: automaticStyle,
+          ...details,
+        };
         profileResponses.set(id, profile);
-        await profiles.get(id).fulfill({
-          json: profile,
-        });
+        const pending = profiles.get(id);
+        profiles.delete(id);
+        await Promise.all(pending.map((route) => route.fulfill({ json: profile })));
       },
       requests,
       previews,
@@ -929,6 +941,37 @@ async function run() {
     await call.page.locator('#join-btn').click();
     await call.page.locator('#room-screen').waitFor({ state: 'visible' });
     call.send(publicMessage('remote-fixture', 'Other person', 'Hovercard fixture message'));
+    const messageTime = call.page
+      .locator('.chat-msg')
+      .filter({ hasText: 'Hovercard fixture message' })
+      .locator('.msg-time');
+    await messageTime.waitFor({ state: 'visible' });
+    assert.match(await messageTime.textContent(), /^\d{2}:\d{2}$/);
+    assert.equal(await messageTime.evaluate((node) => getComputedStyle(node).opacity), '1');
+    assert.ok(Number.isFinite(Date.parse(await messageTime.getAttribute('datetime'))));
+    const optionsStyle = await call.page
+      .getByRole('button', { name: 'Chat options', exact: true })
+      .evaluate((node) => {
+        const style = getComputedStyle(node);
+        return {
+          size: Number.parseFloat(style.fontSize),
+          weight: Number.parseInt(style.fontWeight, 10),
+          background: style.backgroundColor,
+          width: node.getBoundingClientRect().width,
+        };
+      });
+    assert.ok(optionsStyle.size >= 22 && optionsStyle.weight >= 700);
+    assert.ok(optionsStyle.width >= 40);
+    assert.notEqual(optionsStyle.background, 'rgba(0, 0, 0, 0)');
+    assert.equal(
+      await call.page
+        .locator('#room-tools-right')
+        .evaluate((node) => getComputedStyle(node).borderLeftWidth),
+      '0px',
+    );
+    report.checks.push(
+      'Chat times are visible by default, Chat options is prominent, and People has no divider',
+    );
     await participantHovercardChecks(call.page, {
       name: 'Other person',
       message: 'Hovercard fixture message',
@@ -1014,6 +1057,25 @@ async function run() {
     await call.page.locator('#toggle-roster').click();
     assert.equal(await call.page.locator('#classic-users-panel li').count(), 3);
     report.checks.push('Collapsing the roster releases hidden rows and reopening restores members');
+    const joinNotice = call.page
+      .locator('.chat-msg.system')
+      .filter({ hasText: 'Another person joined' });
+    await joinNotice.locator('.msg-time').waitFor({ state: 'visible' });
+    assert.equal(await call.page.locator('.video-tile[data-participant-id="another"]').count(), 0);
+    call.send({ type: 'participantLeft', participantId: 'another' });
+    const leaveNotice = call.page
+      .locator('.chat-msg.system')
+      .filter({ hasText: 'Another person left' });
+    await leaveNotice.locator('.msg-time').waitFor({ state: 'visible' });
+    for (const notice of [joinNotice, leaveNotice]) {
+      const time = notice.locator('.msg-time');
+      assert.match(await time.textContent(), /^\d{2}:\d{2}$/);
+      assert.equal(await time.evaluate((node) => getComputedStyle(node).opacity), '1');
+      assert.ok(Number.isFinite(Date.parse(await time.getAttribute('datetime'))));
+    }
+    report.checks.push(
+      'Joining and leaving without shared media both show timestamped chat notices',
+    );
     const publicConversation = call.page.locator(
       '.conversation-tab[data-conversation-id="public"]',
     );
@@ -1075,7 +1137,7 @@ async function run() {
       assert.equal(await call.page.locator('#participant-list li').count(), 0);
       if (viewport.width === 320) {
         await call.page.locator('#sidebar-tabs [data-tab="users"]').click();
-        assert.equal(await call.page.locator('#participant-list li').count(), 3);
+        assert.equal(await call.page.locator('#participant-list li').count(), 2);
         await call.page.locator('#sidebar-tabs [data-tab="chat"]').click();
         assert.equal(await call.page.locator('#participant-list li').count(), 0);
         report.checks.push('Hidden mobile People tab has no roster rows');
@@ -1129,7 +1191,7 @@ async function run() {
     assert.equal(await call.page.locator('#participant-list li').count(), 0);
     await call.page.setViewportSize({ width: 844, height: 390 });
     await call.page.waitForFunction(
-      () => document.querySelectorAll('#participant-list li').length === 3,
+      () => document.querySelectorAll('#participant-list li').length === 2,
     );
     assert.equal(await call.page.locator('#users-panel').isVisible(), true);
     report.checks.push(
@@ -1208,6 +1270,7 @@ async function run() {
           participantName: id,
           role: 'user',
           authenticated: true,
+          chatStyle: { color: 'rose', style: 'text' },
         });
       const delayed = f.page.locator(
         '#classic-users-panel [data-participant-hovercard="delayed-profile"]',
@@ -1223,7 +1286,10 @@ async function run() {
       await card.waitFor({ state: 'hidden' });
       await other.hover();
       await card.getByText('Other person', { exact: true }).waitFor();
-      await f.finishProfile('delayed-profile', 'This belongs only to the first profile.');
+      await f.finishProfile('delayed-profile', 'This belongs only to the first profile.', {
+        display_name: 'delayed-profile',
+        profile_style: { color: 'violet', style: 'bubble' },
+      });
       await f.page.waitForFunction(() =>
         window.__hovercardProfilesRead.includes('delayed-profile'),
       );
@@ -1234,17 +1300,40 @@ async function run() {
       await card.waitFor({ state: 'hidden' });
       await delayed.hover();
       await card.getByText('This belongs only to the first profile.', { exact: true }).waitFor();
+      await card.getByText('Nickname', { exact: true }).waitFor();
+      await card.getByText('Account name', { exact: true }).waitFor();
       assert.equal(
         await card.locator('.participant-hovercard-profile-name').textContent(),
-        'Profile for delayed-profile',
+        'delayed-profile',
+      );
+      assert.equal(
+        await card.locator('.participant-hovercard-name').textContent(),
+        'delayed-profile',
+      );
+      assert.equal(
+        await card.locator('.appearance-custom').getAttribute('data-appearance'),
+        'bubble',
+      );
+      assert.equal(
+        await card
+          .locator('.appearance-custom')
+          .evaluate((node) => node.style.getPropertyValue('--appearance-color')),
+        '#a78bfa',
+        'The hovercard uses violet profile styling independently of rose chat styling',
+      );
+      report.checks.push(
+        'Hovercards label nickname and account name even when equal and use independent profile styling',
       );
       await f.page.screenshot({ path: path.join(artifacts, 'participant-hovercard-profile.png') });
+      const profileReads = f.requests.filter(
+        (url) => url === '/api/auth/profiles/delayed-profile',
+      ).length;
       await card.getByRole('button', { name: 'Profile', exact: true }).click();
       const profile = f.page.getByRole('dialog', { name: 'Profile', exact: true });
       await profile.getByText('This belongs only to the first profile.', { exact: true }).waitFor();
       assert.equal(
         f.requests.filter((url) => url === '/api/auth/profiles/delayed-profile').length,
-        2,
+        profileReads + 1,
         'Opening the full profile refreshes the correct account',
       );
       await f.page.keyboard.press('Escape');

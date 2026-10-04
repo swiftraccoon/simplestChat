@@ -165,6 +165,13 @@ shapes, including required nullable profile/directory fields and no-content
 statuses. Update the endpoint types, browser action/response contracts and
 serialization tests together; the guide lists the HTTP method/result mappings.
 
+Profile-card appearance (`users.profile_style`) and room name/topic appearance
+(`rooms.name_style`, `rooms.topic_style`) are independent from chat styling.
+Migrations 023/024 add and validate bounded JSON objects using the shared palette
+and three treatments. Profile updates require the account session; room identity
+updates require the owner and broadcast committed styles to current participants.
+These fields require the maintenance deployment path, preserving existing data.
+
 ## Build and run
 
 From the repository root, with the static OpenSSL/Python environment configured

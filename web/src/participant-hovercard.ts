@@ -1,4 +1,6 @@
 import { avatarColors } from './avatar-colors';
+import { applyAppearance } from './appearance';
+import type { ChatStyle } from './protocol';
 import { button, el, safeRasterUrl } from './ui';
 
 export interface ParticipantHovercardData {
@@ -18,6 +20,7 @@ export interface ParticipantHovercardProfile {
   displayName?: string;
   bio?: string;
   avatarUrl?: string;
+  profileStyle?: ChatStyle;
 }
 
 export interface ParticipantHovercardOptions {
@@ -212,19 +215,22 @@ export class ParticipantHovercard {
     this.card.setAttribute('aria-label', data.name);
     const avatar = el('div', [...data.name][0]?.toUpperCase(), 'participant-hovercard-avatar');
     avatar.setAttribute('aria-hidden', 'true');
-    const colors = avatarColors(data.name, data.color);
+    const colors = avatarColors(data.name);
     avatar.style.background = colors.background;
     avatar.style.color = colors.color;
     this.setAvatar(avatar, data.avatarUrl);
     const details = el('div', undefined, 'participant-hovercard-details');
     const profileName = el('p', undefined, 'participant-hovercard-profile-name');
-    profileName.hidden = true;
+    const accountName = el('div');
+    accountName.hidden = true;
+    accountName.append(el('span', 'Account name', 'participant-hovercard-label'), profileName);
     const status = [data.online ? 'In this room' : 'Offline', data.role]
       .filter(Boolean)
       .join(' · ');
     details.append(
+      el('span', 'Nickname', 'participant-hovercard-label'),
       el('h3', data.name, 'participant-hovercard-name'),
-      profileName,
+      accountName,
       el('p', status, 'participant-hovercard-status'),
     );
     const header = el('div', undefined, 'participant-hovercard-header');
@@ -274,7 +280,10 @@ export class ParticipantHovercard {
         (current) => !!current.canMore,
         (current) => this.options.onMore?.(id, current.name, anchor),
       );
-    this.card.append(header, bio);
+    const content = el('div');
+    applyAppearance(content, undefined, data.name);
+    content.append(header, bio);
+    this.card.append(content);
     if (actions.childElementCount) this.card.append(actions);
     this.card.hidden = false;
     this.position();
@@ -292,9 +301,13 @@ export class ParticipantHovercard {
           )
             return;
           profileName.textContent = profile.displayName ?? '';
-          profileName.hidden = !profile.displayName || profile.displayName === data.name;
+          accountName.hidden = !profile.displayName;
           bio.textContent = profile.bio ?? '';
           bio.hidden = !profile.bio;
+          applyAppearance(content, profile.profileStyle, data.name);
+          const colors = avatarColors(data.name, profile.profileStyle?.color);
+          avatar.style.background = colors.background;
+          avatar.style.color = colors.color;
           this.setAvatar(avatar, profile.avatarUrl);
           this.position();
         })

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadTypeScript } from './source-loader.mjs';
 import { createDOM, deferred, flush } from './ui-fixture.mjs';
+import { loadAppearanceFixture } from './appearance-fixture.mjs';
 
 async function fixture() {
   const { document, Node } = createDOM();
@@ -16,7 +17,6 @@ async function fixture() {
   document.createElement = (tag) => {
     const node = originalCreate(tag);
     node.dataset = {};
-    node.style = {};
     return node;
   };
   Node.prototype.contains = function (target) {
@@ -64,7 +64,8 @@ async function fixture() {
   const { ParticipantHovercard } = await loadTypeScript('src/participant-hovercard.ts', {
     modules: {
       './ui': ui,
-      './avatar-colors': { avatarColors: () => ({ background: 'blue', color: 'white' }) },
+      './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
+      './appearance': await loadAppearanceFixture({ Node, ui }),
     },
     globals: {
       Node,
@@ -204,12 +205,45 @@ test('guests do not load account profiles and stale card actions cannot run', as
   f.state.data = { ...f.state.data, profileAvailable: false, canMessage: true };
   f.anchor.focus();
   assert.equal(f.state.profiles.length, 0);
+  assert.equal(f.card.querySelector('.participant-hovercard-profile-name').parentNode.hidden, true);
   const action = f.card.querySelector('button');
   assert.equal(action.textContent, 'Message');
   f.state.session = {};
   action.click();
   assert.deepEqual(f.state.actions, []);
   assert.equal(f.card.hidden, true);
+});
+
+test('nickname and account name remain explicitly labelled when they match', async () => {
+  const f = await fixture();
+  f.anchor.focus();
+  f.state.profiles[0].resolve({ displayName: 'Alice' });
+  await flush();
+  assert.deepEqual(
+    f.card.querySelectorAll('.participant-hovercard-label').map((node) => node.textContent),
+    ['Nickname', 'Account name'],
+  );
+  const accountName = f.card.querySelector('.participant-hovercard-profile-name');
+  assert.equal(accountName.textContent, 'Alice');
+  assert.equal(accountName.parentNode.hidden, false);
+});
+
+test('profile appearance and avatar fallback are independent of the chat color', async () => {
+  const f = await fixture();
+  f.state.data.color = 'red';
+  f.anchor.focus();
+  const avatar = f.card.querySelector('.participant-hovercard-avatar');
+  const content = f.card.querySelector('.appearance-custom');
+  assert.notEqual(avatar.style.background, '#f87171');
+  f.state.profiles[0].resolve({
+    displayName: 'Alice',
+    profileStyle: { color: 'teal', style: 'bubble' },
+  });
+  await flush();
+  assert.equal(content.dataset.appearance, 'bubble');
+  assert.equal(content.style['--appearance-color'], '#2dd4bf');
+  assert.equal(avatar.style.background, '#2dd4bf');
+  assert.equal(f.state.data.color, 'red');
 });
 
 test('roster removal closes the card and disconnected anchors cannot reopen it', async () => {

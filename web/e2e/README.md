@@ -157,6 +157,10 @@ isolation and preferences, mentions, profiles/images, moderation, recovery,
 preview, decoded video/audio, viewer controls, capture restart and mobile layout.
 Participant hovercards open from roster and chat names; pointer movement into
 the card, keyboard navigation, Escape, and Message/More actions use real room data.
+Profile saves verify separate nickname/account-name labels and hovercard styling
+without changing chat or roster colors. Room owners save independent name and
+header-description appearances, which update other participants live and persist
+when reopened through Manage room's Room appearance shortcut.
 Audio must be unmuted at positive volume with advancing playback. A separately
 simulated autoplay rejection checks the visible retry button.
 

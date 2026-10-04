@@ -5,6 +5,7 @@ use crate::room::DeleteRoomResult;
 use crate::room::community::RoomIdentityUpdate;
 use crate::room::settings::{self, CreateRoomRequest, RoomSettings};
 use crate::signaling::SignalingServer;
+use crate::signaling::protocol::ChatStyle;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -44,6 +45,8 @@ pub struct RoomListItem {
     pub description: String,
     pub image_url: Option<String>,
     pub secret: bool,
+    pub name_style: ChatStyle,
+    pub topic_style: ChatStyle,
 }
 
 pub(crate) type RoomListRow = (
@@ -55,6 +58,8 @@ pub(crate) type RoomListRow = (
     String,
     Option<String>,
     bool,
+    sqlx::types::Json<ChatStyle>,
+    sqlx::types::Json<ChatStyle>,
 );
 
 pub(crate) fn room_list_item(server: &SignalingServer, row: RoomListRow) -> RoomListItem {
@@ -69,6 +74,8 @@ pub(crate) fn room_list_item(server: &SignalingServer, row: RoomListRow) -> Room
         description: row.5,
         image_url: row.6,
         secret: row.7,
+        name_style: row.8.0,
+        topic_style: row.9.0,
     }
 }
 
@@ -197,7 +204,7 @@ pub async fn list_rooms(
              )
              SELECT rooms.id, rooms.display_name, rooms.topic,
                     rooms.password_hash IS NOT NULL AS password_protected,
-                    rooms.moderated, rooms.description, rooms.image_url, rooms.secret
+                    rooms.moderated, rooms.description, rooms.image_url, rooms.secret, rooms.name_style, rooms.topic_style
              FROM page JOIN rooms ON rooms.id = page.id
              ORDER BY page.created_at DESC, page.id DESC"#,
         )
@@ -208,7 +215,7 @@ pub async fn list_rooms(
         .await
     } else {
         sqlx::query_as::<_, RoomListRow>(
-            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret
+            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret, name_style, topic_style
              FROM rooms WHERE secret = false
              ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2",
         )
@@ -366,7 +373,7 @@ pub async fn owned_rooms(
         .sub
         .parse()
         .map_err(|_| AuthError::InvalidToken.into_response())?;
-    let rows = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret FROM rooms WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2")
+    let rows = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret, name_style, topic_style FROM rooms WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2")
         .bind(owner).bind(settings::MAX_PERSISTED_ROOMS_PER_OWNER).fetch_all(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?)
         .await.map_err(room_database_error)?;
     let mut response_headers = HeaderMap::new();
@@ -413,7 +420,7 @@ pub async fn update_room_identity(
             .into_response()
             .into());
     }
-    let row = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret FROM rooms WHERE id = $1 AND owner_id = $2")
+    let row = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret, name_style, topic_style FROM rooms WHERE id = $1 AND owner_id = $2")
         .bind(&id).bind(owner).fetch_optional(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?).await
         .map_err(room_database_error)?
         .ok_or_else(|| (StatusCode::NOT_FOUND, "Room not found").into_response())?;

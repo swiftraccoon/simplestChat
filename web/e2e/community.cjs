@@ -2005,62 +2005,164 @@ async function setRole(owner, name, role) {
         await guest.locator('#mic-btn').click();
       },
     );
-    await step('account profile/avatar update and safe public profile', async () => {
-      const account = await header(owner, 'Account');
-      await account.getByLabel('Account display name', { exact: true }).fill('E2E Profile Owner');
-      await account.getByLabel('Bio', { exact: true }).fill('Bio from the browser smoke.');
-      await upload(owner, account);
-      const saved = owner.waitForResponse(
-        (response) =>
-          response.url().endsWith('/api/auth/profile') && response.request().method() === 'PATCH',
-      );
-      await account.getByRole('button', { name: 'Save profile', exact: true }).click();
-      assert.equal((await saved).status(), 200);
-      await close(account);
-      await action(guest, 'E2E Owner', 'View profile');
-      const profile = guest.getByRole('dialog', { name: 'Profile', exact: true });
-      await visible(guest, 'E2E Profile Owner');
-      await visible(guest, 'Bio from the browser smoke.');
-      await profile.getByRole('img').waitFor({ state: 'visible' });
-      assert.equal(await profile.getByText(ownerEmail, { exact: true }).count(), 0);
-      await close(profile);
-    });
-    await step('My rooms edits identity/image and refreshes active room topic', async () => {
-      const mine = await header(owner, 'My rooms');
-      await mine.getByRole('button', { name: 'Edit room', exact: true }).click();
-      const edit = owner.getByRole('dialog', { name: 'Edit E2E Community Room', exact: true });
-      await edit.getByLabel('Room display name', { exact: true }).fill('E2E Edited Room');
-      const topic = 'Edited live topic. ' + 'Everyone can read the full room topic. '.repeat(8);
-      await edit.getByLabel('Topic', { exact: true }).fill(topic);
-      await edit
-        .getByLabel('Description / room rules', { exact: true })
-        .fill('Browser-tested room description');
-      await upload(owner, edit, true);
-      await edit.getByRole('button', { name: 'Save room', exact: true }).click();
-      await edit.waitFor({ state: 'hidden' });
-      await visible(owner, 'E2E Edited Room');
-      await close(mine);
-      await guest.locator('#room-topic').filter({ hasText: topic }).waitFor({ state: 'visible' });
-      const topicBounds = await guest.locator('#room-topic').boundingBox();
-      const headerBounds = await guest.locator('header').boundingBox();
-      assert.ok(topicBounds.width > 0, 'topic remains a visible keyboard-accessible control');
-      assert.ok(
-        headerBounds.height <= 96 &&
-          topicBounds.y + topicBounds.height <= headerBounds.y + headerBounds.height + 1,
-        'a long topic keeps the room header compact',
-      );
-      await guest.locator('#room-topic').focus();
-      await guest.keyboard.press('Enter');
-      const topicDialog = guest.getByRole('dialog', { name: 'Room topic', exact: true });
-      await topicDialog.getByText(topic, { exact: true }).waitFor({ state: 'visible' });
-      assert.equal(await topicDialog.getByRole('button', { name: 'Edit topic' }).count(), 0);
-      await guest.keyboard.press('Escape');
-      await topicDialog.waitFor({ state: 'hidden' });
-      assert.equal(
-        await guest.locator('#room-topic').evaluate((node) => node === document.activeElement),
-        true,
-      );
-    });
+    await step(
+      'account profile/avatar appearance is separate from chat and labels both names',
+      async () => {
+        await publicChat(owner);
+        await publicChat(guest);
+        await send(owner, 'Before profile appearance');
+        const message = guest.locator('.chat-msg').filter({ hasText: 'Before profile appearance' });
+        await message.waitFor({ state: 'visible' });
+        const ownerName = guest
+          .locator('#classic-users-panel [data-participant-hovercard]')
+          .filter({ hasText: 'E2E Owner' });
+        const rosterColor = await ownerName.evaluate((node) => getComputedStyle(node).color);
+        const chatColor = await message
+          .locator('.sender')
+          .evaluate((node) => getComputedStyle(node).color);
+        const account = await header(owner, 'Account');
+        await account.getByLabel('Account display name', { exact: true }).fill('E2E Profile Owner');
+        await account.getByLabel('Bio', { exact: true }).fill('Bio from the browser smoke.');
+        const appearance = account.locator('.appearance-picker');
+        await appearance.getByRole('radio', { name: 'Green', exact: true }).check();
+        await appearance.getByRole('radio', { name: 'Tinted background', exact: true }).check();
+        await upload(owner, account);
+        const saved = owner.waitForResponse(
+          (response) =>
+            response.url().endsWith('/api/auth/profile') && response.request().method() === 'PATCH',
+        );
+        await account.getByRole('button', { name: 'Save profile', exact: true }).click();
+        assert.equal((await saved).status(), 200);
+        await close(account);
+        await ownerName.hover();
+        const card = guest.locator('.participant-hovercard');
+        await card
+          .locator('.participant-hovercard-profile-name')
+          .filter({ hasText: /^E2E Profile Owner$/ })
+          .waitFor();
+        await card.getByText('Nickname', { exact: true }).waitFor();
+        await card.getByText('Account name', { exact: true }).waitFor();
+        assert.equal(await card.locator('.participant-hovercard-name').textContent(), 'E2E Owner');
+        assert.equal(
+          await card.locator('.appearance-custom').getAttribute('data-appearance'),
+          'bubble',
+        );
+        assert.match(
+          await card
+            .locator('.appearance-custom')
+            .evaluate((node) => getComputedStyle(node).backgroundColor),
+          /^rgba\(74, 222, 128, 0\.[1-9]/,
+        );
+        assert.equal(await ownerName.evaluate((node) => getComputedStyle(node).color), rosterColor);
+        await guest.screenshot({ path: path.join(artifacts, 'profile-appearance.png') });
+        await guest.keyboard.press('Escape');
+        await send(owner, 'After profile appearance');
+        const nextMessage = guest
+          .locator('.chat-msg')
+          .filter({ hasText: 'After profile appearance' });
+        await nextMessage.waitFor({ state: 'visible' });
+        assert.equal(
+          await nextMessage.locator('.sender').evaluate((node) => getComputedStyle(node).color),
+          chatColor,
+        );
+        await action(guest, 'E2E Owner', 'View profile');
+        const profile = guest.getByRole('dialog', { name: 'Profile', exact: true });
+        await visible(guest, 'E2E Profile Owner');
+        await visible(guest, 'Bio from the browser smoke.');
+        await profile.getByRole('img').waitFor({ state: 'visible' });
+        assert.equal(await profile.getByText(ownerEmail, { exact: true }).count(), 0);
+        await close(profile);
+      },
+    );
+    await step(
+      'room owners save separate room name and header description appearances',
+      async () => {
+        const mine = await header(owner, 'My rooms');
+        await mine.getByRole('button', { name: 'Edit room', exact: true }).click();
+        const edit = owner.getByRole('dialog', { name: 'Edit E2E Community Room', exact: true });
+        await edit.getByLabel('Room display name', { exact: true }).fill('E2E Edited Room');
+        const topic = 'Edited live topic. ' + 'Everyone can read the full room topic. '.repeat(8);
+        await edit.getByLabel('Header description', { exact: true }).fill(topic);
+        const nameAppearance = edit
+          .locator('.appearance-picker')
+          .filter({ hasText: 'Room name appearance' });
+        await nameAppearance.getByRole('radio', { name: 'Violet', exact: true }).check();
+        await nameAppearance.getByRole('radio', { name: 'Colored text', exact: true }).check();
+        const topicAppearance = edit
+          .locator('.appearance-picker')
+          .filter({ hasText: 'Header description appearance' });
+        await topicAppearance.getByRole('radio', { name: 'Teal', exact: true }).check();
+        await topicAppearance
+          .getByRole('radio', { name: 'Tinted background', exact: true })
+          .check();
+        await edit
+          .getByLabel('Description / room rules', { exact: true })
+          .fill('Browser-tested room description');
+        await upload(owner, edit, true);
+        await edit.getByRole('button', { name: 'Save room', exact: true }).click();
+        await edit.waitFor({ state: 'hidden' });
+        await visible(owner, 'E2E Edited Room');
+        await close(mine);
+        await guest.locator('#room-topic').filter({ hasText: topic }).waitFor({ state: 'visible' });
+        assert.equal(
+          await guest.locator('#room-label').evaluate((node) => getComputedStyle(node).color),
+          'rgb(167, 139, 250)',
+        );
+        assert.match(
+          await guest
+            .locator('#room-topic')
+            .evaluate((node) => getComputedStyle(node).backgroundColor),
+          /^rgba\(45, 212, 191, 0\.[1-9]/,
+        );
+        const topicBounds = await guest.locator('#room-topic').boundingBox();
+        const headerBounds = await guest.locator('header').boundingBox();
+        assert.ok(topicBounds.width > 0, 'topic remains a visible keyboard-accessible control');
+        assert.ok(
+          headerBounds.height <= 96 &&
+            topicBounds.y + topicBounds.height <= headerBounds.y + headerBounds.height + 1,
+          'a long topic keeps the room header compact',
+        );
+        await guest.locator('#room-topic').focus();
+        await guest.keyboard.press('Enter');
+        const topicDialog = guest.getByRole('dialog', { name: 'Room topic', exact: true });
+        await topicDialog.getByText(topic, { exact: true }).waitFor({ state: 'visible' });
+        assert.equal(await topicDialog.getByRole('button', { name: 'Edit topic' }).count(), 0);
+        await guest.keyboard.press('Escape');
+        await topicDialog.waitFor({ state: 'hidden' });
+        assert.equal(
+          await guest.locator('#room-topic').evaluate((node) => node === document.activeElement),
+          true,
+        );
+        const manage = await header(owner, 'Manage room');
+        await manage.getByRole('button', { name: 'Room appearance', exact: true }).click();
+        const reopened = owner.getByRole('dialog', { name: 'Edit E2E Edited Room', exact: true });
+        const savedName = reopened
+          .locator('.appearance-picker')
+          .filter({ hasText: 'Room name appearance' });
+        const savedTopic = reopened
+          .locator('.appearance-picker')
+          .filter({ hasText: 'Header description appearance' });
+        assert.equal(
+          await savedName.getByRole('radio', { name: 'Violet', exact: true }).isChecked(),
+          true,
+        );
+        assert.equal(
+          await savedName.getByRole('radio', { name: 'Colored text', exact: true }).isChecked(),
+          true,
+        );
+        assert.equal(
+          await savedTopic.getByRole('radio', { name: 'Teal', exact: true }).isChecked(),
+          true,
+        );
+        assert.equal(
+          await savedTopic
+            .getByRole('radio', { name: 'Tinted background', exact: true })
+            .isChecked(),
+          true,
+        );
+        await close(reopened);
+      },
+    );
     await step(
       'a room invitation previews its role and requires acceptance before a separate join',
       async () => {

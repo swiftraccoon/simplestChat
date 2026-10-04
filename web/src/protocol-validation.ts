@@ -32,6 +32,7 @@ import type {
   RtcpFeedback,
   DtlsFingerprint,
 } from 'mediasoup-client/types';
+import { decodeAppearance } from './api-validation';
 
 import {
   type Decoder,
@@ -140,6 +141,8 @@ export const decodeRoomSettings = object<RoomSettings>({
   guestsAllowed: boolean,
   guestsCanBroadcast: boolean,
   topic: optional(text),
+  nameStyle: decodeAppearance,
+  topicStyle: decodeAppearance,
 });
 const settings = decodeRoomSettings;
 const lobbyEntry = object<{ participantId: string; displayName: string; authenticated: boolean }>({

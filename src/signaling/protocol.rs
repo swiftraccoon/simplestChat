@@ -778,6 +778,31 @@ impl ChatStyle {
     }
 }
 
+/// Parse an independently stored profile or room appearance. Unlike chat messages,
+/// new appearance settings must name a known palette color and treatment.
+pub fn deserialize_appearance_style<'de, D>(deserializer: D) -> Result<ChatStyle, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Appearance {
+        color: Option<String>,
+        style: ChatStyleKind,
+    }
+    let appearance = Appearance::deserialize(deserializer)?;
+    let style = ChatStyle {
+        color: appearance.color,
+        style: appearance.style,
+    };
+    if style.style == ChatStyleKind::Unknown || style.validated().is_none() {
+        return Err(serde::de::Error::custom(
+            "Unknown appearance color or treatment",
+        ));
+    }
+    Ok(style)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatEntry {

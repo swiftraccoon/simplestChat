@@ -12,6 +12,9 @@ use uuid::Uuid;
 #[path = "auth_secret_canary_tests.rs"]
 mod secret_canary_tests;
 
+#[path = "appearance_tests.rs"]
+mod appearance_tests;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub(super) struct Manifest {
@@ -695,7 +698,8 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
             "PATCH",
             format!("/api/rooms/{room}/identity"),
             Some(
-                json!({"display_name":"Owner-selected label", "description":"", "image_url":null, "topic":null}),
+                json!({"display_name":"Owner-selected label", "description":"", "image_url":null, "topic":null,
+                    "name_style":{"color":"teal","style":"text"}, "topic_style":{"color":"violet","style":"bubble"}}),
             ),
         );
         let response = fixture

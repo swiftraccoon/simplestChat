@@ -644,6 +644,8 @@ test('room directory validates response shapes before rendering untrusted fields
   const entry = {
     id: 'room',
     display_name: 'Room',
+    name_style: { color: null, style: 'accent' },
+    topic_style: { color: null, style: 'accent' },
     topic: null,
     participant_count: 0,
     password_protected: false,

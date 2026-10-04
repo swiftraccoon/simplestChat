@@ -1,4 +1,5 @@
-import type { AccountProfile, PublicProfile, RoomListItem } from './protocol';
+import type { AccountProfile, ChatStyle, PublicProfile, RoomListItem } from './protocol';
+import { CHAT_PALETTE } from './avatar-colors';
 import {
   boolean,
   integer,
@@ -122,11 +123,21 @@ export function decodePasskeyAction(value: unknown): PasskeyActionResponse {
   return invalid();
 }
 
+/** Public appearance is limited to the shared readable palette and three treatments. */
+export const decodeAppearance = object<ChatStyle>({
+  color: nullable((value) => {
+    const color = text(value);
+    return Object.prototype.hasOwnProperty.call(CHAT_PALETTE, color) ? color : invalid();
+  }),
+  style: choice('accent', 'text', 'bubble'),
+});
+
 const profileFields = {
   id: text,
   display_name: text,
   avatar_url: nullable(text),
   bio: text,
+  profile_style: decodeAppearance,
 };
 export const decodePublicProfile = object<PublicProfile>(profileFields);
 export const decodeAccountProfile = object<AccountProfile>({
@@ -164,6 +175,8 @@ const roomListItemFields = {
   description: text,
   image_url: nullable(text),
   secret: boolean,
+  name_style: decodeAppearance,
+  topic_style: decodeAppearance,
 };
 export const decodeRoomListItem = object<RoomListItem>(roomListItemFields);
 export const decodeRoomDirectory = list(decodeRoomListItem);

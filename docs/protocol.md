@@ -77,6 +77,14 @@ creation has not started yet: reload and verify again before continuing.
 when the room's live state was busy at listing time; the browser renders an
 unknown count rather than an empty room.
 
+Account/public profiles include `profile_style`; profile updates require it.
+Room listings and identity updates include `name_style` and `topic_style`, while
+`RoomSettings` carries `nameStyle` and `topicStyle`. Each is a separate
+`{color: null | palette-token, style: "accent" | "text" | "bubble"}` object.
+Update inputs reject unknown colors, treatments and extra style keys. These
+fields never replace a participant's chat style. Only the room owner can update
+room identity/appearance; a successful save broadcasts the committed settings.
+
 Account/profile and directory fields use snake_case. `RoomSettings`, including
 the room-creation result, uses camelCase, and so does `ChatPreferences`: it is
 the browser's own chat preference object (private-message opt-in, sounds, text

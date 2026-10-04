@@ -15,6 +15,7 @@ export async function loadTypeScript(relativePath, options = {}) {
 /** Use real wire decoders when a source fixture exercises a boundary consumer. */
 export async function loadContractModules() {
   const modules = { './validation': await loadTypeScript('src/validation.ts') };
+  modules['./avatar-colors'] = await loadTypeScript('src/avatar-colors.ts');
   modules['./api-validation'] = await loadTypeScript('src/api-validation.ts', { modules });
   modules['./protocol-validation'] = await loadTypeScript('src/protocol-validation.ts', {
     modules,

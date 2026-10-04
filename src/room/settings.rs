@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use crate::signaling::protocol::ChatStyle;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
@@ -25,6 +26,8 @@ pub struct RoomSettings {
     pub guests_allowed: bool,
     pub guests_can_broadcast: bool,
     pub topic: Option<String>,
+    pub name_style: ChatStyle,
+    pub topic_style: ChatStyle,
 }
 
 #[derive(FromRow)]
@@ -47,6 +50,10 @@ struct RoomRow {
     guests_allowed: bool,
     guests_can_broadcast: bool,
     topic: Option<String>,
+    #[sqlx(json)]
+    name_style: ChatStyle,
+    #[sqlx(json)]
+    topic_style: ChatStyle,
 }
 
 #[derive(Debug, Deserialize)]
@@ -161,7 +168,7 @@ pub async fn load_room(
         "SELECT id, owner_id, display_name, password_hash, require_registration,
                 max_participants, max_broadcasters, allow_screen_sharing, allow_chat, allow_video,
                 moderated, invite_only, secret, lobby_enabled, push_to_talk,
-                guests_allowed, guests_can_broadcast, topic
+                guests_allowed, guests_can_broadcast, topic, name_style, topic_style
          FROM rooms WHERE id = $1",
     )
     .bind(room_id)
@@ -190,6 +197,8 @@ pub async fn load_room(
                 guests_allowed: r.guests_allowed,
                 guests_can_broadcast: r.guests_can_broadcast,
                 topic: r.topic,
+                name_style: r.name_style,
+                topic_style: r.topic_style,
             },
             password_hash,
         )
@@ -283,6 +292,8 @@ pub async fn create_room(
         guests_allowed: req.guests_allowed.unwrap_or(true),
         guests_can_broadcast: req.guests_can_broadcast.unwrap_or(true),
         topic: req.topic.clone(),
+        name_style: ChatStyle::default(),
+        topic_style: ChatStyle::default(),
     })
 }
 
@@ -537,11 +548,15 @@ mod tests {
             guests_allowed: true,
             guests_can_broadcast: true,
             topic: Some("hello".to_string()),
+            name_style: ChatStyle::default(),
+            topic_style: ChatStyle::default(),
         };
         let value = serde_json::to_value(&settings).unwrap();
         let obj = value.as_object().unwrap();
         for key in [
             "displayName",
+            "nameStyle",
+            "topicStyle",
             "passwordProtected",
             "requireRegistration",
             "maxParticipants",

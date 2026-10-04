@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadTypeScript } from './source-loader.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
+import { loadAppearanceFixture } from './appearance-fixture.mjs';
 
 async function fixture() {
   const dom = await uiFixture();
@@ -13,6 +14,7 @@ async function fixture() {
     bio: '',
     avatar_url: null,
     recovery_enabled: false,
+    profile_style: { color: null, style: 'accent' },
   };
   const state = {
     requests: [],
@@ -63,6 +65,7 @@ async function fixture() {
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
       './ui': ui,
+      './appearance': await loadAppearanceFixture({ ...dom, ui }),
       './account-security': {
         ...security,
         mountAccountSecurity: (options) => {
@@ -429,6 +432,48 @@ test('closed account dialogs do not receive late load failures', async () => {
   assert.equal(error.textContent, '');
 });
 
+test('Account saves the separate hovercard appearance and updates its live name preview', async () => {
+  const f = await fixture();
+  f.profile.profile_style = { color: 'teal', style: 'bubble' };
+  await f.community.openAccount();
+  const view = dialog(f, 'Account');
+  const picker = view.querySelector('.appearance-picker');
+  const name = control(view, 'Account display name');
+  name.value = 'Changed account name';
+  name.emit('input');
+  assert.equal(picker.querySelector('.appearance-preview').textContent, 'Changed account name');
+  assert.equal(picker.querySelector('.appearance-preview').dataset.appearance, 'bubble');
+  const radios = picker.querySelectorAll('input');
+  for (const radio of radios) {
+    radio.checked = radio.name.endsWith('-color')
+      ? radio.value === 'violet'
+      : radio.value === 'text';
+  }
+  radios.find((radio) => radio.value === 'violet').emit('change');
+  action(view, 'Save profile').click();
+  await flush();
+  const request = f.state.requests.find((entry) => entry[2] === 'PATCH');
+  assert.deepEqual(request[3], {
+    display_name: 'Changed account name',
+    bio: '',
+    avatar_url: null,
+    profile_style: { color: 'violet', style: 'text' },
+  });
+  assert.equal('chat_style' in request[3], false);
+  assert.equal(f.state.updated.length, 1);
+});
+
+test('reopening a hovercard fetches current profile appearance without retaining stale cache', async () => {
+  const f = await fixture();
+  const first = await f.community.participantProfile('account-a');
+  assert.deepEqual(first.profile_style, { color: null, style: 'accent' });
+  f.profile.profile_style = { color: 'rose', style: 'text' };
+  const second = await f.community.participantProfile('account-a');
+  assert.deepEqual(second.profile_style, { color: 'rose', style: 'text' });
+  assert.equal(f.state.requests.length, 2);
+  assert.equal(f.community.profiles.has('account-a'), false);
+});
+
 test('identity changes close account dialogs and reject actions from stale controls', async () => {
   const f = await fixture();
   await f.community.openAccount();
@@ -684,7 +729,11 @@ test('room-scoped actions mount in the room tools while account actions stay in 
     globals: { document: dom.document, navigator: { clipboard: { writeText: async () => {} } } },
   });
   const api = await loadTypeScript('src/community-ui.ts', {
-    modules: { './ui': dom.ui, './account-security': security },
+    modules: {
+      './ui': dom.ui,
+      './account-security': security,
+      './appearance': await loadAppearanceFixture(dom),
+    },
     globals: {
       document: dom.document,
       TextEncoder,
