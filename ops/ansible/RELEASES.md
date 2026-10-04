@@ -19,10 +19,12 @@ the runner user and the root-run release helper.
 
 ## Routine update: use the image CI tested
 
-Run the [complete local CI gate](../../docs/testing.md#run-ci-locally) on the clean
-committed `main` revision, then push it directly under the
+Run the focused checks relevant to the change, then push the clean committed
+`main` revision directly under the
 [main branch policy](../../docs/security.md#main-branch-rules). A pull request is
-optional. From a clean checkout at that exact published revision, run:
+optional. The [complete local CI gate](../../docs/testing.md#run-ci-locally)
+remains available; running it before every push is not required. From a clean
+checkout at that exact published revision, run:
 
 ```sh
 python3 build/deploy.py \
