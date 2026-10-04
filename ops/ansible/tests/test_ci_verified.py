@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -30,6 +31,8 @@ class VerifiedCacheTests(unittest.TestCase):
     @override
     def setUp(self) -> None:
         """Create an owned Git index containing representative coupled inputs."""
+        self.assertFalse((ROOT / "results").is_symlink())
+        (ROOT / "results").mkdir(mode=0o700, exist_ok=True)
         temporary = tempfile.TemporaryDirectory(prefix="ci-verified.", dir=ROOT / "results")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
@@ -220,6 +223,41 @@ class VerifiedCacheTests(unittest.TestCase):
 
 class VerifiedWorkflowTests(unittest.TestCase):
     """Keep volatile audits/browser behavior fresh and publish only completed successes."""
+
+    def test_rust_tests_prime_their_own_complete_graph_before_executing_every_test(self) -> None:
+        """A binary-only cache must not prevent the test dependency graph being retained."""
+        jobs = obj(
+            yaml_value((ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True),
+            "jobs",
+        )
+        for name, key in (("rust-test", "rust-test"), ("browser", "rust-build")):
+            steps = objects(obj(jobs, name), "steps")
+            toolchain = next(
+                step for step in steps if step.get("uses") == "./.github/actions/native-toolchain"
+            )
+            self.assertEqual(string(obj(toolchain, "with"), "cache-key"), key)
+            build = next(
+                step for step in steps if string(step.get("run", "")).startswith("cargo build ")
+            )
+            arguments = shlex.split(string(build, "run"))
+            self.assertIn("--locked", arguments)
+            self.assertIn("--all-features", arguments)
+            if name == "browser":
+                self.assertIn("--bins", arguments)
+                self.assertNotIn("--all-targets", arguments)
+                continue
+            self.assertIn("--all-targets", arguments)
+            self.assertIn("--profile", arguments)
+            self.assertEqual(arguments[arguments.index("--profile") + 1], "test")
+            execute = next(
+                step for step in steps if string(step.get("run", "")).startswith("cargo test ")
+            )
+            self.assertEqual(
+                string(execute, "run"),
+                "cargo test --locked --all-features -- --include-ignored --test-threads=1",
+            )
+            self.assertLess(steps.index(build), steps.index(execute))
+            self.assertEqual(build["if"], execute["if"])
 
     def test_audits_helpers_and_browser_suites_are_not_replaced_by_cached_success(self) -> None:
         """Cached Rust work cannot suppress UI or advisory checks."""

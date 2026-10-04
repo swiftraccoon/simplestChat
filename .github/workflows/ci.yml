@@ -301,7 +301,9 @@ jobs:
       - uses: ./.github/actions/native-toolchain
         if: steps.verified.outputs.cache-hit != 'true'
         with:
-          cache-key: rust-build
+          # Test dependencies produce a different graph from browser binaries.
+          # An immutable browser cache cannot acquire these missing artifacts.
+          cache-key: rust-test
 
       - name: Connect the isolated local runner to its disposable database
         if: ${{ env.ACT && steps.verified.outputs.cache-hit != 'true' }}
@@ -316,14 +318,12 @@ jobs:
             web/package-lock.json
             web/e2e/package-lock.json
 
-      # One feature set for every Rust target in CI. Distinct feature sets
-      # (default for the server, load-test for the generator, all for the
-      # tests) each rebuilt the native worker, three minutes apiece. The
-      # load-test feature only adds the generator's dependencies and binary;
-      # the server code is identical.
-      - name: Build server and load generator
+      # Include development dependencies from the first build so cargo test
+      # reuses the same feature graph and native worker. Explicitly use its
+      # profile too; every test still executes in the test step below.
+      - name: Build server, load generator and test harnesses
         if: steps.verified.outputs.cache-hit != 'true'
-        run: cargo build --locked --all-features --bins
+        run: cargo build --locked --all-features --all-targets --profile test
 
       - name: Verify readiness and graceful shutdown
         if: steps.verified.outputs.cache-hit != 'true'
