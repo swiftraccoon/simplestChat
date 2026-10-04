@@ -14,6 +14,7 @@ import json
 import os
 import re
 import signal
+import stat
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -50,7 +51,10 @@ ACTIONS = (
     "recover-source",
     "seal-source",
     "finalize-source",
+    "abort-target",
 )
+POSTGRES_UID = 999
+POSTGRES_DIRECTORY_MODE = 0o700
 MAX_PRIVATE = 4 * 1024 * 1024
 MAX_ORIGIN_BYTES = 261
 MAX_DUMP = 512 * 1024 * 1024
@@ -927,6 +931,90 @@ def retire(runner: public.RunnerProtocol, request: Request, prior: JsonObject) -
     return record(request, "retired", prior)
 
 
+def retain_failed_database(request: Request) -> None:
+    """Move a stopped failed copy into its private attempt without deleting any data."""
+    database = public.ROOT / "postgres"
+    retained = request.directory / "retained-postgres"
+    for path in (database, retained):
+        if path.exists() or path.is_symlink():
+            metadata = path.lstat()
+            public.require(
+                stat.S_ISDIR(metadata.st_mode)
+                and metadata.st_uid == POSTGRES_UID
+                and stat.S_IMODE(metadata.st_mode) == POSTGRES_DIRECTORY_MODE
+                and path.resolve() == path,
+                "unsafe_failed_database_directory",
+            )
+    if retained.exists():
+        public.require(
+            not database.exists() or not any(database.iterdir()), "replacement_database_not_empty"
+        )
+    else:
+        public.require(database.is_dir(), "failed_database_missing")
+        _ = database.rename(retained)
+    if not database.exists():
+        database.mkdir(mode=0o700)
+        os.chown(database, POSTGRES_UID, POSTGRES_UID)
+
+
+def abort_target(runner: public.RunnerProtocol, request: Request, prior: JsonObject) -> JsonObject:
+    """Retain an unsuccessful restore only when no destination app has ever been created."""
+    public.require(
+        prior.get("role") == "destination" and prior.get("phase") in ("restoring", "aborting"),
+        "destination_abort_phase",
+    )
+    shared = read_object(public.ROOT / "release-state.json")
+    public.require(
+        shared.get("operation") == "server_migration"
+        and shared.get("request") == request.json()
+        and shared.get("phase") == prior["phase"]
+        and shared.get("finalized") is False,
+        "destination_abort_journal",
+    )
+    public.require(
+        configuration_hashes() == object_value(prior["before"])["configurationSha256"],
+        "destination_abort_configuration_changed",
+    )
+    for service in ("simplestchat", "caddy"):
+        public.require(
+            owned_container(runner, service, optional=True) is None,
+            "destination_application_was_created",
+        )
+    database = owned_container(runner, "postgres", optional=True)
+    if prior["phase"] == "restoring":
+        public.require(database is not None, "failed_database_container_missing")
+    details: JsonObject = {**prior}
+    if database is not None:
+        container = string_value(database["id"])
+        public.require(
+            prior["phase"] == "restoring" or prior.get("abortedContainer") == container,
+            "destination_abort_container_changed",
+        )
+        mounts = array_value(
+            decode_json(
+                runner.docker("inspect", "--format", "{{json .Mounts}}", container, timeout=10)
+            )
+        )
+        public.require(
+            any(
+                object_value(mount).get("Type") == "bind"
+                and object_value(mount).get("Source") == str(public.ROOT / "postgres")
+                and object_value(mount).get("Destination") == "/var/lib/postgresql"
+                for mount in mounts
+            ),
+            "destination_abort_database_mount",
+        )
+        details["abortedContainer"] = container
+    _ = record(request, "aborting", details)
+    if database is not None:
+        container = string_value(database["id"])
+        _ = runner.docker("stop", "--time", "30", container, timeout=45)
+        _ = runner.docker("update", "--restart=no", container, timeout=15)
+        _ = runner.docker("rm", container, timeout=15)
+    retain_failed_database(request)
+    return record(request, "aborted", details, finalized=True)
+
+
 def execute(action: str, request: Request, runner: public.RunnerProtocol) -> JsonObject:
     """Dispatch fixed actions; no host-side action starts the destination application."""
     if action in ("inspect-source", "inspect-target"):
@@ -945,12 +1033,13 @@ def execute(action: str, request: Request, runner: public.RunnerProtocol) -> Jso
         "recover-source": recover,
         "seal-source": seal,
         "finalize-source": retire,
+        "abort-target": abort_target,
     }
     handler = handlers.get(action)
     if handler is None:
         message = "unsupported_migration_action"
         raise public.ReleaseError(message)
-    if action != "verify-target":
+    if action not in ("verify-target", "abort-target"):
         public.require(prior.get("role") == "source", "source_action_on_destination")
     return handler(runner, request, prior)
 

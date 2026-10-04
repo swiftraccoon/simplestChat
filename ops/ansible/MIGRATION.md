@@ -127,6 +127,16 @@ automatically: inspect `outcome.json`, `variables.json`, the phase receipts and
 both host journals before any explicit recovery action. Never remove a journal
 to bypass an unfinished operation.
 
+If restoration failed before the destination app or proxy was ever created and
+source recovery succeeded, the host helper's explicit `abort-target --request
+/srv/simplestchat-public/migrations/<operation-id>/request.json` action retains
+the failed PostgreSQL directory inside that attempt as `retained-postgres`.
+It checks the unfinished destination journal, unchanged configuration and owned
+database mount, stops and removes only that PostgreSQL container, then finalizes
+the aborted attempt. It never deletes database files or accepts a completed
+restore or any existing app/proxy container. After inspecting that result, run a
+new migration to take a fresh source archive; do not reuse the failed archive.
+
 CI runs the same controller, preflight and lifecycle tests locally and on GitHub,
 plus a disposable PostgreSQL dump/restore test that exercises row preservation,
 partitioned storage, schema/ACL drift detection and the owner-email transaction.
