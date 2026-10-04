@@ -4,7 +4,6 @@ import { loadTypeScript } from './source-loader.mjs';
 
 const { calculateVideoLayout } = await loadTypeScript('src/video-layout.ts');
 const landscape = 16 / 9;
-const portrait = 9 / 16;
 
 function packedHeight(sizes, width, gap = 8) {
   let occupied = 0;
@@ -19,52 +18,66 @@ function packedHeight(sizes, width, gap = 8) {
   return rows * sizes[0].height + (rows - 1) * gap;
 }
 
-test('three cameras and portrait media fit without cropping or an extra sparse row', () => {
-  const ratios = [landscape, landscape, landscape, portrait];
-  const sizes = calculateVideoLayout(ratios, 900, 787);
+test('four mixed media tiles have identical 16:9 cells in two useful rows', () => {
+  const sizes = calculateVideoLayout(4, 900, 787);
   assert.ok(sizes[0].height > 240);
   assert.ok(sizes[0].height < 251, 'two useful rows win over three slightly larger rows');
   assert.ok(packedHeight(sizes, 900) <= 787);
-  sizes.forEach((size, index) => {
-    assert.equal(size.height, sizes[0].height);
-    assert.ok(Math.abs(size.width / size.height - ratios[index]) < 1e-10);
+  sizes.forEach((size) => {
+    assert.deepEqual(size, sizes[0]);
+    assert.ok(Math.abs(size.width / size.height - landscape) < 1e-10);
   });
 });
 
-test('phone layout fits four mixed videos and treats equal camera/share aspects identically', () => {
-  const sizes = calculateVideoLayout([landscape, landscape, portrait, portrait], 358, 340);
+test('phone layout fits four uniform cells without sacrificing readable height', () => {
+  const sizes = calculateVideoLayout(4, 358, 340);
   assert.ok(packedHeight(sizes, 358) <= 340);
-  assert.deepEqual(sizes[2], sizes[3]);
+  assert.ok(
+    sizes.every((size) => size.width === sizes[0].width && size.height === sizes[0].height),
+  );
   assert.ok(sizes[0].height >= 96);
 });
 
 test('crowded rooms retain readable rows for scrolling instead of shrinking every tile', () => {
-  const sizes = calculateVideoLayout(Array(13).fill(landscape), 358, 280);
+  const sizes = calculateVideoLayout(13, 358, 280);
   assert.equal(sizes[0].height, 96);
   assert.ok(sizes[0].width * 2 + 8 <= 358, 'crowded phone rows still fit two cameras');
   assert.ok(packedHeight(sizes, 358) > 280);
-  const narrow = calculateVideoLayout([landscape, portrait], 120, 300);
+  const narrow = calculateVideoLayout(2, 120, 300);
   assert.ok(narrow.every((size) => size.width <= 120));
   assert.ok(packedHeight(narrow, 120) <= 300);
 });
 
-test('a pinned portrait keeps its narrow aspect and leaves height for the remaining row', () => {
-  const ratios = [landscape, portrait, landscape];
-  const sizes = calculateVideoLayout(ratios, 900, 700, 8, 1);
-  assert.ok(sizes[1].height > sizes[0].height);
-  assert.ok(Math.abs(sizes[1].width / sizes[1].height - portrait) < 1e-10);
-  assert.ok(sizes[1].height + 8 + packedHeight([sizes[0], sizes[2]], 900) <= 700);
-  const unpinned = calculateVideoLayout(ratios, 900, 700);
-  assert.equal(unpinned[0].height, unpinned[1].height);
+test('odd counts retain the same dimensions in every cell, including the last row', () => {
+  for (const count of [1, 3, 5, 7, 13]) {
+    for (const [width, height] of [
+      [900, 700],
+      [358, 340],
+      [640, 220],
+    ]) {
+      const sizes = calculateVideoLayout(count, width, height);
+      assert.equal(sizes.length, count);
+      for (const size of sizes) {
+        assert.deepEqual(size, sizes[0]);
+        assert.ok(size.width <= width);
+        assert.ok(Math.abs(size.width / size.height - landscape) < 1e-10);
+      }
+      assert.ok(sizes[0].height >= 96, 'crowded stages scroll instead of crushing tiles');
+    }
+  }
 });
 
-test('metadata arrival and rotation change aspect while unavailable metadata uses 16:9', () => {
-  const pending = calculateVideoLayout([0, Number.NaN], 600, 400);
-  assert.deepEqual(pending[0], pending[1]);
-  assert.ok(Math.abs(pending[0].width / pending[0].height - landscape) < 1e-10);
-  const rotated = calculateVideoLayout([portrait, landscape], 600, 400);
-  assert.equal(rotated[0].height, rotated[1].height);
-  assert.ok(rotated[0].width < rotated[1].width);
-  assert.deepEqual(calculateVideoLayout([], 600, 400), []);
-  assert.deepEqual(calculateVideoLayout([landscape], 0, 400), [{ width: 0, height: 0 }]);
+test('resizing the stage resizes all cells together without exceeding its width', () => {
+  const desktop = calculateVideoLayout(5, 900, 700);
+  const phone = calculateVideoLayout(5, 358, 340);
+  assert.ok(desktop[0].width > phone[0].width);
+  assert.ok(packedHeight(desktop, 900) <= 700);
+  assert.ok(packedHeight(phone, 358) <= 340);
+  assert.deepEqual(calculateVideoLayout(0, 600, 400), []);
+  assert.deepEqual(calculateVideoLayout(Number.NaN, 600, 400), []);
+  assert.deepEqual(calculateVideoLayout(1, 0, 400), [{ width: 0, height: 0 }]);
+  assert.deepEqual(
+    calculateVideoLayout(4, 600, 400, Number.NaN),
+    calculateVideoLayout(4, 600, 400),
+  );
 });

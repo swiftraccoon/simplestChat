@@ -394,13 +394,14 @@ header h1 {
   scrollbar-gutter: stable;
   align-content: start;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
-/* The pin keeps its actual width while its margins reserve a separate row. */
+/* Pinning changes priority and emphasis while preserving the shared cell size. */
 #video-grid.has-pinned .video-tile.pinned:not(:fullscreen) {
   order: -1;
-  margin-inline: calc((100% - var(--video-tile-width)) / 2);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .tile-pin {
   position: absolute;

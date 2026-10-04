@@ -3642,7 +3642,7 @@ micModeSelect.addEventListener('change', () => {
 });
 
 // --- Update video grid count for adaptive sizing ---
-/** One tile may be pinned: it fills the stage and the others line up below. This viewer only. */
+/** Pin one tile first and highlight it without resizing any cells. This viewer only. */
 function setPinnedTile(key: string | null): void {
   pinnedTileKey = key !== null && remoteTiles.has(key) ? key : null;
   for (const [tileKey, tile] of remoteTiles) {

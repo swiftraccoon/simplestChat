@@ -60,7 +60,7 @@ For complete guest/account setup and LAN ICE addressing see
 | Module | Responsibility |
 | --- | --- |
 | `src/main.ts` | Application wiring, room shell and layout |
-| `src/video-layout.ts` | Aspect-aware video rows, available-stage sizing and explicit pinning |
+| `src/video-layout.ts` | Uniform media cells sized to the available stage |
 | `src/ui.ts` | Text-safe controls, dialogs and named HTTP API methods |
 | `src/participant-hovercard.ts` | Shared participant cards for roster and chat names, profile loading ownership and pointer/keyboard/touch interaction |
 | `src/appearance.ts` | Independent profile-card and room-heading appearance controls, previews and palette-only rendering |
@@ -138,10 +138,12 @@ line. Touch-capable devices show Send and use Enter for new lines; Ctrl/Cmd+Ente
 sends in either mode. An open mention picker can use Enter to complete a name
 before sending.
 
-Camera and screen-share tiles use the same layout: each keeps its video's aspect
-ratio, and rows fit the available stage. Crowded layouts scroll from the top.
-Metadata changes and rotation resize the tiles. Only explicit pinning enlarges
-one video. A compact viewing-controls button opens each remote tile's actions,
+Camera, screen-share and audio-only tiles have identical 16:9 dimensions in
+aligned rows, including the incomplete final row. Video fits inside each cell
+without cropping; portrait content and rotation do not change the cell size.
+Crowded layouts scroll from the top. Pinning moves a tile first and highlights
+it without enlarging it or reserving a separate row. A compact viewing-controls
+button opens each remote tile's actions,
 including Pin, volume and fullscreen, without covering the tile with separate
 permanent buttons.
 

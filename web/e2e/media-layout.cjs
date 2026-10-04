@@ -59,6 +59,7 @@ function browserFixture() {
     videoGrid.replaceChildren();
     layout.observeVideoLayout(videoGrid);
     const videos = new Map();
+    let audioContext;
     window.__mediaLayout = {
       add(id, width, height, screen = false) {
         const canvas = document.createElement('canvas');
@@ -79,6 +80,13 @@ function browserFixture() {
         videos.set(id, {canvas, track, timer, screen, key: screen ? id + ':screen' : id});
         renderRemoteTrack(id, id, track, 'video', screen ? 'screen' : 'camera');
       },
+      addAudio(id) {
+        audioContext ??= new AudioContext();
+        const destination = audioContext.createMediaStreamDestination();
+        const track = destination.stream.getAudioTracks()[0];
+        videos.set(id, {track, destination, screen: false, key: id});
+        renderRemoteTrack(id, id, track, 'audio', 'microphone');
+      },
       rotate(id, width, height) {
         const {canvas} = videos.get(id);
         canvas.width = width;
@@ -88,13 +96,14 @@ function browserFixture() {
         const entry = videos.get(id);
         clearInterval(entry.timer);
         entry.track.stop();
-        removeRemoteTrack(id, 'fixture-producer', 'video', entry.screen ? 'screen' : 'camera');
+        removeRemoteTrack(id, 'fixture-producer', entry.track.kind, entry.screen ? 'screen' : 'camera');
         videos.delete(id);
       },
       pin(id) { setPinnedTile(id === null ? null : videos.get(id).key); },
-      close() {
+      async close() {
         mediaControls.destroy();
         for (const {track, timer} of videos.values()) { clearInterval(timer); track.stop(); }
+        if (audioContext) await audioContext.close();
       },
     };
   })();`;
@@ -121,7 +130,8 @@ async function geometry(page) {
         y: rect.y,
         width: rect.width,
         height: rect.height,
-        ratio: video.videoWidth / video.videoHeight,
+        ratio: video ? video.videoWidth / video.videoHeight : null,
+        objectFit: video ? getComputedStyle(video).objectFit : null,
         horizontallyContained: rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1,
         contained:
           rect.left >= bounds.left - 1 &&
@@ -168,10 +178,26 @@ async function mediaLayout(page, artifacts, report) {
     report.mediaLayouts.push({ name, ...result });
     await page.screenshot({ path: path.join(artifacts, `media-${name}.png`) });
     assert.equal(result.horizontalOverflow, false, `${name}: no horizontal overflow`);
+    const first = result.boxes[0];
+    const top = Math.min(...result.boxes.map((tile) => tile.y));
+    const columns = result.boxes
+      .filter((tile) => Math.abs(tile.y - top) <= 1)
+      .map((tile) => tile.x)
+      .sort((left, right) => left - right);
     for (const [index, tile] of result.boxes.entries()) {
       assert.ok(
-        Math.abs(tile.width / tile.height - tile.ratio) < 0.035,
-        `${name}: ${tile.name} follows intrinsic ${tile.ratio} aspect, got ${tile.width / tile.height}`,
+        Math.abs(tile.width - first.width) <= 1 && Math.abs(tile.height - first.height) <= 1,
+        `${name}: ${tile.name} has the same width and height as every other tile`,
+      );
+      assert.ok(Math.abs(tile.width / tile.height - 16 / 9) < 0.035, `${name}: uniform 16:9 cell`);
+      if (tile.objectFit !== null)
+        assert.equal(tile.objectFit, 'contain', `${name}: the full video remains visible`);
+      const column = result.boxes.filter(
+        (other) => Math.abs(other.y - tile.y) <= 1 && other.x < tile.x - 1,
+      ).length;
+      assert.ok(
+        Math.abs(tile.x - columns[column]) <= 1,
+        `${name}: ${tile.name} aligns with the same column, including incomplete rows`,
       );
       assert.equal(tile.horizontallyContained, true, `${name}: ${tile.name} is not side-clipped`);
       if (fullyVisible) {
@@ -216,7 +242,17 @@ async function mediaLayout(page, artifacts, report) {
       'Equal-aspect camera and share receive the same allocation',
     );
     await page.evaluate(() => window.__mediaLayout.pin('Portrait share'));
-    await inspect('pinned-portrait', false);
+    await inspect('pinned-portrait', true);
+    const pinned = report.mediaLayouts.at(-1).boxes.find((tile) => tile.name === 'Portrait share');
+    const firstPosition = [...report.mediaLayouts.at(-1).boxes].sort(
+      (left, right) => left.y - right.y || left.x - right.x,
+    )[0];
+    assert.equal(firstPosition.name, 'Portrait share', 'Pinning moves the tile to the first cell');
+    assert.ok(
+      Math.abs(pinned.width - comparable[0].width) <= 1 &&
+        Math.abs(pinned.height - comparable[0].height) <= 1,
+      'Pinning does not change tile dimensions',
+    );
     await page.evaluate(() => window.__mediaLayout.pin(null));
     await page.evaluate(() => window.__mediaLayout.rotate('Portrait share', 640, 360));
     await page.waitForFunction(
@@ -228,6 +264,25 @@ async function mediaLayout(page, artifacts, report) {
     assert.equal(await page.locator('#video-grid .video-tile').count(), 3);
     await page.evaluate(() => {
       window.__mediaLayout.add('Portrait share', 360, 640, true);
+      window.__mediaLayout.addAudio('Audio only');
+    });
+    await inspect('mixed-audio-five-tiles', true);
+    assert.equal(
+      report.mediaLayouts.at(-1).boxes.find((tile) => tile.name === 'Audio only').ratio,
+      null,
+      'The audio-only fixture has no video element',
+    );
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 844, height: 390 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await inspect(`mixed-five-${viewport.width}x${viewport.height}`, false);
+      await page.evaluate(() => window.__mediaLayout.pin('Audio only'));
+      await inspect(`pinned-audio-${viewport.width}x${viewport.height}`, false);
+      await page.evaluate(() => window.__mediaLayout.pin(null));
+    }
+    await page.evaluate(() => {
       for (let index = 4; index <= 12; index++)
         window.__mediaLayout.add(`Camera ${index}`, 640, 360);
     });
