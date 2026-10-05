@@ -76,6 +76,18 @@ complete identity or the gate rejects it. No remote alert state was changed.
 
 ## Source re-review: disposable release controller
 
+The 2026-10-05 Caddy 2.11.7 selection changes only lines 59-61 relative to
+`2a6ae6b3714b5378343debf4d023b5db04c2c369`. The complete flagged line 136 and all callers remain
+byte-identical. The reviewed Git blob is `9727472d0cae22313bf1df3a5c9cd6e5cabd53b6`; its
+whole-file SHA-256 is `87c30a0fea7efbde1498dd873a2d539bffe3f443c94bcfb6ad24d2ad2038fa92`. The exact
+replacement fingerprint is `codeql:88c044006c3fd143909245b73cc26f156bc886913a2346d53264bf034cbdeb53`. The original
+query, tool version, range, message, disposition and 2026-11-29 expiry are retained.
+This companion source review does not claim a new CodeQL run: the next original
+analysis must independently match the new identity or fail. The JSON retains the
+original observed analysis and records this source review's base revision and blob.
+
+The preceding review history follows.
+
 Alert 32 was re-reviewed against source commit
 `661fbc763030f6b5423232a7be817e1c09872898`. The only change to
 `build/release_container_harness.py` permits the disposable Linux controller to
@@ -440,7 +452,7 @@ inherit this decision merely because the alert number is unchanged.
 | <a id="alert-29"></a>[29](https://github.com/swiftraccoon/simplestChat/security/code-scanning/29) | high | false-positive | [`ops/ansible/tests/test_automation.py:395`](../ops/ansible/tests/test_automation.py#L395) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
 | <a id="alert-30"></a>[30](https://github.com/swiftraccoon/simplestChat/security/code-scanning/30) | high | false-positive | [`ops/ansible/tests/test_public_templates.py:83`](../ops/ansible/tests/test_public_templates.py#L83) | The unchanged StrictUndefined renderer produces local configuration only. Added RP fixture and migration tests introduce no HTML sink. Source and fresh original SARIF were re-reviewed at `cf941371acc877ed568f84f4e545dd622fe7badd`; HTML escaping is inappropriate for these formats. |
 | <a id="alert-31"></a>[31](https://github.com/swiftraccoon/simplestChat/security/code-scanning/31) | high | false-positive | [`ops/ansible/tests/test_release_playbook.py:76`](../ops/ansible/tests/test_release_playbook.py#L76) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
-| <a id="alert-32"></a>[32](https://github.com/swiftraccoon/simplestChat/security/code-scanning/32) | high | false-positive | [`build/release_container_harness.py:136`](../build/release_container_harness.py#L136) | write_new defaults to mode0600 with O_CREAT\|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets. Source and fresh original SARIF were re-reviewed at `661fbc763030f6b5423232a7be817e1c09872898`; only the disposable controller architecture guard changed. |
+| <a id="alert-32"></a>[32](https://github.com/swiftraccoon/simplestChat/security/code-scanning/32) | high | false-positive | [`build/release_container_harness.py:136`](../build/release_container_harness.py#L136) | Exclusive creation and default mode 0600 are unchanged; only the public fixture certificate and sanitized summary use mode 0644. The 2026-10-05 source re-review covers only the Caddy image selector change at lines 59-61. Fresh analysis must independently match the new whole-file identity. |
 | <a id="alert-33"></a>[33](https://github.com/swiftraccoon/simplestChat/security/code-scanning/33) | high | false-positive | [`src/metrics.rs:1153`](../src/metrics.rs#L1153) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |
 | <a id="alert-34"></a>[34](https://github.com/swiftraccoon/simplestChat/security/code-scanning/34) | high | false-positive | [`src/metrics.rs:1157`](../src/metrics.rs#L1157) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |
 | <a id="alert-35"></a>[35](https://github.com/swiftraccoon/simplestChat/security/code-scanning/35) | high | false-positive | [`src/signaling/mod.rs:1667`](../src/signaling/mod.rs#L1667) | The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved. |

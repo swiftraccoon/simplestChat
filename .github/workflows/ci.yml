@@ -933,9 +933,9 @@ jobs:
     timeout-minutes: 95
     env:
       PRODUCTION_IMAGE: simplestchat-ci:production
-      # Official Caddy image, pinned to the 2.11.4-alpine multi-architecture
-      # manifest digest published by Docker Official Images.
-      CADDY_IMAGE: docker.io/library/caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
+      # Caddy 2.11.7, published and attested by the reviewed project workflow.
+      # The complete digest selects the tested AMD64/ARM64 image index.
+      CADDY_IMAGE: ghcr.io/swiftraccoon/simplestchat-caddy:2.11.7-73c81fdbfe625d3df3989ba807064c81fbe2c071@sha256:23c127cb8945a1de0c6753010614b50af1643bbcf93ab8a9a7d7461efd50b7c0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

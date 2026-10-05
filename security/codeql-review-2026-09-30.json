@@ -718,17 +718,18 @@
         "end_column": 75
       },
       "messageSha256": "535ab3a2aa7b68c36dd4de5f653e5ce0cf41d9f40c326b4394cfef9d0b0b296b",
-      "sourceSha256": "e1cb2e4d577577308f7278f6ad61f8e8780869b6ed07200c6cb2e97d4e0339d7",
+      "sourceSha256": "87c30a0fea7efbde1498dd873a2d539bffe3f443c94bcfb6ad24d2ad2038fa92",
       "scope": "build/release_container_harness.py:136:136:18:75",
-      "fingerprint": "codeql:e6b7b1459367aca32e2699e64e04febcaac994eeeaf48acc95cc04490a998028",
+      "fingerprint": "codeql:88c044006c3fd143909245b73cc26f156bc886913a2346d53264bf034cbdeb53",
       "number": 32,
       "severity": "high",
       "state": "open",
       "disposition": "false-positive",
-      "rationale": "write_new defaults to mode0600 with O_CREAT|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets. Source re-review at 661fbc763030f6b5423232a7be817e1c09872898 confirms that only the disposable controller architecture guard and its refusal message changed; all eight write_new calls and the flagged operation are unchanged. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity. Re-reviewed 2026-10-05 against the complete e0bff7a..3db0a47 diff: only package-version/image-digest constants changed; the flagged operations, their inputs and all callers are unchanged. Current CodeQL run 37268650754 records the matching source/query/range/message identity.",
+      "rationale": "write_new exclusively creates files with O_CREAT|O_EXCL and defaults to mode 0600. The two deliberate mode 0644 outputs are a public one-day fixture CA certificate and a sanitized CI summary; private keys, command output and configuration remain private. Source re-review on 2026-10-05 confirms the complete companion change modifies only the Caddy image selector at lines 59-61. The flagged operation at line 136, its range/message and all write_new callers are byte-identical; no new output or reachability is introduced. This is a source review; fresh hosted analysis must independently match the new complete-file identity.",
       "observedRevision": "3db0a47afb987355b5a5bd0e2768c4d14bac5207",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/32",
-      "sourceProvenanceRevision": "3db0a47afb987355b5a5bd0e2768c4d14bac5207"
+      "sourceReviewBaseRevision": "2a6ae6b3714b5378343debf4d023b5db04c2c369",
+      "sourceReviewBlob": "9727472d0cae22313bf1df3a5c9cd6e5cabd53b6"
     },
     {
       "rule": "rust/cleartext-logging",

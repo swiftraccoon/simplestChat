@@ -56,9 +56,9 @@ POSTGRES = (
     "docker.io/library/postgres:18.6-bookworm@sha256:"
     + "3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650"
 )
-CADDY = (
-    "docker.io/library/caddy:2.11.4-alpine@sha256:"
-    + "6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b"
+CADDY = "ghcr.io/swiftraccoon/simplestchat-caddy:2.11.7-" + (
+    "73c81fdbfe625d3df3989ba807064c81fbe2c071@sha256:"
+    + "23c127cb8945a1de0c6753010614b50af1643bbcf93ab8a9a7d7461efd50b7c0"
 )
 FAILURE_MARKER = "simplestchat-disposable-release-startup-failure"
 ID = re.compile(r"[a-f0-9]{64}")

@@ -553,11 +553,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:e6b7b1459367aca32e2699e64e04febcaac994eeeaf48acc95cc04490a998028",
+      "fingerprint": "codeql:88c044006c3fd143909245b73cc26f156bc886913a2346d53264bf034cbdeb53",
       "scope": "build/release_container_harness.py:136:136:18:75",
       "owner": "swiftraccoon",
-      "rationale": "write_new defaults to mode0600 with O_CREAT|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets. Source re-review at 661fbc763030f6b5423232a7be817e1c09872898 confirms that only the disposable controller architecture guard and its refusal message changed; all eight write_new calls and the flagged operation are unchanged. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
-      "reachability": "Re-reviewed 2026-10-05 against the complete e0bff7a..3db0a47 diff: only exact package-version/image-digest constants changed. The flagged operation and its callers are unchanged. CodeQL 2.27.1 run 37268650754 independently records the same query, primary range and message with current whole-file SHA256 e1cb2e4d577577308f7278f6ad61f8e8780869b6ed07200c6cb2e97d4e0339d7. Original scope and 2026-11-29 expiry retained; no general test/template/path exclusion or automatic renewal.",
+      "rationale": "write_new exclusively creates files with O_CREAT|O_EXCL and defaults to mode 0600. The two deliberate mode 0644 outputs are a public one-day fixture CA certificate and a sanitized CI summary; private keys, command output and configuration remain private. Source re-review on 2026-10-05 confirms the complete companion change modifies only the Caddy image selector at lines 59-61. The flagged operation at line 136, its range/message and all write_new callers are byte-identical; no new output or reachability is introduced. This is a source review; fresh hosted analysis must independently match the new complete-file identity.",
+      "reachability": "Only the exact CodeQL 2.27.1 query, unchanged primary range/message, and whole-file SHA256 87c30a0fea7efbde1498dd873a2d539bffe3f443c94bcfb6ad24d2ad2038fa92 are reviewed. The selector-only source diff is based on 2a6ae6b3714b5378343debf4d023b5db04c2c369; Git blob 9727472d0cae22313bf1df3a5c9cd6e5cabd53b6 identifies the exact reviewed file. The original observed SARIF revision remains historical evidence, not a claim of new analysis. Original scope and expiry are unchanged; the next analyzer report must match this complete identity. No general path/test exclusion or automatic renewal.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-32"
     },

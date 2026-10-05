@@ -109,7 +109,8 @@ scpub_reboot: false
 scpub_config: /etc/simplestchat-public
 scpub_root: /srv/simplestchat-public
 scpub_postgres_image: docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
-scpub_caddy_image: docker.io/library/caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
+scpub_caddy_image: >-
+  ghcr.io/swiftraccoon/simplestchat-caddy:2.11.7-73c81fdbfe625d3df3989ba807064c81fbe2c071@sha256:23c127cb8945a1de0c6753010614b50af1643bbcf93ab8a9a7d7461efd50b7c0
 scpub_turn_enabled: false
 scpub_turn_activate: false
 scpub_turn_image: docker.io/coturn/coturn:4.18.0@sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3
