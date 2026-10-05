@@ -127,10 +127,11 @@ both the process status and the structured findings must report success.
 The OpenSSL freshness check fetches the official current-release page over HTTPS
 without redirects or inherited credentials, under a 35-second process deadline,
 1 MiB response ceiling and 16 KiB error ceiling. It requires exactly one stable
-archive for the pinned major/minor series and exact equality with the native
-manifest's version. A newer patch, missing series, ambiguous page, network error
-or changed response layout fails the gate. Prereleases and other series cannot
-cause an automatic upgrade. The private receipt records the observed versions,
+archive per listed series and exact equality between the highest stable release
+and the native manifest's version. A newer stable major, minor or patch release,
+empty or ambiguous page, network error or changed response layout fails the gate.
+Prereleases are excluded, and no release causes an automatic pin change.
+The private receipt records the observed versions,
 timestamp and source-page/native-manifest hashes. Every fast run, including the
 daily scheduled source gate, refreshes this observation. Vendor releases can
 precede vulnerability-database affected-package mappings; this check closes that
