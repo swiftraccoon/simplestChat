@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -56,7 +57,16 @@ async function contents(directory, prefix = '') {
     if (stat.isSymbolicLink()) result.push([relative, 'link', await readlink(path)]);
     else if (stat.isDirectory()) result.push([relative, 'directory'], ...await contents(path, `${relative}/`));
     else if (stat.isFile()) {
-      result.push([relative, stat.mode & 0o111, createHash('sha256').update(await readFile(path)).digest('hex')]);
+      // Inspect and hash the opened object. A path replaced after lstat must
+      // never redirect this comparison through a symlink or block on a FIFO.
+      const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      try {
+        const opened = await file.stat();
+        if (!opened.isFile()) throw new Error(`Unexpected npm installation entry: ${relative}`);
+        result.push([relative, opened.mode & 0o111, createHash('sha256').update(await file.readFile()).digest('hex')]);
+      } finally {
+        await file.close();
+      }
     } else throw new Error(`Unexpected npm installation entry: ${relative}`);
   }
   return result;
