@@ -22,7 +22,7 @@ from security_context import Context
 from security_tools import ToolError, tool_path
 
 RULE = "simplestchat.example"
-VERSION = "1.178.0"
+VERSION = "1.179.0"
 
 
 def put(root: Path, name: str, content: str) -> Path:
