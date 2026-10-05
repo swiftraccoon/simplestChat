@@ -50,14 +50,15 @@ async function ownedDirectory(path) {
 
 async function contents(directory, prefix = '') {
   const result = [];
-  for (const name of (await readdir(directory)).sort()) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    const name = entry.name;
     const path = join(directory, name);
     const relative = prefix + name;
-    const stat = await lstat(path);
-    if (stat.isSymbolicLink()) result.push([relative, 'link', await readlink(path)]);
-    else if (stat.isDirectory()) result.push([relative, 'directory'], ...await contents(path, `${relative}/`));
-    else if (stat.isFile()) {
-      // Inspect and hash the opened object. A path replaced after lstat must
+    if (entry.isSymbolicLink()) result.push([relative, 'link', await readlink(path)]);
+    else if (entry.isDirectory()) result.push([relative, 'directory'], ...await contents(path, `${relative}/`));
+    else if (entry.isFile()) {
+      // Inspect and hash the opened object. A path replaced after readdir must
       // never redirect this comparison through a symlink or block on a FIFO.
       const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
       try {
