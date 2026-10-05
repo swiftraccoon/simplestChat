@@ -1,0 +1,161 @@
+---
+# Keep the signed Docker packages and their service lifecycle, while selecting
+# independently authenticated upstream releases when that package channel lags.
+- name: Refuse unreviewed containerd service overrides before selecting upstream binaries
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - |
+        import re
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            ["/usr/bin/systemctl", "show", "containerd.service", "--property=LoadState",
+             "--property=FragmentPath", "--property=DropInPaths", "--property=ExecStart"],
+            check=False, capture_output=True, text=True, timeout=15,
+        )
+        fields = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+        allowed = ("/usr/lib/systemd/system/containerd.service", "/lib/systemd/system/containerd.service")
+        dropin = "/etc/systemd/system/containerd.service.d/simplestchat-runtime.conf"
+        if result.returncode or fields.get("LoadState") != "loaded" or fields.get("FragmentPath") not in allowed:
+            sys.exit("containerd must retain its packaged service definition")
+        if fields.get("DropInPaths") not in ("", dropin):
+            sys.exit("Custom containerd service overrides require separate review")
+        command = fields.get("ExecStart", "")
+        executable = r"(?:/usr/bin/containerd|/usr/local/lib/simplestchat-runtime/[0-9]+\.[0-9]+\.[0-9]+/bin/containerd)"
+        if command.count("argv[]=") != 1 or re.search(r"argv\[\]=" + executable + r" ;", command) is None:
+            sys.exit("Custom containerd service arguments require separate review")
+  changed_when: false
+  check_mode: false
+
+- name: Create root-controlled upstream runtime and Docker plugin directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "/usr/local/lib/simplestchat-runtime/{{ scbench_containerd_upstream_version }}"
+    - /usr/local/lib/docker/cli-plugins
+    - /etc/systemd/system/containerd.service.d
+
+- name: Authenticate the selected containerd release archive
+  ansible.builtin.get_url:
+    url: >-
+      {{ 'https://github.com/containerd/containerd/releases/download/v' + scbench_containerd_upstream_version +
+         '/containerd-' + scbench_containerd_upstream_version + '-linux-amd64.tar.gz' }}
+    dest: "/usr/local/lib/simplestchat-runtime/{{ scbench_containerd_upstream_version }}/containerd.tar.gz"
+    checksum: "sha256:{{ scbench_containerd_archive_sha256 }}"
+    owner: root
+    group: root
+    mode: '0644'
+    timeout: 60
+    validate_certs: true
+
+- name: Extract only the authenticated containerd release into its versioned directory
+  ansible.builtin.unarchive:
+    src: "/usr/local/lib/simplestchat-runtime/{{ scbench_containerd_upstream_version }}/containerd.tar.gz"
+    dest: "/usr/local/lib/simplestchat-runtime/{{ scbench_containerd_upstream_version }}"
+    remote_src: true
+    creates: "/usr/local/lib/simplestchat-runtime/{{ scbench_containerd_upstream_version }}/bin/containerd"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Verify the installed containerd executables independently of the cached archive
+  ansible.builtin.stat:
+    path: "/usr/local/lib/simplestchat-runtime/{{ scbench_containerd_upstream_version }}/bin/{{ item.key }}"
+    follow: false
+    checksum_algorithm: sha256
+    get_mime: false
+  loop: "{{ scbench_containerd_binary_sha256 | dict2items }}"
+  register: scbench_upstream_containerd_files
+
+- name: Refuse changed or unprotected upstream containerd executables
+  ansible.builtin.assert:
+    that:
+      - item.stat.isreg | default(false)
+      - item.stat.uid == 0
+      - item.stat.mode == '0755'
+      - item.stat.checksum == item.item.value
+    fail_msg: The selected containerd binary differs from its authenticated upstream release.
+  loop: "{{ scbench_upstream_containerd_files.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when: not ansible_check_mode
+
+- name: Install the authenticated upstream runc beside the selected containerd shim
+  ansible.builtin.get_url:
+    url: "https://github.com/opencontainers/runc/releases/download/v{{ scbench_runc_upstream_version }}/runc.amd64"
+    dest: "/usr/local/lib/simplestchat-runtime/{{ scbench_containerd_upstream_version }}/bin/runc"
+    checksum: "sha256:{{ scbench_runc_binary_sha256 }}"
+    owner: root
+    group: root
+    mode: '0755'
+    timeout: 60
+    validate_certs: true
+
+- name: Install the authenticated upstream Buildx plugin using standard CLI precedence
+  ansible.builtin.get_url:
+    url: >-
+      {{ 'https://github.com/docker/buildx/releases/download/v' + scbench_docker_buildx_upstream_version +
+         '/buildx-v' + scbench_docker_buildx_upstream_version + '.linux-amd64' }}
+    dest: /usr/local/lib/docker/cli-plugins/docker-buildx
+    checksum: "sha256:{{ scbench_docker_buildx_binary_sha256 }}"
+    owner: root
+    group: root
+    mode: '0755'
+    timeout: 60
+    validate_certs: true
+
+- name: Expose the selected runc on the packaged Docker service executable search path
+  ansible.builtin.file:
+    src: "/usr/local/lib/simplestchat-runtime/{{ scbench_containerd_upstream_version }}/bin/runc"
+    dest: /usr/local/bin/runc
+    state: link
+    owner: root
+    group: root
+    force: false
+
+- name: Select the authenticated containerd executable without replacing packaged unit files
+  ansible.builtin.template:
+    src: containerd-runtime.conf.j2
+    dest: /etc/systemd/system/containerd.service.d/simplestchat-runtime.conf
+    owner: root
+    group: root
+    mode: '0644'
+  register: scbench_upstream_containerd_unit
+
+- name: Activate containerd only when maintenance has not deferred runtime restart
+  ansible.builtin.systemd_service:
+    name: containerd.service
+    enabled: true
+    state: "{{ 'restarted' if scbench_upstream_containerd_unit.changed else 'started' }}"
+    daemon_reload: true
+  when: not (scbench_docker_defer_restart | default(false) | bool)
+
+- name: Verify the selected Buildx plugin and containerd executable versions
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - |
+        import subprocess
+        import sys
+
+        version, buildx = sys.argv[1:]
+        executable = "/usr/local/lib/simplestchat-runtime/" + version + "/bin/containerd"
+        for command, position, expected in (([executable, "--version"], 2, "v" + version),
+                                            (["/usr/bin/docker", "buildx", "version"], 1, "v" + buildx)):
+            result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=15,
+                                    env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"})
+            words = result.stdout.split()
+            if result.returncode or len(words) <= position or words[position] != expected:
+                sys.exit("The installed upstream runtime component differs from the selected release")
+      - "{{ scbench_containerd_upstream_version }}"
+      - "{{ scbench_docker_buildx_upstream_version }}"
+  changed_when: false
+  when: not ansible_check_mode

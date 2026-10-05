@@ -414,19 +414,29 @@ add random load balancing: live rooms and media ownership remain process-local.
 
 ### Pinned Docker runtime upgrades
 
-For a reviewed Docker/containerd/Compose update on an existing public host, use
+For a reviewed Docker/containerd/runc/Compose/Buildx update on an existing public
+host, use
 `reboot.yml -e scpub_reboot=true -e scpub_upgrade_runtime=true`. Update the exact
-inventory package pins first; local inventory overrides group defaults. The
-candidate Compose executable must match its separately pinned official SHA-256.
+inventory package and upstream binary pins first; local inventory overrides group
+defaults. The candidate Compose executable must match its separately pinned official SHA-256.
 Before stopping services, the playbook compares its resolved configuration and
 all three service hashes against the installed Compose. Any difference fails
 before maintenance and requires a separate configuration migration.
 
 After preparation saves container identities and gracefully stops the public
 services, the existing signed apt workflow installs the exact packages with
-service auto-start disabled. One explicit host reboot activates the runtime;
-version checks precede the existing recovery/readiness checks. Containers,
-volumes and selected application/dependency images are retained. A failure is
+service auto-start disabled. Where that package channel lags, authenticated
+upstream
+containerd 2.4.1 and runc 1.5.2 binaries live under a versioned root-controlled
+`/usr/local/lib/simplestchat-runtime/` directory. A managed containerd service
+drop-in selects the executable and matching shim/runc search path; unknown service
+overrides are refused. Buildx 0.37.2 uses Docker's standard global CLI plugin
+directory, ahead of the older packaged plugin. Archive and executable SHA-256s
+remain pinned in `group_vars/benchmark_hosts.yml`; the Docker service and socket
+retain their packaged Unix-socket configuration. One explicit reboot activates
+the runtime; the running engine, containerd, runc, Compose and Buildx version
+checks precede the existing recovery/readiness checks. Containers, volumes and
+selected application/dependency images are retained. A failure is
 still a failed maintenance operation even if same-boot recovery succeeds.
 This interrupts active chat/media and also reboots the host's TURN/monitoring
 services. App-only releases do not upgrade Docker or reboot the host.

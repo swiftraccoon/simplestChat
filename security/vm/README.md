@@ -35,7 +35,7 @@ roots, dropped capabilities, no-new-privileges and finite CPU/memory/PID limits.
 Only application HTTP is published on the guest loopback address. PostgreSQL and
 the temporary migrator use their real isolated network configuration.
 
-The provisioned Compose 5.5.1 renderer represents `mem_limit` as a decimal byte
+The provisioned Compose 5.6.0 renderer represents `mem_limit` as a decimal byte
 string. The guest accepts only its bounded positive canonical decimal form and
 applies the memory ceiling after conversion; container-inspect memory remains an
 integer. A daemon-free regression renders the real four-service templates with

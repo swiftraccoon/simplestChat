@@ -1,0 +1,42 @@
+---
+- name: Verify the active Docker engine, containerd, runc, Compose and Buildx identities
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - |
+        import json
+        import subprocess
+        import sys
+
+        engine, compose, containerd, buildx, runc = sys.argv[1:]
+        environment = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
+        docker = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
+
+        def output(arguments):
+            result = subprocess.run(docker + arguments, env=environment, capture_output=True,
+                                    timeout=20, check=False)
+            if result.returncode or len(result.stdout) > 65536:
+                sys.exit("Cannot verify the selected runtime components")
+            return result.stdout.decode().strip()
+
+        server = json.loads(output(["version", "--format", "{% raw %}{{json .Server}}{% endraw %}"]))
+        if server.get("Version") != engine:
+            sys.exit("Running Docker differs from the selected package")
+        components = server.get("Components", [])
+        for name, expected in (("containerd", containerd), ("runc", runc)):
+            actual = [item.get("Version", "").removeprefix("v") for item in components if item.get("Name") == name]
+            if actual != [expected]:
+                sys.exit("Running runtime component differs from the selected release")
+        if output(["compose", "version", "--short"]) != compose:
+            sys.exit("Compose differs from the selected package")
+        if output(["buildx", "version"]).split()[:2] != ["github.com/docker/buildx", "v" + buildx]:
+            sys.exit("Buildx differs from the selected upstream release")
+        print("All active runtime components match their selected releases")
+      - "{{ scbench_docker_engine_version.split(':')[-1].split('-')[0] }}"
+      - "{{ scbench_docker_compose_version.split('-')[0] }}"
+      - "{{ scbench_containerd_upstream_version }}"
+      - "{{ scbench_docker_buildx_upstream_version }}"
+      - "{{ scbench_runc_upstream_version }}"
+  changed_when: false
+  when: not ansible_check_mode

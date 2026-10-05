@@ -1,0 +1,6 @@
+# Managed by simplestChat runtime provisioning. Retain the packaged service and
+# choose the authenticated upstream executable and its matching shim together.
+[Service]
+Environment="PATH=/usr/local/lib/simplestchat-runtime/{{ scbench_containerd_upstream_version }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=
+ExecStart=/usr/local/lib/simplestchat-runtime/{{ scbench_containerd_upstream_version }}/bin/containerd

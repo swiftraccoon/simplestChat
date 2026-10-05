@@ -744,7 +744,9 @@ class RebootPlaybookTests(unittest.TestCase):
         self.assertIs(obj(upgrade, "vars")["scbench_docker_defer_restart"], expr2=True)
         self.assertEqual(upgrade["when"], "scpub_upgrade_runtime | default(false) | bool")
         self.assertIn("ansible.builtin.reboot", obj(workflow, "block", 2))
-        self.assertIn("ansible.builtin.command", obj(workflow, "block", 3))
+        self.assertEqual(
+            at(workflow, "block", 3, "ansible.builtin.include_tasks"), "tasks/runtime-verify.yml"
+        )
         self.assertEqual(at(workflow, "block", 4, "ansible.builtin.command", "argv", -1), "resume")
         self.assertEqual(at(workflow, "rescue", 0, "ansible.builtin.command", "argv", -1), "cancel")
         self.assertIs(at(workflow, "rescue", 0, "failed_when"), expr2=False)

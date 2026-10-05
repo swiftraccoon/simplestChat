@@ -521,7 +521,9 @@ Docker-dependent job authenticates the official Docker 29.8.2 static archive for
 its architecture and starts that pinned daemon with a fresh storage volume, private
 cgroup namespace and private socket. The installer replaces the runner image's
 older embedded daemon only inside the guarded disposable job container; it checks
-both the executable and running server version. The outer engine socket is
+both the executable and running server version. Authenticated containerd 2.4.1
+and Buildx 0.37.2 releases override the older bundled components; the running
+containerd and runc versions must match the maintained host selection. The outer engine socket is
 never mounted, and the production release fixture keeps its empty-engine and
 disposable-host checks.
 

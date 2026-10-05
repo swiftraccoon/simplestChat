@@ -38,6 +38,7 @@ async function fixture(t, options = {}) {
   for (const [original, replacement] of [
     ['/lib/systemd/systemd-journald', path.join(bin, 'journald')],
     ['/usr/local/bin', bin],
+    ['/usr/local/lib/docker/cli-plugins', path.join(directory, 'plugins')],
     ['/run/systemd', path.join(directory, 'systemd')],
     ['/run/log/journal', journalLogs],
     ['/var/run/docker.sock', path.join(directory, 'docker.sock')],
@@ -71,12 +72,17 @@ async function fixture(t, options = {}) {
           process.kill(Number(fs.readFileSync(${JSON.stringify(path.join(temporary, 'local-ci-docker/journald.pid'))}, 'utf8')), 'SIGTERM');
           Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
         }
-      } else if (args.includes('version')) console.log(JSON.stringify({ApiVersion: '1.48', Version: settings.wrongServer ? '29.7.2' : '29.8.2'}));
+      } else if (args.includes('buildx')) console.log('github.com/docker/buildx v0.37.2 revision');
+      else if (args.includes('version')) console.log(JSON.stringify({ApiVersion: '1.48', Version: settings.wrongServer ? '29.7.2' : '29.8.2', Components: [{Name: 'containerd', Version: settings.wrongComponent ? 'v2.3.6' : 'v2.4.1'}, {Name: 'runc', Version: '1.5.2'}]}));
       else process.exit(92);
     } else if (tool === 'curl') {
       const output = args[args.indexOf('--output') + 1];
       if (settings.wrongChecksum) fs.writeFileSync(output, 'corrupt archive');
-      else fs.copyFileSync(${JSON.stringify(path.join(directory, 'docker.tgz'))}, output);
+      else {
+        const name = args.some(arg => arg.includes('github.com/containerd/')) ? 'containerd.tgz'
+          : args.some(arg => arg.includes('github.com/docker/buildx/')) ? 'docker-buildx' : 'docker.tgz';
+        fs.copyFileSync(path.join(${JSON.stringify(directory)}, name), output);
+      }
     } else process.exit(93);
   `);
   for (const tool of ['uname', 'dockerd', 'docker', 'journald', 'curl']) {
@@ -106,6 +112,18 @@ async function fixture(t, options = {}) {
   assert.equal(packStatus, 0);
   const digest = createHash('sha256').update(await readFile(path.join(directory, 'docker.tgz'))).digest('hex');
   source = source.replaceAll(/docker_sha256=[a-f0-9]{64}/g, `docker_sha256=${digest}`);
+  await mkdir(path.join(archiveRoot, 'bin'));
+  for (const tool of ['containerd', 'containerd-shim-runc-v2', 'ctr']) {
+    await writeFile(path.join(archiveRoot, 'bin', tool), '#!/bin/sh\nexit 0\n');
+  }
+  const componentPack = spawn('/usr/bin/tar', ['-czf', path.join(directory, 'containerd.tgz'), '-C', archiveRoot, 'bin']);
+  const [componentStatus] = await once(componentPack, 'close');
+  assert.equal(componentStatus, 0);
+  await writeFile(path.join(directory, 'docker-buildx'), '#!/bin/sh\nexit 0\n');
+  for (const [key, filename] of [['containerd', 'containerd.tgz'], ['buildx', 'docker-buildx']]) {
+    const componentDigest = createHash('sha256').update(await readFile(path.join(directory, filename))).digest('hex');
+    source = source.replaceAll(new RegExp(`${key}_sha256=[a-f0-9]{64}`, 'g'), `${key}_sha256=${componentDigest}`);
+  }
   await writeFile(helper, source);
   return {
     directory, temporary, journal, journalLogs, config, githubEnv,
@@ -200,5 +218,14 @@ test('an unexpected running daemon version cannot publish readiness', async t =>
   const result = await f.run();
   assert.notEqual(result.status, 0, result.output);
   assert.match(result.output, /running Docker daemon differs/);
+  assert.equal(await readFile(f.githubEnv, 'utf8'), '');
+});
+
+
+test('an outdated active containerd cannot publish runtime readiness', async t => {
+  const f = await fixture(t, { wrongComponent: true });
+  const result = await f.run();
+  assert.notEqual(result.status, 0, result.output);
+  assert.match(result.output, /running Docker component differs/);
   assert.equal(await readFile(f.githubEnv, 'utf8'), '');
 });

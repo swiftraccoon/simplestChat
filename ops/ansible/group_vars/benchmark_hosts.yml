@@ -2,13 +2,25 @@
 scbench_root: /srv/simplestchat-bench
 scbench_repository: https://github.com/swiftraccoon/simplestChat.git
 scbench_release_dir: "{{ scbench_root }}/sources/{{ scbench_revision }}"
-# Official Docker Debian repository versions and key verified 2026-09-13.
+# Official Docker Debian repository versions and key verified 2026-10-05.
 scbench_docker_gpg_sha256: 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570
 scbench_docker_engine_version: 5:29.8.2-1~debian.13~trixie
 scbench_docker_cli_version: 5:29.8.2-1~debian.13~trixie
 scbench_containerd_version: 2.3.6-1~debian.13~trixie
 scbench_docker_buildx_version: 0.37.1-1~debian.13~trixie
 scbench_docker_compose_version: 5.6.0-1~debian.13~trixie
+# Docker packages supply the service units. Newer standalone releases
+# are authenticated separately where the signed package channel has not caught up.
+scbench_containerd_upstream_version: 2.4.1
+scbench_containerd_archive_sha256: d65eda6a188aac1006848d8060099be88ba9c4bcddbfd9a23a961194710d0dd4
+scbench_containerd_binary_sha256:
+  containerd: 3853e8be0b4fde012046d9e08e3437be2fa9ee5171bdd7e2e6d7c4daded77232
+  containerd-shim-runc-v2: 5848d90712cc3ed09548b1779efb3ed231d52063054b5f4128a9de0892e8771c
+  ctr: 3b532fb748982b208caeb002efec180dfe04a5e939dffe465ff681343c9ec71c
+scbench_runc_upstream_version: 1.5.2
+scbench_runc_binary_sha256: 599f6f94ff8c5057241eff0d54c3c74f95c34935b6457b33fe545defc61e9488
+scbench_docker_buildx_upstream_version: 0.37.2
+scbench_docker_buildx_binary_sha256: 982ca20490b45ed1ec8d99795974d3d874a358f75938c9c237305010e6b7e548
 scbench_docker_compose_binary_sha256: 40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a
 scbench_upgrade_packages: false
 scbench_reboot: false

@@ -96,26 +96,8 @@
             post_reboot_delay: 5
             test_command: /usr/bin/systemctl is-active docker.service
 
-        - name: Verify the running runtime and Compose versions after the reboot
-          ansible.builtin.command:
-            argv:
-              - /usr/bin/python3
-              - -c
-              - |
-                import subprocess
-                import sys
-
-                environment = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
-                docker = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
-                checks = [(["info", "--format", "{% raw %}{{.ServerVersion}}{% endraw %}"], sys.argv[1]),
-                          (["compose", "version", "--short"], sys.argv[2])]
-                for arguments, expected in checks:
-                    result = subprocess.run(docker + arguments, env=environment, capture_output=True, timeout=20, check=False)
-                    if result.returncode != 0 or result.stdout.decode().strip() != expected:
-                        sys.exit("Running runtime does not match the reviewed package pins")
-              - "{{ scbench_docker_engine_version.split(':')[-1].split('-')[0] }}"
-              - "{{ scbench_docker_compose_version.split('-')[0] }}"
-          changed_when: false
+        - name: Verify all selected runtime component versions after the reboot
+          ansible.builtin.include_tasks: tasks/runtime-verify.yml
           when: scpub_upgrade_runtime | default(false) | bool
 
         - name: Restore the prepared services only after the boot identity changed
