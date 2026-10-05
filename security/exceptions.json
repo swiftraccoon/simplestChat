@@ -503,11 +503,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:53198c10cfe828b706fbe34985132d9b1ed478692f761c2f7ac4b366e19ea663",
-      "scope": "build/release_container_fixture.py:164:168:19:6",
+      "fingerprint": "codeql:2dbbdc8162f2d76a38d73a1f5fae9b07f4b5a48074b312989f156d8a98a81a5d",
+      "scope": "build/release_container_fixture.py:170:174:19:6",
       "owner": "swiftraccoon",
-      "rationale": "The Jinja Environment renders tracked local dotenv/SQL/Compose/PostgreSQL configuration with StrictUndefined and explicit fixture values; it produces no HTML or browser response. Source re-review at cf941371acc877ed568f84f4e545dd622fe7badd confirms the only file change adds the localhost RP ID. The complete flagged Environment moves from lines 163-167 to 164-168 unchanged; callers and exclusive mode0600 output writes are unchanged. HTML escaping would corrupt these configuration formats. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
-      "reachability": "Exact query, CodeQL version, primary range/message and re-reviewed whole-file SHA256 f4c113823c89c511b8b2f73e82ae4a1ffbf4c0c4b367984bd1139757353f51e9. Original Python security-extended SARIF from cf941371acc877ed568f84f4e545dd622fe7badd independently matches the full identity. Changes require a fresh review; no general template/test/path exclusion, automatic renewal or expiry extension.",
+      "rationale": "The Jinja Environment renders tracked local dotenv/SQL/Compose/PostgreSQL configuration with StrictUndefined and explicit fixture values; it produces no HTML or browser response. Source re-review at b5b07c208b58828a7c2a0da6c85b7162269006c1 confirms the only change since the previous review permits the exact project GHCR Caddy image name with a complete immutable digest. The complete flagged Environment moves from lines 164-168 to 170-174 unchanged; callers and exclusive mode0600 output writes are unchanged. HTML escaping would corrupt these configuration formats. The successful hosted CodeQL 2.27.1 Python analysis and its original policy report from run 37276379828 independently confirm this exact source, query, range and message identity.",
+      "reachability": "Exact query, CodeQL version, primary range/message and re-reviewed whole-file SHA256 360ca5eeb6210e56983155e1391b3895694e86aa3a4aee78e997cc2b787d7d6a. The original hosted Python policy report from run 37276379828 independently matches the full identity. Changes require a fresh review; no general template/test/path exclusion, automatic renewal or expiry extension.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-27"
     },

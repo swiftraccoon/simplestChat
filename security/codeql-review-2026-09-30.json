@@ -597,23 +597,23 @@
       "toolVersion": "2.27.1",
       "path": "build/release_container_fixture.py",
       "region": {
-        "start_line": 164,
-        "end_line": 168,
+        "start_line": 170,
+        "end_line": 174,
         "start_column": 19,
         "end_column": 6
       },
       "messageSha256": "67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694",
-      "sourceSha256": "f4c113823c89c511b8b2f73e82ae4a1ffbf4c0c4b367984bd1139757353f51e9",
-      "scope": "build/release_container_fixture.py:164:168:19:6",
-      "fingerprint": "codeql:53198c10cfe828b706fbe34985132d9b1ed478692f761c2f7ac4b366e19ea663",
+      "sourceSha256": "360ca5eeb6210e56983155e1391b3895694e86aa3a4aee78e997cc2b787d7d6a",
+      "scope": "build/release_container_fixture.py:170:174:19:6",
+      "fingerprint": "codeql:2dbbdc8162f2d76a38d73a1f5fae9b07f4b5a48074b312989f156d8a98a81a5d",
       "number": 27,
       "severity": "high",
       "state": "open",
       "disposition": "false-positive",
-      "rationale": "The Jinja Environment renders tracked local dotenv/SQL/Compose/PostgreSQL configuration with StrictUndefined and explicit fixture values; it produces no HTML or browser response. Source re-review at cf941371acc877ed568f84f4e545dd622fe7badd confirms the only file change adds the localhost RP ID. The complete flagged Environment moves from lines 163-167 to 164-168 unchanged; callers and exclusive mode0600 output writes are unchanged. HTML escaping would corrupt these configuration formats. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
-      "observedRevision": "cf941371acc877ed568f84f4e545dd622fe7badd",
+      "rationale": "The Jinja Environment renders tracked local dotenv/SQL/Compose/PostgreSQL configuration with StrictUndefined and explicit fixture values; it produces no HTML or browser response. Source re-review at b5b07c208b58828a7c2a0da6c85b7162269006c1 confirms the only change since the previous review permits the exact project GHCR Caddy image name with a complete immutable digest. The complete flagged Environment moves from lines 164-168 to 170-174 unchanged; callers and exclusive mode0600 output writes are unchanged. HTML escaping would corrupt these configuration formats. The successful hosted CodeQL 2.27.1 Python analysis and its original policy report from run 37276379828 independently confirm this exact source, query, range and message identity.",
+      "observedRevision": "b5b07c208b58828a7c2a0da6c85b7162269006c1",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/27",
-      "sourceProvenanceRevision": "cf941371acc877ed568f84f4e545dd622fe7badd"
+      "sourceProvenanceRevision": "b5b07c208b58828a7c2a0da6c85b7162269006c1"
     },
     {
       "rule": "py/jinja2/autoescape-false",

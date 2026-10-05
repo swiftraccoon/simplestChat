@@ -132,6 +132,30 @@ identities and retain the original 2026-11-29 expiry. No other finding, path or
 query is excluded; no remote alert state changed. This does not claim a complete
 passing CI run.
 
+## Source re-review: immutable Caddy image fixture
+
+Alert 27 was re-reviewed on 2026-10-05 against source commit
+`b5b07c208b58828a7c2a0da6c85b7162269006c1`. The only change since its previous
+review permits the exact `ghcr.io/swiftraccoon/simplestchat-caddy` image name
+alongside the official Caddy image. Both selectors still require a tag and a
+complete SHA-256 digest. The unchanged `StrictUndefined` renderer moves from
+lines 164-168 to 170-174 and continues to produce tracked local dotenv, SQL,
+Compose and PostgreSQL configuration. Its callers and exclusive mode 0600
+writes are unchanged; there is no HTML or browser-response sink.
+
+The complete-file SHA-256 changes from
+`f4c113823c89c511b8b2f73e82ae4a1ffbf4c0c4b367984bd1139757353f51e9` to
+`360ca5eeb6210e56983155e1391b3895694e86aa3a4aee78e997cc2b787d7d6a`.
+The successful hosted Python analysis in
+[run 37276379828](https://github.com/swiftraccoon/simplestChat/actions/runs/37276379828/job/111654198353)
+produced the original policy report identifying this sole stale review. Its
+query, analyzer version, complete-file hash, range and message bind the replacement
+fingerprint `codeql:2dbbdc8162f2d76a38d73a1f5fae9b07f4b5a48074b312989f156d8a98a81a5d`.
+The superseded exception is replaced with the original 2026-11-29 expiry.
+Replaying that hosted report validates the updated policy; it does not constitute
+a new CodeQL analysis or a complete passing CI run. No other finding, query or
+path is excluded, and no remote alert state changed.
+
 ## Source re-review: TURN migration fixtures
 
 Alerts 19–23 were re-reviewed on 2026-10-04 against source commit
@@ -411,7 +435,7 @@ inherit this decision merely because the alert number is unchanged.
 | <a id="alert-24"></a>[24](https://github.com/swiftraccoon/simplestChat/security/code-scanning/24) | high | fix-pending | [`ops/ansible/files/monitoring_collect.py:156`](../ops/ansible/files/monitoring_collect.py#L156) | Assigned source remediation; this review authorizes no dismissal or exception. |
 | <a id="alert-25"></a>[25](https://github.com/swiftraccoon/simplestChat/security/code-scanning/25) | high | fix-pending | [`build/release_http_policy.py:273`](../build/release_http_policy.py#L273) | Assigned source remediation; this review authorizes no dismissal or exception. |
 | <a id="alert-26"></a>[26](https://github.com/swiftraccoon/simplestChat/security/code-scanning/26) | high | fix-pending | [`ops/ansible/files/turn_public.py:298`](../ops/ansible/files/turn_public.py#L298) | Assigned source remediation; this review authorizes no dismissal or exception. |
-| <a id="alert-27"></a>[27](https://github.com/swiftraccoon/simplestChat/security/code-scanning/27) | high | false-positive | [`build/release_container_fixture.py:164`](../build/release_container_fixture.py#L164) | The unchanged StrictUndefined renderer produces local configuration only. The RP fixture addition shifts the flagged Environment by one line; callers and exclusive mode0600 writes are unchanged. Source and fresh original SARIF were re-reviewed at `cf941371acc877ed568f84f4e545dd622fe7badd`; HTML escaping would corrupt these formats. |
+| <a id="alert-27"></a>[27](https://github.com/swiftraccoon/simplestChat/security/code-scanning/27) | high | false-positive | [`build/release_container_fixture.py:170`](../build/release_container_fixture.py#L170) | The unchanged StrictUndefined renderer produces local configuration only. The exact project GHCR selector shifts the flagged Environment by six lines; callers and exclusive mode0600 writes are unchanged. Source and the hosted policy report were re-reviewed at `b5b07c208b58828a7c2a0da6c85b7162269006c1`; HTML escaping would corrupt these formats. |
 | <a id="alert-28"></a>[28](https://github.com/swiftraccoon/simplestChat/security/code-scanning/28) | high | false-positive | [`ops/ansible/tests/test_automation.py:39`](../ops/ansible/tests/test_automation.py#L39) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
 | <a id="alert-29"></a>[29](https://github.com/swiftraccoon/simplestChat/security/code-scanning/29) | high | false-positive | [`ops/ansible/tests/test_automation.py:395`](../ops/ansible/tests/test_automation.py#L395) | The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. |
 | <a id="alert-30"></a>[30](https://github.com/swiftraccoon/simplestChat/security/code-scanning/30) | high | false-positive | [`ops/ansible/tests/test_public_templates.py:83`](../ops/ansible/tests/test_public_templates.py#L83) | The unchanged StrictUndefined renderer produces local configuration only. Added RP fixture and migration tests introduce no HTML sink. Source and fresh original SARIF were re-reviewed at `cf941371acc877ed568f84f4e545dd622fe7badd`; HTML escaping is inappropriate for these formats. |
