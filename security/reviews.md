@@ -73,6 +73,42 @@ remains pinned to `6bed0761d98439e5a578e2877258200ad565ba87`; the version matche
 boundary described above. This additional exact record expires on 2026-11-29;
 it does not exempt extraction, query completion, cache validation or findings.
 
+## Cache retention trigger
+
+On 2026-10-05, the high-severity `dangerous-triggers` finding for
+`cache-retention.yml#on` was reviewed against the complete workflow and
+`build/ci_cache_retention.py`. Its feature SHA-256 is
+`60b335d5888cbd8f0bfc149534de1747011b3fb170702cb69d34688fb75731ec`.
+
+The `workflow_run` event matches completed CI on main. Before checkout, the job
+also requires this repository, a successful push event, main as the source
+branch and this repository as the source repository. It therefore does not
+execute fork or pull-request code with the maintenance token. Checkout is
+pinned and selects the triggering SHA without persisted credentials. No
+artifacts or cached code are downloaded or executed by this workflow.
+
+The helper independently fetches the run from GitHub and requires its exact ID,
+CI workflow name and path, successful completed push status, both repository
+identities, main branch and requested SHA. It rejects a SHA that is no longer
+current main, including before each proposed deletion. It then re-fetches the
+inventory, re-plans retention and checks the cache ID, key, ref, version, size,
+creation time and recent access. Unknown families, other refs, the latest entry
+in each namespace and recently used or created entries remain protected.
+The fixed API allowlist can delete only cache IDs in this repository, with a
+100-deletion ceiling and a 240-second deadline. No source, run or artifact
+endpoint can be deleted. A concurrent GitHub eviction cannot be locked by this
+helper; refreshed retention protects the remaining current copies before each
+request, and the objects involved remain disposable build caches.
+
+The job grants `contents: read` and `actions: write` for this narrow operation;
+its helper defaults to dry-run outside the explicitly applying workflow.
+`test_ci_cache_retention.py` exercises the trigger guards, rejected run states,
+stale main revisions, complete inventories, recent-use protection, re-planning
+and forbidden deletion endpoints without issuing API mutations. The review
+expires on 2026-11-29 and covers only this exact trigger feature and location.
+Changing the guards, checkout provenance, token scope or helper deletion
+boundary requires renewed assessment; no other trigger finding is suppressed.
+
 ## Rust dependency health
 
 The audit distinguishes these health warnings from vulnerability-class results:

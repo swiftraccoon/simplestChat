@@ -590,6 +590,16 @@ GiB of distinct file data, counting hardlinks once. Direct local runs accept
 `--rust-cargo-cache`; the official
 workflow installs the pinned Rust toolchain only on an evaluated-database miss.
 
+After successful push CI on main, `cache-retention.yml` removes obsolete caches
+from known families. It verifies the triggering run and current main revision,
+protects the newest cache in each trust/platform namespace and every cache
+created or accessed within two hours, and targets eight GiB of total storage.
+Unknown cache families and other refs remain untouched. Run
+`python3 build/ci_cache_retention.py` for a read-only plan; applying it requires
+`--apply --run-id <successful-CI-run> --revision <current-main-SHA>`. Deletions
+are limited to cache IDs, with refreshed inventory before each deletion and
+limits of 100 deletions and 240 seconds.
+
 Scheduled mutation, performance/soak and macOS WebKit compatibility workflows
 are additional tiers, not part of the required push gate.
 

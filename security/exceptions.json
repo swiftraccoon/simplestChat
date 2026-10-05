@@ -963,6 +963,16 @@
     },
     {
       "scanner": "zizmor",
+      "fingerprint": "dangerous-triggers:60b335d5888cbd8f0bfc149534de1747011b3fb170702cb69d34688fb75731ec",
+      "scope": ".github/workflows/cache-retention.yml#on",
+      "owner": "swiftraccoon",
+      "rationale": "This completion trigger performs bounded cache maintenance only after successful push CI on this repository's main branch. It does not consume pull-request code, artifacts or restored cache contents.",
+      "reachability": "The job rejects other repositories, forks, pull requests, failed runs and non-main branches before checkout. Checkout uses the triggering SHA without persisted credentials. The helper revalidates the successful CI run and current main SHA through GitHub, then re-plans and checks each obsolete allowlisted main cache before an exact-ID deletion; source, artifacts and runs are outside its API allowlist.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#cache-retention-trigger"
+    },
+    {
+      "scanner": "zizmor",
       "fingerprint": "superfluous-actions:e2b9fc895ab19ccc4e010dfe81099d14a1a54d1170519db580416c80b3bd1580",
       "scope": ".github/workflows/codeql.yml#jobs/source-analysis/steps/5/uses",
       "owner": "swiftraccoon",
