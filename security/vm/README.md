@@ -122,7 +122,7 @@ dependencies only for a full deployment run.
 
 The dated Debian image and its complete upstream SHA-512 checksum are recorded in
 [`debian-cloud.json`](debian-cloud.json), checked against Debian's published
-[SHA512SUMS](https://cloud.debian.org/images/cloud/trixie/20260914-2601/SHA512SUMS).
+[SHA512SUMS](https://cloud.debian.org/images/cloud/trixie/20261001-2618/SHA512SUMS).
 The image is authenticated before QEMU parses it. Updating the pin requires
 reviewing a new dated image and its published checksum. Guest package installation
 uses the actual maintained signed Debian/Docker repositories and package policy;

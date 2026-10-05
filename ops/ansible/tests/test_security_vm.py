@@ -144,7 +144,7 @@ class InputTests(unittest.TestCase):
     def test_published_pin_has_fixed_release_and_full_checksum(self) -> None:
         """The maintained pin has no latest alias or alternate host."""
         selected = vm.CloudImage.read()
-        self.assertIn("/20260914-2601/", selected.url)
+        self.assertIn("/20261001-2618/", selected.url)
         self.assertEqual(len(selected.sha512), 128)
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "pin.json"
@@ -152,7 +152,7 @@ class InputTests(unittest.TestCase):
             for changes in (
                 {"schemaVersion": True},
                 {"url": "https://example.test/disk.qcow2"},
-                {"url": selected.url.replace("20260914-2601/", "latest/")},
+                {"url": selected.url.replace("20261001-2618/", "latest/")},
                 {"sha512": "a" * 127},
                 {"architecture": "arm64"},
             ):
