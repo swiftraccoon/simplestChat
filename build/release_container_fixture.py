@@ -115,7 +115,13 @@ def render_fixture(
         (revision, r"[a-f0-9]{40}"),
         (token, r"[a-f0-9]{32}"),
         (postgres_image, r"docker\.io/library/postgres:[a-z0-9.-]+@sha256:[a-f0-9]{64}"),
-        (caddy_image, r"docker\.io/library/caddy:[a-z0-9.-]+@sha256:[a-f0-9]{64}"),
+        (
+            caddy_image,
+            (
+                r"(?:docker\.io/library/caddy|ghcr\.io/swiftraccoon/simplestchat-caddy)"
+                r":[a-z0-9.-]+@sha256:[a-f0-9]{64}"
+            ),
+        ),
     )
     if any(re.fullmatch(expression, value) is None for value, expression in expressions):
         message = "Fixture image identities, revision, and ownership token must be explicit"

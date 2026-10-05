@@ -256,6 +256,30 @@ class ReleaseContainerFixtureTests(unittest.TestCase):
             self.render(config=link)
         self.assertEqual(list(self.config.iterdir()), [])
 
+    def test_project_caddy_image_preserves_exact_digest(self) -> None:
+        """The reviewed publisher's immutable selector survives fixture rendering."""
+        selector = (
+            "ghcr.io/swiftraccoon/simplestchat-caddy:2.11.7-" + REVISION + "@sha256:" + "e" * 64
+        )
+        self.render(identity=replace(IDENTITY, caddy_image=selector))
+        images = object_value(decode_json((self.config / "images.json").read_bytes()))
+        self.assertEqual(images["caddyImage"], selector)
+
+    def test_unreviewed_caddy_registries_and_mutable_tags_are_rejected(self) -> None:
+        """A project image allowance never expands into an arbitrary registry allowance."""
+        allowed = "ghcr.io/swiftraccoon/simplestchat-caddy:2.11.7@sha256:" + "e" * 64
+        for selector in (
+            allowed.replace("swiftraccoon", "another-owner"),
+            allowed.replace("simplestchat-caddy", "another-image"),
+            allowed.replace("ghcr.io/", "ghcr.io.example/"),
+            allowed.replace("ghcr.io/", "ghcrXio/"),
+            allowed.split("@", 1)[0],
+            allowed + "\n",
+        ):
+            with self.subTest(selector=selector), self.assertRaises(ValueError):
+                self.render(identity=replace(IDENTITY, caddy_image=selector))
+        self.assertEqual(list(self.config.iterdir()), [])
+
     def test_strict_undefined_stops_before_any_output(self) -> None:
         """Missing template inputs stop before any output file is published."""
         original = Path.read_text

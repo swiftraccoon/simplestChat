@@ -1,0 +1,6 @@
+**
+!Caddyfile
+!build/
+build/**
+!build/caddy-image.Dockerfile
+!build/caddy-image.Dockerfile.dockerignore

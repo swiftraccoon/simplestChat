@@ -22,7 +22,8 @@
           - scpub_announce_ip is match('^(?:[0-9]{1,3}(?:\.[0-9]{1,3}){3}|[0-9a-f:]{3,39})$')
           - scpub_announce_ipv6 == '' or scpub_announce_ipv6 is match('^[0-9a-f:]{3,39}$')
           - scpub_postgres_image is match('^docker.io/library/postgres:[a-z0-9.-]+@sha256:[a-f0-9]{64}$')
-          - scpub_caddy_image is match('^docker.io/library/caddy:[a-z0-9.-]+@sha256:[a-f0-9]{64}$')
+          - >-
+            scpub_caddy_image is match('^(?:docker[.]io/library/caddy|ghcr[.]io/swiftraccoon/simplestchat-caddy):[a-z0-9.-]+@sha256:[a-f0-9]{64}\\Z')
         fail_msg: Explicitly configure the public domain, address and immutable images on the prepared Debian host.
 
     - name: Require the passkey identity to belong to the public domain

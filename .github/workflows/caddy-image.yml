@@ -1,0 +1,92 @@
+name: Publish pinned Caddy image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: caddy-image
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Validate and publish Caddy
+    if: github.repository == 'swiftraccoon/simplestChat' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: write # Publish the reviewed image and its attestation to GHCR.
+      attestations: write # Bind the image index to the exact recipe and source revision.
+      id-token: write # Obtain the GitHub identity used to sign that attestation.
+    env:
+      IMAGE_NAME: ghcr.io/swiftraccoon/simplestchat-caddy
+      IMAGE_TAG: 2.11.7-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Authenticate the repository image publisher
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Validate both architectures and publish their immutable index
+        id: image
+        run: |
+          docker buildx create --name simplestchat-caddy --driver docker-container \
+            --driver-opt image=docker.io/moby/buildkit@sha256:3ad6bb9bc8c78c0069d03247adb9a59b3b43d68e55353e876e558b888c6c1768 \
+            --use
+          docker buildx build --builder simplestchat-caddy \
+            --platform linux/amd64,linux/arm64 --pull --push \
+            --build-arg "SOURCE_REVISION=$GITHUB_SHA" \
+            --file build/caddy-image.Dockerfile \
+            --tag "$IMAGE_NAME:$IMAGE_TAG" \
+            --metadata-file "$RUNNER_TEMP/caddy-metadata.json" .
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          metadata = json.loads((root / 'caddy-metadata.json').read_text())
+          digest = metadata['containerimage.digest']
+          if re.fullmatch(r'sha256:[a-f0-9]{64}', digest) is None:
+              raise SystemExit('Caddy image index digest is missing or malformed')
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
+              output.write(f'digest={digest}\n')
+          receipt = {
+              'version': '2.11.7',
+              'revision': os.environ['GITHUB_SHA'],
+              'image': f"{os.environ['IMAGE_NAME']}:{os.environ['IMAGE_TAG']}@{digest}",
+              'platforms': ['linux/amd64', 'linux/arm64'],
+              'recipeSha256': hashlib.sha256(Path('build/caddy-image.Dockerfile').read_bytes()).hexdigest(),
+              'caddyfileSha256': hashlib.sha256(Path('Caddyfile').read_bytes()).hexdigest(),
+          }
+          (root / 'caddy-release.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
+              summary.write(f"Caddy 2.11.7: `{receipt['image']}`\n")
+          PY
+      - name: Attest the exact image index and reviewed build inputs
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          predicate-path: ${{ runner.temp }}/caddy-release.json
+          predicate-type: https://github.com/swiftraccoon/simplestChat/attestations/caddy/v1
+          push-to-registry: true
+          create-storage-record: false
+      - name: Retain the exact deployment selector
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: caddy-release-${{ github.sha }}
+          path: ${{ runner.temp }}/caddy-release.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove the owned builder and registry credentials
+        if: always()
+        run: |
+          docker buildx rm simplestchat-caddy || true
+          docker logout ghcr.io

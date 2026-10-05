@@ -90,7 +90,8 @@
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
                         probe.bind((source, 0))
                     selector = images['caddyImage']
-                    public.require(re.fullmatch(r'docker.io/library/caddy:[a-z0-9.-]+@sha256:[a-f0-9]{64}', selector),
+                    public.require(re.fullmatch(r'(?:docker\.io/library/caddy|ghcr\.io/swiftraccoon/simplestchat-caddy)'
+                                                r':[a-z0-9.-]+@sha256:[a-f0-9]{64}', selector),
                                    'handoff_pinned_caddy_required')
                     image = runner.docker('image', 'inspect', '--format', '{{ '{{.Id}}' }}', selector, timeout=15).decode().strip()
                     public.require(public.ID.fullmatch(image), 'handoff_image_identity')

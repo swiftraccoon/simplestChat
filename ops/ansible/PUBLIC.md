@@ -11,6 +11,52 @@ running and do not rebuild on the live VPS.
 For a move to another VPS, use the [migration controller](MIGRATION.md), which
 automates preparation, verified data transfer, cutover and source retirement.
 
+## Publishing a Caddy release ahead of its official image
+
+When an upstream stable binary is available before its official Docker image,
+`build/caddy-image.Dockerfile` installs the exact upstream binary on the
+checksum-pinned official base. It pins separate AMD64/ARM64 archive hashes and
+preserves the upstream command, directories, environment and `NET_BIND_SERVICE`
+file capability. Both targets must report the selected version and validate the
+repository's Caddyfile before publication. The build context contains only the
+recipe and public Caddyfile; deployment secrets never enter this image.
+
+The current binary pins are from
+[Caddy 2.11.7](https://github.com/caddyserver/caddy/releases/tag/v2.11.7).
+Both archive digests match the release metadata and published SHA-512 checksums;
+their Sigstore signatures are checked against the upstream release workflow.
+Review those identities and the full release notes when updating the recipe.
+
+After committing and pushing the reviewed recipe to `main`, explicitly dispatch:
+
+```sh
+gh workflow run caddy-image.yml --ref main
+```
+
+The publisher runs on one free runner, validates both architectures, publishes
+`ghcr.io/swiftraccoon/simplestchat-caddy`, and attests the exact image index,
+revision, recipe and Caddyfile hashes. It does not run on ordinary pushes or
+modify a deployment. Its `caddy-release-<revision>` artifact contains the
+immutable `tag@sha256` selector. Check the workflow's terminal success and the
+GitHub attestation before selecting that digest for deployment:
+
+```sh
+gh attestation verify oci://ghcr.io/swiftraccoon/simplestchat-caddy@sha256:REVIEWED_DIGEST \
+  --repo swiftraccoon/simplestChat \
+  --signer-workflow swiftraccoon/simplestChat/.github/workflows/caddy-image.yml \
+  --predicate-type https://github.com/swiftraccoon/simplestChat/attestations/caddy/v1 \
+  --source-ref refs/heads/main --source-digest FULL_REVIEWED_REVISION
+```
+
+The package must permit anonymous pulls before using it in public deployment;
+new GHCR packages default to private. Keep the image digest in
+`scpub_caddy_image`, the production-container fixture and the CI Caddy selector
+in sync. Deployment accepts only the official Caddy repository or this exact
+project package, with a complete digest in either case. Apply a proxy image
+change through the full-maintenance workflow below; an app-only release leaves
+the proxy image unchanged. Return to an authenticated official image when its
+matching stable tag becomes available.
+
 ## Prepare configuration
 
 Add these host variables to your ignored `inventory.local.yml`:
