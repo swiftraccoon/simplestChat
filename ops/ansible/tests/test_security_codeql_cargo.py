@@ -173,6 +173,7 @@ class CargoCacheTests(unittest.TestCase):
         runner = next(step for step in steps if step.get("id") == "source-analysis")
         self.assertIn('--rust-cargo-cache "$RUNNER_TEMP/codeql-rust-cargo"', string(runner, "run"))
         size = next(step for step in steps if step.get("id") == "rust-cargo-size")
+        self.assertTrue(string(size, "run").startswith("set -euo pipefail\n"))
         self.assertIn(
             "steps.source-analysis.outputs.database-cache-ready == 'true'", string(size, "if")
         )

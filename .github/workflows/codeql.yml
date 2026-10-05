@@ -131,6 +131,7 @@ jobs:
           steps.rust-cargo.outputs.cache-hit != 'true' && steps.source-analysis.outputs.database-cache-ready == 'true' }}
         id: rust-cargo-size
         run: |
+          set -euo pipefail
           python3 build/security_codeql_cargo.py --source-root "$RUNNER_TEMP/codeql-local/source" \
             --publication-check "$RUNNER_TEMP/codeql-rust-cargo" | tee -a "$GITHUB_OUTPUT"
       - name: Save bounded Rust extraction build output
