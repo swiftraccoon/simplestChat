@@ -21,13 +21,18 @@ from release_json import JsonObject, decode_json, object_value, string_value
 MAX_ARCHIVE = 8 * 1024**3
 
 
-def cache_key(root: Path) -> str:
-    """Bind actual image inputs and tool pins without unrelated workflow/document changes."""
+def trust_namespace() -> str:
+    """Keep reusable artifacts from trusted main separate from pull-request inputs."""
     trusted = (
         os.environ.get("GITHUB_REF") == "refs/heads/main"
         and os.environ.get("GITHUB_EVENT_NAME") != "pull_request"
     )
-    trust = "main" if trusted else "untrusted"
+    return "main" if trusted else "untrusted"
+
+
+def cache_key(root: Path) -> str:
+    """Bind actual image inputs and tool pins without unrelated workflow/document changes."""
+    trust = trust_namespace()
     identity = {
         "inputs": native.inputs_digest(root),
         "modes": {
@@ -40,6 +45,15 @@ def cache_key(root: Path) -> str:
     }
     digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     return f"native-prepared-v1-{trust}-{identity['architecture']}-{digest}"
+
+
+def compiled_key(root: Path, image: str, mode: str) -> str:
+    """Separate instrumented executables by exact image, source, ISA and trusted key."""
+    native.require(native.canonical_image_id(image) == image, "cache_image_id")
+    native.require(mode in native.MODES, "cache_mode")
+    identity = {"prepared": cache_key(root), "image": image, "mode": mode}
+    digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+    return f"native-compiled-v1-{mode}-{trust_namespace()}-{native.native_architecture()}-{digest}"
 
 
 def archive_identity(path: Path) -> tuple[int, str]:
@@ -124,20 +138,26 @@ class Options(argparse.Namespace):
     directory: Path = Path()
     output: Path = Path()
     key: str = ""
+    image: str = ""
+    mode: str = ""
 
 
 def main() -> int:
     """Expose cache keys and checked image transport to the pinned cache workflow actions."""
     parser = argparse.ArgumentParser(description=__doc__)
-    _ = parser.add_argument("operation", choices=("key", "save", "load"))
+    _ = parser.add_argument("operation", choices=("key", "compiled-key", "save", "load"))
     _ = parser.add_argument("--engine", choices=("docker", "podman"), default="docker")
     _ = parser.add_argument("--directory", type=Path, default=Path())
     _ = parser.add_argument("--output", type=Path, default=Path())
     _ = parser.add_argument("--key", default="")
+    _ = parser.add_argument("--image", default="")
+    _ = parser.add_argument("--mode", choices=native.MODES, default="")
     args = parser.parse_args(namespace=Options())
     try:
         if args.operation == "key":
             _ = sys.stdout.write(cache_key(native.ROOT) + "\n")
+        elif args.operation == "compiled-key":
+            _ = sys.stdout.write(compiled_key(native.ROOT, args.image, args.mode) + "\n")
         else:
             for path in (args.directory, args.output):
                 native.require(path.is_absolute() and path.resolve() == path, "cache_path")

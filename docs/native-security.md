@@ -47,7 +47,9 @@ The Fedora 44 base uses the same immutable manifest as the release build.
 OpenSSL uses the existing checksum-pinned 3.5.9 installer. Invoke, Meson and
 Ninja use the worker's hash-locked, wheel-only requirements. Meson downloads
 checksum-authenticated wraps during preparation; actual compile/test containers
-have no network and use `--wrap-mode=nodownload` with two compiler jobs.
+have no network and use `--wrap-mode=nodownload`. Compiler and FlatBuffers
+generator parallelism respects CPU affinity, cgroup quotas and available memory,
+with at most four jobs.
 
 The image's input label binds the maintained worker sources, runner, process
 helper, Dockerfile, OpenSSL installer, Python locks/constraints, toolchain pins
@@ -77,8 +79,9 @@ original command had no total runtime bound.
 Each actual run has no network, published ports, host mounts, engine socket or
 Linux capabilities. It uses a read-only root filesystem and numeric UID/GID
 65532. Private tmpfs storage is limited to 5 GiB for `/work` and 256 MiB for
-`/tmp`. The container has a two-core CPU ceiling, 6 GiB physical-memory limit,
-no additional swap allowance and a 256-process limit. Engine log storage is
+`/tmp`. The container selects one to four CPUs within the host/container budget,
+reserving 2 GiB per compiler plus 1 GiB for other processes (9 GiB for four jobs).
+It has no additional swap allowance and a 256-process limit. Engine log storage is
 disabled; the owner captures independently bounded streams.
 
 The `/work` tmpfs explicitly permits execution because Meson runs compiler
@@ -99,9 +102,42 @@ runner uses container physical-memory limits instead of an incompatible
 [libFuzzer options and replay](https://llvm.org/docs/LibFuzzer.html).
 
 Cleanup checks the exact run label, full container ID and fresh image identity;
-it never deletes by a name prefix. Containers remove themselves after exit, and
-the worker's bounded subprocess handling remains active if the outer client
-disappears. An uncertain cleanup is a failure, not a passing receipt.
+it never deletes by a name prefix. The owned container keeps its private tmpfs
+alive during bounded compilation, transfer and execution; its finite idle
+lifetime removes it even if the outer client disappears. Each worker subprocess
+also retains its own deadline. An uncertain cleanup is a failure, not a passing
+receipt.
+
+## Compiled artifacts
+
+CI caches the prepared image separately from each instrumented executable. A
+compiled artifact contains only a regular ELF binary (at most 512 MiB) and a
+receipt marked `built`. Its exact key binds source, tools, flags, corpus, file
+modes, native architecture, trust namespace, selected mode and prepared image ID.
+No prefix restore is permitted. Both the controller and the offline sandbox
+check binary identity before execution. Changed, incomplete or oversized
+artifacts fail validation; they never become successful test receipts.
+
+To separate compilation from full runtime locally:
+
+```sh
+python3 build/native_security.py compile --engine docker \
+  --image sha256:THE_FULL_IMAGE_ID_FROM_PREPARE --mode asan \
+  --compiled-directory /absolute/private/asan-built \
+  --output /absolute/private/asan-compile
+python3 build/native_security.py run --engine docker \
+  --image sha256:THE_FULL_IMAGE_ID_FROM_PREPARE --mode asan \
+  --compiled-directory /absolute/private/asan-built \
+  --output /absolute/private/asan-execution
+```
+
+Every run using compiled input still executes the complete selected sanitizer
+suite or all 17 reviewed replay inputs. Compilation reports record configure,
+generator, compile and install durations; runtime reports record test duration.
+A successful build is reusable even if a later runtime check fails, while the
+existing verification cache stores a success only after the full suite passes.
+Cold source/tool changes still require compilation; a build-cache hit does not
+claim that cold CI meets a particular duration.
 
 ## Reviewed inputs and coverage boundaries
 

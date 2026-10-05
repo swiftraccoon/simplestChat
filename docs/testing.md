@@ -599,7 +599,13 @@ When native suites must rerun, they can reuse a prepared checker image keyed by
 its actual source/tool/corpus inputs, file modes, architecture and cache trust
 namespace. Restores verify the archive size and hash, then the loaded image's
 exact ID, input label and architecture. This skips image preparation only; each
-selected sanitizer or replay suite still executes.
+selected sanitizer or replay suite still executes. Separate mode-specific ELF
+caches bind the exact prepared image, source/tool/corpus inputs, architecture and
+trust namespace. Both controller and sandbox verify the binary bytes. A compiled
+artifact never supplies a successful test verdict: the complete current runtime
+suite runs after every restore unless its separate exact successful-check receipt
+already matches. Compile reports time configuration, generator, compilation and
+installation separately from runtime.
 
 Browser jobs reuse backend executables only for the same bound inputs and after
 checking both executable hashes. Every browser suite still runs against the

@@ -45,6 +45,7 @@ NATIVE_FILES = frozenset(
         "build/native_security.py",
         "build/native_security_cache.py",
         "build/pip-constraints.txt",
+        "build/security_codeql_resources.py",
         "build/security_context.py",
         "build/security_tools.py",
         "build/security_vendor.py",

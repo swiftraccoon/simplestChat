@@ -146,6 +146,36 @@ jobs:
         with:
           path: ${{ runner.temp }}/native-image-cache
           key: ${{ steps.native-image-inputs.outputs.key }}
+      - name: Identify the exact compiled native artifact
+        if: steps.verified.outputs.cache-hit != 'true'
+        id: native-compiled-inputs
+        env:
+          NATIVE_MODE: ${{ matrix.mode }}
+        run: |
+          image_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["imageId"])' "$RUNNER_TEMP/native-preparation/report.json")"
+          printf 'image=%s\n' "$image_id" >> "$GITHUB_OUTPUT"
+          printf 'key=%s\n' "$(python3 build/native_security_cache.py compiled-key --image "$image_id" --mode "$NATIVE_MODE")" >> "$GITHUB_OUTPUT"
+      - name: Restore the exact compiled native artifact
+        if: steps.verified.outputs.cache-hit != 'true'
+        id: native-compiled
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/native-compiled-cache
+          key: ${{ steps.native-compiled-inputs.outputs.key }}
+      - name: Compile the complete instrumented native target
+        if: steps.verified.outputs.cache-hit != 'true' && steps.native-compiled.outputs.cache-hit != 'true'
+        env:
+          NATIVE_MODE: ${{ matrix.mode }}
+          NATIVE_IMAGE: ${{ steps.native-compiled-inputs.outputs.image }}
+        run: |
+          python3 build/native_security.py compile --image "$NATIVE_IMAGE" --mode "$NATIVE_MODE" \
+            --compiled-directory "$RUNNER_TEMP/native-compiled-cache" --output "$RUNNER_TEMP/native-compile-$NATIVE_MODE"
+      - name: Save only the completed instrumented native build
+        if: steps.verified.outputs.cache-hit != 'true' && steps.native-compiled.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/native-compiled-cache
+          key: ${{ steps.native-compiled-inputs.outputs.key }}
       - name: Run the selected isolated native suite
         if: steps.verified.outputs.cache-hit != 'true'
         env:
@@ -153,13 +183,13 @@ jobs:
         run: |
           image_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["imageId"])' "$RUNNER_TEMP/native-preparation/report.json")"
           python3 build/native_security.py run --image "$image_id" --mode "$NATIVE_MODE" \
-            --output "$RUNNER_TEMP/native-$NATIVE_MODE"
+            --compiled-directory "$RUNNER_TEMP/native-compiled-cache" --output "$RUNNER_TEMP/native-$NATIVE_MODE"
       - name: Retain compact local native evidence
         if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
         env:
           NATIVE_MODE: ${{ matrix.mode }}
         run: |
-          for phase in vendor-integrity native-preparation "native-$NATIVE_MODE"; do
+          for phase in vendor-integrity native-preparation "native-compile-$NATIVE_MODE" "native-$NATIVE_MODE"; do
             destination="$LOCAL_CI_EVIDENCE/native-$NATIVE_MODE/$phase"
             install -d -m 700 "$destination"
             for name in report.json failure.json; do
@@ -182,6 +212,8 @@ jobs:
             ${{ runner.temp }}/vendor-integrity/report.json
             ${{ runner.temp }}/native-*/report.json
             ${{ runner.temp }}/native-*/failure.json
+            ${{ runner.temp }}/native-compile-*/compile.stdout.log
+            ${{ runner.temp }}/native-compile-*/compile.stderr.log
             ${{ runner.temp }}/native-asan/native.stdout.log
             ${{ runner.temp }}/native-asan/native.stderr.log
             ${{ runner.temp }}/native-ubsan/native.stdout.log

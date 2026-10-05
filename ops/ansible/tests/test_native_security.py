@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import platform
 import shutil
 import stat
+import sys
 import tempfile
 import unittest
 from pathlib import Path
-from typing import override
+from typing import cast, override
 from unittest.mock import Mock, patch
 
 from test_support import ROOT, obj, objects, string, yaml_value
@@ -20,6 +22,7 @@ from test_support import ROOT, obj, objects, string, yaml_value
 import bounded_process
 import native_security as native
 import native_security_cache as image_cache
+import security_codeql_resources as resources
 from release_json import JsonObject, decode_json, object_value
 
 IMAGE = "sha256:" + "a" * 64
@@ -38,11 +41,14 @@ class NativeSecurityTests(unittest.TestCase):
         """Own one temporary copy of the small reviewed input corpus."""
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = Path(temporary.name).resolve()
         _ = shutil.copytree(ROOT / "security/native", self.root / "security/native")
         machine = patch.object(platform, "machine", return_value="x86_64")
         _ = machine.start()
         self.addCleanup(machine.stop)
+        budget = patch.object(resources, "detect", return_value=resources.Budget(4, 6144, 14000))
+        _ = budget.start()
+        self.addCleanup(budget.stop)
 
     def manifest(self) -> JsonObject:
         """Read a fixture as the maintained strict JSON domain."""
@@ -137,6 +143,7 @@ class NativeSecurityTests(unittest.TestCase):
                 "MS_FUZZ_DTLS": "0",
                 "ASAN_OPTIONS": "halt_on_error=0",
                 "MESON_ARGS": "-Db_sanitize=none",
+                "NINJA": "/untrusted/ninja",
                 "FAKE_SECRET": "canary",
             },
         ):
@@ -145,6 +152,7 @@ class NativeSecurityTests(unittest.TestCase):
         self.assertEqual(env["MS_FUZZ_STUN"], "1")
         self.assertIn("halt_on_error=1", env["ASAN_OPTIONS"])
         self.assertEqual(env["MESON_ARGS"], "--wrap-mode=nodownload")
+        self.assertEqual(env["NINJA"], "/opt/native-tools/pip_meson_ninja/bin/ninja")
         self.assertNotIn("FAKE_SECRET", env)
 
     def test_sandbox_has_no_network_mounts_socket_ports_or_privilege(self) -> None:
@@ -155,9 +163,9 @@ class NativeSecurityTests(unittest.TestCase):
             "--network=none",
             "--read-only",
             "--cap-drop=ALL",
-            "--cpus=3",
-            "--memory=6g",
-            "--memory-swap=6g",
+            "--cpus=4",
+            "--memory=9216m",
+            "--memory-swap=9216m",
             "--pids-limit=256",
             "--ulimit=core=0:0",
             "--security-opt=no-new-privileges:true",
@@ -347,6 +355,340 @@ class NativeSecurityTests(unittest.TestCase):
         self.assertIn("digest.hexdigest() != asset['sha256']", dockerfile)
         self.assertIn("CC=/opt/llvm/bin/clang CXX=/opt/llvm/bin/clang++", dockerfile)
 
+    def compiled(self, mode: str = "asan") -> tuple[Path, JsonObject]:
+        """Create one bounded binary identity fixture without claiming runtime success."""
+        directory = self.root / "compiled"
+        directory.mkdir()
+        header = bytearray(native.ELF_HEADER_BYTES)
+        header[:6] = b"\x7fELF\x02\x01"
+        header[18:20] = (62).to_bytes(2, "little")
+        _ = (directory / "binary").write_bytes(header)
+        receipt: JsonObject = {
+            "schemaVersion": 1,
+            "status": "built",
+            "mode": mode,
+            "imageId": IMAGE,
+            "inputsSha256": DIGEST,
+            "architecture": "amd64",
+            "binaryBytes": len(header),
+            "binarySha256": hashlib.sha256(header).hexdigest(),
+            "worker": {"status": "built", "mode": mode},
+        }
+        _ = (directory / "receipt.json").write_text(json.dumps(receipt))
+        return directory, receipt
+
+    def test_compiled_artifact_rejects_wrong_identity_and_bytes_before_execution(self) -> None:
+        """A same-named cache cannot change mode, tool image, corpus, ISA or executable."""
+        directory, receipt = self.compiled()
+        options = native.Options(mode="asan", image=IMAGE, compiled_directory=directory)
+        self.assertEqual(native.compiled_receipt(directory, options, DIGEST), receipt)
+        for key, value in (
+            ("mode", "ubsan"),
+            ("imageId", "sha256:" + "f" * 64),
+            ("inputsSha256", "e" * 64),
+            ("architecture", "arm64"),
+            ("status", "passed"),
+            ("binaryBytes", 65),
+            ("binarySha256", "0" * 64),
+        ):
+            _ = (directory / "receipt.json").write_text(json.dumps({**receipt, key: value}))
+            with (
+                self.subTest(key=key),
+                patch.object(native, "inputs_digest", return_value=DIGEST),
+                patch.object(native, "checked_image"),
+                patch.object(native, "command") as engine,
+                self.assertRaises(native.SecurityError),
+            ):
+                _ = native.run_native(options, ["engine"], self.root)
+            engine.assert_not_called()
+        _ = (directory / "receipt.json").write_text(json.dumps(receipt))
+        _ = (directory / "binary").write_bytes(b"invalid" * 20)
+        with self.assertRaisesRegex(native.SecurityError, "compiled_binary_architecture"):
+            _ = native.compiled_receipt(directory, options, DIGEST)
+
+    def test_compiled_binary_rejects_symlink_empty_oversized_and_other_isa(self) -> None:
+        """Cache restore cannot allocate unbounded input or execute another architecture."""
+        directory, _ = self.compiled()
+        path = directory / "binary"
+        data = path.read_bytes()
+        for size in (0, native.MAX_BINARY + 1):
+            with path.open("wb") as output:
+                _ = output.truncate(size)
+            with (
+                self.subTest(size=size),
+                self.assertRaisesRegex(native.SecurityError, "compiled_binary_size"),
+            ):
+                _ = native.binary_identity(path)
+        _ = path.write_bytes(data[:18] + (183).to_bytes(2, "little") + data[20:])
+        with self.assertRaisesRegex(native.SecurityError, "compiled_binary_architecture"):
+            _ = native.binary_identity(path)
+        path.unlink()
+        path.symlink_to(directory / "receipt.json")
+        with self.assertRaises(OSError):
+            _ = native.binary_identity(path)
+
+    def test_compiled_restore_still_executes_and_requires_the_complete_fresh_suite(self) -> None:
+        """A build receipt can only provide bytes; it never bypasses runtime validation."""
+        directory, receipt = self.compiled("replay")
+        output = self.root / "runtime"
+        output.mkdir()
+        options = native.Options(mode="replay", image=IMAGE, compiled_directory=directory)
+        result = {
+            "status": "passed",
+            "mode": "replay",
+            "completed": [case.identifier for case in native.corpus()],
+        }
+        _ = (output / "native.stdout.log").write_text(native.EVENT + json.dumps(result))
+        with (
+            patch.object(native, "inputs_digest", return_value=DIGEST),
+            patch.object(native, "checked_image", return_value={"Architecture": "amd64"}),
+            patch.object(native, "command", return_value=CONTAINER.encode()),
+            patch.object(native, "send_binary") as transfer,
+            patch.object(native, "capture", return_value=0) as execute,
+            patch.object(native, "cleanup") as cleanup,
+        ):
+            report = native.run_native(options, ["engine"], output)
+        self.assertEqual(report["status"], "passed")
+        self.assertTrue(report["compiledReused"])
+        self.assertEqual(report["worker"], result)
+        self.assertEqual(execute.call_count, 1)
+        self.assertTrue("exec" in execute.call_args.args[0])
+        self.assertEqual(
+            execute.call_args.args[0][-2:], ["--compiled-sha256", receipt["binarySha256"]]
+        )
+        transfer.assert_called_once()
+        self.assertEqual(
+            transfer.call_args.args[2:], (directory / "binary", receipt["binarySha256"])
+        )
+        cleanup.assert_called_once()
+
+    def test_failed_compile_never_publishes_a_reusable_artifact(self) -> None:
+        """Build failures and cancellation retain exact cleanup but no partial cache."""
+        for status in (1, 77):
+            output = self.root / ("failed-" + str(status))
+            output.mkdir()
+            directory = self.root / ("cache-" + str(status))
+            options = native.Options(mode="asan", image=IMAGE, compiled_directory=directory)
+            with (
+                self.subTest(status=status),
+                patch.object(native, "inputs_digest", return_value=DIGEST),
+                patch.object(native, "checked_image"),
+                patch.object(native, "command", return_value=CONTAINER.encode()),
+                patch.object(native, "capture", return_value=status),
+                patch.object(native, "cleanup") as cleanup,
+                self.assertRaisesRegex(native.SecurityError, "native_build_failed_exit_"),
+            ):
+                _ = native.compile_native(options, ["engine"], output)
+            cleanup.assert_called_once()
+            self.assertFalse(directory.exists())
+            self.assertEqual(list(self.root.glob("native-compiled-*")), [])
+
+    def test_complete_build_publishes_only_after_identity_check_and_cleanup(self) -> None:
+        """A copied binary becomes reusable only after exact cleanup succeeds."""
+        fixture, receipt = self.compiled()
+        binary = (fixture / "binary").read_bytes()
+        output = self.root / "compile-success"
+        output.mkdir()
+        destination = self.root / "published"
+        result = {
+            "status": "built",
+            "mode": "asan",
+            "binaryBytes": len(binary),
+            "binarySha256": receipt["binarySha256"],
+            "phaseSeconds": {"compile": 3.5},
+        }
+        _ = (output / "compile.stdout.log").write_text(native.BUILD_EVENT + json.dumps(result))
+        options = native.Options(mode="asan", image=IMAGE, compiled_directory=destination)
+
+        def transfer(_engine: list[str], identifier: str, mode: str, destination: Path) -> None:
+            """Write only the fixed executable into a private staging path."""
+            self.assertEqual(identifier, CONTAINER)
+            self.assertEqual(mode, "asan")
+            _ = destination.write_bytes(binary)
+
+        def clean(_engine: list[str], _run_id: str, _image: str) -> None:
+            """Observe that publication has not happened while cleanup is pending."""
+            self.assertFalse(destination.exists())
+
+        with (
+            patch.object(native, "inputs_digest", return_value=DIGEST),
+            patch.object(native, "checked_image"),
+            patch.object(native, "command", return_value=CONTAINER.encode()),
+            patch.object(native, "export_binary", side_effect=transfer),
+            patch.object(native, "capture", return_value=0),
+            patch.object(native, "cleanup", side_effect=clean),
+        ):
+            report = native.compile_native(options, ["engine"], output)
+        self.assertEqual(report["status"], "built")
+        self.assertEqual(report["cleanup"], "verified")
+        checked = native.compiled_receipt(destination, options, DIGEST)
+        self.assertEqual(checked["binarySha256"], receipt["binarySha256"])
+        self.assertEqual(stat.S_IMODE((destination / "binary").stat().st_mode), 0o755)
+
+    def test_binary_transport_is_bounded_and_uses_fixed_unprivileged_exec_paths(self) -> None:
+        """Read-only tmpfs artifacts travel through exec streams, never engine mount copying."""
+        fixture, receipt = self.compiled()
+        checksum = string(receipt, "binarySha256")
+        with patch.object(bounded_process, "run", return_value=(0, b"", b"")) as execute:
+            native.send_binary(["engine"], CONTAINER, fixture / "binary", checksum)
+            self.assertEqual(execute.call_args.args[0][1:4], ["exec", "--interactive", CONTAINER])
+            self.assertEqual(
+                execute.call_args.kwargs["input_data"], (fixture / "binary").read_bytes()
+            )
+            limits = cast("bounded_process.Limits", execute.call_args.kwargs["limits"])
+            self.assertEqual(limits.timeout, 120)
+            self.assertEqual(
+                execute.call_args.args[0][-4:],
+                ["--compiled-sha256", checksum, "--compiled-bytes", "64"],
+            )
+        with (
+            patch.object(bounded_process, "run") as execute,
+            self.assertRaisesRegex(native.SecurityError, "compiled_transfer_changed"),
+        ):
+            native.send_binary(["engine"], CONTAINER, fixture / "binary", "f" * 64)
+        execute.assert_not_called()
+        with patch.object(bounded_process, "run", return_value=(0, b"", b"")) as execute:
+            native.export_binary(["engine"], CONTAINER, "asan", self.root / "exported")
+            self.assertEqual(
+                execute.call_args.args[0],
+                [
+                    "engine",
+                    "exec",
+                    CONTAINER,
+                    "/usr/bin/cat",
+                    "/work/build/" + native.TARGETS["asan"],
+                ],
+            )
+            limits = cast("bounded_process.Limits", execute.call_args.kwargs["limits"])
+            self.assertEqual(limits.stdout, native.MAX_BINARY)
+
+    def test_receiver_checks_stream_size_digest_and_exclusive_fixed_destination(self) -> None:
+        """Truncated, changed and oversized transfers fail before runtime is invoked."""
+        fixture, receipt = self.compiled()
+        data = (fixture / "binary").read_bytes()
+        checksum = string(receipt, "binarySha256")
+        original_open = os.open
+        for index, (payload, size, expected) in enumerate(
+            (
+                (data, len(data), ""),
+                (data, len(data) + 1, "compiled_import_mismatch"),
+                (data + b"extra", len(data), "compiled_import_size"),
+                (data[:-1] + b"x", len(data), "compiled_import_mismatch"),
+            )
+        ):
+            destination = self.root / ("received-" + str(index))
+
+            def open_destination(
+                path: Path, flags: int, mode: int, owned_destination: Path = destination
+            ) -> int:
+                """Substitute only the test's owned destination and preserve open protections."""
+                self.assertEqual(path, Path("/work/native-program"))
+                self.assertEqual(flags, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW)
+                self.assertEqual(mode, 0o700)
+                return original_open(owned_destination, flags, mode)
+
+            with (
+                self.subTest(expected=expected),
+                patch.object(sys, "platform", "linux"),
+                patch.object(Path, "is_dir", return_value=True),
+                patch.object(os, "open", side_effect=open_destination),
+                patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(payload))),
+            ):
+                options = native.Options(compiled_sha256=checksum, compiled_bytes=size)
+                if expected:
+                    with self.assertRaisesRegex(native.SecurityError, expected):
+                        native.receive_binary(options)
+                else:
+                    native.receive_binary(options)
+                    self.assertEqual(destination.read_bytes(), data)
+
+    def test_restored_worker_runs_every_replay_input_without_recompiling(self) -> None:
+        """Cached input affects compilation only; all original family executions remain."""
+        cases = native.corpus()
+        with (
+            patch.object(native, "worker_sources", return_value=cases),
+            patch.object(native, "binary_identity", return_value=(64, DIGEST)),
+            patch.object(native, "worker_compile") as compile_target,
+            patch.object(native, "worker_command", return_value=0.1) as execute,
+            patch.object(native, "read_regular", return_value=b"rpm receipt"),
+            patch.object(native, "new_file"),
+            patch.object(Path, "mkdir"),
+        ):
+            result = native.worker(native.Options(mode="replay", compiled_sha256=DIGEST))
+        compile_target.assert_not_called()
+        self.assertEqual(result["completed"], [case.identifier for case in cases])
+        self.assertEqual(execute.call_count, 17)
+        for call, case in zip(execute.call_args_list, cases, strict=True):
+            self.assertEqual(call.args[0][0], "/work/native-program")
+            self.assertEqual(call.kwargs, {"timeout": 10, "family": case.family})
+            self.assertEqual(call.args[0][1:-1], native.replay_args(Path("unused"))[1:-1])
+
+    def test_restored_worker_rechecks_binary_before_any_runtime_command(self) -> None:
+        """A changed transfer fails inside the sandbox before its bytes can execute."""
+        with (
+            patch.object(native, "worker_sources", return_value=native.corpus()),
+            patch.object(native, "binary_identity", return_value=(64, "f" * 64)),
+            patch.object(native, "worker_command") as execute,
+            self.assertRaisesRegex(native.SecurityError, "compiled_runtime_mismatch"),
+        ):
+            _ = native.worker(native.Options(mode="asan", compiled_sha256=DIGEST))
+        execute.assert_not_called()
+
+    def test_build_cache_identity_binds_mode_image_source_and_trust(self) -> None:
+        """The three instrumented programs and rebuilt tool images never share keys."""
+        with patch.object(image_cache, "cache_key", return_value="prepared-main-one"):
+            baseline = image_cache.compiled_key(ROOT, IMAGE, "asan")
+            self.assertNotEqual(baseline, image_cache.compiled_key(ROOT, IMAGE, "ubsan"))
+            self.assertNotEqual(
+                baseline, image_cache.compiled_key(ROOT, "sha256:" + "e" * 64, "asan")
+            )
+        with patch.object(image_cache, "cache_key", return_value="prepared-untrusted-other"):
+            self.assertNotEqual(baseline, image_cache.compiled_key(ROOT, IMAGE, "asan"))
+
+    def test_all_build_phases_preserve_instrumentation_and_bounded_generator_parallelism(
+        self,
+    ) -> None:
+        """Every target keeps the upstream release flags and full tagged install."""
+        for mode in native.MODES:
+            commands = native.compile_commands(mode, 4)
+            setup = commands["configure"]
+            self.assertIn("--wrap-mode=nodownload", setup)
+            self.assertIn("-Db_ndebug=true", setup)
+            self.assertIn("-Db_lundef=false", setup)
+            self.assertIn("-Db_sanitize=" + ("undefined" if mode == "ubsan" else "address"), setup)
+            for phase in ("generator", "compile"):
+                self.assertEqual(commands[phase][4:6], ["-j", "4"])
+            self.assertEqual(commands["compile"][-1], native.TARGETS[mode])
+            self.assertEqual(
+                commands["install"][-3:], ["--no-rebuild", "--tags", native.TARGETS[mode]]
+            )
+        env = native.worker_environment()
+        for option in (
+            "detect_leaks=1",
+            "strict_init_order=1",
+            "check_initialization_order=1",
+            "detect_container_overflow=1",
+        ):
+            self.assertIn(option, env["ASAN_OPTIONS"])
+
+    def test_resources_fall_back_with_real_cpu_and_memory_ceilings(self) -> None:
+        """Four jobs require their real memory allowance; smaller runners stay bounded."""
+        for workers, memory in ((1, 3072), (2, 5120), (3, 7168), (4, 9216)):
+            with patch.object(
+                resources,
+                "detect",
+                return_value=resources.Budget(workers, 2048, memory),
+            ):
+                args = native.sandbox_args(IMAGE, RUN_ID, DIGEST)
+            self.assertIn(f"--cpus={workers}", args)
+            self.assertIn(f"--memory={memory}m", args)
+            self.assertIn(f"--env=MEDIASOUP_BUILD_JOBS={workers}", args)
+        with (
+            patch.object(resources, "detect", return_value=resources.Budget(1, 1024, 1024)),
+            self.assertRaisesRegex(native.SecurityError, "native_insufficient_memory"),
+        ):
+            _ = native.sandbox_args(IMAGE, RUN_ID, DIGEST)
+
     def preparation(self) -> Path:
         """Write a successful preparation receipt for an immutable fixture image."""
         output = self.root / "prepare-cache"
@@ -529,6 +871,16 @@ class NativeSecurityTests(unittest.TestCase):
         self.assertLess(steps.index(save), steps.index(run))
         self.assertEqual(obj(restore, "with")["key"], obj(save, "with")["key"])
         self.assertNotIn("restore-keys", obj(restore, "with"))
+        compiled_restore = next(step for step in steps if step.get("id") == "native-compiled")
+        compiled_save = next(
+            step
+            for step in steps
+            if step.get("name") == "Save only the completed instrumented native build"
+        )
+        self.assertEqual(obj(compiled_restore, "with")["key"], obj(compiled_save, "with")["key"])
+        self.assertNotIn("restore-keys", obj(compiled_restore, "with"))
+        self.assertLess(steps.index(compiled_save), steps.index(run))
+        self.assertIn("--compiled-directory", string(run, "run"))
 
 
 if __name__ == "__main__":

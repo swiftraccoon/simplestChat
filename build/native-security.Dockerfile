@@ -79,7 +79,6 @@ ENV PATH=/opt/llvm/bin:/usr/bin:/bin \
     PIP_CONSTRAINT=/opt/check/build/pip-constraints.txt \
     MEDIASOUP_OUT_DIR=/opt/native-tools \
     MEDIASOUP_INSTALL_DIR=/work/install BUILD_DIR=/work/build \
-    MEDIASOUP_BUILD_JOBS=3 \
     PYTHONPATH=/opt/native-tools/pip_invoke:/opt/native-tools/pip_meson_ninja \
     ASAN_SYMBOLIZER_PATH=/opt/llvm/bin/llvm-symbolizer \
     UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
@@ -95,7 +94,7 @@ RUN python3 -m pip install --no-user --target /opt/native-tools/pip_invoke \
 # receipt describes the resolved builder, not a promise that RPM repositories freeze.
 RUN rpm -qa --qf '%{NAME} %{EPOCHNUM}:%{VERSION}-%{RELEASE} %{ARCH}\n' \
     | sort > /opt/check/builder-rpms.txt
-COPY build/native_security.py /opt/check/build/native_security.py
+COPY build/native_security.py build/security_codeql_resources.py build/security_tools.py /opt/check/build/
 COPY ops/ansible/files/bounded_process.py ops/ansible/files/release_json.py /opt/check/ops/ansible/files/
 COPY security/native /opt/check/security/native
 RUN chmod -R a+rX /opt/check /opt/worker

@@ -22,6 +22,7 @@ import sys
 import tempfile
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -32,6 +33,7 @@ sys.path.insert(0, str(ROOT / "ops/ansible/files"))
 
 # isort: split
 import bounded_process  # noqa: E402 -- Maintained flat helper used by installed operations tools too.
+import security_codeql_resources as resources  # noqa: E402
 from release_json import (  # noqa: E402
     JsonObject,
     array_value,
@@ -40,9 +42,10 @@ from release_json import (  # noqa: E402
     object_value,
     string_value,
 )
+from security_tools import ToolError  # noqa: E402
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Generator, Sequence
 
 FAMILIES = ("stun", "dtls", "sctp", "rtp", "rtcp", "codecs", "utils")
 UNIT_FIXTURES = {
@@ -83,6 +86,14 @@ BUILD_SECONDS = 1200
 PREPARE_SECONDS = 2400
 MAX_LOG = 16 * MIB
 EVENT = "NATIVE_SECURITY_RESULT "
+BUILD_EVENT = "NATIVE_BUILD_RESULT "
+MAX_BINARY = 512 * MIB
+ELF_HEADER_BYTES = 64
+TARGETS = {
+    "asan": "mediasoup-worker-test-asan-address",
+    "ubsan": "mediasoup-worker-test-asan-undefined",
+    "replay": "mediasoup-worker-fuzzer",
+}
 INPUT_LABEL = "org.simplestchat.native-security.inputs"
 RUN_LABEL = "org.simplestchat.native-security.run"
 
@@ -215,6 +226,8 @@ def source_files(root: Path) -> list[Path]:
         for relative in (
             "build/native-security.Dockerfile",
             "build/native_security.py",
+            "build/security_codeql_resources.py",
+            "build/security_tools.py",
             "build/install-openssl.sh",
             "build/pip-constraints.txt",
             "ops/ansible/files/bounded_process.py",
@@ -294,6 +307,10 @@ def sandbox_args(image: str, run_id: str, digest: str) -> list[str]:
     """No host paths, published ports, network, privileges or unbounded storage."""
     require(re.fullmatch(r"sha256:[0-9a-f]{64}", image), "immutable_image_required")
     require(re.fullmatch(r"[0-9a-f]{32}", run_id), "run_identity")
+    budget = resources.detect()
+    # Two GiB per compiler plus one GiB for Meson, the generator and runtime.
+    memory = budget.workers * 2048 + 1024
+    require(budget.query_ram_mib >= budget.workers * 2048, "native_insufficient_memory")
     return [
         "create",
         "--platform=linux/" + native_architecture(),
@@ -310,9 +327,10 @@ def sandbox_args(image: str, run_id: str, digest: str) -> list[str]:
         "--cap-drop=ALL",
         "--security-opt=no-new-privileges:true",
         "--user=65532:65532",
-        "--cpus=3",
-        "--memory=6g",
-        "--memory-swap=6g",
+        f"--cpus={budget.workers}",
+        f"--memory={memory}m",
+        f"--memory-swap={memory}m",
+        f"--env=MEDIASOUP_BUILD_JOBS={budget.workers}",
         "--pids-limit=256",
         "--ulimit=core=0:0",
         # Meson executes compiler sanity checks and the built tests here.
@@ -425,10 +443,11 @@ def prepare(engine: Sequence[str], output: Path) -> dict[str, object]:
     }
 
 
-def run_native(options: Options, engine: Sequence[str], output: Path) -> dict[str, object]:
-    """Run one mode and require complete worker results plus verified resource removal."""
-    digest = inputs_digest(ROOT)
-    info = checked_image(engine, options.image, digest)
+@contextmanager
+def owned_sandbox(
+    options: Options, engine: Sequence[str], output: Path, digest: str
+) -> Generator[tuple[str, str]]:
+    """Keep only owned tmpfs alive between bounded compilation, copy and execution."""
     run_id = uuid.uuid4().hex
     write_json(
         output / "ownership.json",
@@ -440,23 +459,234 @@ def run_native(options: Options, engine: Sequence[str], output: Path) -> dict[st
             command(
                 [
                     *engine,
-                    *args,
-                    "--mode",
-                    options.mode,
+                    *args[:-1],
+                    "--entrypoint=/usr/bin/python3",
+                    args[-1],
+                    "/opt/check/build/native_security.py",
+                    "_hold",
                 ]
             )
             .decode("ascii")
             .strip()
         )
         require(re.fullmatch(r"[0-9a-f]{64}", identifier), "container_identity")
+        _ = command([*engine, "start", identifier])
+        yield identifier, run_id
+    finally:
+        cleanup(engine, run_id, options.image)
+
+
+def worker_result(output: Path, phase: str, event: str) -> JsonObject:
+    """Require exactly one bounded worker receipt from the selected execution."""
+    lines = read_regular(output / (phase + ".stdout.log"), MAX_LOG).decode("utf-8").splitlines()
+    results = [line.removeprefix(event) for line in lines if line.startswith(event)]
+    require(len(results) == 1, "missing_worker_result")
+    return object_value(decode_json(results[0]))
+
+
+def binary_identity(path: Path) -> tuple[int, str]:
+    """Stream only a bounded ordinary native ELF executable, rejecting changed bytes."""
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as source:
+        metadata = os.fstat(source.fileno())
+        require(stat.S_ISREG(metadata.st_mode), "compiled_binary_not_regular")
+        require(ELF_HEADER_BYTES <= metadata.st_size <= MAX_BINARY, "compiled_binary_size")
+        header = source.read(20)
+        machine = {"amd64": 62, "arm64": 183}[native_architecture()]
+        require(
+            header[:6] == b"\x7fELF\x02\x01" and int.from_bytes(header[18:20], "little") == machine,
+            "compiled_binary_architecture",
+        )
+        _ = source.seek(0)
+        digest = hashlib.file_digest(source, "sha256").hexdigest()
+        after = os.fstat(source.fileno())
+        require(
+            (after.st_size, after.st_mtime_ns) == (metadata.st_size, metadata.st_mtime_ns),
+            "compiled_binary_changed",
+        )
+    return metadata.st_size, digest
+
+
+def compiled_receipt(directory: Path, options: Options, digest: str) -> JsonObject:
+    """Validate exact compiled input independently from successful test evidence."""
+    require(directory.is_absolute() and directory.resolve() == directory, "compiled_path")
+    require(
+        {path.name for path in directory.iterdir()} == {"binary", "receipt.json"}, "compiled_files"
+    )
+    receipt = object_value(decode_json(read_regular(directory / "receipt.json", MIB)))
+    require(
+        set(receipt)
+        == {
+            "schemaVersion",
+            "status",
+            "mode",
+            "imageId",
+            "inputsSha256",
+            "architecture",
+            "binaryBytes",
+            "binarySha256",
+            "worker",
+        }
+        and receipt.get("schemaVersion") == 1
+        and receipt.get("status") == "built"
+        and receipt.get("mode") == options.mode
+        and receipt.get("imageId") == options.image
+        and receipt.get("inputsSha256") == digest
+        and receipt.get("architecture") == native_architecture(),
+        "compiled_receipt_mismatch",
+    )
+    size, checksum = binary_identity(directory / "binary")
+    require(
+        size == receipt["binaryBytes"] and checksum == receipt["binarySha256"],
+        "compiled_binary_mismatch",
+    )
+    return receipt
+
+
+def export_binary(engine: Sequence[str], identifier: str, mode: str, destination: Path) -> None:
+    """Read one fixed tmpfs executable through bounded exec, without an engine mount copy."""
+    with destination.open("xb") as output:
+        status, _, _ = bounded_process.run(
+            [*engine, "exec", identifier, "/usr/bin/cat", "/work/build/" + TARGETS[mode]],
+            output=output,
+            limits=bounded_process.Limits(timeout=120, stdout=MAX_BINARY, stderr=MIB),
+        )
+    require(status == 0, "compiled_export_failed")
+
+
+def send_binary(engine: Sequence[str], identifier: str, path: Path, checksum: str) -> None:
+    """Send at most one bounded binary to an unprivileged fixed-path receiver."""
+    data = read_regular(path, MAX_BINARY)
+    require(hashlib.sha256(data).hexdigest() == checksum, "compiled_transfer_changed")
+    status, _, _ = bounded_process.run(
+        [
+            *engine,
+            "exec",
+            "--interactive",
+            identifier,
+            "/usr/bin/python3",
+            "/opt/check/build/native_security.py",
+            "_receive",
+            "--compiled-sha256",
+            checksum,
+            "--compiled-bytes",
+            str(len(data)),
+        ],
+        input_data=data,
+        limits=bounded_process.Limits(timeout=120, stdout=MIB, stderr=MIB),
+    )
+    require(status == 0, "compiled_import_failed")
+
+
+def receive_binary(options: Options) -> None:
+    """Stream authenticated executable bytes only into this sandbox's private tmpfs."""
+    require(sys.platform == "linux" and Path("/opt/worker").is_dir(), "worker_sandbox_required")
+    require(ELF_HEADER_BYTES <= options.compiled_bytes <= MAX_BINARY, "compiled_binary_size")
+    require(re.fullmatch(r"[0-9a-f]{64}", options.compiled_sha256), "compiled_binary_digest")
+    path = Path("/work/native-program")
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o700)
+    digest = hashlib.sha256()
+    size = 0
+    with os.fdopen(descriptor, "wb") as output:
+        while chunk := sys.stdin.buffer.read(MIB):
+            size += len(chunk)
+            require(size <= options.compiled_bytes, "compiled_import_size")
+            _ = output.write(chunk)
+            digest.update(chunk)
+    require(
+        size == options.compiled_bytes and digest.hexdigest() == options.compiled_sha256,
+        "compiled_import_mismatch",
+    )
+
+
+def compile_native(options: Options, engine: Sequence[str], output: Path) -> dict[str, object]:
+    """Atomically publish one verified binary after complete build and exact cleanup."""
+    directory = options.compiled_directory
+    require(directory is not None, "compiled_directory_required")
+    if directory is None:
+        raise SecurityError("compiled_directory_required")  # noqa: EM101
+    require(directory.is_absolute() and directory.resolve() == directory, "compiled_path")
+    require(not directory.exists(), "compiled_already_exists")
+    digest = inputs_digest(ROOT)
+    _ = checked_image(engine, options.image, digest)
+    with tempfile.TemporaryDirectory(prefix="native-compiled-", dir=directory.parent) as temporary:
+        stage = Path(temporary) / "artifact"
+        stage.mkdir(mode=0o700)
+        with owned_sandbox(options, engine, output, digest) as (identifier, _):
+            status = capture(
+                [
+                    *engine,
+                    "exec",
+                    identifier,
+                    "/usr/bin/python3",
+                    "/opt/check/build/native_security.py",
+                    "_compile",
+                    "--mode",
+                    options.mode,
+                ],
+                output,
+                "compile",
+                BUILD_SECONDS,
+            )
+            require(status == 0, f"native_build_failed_exit_{status}")
+            result = worker_result(output, "compile", BUILD_EVENT)
+            require(
+                result.get("status") == "built" and result.get("mode") == options.mode,
+                "incomplete_build_result",
+            )
+            export_binary(engine, identifier, options.mode, stage / "binary")
+            (stage / "binary").chmod(0o755)
+            size, checksum = binary_identity(stage / "binary")
+            require(
+                size == result.get("binaryBytes") and checksum == result.get("binarySha256"),
+                "compiled_copy_mismatch",
+            )
+        receipt: dict[str, object] = {
+            "schemaVersion": 1,
+            "status": "built",
+            "mode": options.mode,
+            "imageId": options.image,
+            "inputsSha256": digest,
+            "architecture": native_architecture(),
+            "binaryBytes": size,
+            "binarySha256": checksum,
+            "worker": result,
+        }
+        write_json(stage / "receipt.json", receipt)
+        _ = stage.rename(directory)
+    return {**receipt, "cleanup": "verified"}
+
+
+def run_native(options: Options, engine: Sequence[str], output: Path) -> dict[str, object]:
+    """Execute the complete current suite, even when its exact compiled binary is reused."""
+    digest = inputs_digest(ROOT)
+    info = checked_image(engine, options.image, digest)
+    arguments: list[str] = []
+    directory = options.compiled_directory
+    if directory is not None:
+        receipt = compiled_receipt(directory, options, digest)
+        arguments = ["--compiled-sha256", string_value(receipt["binarySha256"])]
+    with owned_sandbox(options, engine, output, digest) as (identifier, run_id):
+        if directory is not None:
+            send_binary(engine, identifier, directory / "binary", arguments[1])
         status = capture(
-            [*engine, "start", "--attach", identifier], output, "native", BUILD_SECONDS + 900
+            [
+                *engine,
+                "exec",
+                identifier,
+                "/usr/bin/python3",
+                "/opt/check/build/native_security.py",
+                "_worker",
+                "--mode",
+                options.mode,
+                *arguments,
+            ],
+            output,
+            "native",
+            BUILD_SECONDS + 900,
         )
         require(status == 0, f"native_failed_exit_{status}")
-        lines = read_regular(output / "native.stdout.log", MAX_LOG).decode("utf-8").splitlines()
-        results = [line.removeprefix(EVENT) for line in lines if line.startswith(EVENT)]
-        require(len(results) == 1, "missing_worker_result")
-        result = object_value(decode_json(results[0]))
+        result = worker_result(output, "native", EVENT)
         expected = (
             [case.identifier for case in corpus()] if options.mode == "replay" else [options.mode]
         )
@@ -466,8 +696,6 @@ def run_native(options: Options, engine: Sequence[str], output: Path) -> dict[st
             and result.get("completed") == expected,
             "incomplete_worker_result",
         )
-    finally:
-        cleanup(engine, run_id, options.image)
     return {
         "schemaVersion": 1,
         "status": "passed",
@@ -476,6 +704,7 @@ def run_native(options: Options, engine: Sequence[str], output: Path) -> dict[st
         "imageId": options.image,
         "inputsSha256": digest,
         "architecture": info.get("Architecture"),
+        "compiledReused": directory is not None,
         "worker": result,
         "cleanup": "verified",
     }
@@ -507,8 +736,10 @@ def worker_environment(family: str | None = None) -> dict[str, str]:
     env.update(
         {
             "MESON_ARGS": "--wrap-mode=nodownload",
-            "ASAN_OPTIONS": "halt_on_error=1:detect_leaks=1:symbolize=1:"
-            + "detect_stack_use_after_return=1",
+            "NINJA": "/opt/native-tools/pip_meson_ninja/bin/ninja",
+            "ASAN_OPTIONS": "halt_on_error=1:print_stacktrace=1:detect_leaks=1:symbolize=1:"
+            + "detect_stack_use_after_return=1:strict_init_order=1:"
+            + "check_initialization_order=1:detect_container_overflow=1",
             "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1",
         }
     )
@@ -518,8 +749,9 @@ def worker_environment(family: str | None = None) -> dict[str, str]:
     return env
 
 
-def worker_command(argv: Sequence[str], *, timeout: int, family: str | None = None) -> None:
+def worker_command(argv: Sequence[str], *, timeout: int, family: str | None = None) -> float:
     """Emit bounded diagnostics and fail on any sanitizer or child-process failure."""
+    started = time.monotonic()
     status, _, _ = bounded_process.run(
         argv,
         cwd=Path("/work/worker"),
@@ -529,6 +761,7 @@ def worker_command(argv: Sequence[str], *, timeout: int, family: str | None = No
         limits=bounded_process.Limits(timeout=timeout, stdout=MAX_LOG // 2, stderr=MAX_LOG // 2),
     )
     require(status == 0, "worker_command_failed")
+    return round(time.monotonic() - started, 3)
 
 
 def replay_args(path: Path) -> list[str]:
@@ -545,31 +778,93 @@ def replay_args(path: Path) -> list[str]:
     ]
 
 
-def worker(options: Options) -> dict[str, object]:
-    """Execute only inside the offline native sandbox; no remote target input exists."""
+def worker_sources() -> tuple[Case, ...]:
+    """Restore exact source and all reviewed test fixtures inside the sandbox."""
     require(sys.platform == "linux" and Path("/opt/worker").is_dir(), "worker_sandbox_required")
-    started = time.monotonic()
     cases = corpus()
     _ = shutil.copytree("/opt/worker", "/work/worker")
     data_directory = Path("/work/worker/test/data")
     data_directory.mkdir()
     for case in cases:
         if case.identifier in UNIT_FIXTURES:
-            # The unchanged upstream readBinaryFile helper intentionally omits
-            # the file's final byte. Supply its terminator separately, keeping
-            # the reviewed packet bytes identical to finite parser replay.
+            # Upstream readBinaryFile omits its final byte; preserve every reviewed byte.
             new_file(data_directory / UNIT_FIXTURES[case.identifier], case.data + b"\n")
-    task = {
-        "asan": "test-asan-address",
-        "ubsan": "test-asan-undefined",
-        "replay": "fuzzer",
-    }[options.mode]
-    worker_command(
-        ["/usr/bin/python3", "-m", "invoke", "--search-root", "/work/worker", task],
-        timeout=BUILD_SECONDS,
-    )
+    return cases
+
+
+def compile_commands(mode: str, workers: int) -> dict[str, list[str]]:
+    """Use the unchanged upstream sanitizer targets with bounded generator jobs too."""
+    require(mode in MODES and 1 <= workers <= resources.MAX_WORKERS, "native_compile_options")
+    meson = "/opt/native-tools/pip_meson_ninja/bin/meson"
+    target = TARGETS[mode]
+    sanitizer = "undefined" if mode == "ubsan" else "address"
+    return {
+        "configure": [
+            meson,
+            "setup",
+            "--prefix",
+            "/work/install",
+            "--bindir",
+            "",
+            "--libdir",
+            "",
+            "--buildtype",
+            "release",
+            "-Db_ndebug=true",
+            "--wrap-mode=nodownload",
+            "-Dms_build_fuzzer=true" if mode == "replay" else "-Dms_build_tests=true",
+            "-Db_sanitize=" + sanitizer,
+            "-Db_lundef=false",
+            "/work/build",
+        ],
+        "generator": [
+            meson,
+            "compile",
+            "-C",
+            "/work/build",
+            "-j",
+            str(workers),
+            "flatbuffers-generator",
+        ],
+        "compile": [meson, "compile", "-C", "/work/build", "-j", str(workers), target],
+        "install": [meson, "install", "-C", "/work/build", "--no-rebuild", "--tags", target],
+    }
+
+
+def worker_compile(mode: str) -> dict[str, object]:
+    """Measure each complete build phase; never issue a successful test receipt here."""
+    budget = resources.detect(os.environ.get("MEDIASOUP_BUILD_JOBS"))
+    timings = {
+        phase: worker_command(argv, timeout=BUILD_SECONDS)
+        for phase, argv in compile_commands(mode, budget.workers).items()
+    }
+    size, digest = binary_identity(Path("/work/build") / TARGETS[mode])
+    return {
+        "status": "built",
+        "mode": mode,
+        "workers": budget.workers,
+        "phaseSeconds": timings,
+        "binaryBytes": size,
+        "binarySha256": digest,
+    }
+
+
+def worker(options: Options) -> dict[str, object]:
+    """Fresh complete sanitizer execution or every finite reviewed replay input."""
+    started = time.monotonic()
+    cases = worker_sources()
+    build: dict[str, object] = {}
+    binary = Path("/work/build") / TARGETS[options.mode]
+    if options.compiled_sha256:
+        binary = Path("/work/native-program")
+        _, digest = binary_identity(binary)
+        require(digest == options.compiled_sha256, "compiled_runtime_mismatch")
+    else:
+        build = worker_compile(options.mode)
     completed: list[str] = []
+    test_started = time.monotonic()
     if options.mode in {"asan", "ubsan"}:
+        _ = worker_command([str(binary), "--invisibles"], timeout=BUILD_SECONDS)
         completed.append(options.mode)
     else:
         directory = Path("/work/corpus")
@@ -579,17 +874,17 @@ def worker(options: Options) -> dict[str, object]:
             family_directory.mkdir(exist_ok=True)
             new_file(family_directory / case.identifier, case.data)
         for case in cases:
-            worker_command(
-                replay_args(directory / case.family / case.identifier),
-                timeout=10,
-                family=case.family,
-            )
+            args = replay_args(directory / case.family / case.identifier)
+            args[0] = str(binary)
+            _ = worker_command(args, timeout=10, family=case.family)
             completed.append(case.identifier)
     return {
         "status": "passed",
         "mode": options.mode,
         "completed": completed,
         "elapsedSeconds": round(time.monotonic() - started, 3),
+        "testSeconds": round(time.monotonic() - test_started, 3),
+        "build": build,
         "llvmVersion": "23.1.2",
         "opensslInstrumented": False,
         "builderRpmSha256": hashlib.sha256(
@@ -607,6 +902,9 @@ class Options(argparse.Namespace):
     output: Path | None = None
     image: str = ""
     mode: str = "replay"
+    compiled_directory: Path | None = None
+    compiled_sha256: str = ""
+    compiled_bytes: int = 0
 
 
 def options_from(argv: Sequence[str] | None = None) -> Options:
@@ -614,16 +912,39 @@ def options_from(argv: Sequence[str] | None = None) -> Options:
     parser = argparse.ArgumentParser(description=__doc__)
     subs = parser.add_subparsers(dest="operation", required=True)
     _ = subs.add_parser("verify")
-    for operation in ("prepare", "run", "_worker"):
+    _ = subs.add_parser("_hold")
+    receiver = subs.add_parser("_receive")
+    _ = receiver.add_argument("--compiled-sha256", required=True)
+    _ = receiver.add_argument("--compiled-bytes", type=int, required=True)
+    for operation in ("prepare", "run", "compile", "_worker", "_compile"):
         child = subs.add_parser(operation, argument_default=argparse.SUPPRESS)
-        if operation != "_worker":
+        if operation not in {"_worker", "_compile"}:
             _ = child.add_argument("--engine", choices=("docker", "podman"), default="docker")
             _ = child.add_argument("--output", type=Path, required=True)
         if operation != "prepare":
             _ = child.add_argument("--mode", choices=MODES, required=True)
-        if operation == "run":
+        if operation in {"run", "compile"}:
             _ = child.add_argument("--image", required=True)
+            _ = child.add_argument(
+                "--compiled-directory", type=Path, required=operation == "compile"
+            )
+        if operation == "_worker":
+            _ = child.add_argument("--compiled-sha256", default="")
     return parser.parse_args(argv, namespace=Options())
+
+
+def worker_operation(options: Options) -> None:
+    """Dispatch only the closed internal sandbox operations accepted by the CLI."""
+    if options.operation == "_hold":
+        time.sleep(BUILD_SECONDS + 900)
+    elif options.operation == "_receive":
+        receive_binary(options)
+    elif options.operation == "_compile":
+        _ = worker_sources()
+        print(BUILD_EVENT + json.dumps(worker_compile(options.mode), sort_keys=True))  # noqa: T201
+    else:
+        require(options.operation == "_worker", "worker_operation")
+        print(EVENT + json.dumps(worker(options), sort_keys=True))  # noqa: T201
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -643,23 +964,31 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
             return 0
-        if options.operation == "_worker":
-            print(EVENT + json.dumps(worker(options), sort_keys=True))  # noqa: T201 -- Closed worker receipt.
+        if options.operation.startswith("_"):
+            worker_operation(options)
             return 0
         output = fresh_output(output)
         created = True
         engine = engine_prefix(options.engine)
-        result = (
-            prepare(engine, output)
-            if options.operation == "prepare"
-            else run_native(options, engine, output)
-        )
+        if options.operation == "prepare":
+            result = prepare(engine, output)
+        elif options.operation == "compile":
+            result = compile_native(options, engine, output)
+        else:
+            result = run_native(options, engine, output)
         write_json(output / "report.json", result)
         print(json.dumps(result, sort_keys=True))  # noqa: T201 -- Sanitized identity/result evidence.
-    except (OSError, ValueError, KeyError, SecurityError, bounded_process.ProcessError) as error:
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        SecurityError,
+        ToolError,
+        bounded_process.ProcessError,
+    ) as error:
         code = (
             str(error)
-            if isinstance(error, (SecurityError, bounded_process.ProcessError))
+            if isinstance(error, (SecurityError, ToolError, bounded_process.ProcessError))
             else "invalid_native_security_input"
         )
         if created and output is not None and not (output / "report.json").exists():
