@@ -110,8 +110,8 @@ class LocalCodeqlTests(unittest.TestCase):
                 with self.assertRaisesRegex(ToolError, "codeql_metadata_"):
                     local.database_health(database, "c-cpp")
 
-    def test_native_creation_declares_manual_mode_with_the_real_traced_build(self) -> None:
-        """A command alone does not make the pinned CLI record buildMode: manual."""
+    def test_native_creation_times_each_phase_and_preserves_the_bounded_traced_build(self) -> None:
+        """Manual extraction retains compiler/import budgets while exposing separate timing."""
         output = self.directory / "output"
         output.mkdir()
         context = Context(ROOT, output)
@@ -122,11 +122,11 @@ class LocalCodeqlTests(unittest.TestCase):
         (args.openssl_prefix / "lib").mkdir(parents=True)
         for archive in ("libssl.a", "libcrypto.a"):
             _ = (args.openssl_prefix / "lib" / archive).write_bytes(b"fixture")
-        calls: list[tuple[str, list[str]]] = []
+        calls: list[tuple[str, list[str], dict[str, object]]] = []
 
-        def record(name: str, argv: Sequence[str], **_kwargs: object) -> tuple[int, bytes]:
+        def record(name: str, argv: Sequence[str], **kwargs: object) -> tuple[int, bytes]:
             """Capture the real invocation boundary without claiming analyzer execution."""
-            calls.append((name, list(argv)))
+            calls.append((name, list(argv), kwargs))
             return 0, b""
 
         with (
@@ -138,16 +138,57 @@ class LocalCodeqlTests(unittest.TestCase):
         ):
             _ = local.analyze_language(context, args, source, self.directory / "codeql", "c-cpp")
         self.assertEqual(
-            [name for name, _command in calls], ["codeql-vendor-integrity", "codeql-create-c-cpp"]
+            [name for name, _command, _kwargs in calls],
+            [
+                "codeql-vendor-integrity",
+                "codeql-init-c-cpp",
+                "codeql-trace-c-cpp",
+                "codeql-finalize-c-cpp",
+            ],
         )
-        command = calls[-1][1]
+        command = calls[1][1]
         self.assertEqual(
             [argument for argument in command if argument.startswith("--build-mode=")],
             ["--build-mode=manual"],
         )
-        self.assertIn("--command=bash build/codeql-native-build.sh", command)
         self.assertIn("--source-root=" + str(source), command)
+        command = calls[2][1]
+        self.assertEqual(command[-3:], ["--", "bash", "build/codeql-native-build.sh"])
+        self.assertIn("--threads=2", command)
         self.assertIn("--ram=4096", command)
+        self.assertEqual(
+            calls[2][2]["env_updates"],
+            {"OPENSSL_DIR": str(args.openssl_prefix), "CODEQL_BUILD_JOBS": "2"},
+        )
+        self.assertIn("--threads=2", calls[3][1])
+        self.assertIn("--ram=4096", calls[3][1])
+        self.assertTrue(all(kwargs["cwd"] == source for _name, _command, kwargs in calls[1:]))
+
+    def test_native_creation_stops_at_the_first_failed_phase(self) -> None:
+        """A failed init or traced build must never continue to import incomplete extraction."""
+        phases = ("codeql-init-c-cpp", "codeql-trace-c-cpp", "codeql-finalize-c-cpp")
+        for failed_index, failed_phase in enumerate(phases):
+            with self.subTest(phase=failed_phase):
+                output = self.directory / str(failed_index)
+                output.mkdir()
+                context = Context(ROOT, output)
+                failure = ToolError("fixture_phase_failed")
+                with (
+                    patch.object(
+                        context, "run", side_effect=[*([(0, b"")] * failed_index), failure]
+                    ) as run,
+                    self.assertRaisesRegex(ToolError, "fixture_phase_failed"),
+                ):
+                    local.create_native(
+                        context,
+                        self.directory / "source",
+                        self.directory / "codeql",
+                        self.directory / "openssl",
+                        resources.Budget(4, 6144, 14950),
+                    )
+                self.assertEqual(
+                    [call.args[0] for call in run.call_args_list], list(phases[: failed_index + 1])
+                )
 
     def test_report_health_rejects_wrong_category_version_empty_queries_and_incremental_mode(
         self,

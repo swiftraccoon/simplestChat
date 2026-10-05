@@ -550,9 +550,11 @@ stored-analysis ingestion check and OIDC release signing/publication remain
 hosted operations; a successful local gate does not claim a GitHub signature.
 Native and Rust CodeQL use the same pinned CLI runner locally and on GitHub.
 Query RAM follows the pinned official action's allocation: cgroup-limited memory
-minus one GiB and five percent of memory above eight GiB. Compiler concurrency
-and extraction retain their separate conservative limits. This matches the
-official allocation; its effect on cold scan duration has not been measured.
+minus one GiB and five percent of memory above eight GiB. Native creation records
+initialization, traced compilation and database import as separate checks. The
+traced build and import retain their conservative extraction memory budget. The
+FlatBuffers generator and worker library each use at most four compile jobs;
+their separate durations are retained in the traced build log.
 They can reuse a complete evaluated database only for identical source, suite,
 analyzer and query pins, runner generation/architecture/trust, and absolute
 source paths. Rust includes shared web JSON inputs. Native also binds compiler

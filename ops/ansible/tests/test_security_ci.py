@@ -275,6 +275,19 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertIn('mktemp -d "$project_root/target/codeql-worker.XXXXXXXX"', command)
         self.assertIn("build/security_codeql_resources.py", command)
         self.assertNotIn("docker", command)
+        setup = "python3 -m invoke --search-root vendor/mediasoup-sys-0.17.0 setup"
+        generator = '-j "$MEDIASOUP_BUILD_JOBS" flatbuffers-generator'
+        worker = "python3 -m invoke --search-root vendor/mediasoup-sys-0.17.0 libmediasoup-worker"
+        self.assertLess(command.index(setup), command.index(generator))
+        self.assertLess(command.index(generator), command.index(worker))
+        self.assertIn('NINJA="$MEDIASOUP_OUT_DIR/pip_meson_ninja/bin/ninja"', command)
+        self.assertIn(
+            '"$MEDIASOUP_OUT_DIR/pip_meson_ninja/bin/meson" compile -C "$BUILD_DIR"', command
+        )
+        self.assertIn("export MEDIASOUP_BUILDTYPE=Release", command)
+        self.assertNotIn("-Doptimization", command)
+        self.assertIn("CodeQL FlatBuffers generator:", command)
+        self.assertIn("CodeQL worker library:", command)
 
     def test_native_codeql_guard_accepts_supported_targets_and_rejects_other_hosts(self) -> None:
         """Exercise the real guard without starting the compiler or contacting a runner."""

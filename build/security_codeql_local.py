@@ -209,6 +209,63 @@ def enforce_policy(context: Context, args: Options, identity: JsonObject) -> Non
     identity["policyPassed"] = True
 
 
+def create_native(
+    context: Context,
+    source: Path,
+    codeql: Path,
+    openssl_prefix: Path,
+    budget: resources.Budget,
+) -> None:
+    """Record bounded traced compilation and database import as distinct timed checks."""
+    database = context.output / "databases" / "c-cpp"
+    _ = context.run(
+        "codeql-init-c-cpp",
+        [
+            str(codeql),
+            "database",
+            "init",
+            str(database),
+            "--source-root=" + str(source),
+            "--language=c-cpp",
+            "--build-mode=manual",
+        ],
+        cwd=source,
+    )
+    _ = context.run(
+        "codeql-trace-c-cpp",
+        [
+            str(codeql),
+            "database",
+            "trace-command",
+            str(database),
+            "--threads=" + str(budget.workers),
+            "--ram=" + str(budget.ram_mib),
+            "--",
+            "bash",
+            "build/codeql-native-build.sh",
+        ],
+        cwd=source,
+        timeout=2100,
+        env_updates={
+            "OPENSSL_DIR": str(openssl_prefix),
+            "CODEQL_BUILD_JOBS": str(budget.workers),
+        },
+    )
+    _ = context.run(
+        "codeql-finalize-c-cpp",
+        [
+            str(codeql),
+            "database",
+            "finalize",
+            str(database),
+            "--threads=" + str(budget.workers),
+            "--ram=" + str(budget.ram_mib),
+        ],
+        cwd=source,
+        timeout=600,
+    )
+
+
 def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in their required order.
     context: Context, args: Options, source: Path, codeql: Path, language: str
 ) -> list[JsonObject]:
@@ -219,16 +276,6 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
     require(not ready.exists() and not ready.is_symlink(), "codeql_cache_ready_exists")
     extraction: JsonObject | None = None
     cache_key: str | None = None
-    create = [
-        str(codeql),
-        "database",
-        "create",
-        str(database),
-        "--source-root=" + str(source),
-        "--language=" + language,
-        "--threads=" + str(budget.workers),
-        "--ram=" + str(budget.ram_mib),
-    ]
     if language == "c-cpp":
         require(sys.platform == "linux", "codeql_native_requires_linux")
         require(args.openssl_prefix.is_absolute(), "codeql_openssl_absolute")
@@ -249,13 +296,23 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
             ],
             timeout=900,
         )
-        create.extend(["--build-mode=manual", "--command=bash build/codeql-native-build.sh"])
-    else:
-        create.append("--build-mode=none")
     if args.database_cache is not None:
         cache_key = cache.cache_key(context.root, source, args.openssl_prefix, language, args.suite)
         extraction = cache.restore(context, codeql, args.database_cache, cache_key, database)
-    if extraction is None:
+    if extraction is None and language == "c-cpp":
+        create_native(context, source, codeql, args.openssl_prefix, budget)
+    elif extraction is None:
+        create = [
+            str(codeql),
+            "database",
+            "create",
+            str(database),
+            "--source-root=" + str(source),
+            "--language=" + language,
+            "--build-mode=none",
+            "--threads=" + str(budget.workers),
+            "--ram=" + str(budget.ram_mib),
+        ]
         _ = context.run(
             "codeql-create-" + language,
             create,

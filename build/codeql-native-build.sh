@@ -27,5 +27,16 @@ export PYTHONPATH="$MEDIASOUP_OUT_DIR/pip_invoke"
 python3 -m pip install --no-user --target "$PYTHONPATH" \
   --require-hashes --only-binary=:all: \
   --requirement vendor/mediasoup-sys-0.17.0/python-invoke-requirements.txt
+python3 -m invoke --search-root vendor/mediasoup-sys-0.17.0 setup
+# The upstream flatc prerequisite omits a job limit. Complete that same target
+# within our budget first; its later invocation has no remaining compilation.
+generator_started=$SECONDS
+PYTHONPATH="$MEDIASOUP_OUT_DIR/pip_meson_ninja:$PYTHONPATH" \
+  NINJA="$MEDIASOUP_OUT_DIR/pip_meson_ninja/bin/ninja" \
+  "$MEDIASOUP_OUT_DIR/pip_meson_ninja/bin/meson" compile -C "$BUILD_DIR" \
+  -j "$MEDIASOUP_BUILD_JOBS" flatbuffers-generator
+printf 'CodeQL FlatBuffers generator: %ss\n' "$((SECONDS - generator_started))"
+worker_started=$SECONDS
 python3 -m invoke --search-root vendor/mediasoup-sys-0.17.0 libmediasoup-worker
+printf 'CodeQL worker library: %ss\n' "$((SECONDS - worker_started))"
 test -s "$MEDIASOUP_INSTALL_DIR/libmediasoup-worker.a"
