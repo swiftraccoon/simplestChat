@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from release_json import JsonObject
 
 MANIFEST = "vendor/integrity.json"
-SUBPROJECTS = "vendor/mediasoup-sys-0.17.0/subprojects"
+SUBPROJECTS = "vendor/mediasoup-sys-0.19.0/subprojects"
 MAX_SOURCE = 4 * 1024**2
 
 

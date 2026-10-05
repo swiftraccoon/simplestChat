@@ -308,7 +308,7 @@ Do not change bitrate policy or shorten reconnect grace just to suppress this
 message. A configured minimum of zero still uses the native 30,000 bps floor;
 lowering today's 100,000 bps minimum changes active congestion-control behavior.
 The message's source is the pinned
-[constraint clamp](../vendor/mediasoup-sys-0.17.0/deps/libwebrtc/libwebrtc/modules/congestion_controller/goog_cc/goog_cc_network_control.cc).
+[constraint clamp](../vendor/mediasoup-sys-0.19.0/deps/libwebrtc/libwebrtc/modules/congestion_controller/goog_cc/goog_cc_network_control.cc).
 
 A zero-minimum experiment eliminated the observed clamp logs but showed lower
 received throughput and higher CPU at 100 clients. The default remains unchanged;

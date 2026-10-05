@@ -83,7 +83,7 @@ ENV PATH=/opt/llvm/bin:/usr/bin:/bin \
     ASAN_SYMBOLIZER_PATH=/opt/llvm/bin/llvm-symbolizer \
     UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
 COPY build/pip-constraints.txt /opt/check/build/pip-constraints.txt
-COPY vendor/mediasoup-sys-0.17.0 /opt/worker
+COPY vendor/mediasoup-sys-0.19.0 /opt/worker
 RUN python3 -m pip install --no-user --target /opt/native-tools/pip_invoke \
       --require-hashes --only-binary=:all: \
       --requirement /opt/worker/python-invoke-requirements.txt \

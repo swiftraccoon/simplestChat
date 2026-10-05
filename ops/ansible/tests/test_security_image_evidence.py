@@ -386,7 +386,7 @@ class RustEvidenceTests(unittest.TestCase):
     def test_reviewed_declaration_evidence_matches_current_lock(self) -> None:
         """Pinned upstream metadata review cannot silently drift to a different crate release."""
         evidence = object_value(
-            policy.report(ROOT / "security/license-evidence/cargo-declarations-2026-09-30.json")
+            policy.report(ROOT / "security/license-evidence/cargo-declarations-2026-10-05.json")
         )
         locked = [
             object_value(item)
@@ -408,7 +408,7 @@ class RustEvidenceTests(unittest.TestCase):
             self.assertEqual(matches[0]["source"], native_producer.SOURCE_REGISTRY)
             raw = string_value(record["raw"])
             self.assertEqual(policy.CARGO_LICENSE_ALTERNATIVES[raw], record["spdxExpression"])
-        self.assertEqual(len(seen), 35)
+        self.assertEqual(len(seen), 34)
 
     def test_source_mismatch_missing_and_ambiguous_license_records_fail(self) -> None:
         """Equal names and versions cannot borrow a license from a different source."""

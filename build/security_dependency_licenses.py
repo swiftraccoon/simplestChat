@@ -24,6 +24,7 @@ from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name, parse_sdist_filename, parse_wheel_filename
 from security_context import Context, executable
 from security_image_policy import LicenseExpression
+from security_source_scope import require_local_vendor, selected
 from security_tools import bounded_file, require, safe_name, write_private
 
 # isort: split
@@ -39,8 +40,8 @@ PYTHON_LOCKS = (
     "build/python-requirements.txt",
     "ops/ansible/requirements.txt",
     "security/requirements.txt",
-    "vendor/mediasoup-sys-0.17.0/python-invoke-requirements.txt",
-    "vendor/mediasoup-sys-0.17.0/python-tools-requirements.txt",
+    "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+    "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
 )
 MAX_LOCK = 2 * 1024**2
 MAX_INDEX = 16 * 1024**2
@@ -214,11 +215,20 @@ def require_wheel_only(snapshot: Path) -> None:
 
 
 def require_audited_locks(
-    names: set[str], current: Callable[[str], bytes | None], previous: Callable[[str], bytes | None]
+    names: set[str],
+    current: Callable[[str], bytes | None],
+    previous: Callable[[str], bytes | None],
+    *,
+    include_vendor: bool = False,
 ) -> None:
     """Require shared audit support before a new lock graph introduces dependencies."""
+    require_local_vendor(include_vendor=include_vendor)
     maintained = set(NPM_LOCKS) | set(PYTHON_LOCKS)
     for path in sorted(names - maintained):
+        # Installed build requirements are audited above even inside vendor/.
+        # Unused upstream development locks follow the optional source-scan policy.
+        if not selected(path, include_vendor=include_vendor):
+            continue
         name = posixpath.basename(path)
         is_lock = (
             name in OTHER_LOCK_NAMES
@@ -414,7 +424,7 @@ def python_licenses(dependency: Dependency, registry: Registry) -> list[dict[str
 
 
 def changed_dependencies(
-    context: Context, snapshot: Path, base: str | None
+    context: Context, snapshot: Path, base: str | None, *, include_vendor: bool = False
 ) -> tuple[str, set[Dependency]]:
     """Require an ancestor commit; omitted base compares working changes with HEAD."""
     selected = base or "HEAD"
@@ -455,11 +465,13 @@ def changed_dependencies(
         [executable("git"), "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
     )
     current_names = set(current_listing.decode().rstrip("\0").split("\0"))
-    require_audited_locks(names | current_names, current, previous)
+    require_audited_locks(names | current_names, current, previous, include_vendor=include_vendor)
     return resolved, dependencies(current) - dependencies(previous)
 
 
-def check(context: Context, snapshot: Path, base: str | None) -> None:
+def check(
+    context: Context, snapshot: Path, base: str | None, *, include_vendor: bool = False
+) -> None:
     """Record exact changed declarations and fail unapproved, absent or invalid licenses."""
     started = time.monotonic()
     result: dict[str, object] = {"name": "changed-dependency-licenses", "exitStatus": 1}
@@ -469,7 +481,9 @@ def check(context: Context, snapshot: Path, base: str | None) -> None:
     try:
         allowed = allowed_licenses(snapshot)
         require_wheel_only(snapshot)
-        resolved, changed = changed_dependencies(context, snapshot, base)
+        resolved, changed = changed_dependencies(
+            context, snapshot, base, include_vendor=include_vendor
+        )
         receipt.update(baseRevision=resolved, allowedLicenses=sorted(allowed))
         registry = Registry(context)
         for dependency in sorted(

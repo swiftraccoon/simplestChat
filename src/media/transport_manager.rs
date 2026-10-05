@@ -125,6 +125,13 @@ fn lifecycle_participant_id(media_namespace: &str) -> Option<Uuid> {
     Some(participant_id)
 }
 
+/// Keep application and wire bitrates within their 32-bit contract. The worker
+/// reports 64-bit estimates; saturation preserves high-bandwidth tier selection
+/// without truncating an oversized estimate into a low-bandwidth value.
+fn application_bitrate(bitrate: u64) -> u32 {
+    u32::try_from(bitrate).unwrap_or(u32::MAX)
+}
+
 /// Manages WebRTC transports for participants.
 ///
 /// Uses per-participant locking: the outer HashMap is protected by a std::sync::RwLock
@@ -280,7 +287,7 @@ impl TransportManager {
         // cannot complete and leave this transport in a detached media state.
         let mut transport_options = WebRtcTransportOptions::new_with_server(webrtc_server);
         transport_options.initial_available_outgoing_bitrate =
-            config.initial_available_outgoing_bitrate;
+            u64::from(config.initial_available_outgoing_bitrate);
         transport_options.enable_udp = config.enable_udp;
         transport_options.enable_tcp = config.enable_tcp;
         transport_options.prefer_udp = config.prefer_udp;
@@ -295,7 +302,7 @@ impl TransportManager {
 
             if let Some(maximum) = config.max_incoming_bitrate {
                 transport
-                    .set_max_incoming_bitrate(maximum)
+                    .set_max_incoming_bitrate(u64::from(maximum))
                     .await
                     .map_err(|error| {
                         MediaError::TransportError(format!(
@@ -364,7 +371,7 @@ impl TransportManager {
         // cannot complete and leave this transport in a detached media state.
         let mut transport_options = WebRtcTransportOptions::new_with_server(webrtc_server);
         transport_options.initial_available_outgoing_bitrate =
-            config.initial_available_outgoing_bitrate;
+            u64::from(config.initial_available_outgoing_bitrate);
         transport_options.enable_udp = config.enable_udp;
         transport_options.enable_tcp = config.enable_tcp;
         transport_options.prefer_udp = config.prefer_udp;
@@ -378,7 +385,7 @@ impl TransportManager {
                 })?;
 
             transport
-                .set_max_outgoing_bitrate(config.max_outgoing_bitrate)
+                .set_max_outgoing_bitrate(u64::from(config.max_outgoing_bitrate))
                 .await
                 .map_err(|error| {
                     MediaError::TransportError(format!(
@@ -386,7 +393,7 @@ impl TransportManager {
                     ))
                 })?;
             transport
-                .set_min_outgoing_bitrate(config.min_outgoing_bitrate)
+                .set_min_outgoing_bitrate(u64::from(config.min_outgoing_bitrate))
                 .await
                 .map_err(|error| {
                     MediaError::TransportError(format!(
@@ -966,7 +973,7 @@ impl TransportManager {
         let pid = participant_id.to_string();
         let handler = transport.on_trace(Arc::new(move |event: &TransportTraceEventData| {
             if let TransportTraceEventData::Bwe { info, .. } = event {
-                let bitrate = info.available_bitrate;
+                let bitrate = application_bitrate(info.available_bitrate);
                 let _ = bwe_sender.try_send(bitrate);
                 debug!("BWE event for {}: available_bitrate={}", pid, bitrate);
             }
@@ -1051,7 +1058,9 @@ impl TransportManager {
                 let stat = stats.first()?;
                 Some(TransportReading {
                     loss_sent: stat.rtp_packet_loss_sent,
-                    available_outgoing_bitrate: stat.available_outgoing_bitrate,
+                    available_outgoing_bitrate: stat
+                        .available_outgoing_bitrate
+                        .map(application_bitrate),
                 })
             }
         });
@@ -1450,6 +1459,16 @@ impl TransportManager {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn worker_bitrate_preserves_values_and_saturates_without_wrapping() {
+        for bitrate in [0, 200_000, 600_000, u64::from(u32::MAX)] {
+            assert_eq!(u64::from(super::application_bitrate(bitrate)), bitrate);
+        }
+        for bitrate in [u64::from(u32::MAX) + 1, u64::MAX] {
+            assert_eq!(super::application_bitrate(bitrate), u32::MAX);
+        }
+    }
+
     use super::*;
     use crate::media::config::{MediaConfig, RouterConfig};
     use crate::media::router_manager::RouterManager;

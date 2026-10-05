@@ -1861,7 +1861,6 @@ async fn run_client_inner(
     let mut webrtc_session = WebRtcSession::new(client_id.clone(), metrics.clone());
     if let Some(profile) = config.profile.browser() {
         webrtc_session.set_video_layers(profile.layers.len());
-        webrtc_session.set_probator(true);
     }
     let webrtc_session = Arc::new(Mutex::new(webrtc_session));
 
@@ -2794,7 +2793,7 @@ fn simulcast_encodings(
         .zip(ssrcs)
         .map(|(layer, (ssrc, _))| RtpEncodingParameters {
             ssrc: Some(*ssrc),
-            max_bitrate: Some(layer.max_bitrate_bps),
+            max_bitrate: Some(u64::from(layer.max_bitrate_bps)),
             ..Default::default()
         })
         .collect())
@@ -4353,7 +4352,7 @@ fn extract_rtp_parameters(
             header_extensions,
             encodings: vec![RtpEncodingParameters {
                 ssrc: Some(ssrc),
-                max_bitrate: Some(video_bitrate_kbps * 1000),
+                max_bitrate: Some(u64::from(video_bitrate_kbps) * 1000),
                 ..Default::default()
             }],
             rtcp: RtcpParameters::default(),

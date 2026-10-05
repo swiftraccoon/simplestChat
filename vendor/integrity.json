@@ -1,15 +1,15 @@
 {
   "sources": [
     {
-      "id": "mediasoup-0.27.0",
-      "url": "https://crates.io/api/v1/crates/mediasoup/0.27.0/download",
-      "sha256": "c79e3ce92e845fb431052e2bf0083a2c9c3772367588874a891826b50dda4c33",
+      "id": "mediasoup-0.29.0",
+      "url": "https://crates.io/api/v1/crates/mediasoup/0.29.0/download",
+      "sha256": "a347fa0a1bd3d195233b09d41c55b5c70562b0006ab4b4c3c60c89dba2d8c5ef",
       "format": "tar.gz"
     },
     {
-      "id": "mediasoup-sys-0.17.0",
-      "url": "https://crates.io/api/v1/crates/mediasoup-sys/0.17.0/download",
-      "sha256": "b4193421652913559e68e6640d5fbe862241f313fa00cc446561e0d3f69ec684",
+      "id": "mediasoup-sys-0.19.0",
+      "url": "https://crates.io/api/v1/crates/mediasoup-sys/0.19.0/download",
+      "sha256": "85eae93b38f8840f30ab93afb2d5a45b2b087237afd3464dc086a250e58e196f",
       "format": "tar.gz"
     },
     {
@@ -43,15 +43,15 @@
       "format": "zip"
     },
     {
-      "id": "libuv-v1.52.1",
-      "url": "https://dist.libuv.org/dist/v1.52.1/libuv-v1.52.1.tar.gz",
-      "sha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7",
+      "id": "libuv-v1.53.0",
+      "url": "https://dist.libuv.org/dist/v1.53.0/libuv-v1.53.0.tar.gz",
+      "sha256": "cb0d6dd2128d5a95bd242c6cc982a24fe608fa93da57b6b4ec763b0018c53e64",
       "format": "tar.gz"
     },
     {
-      "id": "unordered_dense-4.11.0",
-      "url": "https://github.com/martinus/unordered_dense/archive/refs/tags/v4.11.0.tar.gz",
-      "sha256": "a232f7433b45872d43e4dc74a25cbd58effc0be76e3d704b34e5de3c637eed77",
+      "id": "unordered_dense-5.3.1",
+      "url": "https://github.com/martinus/unordered_dense/archive/refs/tags/v5.3.1.tar.gz",
+      "sha256": "06c262f9d7e1ff94d92e0359f89cc5d8632f32dfffb5e176a10516c509f5e5f2",
       "format": "tar.gz"
     },
     {
@@ -87,41 +87,41 @@
   ],
   "trees": [
     {
-      "path": "vendor/mediasoup-0.27.0",
-      "source": "mediasoup-0.27.0",
-      "prefix": "mediasoup-0.27.0",
+      "path": "vendor/mediasoup-0.29.0",
+      "source": "mediasoup-0.29.0",
+      "prefix": "mediasoup-0.29.0",
       "changes": [
         {
           "path": "Cargo.toml",
-          "upstream_sha256": "f71ad6920d048f678f63d49c95a556c9f2757f01e5e80fe9f518e3f148f23ff4",
-          "vendored_sha256": "863e5fc972515d40d121135c71a3636f618138d0486f178343e134c1b3e8f25c"
+          "upstream_sha256": "74de194da80c73560d2a05b85c0d03360d3f407aa89620b43bc9bc51187fec26",
+          "vendored_sha256": "baffc36fd25ab9dd691677306a471cc7619bc3349d75e9e53d4e7e6143d8b75f"
         },
         {
           "path": "Cargo.toml.orig",
-          "upstream_sha256": "493cca531b0e80aedcd6df8fb39bdc0cb09943e002b1a5cbfed05001147ecb2c",
-          "vendored_sha256": "94dd1a4a4686d3c381f932749c2177969fa8bf67a695947532821ed7a3bde33f"
+          "upstream_sha256": "999bd49cbba117d3c13024be09c9bb1ff126a28443f06c23a5c18465dc9f516b",
+          "vendored_sha256": "dc10d59fdc7e9c37ae9b5a89b54e75c263b9c1cff03547e62900b10000c76e5b"
         }
       ]
     },
     {
-      "path": "vendor/mediasoup-sys-0.17.0",
-      "source": "mediasoup-sys-0.17.0",
-      "prefix": "mediasoup-sys-0.17.0",
+      "path": "vendor/mediasoup-sys-0.19.0",
+      "source": "mediasoup-sys-0.19.0",
+      "prefix": "mediasoup-sys-0.19.0",
       "changes": [
         {
           "path": "Cargo.lock",
-          "upstream_sha256": "c6b5af76260651b41d03b5141e1ec4116ccd294ef78355d9cde64a2730228c0a",
+          "upstream_sha256": "d33a7a6ed0c967b8b74dac09a395b4f6ac68f0f403549e3b417bf1175a496e4a",
           "vendored_sha256": null
         },
         {
           "path": "Cargo.toml",
-          "upstream_sha256": "e376da83f5a2f2b945640749db6a6e5fa3f908dbe1ce5113f1e9149ea6b46517",
-          "vendored_sha256": "136b21d23af3e842429e91319ea5ee3450dc2f8df683bcfa0c80458568a8f88e"
+          "upstream_sha256": "4e0ee25233dae9042912b6e983341fa4a757fa994f63d583e53477657824b058",
+          "vendored_sha256": "269747dd31c17b1a5e3bbd12f388277e7c14c0b405d5abfa1432c850760d02e8"
         },
         {
           "path": "Cargo.toml.orig",
-          "upstream_sha256": "4a99117b42da498d1a9192e9c43dc2850d59b1db78b040ad5dbe96b070dbbad3",
-          "vendored_sha256": "8d52d518ba75768347987420af73320ef05dbb87a44529dde75b254f4289e649"
+          "upstream_sha256": "ff0662a233354220336ce698a852a9371a44f9e7c3ab2b43345dbd07abb1ba13",
+          "vendored_sha256": "632d07d615e5dc52b17735be13c6c81330e4766e3c8219f9c3a6c1d93345fe7d"
         },
         {
           "path": "build.rs",
@@ -140,8 +140,8 @@
         },
         {
           "path": "include/RTC/DtlsTransport.hpp",
-          "upstream_sha256": "565343065caf7b8611159d55f26f05433c145690eabb2a7fa06faa6326d03b18",
-          "vendored_sha256": "359e64a590fa4440f1bd799e1ff546dfcd4142521806ad89129c400be68f2c5d"
+          "upstream_sha256": "4bf45225801db31307a1035c8207e61815158e6df6cdb6ddc260db37dd513141",
+          "vendored_sha256": "892248d8a1ec53baaa8bc55891b5eaa8d6ac20c0ddae84d00b83d0af0338a965"
         },
         {
           "path": "include/RTC/MediaDiagnosticId.hpp",
@@ -151,27 +151,27 @@
         {
           "path": "include/RTC/MediaDiagnostics.hpp",
           "upstream_sha256": null,
-          "vendored_sha256": "e957926951eacea0dbd0112af301248514675eac7544d2ac2a03356744a056c3"
+          "vendored_sha256": "d23d828cdccf2859b085c8b8cbda835bae1dc5042f4e3ac81e865e5eb2493fa7"
         },
         {
           "path": "include/RTC/Producer.hpp",
-          "upstream_sha256": "e764af3825b3956e842481628da38c49697de70a7224466a9326d4e6543848d9",
-          "vendored_sha256": "7b2e79e6af9b85851629927d8cc15c4422b58cedc49c5387a6fcf68d2d0a3c99"
+          "upstream_sha256": "63fb98359221a4f156ba3c5143313955f878334705aaff2aff19dbdeb918f964",
+          "vendored_sha256": "8e963eb3b3abf8ba10d04cba21b4145858b74583b6470c12e44e40668e643887"
         },
         {
           "path": "include/RTC/RTP/RtpStreamRecv.hpp",
-          "upstream_sha256": "1ab3dada8d57d2e14c77c7ef4679e1de9f609ba88f937d169a22f06b7a9ac410",
-          "vendored_sha256": "c0e7ebe0757015c07da6e1d9c109f40ee9b408755c73f904a0f2d4a3c8d091fe"
+          "upstream_sha256": "a24f5f5b0953f735fa3299f5750f6befd7d338ac7c12450f3e87d1a326a06590",
+          "vendored_sha256": "3cb6719085394afe311c2ac35bdacccaef5e2459a0ae9442ba7770eb90dfe74e"
         },
         {
           "path": "include/RTC/WebRtcServer.hpp",
-          "upstream_sha256": "32cda29bd88e14b1b5e9faa6feded961133d8de13ed98d5316f8347f9d13aa0d",
-          "vendored_sha256": "4e6dc77e256dff221598107e74f7f039ce44cb32a10c90974443b01727d19031"
+          "upstream_sha256": "cf9a71b8cb07b1f924d3d8e5b60542e1c693642911e79ecfe54f7186f3d08300",
+          "vendored_sha256": "57e8ab2f9240a612d996d9aa788267601c7de7f07bfb9adc8284434e65593b2d"
         },
         {
           "path": "meson.build",
-          "upstream_sha256": "3b3550eb51bc5e2ab9fd74731ab6f8f84df34d19f4c19409861306b86d95c229",
-          "vendored_sha256": "46250d6321d85cf521faae08bc33440ac5d2a29961a2ef2dc5cf545d155bc172"
+          "upstream_sha256": "c5b7604af745a2b1fa00d39eb45f96c71443abea0e9b95597f9468ff5edd9959",
+          "vendored_sha256": "0f94d6eca26910c85b7a910cb094a623f14e67fa63566010fcab2caf270bb5fd"
         },
         {
           "path": "python-invoke-requirements.txt",
@@ -181,7 +181,7 @@
         {
           "path": "python-tools-requirements.txt",
           "upstream_sha256": null,
-          "vendored_sha256": "1b0d0f9d62fba50f97f8e4cb9f599b7e3d1042e8f222b56c4b9512e13c4bd209"
+          "vendored_sha256": "f33d78b0eaac49bb958d9332e189d2d1c2ae21afbc97ad1b136f3c83e9ee7aec"
         },
         {
           "path": "scripts/get-dep.sh",
@@ -190,38 +190,38 @@
         },
         {
           "path": "src/RTC/DtlsTransport.cpp",
-          "upstream_sha256": "d5cb544f850aa9423f880d7aca55ba6e565d6c6e11bb049547f89a3891b2071b",
-          "vendored_sha256": "73723a97544dc7b7323eada6a8299030e19e17482e1a1c2933484421d38b2329"
+          "upstream_sha256": "a13478960d24d52220415e6c590731c782792671f3e89fbe9ddb7610841fa350",
+          "vendored_sha256": "46fb7f141f8d27ae373fe24d8ed7ac57be137043064c2d35d0345fc1b6609a5f"
         },
         {
           "path": "src/RTC/Producer.cpp",
-          "upstream_sha256": "e6d1a38f9d6445dca3e08a00200f13665b4a45bf2441c1a7458ddc45f620889b",
-          "vendored_sha256": "297a28985509bec8623a46379afc367bad7ec3f18d39ea16152fef3e91718f44"
+          "upstream_sha256": "c3fc088e6af4f338efe298976c10380b0189bca5ef4bea61715f44239290c947",
+          "vendored_sha256": "a22739b8bb0c9299ff606653378500be5c4416e184197997d370d217092b5812"
         },
         {
           "path": "src/RTC/RTP/RtpStreamRecv.cpp",
-          "upstream_sha256": "c3021bfa9dc2e6c8ae3b40f94428e9b21cd52cf27c9f5209fdfc07a1b7c39f22",
-          "vendored_sha256": "9743b23c3650a955ce65aae595766e8680970d5c9b0bbed6d9b240da21c79821"
+          "upstream_sha256": "0b624665e12374f4d5c137399b9322cd24c1cb9e582ceba5aa4bcd2b349bcd96",
+          "vendored_sha256": "b693e30e99ae8af7a0b05314e0fb892e5792a10c33723f58588b9ff3f0401177"
         },
         {
           "path": "src/RTC/Transport.cpp",
-          "upstream_sha256": "595f7ca6706d25d4d8dc65fc08e3a41aa84dc293fc86eb0e438b7e2f4daefb19",
-          "vendored_sha256": "7631f760334ced80f0a3c2ebd2547236bec24f3b30dc7917209c2c74929c3423"
+          "upstream_sha256": "3b5cc98f0b1791f8ba91c1dd47bebdb60002c567f8163be5926c741c447e46cb",
+          "vendored_sha256": "2ff53b2f43537df4174a2227f5a2f9481c7e49cedfb47c3956da62fb987eacd8"
         },
         {
           "path": "src/RTC/TransportCongestionControlClient.cpp",
-          "upstream_sha256": "d5af1550ef374bd4133b4aa1df083d6d280702da0cabeea65773110f9fa5bf11",
-          "vendored_sha256": "16206c746d6fb9976087e7011f77b232c30592ed9dd20f1b0b32cbaca18268ea"
+          "upstream_sha256": "f4bf4249c874e1ddc9877e56a1f4098de811d64e49f5e585c118670b5febf891",
+          "vendored_sha256": "f632b45cc0dc06afc5a4f65cdbfe9b1a6db027d722dad8a08dca97c70b2be2ad"
         },
         {
           "path": "src/RTC/WebRtcServer.cpp",
-          "upstream_sha256": "8f8cff6e867d5ada7b62bfb4a2783d877fb917a2a9f05c136455298509ea4348",
-          "vendored_sha256": "3fa0203164b58a9f6e121c036c204bf93a35d0b287f942d94b8f423bc8b68b04"
+          "upstream_sha256": "16f1058840682c25ecc51f8b1c53090c4c1a8966a1482c26e0ad7958542def17",
+          "vendored_sha256": "a12ca15dd01dc94174c5781d66ab5ae3f01f0462b2b60bf8a5e1064050dae906"
         },
         {
           "path": "src/RTC/WebRtcTransport.cpp",
-          "upstream_sha256": "81a7c358521b1e961b791be5a85e1f52162a8cd1f6e16edb1528821cbd7614c9",
-          "vendored_sha256": "83dc951fa0db05f88e534a976de32268c1ba1d84c8ea5dce5220d37716cedecb"
+          "upstream_sha256": "73c8c200d35425318031284bccd5a4618470aaa26bd81e110c491a064a1f36a1",
+          "vendored_sha256": "e2df6b35a1bf3dc04b236bf9ebda7fc96fcd25ef170a837d137f436b63b74ad3"
         },
         {
           "path": "subprojects/abseil-cpp.wrap",
@@ -236,7 +236,7 @@
         {
           "path": "subprojects/libuv.wrap",
           "upstream_sha256": "c940eb25419f0539666a41fef58e5a65e98258f90cac41e5d01003b97f65a2c9",
-          "vendored_sha256": "015ca3316cf4ac722c7527f6057ac108d43e0fa3deea19aaf7c82f187f623a2c"
+          "vendored_sha256": "4a4a13a59920603c031ba643eb4027c646579e9f8dcc9148873fdf273275f9c1"
         },
         {
           "path": "subprojects/openssl.wrap",
@@ -256,7 +256,7 @@
         {
           "path": "subprojects/packagefiles/ankerl-unordered-dense/meson.build",
           "upstream_sha256": "96f360db70b0db95554110846e18ab927759858a3228843d8eff5b63c91a4a10",
-          "vendored_sha256": "8f535a2932f7074ed3c52c01de988b8e2881d94a3e2a169945c42d64ac0f3e77"
+          "vendored_sha256": "67fc3f19a4f3352e2383293cd68e36c899b7b59445d3bd7bf54f3523ac9a5166"
         },
         {
           "path": "subprojects/packagefiles/libuv/LICENSE.build",
@@ -271,7 +271,7 @@
         {
           "path": "subprojects/packagefiles/libuv/meson.build",
           "upstream_sha256": null,
-          "vendored_sha256": "3eada92dfde42ed1148b17712bd363d28d73a74bf374484acd45e1faf27f487f"
+          "vendored_sha256": "4ea34585b52222502e7cb9ffd963d9a0ff3c06a7c3251d6d09461490bd069056"
         },
         {
           "path": "subprojects/packagefiles/libuv/meson_options.txt",
@@ -281,27 +281,27 @@
         {
           "path": "subprojects/unordered-dense.wrap",
           "upstream_sha256": "8f21fc19d38cfbf0529a0940a5e6395d47308cc21ed554abfe7adad9e870dc97",
-          "vendored_sha256": "a06d7bd36e2c157737343cb91795c4ef33ef39dd2127d428cc5de4b42cb18ef3"
+          "vendored_sha256": "9a3abe5ffb9973fa85814466657d606e57e184b40176765aae8a2e323fdd538c"
         },
         {
           "path": "tasks.py",
-          "upstream_sha256": "cf3a9831d5daab7e87197c7851233ffe7c743b7365e06e6118085404a5f44754",
-          "vendored_sha256": "c5d5b134ac1abbcfe7790919024a5b2d235202717b6a2986534cc6319b841d48"
+          "upstream_sha256": "0e04e3bfe07be3d5e84ef73b7bb40376dfbf32ece51004452b24b33535d4269d",
+          "vendored_sha256": "ed0bc429e4df6315668234bb549cc2a9e599051f0233aa2dfaee3261b67bc1aa"
         },
         {
           "path": "test/src/RTC/TestDtlsTransport.cpp",
           "upstream_sha256": null,
-          "vendored_sha256": "d9d386f7770266aecd8f950c7740b3ad8c055d558bc2399789e8ef140c4bf48f"
+          "vendored_sha256": "298ff52f25a19139cb7d05a03573a72953734a1921f878ec03ef0d31952a7baa"
         },
         {
           "path": "test/src/RTC/TestMediaDiagnostics.cpp",
           "upstream_sha256": null,
-          "vendored_sha256": "88b04b90f1b3cebc4f7b0dc04df9d651b111328ebd95f1c0819105f9ca6b9b44"
+          "vendored_sha256": "fd541079b64e54041a7418187edbd56d0bfda452c07256d40b610369ca51279a"
         }
       ]
     },
     {
-      "path": "vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/abseil-cpp",
+      "path": "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp",
       "source": "abseil-cpp-20240722.0-4-overlay",
       "prefix": "abseil-cpp-20240722.0",
       "changes": [
@@ -313,14 +313,14 @@
       ]
     },
     {
-      "path": "vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/libuv",
+      "path": "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/libuv",
       "source": "libuv-1.51.0-1-overlay",
       "prefix": "libuv-v1.51.0",
       "changes": [
         {
           "path": "meson.build",
           "upstream_sha256": "7c106a5a406c1ef41d12dd2208f3784814df4778fae13887ae4ba527f29b88ce",
-          "vendored_sha256": "3eada92dfde42ed1148b17712bd363d28d73a74bf374484acd45e1faf27f487f"
+          "vendored_sha256": "4ea34585b52222502e7cb9ffd963d9a0ff3c06a7c3251d6d09461490bd069056"
         }
       ]
     }
@@ -342,14 +342,14 @@
   ],
   "wraps": [
     {
-      "path": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp.wrap",
+      "path": "vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap",
       "source": "abseil-cpp-20240722.2",
       "patch_source": null,
       "patch_directory": "abseil-cpp",
       "fallback_urls": []
     },
     {
-      "path": "vendor/mediasoup-sys-0.17.0/subprojects/catch2.wrap",
+      "path": "vendor/mediasoup-sys-0.19.0/subprojects/catch2.wrap",
       "source": "catch2-3.16.0",
       "patch_source": null,
       "patch_directory": null,
@@ -358,7 +358,7 @@
       ]
     },
     {
-      "path": "vendor/mediasoup-sys-0.17.0/subprojects/flatbuffers.wrap",
+      "path": "vendor/mediasoup-sys-0.19.0/subprojects/flatbuffers.wrap",
       "source": "flatbuffers-24.3.25",
       "patch_source": "flatbuffers-24.3.25-wrapdb-patch",
       "patch_directory": null,
@@ -367,28 +367,28 @@
       ]
     },
     {
-      "path": "vendor/mediasoup-sys-0.17.0/subprojects/libsrtp3.wrap",
+      "path": "vendor/mediasoup-sys-0.19.0/subprojects/libsrtp3.wrap",
       "source": "libsrtp-3.0.0-beta-2fc078db",
       "patch_source": null,
       "patch_directory": null,
       "fallback_urls": []
     },
     {
-      "path": "vendor/mediasoup-sys-0.17.0/subprojects/libuv.wrap",
-      "source": "libuv-v1.52.1",
+      "path": "vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap",
+      "source": "libuv-v1.53.0",
       "patch_source": null,
       "patch_directory": "libuv",
       "fallback_urls": []
     },
     {
-      "path": "vendor/mediasoup-sys-0.17.0/subprojects/unordered-dense.wrap",
-      "source": "unordered_dense-4.11.0",
+      "path": "vendor/mediasoup-sys-0.19.0/subprojects/unordered-dense.wrap",
+      "source": "unordered_dense-5.3.1",
       "patch_source": null,
       "patch_directory": "ankerl-unordered-dense",
       "fallback_urls": []
     },
     {
-      "path": "vendor/mediasoup-sys-0.17.0/subprojects/wingetopt.wrap",
+      "path": "vendor/mediasoup-sys-0.19.0/subprojects/wingetopt.wrap",
       "source": "wingetopt-1.00",
       "patch_source": null,
       "patch_directory": null,

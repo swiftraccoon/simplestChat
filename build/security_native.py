@@ -193,7 +193,7 @@ def validate_adapted(root: Path, value: JsonValue) -> None:
     component = vendor.fields(value, {"name", "version", "revision", "path", "license"})
     path = vendor.relative_path(text(component, "path"))
     if (
-        path != "vendor/mediasoup-sys-0.17.0/deps/libwebrtc"
+        path != "vendor/mediasoup-sys-0.19.0/deps/libwebrtc"
         or text(component, "name") != "libwebrtc"
     ):
         raise NativeError("Unsupported adapted native component")

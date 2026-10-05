@@ -7,7 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const worker = 'vendor/mediasoup-sys-0.17.0/';
+const worker = 'vendor/mediasoup-sys-0.19.0/';
 const read = name => readFileSync(new URL(`../../${name}`, import.meta.url), 'utf8');
 
 test('every native Python tool is version and wheel-hash locked', () => {

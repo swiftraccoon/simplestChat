@@ -1,0 +1,282 @@
+#define MS_CLASS "RTC::RTP::RtxStream"
+// #define MS_LOG_DEV_LEVEL 3
+
+#include "RTC/RTP/RtxStream.hpp"
+#include "Logger.hpp"
+#include "Utils.hpp"
+#include <cmath> // std::round()
+
+namespace RTC
+{
+	namespace RTP
+	{
+		/* Static. */
+
+		static constexpr uint16_t MaxDropout{ 3000 };
+		static constexpr uint16_t MaxMisorder{ 1500 };
+		static constexpr uint32_t RtpSeqMod{ 1 << 16 };
+
+		/* Instance methods. */
+
+		RtxStream::RtxStream(SharedInterface* shared, RTP::RtxStream::Params& params)
+		  : shared(shared), params(params)
+		{
+			MS_TRACE();
+
+			MS_ASSERT(
+			  params.mimeType.subtype == RTC::RtpCodecMimeType::Subtype::RTX,
+			  "mimeType.subtype is not RTX");
+		}
+
+		RtxStream::~RtxStream()
+		{
+			MS_TRACE();
+		}
+
+		flatbuffers::Offset<FBS::RtxStream::RtxDump> RtxStream::FillBuffer(
+		  flatbuffers::FlatBufferBuilder& builder) const
+		{
+			MS_TRACE();
+
+			// Add params.
+			auto params = this->params.FillBuffer(builder);
+
+			return FBS::RtxStream::CreateRtxDump(builder, params);
+		}
+
+		bool RtxStream::ReceivePacket(const RTP::Packet* packet)
+		{
+			MS_TRACE();
+
+			const uint16_t seq = packet->GetSequenceNumber();
+
+			// If this is the first packet seen, initialize stuff.
+			if (!this->started)
+			{
+				InitSeq(seq);
+
+				this->started     = true;
+				this->maxSeq      = seq - 1;
+				this->maxPacketTs = packet->GetTimestamp();
+			}
+
+			// If not a valid packet ignore it.
+			if (!UpdateSeq(packet))
+			{
+				MS_WARN_TAG(
+				  rtx,
+				  "invalid packet [ssrc:%" PRIu32 ", seq:%" PRIu16 "]",
+				  packet->GetSsrc(),
+				  packet->GetSequenceNumber());
+
+				return false;
+			}
+
+			// Update highest seen RTP timestamp.
+			if (Utils::Number::IsHigherThan<uint32_t>(packet->GetTimestamp(), this->maxPacketTs))
+			{
+				this->maxPacketTs = packet->GetTimestamp();
+			}
+
+			// Increase packet count.
+			this->packetsCount++;
+
+			return true;
+		}
+
+		RTC::RTCP::ReceiverReport* RtxStream::GetRtcpReceiverReport()
+		{
+			MS_TRACE();
+
+			auto* report = new RTC::RTCP::ReceiverReport();
+
+			report->SetSsrc(GetSsrc());
+
+			const int32_t prevPacketsLost = this->packetsLost;
+
+			// Calculate packets xxpected and lost.
+			auto expected = GetExpectedPackets();
+
+			// NOTE: The expected count is the extended sequence number arithmetic of RFC
+			// 3550, so it wraps at 32 bits, whereas the received one does not wrap at
+			// all. Each subtraction below is therefore made in the width that keeps it
+			// right: this one truncates the received count so that both wrap together,
+			// and the interval further down is taken in full width, where it is exact.
+			const auto received = static_cast<uint32_t>(this->packetsCount);
+
+			if (expected > received)
+			{
+				this->packetsLost = static_cast<int32_t>(expected - received);
+			}
+			else
+			{
+				this->packetsLost = 0u;
+			}
+
+			// Calculate fraction lost.
+			//
+			// NOTE: Reading the difference of the expected count as signed makes a
+			// sequence number re-sync, which restarts the count, come out negative.
+			const int64_t expectedInterval = static_cast<int32_t>(expected - this->expectedPrior);
+
+			this->expectedPrior = expected;
+
+			const auto receivedInterval = static_cast<int64_t>(this->packetsCount - this->receivedPrior);
+
+			this->receivedPrior = this->packetsCount;
+
+			const int64_t lostInterval = expectedInterval - receivedInterval;
+
+			if (expectedInterval <= 0 || lostInterval <= 0)
+			{
+				this->fractionLost = 0;
+			}
+			else
+			{
+				// A fixed point number with 8 bits of fraction, so a whole interval lost
+				// gives 256, one more than the field can hold.
+				const double fraction = std::round(static_cast<double>(lostInterval << 8) / expectedInterval);
+
+				this->fractionLost = static_cast<uint8_t>(std::min(fraction, 255.0));
+			}
+
+			this->reportedPacketsLost += (this->packetsLost - prevPacketsLost);
+
+			report->SetTotalLost(this->reportedPacketsLost);
+			report->SetFractionLost(this->fractionLost);
+
+			// Fill the rest of the report.
+			report->SetLastSeq(static_cast<uint32_t>(this->maxSeq) + this->cycles);
+
+			// NOTE: Do not calculate any jitter.
+			report->SetJitter(0);
+
+			if (this->lastSenderReportTiming.has_value())
+			{
+				const auto& senderReportTiming = this->lastSenderReportTiming.value();
+				// Get delay in microseconds.
+				const int64_t delayUs = this->shared->GetTimeUs() - senderReportTiming.receivedAtUs;
+				// Express delay in units of 1/65536 seconds.
+				auto dlsr = static_cast<uint32_t>((delayUs / 1000000) << 16);
+
+				dlsr |= static_cast<uint32_t>(((delayUs % 1000000) * 65536) / 1000000);
+
+				report->SetDelaySinceLastSenderReport(dlsr);
+				report->SetLastSenderReport(senderReportTiming.compactNtp);
+			}
+			else
+			{
+				report->SetDelaySinceLastSenderReport(0);
+				report->SetLastSenderReport(0);
+			}
+
+			return report;
+		}
+
+		void RtxStream::ReceiveRtcpSenderReport(RTC::RTCP::SenderReport* report, int64_t receivedAtUs)
+		{
+			MS_TRACE();
+
+			uint32_t compactNtp = report->GetNtpSec() << 16;
+
+			compactNtp += report->GetNtpFrac() >> 16;
+
+			this->lastSenderReportTiming = SenderReportTiming{
+				.compactNtp   = compactNtp,
+				.receivedAtUs = receivedAtUs,
+			};
+		}
+
+		bool RtxStream::UpdateSeq(const RTP::Packet* packet)
+		{
+			MS_TRACE();
+
+			const uint16_t seq    = packet->GetSequenceNumber();
+			const uint16_t udelta = seq - this->maxSeq;
+
+			// If the new packet sequence number is greater than the max seen but not
+			// "so much bigger", accept it.
+			// NOTE: udelta also handles the case of a new cycle, this is:
+			//    maxSeq:65536, seq:0 => udelta:1
+			if (udelta < MaxDropout)
+			{
+				// In order, with permissible gap.
+				if (seq < this->maxSeq)
+				{
+					// Sequence number wrapped: count another 64K cycle.
+					this->cycles += RtpSeqMod;
+				}
+
+				this->maxSeq = seq;
+			}
+			// Too old packet received (older than the allowed misorder).
+			// Or to new packet (more than acceptable dropout).
+			else if (udelta <= RtpSeqMod - MaxMisorder)
+			{
+				// The sequence number made a very large jump. If two sequential packets
+				// arrive, accept the latter.
+				if (seq == this->badSeq)
+				{
+					// Two sequential packets. Assume that the other side restarted without
+					// telling us so just re-sync (i.e., pretend this was the first packet).
+					MS_WARN_TAG(
+					  rtx,
+					  "too bad sequence number, re-syncing RTP [ssrc:%" PRIu32 ", seq:%" PRIu16 "]",
+					  packet->GetSsrc(),
+					  packet->GetSequenceNumber());
+
+					InitSeq(seq);
+
+					this->maxPacketTs = packet->GetTimestamp();
+				}
+				else
+				{
+					MS_WARN_TAG(
+					  rtx,
+					  "bad sequence number, ignoring packet [ssrc:%" PRIu32 ", seq:%" PRIu16 "]",
+					  packet->GetSsrc(),
+					  packet->GetSequenceNumber());
+
+					this->badSeq = (seq + 1) & (RtpSeqMod - 1);
+
+					// Packet discarded due to late or early arriving.
+					this->packetsDiscarded++;
+
+					return false;
+				}
+			}
+			// Acceptable misorder.
+			else
+			{
+				// Do nothing.
+			}
+
+			return true;
+		}
+
+		inline void RtxStream::InitSeq(uint16_t seq)
+		{
+			MS_TRACE();
+
+			// Initialize/reset RTP counters.
+			this->baseSeq = seq;
+			this->maxSeq  = seq;
+			this->badSeq  = RtpSeqMod + 1; // So seq == badSeq is false.
+		}
+
+		flatbuffers::Offset<FBS::RtxStream::Params> RtxStream::Params::FillBuffer(
+		  flatbuffers::FlatBufferBuilder& builder) const
+		{
+			MS_TRACE();
+
+			return FBS::RtxStream::CreateParamsDirect(
+			  builder,
+			  this->ssrc,
+			  this->payloadType,
+			  this->mimeType.ToString().c_str(),
+			  this->clockRate,
+			  this->rrid.c_str(),
+			  this->cname.c_str());
+		}
+	} // namespace RTP
+} // namespace RTC

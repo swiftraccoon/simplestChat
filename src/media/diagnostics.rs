@@ -82,7 +82,7 @@ impl SnapshotContext {
         // its terminal identifier is explicitly an incomplete observation.
         match self
             .next_sample
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 (value <= MAX_SAFE_INTEGER).then_some(value.saturating_add(1))
             }) {
             Ok(value) => (value, true),

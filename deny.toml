@@ -27,6 +27,8 @@ deny = [
 # Exact reviewed versions only; a new version still reaches duplicate detection.
 # security/dependency-budget.json also rejects increases or replacement groups.
 skip = [
+  { crate = "pem@=3.0.6", reason = "rtc/rtc-dtls 0.21 require pem 3; their current rcgen 0.14.10 requires pem 4. Exact optional load-test split reviewed 2026-10-05." },
+  { crate = "synstructure@=0.13.2", reason = "asn1-rs-derive 0.5.1 requires 0.13; current ICU derive macros require 0.14. Exact build-time split reviewed 2026-10-05." },
   { crate = "ahash@=0.7.8", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "asn1-rs@=0.6.2", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "asn1-rs-derive@=0.5.1", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
@@ -36,8 +38,6 @@ skip = [
   { crate = "bit-vec@=0.6.3", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "bitflags@=1.3.2", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "block-buffer@=0.10.4", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
-  { crate = "chacha20@=0.9.1", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
-  { crate = "const-oid@=0.9.6", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "cpufeatures@=0.2.17", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "crypto-common@=0.1.7", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "der-parser@=9.0.0", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
@@ -54,7 +54,6 @@ skip = [
   { crate = "hashbrown@=0.16.1", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "heck@=0.4.1", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "hermit-abi@=0.1.19", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
-  { crate = "hkdf@=0.12.4", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "hmac@=0.12.1", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "indexmap@=1.9.3", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
   { crate = "md-5@=0.10.6", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },

@@ -36,7 +36,7 @@ impl ReceiverStallBudget {
             .try_acquire_owned()
             .map_err(|_| CaptureStatus::Busy)?;
         self.remaining
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
                 remaining.checked_sub(1)
             })
             .map_err(|_| CaptureStatus::BudgetExhausted)?;

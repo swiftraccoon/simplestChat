@@ -209,7 +209,7 @@ struct Summary {
 impl Shared {
     fn enter(&self) -> Option<ProducerSection<'_>> {
         self.producers
-            .fetch_update(Acquire, Relaxed, |state| {
+            .try_update(Acquire, Relaxed, |state| {
                 // Also prevent the count from overflowing into the closed bit.
                 (state < CLOSED - 1).then(|| state + 1)
             })
@@ -230,7 +230,7 @@ impl Shared {
 
     fn reserve_record(&self) -> bool {
         self.reserved_records
-            .fetch_update(Relaxed, Relaxed, |reserved| {
+            .try_update(Relaxed, Relaxed, |reserved| {
                 (reserved < self.limits.max_records).then_some(reserved + 1)
             })
             .is_ok()
@@ -258,7 +258,7 @@ fn microseconds(duration: Duration) -> u64 {
 
 fn next_id(counter: &AtomicU64) -> Option<u64> {
     counter
-        .fetch_update(Relaxed, Relaxed, |value| {
+        .try_update(Relaxed, Relaxed, |value| {
             (value < MAX_SAFE_INTEGER).then_some(value + 1)
         })
         .ok()

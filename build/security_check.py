@@ -271,8 +271,8 @@ def dependency_checks(context: Context, tools: Path, reviews: Sequence[Exception
             "build/python-requirements.txt",
             "ops/ansible/requirements.txt",
             "security/requirements.txt",
-            "vendor/mediasoup-sys-0.17.0/python-invoke-requirements.txt",
-            "vendor/mediasoup-sys-0.17.0/python-tools-requirements.txt",
+            "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+            "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
         )
     ):
         _, output = context.run(
@@ -380,7 +380,7 @@ def fast(context: Context, base: str | None, *, include_vendor: bool = False) ->
     workflow_checks(context, tools, reviews)
     secret_checks(context, tools, reviews, base, snapshot, include_vendor=include_vendor)
     dependency_checks(context, tools, reviews)
-    security_dependency_licenses.check(context, snapshot, base)
+    security_dependency_licenses.check(context, snapshot, base, include_vendor=include_vendor)
     security_actions.check(context, snapshot, base, include_vendor=include_vendor)
     source_checks(context, tools, include_vendor=include_vendor)
     security_openssl.check(context, snapshot)

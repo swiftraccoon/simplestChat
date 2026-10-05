@@ -33,17 +33,17 @@
       "license": "BSD-3-Clause"
     },
     {
-      "source": "libuv-v1.52.1",
+      "source": "libuv-v1.53.0",
       "name": "libuv",
-      "version": "1.52.1",
+      "version": "1.53.0",
       "linkage": "static",
       "usage": "production",
       "license": "MIT AND BSD-2-Clause AND ISC"
     },
     {
-      "source": "unordered_dense-4.11.0",
+      "source": "unordered_dense-5.3.1",
       "name": "unordered_dense",
-      "version": "4.11.0",
+      "version": "5.3.1",
       "linkage": "header-only",
       "usage": "production",
       "license": "MIT"
@@ -61,7 +61,7 @@
     "name": "libwebrtc",
     "version": "m77",
     "revision": "2bac7da1349c75e5cf89612ab9619a1920d5d974",
-    "path": "vendor/mediasoup-sys-0.17.0/deps/libwebrtc",
+    "path": "vendor/mediasoup-sys-0.19.0/deps/libwebrtc",
     "license": "BSD-3-Clause"
   },
   "openssl": {

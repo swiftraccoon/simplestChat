@@ -21,8 +21,8 @@ does not perform a vulnerability or source-pattern scan.
 
 | Directory | crates.io archive | SHA-256 | Upstream VCS revision |
 | --- | --- | --- | --- |
-| `mediasoup-0.27.0` | `https://crates.io/api/v1/crates/mediasoup/0.27.0/download` | `c79e3ce92e845fb431052e2bf0083a2c9c3772367588874a891826b50dda4c33` | `7b896f1743b6f4d9d7b237fc1d642828fa6c5b6c` (`rust/`) |
-| `mediasoup-sys-0.17.0` | `https://crates.io/api/v1/crates/mediasoup-sys/0.17.0/download` | `b4193421652913559e68e6640d5fbe862241f313fa00cc446561e0d3f69ec684` | `3a6f865307c00ea1c5793b7de6de16d003854f29` (`worker/`) |
+| `mediasoup-0.29.0` | `https://crates.io/api/v1/crates/mediasoup/0.29.0/download` | `a347fa0a1bd3d195233b09d41c55b5c70562b0006ab4b4c3c60c89dba2d8c5ef` | `bf70a2eceba77b5329cbe6833bab00021e3d170c` (`rust/`) |
+| `mediasoup-sys-0.19.0` | `https://crates.io/api/v1/crates/mediasoup-sys/0.19.0/download` | `85eae93b38f8840f30ab93afb2d5a45b2b087237afd3464dc086a250e58e196f` | `16ec8ab2a1eb4a0dc406c6799fa5b6dd0d767d91` (`worker/`) |
 
 The VCS revisions above are the values embedded by crates.io in each
 `.cargo_vcs_info.json`.  The original license and third-party license files
@@ -140,11 +140,19 @@ hash; runtime-loaded components and deployed protections need separate evidence.
 
 ## Maintained changes
 
-`mediasoup-0.27.0` changes only `Cargo.toml` and `Cargo.toml.orig`, raising
-`lru` from 0.8.1 to 0.18.4.  The worker uses the compatible `new`, `contains`,
+The 2026-10-05 rebase retains the same 38 worker deviation paths against the
+0.19.0 archive. Timer integrations now provide diagnostic labels and use the
+upstream signed millisecond API; the manual timer fixture implements that same
+contract. NACK delay and congestion constraints retain their prior behavior
+with the widened upstream types. The upstream archive supplies its new RTP/RTX
+encoding and SCTP reassembly fixes; those are not local patches.
+
+
+`mediasoup-0.29.0` changes only `Cargo.toml` and `Cargo.toml.orig`, raising
+`lru` from 0.8.1 to 0.18.5.  The worker uses the compatible `new`, `contains`,
 and `put` API surface; this removes RUSTSEC-2026-0253 from the active graph.
 
-`mediasoup-sys-0.17.0` changes only `Cargo.toml`, `Cargo.toml.orig`,
+`mediasoup-sys-0.19.0` changes only `Cargo.toml`, `Cargo.toml.orig`,
 `build.rs`, `tasks.py`, `scripts/get-dep.sh`, `meson.build`, `deps/libwebrtc/meson.build`,
 `src/RTC/TransportCongestionControlClient.cpp`, `src/RTC/RTP/RtpStreamRecv.cpp`,
 `include/RTC/Producer.hpp`, `src/RTC/Producer.cpp`, `src/RTC/Transport.cpp`,
@@ -339,7 +347,7 @@ Non-doc builds fail closed unless `PIP_CONSTRAINT` names an existing file. The
 repository uses `build/pip-constraints.txt`; CI, containers, checked-in VS Code
 settings, deployment scripts, and the README build examples set it explicitly
 so PyPI build tools cannot float between otherwise identical Cargo builds.
-The maintained `tasks.py` also selects Meson 1.12.0 and Ninja 1.13.2,
+The maintained `tasks.py` also selects Meson 1.12.1 and Ninja 1.13.2,
 matching the exact constraints. `python-invoke-requirements.txt` and
 `python-tools-requirements.txt` pin the accepted PyPI wheel SHA-256 hashes for
 Invoke, pip, setuptools, Meson and Ninja. `build.rs` and `tasks.py` install with
@@ -379,14 +387,14 @@ The repository's pinned OpenSSL build helper supplies the dependency in Linux
 CI and container builds.  Do not relax the minimum version or restore an
 OpenSSL wrap to make a build pass.
 
-## Native dependency refresh (2026-09-09)
+## Native dependency refresh (2026-10-05)
 
 The following source archives are pinned to their verified upstream downloads:
 
 | Dependency | Source archive | SHA-256 |
 | --- | --- | --- |
-| libuv 1.52.1 | [official distribution](https://dist.libuv.org/dist/v1.52.1/libuv-v1.52.1.tar.gz) | `66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7` |
-| unordered_dense 4.11.0 | [official tag archive](https://github.com/martinus/unordered_dense/archive/refs/tags/v4.11.0.tar.gz) | `a232f7433b45872d43e4dc74a25cbd58effc0be76e3d704b34e5de3c637eed77` |
+| libuv 1.53.0 | [official distribution](https://dist.libuv.org/dist/v1.53.0/libuv-v1.53.0.tar.gz) | `cb0d6dd2128d5a95bd242c6cc982a24fe608fa93da57b6b4ec763b0018c53e64` |
+| unordered_dense 5.3.1 | [official tag archive](https://github.com/martinus/unordered_dense/archive/refs/tags/v5.3.1.tar.gz) | `06c262f9d7e1ff94d92e0359f89cc5d8632f32dfffb5e176a10516c509f5e5f2` |
 | Catch2 3.16.0 | [official tag archive](https://github.com/catchorg/Catch2/archive/v3.16.0.tar.gz) | `0957cae5821b17ce07f0833aaa52b5137643a8382203221f363a8303c109af34` |
 
 libuv's local Meson overlay comes from the already-pinned
@@ -395,9 +403,10 @@ libuv's local Meson overlay comes from the already-pinned
 `0fb123dee5e74621a767a8f2a29dde7219c65a01a5fe63e3c8ffeed675a2d820`).
 The original `meson.build` SHA-256 is
 `7c106a5a406c1ef41d12dd2208f3784814df4778fae13887ae4ba527f29b88ce`;
-only its project version changes to `1.52.1`, resulting in
-`3eada92dfde42ed1148b17712bd363d28d73a74bf374484acd45e1faf27f487f`.
-The compiler source lists still match upstream's 1.52.1 CMake build for the
+its project version changes to `1.53.0` and its Windows libraries add
+`Synchronization`, matching the upstream CMake dependency, resulting in
+`4ea34585b52222502e7cb9ffd963d9a0ff3c06a7c3251d6d09461490bd069056`.
+The compiler source lists still match upstream's 1.53.0 CMake build for the
 supported macOS/Linux/Windows paths. The other files are byte-for-byte imports:
 `meson_options.txt` (`dc02dc5b7d5bd069782529f59012e7ac25b53325b7783609c77a3b36ca819a7c`),
 `link_file_in_build_dir.py` (`cba566c9f026b7c23c2460c4262ddd420e4da63986a892653d4c15a0f9e6943d`),
@@ -406,20 +415,20 @@ A local overlay avoids extracting the old archive into the wrong source director
 the old 1.51.0 source fallback is removed. No libuv C source is patched.
 
 unordered_dense keeps its existing header-only overlay; only the declared
-version changes to `4.11.0` (overlay SHA-256
-`8f535a2932f7074ed3c52c01de988b8e2881d94a3e2a169945c42d64ac0f3e77`).
+version changes to `5.3.1` (overlay SHA-256
+`67fc3f19a4f3352e2383293cd68e36c899b7b59445d3bd7bf54f3523ac9a5166`).
 Catch2 uses the published WrapDB `3.16.0-1` wrap unchanged. It is used only when
 the native worker's `ms_build_tests` option is enabled, not by the production
 worker. Its upstream native tests must be built separately from Cargo tests.
 
 Two native source pins intentionally remain compatibility exceptions. The newer
-release comparisons below record the 2026-09-09 refresh review, not a live
-upstream-version check:
+release comparisons below were verified on 2026-10-05:
 
 - Abseil stays on the security-fixed `20240722.2` LTS branch, although the
   [reviewed newer standalone release is `20260817.0`](https://github.com/abseil/abseil-cpp/releases/tag/20260817.0).
-  Its newer hash-container APIs include breaking changes; updating the adapted
-  libwebrtc dependency and the Meson overlay requires a coordinated native port.
+  The existing Meson overlay references 25 files removed by that release.
+  Its optional/variant aliases and source dependencies need a coordinated
+  overlay and adapted libwebrtc port; a version-only update cannot build.
 - FlatBuffers stays on the worker's `24.3.25` source/tool version. Upstream's
   [reviewed newer normal release is `25.12.19`](https://github.com/google/flatbuffers/releases/tag/v25.12.19),
   with an additional `v25.12.19-2026-02-06-03fffb2` release tag whose status

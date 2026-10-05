@@ -229,7 +229,9 @@ class NativeSourceTests(unittest.TestCase):
         )
         entries = [object_value(value) for value in array_value(raw["alerts"])]
         self.assertEqual({triage.positive(item["number"]) for item in entries}, set(range(70, 102)))
-        manifest_sha = vendor.sha256((ROOT / sources.MANIFEST).read_bytes())
+        # Historical findings remain bound to the historical manifest. An upgrade
+        # must not refresh those waivers by simply substituting the current hash.
+        manifest_sha = object_value(raw["manifestRevalidation"])["sourceManifestSha256"]
         previous_sha = object_value(raw["manifestRevalidation"])["previousManifestSha256"]
         reviews = security_policy.read_exceptions(
             today=date.fromisoformat(str(raw["reviewed"])), include_vendor=True

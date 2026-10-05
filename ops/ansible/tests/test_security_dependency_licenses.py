@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -151,7 +152,7 @@ class DependencyLicenseTests(unittest.TestCase):
                 )
 
     def test_changed_unmanaged_locks_require_shared_audit_support(self) -> None:
-        """A new project or changed vendor lock cannot evade the maintained audit graphs."""
+        """A new first-party project cannot evade the maintained audit graphs."""
         empty: dict[str, bytes] = {}
         for path in (
             "other/package-lock.json",
@@ -167,6 +168,21 @@ class DependencyLicenseTests(unittest.TestCase):
                     licenses.require_audited_locks({path}, {path: b"new"}.get, previous.get)
                 with self.assertRaisesRegex(ToolError, "dependency_unaudited_lock_changed"):
                     licenses.require_audited_locks({path}, previous.get, empty.get)
+
+    def test_unused_vendor_locks_follow_optional_local_source_scan_scope(self) -> None:
+        """Upstream development locks are optional; installed build graphs remain audited."""
+        path = "vendor/upstream/scripts/package-lock.json"
+        current = {path: b"new"}
+        previous: dict[str, bytes] = {}
+        licenses.require_audited_locks({path}, current.get, previous.get)
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            self.assertRaisesRegex(ToolError, "dependency_unaudited_lock_changed"),
+        ):
+            licenses.require_audited_locks({path}, current.get, previous.get, include_vendor=True)
+        self.assertIn(
+            "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt", licenses.PYTHON_LOCKS
+        )
 
     def test_python_requires_exact_metadata_identity_and_explicit_expression(self) -> None:
         """Free text, duplicate fields and another release never become license evidence."""

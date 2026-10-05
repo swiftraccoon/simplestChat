@@ -1,0 +1,68 @@
+#ifndef MS_COMMON_HPP
+#define MS_COMMON_HPP
+
+// NOTE: This is an umbrella header. The includes below are not meant to be used
+// by this file, but re-exported to whoever includes it.
+// IWYU pragma: begin_exports
+#include <algorithm> // std::transform(), std::find(), std::min(), std::max(), std::copy(), std::clamp(), std::ranges
+#include <cinttypes>  // PRIu64, etc
+#include <cstddef>    // size_t
+#include <cstdint>    // uint8_t, etc
+#include <functional> // std::function
+#include <memory>     // std::addressof(), std::unique_ptr(), etc
+#include <optional>
+#include <utility> // std::pair, std::move(), std::piecewise_construct
+#ifdef _WIN32
+#include <winsock2.h>
+// Avoid uv/win.h: error C2628 'intptr_t' followed by 'int' is illegal.
+#if !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#define SSIZE_MAX INTPTR_MAX
+#define _SSIZE_T_
+#define _SSIZE_T_DEFINED
+#endif
+#else
+#include <arpa/inet.h>  // htonl(), htons(), ntohl(), ntohs()
+#include <netinet/in.h> // sockaddr_in, sockaddr_in6
+#include <sys/socket.h> // struct sockaddr, struct sockaddr_storage, AF_INET, AF_INET6
+#endif
+// IWYU pragma: end_exports
+
+// This is a macro to silence false warnings in switch() blocks that already
+// cover every value of their enum and hence need no default label.
+//
+// GCC warns that the enum is not fully handled (typically with FBS types) and
+// MSVC warns that the function may fall off its end without returning a value,
+// so each of them is told that reaching the default label is impossible.
+#if defined(__GNUC__) && !defined(__clang__)
+#define NO_DEFAULT()                                                                               \
+	default:                                                                                         \
+		__builtin_unreachable()
+#elif defined(_MSC_VER)
+#define NO_DEFAULT()                                                                               \
+	default:                                                                                         \
+		__assume(0)
+#else
+#define NO_DEFAULT()
+#endif
+
+using ChannelReadCtx    = void*;
+using ChannelReadFreeFn = void (*)(uint8_t*, uint32_t, size_t);
+// Returns `ChannelReadFree` on successful read that must be used to free
+// `message`.
+using ChannelReadFn = ChannelReadFreeFn (*)(
+  uint8_t** /*message*/,
+  uint32_t* /*messageLen*/,
+  size_t* /*messageCtx*/,
+  // This is `uv_async_t` handle that can be called later with `uv_async_send()`
+  // when there is more data to read.
+  const void* /*handle*/,
+  ChannelReadCtx /*ctx*/
+);
+
+using ChannelWriteCtx = void*;
+using ChannelWriteFn =
+  void (*)(const uint8_t* /*message*/, uint32_t /*messageLen*/, ChannelWriteCtx /*ctx*/);
+
+#endif

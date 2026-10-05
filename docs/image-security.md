@@ -272,10 +272,12 @@ unchanged strict SPDX parser.
 
 The [Cargo manifest documentation](https://doc.rust-lang.org/cargo/reference/manifest.html#the-license-and-license-file-fields)
 describes the deprecated slash notation and license choices. The retained
-[declaration review](../security/license-evidence/cargo-declarations-2026-09-30.json)
-binds all 35 observed declarations to `Cargo.lock` archive and manifest hashes,
-plus the packaged license-text hashes where present. Twelve occur in the observed
-runtime SBOM. For `asn1-rs-impl`, the crate manifest declares the terms but omits
+[declaration review](../security/license-evidence/cargo-declarations-2026-10-05.json)
+binds 34 unchanged legacy declarations to `Cargo.lock` archive and manifest
+hashes, plus the packaged license-text hashes where present. The former
+`siphasher` record is retired because 1.0.4 declares standard SPDX directly.
+The original receipt observed twelve runtime packages; the new image gate
+selects the actual runtime inventory again. For `asn1-rs-impl`, the crate manifest declares the terms but omits
 the license text; its recorded exact upstream revision explicitly offers either
 Apache-2.0 or MIT. This metadata interpretation does not waive notice obligations
 or establish that every package contributed linked machine code.

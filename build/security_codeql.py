@@ -12,10 +12,10 @@ from security_tools import ToolError, bounded_file, require, string
 
 REQUIRED = frozenset(
     {
-        "vendor/mediasoup-sys-0.17.0/src/RTC/DtlsTransport.cpp",
-        "vendor/mediasoup-sys-0.17.0/src/RTC/ICE/StunPacket.cpp",
-        "vendor/mediasoup-sys-0.17.0/src/RTC/SCTP/association/Association.cpp",
-        "vendor/mediasoup-sys-0.17.0/src/RTC/RTP/Packet.cpp",
+        "vendor/mediasoup-sys-0.19.0/src/RTC/DtlsTransport.cpp",
+        "vendor/mediasoup-sys-0.19.0/src/RTC/ICE/StunPacket.cpp",
+        "vendor/mediasoup-sys-0.19.0/src/RTC/SCTP/association/Association.cpp",
+        "vendor/mediasoup-sys-0.19.0/src/RTC/RTP/Packet.cpp",
     }
 )
 

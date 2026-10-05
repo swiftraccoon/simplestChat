@@ -1,0 +1,1197 @@
+#define MS_CLASS "RTC::RTP::RtpStreamRecv"
+// #define MS_LOG_DEV_LEVEL 3
+
+#include "RTC/RTP/RtpStreamRecv.hpp"
+#include "Logger.hpp"
+#include "RTC/RTCP/FeedbackPsFir.hpp"
+#include "RTC/RTCP/FeedbackPsPli.hpp"
+#include "RTC/RTCP/FeedbackRtpNack.hpp"
+#include "RTC/RTP/Codecs/Tools.hpp"
+#include "RTC/SeqManager.hpp"
+#include "Utils.hpp"
+#include <cmath> // std::round()
+
+namespace RTC
+{
+	namespace RTP
+	{
+		/* Static. */
+
+		static constexpr int64_t InactivityCheckIntervalMs{ 1500 };
+		static constexpr int64_t InactivityCheckIntervalWithDtxMs{ 5000 };
+		// How often the spatial layers of a stream are checked for traffic.
+		// NOTE: A layer that stops doesn't report zero bitrate until the window of
+		// its counter has fully elapsed, so this interval just adds to that
+		// unavoidable detection delay.
+		static constexpr int64_t SpatialLayersActivityCheckIntervalMs{ 1500 };
+
+		/* TransmissionCounter methods. */
+
+		RtpStreamRecv::TransmissionCounter::TransmissionCounter(
+		  SharedInterface* shared, uint8_t spatialLayers, uint8_t temporalLayers, int64_t windowSizeMs)
+		{
+			MS_TRACE();
+
+			// Reserve vectors capacity.
+			this->spatialLayerCounters = std::vector<std::vector<RTC::RtpDataCounter>>(spatialLayers);
+
+			for (auto& spatialLayerCounter : this->spatialLayerCounters)
+			{
+				for (uint8_t tIdx{ 0 }; tIdx < temporalLayers; ++tIdx)
+				{
+					spatialLayerCounter.emplace_back(shared, /*ignorePaddingOnlyPackets*/ true, windowSizeMs);
+				}
+			}
+		}
+
+		void RtpStreamRecv::TransmissionCounter::Update(const RTP::Packet* packet)
+		{
+			MS_TRACE();
+
+			auto spatialLayer  = packet->GetSpatialLayer();
+			auto temporalLayer = packet->GetTemporalLayer();
+
+			// Sanity check. Do not allow spatial layers higher than defined.
+			spatialLayer =
+			  std::min(static_cast<size_t>(spatialLayer), this->spatialLayerCounters.size() - 1);
+
+			// Sanity check. Do not allow temporal layers higher than defined.
+			temporalLayer =
+			  std::min(static_cast<size_t>(temporalLayer), this->spatialLayerCounters[0].size() - 1);
+
+			auto& counter = this->spatialLayerCounters[spatialLayer][temporalLayer];
+
+			counter.Update(packet);
+		}
+
+		int64_t RtpStreamRecv::TransmissionCounter::GetBitrate(int64_t nowMs)
+		{
+			MS_TRACE();
+
+			int64_t rate{ 0 };
+
+			for (auto& spatialLayerCounter : this->spatialLayerCounters)
+			{
+				for (auto& temporalLayerCounter : spatialLayerCounter)
+				{
+					rate += temporalLayerCounter.GetBitrate(nowMs).value_or(0);
+				}
+			}
+
+			return rate;
+		}
+
+		int64_t RtpStreamRecv::TransmissionCounter::GetBitrate(
+		  int64_t nowMs, uint8_t spatialLayer, uint8_t temporalLayer)
+		{
+			MS_TRACE();
+
+			MS_ASSERT(spatialLayer < this->spatialLayerCounters.size(), "spatialLayer too high");
+			MS_ASSERT(
+			  temporalLayer < this->spatialLayerCounters[spatialLayer].size(), "temporalLayer too high");
+
+			// Return 0 if specified layers are not being received.
+			auto& counter = this->spatialLayerCounters[spatialLayer][temporalLayer];
+
+			if (counter.GetBitrate(nowMs).value_or(0) <= 0)
+			{
+				return 0;
+			}
+
+			int64_t rate{ 0 };
+
+			// Iterate all temporal layers of spatial layers previous to the given one.
+			for (uint8_t sIdx{ 0 }; sIdx < spatialLayer; ++sIdx)
+			{
+				for (size_t tIdx{ 0 }; tIdx < this->spatialLayerCounters[sIdx].size(); ++tIdx)
+				{
+					auto& temporalLayerCounter = this->spatialLayerCounters[sIdx][tIdx];
+
+					rate += temporalLayerCounter.GetBitrate(nowMs).value_or(0);
+				}
+			}
+
+			// Add the given spatial layer with up to the given temporal layer.
+			for (uint8_t tIdx{ 0 }; tIdx <= temporalLayer; ++tIdx)
+			{
+				auto& temporalLayerCounter = this->spatialLayerCounters[spatialLayer][tIdx];
+
+				rate += temporalLayerCounter.GetBitrate(nowMs).value_or(0);
+			}
+
+			return rate;
+		}
+
+		int64_t RtpStreamRecv::TransmissionCounter::GetSpatialLayerBitrate(int64_t nowMs, uint8_t spatialLayer)
+		{
+			MS_TRACE();
+
+			MS_ASSERT(spatialLayer < this->spatialLayerCounters.size(), "spatialLayer too high");
+
+			int64_t rate{ 0 };
+
+			for (size_t tIdx{ 0 }; tIdx < this->spatialLayerCounters[spatialLayer].size(); ++tIdx)
+			{
+				auto& temporalLayerCounter = this->spatialLayerCounters[spatialLayer][tIdx];
+
+				rate += temporalLayerCounter.GetBitrate(nowMs).value_or(0);
+			}
+
+			return rate;
+		}
+
+		int64_t RtpStreamRecv::TransmissionCounter::GetLayerBitrate(
+		  int64_t nowMs, uint8_t spatialLayer, uint8_t temporalLayer)
+		{
+			MS_TRACE();
+
+			MS_ASSERT(spatialLayer < this->spatialLayerCounters.size(), "spatialLayer too high");
+			MS_ASSERT(
+			  temporalLayer < this->spatialLayerCounters[spatialLayer].size(), "temporalLayer too high");
+
+			auto& counter = this->spatialLayerCounters[spatialLayer][temporalLayer];
+
+			return counter.GetBitrate(nowMs).value_or(0);
+		}
+
+		uint64_t RtpStreamRecv::TransmissionCounter::GetPacketCount() const
+		{
+			MS_TRACE();
+
+			uint64_t packetCount{ 0 };
+
+			for (const auto& spatialLayerCounter : this->spatialLayerCounters)
+			{
+				for (const auto& temporalLayerCounter : spatialLayerCounter)
+				{
+					packetCount += temporalLayerCounter.GetPacketCount();
+				}
+			}
+
+			return packetCount;
+		}
+
+		uint64_t RtpStreamRecv::TransmissionCounter::GetBytes() const
+		{
+			MS_TRACE();
+
+			uint64_t bytes{ 0 };
+
+			for (const auto& spatialLayerCounter : this->spatialLayerCounters)
+			{
+				for (const auto& temporalLayerCounter : spatialLayerCounter)
+				{
+					bytes += temporalLayerCounter.GetBytes();
+				}
+			}
+
+			return bytes;
+		}
+
+		/* Instance methods. */
+
+		RtpStreamRecv::RtpStreamRecv(
+		  RTP::RtpStreamRecv::Listener* listener,
+		  SharedInterface* shared,
+		  RTP::RtpStream::Params& params,
+		  int64_t sendNackDelayMs,
+		  bool useRtpInactivityCheck,
+		  std::string_view diagnosticProducerId,
+		  std::string_view diagnosticTransportId)
+		  : RTP::RtpStream::RtpStream(listener, shared, params, 10),
+		    sendNackDelayMs(sendNackDelayMs),
+		    useRtpInactivityCheck(useRtpInactivityCheck),
+		    diagnosticProducerId(diagnosticProducerId),
+		    diagnosticTransportId(diagnosticTransportId),
+		    transmissionCounter(
+		      shared, params.spatialLayers, params.temporalLayers, this->params.useDtx ? 6000 : 2500),
+		    mediaTransmissionCounter(shared, /*ignorePaddingOnlyPackets*/ true)
+		{
+			MS_TRACE();
+
+			if (this->params.useNack)
+			{
+				this->nackGenerator.reset(new RTC::NackGenerator(this, this->shared, this->sendNackDelayMs));
+			}
+
+			this->inactive = false;
+
+			if (this->useRtpInactivityCheck)
+			{
+				// Run the RTP inactivity periodic timer (use a different timeout if DTX is
+				// enabled).
+				this->inactivityCheckPeriodicTimer =
+				  this->shared->CreateTimer(this, "rtp-stream-recv-inactivity-check");
+
+				this->inactivityCheckPeriodicTimer->Start(
+				  this->params.useDtx ? InactivityCheckIntervalWithDtxMs : InactivityCheckIntervalMs);
+			}
+
+			// A stream with more than a spatial layer carries all of them within the
+			// same SSRC, so the inactivity check above cannot tell that just one of
+			// them stopped. Watch their traffic separately.
+			if (GetSpatialLayers() > 1)
+			{
+				this->spatialLayersActivity.assign(GetSpatialLayers(), false);
+
+				this->spatialLayersActivityCheckPeriodicTimer =
+				  this->shared->CreateTimer(this, "rtp-stream-recv-spatial-layers-activity-check");
+
+				this->spatialLayersActivityCheckPeriodicTimer->Start(
+				  SpatialLayersActivityCheckIntervalMs, SpatialLayersActivityCheckIntervalMs);
+			}
+		}
+
+		RtpStreamRecv::~RtpStreamRecv()
+		{
+			MS_TRACE();
+
+			// Close the RTP inactivity check periodic timer.
+			delete this->inactivityCheckPeriodicTimer;
+			this->inactivityCheckPeriodicTimer = nullptr;
+
+			// Close the spatial layers activity check periodic timer.
+			delete this->spatialLayersActivityCheckPeriodicTimer;
+			this->spatialLayersActivityCheckPeriodicTimer = nullptr;
+		}
+
+		flatbuffers::Offset<FBS::RtpStream::Stats> RtpStreamRecv::FillBufferStats(
+		  flatbuffers::FlatBufferBuilder& builder)
+		{
+			MS_TRACE();
+
+			const int64_t nowMs = this->shared->GetTimeMs();
+
+			auto baseStats = RTP::RtpStream::FillBufferStats(builder);
+
+			std::vector<flatbuffers::Offset<FBS::RtpStream::BitrateByLayer>> bitrateByLayer;
+
+			if (GetSpatialLayers() > 1 || GetTemporalLayers() > 1)
+			{
+				for (uint8_t sIdx = 0; sIdx < GetSpatialLayers(); ++sIdx)
+				{
+					for (uint8_t tIdx = 0; tIdx < GetTemporalLayers(); ++tIdx)
+					{
+						auto layer = std::to_string(sIdx) + "." + std::to_string(tIdx);
+
+						bitrateByLayer.emplace_back(
+						  FBS::RtpStream::CreateBitrateByLayerDirect(
+						    builder, layer.c_str(), static_cast<uint64_t>(GetBitrate(nowMs, sIdx, tIdx))));
+					}
+				}
+			}
+
+			auto stats = FBS::RtpStream::CreateRecvStatsDirect(
+			  builder,
+			  baseStats,
+			  this->transmissionCounter.GetPacketCount(),
+			  this->transmissionCounter.GetBytes(),
+			  static_cast<uint64_t>(this->transmissionCounter.GetBitrate(nowMs)),
+			  std::addressof(bitrateByLayer));
+
+			return FBS::RtpStream::CreateStats(builder, FBS::RtpStream::StatsData::RecvStats, stats.Union());
+		}
+
+		bool RtpStreamRecv::ReceivePacket(RTP::Packet* packet, int64_t receivedAtUs)
+		{
+			MS_TRACE();
+
+			// Call the parent method.
+			if (!RTP::RtpStream::ReceiveStreamPacket(packet))
+			{
+				MS_WARN_TAG(rtp, "packet discarded");
+
+				return false;
+			}
+
+			// Process the packet at codec level.
+			if (packet->GetPayloadType() == GetPayloadType())
+			{
+				RTP::Codecs::Tools::ProcessRtpPacket(packet, GetMimeType(), this->templateDependencyStructure);
+			}
+
+			// Pass the packet to the NackGenerator.
+			if (this->params.useNack)
+			{
+				// If there is RTX just provide the NackGenerator with the packet.
+				if (HasRtx())
+				{
+					this->nackGenerator->ReceivePacket(packet, /*isRecovered*/ false);
+				}
+				// If there is no RTX and NackGenerator returns true it means that it
+				// was a NACKed packet.
+				else if (this->nackGenerator->ReceivePacket(packet, /*isRecovered*/ false))
+				{
+					// Mark the packet as retransmitted and repaired.
+					RTP::RtpStream::PacketRetransmitted(packet);
+					RTP::RtpStream::PacketRepaired(packet);
+				}
+			}
+
+			// Calculate jitter.
+			CalculateJitter(packet->GetTimestamp(), receivedAtUs);
+
+			// Store the capture instant if the packet carries it.
+			{
+				uint64_t absCaptureTimestamp{ 0 };
+				int64_t estimatedCaptureClockOffset{ 0 };
+
+				// NOTE: A zeroed capture timestamp gives no capture instant to store.
+				if (packet->ReadAbsCaptureTime(absCaptureTimestamp, estimatedCaptureClockOffset) && absCaptureTimestamp != 0)
+				{
+					Utils::Time::Ntp ntp{}; // NOLINT(cppcoreguidelines-pro-type-member-init)
+
+					ntp.seconds   = static_cast<uint32_t>(absCaptureTimestamp >> 32);
+					ntp.fractions = static_cast<uint32_t>(absCaptureTimestamp);
+
+					// The capture timestamp belongs to the clock of the capture system, which is
+					// not the clock of the sender of this stream when the media comes from
+					// somewhere else. The capture clock offset gives the instant back in the clock
+					// of the sender, which is the one this stream is estimated against:
+					//
+					//   capture NTP clock = sender NTP clock + capture clock offset
+					const auto captureAtUs =
+					  Utils::Time::NtpToTimeUs(ntp) - Utils::Time::Q32x32ToTimeUs(estimatedCaptureClockOffset);
+
+					// NOTE: A capture instant that is not positive means a capture clock offset
+					// that cannot be true, so there is nothing to store.
+					if (captureAtUs > 0)
+					{
+						this->lastAbsCaptureTime = AbsCaptureTime{
+							.ts    = packet->GetTimestamp(),
+							.ntpUs = captureAtUs,
+						};
+					}
+				}
+			}
+
+			// Increase transmission counter.
+			this->transmissionCounter.Update(packet);
+
+			// Increase media transmission counter.
+			this->mediaTransmissionCounter.Update(packet);
+
+			// Padding only packet, do not consider it for stream activation.
+			if (packet->GetPayloadLength() == 0)
+			{
+				return true;
+			}
+
+			// Not inactive anymore.
+			if (this->inactive)
+			{
+				this->inactive = false;
+
+				ResetScore(10, /*notify*/ true);
+			}
+
+			// Restart the inactivityCheckPeriodicTimer.
+			if (this->inactivityCheckPeriodicTimer)
+			{
+				this->diagnosticActivity.mediaMs = this->shared->GetTimeMs();
+				this->inactivityCheckPeriodicTimer->Restart();
+			}
+
+			return true;
+		}
+
+		bool RtpStreamRecv::ReceiveRtxPacket(RTP::Packet* packet)
+		{
+			MS_TRACE();
+
+			if (!this->params.useNack)
+			{
+				MS_WARN_TAG(rtx, "NACK not supported");
+
+				return false;
+			}
+
+			MS_ASSERT(packet->GetSsrc() == this->params.rtxSsrc, "invalid ssrc on RTX packet");
+
+			// Check that the payload type corresponds to the one negotiated.
+			if (packet->GetPayloadType() != this->params.rtxPayloadType)
+			{
+				MS_WARN_TAG(
+				  rtx,
+				  "ignoring RTX packet with invalid payload type [ssrc:%" PRIu32 ", seq:%" PRIu16
+				  ", pt:%" PRIu8 "]",
+				  packet->GetSsrc(),
+				  packet->GetSequenceNumber(),
+				  packet->GetPayloadType());
+
+				return false;
+			}
+
+			if (HasRtx())
+			{
+				if (!this->rtxStream->ReceivePacket(packet))
+				{
+					MS_WARN_TAG(rtx, "RTX packet discarded");
+
+					return false;
+				}
+			}
+
+#if MS_LOG_DEV_LEVEL == 3
+			// Get the RTX packet sequence number for logging purposes.
+			auto rtxSeq = packet->GetSequenceNumber();
+#endif
+
+			// Get the original RTP packet.
+			if (!packet->RtxDecode(this->params.payloadType, this->params.ssrc))
+			{
+				MS_DEBUG_DEV(
+				  "ignoring empty RTX packet [ssrc:%" PRIu32 ", seq:%" PRIu16 ", pt:%" PRIu8 "]",
+				  packet->GetSsrc(),
+				  packet->GetSequenceNumber(),
+				  packet->GetPayloadType());
+
+				return false;
+			}
+
+			MS_DEBUG_DEV(
+			  "received RTX packet [ssrc:%" PRIu32 ", seq:%" PRIu16 "] recovering original [ssrc:%" PRIu32
+			  ", seq:%" PRIu16 "]",
+			  this->params.rtxSsrc,
+			  rtxSeq,
+			  packet->GetSsrc(),
+			  packet->GetSequenceNumber());
+
+			// RTX can carry old media for recovery or bandwidth probing. Applying
+			// primary-stream misorder/restart detection to it would reject requested
+			// repairs and let duplicate probes reset the primary sequence state.
+			// Only advance that state for newer media; the NackGenerator below
+			// decides whether an older packet is still needed or is a duplicate.
+			if (
+			  RTC::SeqManager<uint16_t>::IsSeqHigherThan(packet->GetSequenceNumber(), this->maxSeq) &&
+			  !RTP::RtpStream::UpdateSeq(packet))
+			{
+				MS_WARN_TAG(
+				  rtx,
+				  "invalid RTX packet [ssrc:%" PRIu32 ", seq:%" PRIu16 "]",
+				  packet->GetSsrc(),
+				  packet->GetSequenceNumber());
+
+				return false;
+			}
+
+			// Process the packet at codec level.
+			if (packet->GetPayloadType() == GetPayloadType())
+			{
+				RTP::Codecs::Tools::ProcessRtpPacket(packet, GetMimeType(), this->templateDependencyStructure);
+			}
+
+			// Mark the packet as retransmitted.
+			RTP::RtpStream::PacketRetransmitted(packet);
+
+			// Pass the packet to the NackGenerator and return true just if this was a
+			// NACKed packet or a RTX packet containing a non yet seen original RTP
+			// packet.
+			if (this->nackGenerator->ReceivePacket(packet, /*isRecovered*/ true))
+			{
+				// Mark the packet as repaired.
+				RTP::RtpStream::PacketRepaired(packet);
+
+				// Increase transmission counter.
+				this->transmissionCounter.Update(packet);
+
+				// Padding only packet, do not consider it for stream activation.
+				if (packet->GetPayloadLength() == 0)
+				{
+					return true;
+				}
+
+				// Not inactive anymore.
+				if (this->inactive)
+				{
+					this->inactive = false;
+
+					ResetScore(10, /*notify*/ true);
+				}
+
+				// Restart the inactivityCheckPeriodicTimer.
+				if (this->inactivityCheckPeriodicTimer)
+				{
+					this->diagnosticActivity.mediaMs = this->shared->GetTimeMs();
+					this->inactivityCheckPeriodicTimer->Restart();
+				}
+
+				return true;
+			}
+
+			return false;
+		}
+
+		RTC::RTCP::ReceiverReport* RtpStreamRecv::GetRtcpReceiverReport()
+		{
+			MS_TRACE();
+
+			// Ask the listener for the worst remote fraction lost.
+			const uint8_t worstRemoteFractionLost =
+			  this->params.useInBandFec ? static_cast<RTP::RtpStreamRecv::Listener*>(this->listener)
+			                                ->OnRtpStreamNeedWorstRemoteFractionLost(this)
+				                          : 0;
+
+			if (worstRemoteFractionLost > 0)
+			{
+				MS_DEBUG_TAG(rtcp, "using worst remote fraction lost:%" PRIu8, worstRemoteFractionLost);
+			}
+
+			auto* report = new RTC::RTCP::ReceiverReport();
+
+			report->SetSsrc(GetSsrc());
+
+			const int32_t prevPacketsLost = this->packetsLost;
+
+			// Calculate packets expected and lost.
+			auto expected = GetExpectedPackets();
+
+			// NOTE: The expected count is the extended sequence number arithmetic of RFC
+			// 3550, so it wraps at 32 bits, whereas the received one does not wrap at
+			// all. Each subtraction below is therefore made in the width that keeps it
+			// right: this one truncates the received count so that both wrap together,
+			// and the interval further down is taken in full width, where it is exact.
+			const auto received = static_cast<uint32_t>(this->mediaTransmissionCounter.GetPacketCount());
+
+			if (expected > received)
+			{
+				this->packetsLost = static_cast<int32_t>(expected - received);
+			}
+			else
+			{
+				this->packetsLost = 0;
+			}
+
+			// Calculate fraction lost.
+			//
+			// NOTE: Reading the difference of the expected count as signed makes a
+			// sequence number re-sync, which restarts the count, come out negative.
+			const int64_t expectedInterval = static_cast<int32_t>(expected - this->expectedPrior);
+
+			this->expectedPrior = expected;
+
+			const auto receivedInterval =
+			  static_cast<int64_t>(this->mediaTransmissionCounter.GetPacketCount() - this->receivedPrior);
+
+			this->receivedPrior = this->mediaTransmissionCounter.GetPacketCount();
+
+			const int64_t lostInterval = expectedInterval - receivedInterval;
+
+			if (expectedInterval <= 0 || lostInterval <= 0)
+			{
+				this->fractionLost = 0;
+			}
+			else
+			{
+				// A fixed point number with 8 bits of fraction, so a whole interval lost
+				// gives 256, one more than the field can hold.
+				const double fraction = std::round(static_cast<double>(lostInterval << 8) / expectedInterval);
+
+				this->fractionLost = static_cast<uint8_t>(std::min(fraction, 255.0));
+			}
+
+			// Worst remote fraction lost is not worse than local one.
+			if (worstRemoteFractionLost <= this->fractionLost)
+			{
+				this->reportedPacketsLost += (this->packetsLost - prevPacketsLost);
+
+				report->SetTotalLost(this->reportedPacketsLost);
+				report->SetFractionLost(this->fractionLost);
+			}
+			else
+			{
+				// Recalculate packetsLost.
+				//
+				// NOTE: The expected interval is not positive when a sequence number
+				// re-sync restarted the count, and then nothing was expected to be lost.
+				const auto newLostInterval = static_cast<uint32_t>(
+				  (worstRemoteFractionLost * std::max<int64_t>(expectedInterval, 0)) >> 8);
+
+				this->reportedPacketsLost += newLostInterval;
+
+				report->SetTotalLost(this->reportedPacketsLost);
+				report->SetFractionLost(worstRemoteFractionLost);
+			}
+
+			// Fill the rest of the report.
+			report->SetLastSeq(static_cast<uint32_t>(this->maxSeq) + this->cycles);
+			report->SetJitter(this->jitter);
+
+			if (this->lastSenderReportTiming.has_value())
+			{
+				const auto& senderReportTiming = this->lastSenderReportTiming.value();
+				// Get delay in microseconds.
+				const int64_t delayUs = this->shared->GetTimeUs() - senderReportTiming.receivedAtUs;
+				// Express delay in units of 1/65536 seconds.
+				auto dlsr = static_cast<uint32_t>((delayUs / 1000000) << 16);
+
+				dlsr |= static_cast<uint32_t>(((delayUs % 1000000) * 65536) / 1000000);
+
+				report->SetDelaySinceLastSenderReport(dlsr);
+				report->SetLastSenderReport(senderReportTiming.compactNtp);
+			}
+			else
+			{
+				report->SetDelaySinceLastSenderReport(0);
+				report->SetLastSenderReport(0);
+			}
+
+			return report;
+		}
+
+		RTC::RTCP::ReceiverReport* RtpStreamRecv::GetRtxRtcpReceiverReport()
+		{
+			MS_TRACE();
+
+			if (HasRtx())
+			{
+				return this->rtxStream->GetRtcpReceiverReport();
+			}
+
+			return nullptr;
+		}
+
+		void RtpStreamRecv::ReceiveRtcpSenderReport(RTC::RTCP::SenderReport* report, int64_t receivedAtUs)
+		{
+			MS_TRACE();
+
+			// Update info about last Sender Report.
+			//
+			// NOTE: A sender with no wall clock may report a zeroed NTP timestamp, which
+			// gives nothing to store.
+			if (report->GetNtpSec() != 0 || report->GetNtpFrac() != 0)
+			{
+				uint32_t compactNtp = report->GetNtpSec() << 16;
+
+				compactNtp += report->GetNtpFrac() >> 16;
+
+				this->lastSenderReportTiming = SenderReportTiming{
+					.compactNtp   = compactNtp,
+					.receivedAtUs = receivedAtUs,
+				};
+
+				Utils::Time::Ntp ntp{}; // NOLINT(cppcoreguidelines-pro-type-member-init)
+
+				ntp.seconds   = report->GetNtpSec();
+				ntp.fractions = report->GetNtpFrac();
+
+				this->lastSenderReportMapping = RTP::RtpStream::SenderReportMapping{
+					.ntpUs = Utils::Time::NtpToTimeUs(ntp),
+					.ts    = report->GetRtpTs(),
+				};
+			}
+
+			// Update the score with the current RR.
+			UpdateScore();
+		}
+
+		void RtpStreamRecv::ReceiveRtxRtcpSenderReport(RTC::RTCP::SenderReport* report, int64_t receivedAtUs)
+		{
+			MS_TRACE();
+
+			if (HasRtx())
+			{
+				this->rtxStream->ReceiveRtcpSenderReport(report, receivedAtUs);
+			}
+		}
+
+		void RtpStreamRecv::ReceiveRtcpXrDelaySinceLastRr(
+		  RTC::RTCP::DelaySinceLastRr::SsrcInfo* ssrcInfo, int64_t receivedAtUs)
+		{
+			MS_TRACE();
+
+			/* Calculate RTT. */
+
+			// Get the NTP representation of the time at which the report arrived, which
+			// is what the round trip is measured against.
+			auto ntp = Utils::Time::TimeUsToNtp(receivedAtUs + this->shared->GetNtpOffsetUs());
+
+			// Get the compact NTP representation of the arrival time.
+			uint32_t compactNtp = (ntp.seconds & 0x0000FFFF) << 16;
+
+			compactNtp |= (ntp.fractions & 0xFFFF0000) >> 16;
+
+			const uint32_t lastRr = ssrcInfo->GetLastReceiverReport();
+			const uint32_t dlrr   = ssrcInfo->GetDelaySinceLastReceiverReport();
+
+			// If no Receiver Extended Report was received by the remote endpoint yet,
+			// the Sender Extended Report carries no RTT, so the last one is kept.
+			if (lastRr == 0)
+			{
+				return;
+			}
+
+			// NOTE: The subtraction wraps around along with the compact NTP
+			// representation, which is what the conversion expects.
+			this->rttMs =
+			  static_cast<float>(Utils::Time::CompactNtpRttToTimeUs(compactNtp - dlrr - lastRr)) / 1000;
+
+			// Tell it to the NackGenerator.
+			if (this->params.useNack)
+			{
+				this->nackGenerator->UpdateRttMs(static_cast<int64_t>(this->rttMs));
+			}
+		}
+
+		std::optional<int64_t> RtpStreamRecv::GetRemoteCaptureAtUsFromAbsCaptureTime(uint32_t ts) const
+		{
+			MS_TRACE();
+
+			if (!this->lastAbsCaptureTime.has_value())
+			{
+				return std::nullopt;
+			}
+
+			const auto& absCaptureTime = this->lastAbsCaptureTime.value();
+
+			return InterpolateRemoteCaptureAtUs(
+			  absCaptureTime.ntpUs,
+			  absCaptureTime.ts,
+			  ts,
+			  RtpStreamRecv::MaxAbsCaptureTimeInterpolationMs * 1000);
+		}
+
+		std::optional<int64_t> RtpStreamRecv::GetRemoteCaptureAtUsFromSenderReport(uint32_t ts) const
+		{
+			MS_TRACE();
+
+			if (!this->lastSenderReportMapping.has_value())
+			{
+				return std::nullopt;
+			}
+
+			const auto& senderReportMapping = this->lastSenderReportMapping.value();
+
+			return InterpolateRemoteCaptureAtUs(
+			  senderReportMapping.ntpUs,
+			  senderReportMapping.ts,
+			  ts,
+			  RtpStreamRecv::MaxSenderReportInterpolationMs * 1000);
+		}
+
+		std::optional<int64_t> RtpStreamRecv::InterpolateRemoteCaptureAtUs(
+		  int64_t referenceNtpUs, uint32_t referenceTs, uint32_t ts, int64_t maxDistanceUs) const
+		{
+			MS_TRACE();
+
+			const auto clockRate = GetClockRate();
+
+			if (clockRate == 0)
+			{
+				return std::nullopt;
+			}
+
+			// Distance in RTP timestamp units, taking wrap around into account.
+			const auto distanceTs    = static_cast<int64_t>(static_cast<int32_t>(ts - referenceTs));
+			const int64_t distanceUs = (distanceTs * 1000000) / static_cast<int64_t>(clockRate);
+			// NOTE: The negation is safe since `distanceUs` comes from a 32 bits
+			// distance scaled down by the clock rate.
+			const int64_t absDistanceUs = distanceUs < 0 ? -distanceUs : distanceUs;
+
+			if (absDistanceUs > maxDistanceUs)
+			{
+				return std::nullopt;
+			}
+
+			const int64_t captureAtUs = referenceNtpUs + distanceUs;
+
+			// The reference does not map into a valid capture instant, so the remote
+			// endpoint is reporting nonsense.
+			if (captureAtUs < 0)
+			{
+				MS_WARN_2TAGS(
+				  rtp, rtcp, "invalid interpolated capture instant [distanceUs:%" PRIi64 "]", distanceUs);
+
+				return std::nullopt;
+			}
+
+			return captureAtUs;
+		}
+
+		void RtpStreamRecv::RequestKeyFrame()
+		{
+			MS_TRACE();
+
+			if (this->params.usePli)
+			{
+				MS_DEBUG_2TAGS(rtcp, rtx, "sending PLI [ssrc:%" PRIu32 "]", GetSsrc());
+
+				// Sender SSRC should be 0 since there is no media sender involved, but
+				// some implementations like gstreamer will fail to process it otherwise.
+				RTC::RTCP::FeedbackPsPliPacket packet(GetSsrc(), GetSsrc());
+
+				packet.Serialize(RTC::RTCP::SerializationBuffer);
+
+				this->pliCount++;
+
+				// Notify the listener.
+				static_cast<RTP::RtpStreamRecv::Listener*>(this->listener)
+				  ->OnRtpStreamSendRtcpPacket(this, std::addressof(packet));
+			}
+			else if (this->params.useFir)
+			{
+				MS_DEBUG_2TAGS(rtcp, rtx, "sending FIR [ssrc:%" PRIu32 "]", GetSsrc());
+
+				// Sender SSRC should be 0 since there is no media sender involved, but
+				// some implementations like gstreamer will fail to process it otherwise.
+				RTC::RTCP::FeedbackPsFirPacket packet(GetSsrc(), GetSsrc());
+				auto* item = new RTC::RTCP::FeedbackPsFirItem(GetSsrc(), ++this->firSeqNumber);
+
+				packet.AddItem(item);
+				packet.Serialize(RTC::RTCP::SerializationBuffer);
+
+				this->firCount++;
+
+				// Notify the listener.
+				static_cast<RTP::RtpStreamRecv::Listener*>(this->listener)
+				  ->OnRtpStreamSendRtcpPacket(this, std::addressof(packet));
+			}
+		}
+
+		void RtpStreamRecv::Pause()
+		{
+			MS_TRACE();
+			this->diagnosticActivity.paused = true;
+			this->diagnosticActivity.pauseMs = this->shared->GetTimeMs();
+
+			if (this->inactivityCheckPeriodicTimer)
+			{
+				this->inactivityCheckPeriodicTimer->Stop();
+			}
+
+			if (this->params.useNack)
+			{
+				this->nackGenerator->Reset();
+			}
+
+			// Reset jitter.
+			this->transit = 0;
+			this->jitter  = 0;
+		}
+
+		void RtpStreamRecv::Resume()
+		{
+			MS_TRACE();
+			this->diagnosticActivity.paused = false;
+			this->diagnosticActivity.resumeMs = this->shared->GetTimeMs();
+
+			if (this->inactivityCheckPeriodicTimer && !this->inactive)
+			{
+				this->inactivityCheckPeriodicTimer->Restart();
+			}
+		}
+
+		void RtpStreamRecv::CalculateJitter(uint32_t rtpTimestamp, int64_t receivedAtUs)
+		{
+			MS_TRACE();
+
+			if (GetClockRate() == 0)
+			{
+				return;
+			}
+
+			// The arrival time expressed in the clock rate of the stream, which is
+			// the R of RFC 3550 section 6.4.1.
+			//
+			// NOTE: The seconds and the sub-second parts are converted separately
+			// because a single multiplication of the whole time by the clock rate
+			// would overflow on a long lived host.
+			const auto arrivalTs =
+			  static_cast<uint32_t>((receivedAtUs / 1000000) * GetClockRate()) +
+			  static_cast<uint32_t>(((receivedAtUs % 1000000) * GetClockRate()) / 1000000);
+
+			// NOTE: Based on https://github.com/versatica/mediasoup/issues/1018.
+			const auto transit = static_cast<int32_t>(arrivalTs - rtpTimestamp);
+			// NOTE: Wider than its operands because the difference of two int32_t does
+			// not fit in an int32_t, and neither would negating its lowest value.
+			int64_t d = static_cast<int64_t>(transit) - this->transit;
+
+			// First transit calculation, save and return.
+			if (this->transit == 0)
+			{
+				this->transit = transit;
+
+				return;
+			}
+
+			this->transit = transit;
+
+			if (d < 0)
+			{
+				d = -d;
+			}
+
+			this->jitter += (1. / 16.) * (static_cast<float>(d) - this->jitter);
+		}
+
+		void RtpStreamRecv::UpdateScore()
+		{
+			MS_TRACE();
+
+			// Calculate number of packets expected in this interval.
+			const auto totalExpected = GetExpectedPackets();
+			const uint32_t expected  = totalExpected - this->expectedPriorScore;
+
+			this->expectedPriorScore = totalExpected;
+
+			// Calculate number of packets received in this interval.
+			const auto totalReceived = this->mediaTransmissionCounter.GetPacketCount();
+			const auto received      = totalReceived - this->receivedPriorScore;
+
+			this->receivedPriorScore = totalReceived;
+
+			// Calculate number of packets lost in this interval.
+			uint64_t lost;
+
+			if (expected < received)
+			{
+				lost = 0;
+			}
+			else
+			{
+				lost = expected - received;
+			}
+
+			// Calculate number of packets repaired in this interval.
+			const auto totalRepaired = this->packetsRepaired;
+
+			auto repaired = totalRepaired - this->repairedPriorScore;
+
+			this->repairedPriorScore = totalRepaired;
+
+			// Calculate number of packets retransmitted in this interval.
+			const auto totatRetransmitted = this->packetsRetransmitted;
+
+			auto retransmitted = totatRetransmitted - this->retransmittedPriorScore;
+
+			this->retransmittedPriorScore = totatRetransmitted;
+
+			if (this->inactive)
+			{
+				return;
+			}
+
+			// We didn't expect more packets to come.
+			if (expected == 0)
+			{
+				RTP::RtpStream::UpdateScore(10);
+
+				return;
+			}
+
+			// We expected packets but received none of them, so there is nothing to
+			// compute (and ratios below would divide by zero).
+			if (received == 0)
+			{
+				RTP::RtpStream::UpdateScore(0);
+
+				return;
+			}
+
+			lost = std::min(lost, received);
+
+			if (repaired > lost)
+			{
+				if (HasRtx())
+				{
+					// NOTE: The excess has to be discounted before clamping, since once
+					// `repaired` has been clamped there is no excess left to tell.
+					retransmitted -= repaired - lost;
+					repaired = lost;
+				}
+				else
+				{
+					lost = repaired;
+				}
+			}
+
+#if MS_LOG_DEV_LEVEL == 3
+			MS_DEBUG_TAG(
+			  score,
+			  "[totalExpected:%" PRIu32 ", totalReceived:%" PRIu64 ", totalRepaired:%" PRIu64,
+			  totalExpected,
+			  totalReceived,
+			  totalRepaired);
+
+			MS_DEBUG_TAG(
+			  score,
+			  "fixed values [expected:%" PRIu32 ", received:%" PRIu64 ", lost:%" PRIu64
+			  ", repaired:%" PRIu64 ", retransmitted:%" PRIu64,
+			  expected,
+			  received,
+			  lost,
+			  repaired,
+			  retransmitted);
+#endif
+
+			auto repairedRatio  = static_cast<float>(repaired) / static_cast<float>(received);
+			auto repairedWeight = std::pow(1 / (repairedRatio + 1), 4);
+
+			MS_ASSERT(retransmitted >= repaired, "repaired packets cannot be more than retransmitted ones");
+
+			if (retransmitted > 0)
+			{
+				repairedWeight *= static_cast<float>(repaired) / retransmitted;
+			}
+
+			lost = static_cast<uint64_t>(lost - (repaired * repairedWeight));
+
+			auto deliveredRatio = static_cast<float>(received - lost) / static_cast<float>(received);
+			auto score          = static_cast<uint8_t>(std::round(std::pow(deliveredRatio, 4) * 10));
+
+#if MS_LOG_DEV_LEVEL == 3
+			MS_DEBUG_TAG(
+			  score,
+			  "[deliveredRatio:%f, repairedRatio:%f, repairedWeight:%f, new lost:%" PRIu64
+			  ", score:%" PRIu8 "]",
+			  deliveredRatio,
+			  repairedRatio,
+			  repairedWeight,
+			  lost,
+			  score);
+#endif
+
+			// Call the parent method for update score.
+			RTP::RtpStream::UpdateScore(score);
+		}
+
+		void RtpStreamRecv::UserOnSequenceNumberReset()
+		{
+			MS_TRACE();
+
+			// Nothing to do.
+		}
+
+		inline void RtpStreamRecv::OnTimer(TimerHandleInterface* timer)
+		{
+			MS_TRACE();
+
+			if (timer == this->inactivityCheckPeriodicTimer)
+			{
+				this->inactive = true;
+
+				if (GetScore() != 0)
+				{
+					const auto nowMs = this->shared->GetTimeMs();
+					const auto& activity = this->diagnosticActivity;
+					MS_WARN_2TAGS(
+					  rtp, score,
+					  "RTP inactivity detected, resetting score to 0 [ssrc:%" PRIu32
+					  ", producer:%s, transport:%s, kind:%s, encodingIdx:%" PRIu32 ", workerMs:%" PRId64
+					  ", timeoutMs:%" PRId64 ", mediaObserved:%u, lastMediaMs:%" PRIu64
+					  ", paused:%u, pauseObserved:%u, lastPauseMs:%" PRIu64
+					  ", resumeObserved:%u, lastResumeMs:%" PRIu64 "]",
+					  GetSsrc(), this->diagnosticProducerId.Get(), this->diagnosticTransportId.Get(),
+					  GetMimeType().type == RTC::RtpCodecMimeType::Type::VIDEO ? "video" : "audio",
+					  GetEncodingIdx(), nowMs, this->inactivityCheckPeriodicTimer->GetTimeoutMs(),
+					  unsigned(activity.mediaMs.has_value()), activity.mediaMs.value_or(0),
+					  unsigned(activity.paused), unsigned(activity.pauseMs.has_value()), activity.pauseMs.value_or(0),
+					  unsigned(activity.resumeMs.has_value()), activity.resumeMs.value_or(0));
+				}
+
+				ResetScore(0, /*notify*/ true);
+			}
+			else if (timer == this->spatialLayersActivityCheckPeriodicTimer)
+			{
+				const int64_t nowMs = this->shared->GetTimeMs();
+
+				for (uint8_t spatialLayer{ 0 }; spatialLayer < GetSpatialLayers(); ++spatialLayer)
+				{
+					const bool isActive =
+					  this->transmissionCounter.GetSpatialLayerBitrate(nowMs, spatialLayer) > 0;
+
+					if (isActive == this->spatialLayersActivity[spatialLayer])
+					{
+						continue;
+					}
+
+					this->spatialLayersActivity[spatialLayer] = isActive;
+
+					MS_DEBUG_2TAGS(
+					  rtp,
+					  svc,
+					  "spatial layer activity changed [ssrc:%" PRIu32 ", spatialLayer:%" PRIu8 ", isActive:%s]",
+					  GetSsrc(),
+					  spatialLayer,
+					  isActive ? "true" : "false");
+
+					static_cast<RTP::RtpStreamRecv::Listener*>(this->listener)
+					  ->OnRtpStreamSpatialLayerActivityChanged(this, spatialLayer, isActive);
+				}
+			}
+		}
+
+		inline void RtpStreamRecv::OnNackGeneratorNackRequired(const std::vector<uint16_t>& seqNumbers)
+		{
+			MS_TRACE();
+
+			MS_ASSERT(this->params.useNack, "NACK required but not supported");
+
+			MS_DEBUG_TAG(
+			  rtx,
+			  "triggering NACK [ssrc:%" PRIu32 ", first seq:%" PRIu16 ", num packets:%zu]",
+			  this->params.ssrc,
+			  seqNumbers[0],
+			  seqNumbers.size());
+
+			RTC::RTCP::FeedbackRtpNackPacket packet(0, GetSsrc());
+
+			auto it        = seqNumbers.begin();
+			const auto end = seqNumbers.end();
+			size_t numPacketsRequested{ 0 };
+
+			while (it != end)
+			{
+				uint16_t seq;
+				uint16_t bitmask{ 0 };
+
+				seq = *it;
+				++it;
+
+				while (it != end)
+				{
+					const uint16_t shift = *it - seq - 1;
+
+					if (shift > 15)
+					{
+						break;
+					}
+
+					bitmask |= (1 << shift);
+					++it;
+				}
+
+				auto* nackItem = new RTC::RTCP::FeedbackRtpNackItem(seq, bitmask);
+
+				packet.AddItem(nackItem);
+
+				numPacketsRequested += nackItem->CountRequestedPackets();
+			}
+
+			// Ensure that the RTCP packet fits into the RTCP buffer.
+			if (packet.GetSize() > RTC::RTCP::SerializationBufferSize)
+			{
+				MS_WARN_TAG(rtx, "cannot send RTCP NACK packet, size too big (%zu bytes)", packet.GetSize());
+
+				return;
+			}
+
+			this->nackCount++;
+			this->nackPacketCount += numPacketsRequested;
+
+			packet.Serialize(RTC::RTCP::SerializationBuffer);
+
+			// Notify the listener.
+			static_cast<RTP::RtpStreamRecv::Listener*>(this->listener)->OnRtpStreamSendRtcpPacket(this, &packet);
+		}
+
+		inline void RtpStreamRecv::OnNackGeneratorKeyFrameRequired()
+		{
+			MS_TRACE();
+
+			MS_DEBUG_TAG(rtx, "requesting key frame [ssrc:%" PRIu32 "]", this->params.ssrc);
+
+			RequestKeyFrame();
+		}
+	} // namespace RTP
+} // namespace RTC

@@ -1,0 +1,136 @@
+#ifndef MS_RTC_CONSTS_HPP
+#define MS_RTC_CONSTS_HPP
+
+#include "common.hpp"
+#include <string_view>
+
+namespace RTC
+{
+	namespace Consts
+	{
+		/**
+		 * Bytes an IPv4 header takes, without options.
+		 */
+		constexpr size_t Ipv4HeaderSize{ 20 };
+
+		/**
+		 * Bytes an IPv6 header takes, without extension headers.
+		 */
+		constexpr size_t Ipv6HeaderSize{ 40 };
+
+		/**
+		 * Bytes a UDP header takes.
+		 */
+		constexpr size_t UdpHeaderSize{ 8 };
+
+		/**
+		 * Bytes a TCP header takes, without options.
+		 */
+		constexpr size_t TcpHeaderSize{ 20 };
+
+		/**
+		 * Bytes of the length field that frames every packet sent over TCP.
+		 *
+		 * @see https://datatracker.ietf.org/doc/html/rfc4571
+		 */
+		constexpr size_t TcpFramingSize{ 2 };
+
+		/**
+		 * Max MTU size.
+		 */
+		constexpr size_t MtuSize{ 1500 };
+
+		/**
+		 * Maximum size for a RTCP compound packet.
+		 * IPv4|Ipv6 header size (20|40 bytes). IPv6 considered.
+		 * UDP|TCP header size (8|20  bytes). TCP considered.
+		 * SRTP Encryption (148 bytes):
+		 *   - SRTP_MAX_TRAILER_LEN + 4 is the maximum number of octects that will
+		 *     be added to an RTCP packet by srtp_protect_rtcp().
+		 *   - srtp.h: SRTP_MAX_TRAILER_LEN (SRTP_MAX_TAG_LEN + SRTP_MAX_MKI_LEN).
+		 */
+		constexpr size_t RtcpPacketMaxSize{ RTC::Consts::MtuSize - 40 - 20 - 148 };
+
+		/**
+		 * Max length for a 1 byte RTP header extension.
+		 */
+		constexpr uint8_t OneByteRtpExtensionMaxLength{ 16 };
+
+		/**
+		 * Max length for a 2 bytes RTP header extension.
+		 */
+		constexpr uint8_t TwoBytesRtpExtensionMaxLength{ 255 };
+
+		/**
+		 * MID RTP header extension max length (just used when setting/updating MID
+		 * extension).
+		 */
+		constexpr uint8_t MidRtpExtensionMaxLength{ 8 };
+
+		/**
+		 * SSRC of the RTP stream the probing packets are sent on.
+		 *
+		 * @remarks
+		 * - The receiver negotiates a stream with this very SSRC, so it cannot be
+		 *   changed without changing the client as well.
+		 */
+		constexpr uint32_t BweProbeRtpSsrc{ 1234 };
+
+		/**
+		 * Codec payload type of the RTP stream the probing packets are sent on.
+		 *
+		 * @remarks
+		 * - The receiver negotiates a stream with this very payload type, so it
+		 *   cannot be changed without changing the client as well.
+		 */
+		constexpr uint8_t BweProbeRtpPayloadType{ 127 };
+
+		/**
+		 * MID of the RTP stream the probing packets are sent on, which is how the
+		 * receiver tells it apart.
+		 *
+		 * @remarks
+		 * - The receiver negotiates a stream with this very MID, so it cannot be
+		 *   changed without changing the client as well.
+		 */
+		constexpr std::string_view BweProbeRtpMid{ "probator" };
+
+		static_assert(
+		  BweProbeRtpMid.size() <= MidRtpExtensionMaxLength,
+		  "the MID of the probing stream does not fit in a MID RTP header extension");
+
+		/**
+		 * Lowest bitrate the bandwidth estimation ever produces (bps), so 5 kbps.
+		 */
+		constexpr int64_t BweMinBitrate{ 5000 };
+
+		/**
+		 * Highest bitrate the bandwidth estimation ever deals in (bps), so 1 Gbps.
+		 */
+		constexpr int64_t BweMaxBitrate{ 1000000000 };
+
+		/**
+		 * Largest safe SCTP packet. Starting from the minimum guaranteed MTU value
+		 * of 1280 for IPv6 (which may not support fragmentation), take off 85
+		 * bytes for DTLS/TURN/TCP/IP and ciphertext overhead.
+		 *
+		 * Additionally, it's possible that TURN adds an additional 4 bytes of
+		 * overhead after a channel has been established, so an additional 4 bytes
+		 * is subtracted.
+		 *
+		 * 1280 IPV6 MTU
+		 *  -40 IPV6 header
+		 *   -8 UDP
+		 *  -24 GCM Cipher
+		 *  -13 DTLS record header
+		 *   -4 TURN ChannelData
+		 * = 1191 bytes.
+		 *
+		 * @remarks
+		 * Value copied from dcSCTP library.
+		 */
+		constexpr size_t MaxSafeMtuSizeForSctp{ 1191 };
+	} // namespace Consts
+} // namespace RTC
+
+#endif

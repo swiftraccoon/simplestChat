@@ -56,7 +56,7 @@ cleanup() {
       fi
     done
     # Retain diagnostic logs, not the large disposable build or tool trees.
-    rm -rf -- "${dtls_temp}/worker" "${dtls_temp}/out" "${dtls_temp}/build" "${dtls_temp}/install"
+    rm -rf -- "${dtls_temp}/worker" "${dtls_temp}/out" "${dtls_temp}/build" "${dtls_temp}/build-test" "${dtls_temp}/install"
   fi
   exit "${dtls_status}"
 }
@@ -64,7 +64,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-cp -R -- "${project_root}/vendor/mediasoup-sys-0.17.0" "${dtls_temp}/worker"
+cp -R -- "${project_root}/vendor/mediasoup-sys-0.19.0" "${dtls_temp}/worker"
 cat >"${dtls_temp}/run.sh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -72,7 +72,7 @@ set -euo pipefail
   --require-hashes --only-binary=:all: \
   --requirement "$1/worker/python-invoke-requirements.txt"
 "$PYTHON" -m invoke --search-root "$1/worker" test > "$1/dtls.log" 2>&1
-"$BUILD_DIR/mediasoup-worker-test" '[dtls-close]' > "$1/orderly-close.log" 2>&1
+"${BUILD_DIR}-test/mediasoup-worker-test" '[dtls-close]' > "$1/orderly-close.log" 2>&1
 "$PYTHON" - "$1/orderly-close.log" "$1/dtls.log" <<'PY'
 import pathlib
 import sys

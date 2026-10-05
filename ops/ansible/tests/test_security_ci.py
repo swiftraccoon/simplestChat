@@ -300,9 +300,9 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertIn('mktemp -d "$project_root/target/codeql-worker.XXXXXXXX"', command)
         self.assertIn("build/security_codeql_resources.py", command)
         self.assertNotIn("docker", command)
-        setup = "python3 -m invoke --search-root vendor/mediasoup-sys-0.17.0 setup"
+        setup = "python3 -m invoke --search-root vendor/mediasoup-sys-0.19.0 setup"
         generator = '-j "$MEDIASOUP_BUILD_JOBS" flatbuffers-generator'
-        worker = "python3 -m invoke --search-root vendor/mediasoup-sys-0.17.0 libmediasoup-worker"
+        worker = "python3 -m invoke --search-root vendor/mediasoup-sys-0.19.0 libmediasoup-worker"
         self.assertLess(command.index(setup), command.index(generator))
         self.assertLess(command.index(generator), command.index(worker))
         self.assertIn('NINJA="$MEDIASOUP_OUT_DIR/pip_meson_ninja/bin/ninja"', command)
@@ -426,7 +426,11 @@ class SecurityWorkflowTests(unittest.TestCase):
             "${{ github.event.pull_request.base.sha || github.event.before }}",
         )
         source = (ROOT / "build/security_check.py").read_text()
-        self.assertIn("security_dependency_licenses.check(context, snapshot, base)", source)
+        self.assertIn(
+            "security_dependency_licenses.check(context, snapshot, base, "
+            "include_vendor=include_vendor)",
+            source,
+        )
         self.assertIn(
             "security_actions.check(context, snapshot, base, include_vendor=include_vendor)", source
         )

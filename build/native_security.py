@@ -55,7 +55,7 @@ UNIT_FIXTURES = {
     "rtp-unit-packet3": "packet3.raw",
 }
 MODES = ("asan", "ubsan", "replay")
-WORKER = "vendor/mediasoup-sys-0.17.0"
+WORKER = "vendor/mediasoup-sys-0.19.0"
 SOURCE_PATHS = (
     "deps/libwebrtc",
     "fbs",

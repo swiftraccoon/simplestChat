@@ -344,8 +344,8 @@ class VendorTests(unittest.TestCase):
         }
         manifest = vendor.parse_manifest(local["vendor/integrity.json"])
         vendor.validate_coverage(manifest, local)
-        self.assertIn("mediasoup-0.27.0", manifest.sources)
-        self.assertIn("mediasoup-sys-0.17.0", manifest.sources)
+        self.assertIn("mediasoup-0.29.0", manifest.sources)
+        self.assertIn("mediasoup-sys-0.19.0", manifest.sources)
 
 
 class ArchiveTests(unittest.TestCase):

@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
-  "reviewedOn": "2026-10-03",
+  "reviewedOn": "2026-10-05",
   "expires": "2026-11-29",
   "scope": "managed-default-server-dtls",
-  "assessment": "Agent-performed source review under user authorization. The production server has no configured external worker, subprocess or dynamic-library execution path; mediasoup starts an in-process thread and calls mediasoup_worker_run, whose DTLS transport uses the authenticated static OpenSSL archive. The reviewed server does not invoke iconv/gconv or locale-module conversion APIs. Built-in files/dns NSS and the restricted loader profile remove the configured optional plugin routes. On 2026-09-30, two agents independently reviewed the complete source delta from tree d04457098724b7f326d3e6416c19e250fb98f60f to the recorded src tree: only auth/passkeys.rs and auth/webauthn.rs changed. Passkey replacement reuses existing WebAuthn registration/verification, system randomness, SHA-256 and SQLx paths; credential replacement, recovery preparation, session revocation and challenge deadlines introduce no process, dynamic-library, locale-conversion or DTLS execution path. Every vendor tree, dependency/native manifest and profile binding remained unchanged in that review. On 2026-10-03, explicitly re-reviewed the native manifest and OpenSSL installer delta from b53281d23675be071e737a06c127413540017086 to ca31288a641050eb59b77955a5d7e57bc58d4209. Only openssl.installer_sha256 changed in the native manifest: the installer replaces tar extraction with Python's data-filtered extraction after verifying the same archive SHA-256. OpenSSL 3.5.9, its authenticated source archive, static build options, build/install steps and recorded disabled settings remain unchanged. Every reviewed application/vendor tree, Cargo dependency binding, vendor integrity manifest and runtime profile remains identical. The extraction change adds no server execution path, dynamic loading, locale conversion or DTLS behavior; only this exact native-manifest identity is renewed, retaining the original 2026-11-29 expiry and managed-server scope. This assessment concerns the intended server DTLS path, not unused libc/libuv APIs, engine-provided init, administrator-selected programs or arbitrary post-deployment mutation. Changed source trees, dependency/native manifests or profile bytes require explicit re-review; no automatic renewal.",
+  "assessment": "Explicit source-path review for the dependency upgrade, retaining the original 2026-11-29 expiry and managed-default-server-DTLS scope. mediasoup 0.29.0 still creates an in-process Rust thread and directly calls mediasoup_worker_run; worker/utils.rs is unchanged from 0.27.0. The 0.19.0 DTLS source delta changes timer labels, signed timestamps and application-data receive timestamps while retaining OpenSSL SSL/BIO calls. The maintained authenticated-close, fingerprint and SRTP validation patches remain present. First-party production changes replace deprecated atomic calls and widen configuration inputs/saturate worker estimates at the existing application bitrate boundary; they introduce no subprocess, dynamic-loader, iconv or gconv call. The authenticated native inventory updates libuv and unordered_dense while retaining static OpenSSL 3.5.9, no-module/no-engine options and the same OpenSSL installer. The Cargo dependency graph and all source identities are rebound to the reviewed upgrade; optional load-test clients are not in the production image. The built-in files/dns NSS and restricted loader profile are unchanged. This assessment covers the intended production execution path, not every unused dependency API, engine-provided init, administrator-selected programs or arbitrary post-deployment mutation. Actual archive/final-binary identities, runtime restrictions and image findings remain independently enforced; changed source or profile bytes require fresh review.",
   "trees": {
-    "src": "496833ae9ef057d4f0dc4fe567b77d2dce8538e4",
-    "vendor/mediasoup-0.27.0/src": "b2c4f2468779fbf6cb57ec218aed569528071a98",
-    "vendor/mediasoup-sys-0.17.0/src": "b1ba1a7aff3b1e95b16c70d3bbf1fc4f4ea6c8dd",
-    "vendor/mediasoup-sys-0.17.0/include": "d96c2c5f08dc630fe13c22a29f8e6e2fee35c9b0",
-    "vendor/mediasoup-sys-0.17.0/deps": "36bfec6c2a8365e2be9ca5a839af41b478ca0b70"
+    "src": "07c266e2ce95afcb27d6f97763f3f62d70b429b5",
+    "vendor/mediasoup-0.29.0/src": "5766ad6c2ea615f33c2e6b2a456c19e7941e25e6",
+    "vendor/mediasoup-sys-0.19.0/src": "8346991b1956cf62509944762004818a65612158",
+    "vendor/mediasoup-sys-0.19.0/include": "67f87f2828eaba61ed98823cd162d251680e0736",
+    "vendor/mediasoup-sys-0.19.0/deps": "e8f536f2aa710ba5e3125e516deda65bbad2828f"
   },
   "files": {
-    "Cargo.toml": "ce13864478643b6fea30e91b3a304081b32ea26493e5cae88f9399c4dcf75a5f",
-    "Cargo.lock": "bbb0a2ee470fe936915482aa326dec2914fce7a08e09a73d74453fe76f740560",
-    "vendor/integrity.json": "612ad0d88e223d53a121e467382a1a16f62c6a622e18c2f7d7b235ff59efb7e8",
-    "vendor/native-components.json": "2f767143d7579299b972e2868e8fd8ce4eceb7a37406163008f5e334353a1760"
+    "Cargo.toml": "9dc2d191f20e29e93f7f52764b5fe4ddc049c3e0d23ce797305f3690c5ffd127",
+    "Cargo.lock": "2d75c20bb0b3e8a4b1a6c12b677d7a4830f8972f9b66cb8375defffa41b0f3d1",
+    "vendor/integrity.json": "6d9b9c1e9b43e677e2755a22a229c25eeb96b465fd3c6ef93abd5b448ac3afad",
+    "vendor/native-components.json": "acdd50c599947ca95b406a596e19691cea4830cd567b01ff0890b2b1dd4a7ae8"
   },
   "profileFiles": {
     "ops/ansible/files/runtime_profile.py": "22f9b098a6b19be111291c467e2a34a5c7c0f53a6aa3691f71390ddf8bd85965",

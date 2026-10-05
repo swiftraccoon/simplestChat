@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 VERSION = "0.45.0"
 REVISION = "a" * 40
-WORKER = "vendor/mediasoup-sys-0.17.0"
+WORKER = "vendor/mediasoup-sys-0.19.0"
 
 
 def put(root: Path, path: str, body: bytes) -> Path:
@@ -114,7 +114,7 @@ class Fixture:
             self.root,
             "Cargo.toml",
             b'[package]\nname="simplestChat"\nversion="0.1.0"\n'
-            + b'rust-version="1.98.1"\npublish=false\n',
+            + b'rust-version="1.99.0"\npublish=false\n',
         )
         aws_files = {
             "Cargo.toml": b'[package]\nname="aws-lc-sys"\nversion="0.45.0"\nlicense="ISC"\n',
@@ -228,18 +228,18 @@ class Fixture:
                 f"- libwebrtc branch: m77\n- libwebrtc commit: {REVISION}\n"
             ).encode(),
         }
-        worker = tar_bytes({"mediasoup-sys-0.17.0/" + name: body for name, body in files.items()})
+        worker = tar_bytes({"mediasoup-sys-0.19.0/" + name: body for name, body in files.items()})
         for name, body in files.items():
             _ = put(self.root, WORKER + "/" + name, body)
         for body in (foo, worker):
             vendor.write_private(self.cache / vendor.sha256(body), body)
         manifest: JsonObject = {
-            "sources": [source("foo-1.0", foo), source("mediasoup-sys-0.17.0", worker)],
+            "sources": [source("foo-1.0", foo), source("mediasoup-sys-0.19.0", worker)],
             "trees": [
                 {
                     "path": WORKER,
-                    "source": "mediasoup-sys-0.17.0",
-                    "prefix": "mediasoup-sys-0.17.0",
+                    "source": "mediasoup-sys-0.19.0",
+                    "prefix": "mediasoup-sys-0.19.0",
                     "changes": [],
                 }
             ],
@@ -267,7 +267,7 @@ class Fixture:
         providers = object_value(self.native_manifest["native_links"])
         for name, value in providers.items():
             identifier = (
-                "path+file:///app/vendor/mediasoup-sys-0.17.0#mediasoup-sys@0.17.0"
+                "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0"
                 if name == "mediasoup-sys"
                 else native.SOURCE_REGISTRY
                 + "#"
@@ -360,7 +360,7 @@ class Fixture:
         _ = limit
         rpm = "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n"
         if list(argv) == ["rustc", "--version", "--verbose"]:
-            return "rustc 1.98.1\nrelease: 1.98.1\nhost: x86_64-unknown-linux-gnu\n"
+            return "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n"
         if list(argv) == ["c++", "--version"]:
             return "c++ (GCC) fixture\n"
         if list(argv) == [

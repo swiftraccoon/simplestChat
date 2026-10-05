@@ -1,12 +1,10 @@
-// Real ICE/DTLS/RTP client using the webrtc-rs 0.20 async Sans-I/O driver.
+// Real ICE/DTLS/RTP client using the webrtc-rs 0.21 async Sans-I/O driver.
 // Mediasoup's parameter-based signaling is adapted to the peer's SDP API.
 
 use anyhow::{Context, Result};
 use mediasoup::prelude::*;
 use mediasoup_types::data_structures::{DtlsFingerprint, DtlsRole, IceCandidateType};
-use rtc::interceptor::{
-    Interceptor, Packet, RTPHeaderExtension, StreamInfo, TaggedPacket, interceptor,
-};
+use rtc::interceptor::{Interceptor, Packet, Slot, StreamInfo, TaggedPacket};
 use rtc::peer_connection::configuration::interceptor_registry::{
     configure_nack, configure_rtcp_reports, configure_simulcast_extension_headers, configure_twcc,
 };
@@ -17,8 +15,9 @@ use rtc::rtp_transceiver::rtp_sender::{
     RTCPFeedback, RTCRtpCodec, RTCRtpCodecParameters, RTCRtpCodingParameters,
     RTCRtpEncodingParameters, RTCRtpHeaderExtensionCapability, RtpCodecKind,
 };
-use rtc::sansio;
+use rtc::sansio::Protocol as SansioProtocol;
 use rtc::shared::error::Error;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 use webrtc::media_stream::MediaStreamTrack;
@@ -40,9 +39,7 @@ const TRANSPORT_CC_URI: &str =
 /// TWCC sender stamps outgoing packets so the SFU can estimate our uplink; the
 /// TWCC receiver reports what we receive so the SFU's downlink estimator runs.
 /// Nothing adapts the fixed send rate to either estimate.
-fn interceptor_registry(
-    media_engine: &mut MediaEngine,
-) -> Result<Registry<impl Interceptor + use<>>> {
+fn interceptor_registry(media_engine: &mut MediaEngine) -> Result<Registry> {
     let registry = configure_nack(Registry::new(), media_engine);
     let registry = configure_rtcp_reports(registry);
     configure_simulcast_extension_headers(media_engine)?;
@@ -89,11 +86,10 @@ fn extract_extension_ids_from_sdp(sdp: &str) -> HeaderExtensionIds {
 }
 
 /// Observe requests before the default chain consumes RTCP. The original packet
-/// still reaches every interceptor; this observer neither clones nor queues it.
-#[derive(Interceptor)]
-struct VideoFeedbackObserver<P> {
-    #[next]
-    next: P,
+/// still reaches every interceptor through the flat chain's packet queues.
+struct VideoFeedbackObserver {
+    reads: VecDeque<TaggedPacket>,
+    writes: VecDeque<TaggedPacket>,
     video_ssrc: Option<u32>,
     requests: Arc<super::media_generator::KeyframeRequests>,
     cancellation: tokio::sync::watch::Receiver<bool>,
@@ -105,46 +101,6 @@ struct VideoFeedbackObserver<P> {
     /// The upper simulcast layers of a browser-profile camera, each with its
     /// own latch: the SFU asks for a keyframe on the layer it switches to.
     extra_layers: Vec<SimulcastFeedback>,
-}
-
-/// Counts mediasoup's bandwidth probes in transport-wide feedback, as a
-/// browser does. Chrome records every packet carrying the transport-wide
-/// sequence extension, whatever its SSRC; webrtc-rs records only packets of a
-/// bound receive stream, and no receive section owns the probe SSRC. Unbound,
-/// every probe looks lost, and the SFU's estimate stays near 1.5 times what
-/// it already sends, so simulcast consumers never leave their lowest layer.
-/// Bound on the first probe, the inner chain's recorder counts the rest; the
-/// endpoint still drops the probe payload, which nothing consumes.
-#[derive(Interceptor)]
-struct ProbeFeedbackBinder<P> {
-    #[next]
-    next: P,
-    bound: bool,
-}
-
-#[interceptor]
-impl<P: Interceptor> ProbeFeedbackBinder<P> {
-    #[overrides]
-    fn handle_read(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
-        if !self.bound
-            && let Packet::Rtp(packet) = &msg.message
-            && packet.header.ssrc == PROBATOR_SSRC
-        {
-            self.bound = true;
-            self.next.bind_remote_stream(&StreamInfo {
-                ssrc: PROBATOR_SSRC,
-                payload_type: PROBATOR_PAYLOAD_TYPE,
-                mime_type: "video/VP8".into(),
-                clock_rate: 90_000,
-                rtp_header_extensions: vec![RTPHeaderExtension {
-                    uri: TRANSPORT_CC_URI.into(),
-                    id: u16::from(PROBATOR_TRANSPORT_CC_ID),
-                }],
-                ..Default::default()
-            });
-        }
-        self.next.handle_read(msg)
-    }
 }
 
 /// Keyframe feedback state of one upper simulcast layer.
@@ -173,7 +129,7 @@ fn note_keyframe_request(
     }
 }
 
-impl<P> VideoFeedbackObserver<P> {
+impl VideoFeedbackObserver {
     fn request(&self, ssrc: u32, feedback: &str) {
         note_keyframe_request(
             &self.requests,
@@ -237,21 +193,47 @@ impl<P> VideoFeedbackObserver<P> {
     }
 }
 
-#[interceptor]
-impl<P: Interceptor> VideoFeedbackObserver<P> {
-    #[overrides]
+impl SansioProtocol<TaggedPacket, TaggedPacket, ()> for VideoFeedbackObserver {
+    type Rout = TaggedPacket;
+    type Wout = TaggedPacket;
+    type Eout = ();
+    type Error = Error;
+    type Time = std::time::Instant;
+
     fn handle_read(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
-        if let Packet::Rtcp(packets) = &msg.message {
+        if let Packet::Rtcp(packets) = &msg.message.packet {
             self.observe(packets);
         }
-        self.next.handle_read(msg)
+        self.reads.push_back(msg);
+        Ok(())
     }
 
-    #[overrides]
+    fn poll_read(&mut self) -> Option<Self::Rout> {
+        self.reads.pop_front()
+    }
+
+    fn handle_write(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
+        self.writes.push_back(msg);
+        Ok(())
+    }
+
+    fn poll_write(&mut self) -> Option<Self::Wout> {
+        self.writes.pop_front()
+    }
+
     fn close(&mut self) -> Result<(), Self::Error> {
         self.video_ssrc = None;
-        self.next.close()
+        self.reads.clear();
+        self.writes.clear();
+        Ok(())
     }
+}
+
+impl Interceptor for VideoFeedbackObserver {
+    fn bind_local_stream(&mut self, _info: &StreamInfo) {}
+    fn unbind_local_stream(&mut self, _info: &StreamInfo) {}
+    fn bind_remote_stream(&mut self, _info: &StreamInfo) {}
+    fn unbind_remote_stream(&mut self, _info: &StreamInfo) {}
 }
 
 struct TransportEvents {
@@ -495,8 +477,11 @@ struct ConsumerInfo {
 /// packets on this SSRC and payload type, carrying the transport-wide
 /// sequence extension under its fixed id (`RTC::RTP::ProbationGenerator`,
 /// `RtpHeaderExtensionUri::Type::TRANSPORT_WIDE_CC_01`).
+#[cfg(test)]
 const PROBATOR_SSRC: u32 = 1234;
+#[cfg(test)]
 const PROBATOR_PAYLOAD_TYPE: u8 = 127;
+#[cfg(test)]
 const PROBATOR_TRANSPORT_CC_ID: u8 = 5;
 
 /// What a transport's media sections need beyond the defaults.
@@ -504,9 +489,6 @@ const PROBATOR_TRANSPORT_CC_ID: u8 = 5;
 pub struct TransportMedia {
     /// Simulcast SSRCs the send-side camera publishes (1 to 3).
     pub video_layers: usize,
-    /// Count mediasoup's bandwidth probes in transport-wide feedback, as a
-    /// browser does, on a receive transport.
-    pub probator: bool,
 }
 
 fn audio_codec() -> RTCRtpCodec {
@@ -648,7 +630,6 @@ impl WebRtcTransport {
         media: TransportMedia,
     ) -> Result<(Self, DtlsParameters)> {
         let video_layers = media.video_layers;
-        let probator = media.probator && !is_send;
         let mut media_engine = MediaEngine::default();
         media_engine.register_codec(
             RTCRtpCodecParameters {
@@ -704,40 +685,37 @@ impl WebRtcTransport {
             .as_ref()
             .map(|m| m.diagnostic_attempt())
             .unwrap_or(0);
-        let registry = registry.with(|next| VideoFeedbackObserver {
-            next,
-            video_ssrc: is_send.then_some(video_ssrc),
-            requests: video_keyframe_requests.clone(),
-            cancellation: cancellation.subscribe(),
-            metrics: metrics.clone(),
-            diagnostic_attempt,
-            last_fir: None,
-            extra_layers: if is_send {
-                video_layer_requests
-                    .iter()
-                    .skip(1)
-                    .map(|(ssrc, requests)| SimulcastFeedback {
-                        ssrc: *ssrc,
-                        requests: requests.clone(),
-                        last_fir: None,
-                    })
-                    .collect()
-            } else {
-                Vec::new()
+        let registry = registry.with(
+            Slot::from(500),
+            VideoFeedbackObserver {
+                reads: VecDeque::new(),
+                writes: VecDeque::new(),
+                video_ssrc: is_send.then_some(video_ssrc),
+                requests: video_keyframe_requests.clone(),
+                cancellation: cancellation.subscribe(),
+                metrics: metrics.clone(),
+                diagnostic_attempt,
+                last_fir: None,
+                extra_layers: if is_send {
+                    video_layer_requests
+                        .iter()
+                        .skip(1)
+                        .map(|(ssrc, requests)| SimulcastFeedback {
+                            ssrc: *ssrc,
+                            requests: requests.clone(),
+                            last_fir: None,
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                },
             },
-        });
-        let registry = registry.with(move |next| ProbeFeedbackBinder {
-            next,
-            // Leave the synthetic profile's receive chain exactly as before.
-            bound: !probator,
-        });
+        );
         let (connection_state_tx, connection_state) =
             tokio::sync::watch::channel(RTCPeerConnectionState::New);
         // Counted sockets make the clients' sends the denominator of the
         // workers' socket drops; tests without a collector keep the default.
-        let datagram_counter = metrics
-            .as_ref()
-            .map(|metrics| metrics.datagram_counter());
+        let datagram_counter = metrics.as_ref().map(|metrics| metrics.datagram_counter());
         let handler = Arc::new(TransportEvents {
             client_id: client_id.clone(),
             transport_id: transport_id.clone(),
@@ -754,7 +732,8 @@ impl WebRtcTransport {
             .with_handler(handler)
             .with_udp_addrs(local_udp_addresses(&ice_candidates));
         if let Some(counter) = datagram_counter {
-            let inner = webrtc::runtime::default_runtime().context("No async runtime for WebRTC")?;
+            let inner =
+                webrtc::runtime::default_runtime().context("No async runtime for WebRTC")?;
             builder = builder.with_runtime(Arc::new(
                 super::datagram_counter::CountingRuntime::new(inner, counter),
             ));
@@ -1230,8 +1209,6 @@ pub struct WebRtcSession {
     metrics: Option<Arc<super::metrics::MetricsCollector>>,
     /// Simulcast layers the send transport's camera publishes (1 without).
     video_layers: usize,
-    /// Declare mediasoup's probation stream on the receive transport.
-    probator: bool,
 }
 
 impl WebRtcSession {
@@ -1244,15 +1221,7 @@ impl WebRtcSession {
             video_track: None,
             metrics: Some(metrics),
             video_layers: 1,
-            probator: false,
         }
-    }
-
-    /// Receive like mediasoup-client: declare the SFU's bandwidth probes so
-    /// they reach transport-wide feedback. Call before the receive transport
-    /// exists.
-    pub fn set_probator(&mut self, probator: bool) {
-        self.probator = probator;
     }
 
     /// Publish the camera as `layers` simulcast SSRCs; call before the send
@@ -1288,7 +1257,6 @@ impl WebRtcSession {
             self.metrics.clone(),
             TransportMedia {
                 video_layers: self.video_layers,
-                probator: false,
             },
         )
         .await?;
@@ -1325,10 +1293,7 @@ impl WebRtcSession {
             dtls_parameters.clone(),
             false,
             self.metrics.clone(), // on_track handler increments metrics directly
-            TransportMedia {
-                video_layers: 1,
-                probator: self.probator,
-            },
+            TransportMedia { video_layers: 1 },
         )
         .await?;
 
@@ -1766,32 +1731,12 @@ fn hex_encode(bytes: &[u8]) -> String {
 mod migration_tests {
     use super::*;
     use futures_util::FutureExt;
-    use rtc::interceptor::NoopInterceptor;
     use rtc::rtcp::payload_feedbacks::full_intra_request::FirEntry;
-    use rtc::sansio::Protocol as _;
     use std::time::Duration;
     use webrtc::media_stream::Track;
 
-    #[derive(Interceptor)]
-    struct FeedbackProbe<P> {
-        #[next]
-        next: P,
-        reads: usize,
-        last_read: Option<Packet>,
-    }
-
-    #[interceptor]
-    impl<P: Interceptor> FeedbackProbe<P> {
-        #[overrides]
-        fn handle_read(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
-            self.reads += 1;
-            self.last_read = Some(msg.message.clone());
-            self.next.handle_read(msg)
-        }
-    }
-
     struct FeedbackFixture {
-        observer: VideoFeedbackObserver<FeedbackProbe<NoopInterceptor>>,
+        observer: VideoFeedbackObserver,
         cancellation: tokio::sync::watch::Sender<bool>,
     }
 
@@ -1805,11 +1750,8 @@ mod migration_tests {
             metrics.enable_diagnostics();
             Self {
                 observer: VideoFeedbackObserver {
-                    next: FeedbackProbe {
-                        next: NoopInterceptor::new(),
-                        reads: 0,
-                        last_read: None,
-                    },
+                    reads: VecDeque::new(),
+                    writes: VecDeque::new(),
                     video_ssrc: Some(7),
                     requests: Arc::new(super::super::media_generator::KeyframeRequests::default()),
                     cancellation: receiver,
@@ -1827,7 +1769,7 @@ mod migration_tests {
                 .handle_read(TaggedPacket {
                     now: std::time::Instant::now(),
                     transport: Default::default(),
-                    message: Packet::Rtcp(packets),
+                    message: Packet::Rtcp(packets).into(),
                 })
                 .unwrap();
         }
@@ -1946,19 +1888,19 @@ mod migration_tests {
         fixture.cancellation.send_replace(true);
         fixture.receive(vec![pli(7), fir(99, 7, 1)]);
         assert!(!fixture.observer.requests.take());
-        assert_eq!(fixture.observer.next.reads, 1);
+        assert_eq!(fixture.observer.reads.len(), 1);
 
         let mut fixture = FeedbackFixture::new();
         fixture.observer.close().unwrap();
         fixture.receive(vec![pli(7), fir(99, 7, 1)]);
         assert!(!fixture.observer.requests.take());
-        assert_eq!(fixture.observer.next.reads, 1);
+        assert_eq!(fixture.observer.reads.len(), 1);
 
         let mut fixture = FeedbackFixture::new();
         fixture.observer.video_ssrc = None;
         fixture.receive(vec![pli(7), fir(99, 7, 1)]);
         assert!(!fixture.observer.requests.take());
-        assert_eq!(fixture.observer.next.reads, 1);
+        assert_eq!(fixture.observer.reads.len(), 1);
     }
 
     #[test]
@@ -1967,12 +1909,11 @@ mod migration_tests {
         let packets = vec![pli(7), fir(99, 7, 1)];
         let expected = Packet::Rtcp(packets.clone());
         fixture.receive(packets);
-        assert_eq!(fixture.observer.next.last_read.as_ref(), Some(&expected));
-        assert_eq!(fixture.observer.next.reads, 1);
-        assert!(
-            fixture.observer.poll_read().is_none(),
-            "terminal consumes RTCP as before"
+        assert_eq!(
+            fixture.observer.poll_read().unwrap().message.packet,
+            expected
         );
+        assert!(fixture.observer.poll_read().is_none());
         assert!(fixture.observer.requests.take());
 
         let rtp = rtc::rtp::Packet::default();
@@ -1981,11 +1922,11 @@ mod migration_tests {
             .handle_read(TaggedPacket {
                 now: std::time::Instant::now(),
                 transport: Default::default(),
-                message: Packet::Rtp(rtp.clone()),
+                message: Packet::Rtp(rtp.clone()).into(),
             })
             .unwrap();
         assert_eq!(
-            fixture.observer.poll_read().unwrap().message,
+            fixture.observer.poll_read().unwrap().message.packet,
             Packet::Rtp(rtp.clone())
         );
         fixture
@@ -1993,11 +1934,11 @@ mod migration_tests {
             .handle_write(TaggedPacket {
                 now: std::time::Instant::now(),
                 transport: Default::default(),
-                message: Packet::Rtp(rtp.clone()),
+                message: Packet::Rtp(rtp.clone()).into(),
             })
             .unwrap();
         assert_eq!(
-            fixture.observer.poll_write().unwrap().message,
+            fixture.observer.poll_write().unwrap().message.packet,
             Packet::Rtp(rtp)
         );
         assert!(!fixture.observer.requests.take());
@@ -2053,22 +1994,26 @@ mod migration_tests {
         let mut media_engine = MediaEngine::default();
         let registry = interceptor_registry(&mut media_engine).unwrap();
         let mut observer = registry
-            .with(|next| VideoFeedbackObserver {
-                next,
-                video_ssrc: Some(7),
-                requests: requests.clone(),
-                cancellation: receiver,
-                metrics: None,
-                diagnostic_attempt: 0,
-                last_fir: None,
-                extra_layers: Vec::new(),
-            })
+            .with(
+                Slot::from(500),
+                VideoFeedbackObserver {
+                    reads: VecDeque::new(),
+                    writes: VecDeque::new(),
+                    video_ssrc: Some(7),
+                    requests: requests.clone(),
+                    cancellation: receiver,
+                    metrics: None,
+                    diagnostic_attempt: 0,
+                    last_fir: None,
+                    extra_layers: Vec::new(),
+                },
+            )
             .build();
         observer
             .handle_read(TaggedPacket {
                 now: std::time::Instant::now(),
                 transport: Default::default(),
-                message: Packet::Rtcp(vec![pli(7)]),
+                message: Packet::Rtcp(vec![pli(7)]).into(),
             })
             .unwrap();
         assert!(requests.take());
@@ -2229,9 +2174,9 @@ mod migration_tests {
                         kind,
                     )?;
                 }
-                let mut settings =
-                    rtc::peer_connection::configuration::setting_engine::SettingEngine::default();
-                settings.set_lite(true);
+                let settings = webrtc::peer_connection::SettingEngineBuilder::new()
+                    .with_lite(true)
+                    .build();
                 let (source_state_tx, source_state) =
                     tokio::sync::watch::channel(RTCPeerConnectionState::New);
                 let (gathered_tx, mut gathered) = tokio::sync::watch::channel(false);
@@ -2745,19 +2690,26 @@ mod migration_tests {
     fn feedback_after_probes(count_probes: bool) -> bool {
         let mut media_engine = MediaEngine::default();
         let registry = interceptor_registry(&mut media_engine).unwrap();
-        let mut chain = registry
-            .with(move |next| ProbeFeedbackBinder {
-                next,
-                bound: !count_probes,
-            })
-            .build();
+        let mut chain = registry.build();
+        if count_probes {
+            // A real negotiated stream supplies the transport-wide extension ID.
+            // The current receiver also counts the SFU's unbound probe SSRC.
+            chain.bind_remote_stream(&StreamInfo {
+                ssrc: 4321,
+                rtp_header_extensions: vec![rtc::interceptor::RTPHeaderExtension {
+                    uri: TRANSPORT_CC_URI.into(),
+                    id: u16::from(PROBATOR_TRANSPORT_CC_ID),
+                }],
+                ..Default::default()
+            });
+        }
         let start = std::time::Instant::now();
         for sequence in 1..=3u16 {
             chain
                 .handle_read(TaggedPacket {
                     now: start + std::time::Duration::from_millis(u64::from(sequence)),
                     transport: Default::default(),
-                    message: Packet::Rtp(probe(sequence)),
+                    message: Packet::Rtp(probe(sequence)).into(),
                 })
                 .unwrap();
             while chain.poll_read().is_some() {}
@@ -2767,7 +2719,7 @@ mod migration_tests {
             .unwrap();
         let mut feedback = false;
         while let Some(packet) = chain.poll_write() {
-            if let Packet::Rtcp(packets) = &packet.message {
+            if let Packet::Rtcp(packets) = &packet.message.packet {
                 feedback |= packets.iter().any(|packet| {
                     packet
                         .as_any()
@@ -2780,14 +2732,14 @@ mod migration_tests {
     }
 
     #[test]
-    fn probes_reach_transport_wide_feedback_only_when_counted() {
+    fn unbound_probes_use_the_negotiated_transport_wide_extension() {
         assert!(
             feedback_after_probes(true),
             "counted probes must be acknowledged"
         );
         assert!(
             !feedback_after_probes(false),
-            "without the binder webrtc-rs ignores the unbound probe SSRC"
+            "without a negotiated extension ID probes cannot be acknowledged"
         );
     }
 

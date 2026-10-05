@@ -28,10 +28,10 @@ NSS = "security/runtime/nsswitch.conf"
 PROFILE = "ops/ansible/files/runtime_profile.py"
 SOURCE_TREES = (
     "src",
-    "vendor/mediasoup-0.27.0/src",
-    "vendor/mediasoup-sys-0.17.0/src",
-    "vendor/mediasoup-sys-0.17.0/include",
-    "vendor/mediasoup-sys-0.17.0/deps",
+    "vendor/mediasoup-0.29.0/src",
+    "vendor/mediasoup-sys-0.19.0/src",
+    "vendor/mediasoup-sys-0.19.0/include",
+    "vendor/mediasoup-sys-0.19.0/deps",
 )
 SOURCE_FILES = (
     "Cargo.toml",
