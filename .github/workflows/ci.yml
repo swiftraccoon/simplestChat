@@ -994,16 +994,19 @@ jobs:
             "${CADDY_IMAGE}" \
             validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
-      # Builder layers (OpenSSL, toolchain, warmed dependencies including the
-      # native worker) are reused from this directory until their inputs
-      # change, so a source-only push compiles only this crate.
+      # Publish newly compiled application layers when build inputs change.
+      # A dependency-only immutable key otherwise keeps restoring the first
+      # application revision forever. Fallback layers remain build inputs;
+      # BuildKit validates every dependency and all image checks still run.
       - name: Restore image layer cache
         id: production-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/buildx-cache
-          key: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', 'Cargo.toml', 'Cargo.lock', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'vendor/**', 'security/exceptions.json', 'security/image-policy.json') }}
-          restore-keys: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
+          key: buildx-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', '.dockerignore', 'Cargo.toml', 'Cargo.lock', 'src/**', 'migrations/**', 'vendor/**', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'build/security_tools.py', 'build/security-tools.lock.json', 'build/security_vendor.py', 'build/security_native.py', 'build/security_elf.py', 'ops/ansible/files/bounded_process.py', 'ops/ansible/files/release_json.py', 'security/exceptions.json', 'security/image-policy.json', 'security/runtime/**', 'web/package*.json', 'web/tsconfig*.json', 'web/vite.config.ts', 'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs', 'web/scripts/mediasoup-runtime.mjs', 'web/public/**', 'web/src/**') }}
+          restore-keys: |
+            buildx-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
+            buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build production container
         shell: bash
@@ -1183,13 +1186,38 @@ jobs:
             install -m 600 "${source}/${name}" "${destination}/${name}"
           done
 
+      - name: Fingerprint the vulnerability database download cache
+        id: image-database-inputs
+        run: |
+          key="$(python3 build/security_image_cache.py)"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+          printf 'prefix=%s\n' "${key%-????-??-??}-" >> "$GITHUB_OUTPUT"
+
+      - name: Restore vulnerability database download bytes
+        id: image-database
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/image-database-cache
+          key: ${{ steps.image-database-inputs.outputs.key }}
+          restore-keys: ${{ steps.image-database-inputs.outputs.prefix }}
+
       - name: Scan the same exported production image
         timeout-minutes: 25
         run: |
           build/check-security.sh image "${PRODUCTION_IMAGE}" \
             --artifact-dir "${RUNNER_TEMP}/simplestchat-release" \
             --image-tools "${RUNNER_TEMP}/release-checks/tools" \
+            --image-database-cache "${RUNNER_TEMP}/image-database-cache" \
             --output "${RUNNER_TEMP}/production-security"
+
+      # The scanner always checks upstream updates and current age/hash before
+      # running the full image policy. This stores data, never scan success.
+      - name: Save refreshed vulnerability database download bytes
+        if: ${{ success() && steps.image-database.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/image-database-cache
+          key: ${{ steps.image-database.outputs.cache-primary-key }}
 
       - name: Retain the verified production release
         # Export precedes the root-owned fixture; publication requires every

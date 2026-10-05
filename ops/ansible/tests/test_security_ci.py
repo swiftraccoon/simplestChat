@@ -733,6 +733,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             for step in steps
             if string(step.get("uses", "")).startswith("actions/cache")
             and not string(step.get("uses", "")).startswith("actions/cache/save@")
+            and step.get("id") != "image-database"
         ]
         self.assertEqual(len(caches), 2)
         for config in caches:
@@ -741,7 +742,22 @@ class SecurityWorkflowTests(unittest.TestCase):
                 self.assertIn(f"'{source}'", key)
             # A broad fallback is safe only with the checked Dockerfile mount
             # dependency and the existing trust/architecture namespace guard.
-            self.assertTrue(string(config, "restore-keys").startswith("buildx-v2-"))
+            self.assertTrue(string(config, "restore-keys").startswith("buildx-v3-"))
+
+    def test_image_cache_updates_application_layers_without_reusing_a_scan_verdict(self) -> None:
+        """Source changes publish new immutable layers while every image check stays required."""
+        steps = objects(obj(workflow("ci.yml"), "jobs", "deployment"), "steps")
+        restore = next(step for step in steps if step.get("id") == "production-cache")
+        key = string(restore, "with", "key")
+        for source in ("src/**", "migrations/**", "web/src/**", ".dockerignore"):
+            self.assertIn(f"'{source}'", key)
+        scan = next(
+            step for step in steps if step.get("name") == "Scan the same exported production image"
+        )
+        self.assertNotIn("if", scan)
+        self.assertIn(
+            '--image-database-cache "${RUNNER_TEMP}/image-database-cache"', string(scan, "run")
+        )
 
     def test_build_caches_cannot_fall_back_across_trust_or_architecture(self) -> None:
         """PR build artifacts remain outside the main compiler/layer cache namespace."""
@@ -781,6 +797,19 @@ class SecurityWorkflowTests(unittest.TestCase):
                     self.assertEqual(config["path"], at(restore, "with", "path"))
                     config = obj(restore, "with")
                 key = string(config.get("prefix-key", config.get("key", "")))
+                if key == "${{ steps.image-database-inputs.outputs.key }}":
+                    # Database bytes have no CPU architecture. Their helper
+                    # tests bind scanner format, main/PR trust and daily update.
+                    self.assertEqual(
+                        config["restore-keys"], "${{ steps.image-database-inputs.outputs.prefix }}"
+                    )
+                    fingerprint = next(
+                        step for step in steps if step.get("id") == "image-database-inputs"
+                    )
+                    self.assertIn(
+                        "python3 build/security_image_cache.py", string(fingerprint, "run")
+                    )
+                    continue
                 if string(step, "uses").startswith("Swatinem/rust-cache@"):
                     self.assertTrue(
                         key.startswith("v3-rust-"), "Old archives included CodeQL tools"

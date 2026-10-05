@@ -444,6 +444,7 @@ class Options(argparse.Namespace):
     engine: str = "docker"
     artifact_dir: Path | None = None
     image_tools: Path | None = None
+    image_database_cache: Path | None = None
     deep_check: str = "all"
     openssl_prefix: Path | None = None
     mutation_tool_platform: str | None = None
@@ -495,6 +496,11 @@ def image(context: Context, args: Options) -> None:
             args.engine,
             "--tools-directory",
             str(scanner_directory),
+            *(
+                ["--database-cache", str(args.image_database_cache)]
+                if args.image_database_cache is not None
+                else []
+            ),
         ],
         timeout=1800,
     )
@@ -510,6 +516,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ = parser.add_argument("--engine", choices=("docker", "podman"), default="docker")
     _ = parser.add_argument("--artifact-dir", type=Path)
     _ = parser.add_argument("--image-tools", type=Path)
+    _ = parser.add_argument("--image-database-cache", type=Path)
     _ = parser.add_argument("--deep-check", choices=("all", "native", "mutation"), default="all")
     _ = parser.add_argument("--openssl-prefix", type=Path)
     _ = parser.add_argument("--mutation-tool-platform", choices=("linux-x86_64", "darwin-x86_64"))
@@ -529,6 +536,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         require((args.tier == "image") == (args.image is not None), "security_image_argument")
         require(args.tier == "image" or args.image_tools is None, "security_image_tools_argument")
+        require(
+            args.tier == "image" or args.image_database_cache is None,
+            "security_image_database_cache_argument",
+        )
         require(
             args.tier == "deep"
             or (

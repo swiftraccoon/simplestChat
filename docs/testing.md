@@ -440,9 +440,10 @@ native/PostgreSQL tests and browser backends use separate `rust-check`,
 all targets with `cargo build --locked --all-features --all-targets --profile test`,
 including development dependencies and test harnesses; it then runs the complete
 test command with ignored tests included and one test thread. A browser-only
-binary cache cannot substitute for that test graph. The production image reuses
-cached layers up to a warmed
-dependency build, and the release fixture's controller installs in the
+binary cache cannot substitute for that test graph. The production image caches
+completed application layers as well as warmed dependencies, with a new cache
+key whenever its build inputs change. BuildKit validates fallback layers against
+the current inputs. The release fixture's controller installs in the
 background while the image builds.
 [CI](../.github/workflows/ci.yml) also runs formatting, locked Rust builds/tests,
 web tests/build, readiness/shutdown and pinned Chromium integration tests, dependency audits, native
@@ -613,6 +614,14 @@ only after the fixture has cleaned its engine. Within the image gate, fresh
 database preparation overlaps offline SBOM/secret scanning in two bounded
 branches; vulnerability matching waits for both. Timing receipts measure the
 actual phases. Neither overlap establishes a measured five-minute job budget.
+
+The image gate also caches Grype database download bytes under a scanner-specific,
+daily key with separate main and untrusted namespaces. Every invocation still
+runs the online updater, verifies the database hash and allowed age, and performs
+the full vulnerability scan and current policy checks. Restored bytes have a
+bounded file inventory and checked hashes; a malformed cache fails validation.
+No image scan verdict is cached. Local image checks can use the same path with
+`--image-database-cache <absolute-directory>`.
 
 Action and build caches persist under `target/act`. Each invocation writes a
 private directory under `results/` containing its event, workflow log, source

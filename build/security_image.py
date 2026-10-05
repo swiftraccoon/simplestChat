@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 
 import security_archive
 import security_elf
+import security_image_cache
 import security_image_policy as policy
 import security_rpm_notices
 import security_runtime
@@ -219,6 +220,7 @@ class Sandbox:
     diagnostic_prefix: str = ""
     scanner_limit: int = MAX_SCANNERS
     cancelled: threading.Event = field(default_factory=threading.Event)
+    database_cache: Path | None = None
 
     def command(
         self, argv: Sequence[str], *, timeout: int = 30, allow_failure: bool = False
@@ -287,6 +289,8 @@ class Sandbox:
         destination.mkdir(mode=0o700)
         if os.getuid() == 0:
             os.chown(destination, uid, gid)
+        if online and self.database_cache is not None:
+            _ = security_image_cache.restore(self.database_cache, destination, uid, gid)
         limit = MAX_DB if online else MAX_OUTPUT
         scratch_bytes = (
             SYFT_SCAN_SCRATCH_BYTES
@@ -449,6 +453,7 @@ def prepare_sandbox(args: Options, output: Path, image_policy: JsonObject) -> Sa
         base,
         args.platform,
         runner,
+        database_cache=args.database_cache,
     )
     _ = sandbox.command(["pull", "--platform", args.platform, base], timeout=300)
     _, identity = sandbox.command(["image", "inspect", "--format", "{{.Id}}", base])
@@ -527,6 +532,8 @@ def prepare_database(sandbox: Sandbox) -> JsonObject:
     db_status["databaseSha256"] = digest(database / "cache/6/vulnerability.db")
     db_status["importReceiptSha256"] = digest(database / "cache/6/import.json")
     write(sandbox.output / "database-status.json", db_status)
+    if sandbox.database_cache is not None:
+        security_image_cache.save(sandbox.database_cache, database)
     return db_status
 
 
@@ -1035,6 +1042,7 @@ class Options(argparse.Namespace):
     tools_directory: Path = Path()
     engine: str = "docker"
     platform: str = "linux/amd64"
+    database_cache: Path | None = None
 
 
 def main() -> int:
@@ -1045,6 +1053,7 @@ def main() -> int:
         _ = parser.add_argument("--" + name, type=Path, required=True)
     _ = parser.add_argument("--engine", choices=("docker", "podman"), default="docker")
     _ = parser.add_argument("--platform", choices=tuple(PLATFORMS), default="linux/amd64")
+    _ = parser.add_argument("--database-cache", type=Path)
     args = parser.parse_args(namespace=Options())
     _ = os.umask(0o077)
     args.artifact_dir = args.artifact_dir.resolve(strict=True)

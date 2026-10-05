@@ -28,8 +28,10 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/buildx-cache
-          key: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', 'Cargo.toml', 'Cargo.lock', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'vendor/**', 'security/exceptions.json', 'security/image-policy.json') }}
-          restore-keys: buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
+          key: buildx-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', '.dockerignore', 'Cargo.toml', 'Cargo.lock', 'src/**', 'migrations/**', 'vendor/**', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'build/security_tools.py', 'build/security-tools.lock.json', 'build/security_vendor.py', 'build/security_native.py', 'build/security_elf.py', 'ops/ansible/files/bounded_process.py', 'ops/ansible/files/release_json.py', 'security/exceptions.json', 'security/image-policy.json', 'security/runtime/**', 'web/package*.json', 'web/tsconfig*.json', 'web/vite.config.ts', 'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs', 'web/scripts/mediasoup-runtime.mjs', 'web/public/**', 'web/src/**') }}
+          restore-keys: |
+            buildx-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
+            buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build the load-test image
         shell: bash
