@@ -1,5 +1,5 @@
 [tool.ruff]
-required-version = "==0.16.8"
+required-version = "==0.16.10"
 target-version = "py312"
 line-length = 100
 # `build/` contains maintained source, not generated packaging output.
