@@ -139,7 +139,7 @@ or findings for another package.
 
 The proof binds the archive and image configuration, source revision, application
 binary, actual ELF/native evidence files and SPDX SBOM. It requires authenticated
-static OpenSSL 3.5.9 with shared libraries, dynamic loading and engines disabled
+static OpenSSL 4.0.3 with shared libraries, dynamic loading and engines disabled
 while retaining built-in providers, including legacy algorithms;
 no loader cache, preload or hwcaps paths; no ELF audit/filter or RPATH/RUNPATH
 hooks; identical bytes for every present standard-directory candidate of each
@@ -519,11 +519,12 @@ status `analyzing`, no affected-CPE/package mappings and no Fedora record. The
 already identified the High-severity issue and the affected 3.5.0–3.5.8 range,
 fixed in 3.5.9. Adding an OpenSSL CPE alone would not close that ingestion gap.
 
-The fast source gate separately requires the pinned OpenSSL patch to match the
-single current stable archive in its supported major/minor series on the
-[official source page](https://openssl-library.org/source/). Missing, ambiguous,
-unavailable or stale evidence fails; the check never updates the pin or changes
-the supported series. Its receipt binds the observed page and native manifest
+The fast source gate separately requires the pinned OpenSSL version to match the
+latest stable archive across all release series on the
+[official source page](https://openssl-library.org/source/). Prereleases are
+excluded. Missing, ambiguous, unavailable or stale evidence fails; the check never
+updates the pin automatically. A new stable major or minor release requires a
+reviewed upgrade. Its receipt binds the observed page and native manifest
 hashes. This release-freshness check complements advisory matching; it is not a
 vulnerability-free or application-reachability verdict. Empty advisory API
 responses likewise do not establish indexing or complete native coverage.

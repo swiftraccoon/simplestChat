@@ -51,7 +51,7 @@ if [ "$check_group" = all ] || [ "$check_group" = rust ]; then
     # Homebrew toolchain earlier on PATH from taking over those child commands.
     PATH="$(dirname -- "$RUSTC"):$PATH"
     export PATH
-    OPENSSL_DIR="${OPENSSL_DIR:-$repo_root/target/openssl-3.5.9}"
+    OPENSSL_DIR="${OPENSSL_DIR:-$repo_root/target/openssl-4.0.3}"
     PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
     OPENSSL_STATIC=1
     PIP_CONSTRAINT="$repo_root/build/pip-constraints.txt"

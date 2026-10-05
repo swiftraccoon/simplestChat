@@ -2,9 +2,9 @@
 set -eu
 
 # Keep this in sync with the minimum enforced by the vendored mediasoup-sys
-# build. OpenSSL 3.5 is LTS through 2030-04-08.
-openssl_version='3.5.9'
-openssl_sha256='603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a'
+# build. Use the current stable release, with external loading disabled.
+openssl_version='4.0.3'
+openssl_sha256='325b5c806167c13b40b1ffeadfe0248197c00eccc4cf123ec1e28d2d2fd216d9'
 openssl_url="https://github.com/openssl/openssl/releases/download/openssl-${openssl_version}/openssl-${openssl_version}.tar.gz"
 
 install_prefix=${1:-}

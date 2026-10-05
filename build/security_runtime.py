@@ -248,7 +248,7 @@ def proof(  # noqa: PLR0913 -- Every independently authenticated artifact is exp
     )
     openssl = object_value(native["openssl"])
     require(
-        openssl["version"] == "3.5.9"
+        openssl["version"] == "4.0.3"
         and object_value(openssl["build"])["disabled_options"]
         == ["shared", "dso", "module", "engine"],
         "runtime_static_openssl",
@@ -353,7 +353,7 @@ def apply(
                 "justification": "vulnerable_code_not_in_execute_path",
                 "impact_statement": (
                     "Applies only to this exact image's shipped server under the enforced managed "
-                    "runtime profile. DTLS uses authenticated static OpenSSL 3.5.9 with external "
+                    "runtime profile. DTLS uses authenticated static OpenSSL 4.0.3 with external "
                     "DSO/module/engine loading disabled. The installed Fedora RPM remains "
                     "affected; other programs and operator-selected execution profiles are "
                     "outside this statement."

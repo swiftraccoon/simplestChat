@@ -108,7 +108,7 @@ class Fixture:
 
     def make_sources(self) -> JsonObject:
         """Build authenticated worker and AWS-LC archives plus their exact local files."""
-        installer = b"openssl_version='3.5.9'\nopenssl_sha256='" + b"0" * 64 + b"'\n"
+        installer = b"openssl_version='4.0.3'\nopenssl_sha256='" + b"0" * 64 + b"'\n"
         _ = put(self.root, "build/install-openssl.sh", installer)
         _ = put(
             self.root,
@@ -161,10 +161,10 @@ class Fixture:
                 "path": WORKER + "/deps/libwebrtc",
             },
             "openssl": {
-                "version": "3.5.9",
+                "version": "4.0.3",
                 "source": {
-                    "id": "openssl-3.5.9",
-                    "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
+                    "id": "openssl-4.0.3",
+                    "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz",
                     "sha256": "0" * 64,
                     "format": "tar.gz",
                 },
@@ -199,7 +199,7 @@ class Fixture:
         for name in ("ssl", "crypto"):
             _ = put(self.openssl, "lib/lib" + name + ".a", b"!<arch>\n" + name.encode())
         _ = put(
-            self.openssl, "include/openssl/opensslv.h", b'# define OPENSSL_VERSION_STR "3.5.9"\n'
+            self.openssl, "include/openssl/opensslv.h", b'# define OPENSSL_VERSION_STR "4.0.3"\n'
         )
         _ = put(
             self.openssl,

@@ -104,7 +104,7 @@ invocation with `--message-format=json`. After building, it runs:
 python3 build/security_native.py --root /app \
   --vendor-report /app/vendor-evidence/report.json \
   --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
-  --openssl-prefix /opt/openssl-3.5.9 --output /app/native-components.build.json
+  --openssl-prefix /opt/openssl-4.0.3 --output /app/native-components.build.json
 ```
 
 The helper rechecks the vendor receipt against current files, selects the actual
@@ -296,27 +296,33 @@ Cargo ignores a dependency's
 nested lockfile, so removing that generated package artifact does not change
 workspace resolution. The replacement build:
 
-- requires pkg-config to find OpenSSL 3.5.9 or newer on the 3.5 LTS line
-  (versions before 3.6.0);
+- requires pkg-config to find OpenSSL 4.0.3 or newer in the reviewed 4.0 series
+  (versions before 4.1.0);
 - forbids Meson fallback to a bundled copy;
 - requires static `libssl` and `libcrypto`; and
 - makes libsrtp use the same resolved dependency.
 
-The pinned source is OpenSSL 3.5.9, released 29 September 2026. The update follows
+The pinned source is OpenSSL 4.0.3, released 29 September 2026. The update follows
 the [OpenSSL security advisory](https://openssl-library.org/news/secadv/20260929.txt),
 including the High-severity DTLS issue CVE-2026-84782. The official source archive
-SHA-256 is `603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a`;
+SHA-256 is `325b5c806167c13b40b1ffeadfe0248197c00eccc4cf123ec1e28d2d2fd216d9`;
 the installer verifies it before unpacking, and `native-components.json` binds
-both the source and installer hashes. Cargo and Meson reject earlier 3.5 releases
+both the source and installer hashes. The release PGP signature was verified
+against the official primary fingerprint
+`B146647E45A7B33947AB226B2A2C87D161692D40`. Cargo and Meson reject earlier 4.0 releases
 and other release lines. Updating the source pin requires rebuilding the worker,
 Rust executables, native test image and production/load-generator images;
 previous binaries and historical scan receipts do not acquire the fix.
+OpenSSL 4 makes certificate subject-name access immutable. The maintained worker
+now constructs an owned name, copies it into the subject and issuer, and frees it
+on both success and failure. The native DTLS regression verifies both fields,
+the self signature and the existing real client/server handshakes.
 
 The maintained installer also configures `no-dso`, `no-module` and `no-engine`
 alongside `no-shared`. Dynamic provider and engine loading is disabled in these
 static libraries. Default and base providers remain built in; OpenSSL also builds
 the legacy provider in when modules are disabled, so this does **not** remove
-legacy algorithms. These settings follow the authenticated 3.5.9 source's
+legacy algorithms. These settings follow the authenticated 4.0.3 source's
 `Configure`, `providers/build.info` and `INSTALL.md` semantics.
 
 The installer records `shared`, `dso`, `module` and `engine` from the completed

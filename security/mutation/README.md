@@ -27,7 +27,7 @@ component and installs the checksum-verified mutation tool:
 
 ```sh
 build/check-security.sh deep --deep-check mutation \
-  --openssl-prefix "$PWD/target/openssl-3.5.9"
+  --openssl-prefix "$PWD/target/openssl-4.0.3"
 ```
 
 `deep` defaults to `--deep-check all` and runs application mutations without
@@ -37,7 +37,7 @@ the native component after the shared source gate. Vendor opt-in is rejected in
 CI environments. `--deep-check mutation` selects the application mutation scope
 explicitly and remains the scheduled CI command.
 The shared OpenSSL argument defaults to `OPENSSL_DIR` when set, otherwise
-`target/openssl-3.5.9` in the checkout.
+`target/openssl-4.0.3` in the checkout.
 
 For a focused local iteration, install the same tool and invoke the maintained
 helper directly with a **new** private output directory:
@@ -47,7 +47,7 @@ python3 build/security_tools.py install --tools cargo-mutants \
   --directory "$PWD/target/mutation-tools-local"
 python3 build/security_mutation.py \
   --tools-directory "$PWD/target/mutation-tools-local" \
-  --openssl-prefix "$PWD/target/openssl-3.5.9" \
+  --openssl-prefix "$PWD/target/openssl-4.0.3" \
   --output results/mutation-policy-local
 ```
 

@@ -445,20 +445,28 @@ namespace RTC
 			goto error;
 		}
 
-		// Set certificate fields.
-		certName = X509_get_subject_name(DtlsTransport::certificate);
+		// OpenSSL 4 exposes the certificate's subject as immutable. Build an
+		// owned name and copy it into the subject and issuer fields below.
+		certName = X509_NAME_new();
 
 		if (!certName)
 		{
-			LOG_OPENSSL_ERROR("X509_get_subject_name() failed");
+			LOG_OPENSSL_ERROR("X509_NAME_new() failed");
 
 			goto error;
 		}
 
-		X509_NAME_add_entry_by_txt(
-		  certName, "O", MBSTRING_ASC, reinterpret_cast<const uint8_t*>(subject.c_str()), -1, -1, 0);
-		X509_NAME_add_entry_by_txt(
-		  certName, "CN", MBSTRING_ASC, reinterpret_cast<const uint8_t*>(subject.c_str()), -1, -1, 0);
+		if (
+		  X509_NAME_add_entry_by_txt(
+		    certName, "O", MBSTRING_ASC, reinterpret_cast<const uint8_t*>(subject.c_str()), -1, -1, 0) != 1 ||
+		  X509_NAME_add_entry_by_txt(
+		    certName, "CN", MBSTRING_ASC, reinterpret_cast<const uint8_t*>(subject.c_str()), -1, -1, 0) != 1 ||
+		  X509_set_subject_name(DtlsTransport::certificate, certName) != 1)
+		{
+			LOG_OPENSSL_ERROR("setting X509 subject name failed");
+
+			goto error;
+		}
 
 		// It is self-signed so set the issuer name to be the same as the subject.
 		ret = X509_set_issuer_name(DtlsTransport::certificate, certName);
@@ -480,9 +488,12 @@ namespace RTC
 			goto error;
 		}
 
+		X509_NAME_free(certName);
+
 		return;
 
 	error:
+		X509_NAME_free(certName);
 
 		if (DtlsTransport::privateKey)
 		{

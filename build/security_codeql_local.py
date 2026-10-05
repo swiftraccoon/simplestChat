@@ -83,7 +83,7 @@ class Options(argparse.Namespace):
     output: Path = Path()
     language: str | None = None
     suite: str = "security"
-    openssl_prefix: Path = ROOT / "target/openssl-3.5.9"
+    openssl_prefix: Path = ROOT / "target/openssl-4.0.3"
     database_cache: Path | None = None
     rust_cargo_cache: Path | None = None
     include_vendor: bool = False
@@ -537,7 +537,7 @@ def main() -> int:
     _ = parser.add_argument("--output", type=Path, required=True)
     _ = parser.add_argument("--language", choices=tools.LANGUAGES)
     _ = parser.add_argument("--suite", choices=("security", "all"), default="security")
-    _ = parser.add_argument("--openssl-prefix", type=Path, default=ROOT / "target/openssl-3.5.9")
+    _ = parser.add_argument("--openssl-prefix", type=Path, default=ROOT / "target/openssl-4.0.3")
     _ = parser.add_argument("--database-cache", type=Path)
     _ = parser.add_argument("--rust-cargo-cache", type=Path)
     _ = parser.add_argument(

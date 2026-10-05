@@ -347,8 +347,8 @@ libuv_proj = subproject(
 
 openssl_dep = dependency(
   'openssl',
-  # A bare >=3.5.9 would admit CVE-2026-84782 in 3.6.0-3.6.4 and 4.0.0-4.0.2.
-  version: ['>=3.5.9', '<3.6.0'],
+  # Require the reviewed stable series and the CVE-2026-84782 fix.
+  version: ['>=4.0.3', '<4.1.0'],
   method: 'pkg-config',
   static: true,
   required: true,

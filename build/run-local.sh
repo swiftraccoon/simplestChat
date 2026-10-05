@@ -42,7 +42,7 @@ if [ -z "$toolchain" ]; then
     echo 'Cannot read the Rust channel from rust-toolchain.toml.' >&2
     exit 2
 fi
-export OPENSSL_DIR="$repo_root/target/openssl-3.5.9"
+export OPENSSL_DIR="$repo_root/target/openssl-4.0.3"
 export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
 export OPENSSL_STATIC=1
 export PIP_CONSTRAINT="$repo_root/build/pip-constraints.txt"

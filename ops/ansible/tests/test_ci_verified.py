@@ -502,7 +502,7 @@ class VerifiedCacheTests(unittest.TestCase):
             ("test:stress", "test:stress-extra", False),
             ("cargo build --locked --all-features --bins", "cargo build --locked --bins", True),
             ('OPENSSL_STATIC: "1"', 'OPENSSL_STATIC: "0"', True),
-            ("target/openssl-3.5.9", "target/openssl-3.5.10", True),
+            ("target/openssl-4.0.3", "target/openssl-4.0.4", True),
             ("cache-key: rust-build", "cache-key: different-build", True),
         ):
             with self.subTest(before=before):
@@ -568,13 +568,13 @@ class VerifiedCacheTests(unittest.TestCase):
     def test_backend_dependency_guard_binds_generated_inputs_and_depinfo_bytes(self) -> None:
         """Generated files inherit pinned build inputs; restored dep-info is authenticated."""
         generated = "target/debug/build/mediasoup-sys-1234567890abcdef/out/fbs.rs"
-        openssl = "target/openssl-3.5.9/lib/libssl.a"
+        openssl = "target/openssl-4.0.3/lib/libssl.a"
         for relative in (generated, openssl):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             _ = path.write_text("generated fixture\n")
         output = self.backend_fixture(("src/main.rs", "vendor", generated, openssl))
-        with patch.dict(os.environ, {"OPENSSL_DIR": str(self.root / "target/openssl-3.5.9")}):
+        with patch.dict(os.environ, {"OPENSSL_DIR": str(self.root / "target/openssl-4.0.3")}):
             key = cache.cache_key(self.root, "backend")
             directory = self.root / "cache"
             cache.save(self.root, "backend", key, directory)

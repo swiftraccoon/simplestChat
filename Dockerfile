@@ -68,14 +68,14 @@ RUN --mount=type=bind,from=image-review-inputs,source=/image-exceptions.json,tar
     && dnf clean all
 
 # Fedora 44 currently has no native OpenSSL static-devel package. Build the
-# fixed LTS release from its official, checksum-pinned source so both the C++
+# current stable release from its official, checksum-pinned source so both the C++
 # worker and Rust OpenSSL bindings use one version and the runtime cannot load
 # an older libssl with the same SONAME.
 COPY build/install-openssl.sh /usr/local/bin/install-simplestchat-openssl
-RUN /usr/local/bin/install-simplestchat-openssl /opt/openssl-3.5.9
-ENV OPENSSL_DIR=/opt/openssl-3.5.9 \
+RUN /usr/local/bin/install-simplestchat-openssl /opt/openssl-4.0.3
+ENV OPENSSL_DIR=/opt/openssl-4.0.3 \
     OPENSSL_STATIC=1 \
-    PKG_CONFIG_PATH=/opt/openssl-3.5.9/lib/pkgconfig
+    PKG_CONFIG_PATH=/opt/openssl-4.0.3/lib/pkgconfig
 
 # Verify rustup before executing it. TARGETARCH is supplied by Docker/BuildKit;
 # the uname fallback also supports direct Podman builds.
@@ -135,14 +135,14 @@ COPY migrations/*.sql ./migrations/
 RUN python3 build/security_tools.py path cargo-auditable --directory /opt/security-tools \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
         --message-format=json > /app/cargo-build.json \
-    && strings target/release/simplestChat | grep -Fq 'OpenSSL 3.5.9 29 Sep 2026' \
+    && strings target/release/simplestChat | grep -Fq 'OpenSSL 4.0.3 29 Sep 2026' \
     && ! strings target/release/simplestChat | grep -Fq 'OpenSSL 3.0.8' \
     && ! ldd target/release/simplestChat | grep -Eq 'lib(ssl|crypto)\.so'
 COPY build/security_native.py build/security_elf.py build/install-openssl.sh ./build/
 RUN python3 build/security_native.py --root /app \
     --vendor-report /app/vendor-evidence/report.json \
     --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
-    --openssl-prefix /opt/openssl-3.5.9 --output /app/native-components.build.json
+    --openssl-prefix /opt/openssl-4.0.3 --output /app/native-components.build.json
 
 # The load tester has a separate target so its WebRTC client dependencies and
 # executable are absent from the default production image.

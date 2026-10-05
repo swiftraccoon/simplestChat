@@ -11,7 +11,7 @@ project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 dtls_python="${PYTHON:-python3}"
 dtls_cc="${CC:-clang}"
 dtls_cxx="${CXX:-clang++}"
-dtls_openssl="${OPENSSL_DIR:-${project_root}/target/openssl-3.5.9}"
+dtls_openssl="${OPENSSL_DIR:-${project_root}/target/openssl-4.0.3}"
 dtls_temp_parent="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 for dtls_tool in "${dtls_python}" "${dtls_cc}" "${dtls_cxx}" pkg-config; do
   if ! command -v "${dtls_tool}" >/dev/null; then

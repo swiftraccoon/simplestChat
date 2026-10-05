@@ -1,4 +1,4 @@
-"""Require the pinned OpenSSL series to match its vendor's current stable patch.
+"""Require pinned OpenSSL to match its vendor's latest stable release.
 
 Vulnerability databases can lag a vendor advisory even after downloading their
 latest snapshot. This independent freshness gate consults the official current
@@ -64,20 +64,22 @@ class Releases(HTMLParser):
 
 
 def latest_version(page: bytes, pinned: str) -> str:
-    """Require one current stable archive for the pinned major/minor series.
+    """Select the highest stable release from the current official release table.
 
-    An absent or ambiguous series fails instead of silently selecting an old
-    link, a prerelease, another release series or an unrecognized new layout.
+    Require one release per series. An absent or ambiguous table fails instead
+    of accepting an old or duplicate entry; prereleases never become candidates.
     """
     require(re.fullmatch(VERSION, pinned) is not None, "openssl_pinned_version")
     require(0 < len(page) <= MAX_PAGE, "openssl_release_page_size")
     parser = Releases()
     parser.feed(page.decode("utf-8", errors="strict"))
     parser.close()
-    series = pinned.rsplit(".", 1)[0]
-    matches = [value for value in parser.versions if value.rsplit(".", 1)[0] == series]
-    require(len(matches) == 1, "openssl_release_series_missing_or_ambiguous")
-    return matches[0]
+    series = [value.rsplit(".", 1)[0] for value in parser.versions]
+    require(
+        bool(series) and len(series) == len(set(series)),
+        "openssl_release_series_missing_or_ambiguous",
+    )
+    return max(parser.versions, key=lambda value: tuple(int(part) for part in value.split(".")))
 
 
 def fetch_page(context: Context) -> bytes:
@@ -144,7 +146,7 @@ def check(context: Context, snapshot: Path) -> None:
             (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode(),
             0o600,
         )
-        require(current == pinned, "openssl_patch_update_required")
+        require(current == pinned, "openssl_stable_update_required")
         result.update(exitStatus=0, pinnedVersion=pinned, latestVersion=current)
     finally:
         result["elapsedSeconds"] = round(time.monotonic() - started, 3)

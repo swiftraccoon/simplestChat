@@ -56,7 +56,7 @@ archive requires a 1 GiB decoding window, which preparation explicitly allows.
 [LLVM release](https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.2).
 
 The Fedora 44 base uses the same immutable manifest as the release build.
-OpenSSL uses the existing checksum-pinned 3.5.9 installer. Invoke, Meson and
+OpenSSL uses the existing checksum-pinned 4.0.3 installer. Invoke, Meson and
 Ninja use the worker's hash-locked, wheel-only requirements. Meson downloads
 checksum-authenticated wraps during preparation; actual compile/test containers
 have no network and use `--wrap-mode=nodownload`. Compiler and FlatBuffers

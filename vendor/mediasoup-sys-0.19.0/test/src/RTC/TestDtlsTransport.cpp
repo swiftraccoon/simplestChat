@@ -16,6 +16,11 @@ namespace RTC
 	class DtlsTransportTestAccess
 	{
 	public:
+		static const X509* Certificate()
+		{
+			return DtlsTransport::certificate;
+		}
+
 		static bool HasResetReceiveState(const DtlsTransport& transport)
 		{
 			return !transport.timer->IsActive() && !transport.localRole.has_value() &&
@@ -26,19 +31,27 @@ namespace RTC
 		static bool FailSsl(DtlsTransport& transport, bool syscall, bool receivedShutdown)
 		{
 			ERR_clear_error();
+			// OpenSSL 4 records the result of SSL I/O on the SSL object. Raising
+			// an unrelated thread-local queue entry no longer makes I/O fail.
+			int result;
+			if (syscall)
+			{
+				BIO_set_callback_ex(transport.sslBioFromNetwork, FailBioRead);
+				uint8_t buffer;
+				result = SSL_read(transport.ssl, &buffer, sizeof(buffer));
+				BIO_set_callback_ex(transport.sslBioFromNetwork, nullptr);
+			}
+			else
+			{
+				result = SSL_read(transport.ssl, nullptr, -1);
+			}
+			REQUIRE(result < 0);
+			REQUIRE(SSL_get_error(transport.ssl, result) == (syscall ? SSL_ERROR_SYSCALL : SSL_ERROR_SSL));
 			if (receivedShutdown)
 			{
 				SSL_set_shutdown(transport.ssl, SSL_RECEIVED_SHUTDOWN);
 			}
-			if (syscall)
-			{
-				ERR_raise(ERR_LIB_SYS, EIO);
-			}
-			else
-			{
-				ERR_raise(ERR_LIB_SSL, SSL_R_UNEXPECTED_MESSAGE);
-			}
-			return transport.CheckStatus(-1);
+			return transport.CheckStatus(result);
 		}
 
 		static void UseLongHandshakeTimeout(DtlsTransport& transport)
@@ -49,6 +62,25 @@ namespace RTC
 		static bool SetSrtpProfile(DtlsTransport& transport, const char* profile)
 		{
 			return SSL_set_tlsext_use_srtp(transport.ssl, profile) == 0;
+		}
+
+	private:
+		static long FailBioRead(
+		  BIO* bio, int operation, const char*, size_t, int command, long, int result, size_t*)
+		{
+			if (operation == BIO_CB_READ)
+			{
+				BIO_clear_retry_flags(bio);
+				errno = EIO;
+				ERR_raise(ERR_LIB_SYS, EIO);
+				return -1;
+			}
+			// An I/O failure is neither a retry nor orderly EOF on this owned BIO.
+			if (operation == BIO_CB_CTRL && command == BIO_CTRL_EOF)
+			{
+				return 0;
+			}
+			return (operation & BIO_CB_RETURN) != 0 ? result : 1;
 		}
 	};
 } // namespace RTC
@@ -175,6 +207,36 @@ namespace
 		}
 	};
 } // namespace
+
+TEST_CASE("DTLS generated certificate retains its subject and self signature", "[dtls]")
+{
+	DtlsClass dtlsClass;
+	auto* certificate = Access::Certificate();
+	REQUIRE(certificate != nullptr);
+	const auto* subject = X509_get_subject_name(certificate);
+	const auto* issuer  = X509_get_issuer_name(certificate);
+	REQUIRE(subject != nullptr);
+	REQUIRE(issuer != nullptr);
+	CHECK(X509_NAME_cmp(subject, issuer) == 0);
+	const auto commonNameIndex   = X509_NAME_get_index_by_NID(subject, NID_commonName, -1);
+	const auto organizationIndex = X509_NAME_get_index_by_NID(subject, NID_organizationName, -1);
+	REQUIRE(commonNameIndex >= 0);
+	REQUIRE(organizationIndex >= 0);
+	const auto* commonName = X509_NAME_ENTRY_get_data(X509_NAME_get_entry(subject, commonNameIndex));
+	const auto* organization = X509_NAME_ENTRY_get_data(X509_NAME_get_entry(subject, organizationIndex));
+	REQUIRE(commonName != nullptr);
+	REQUIRE(organization != nullptr);
+	CHECK(ASN1_STRING_cmp(commonName, organization) == 0);
+	REQUIRE(ASN1_STRING_length(commonName) > 0);
+	const std::string name(
+	  reinterpret_cast<const char*>(ASN1_STRING_get0_data(commonName)),
+	  static_cast<size_t>(ASN1_STRING_length(commonName)));
+	CHECK(name.find("mediasoup") == 0);
+	std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> publicKey(
+	  X509_get_pubkey(certificate), EVP_PKEY_free);
+	REQUIRE(publicKey != nullptr);
+	CHECK(X509_verify(certificate, publicKey.get()) == 1);
+}
 
 TEST_CASE("DTLS authenticated peer close retains its reason after reset", "[dtls][dtls-close]")
 {

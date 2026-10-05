@@ -66,7 +66,7 @@ a deployment.
 
 Mutation checks require the documented native compiler, locked Cargo cache and
 checksum-pinned static OpenSSL prefix. `--openssl-prefix` defaults to `OPENSSL_DIR`
-or the checkout's `target/openssl-3.5.9`. The runner builds a private source copy
+or the checkout's `target/openssl-4.0.3`. The runner builds a private source copy
 and measures assertions over selected pure role, label and password policies.
 See [mutation checks](../security/mutation/README.md) for platform support, limits
 and failure interpretation. Unsupported tool platforms fail explicitly.
@@ -95,7 +95,7 @@ for detailed archive, scanner, database, license and ELF contracts.
 | Gitleaks | Redacted current-tree and change-range scans with exact public-fixture exceptions | Pattern detection cannot recognize every secret or encoding. |
 | Semgrep | Local tested rules; complete explicit target and rule inventories | Scope and limits are documented in the rule pack. |
 | Cargo audit | Current RustSec database and all reported advisories | Reviewed exact dependency-health warnings are counted. |
-| OpenSSL freshness | The pinned major/minor series must match the vendor's current stable patch | Complements advisory databases; does not establish coverage of other native libraries. |
+| OpenSSL freshness | The pin must match the vendor's latest stable release across all series | Complements advisory databases; does not establish coverage of other native libraries. |
 | Cargo deny | Approved licenses, crates.io origins, banned crates and dependency constraints | A separate exact duplicate budget covers the all-feature graph. |
 | Pip audit | All five hashed build, deployment, scanner and native Python requirement sets | Uses current package advisory service responses. |
 | Npm audit | Both web and browser-harness lockfiles | Lockfile audit remains necessary for bundled JavaScript. |
@@ -204,7 +204,7 @@ a Linux environment with the pinned OpenSSL prefix:
 ```sh
 python3 build/security_codeql_local.py --revision "$(git rev-parse HEAD)" \
   --include-vendor --language c-cpp --suite all \
-  --openssl-prefix "$PWD/target/openssl-3.5.9" \
+  --openssl-prefix "$PWD/target/openssl-4.0.3" \
   --output "$PWD/results/codeql-native-local"
 ```
 

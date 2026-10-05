@@ -97,8 +97,8 @@ including its port when using Vite or a second instance.
 For release builds or direct Cargo commands, configure the native environment:
 
 ```sh
-build/install-openssl.sh "$PWD/target/openssl-3.5.9"
-export OPENSSL_DIR="$PWD/target/openssl-3.5.9"
+build/install-openssl.sh "$PWD/target/openssl-4.0.3"
+export OPENSSL_DIR="$PWD/target/openssl-4.0.3"
 export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
 export OPENSSL_STATIC=1
 export PIP_CONSTRAINT="$PWD/build/pip-constraints.txt"
