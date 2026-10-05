@@ -299,6 +299,102 @@ class NativeCacheTests(unittest.TestCase):
                 )
             run.assert_not_called()
 
+    def test_save_restore_keeps_final_results_and_limits_cleanup_to_native(self) -> None:
+        """Keep evaluated bytes for both languages, clearing intermediates only for native."""
+        contents = {
+            "codeql-database.yml": b"extraction identity",
+            "src.zip": b"archived source bytes",
+            "results/security.bqrs": b"evaluated security results",
+            "results/diagnostics.bqrs": b"completed extraction diagnostics",
+        }
+        for language in ("c-cpp", "rust"):
+            with self.subTest(language=language):
+                output = self.directory / language
+                output.mkdir()
+                directory = output / "cache"
+                database = output / "restored" / language
+                context = Context(ROOT, output)
+
+                def run(
+                    name: str,
+                    argv: Sequence[str],
+                    *,
+                    language: str = language,
+                    output: Path = output,
+                    database: Path = database,
+                    **_kwargs: object,
+                ) -> tuple[int, bytes]:
+                    if name == "codeql-cache-bundle":
+                        self.assertIn("--include-results", argv)
+                        self.assertIn("--include-diagnostics", argv)
+                        self.assertIn("--no-include-logs", argv)
+                        self.assertEqual("--cache-cleanup=clear" in argv, language == "c-cpp")
+                        self.assertEqual(argv[-1], str(output / "databases" / language))
+                        path = Path(
+                            next(
+                                a.removeprefix("--output=")
+                                for a in argv
+                                if a.startswith("--output=")
+                            )
+                        )
+                        with zipfile.ZipFile(path, "w") as archive:
+                            for member, data in contents.items():
+                                archive.writestr(language + "/" + member, data)
+                    else:
+                        self.assertEqual(name, "codeql-cache-unbundle")
+                        self.assertIn("--name=" + language, argv)
+                        self.assertIn("--target=" + str(database.parent), argv)
+                        with zipfile.ZipFile(argv[-1]) as archive:
+                            for member in contents:
+                                target = database / member
+                                target.parent.mkdir(parents=True, exist_ok=True)
+                                _ = target.write_bytes(archive.read(language + "/" + member))
+                    return 0, b""
+
+                with patch.object(context, "run", side_effect=run):
+                    receipt = cache.save(
+                        context,
+                        Path("/codeql"),
+                        directory,
+                        "exact-key",
+                        "a" * 40,
+                        language=language,
+                    )
+                    restored = cache.restore(
+                        context, Path("/codeql"), directory, "exact-key", database
+                    )
+                self.assertEqual(restored, {**receipt, "reused": True})
+                self.assertEqual(
+                    {member: (database / member).read_bytes() for member in contents}, contents
+                )
+                self.assertEqual(
+                    {p.name for p in directory.iterdir()}, {"database.zip", "receipt.json"}
+                )
+                self.assertFalse(list(output.glob(".codeql-analyzed-*")))
+
+    def test_save_refuses_missing_final_results_before_publication(self) -> None:
+        """Cleanup can never publish a bundle that lost its evaluated query results."""
+        context = Context(ROOT, self.directory)
+        directory = self.directory / "cache"
+
+        def run(_name: str, argv: Sequence[str], **_kwargs: object) -> tuple[int, bytes]:
+            path = Path(
+                next(a.removeprefix("--output=") for a in argv if a.startswith("--output="))
+            )
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("c-cpp/codeql-database.yml", b"fixture")
+            return 0, b""
+
+        with (
+            patch.object(context, "run", side_effect=run),
+            self.assertRaisesRegex(ToolError, "codeql_cache_query_results_missing"),
+        ):
+            _ = cache.save(
+                context, Path("/codeql"), directory, "exact-key", "a" * 40, language="c-cpp"
+            )
+        self.assertFalse(directory.exists())
+        self.assertFalse(list(self.directory.glob(".codeql-analyzed-*")))
+
     def run_analysis(
         self,
         *,
