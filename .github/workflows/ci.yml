@@ -1010,6 +1010,8 @@ jobs:
 
       - name: Build production container
         shell: bash
+        env:
+          CACHE_PRIMARY_HIT: ${{ steps.production-cache.outputs.cache-hit }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
@@ -1042,18 +1044,25 @@ jobs:
           if [[ -f "${cache_dir}/index.json" ]]; then
             cache_from=(--cache-from "type=local,src=${cache_dir}")
           fi
+          cache_to=()
+          if [[ "${CACHE_PRIMARY_HIT}" != true ]]; then
+            cache_to=(--cache-to "type=local,dest=${cache_dir}-next,mode=max")
+          fi
           timeout --signal=TERM --kill-after=2m 50m \
             docker buildx build --pull --load --target production --platform linux/amd64 \
               --provenance=false --sbom=false \
-              "${cache_from[@]}" \
-              --cache-to "type=local,dest=${cache_dir}-next,mode=max" \
+              ${cache_from[@]+"${cache_from[@]}"} \
+              ${cache_to[@]+"${cache_to[@]}"} \
               --build-arg "SOURCE_REVISION=${GITHUB_SHA}" \
               --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
               --iidfile "${RUNNER_TEMP}/production.iid" \
               --tag "${PRODUCTION_IMAGE}" .
-          # Replace rather than append: an appended local cache grows without bound.
-          rm -rf "${cache_dir}"
-          mv "${cache_dir}-next" "${cache_dir}"
+          # Exact hits cannot be published again; avoid exporting unused layers.
+          # Otherwise replace, rather than append, to bound the cache's growth.
+          if [[ "${CACHE_PRIMARY_HIT}" != true ]]; then
+            rm -rf "${cache_dir}"
+            mv "${cache_dir}-next" "${cache_dir}"
+          fi
           # The release fixture requires an empty engine; the builder's
           # BuildKit container must not outlive the build.
           docker buildx rm --force simplestchat-ci

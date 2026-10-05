@@ -826,6 +826,112 @@ class SecurityWorkflowTests(unittest.TestCase):
             '--image-database-cache "${RUNNER_TEMP}/image-database-cache"', string(scan, "run")
         )
 
+    def test_image_build_exports_layers_only_when_the_primary_cache_is_missing(self) -> None:
+        """Run the actual build wrapper through cache hits, misses and a partial failed export."""
+        (ROOT / "results").mkdir(exist_ok=True)
+        steps = objects(workflow("ci.yml"), "jobs", "deployment", "steps")
+        build = next(step for step in steps if step.get("name") == "Build production container")
+        self.assertEqual(
+            at(build, "env", "CACHE_PRIMARY_HIT"),
+            "${{ steps.production-cache.outputs.cache-hit }}",
+        )
+        save = next(
+            step for step in steps if step.get("name") == "Save completed image layer cache"
+        )
+        self.assertEqual(
+            save["if"], "${{ success() && steps.production-cache.outputs.cache-hit != 'true' }}"
+        )
+        stubs = r"""
+git() {
+  case "$1" in
+    rev-parse) printf '%s\n' "$GITHUB_SHA";;
+    status) return 0;;
+    *) return 1;;
+  esac
+}
+timeout() {
+  [[ "$1 $2 $3" == '--signal=TERM --kill-after=2m 50m' ]]
+  shift 3
+  "$@"
+}
+docker() {
+  if [[ "$1 $2" != 'buildx build' ]]; then
+    [[ "$1 $2" == 'buildx create' || "$1 $2" == 'buildx rm' ]]
+    return
+  fi
+  printf '%s\n' "$@" > "$TEST_BUILD_ARGS"
+  shift 2
+  while (( $# )); do
+    case "$1" in
+      --cache-to)
+        destination="${2#type=local,dest=}"
+        destination="${destination%,mode=max}"
+        mkdir -p "$destination"
+        printf 'new layers\n' > "$destination/index.json"
+        shift 2;;
+      --iidfile) printf '%s\n' "$TEST_IMAGE_ID" > "$2"; shift 2;;
+      *) shift;;
+    esac
+  done
+  return "$TEST_BUILD_STATUS"
+}
+"""
+        for hit, restored, status in (
+            ("true", True, 0),
+            ("false", True, 0),
+            ("", False, 0),
+            ("false", True, 23),
+        ):
+            with (
+                self.subTest(hit=hit, restored=restored, status=status),
+                tempfile.TemporaryDirectory(prefix="image cache-", dir=ROOT / "results") as tmp,
+            ):
+                directory = Path(tmp)
+                cache = directory / "buildx-cache"
+                if restored:
+                    cache.mkdir()
+                    _ = (cache / "index.json").write_text("original layers\n")
+                    _ = (cache / "existing-layer").write_bytes(b"original layer bytes")
+                arguments = directory / "arguments"
+                output = directory / "environment"
+                image = "sha256:" + "b" * 64
+                result = subprocess.run(  # noqa: S603 -- Owned fixture of the actual build wrapper.
+                    ["/bin/bash", "-c", stubs + string(build, "run")],
+                    env={
+                        "PATH": "/usr/bin:/bin",
+                        "RUNNER_TEMP": tmp,
+                        "GITHUB_SHA": "a" * 40,
+                        "GITHUB_ENV": str(output),
+                        "PRODUCTION_IMAGE": "fixture:latest",
+                        "CACHE_PRIMARY_HIT": hit,
+                        "TEST_BUILD_ARGS": str(arguments),
+                        "TEST_BUILD_STATUS": str(status),
+                        "TEST_IMAGE_ID": image,
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=5,
+                )
+                self.assertEqual(result.returncode, status, result.stderr)
+                tokens = arguments.read_text().splitlines()
+                self.assertEqual("--cache-from" in tokens, restored)
+                if restored:
+                    self.assertEqual(
+                        tokens[tokens.index("--cache-from") + 1], f"type=local,src={cache}"
+                    )
+                self.assertEqual("--cache-to" in tokens, hit != "true")
+                self.assertEqual(
+                    (cache / "index.json").read_text(),
+                    "original layers\n" if hit == "true" or status else "new layers\n",
+                )
+                self.assertEqual((cache / "existing-layer").exists(), hit == "true" or status != 0)
+                self.assertEqual((directory / "buildx-cache-next").exists(), status != 0)
+                self.assertEqual(
+                    output.read_text() if output.exists() else "",
+                    "" if status else f"PRODUCTION_IMAGE={image}\n",
+                )
+
     def test_build_caches_cannot_fall_back_across_trust_or_architecture(self) -> None:
         """PR build artifacts remain outside the main compiler/layer cache namespace."""
         composite = obj(
