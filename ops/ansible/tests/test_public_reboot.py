@@ -152,11 +152,20 @@ class FixtureRunner:
                     "envNames": ["PATH", "RUST_LOG"],
                 }
             ).encode()
+        if args[:5] == ("ps", "--all", "--no-trunc", "--quiet", "--filter"):
+            name = args[5].removeprefix("name=^/").removesuffix("$")
+            assert name in reboot.COMPANIONS
+            value = self.state.companions.get(name)
+            return string(value, "id").encode() if value is not None else b""
+        if args[0] == "start":
+            value = next(item for item in self.state.companions.values() if item["id"] == args[-1])
+            obj(value, "state")["Running"] = True
+            return b""
         if args[0] == "inspect":
             return json.dumps(
                 next(
                     value
-                    for value in self.state.containers.values()
+                    for value in [*self.state.containers.values(), *self.state.companions.values()]
                     if value and value["id"] == args[-1]
                 )
             ).encode()
@@ -199,6 +208,7 @@ class PublicRebootTests(unittest.TestCase):
         self.current_boot = OLD_BOOT
         self.calls: list[tuple[str, tuple[str, ...], dict[str, object]]] = []
         self.containers: dict[str, JsonObject | None] = {}
+        self.companions: dict[str, JsonObject] = {}
         self.resolved: JsonObject = {}
         self.changed_hash: str | None = None
         self.migration_container = False
@@ -236,6 +246,7 @@ class PublicRebootTests(unittest.TestCase):
         self.current_boot = OLD_BOOT
         self.calls = []
         self.containers = {}
+        self.companions = {}
         for index, (service, image) in enumerate(
             (("simplestchat", APP_IMAGE), ("postgres", PG_IMAGE), ("caddy", PROXY_IMAGE)), 1
         ):
@@ -346,6 +357,54 @@ class PublicRebootTests(unittest.TestCase):
             for kind, args, _ in self.calls
             if kind == "compose" and args[0] in ("stop", "start") and "--help" not in args
         ]
+
+    def test_reboot_restores_only_previously_running_managed_companions(self) -> None:
+        """Docker auto-start is not assumed, and intentionally stopped services stay stopped."""
+        for index, name in enumerate(reboot.COMPANIONS, 4):
+            self.companions[name] = {
+                "id": str(index) * 64,
+                "image": "sha256:" + "f" * 64,
+                "configHash": "9" * 64,
+                "state": {"Running": index != 6, "OOMKilled": False},
+            }
+        _ = self.execute("prepare")
+        self.current_boot = NEW_BOOT
+        obj(self.companions["simplestchat-turn-turn-1"], "state")["Running"] = False
+        self.calls.clear()
+        result = self.execute("resume")
+        self.assertIs(result["passed"], expr2=True)
+        self.assertEqual(
+            [args for kind, args, _ in self.calls if kind == "docker" and args[0] == "start"],
+            [("start", "4" * 64)],
+        )
+        self.assertIs(
+            at(self.companions["simplestchat-turn-turn-1"], "state", "Running"), expr2=True
+        )
+        self.assertIs(
+            at(self.companions["simplestchat-monitoring-node-exporter-1"], "state", "Running"),
+            expr2=False,
+        )
+
+    def test_replaced_companion_refuses_recovery_before_starting_any_container(self) -> None:
+        """A reboot journal cannot start a replacement that reused the old service name."""
+        name = "simplestchat-turn-turn-1"
+        self.companions[name] = {
+            "id": "4" * 64,
+            "image": "sha256:" + "f" * 64,
+            "configHash": "9" * 64,
+            "state": {"Running": True, "OOMKilled": False},
+        }
+        _ = self.execute("prepare")
+        self.current_boot = NEW_BOOT
+        self.companions[name]["id"] = "5" * 64
+        self.calls.clear()
+        with self.assertRaisesRegex(public.ReleaseError, "Managed companion changed"):
+            _ = self.execute("resume")
+        self.assertEqual(self.mutations(), [])
+        self.assertFalse(
+            any(kind == "docker" and args[0] == "start" for kind, args, _ in self.calls)
+        )
+        self.assertIs(self.state()["finalized"], expr2=False)
 
     def test_older_compose_is_rejected_before_any_stops_or_unfinished_journal(self) -> None:
         """Older compose is rejected before any stops or unfinished journal."""

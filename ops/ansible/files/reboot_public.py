@@ -34,6 +34,11 @@ CONFIGURATION = {
     "Caddyfile": 0o644,
     "pg_hba.conf": 0o644,
 }
+COMPANIONS = {
+    "simplestchat-turn-turn-1": ("simplestchat-turn", "turn"),
+    "simplestchat-monitoring-prometheus-1": ("simplestchat-monitoring", "prometheus"),
+    "simplestchat-monitoring-node-exporter-1": ("simplestchat-monitoring", "node-exporter"),
+}
 UUID = re.compile(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}")
 HEX = re.compile(r"[a-f0-9]{64}")
 CONTAINER_FORMAT = (
@@ -95,6 +100,97 @@ def container(runner: public.RunnerProtocol, service: str) -> JsonObject:
 def identity(value: JsonObject) -> JsonObject:
     """Select immutable fields used to reject replacement containers."""
     return {key: value[key] for key in ("id", "image", "configHash")}
+
+
+def companion(runner: public.RunnerProtocol, name: str) -> JsonObject | None:
+    """Inspect only an existing named container with the expected ownership labels."""
+    project, service = COMPANIONS[name]
+    identifier = (
+        runner.docker(
+            "ps",
+            "--all",
+            "--no-trunc",
+            "--quiet",
+            "--filter",
+            f"name=^/{name}$",
+            "--filter",
+            f"label=com.docker.compose.project={project}",
+            "--filter",
+            f"label=com.docker.compose.service={service}",
+            timeout=10,
+        )
+        .decode()
+        .strip()
+    )
+    if not identifier:
+        return None
+    public.require(HEX.fullmatch(identifier), "Ambiguous managed companion container")
+    value = object_value(
+        decode_json(
+            runner.docker(
+                "inspect",
+                "--format",
+                CONTAINER_FORMAT,
+                identifier,
+                timeout=10,
+            )
+        )
+    )
+    public.require(
+        value["id"] == identifier
+        and public.ID.fullmatch(string_value(value["image"]))
+        and HEX.fullmatch(string_value(value["configHash"]))
+        and type(object_value(value["state"]).get("Running")) is bool,
+        "Invalid managed companion identity",
+    )
+    return value
+
+
+def capture_companions(runner: public.RunnerProtocol) -> JsonObject:
+    """Persist which managed relay/monitoring containers were actually running."""
+    values: JsonObject = {}
+    for name in COMPANIONS:
+        value = companion(runner, name)
+        if value is not None:
+            values[name] = {**identity(value), "running": object_value(value["state"])["Running"]}
+    return values
+
+
+def validate_companions(runner: public.RunnerProtocol, saved: JsonObject) -> dict[str, JsonObject]:
+    """Refuse replacements before recovery; absent or intentionally stopped services stay so."""
+    records = object_value(saved["companions"])
+    public.require(set(records) <= set(COMPANIONS), "Unexpected managed companion selection")
+    values: dict[str, JsonObject] = {}
+    for name, record in records.items():
+        previous = object_value(record)
+        public.require(type(previous.get("running")) is bool, "Missing companion running state")
+        current = companion(runner, name)
+        if current is None:
+            message = "Managed companion disappeared during reboot"
+            raise public.ReleaseError(message)
+        public.require(
+            identity(current) == identity(previous), "Managed companion changed during reboot"
+        )
+        values[name] = current
+    return values
+
+
+def restore_companions(runner: public.RunnerProtocol, saved: JsonObject) -> None:
+    """Restart only previously running, unchanged containers; never create or replace any."""
+    values = validate_companions(runner, saved)
+    for name, previous in object_value(saved["companions"]).items():
+        if object_value(previous)["running"] is not True:
+            continue
+        value = values[name]
+        if object_value(value["state"])["Running"] is not True:
+            _ = runner.docker("start", string_value(value["id"]), timeout=30)
+        current = companion(runner, name)
+        public.require(
+            current is not None
+            and identity(current) == identity(value)
+            and object_value(current["state"]).get("Running") is True,
+            "Managed companion did not resume",
+        )
 
 
 def selection(runner: public.RunnerProtocol) -> JsonObject:
@@ -188,6 +284,7 @@ def capture(runner: public.RunnerProtocol) -> JsonObject:
         "configuration": dict(hashes),
         "selection": selected,
         "containers": {service: identity(value) for service, value in containers.items()},
+        "companions": capture_companions(runner),
         "origin": origin,
         "resolvedSha256": hashlib.sha256(json.dumps(resolved, sort_keys=True).encode()).hexdigest(),
     }
@@ -235,6 +332,7 @@ def write_state(runner: public.AttemptContext, saved: JsonObject, phase: str) ->
 def start(runner: public.RunnerProtocol, saved: JsonObject) -> None:
     """Start existing containers in dependency order with bounded readiness gates."""
     _ = validate(runner, saved)
+    _ = validate_companions(runner, saved)
     _ = runner.compose("start", "--wait", "--wait-timeout", "180", "postgres", timeout=195)
     database = container(runner, "postgres")
     state = object_value(database["state"])
@@ -252,6 +350,7 @@ def start(runner: public.RunnerProtocol, saved: JsonObject) -> None:
         all(object_value(value["state"]).get("Running") is True for value in values.values()),
         "A recovered service is not running",
     )
+    restore_companions(runner, saved)
 
 
 def prepare(runner: public.RunnerProtocol, report: JsonObject) -> None:

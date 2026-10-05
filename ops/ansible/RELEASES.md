@@ -384,6 +384,10 @@ ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
 
 The workflow records the running selection, stops gracefully, verifies a changed
 host boot ID, then starts the existing database, application and proxy in order.
+It also records existing managed TURN, Prometheus and node-exporter container
+identities and their running state. Recovery starts only unchanged containers
+that were running before maintenance; absent or intentionally stopped companions
+are not started. Their state is part of the private durable reboot journal.
 There is no image build/pull, migration, enrollment, or competing boot manager.
 If the reboot request fails without a new boot, the explicit cancellation path
 can restore the saved containers; it does not report a successful reboot.
