@@ -285,10 +285,10 @@ docker() {
         )
         self.assertIn("--connect-timeout 10 --max-time 60", command)
         self.assertIn(
-            "https://github.com/docker/compose/releases/download/v5.5.1/docker-compose-linux-${compose_arch}",
+            "https://github.com/docker/compose/releases/download/v5.6.0/docker-compose-linux-${compose_arch}",
             command,
         )
-        self.assertIn("db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576", command)
+        self.assertIn("40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a", command)
         self.assertIn('"${compose_download}/docker-compose" | sha256sum --check --strict', command)
         self.assertIn("sudo install -d -m 0755 /usr/local/lib/docker/cli-plugins", command)
         installation = (
@@ -302,7 +302,7 @@ docker() {
         )
         self.assertIn(
             'test "$(timeout --signal=TERM --kill-after=2s 10s '
-            + 'docker compose version --short)" = 5.5.1',
+            + 'docker compose version --short)" = 5.6.0',
             command,
         )
         self.assertIn("sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C", command)
@@ -310,7 +310,7 @@ docker() {
             "timeout --signal=TERM --kill-after=2s 10s /usr/bin/docker --host unix:///var/run/docker.sock",
             command,
         )
-        self.assertEqual(command.count('compose version --short)" = 5.5.1'), 2)
+        self.assertEqual(command.count('compose version --short)" = 5.6.0'), 2)
         self.assertNotRegex(command, r"\b(?:apt|apt-get|systemctl|service|dockerd)\b")
         self.assertNotRegex(command, r"\b(?:latest|prune|remove|upgrade)\b")
 
@@ -325,8 +325,8 @@ docker() {
             + 'printf "%s %s\\n" "$compose_arch" "$compose_sha256"\n'
         )
         digests = {
-            "x86_64": "db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576",
-            "aarch64": "732e3a84c1a0f67256ce80bc2598a24546b10ca05f9faa97efceb1171ece2ef7",
+            "x86_64": "40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a",
+            "aarch64": "733ec76717ceb59052a9609b9dadfb523b2df8eab57a54212872d10a58078ea2",
         }
         for machine in ("x86_64", "aarch64", "arm64", "riscv64"):
             with self.subTest(machine=machine):

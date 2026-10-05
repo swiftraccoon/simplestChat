@@ -239,6 +239,6 @@ test('context excludes local-only descendants while retaining production inputs'
     'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs',
     'web/scripts/mediasoup-runtime.mjs',
     'web/public/help.html', 'web/public/help.css', 'web/src/main.ts', 'web/src/style.css',
-    'vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/abseil-cpp/meson.build',
+    'vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/meson.build',
   ]) assert.equal(excluded(filename), false, `${filename} must remain available to the build`);
 });

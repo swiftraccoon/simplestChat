@@ -21,7 +21,7 @@ from release_json import decode_json, object_value
 
 POSTGRES_IMAGE = (
     "docker.io/library/postgres:18.6-bookworm@sha256:"
-    "1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af"
+    "3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650"
 )
 SESSION_FAMILY_MIGRATION = 22
 

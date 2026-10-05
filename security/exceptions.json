@@ -93,31 +93,31 @@
     },
     {
       "scanner": "zizmor",
-      "fingerprint": "superfluous-actions:e2b9fc895ab19ccc4e010dfe81099d14a1a54d1170519db580416c80b3bd1580",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
       "scope": ".github/actions/native-toolchain/action.yml#runs/steps/1/uses",
       "owner": "swiftraccoon",
       "rationale": "The pinned toolchain action also bootstraps the maintained act container, whose runner tools differ from hosted GitHub runners.",
-      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
+      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks. Re-reviewed 2026-10-05 at 89b12181: fixed repository-controlled toolchain/component inputs, HTTPS rustup bootstrap when absent, and bounded retries for official-server checksum propagation failures. Scope and expiry are unchanged.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
     },
     {
       "scanner": "zizmor",
-      "fingerprint": "superfluous-actions:e2b9fc895ab19ccc4e010dfe81099d14a1a54d1170519db580416c80b3bd1580",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
       "scope": ".github/workflows/browser-compatibility.yml#jobs/browser/steps/3/uses",
       "owner": "swiftraccoon",
       "rationale": "The pinned toolchain action also bootstraps the maintained act container, whose runner tools differ from hosted GitHub runners.",
-      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
+      "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks. Re-reviewed 2026-10-05 at 89b12181: fixed repository-controlled toolchain/component inputs, HTTPS rustup bootstrap when absent, and bounded retries for official-server checksum propagation failures. Scope and expiry are unchanged.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
     },
     {
       "scanner": "zizmor",
-      "fingerprint": "superfluous-actions:e2b9fc895ab19ccc4e010dfe81099d14a1a54d1170519db580416c80b3bd1580",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
       "scope": ".github/workflows/security.yml#jobs/security-fast/steps/2/uses",
       "owner": "swiftraccoon",
       "rationale": "The maintained local act image has no rustup; its fast security prerequisites failed with command not found. This existing pinned installer bootstraps rustup and installs the repository's exact Rust toolchain before the shared checks.",
-      "reachability": "Only this exact step and immutable action reference are reviewed. Checkout disables persisted credentials, and the shared source security checks remain blocking.",
+      "reachability": "Only this exact step and immutable action reference are reviewed. Checkout disables persisted credentials, and the shared source security checks remain blocking. Re-reviewed 2026-10-05 at 89b12181: fixed repository-controlled toolchain/component inputs, HTTPS rustup bootstrap when absent, and bounded retries for official-server checksum propagation failures. Scope and expiry are unchanged.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
     },
@@ -963,11 +963,11 @@
     },
     {
       "scanner": "zizmor",
-      "fingerprint": "superfluous-actions:e2b9fc895ab19ccc4e010dfe81099d14a1a54d1170519db580416c80b3bd1580",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
       "scope": ".github/workflows/codeql.yml#jobs/source-analysis/steps/5/uses",
       "owner": "swiftraccoon",
-      "rationale": "Rust extraction needs the exact repository Rust 1.98.1 toolchain on a database-cache miss. The maintained local act image does not supply the hosted runner's Rust prerequisites, so the existing immutable installer action remains necessary.",
-      "reachability": "Only this exact Rust matrix step and immutable action reference are reviewed. Checkout disables persisted credentials, the toolchain version is explicit, and database validation, all requested queries and current finding policy remain blocking. The official HTTPS rustup bootstrap is not independently checksum-pinned by this review.",
+      "rationale": "Rust extraction needs the exact repository Rust 1.99.0 toolchain on a database-cache miss. The maintained local act image does not supply the hosted runner's Rust prerequisites, so the existing immutable installer action remains necessary.",
+      "reachability": "Only this exact Rust matrix step and immutable action reference are reviewed. Checkout disables persisted credentials, the toolchain version is explicit, and database validation, all requested queries and current finding policy remain blocking. The official HTTPS rustup bootstrap is not independently checksum-pinned by this review. Re-reviewed 2026-10-05 at 89b12181: fixed repository-controlled toolchain/component inputs, HTTPS rustup bootstrap when absent, and bounded retries for official-server checksum propagation failures. Scope and expiry are unchanged.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     },

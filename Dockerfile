@@ -4,7 +4,7 @@ ARG FEDORA_REFRESH_EPOCH=2026-09-30
 
 # Node builds the frontend and projects image reviews; it is never deployed.
 # Pin the latest stable Current release and its verified multi-arch manifest.
-FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e AS image-review-inputs
+FROM docker.io/library/node:26.10.0-bookworm-slim@sha256:662933cf47f013bc8e4beb31a6116448427a82057ba7c42c97e4c5ba766504c2 AS image-review-inputs
 COPY security/exceptions.json /reviews.json
 # Only image-relevant reviews invalidate package layers. The complete current
 # policy is still validated by the independent image audit on every release.
@@ -24,7 +24,7 @@ const records = policy.exceptions.filter(row => scanners.has(row.scanner))
 writeFileSync(output, JSON.stringify({ schemaVersion: 1, exceptions: records }) + '\n', { mode: 0o644 });
 IMAGE_REVIEWS
 
-FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e AS web-builder
+FROM docker.io/library/node:26.10.0-bookworm-slim@sha256:662933cf47f013bc8e4beb31a6116448427a82057ba7c42c97e4c5ba766504c2 AS web-builder
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --ignore-scripts
@@ -98,7 +98,7 @@ RUN set -eu; \
         --output /tmp/rustup-init; \
     echo "${rustup_sha256}  /tmp/rustup-init" | sha256sum --check --strict; \
     chmod +x /tmp/rustup-init; \
-    /tmp/rustup-init -y --default-toolchain 1.98.1 --profile minimal \
+    /tmp/rustup-init -y --default-toolchain 1.99.0 --profile minimal \
         --component rustfmt; \
     rm /tmp/rustup-init
 ENV PATH="/root/.cargo/bin:${PATH}"

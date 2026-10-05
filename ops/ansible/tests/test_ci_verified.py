@@ -249,9 +249,9 @@ class VerifiedCacheTests(unittest.TestCase):
             "security/codeql/native-coverage/compilations.ql",
             ".github/workflows/codeql.yml",
             "ops/ansible/files/bounded_process.py",
-            "vendor/mediasoup-sys-0.17.0/tasks.py",
-            "vendor/mediasoup-sys-0.17.0/meson.build",
-            "vendor/mediasoup-sys-0.17.0/python-tools-requirements.txt",
+            "vendor/mediasoup-sys-0.19.0/tasks.py",
+            "vendor/mediasoup-sys-0.19.0/meson.build",
+            "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
         )
         for name in names:
             self.assertTrue((ROOT / name).is_file())
@@ -309,8 +309,8 @@ class VerifiedCacheTests(unittest.TestCase):
             "new_target/Cargo.toml",
             "new_target/rust-project.json",
             "migrations/001_example.sql",
-            "vendor/mediasoup-sys-0.17.0/build.rs",
-            "vendor/mediasoup-sys-0.17.0/meson.build",
+            "vendor/mediasoup-sys-0.19.0/build.rs",
+            "vendor/mediasoup-sys-0.19.0/meson.build",
             "vendor/seclists-passwords/10k-most-common.txt",
             "security/authorization/operations.json",
             "security/codeql/new-query.ql",
@@ -372,8 +372,8 @@ class VerifiedCacheTests(unittest.TestCase):
         native = (
             "vendor/native-components.json",
             "vendor/integrity.json",
-            "vendor/mediasoup-sys-0.17.0/subprojects/libuv.wrap",
-            "vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/libuv/meson.build",
+            "vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap",
+            "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/libuv/meson.build",
             "security/codeql/native-coverage/qlpack.yml",
             "build/codeql-native-build.sh",
         )

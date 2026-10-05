@@ -129,9 +129,9 @@ cargo --version
 If rustup proxies are unavailable, select the compiler explicitly:
 
 ```sh
-export RUSTC="$(rustup which --toolchain 1.98.1 rustc)"
-export RUSTDOC="$(rustup which --toolchain 1.98.1 rustdoc)"
-rustup run 1.98.1 cargo build --locked --release --bin simplestChat
+export RUSTC="$(rustup which --toolchain 1.99.0 rustc)"
+export RUSTDOC="$(rustup which --toolchain 1.99.0 rustdoc)"
+rustup run 1.99.0 cargo build --locked --release --bin simplestChat
 ```
 
 Keep the release `build-override` in Cargo.toml: macOS needs it to load

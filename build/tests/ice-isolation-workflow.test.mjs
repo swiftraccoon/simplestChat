@@ -28,7 +28,7 @@ test('ICE isolation retains read-only permissions and the existing pinned toolin
     assert.match(action, /@[a-f0-9]{40}$/);
     assert.ok(compatibility.includes(`uses: ${action}`), 'reuse the audited action pins');
   }
-  assert.match(workflow, /node-version: 26\.8\.1/);
+  assert.match(workflow, /node-version: 26\.10\.0/);
   assert.match(workflow, /cache-dependency-path: web\/e2e\/package-lock\.json/);
   const tooling = step('Install pinned browser tooling');
   assert.match(tooling, /id: tooling/);

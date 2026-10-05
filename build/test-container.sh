@@ -6,7 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 production_image="${PRODUCTION_IMAGE:-simplestchat-ci:production}"
 # Official multi-architecture manifest, verified 2026-09-09.
-postgres_image='docker.io/library/postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af'
+postgres_image='docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650'
 docker info >/dev/null
 docker image inspect "${production_image}" >/dev/null
 test_artifacts="${CONTAINER_TEST_ARTIFACTS:-$(mktemp -d "${TMPDIR:-/tmp}/simplestchat-container-tests.XXXXXX")}"

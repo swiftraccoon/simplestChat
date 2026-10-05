@@ -54,11 +54,11 @@ CONFIG, ROOT, WORK = release.CONFIG, release.ROOT, release.WORK
 FIXED_PATHS = (CONFIG, ROOT, WORK, Path("/srv/simplestchat-bench"))
 POSTGRES = (
     "docker.io/library/postgres:18.6-bookworm@sha256:"
-    + "1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af"
+    + "3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650"
 )
 CADDY = (
     "docker.io/library/caddy:2.11.4-alpine@sha256:"
-    + "5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648"
+    + "6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b"
 )
 FAILURE_MARKER = "simplestchat-disposable-release-startup-failure"
 ID = re.compile(r"[a-f0-9]{64}")

@@ -76,7 +76,7 @@ if (command === 'rustup') {
 } else if (command === 'node') {
   // The inline availability preflight is covered separately. Never open ports
   // in these command-contract fixtures, and never execute real setup commands.
-  if (args.includes('--version') || args.includes('-v')) console.log('v26.8.1');
+  if (args.includes('--version') || args.includes('-v')) console.log('v26.10.0');
 }
 else if (command === 'python3') console.log('Python 3.14.0');
 else if (command === 'openssl') console.log('OpenSSL 3.5.9 fixture');
@@ -88,7 +88,7 @@ else if (['cc', 'c++', 'clang', 'clang++', 'cmake', 'make', 'xcrun'].includes(co
 }
 `;
 
-async function fixture(t, { channel = '1.98.1', installedOpenSsl = true, installedWeb = true, installedDist = true } = {}) {
+async function fixture(t, { channel = '1.99.0', installedOpenSsl = true, installedWeb = true, installedDist = true } = {}) {
   // macOS aliases /var to /private/var; compare canonical fixture paths with
   // the shell's physical cwd, without making the test platform-dependent.
   const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'simplestchat-launcher-test.')));

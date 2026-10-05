@@ -111,7 +111,7 @@ jobs:
         env:
           RESTORE_CONTAINER_E2E: "1"
         run: |
-          docker pull docker.io/library/postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+          docker pull docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
           postgres_bindir="$(pg_config --bindir)"
           export PATH="${postgres_bindir}:$PATH"
           build/with-test-postgres.sh python -m unittest discover \
@@ -142,7 +142,7 @@ jobs:
             --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m \
             --volume "$PWD/ops/ansible:/work:ro" --workdir /work/tests \
             --entrypoint /bin/promtool \
-            quay.io/prometheus/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0 \
+            quay.io/prometheus/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e \
             test rules monitoring-rules.test.yml
 
       - name: Record the successful automation verification
@@ -202,7 +202,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 26.8.1
+          node-version: 26.10.0
           cache: npm
           cache-dependency-path: |
             web/package-lock.json
@@ -250,7 +250,7 @@ jobs:
     services:
       postgres:
         # Official image, pinned to the verified PostgreSQL 18.6 manifest.
-        image: docker.io/library/postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        image: docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
         env:
           POSTGRES_USER: test_owner
           POSTGRES_PASSWORD: disposable-ci-password
@@ -312,7 +312,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: steps.verified.outputs.cache-hit != 'true'
         with:
-          node-version: 26.8.1
+          node-version: 26.10.0
           cache: npm
           cache-dependency-path: |
             web/package-lock.json
@@ -336,44 +336,44 @@ jobs:
       - name: Verify native security patches
         if: steps.verified.outputs.cache-hit != 'true'
         run: |
-          cargo tree --locked -i lru | grep -F 'lru v0.18.4'
+          cargo tree --locked -i lru | grep -F 'lru v0.18.5'
           cargo tree --locked -i mediasoup-sys \
-            | grep -Eq 'mediasoup-sys v0\.17\.0 \(.*/vendor/mediasoup-sys-0\.17\.0\)$'
+            | grep -Eq 'mediasoup-sys v0\.19\.0 \(.*/vendor/mediasoup-sys-0\.19\.0\)$'
           grep -Fq 'source_filename = abseil-cpp-20240722.2.tar.gz' \
-            vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp.wrap
+            vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap
           grep -Fq 'source_hash = ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8' \
-            vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp.wrap
+            vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap
           grep -Fq 'patch_directory = abseil-cpp' \
-            vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp.wrap
-          echo '454b10520ba4ba4a9995612ba2d9e6490b5477bb5093eff54af4c84917f71f19  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/abseil-cpp/meson.build' \
+            vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap
+          echo '454b10520ba4ba4a9995612ba2d9e6490b5477bb5093eff54af4c84917f71f19  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/meson.build' \
             | sha256sum --check --strict
-          echo '7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/abseil-cpp/LICENSE.build' \
+          echo '7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/LICENSE.build' \
             | sha256sum --check --strict
           if grep -Fq 'source_filename = abseil-cpp-20240722.0.tar.gz' \
-            vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp.wrap; then
+            vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap; then
             echo 'vulnerable Abseil 20240722.0 source remains configured' >&2
             exit 1
           fi
           if grep -Fq 'source_fallback_url' \
-            vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp.wrap; then
+            vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap; then
             echo 'Abseil source fallback must remain disabled' >&2
             exit 1
           fi
-          grep -Fq 'source_hash = 66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7' \
-            vendor/mediasoup-sys-0.17.0/subprojects/libuv.wrap
-          grep -Fq 'source_hash = a232f7433b45872d43e4dc74a25cbd58effc0be76e3d704b34e5de3c637eed77' \
-            vendor/mediasoup-sys-0.17.0/subprojects/unordered-dense.wrap
+          grep -Fq 'source_hash = cb0d6dd2128d5a95bd242c6cc982a24fe608fa93da57b6b4ec763b0018c53e64' \
+            vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap
+          grep -Fq 'source_hash = 06c262f9d7e1ff94d92e0359f89cc5d8632f32dfffb5e176a10516c509f5e5f2' \
+            vendor/mediasoup-sys-0.19.0/subprojects/unordered-dense.wrap
           grep -Fq 'source_hash = 0957cae5821b17ce07f0833aaa52b5137643a8382203221f363a8303c109af34' \
-            vendor/mediasoup-sys-0.17.0/subprojects/catch2.wrap
-          echo '3eada92dfde42ed1148b17712bd363d28d73a74bf374484acd45e1faf27f487f  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/libuv/meson.build' \
+            vendor/mediasoup-sys-0.19.0/subprojects/catch2.wrap
+          echo '4ea34585b52222502e7cb9ffd963d9a0ff3c06a7c3251d6d09461490bd069056  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/libuv/meson.build' \
             | sha256sum --check --strict
-          echo 'dc02dc5b7d5bd069782529f59012e7ac25b53325b7783609c77a3b36ca819a7c  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/libuv/meson_options.txt' \
+          echo 'dc02dc5b7d5bd069782529f59012e7ac25b53325b7783609c77a3b36ca819a7c  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/libuv/meson_options.txt' \
             | sha256sum --check --strict
-          echo 'cba566c9f026b7c23c2460c4262ddd420e4da63986a892653d4c15a0f9e6943d  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/libuv/link_file_in_build_dir.py' \
+          echo 'cba566c9f026b7c23c2460c4262ddd420e4da63986a892653d4c15a0f9e6943d  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/libuv/link_file_in_build_dir.py' \
             | sha256sum --check --strict
-          echo '7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/libuv/LICENSE.build' \
+          echo '7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/libuv/LICENSE.build' \
             | sha256sum --check --strict
-          echo '8f535a2932f7074ed3c52c01de988b8e2881d94a3e2a169945c42d64ac0f3e77  vendor/mediasoup-sys-0.17.0/subprojects/packagefiles/ankerl-unordered-dense/meson.build' \
+          echo '67fc3f19a4f3352e2383293cd68e36c899b7b59445d3bd7bf54f3523ac9a5166  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/ankerl-unordered-dense/meson.build' \
             | sha256sum --check --strict
           strings target/debug/simplestChat | grep -Fq 'OpenSSL 3.5.9 29 Sep 2026'
           if strings target/debug/simplestChat | grep -Fq 'OpenSSL 3.0.8'; then
@@ -524,7 +524,7 @@ jobs:
     services:
       postgres:
         # Official image, pinned to the verified PostgreSQL 18.6 manifest.
-        image: docker.io/library/postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        image: docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
         env:
           POSTGRES_USER: test_owner
           POSTGRES_PASSWORD: disposable-ci-password
@@ -583,7 +583,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 26.8.1
+          node-version: 26.10.0
           cache: npm
           cache-dependency-path: |
             web/package-lock.json
@@ -884,7 +884,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Node is build/test-only; deployment runs Rust, not Node.
-          node-version: 26.8.1
+          node-version: 26.10.0
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --ignore-scripts
@@ -902,7 +902,7 @@ jobs:
       PRODUCTION_IMAGE: simplestchat-ci:production
       # Official Caddy image, pinned to the 2.11.4-alpine multi-architecture
       # manifest digest published by Docker Official Images.
-      CADDY_IMAGE: docker.io/library/caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+      CADDY_IMAGE: docker.io/library/caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -939,32 +939,32 @@ jobs:
         run: |
           set -euo pipefail
           # Match the provisioned host: older config --hash omits env_file values.
-          # Digest verified against the official v5.5.1 release asset and checksum.
+          # Digest verified against the official v5.6.0 release asset and checksum.
           case "$(uname -m)" in
             x86_64)
               compose_arch=x86_64
-              compose_sha256=db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576
+              compose_sha256=40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a
               ;;
             aarch64|arm64)
               compose_arch=aarch64
-              compose_sha256=732e3a84c1a0f67256ce80bc2598a24546b10ca05f9faa97efceb1171ece2ef7
+              compose_sha256=733ec76717ceb59052a9609b9dadfb523b2df8eab57a54212872d10a58078ea2
               ;;
             *) echo 'Unsupported Compose controller architecture' >&2; exit 1 ;;
           esac
           compose_download="$(mktemp -d "${RUNNER_TEMP}/simplestchat-compose.XXXXXXXX")"
           curl --disable --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
             --connect-timeout 10 --max-time 60 \
-            "https://github.com/docker/compose/releases/download/v5.5.1/docker-compose-linux-${compose_arch}" \
+            "https://github.com/docker/compose/releases/download/v5.6.0/docker-compose-linux-${compose_arch}" \
             --output "${compose_download}/docker-compose"
           printf '%s  %s\n' \
             "${compose_sha256}" \
             "${compose_download}/docker-compose" | sha256sum --check --strict
           sudo install -d -m 0755 /usr/local/lib/docker/cli-plugins
           sudo install -m 0755 "${compose_download}/docker-compose" /usr/local/lib/docker/cli-plugins/docker-compose
-          test "$(timeout --signal=TERM --kill-after=2s 10s docker compose version --short)" = 5.5.1
+          test "$(timeout --signal=TERM --kill-after=2s 10s docker compose version --short)" = 5.6.0
           test "$(sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C \
             timeout --signal=TERM --kill-after=2s 10s /usr/bin/docker --host unix:///var/run/docker.sock \
-            compose version --short)" = 5.5.1
+            compose version --short)" = 5.6.0
 
       - name: Validate Compose rendering
         env:
