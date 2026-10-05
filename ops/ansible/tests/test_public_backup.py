@@ -57,14 +57,22 @@ class NightlyBackupTests(unittest.TestCase):
                 with self.assertRaises(subprocess.TimeoutExpired):
                     _ = runner.run([sys.executable, "-c", script, str(child_file)], timeout=0.5)
                 descendant = int(child_file.read_text())
-                status = subprocess.run(  # noqa: S603 -- read-only query for this fixture's PID.
-                    ["/bin/ps", "-o", "stat=", "-p", str(descendant)],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                self.assertTrue(status.returncode != 0 or status.stdout.strip().startswith("Z"))
+                # SIGKILL delivery is asynchronous for the orphaned descendant;
+                # reaping its leader does not wait for the child's exit state.
+                deadline = time.monotonic() + 5
+                while True:
+                    remaining = deadline - time.monotonic()
+                    self.assertGreater(remaining, 0, "Owned descendant survived timeout cleanup")
+                    status = subprocess.run(  # noqa: S603 -- read-only query for this fixture's PID.
+                        ["/bin/ps", "-o", "stat=", "-p", str(descendant)],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=min(1, remaining),
+                    )
+                    if status.returncode != 0 or status.stdout.strip().startswith("Z"):
+                        break
+                    time.sleep(min(0.01, max(0, deadline - time.monotonic())))
             finally:
                 if descendant is None and child_file.is_file():
                     descendant = int(child_file.read_text())
