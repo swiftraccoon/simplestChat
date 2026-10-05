@@ -65,6 +65,37 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 cp -R -- "${project_root}/vendor/mediasoup-sys-0.19.0" "${dtls_temp}/worker"
+# This gate runs only these two tag families. Keep every tagged test, the
+# shared runner/helpers, and all production/mock sources, without compiling
+# hundreds of unrelated upstream test bodies that this gate never executes.
+# Modify only the disposable copy; Cargo's worker and the full upstream suite
+# retain their original build definitions.
+"${dtls_python}" - "${dtls_temp}/worker" <<'PY'
+import pathlib
+import re
+import sys
+
+worker = pathlib.Path(sys.argv[1])
+tags = ("[dtls]", "[media-diagnostics]")
+sources = {"test/src/tests.cpp", "test/src/testHelpers.cpp"}
+found = set()
+for source in (worker / "test/src").rglob("*.cpp"):
+    matched = {tag for tag in tags if tag in source.read_text()}
+    if matched:
+        sources.add(source.relative_to(worker).as_posix())
+        found.update(matched)
+if found != set(tags) or not all(
+    re.fullmatch(r"test/src/[A-Za-z0-9_/.-]+\.cpp", name) for name in sources
+):
+    raise SystemExit("Native regression source selection is incomplete")
+path = worker / "meson.build"
+definition = path.read_text()
+anchor = "mediasoup_worker_test = executable("
+if definition.count(anchor) != 1:
+    raise SystemExit("Native regression build target changed; review its source selection")
+selection = "test_sources = [\n" + "".join(f"  '{name}',\n" for name in sorted(sources)) + "]\n\n"
+path.write_text(definition.replace(anchor, selection + anchor))
+PY
 cat >"${dtls_temp}/run.sh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
