@@ -157,9 +157,12 @@ RUN python3 build/security_native.py --root /app \
     --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
     --openssl-prefix /opt/openssl-4.0.3 --aws-lc-prefix /opt/aws-lc-5.11.0 \
     --output /app/native-components.build.json
-RUN mkdir -p /app/native-licenses \
-    && tar -xOf /opt/aws-lc-5.11.0/share/simplestchat/aws-lc-source.tar.gz \
-        aws-lc-5.11.0/LICENSE > /app/native-licenses/aws-lc.LICENSE
+RUN python3 -c 'import pathlib, tarfile; \
+    archive = tarfile.open("/opt/aws-lc-5.11.0/share/simplestchat/aws-lc-source.tar.gz"); \
+    member = archive.extractfile("aws-lc-5.11.0/LICENSE"); \
+    content = member.read(); archive.close(); \
+    destination = pathlib.Path("/app/native-licenses/aws-lc.LICENSE"); \
+    destination.parent.mkdir(parents=True); destination.write_bytes(content)'
 
 # The load tester has a separate target so its WebRTC client dependencies and
 # executable are absent from the default production image.
