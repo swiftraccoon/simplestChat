@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const VERSION = '3.23.1';
+const VERSION = '3.24.4';
 const REMOTE_SDP_SHA256 = '556c727892cc42504a41a69bfb8ed7383d66eaea5ea87ee5072d0aea06f71a9e';
 const VERSION_MODULE = '\0simplestchat-mediasoup-version';
 

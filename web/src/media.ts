@@ -796,7 +796,10 @@ export class MediaManager {
       track.enabled = true;
       track = undefined; // Ownership transferred to the producer/local stream.
     } catch (error) {
-      if (isCurrent()) this.audioRequested = false;
+      // Replacing a track now rejects if its producer closes while awaiting it.
+      // A cancelled capture owns cleanup, but cannot fail a newer user intent.
+      if (!isCurrent()) return;
+      this.audioRequested = false;
       throw error;
     } finally {
       unwatchCapture?.();
@@ -1185,6 +1188,9 @@ export class MediaManager {
       this.localStream.addTrack(track);
       track = undefined;
       return true;
+    } catch (error) {
+      if (!isCurrent()) return false;
+      throw error;
     } finally {
       unwatchCapture?.();
       if (this.pendingVideoTrack === track || isCurrent()) this.pendingVideoTrack = null;
