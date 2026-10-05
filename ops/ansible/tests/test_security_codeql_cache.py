@@ -49,7 +49,9 @@ class AnalysisFixture:
         if name == self.failure:
             raise ToolError("fixture_command_failed")  # noqa: EM101 -- Fixed safe code.
         if name.startswith("codeql-analyze-"):
-            _ = (self.directory / (self.language + "-security.sarif")).write_text("fixture")
+            _ = (self.directory / (self.language + "-security.sarif")).write_text(
+                json.dumps({"runs": [{"results": []}]})
+            )
         if name.startswith("codeql-policy-"):
             policy = self.directory / (self.language + "-security-policy")
             policy.mkdir()
@@ -224,6 +226,10 @@ class NativeCacheTests(unittest.TestCase):
             self.assertEqual(original, cache.cache_key(ROOT, source, prefix, "c-cpp", "security"))
             self.assertNotEqual(original, cache.cache_key(ROOT, source, prefix, "c-cpp", "all"))
             self.assertNotEqual(original, cache.cache_key(ROOT, source, None, "rust", "security"))
+            self.assertNotEqual(
+                cache.cache_key(ROOT, source, None, "rust", "security"),
+                cache.cache_key(ROOT, source, None, "rust", "security", include_vendor=True),
+            )
             self.assertNotEqual(
                 original, cache.cache_key(ROOT, source / "other", prefix, "c-cpp", "security")
             )
@@ -409,7 +415,7 @@ class NativeCacheTests(unittest.TestCase):
         source = self.directory / "source"
         source.mkdir()
         _ = (self.directory / "source-manifest.json").write_text("{}")
-        args = local.Options()
+        args = local.Options(include_vendor=language == "c-cpp")
         args.revision = "b" * 40
         args.suite = "all" if failure and failure.endswith("quality-advisory") else "security"
         args.database_cache = self.directory / "cache"
@@ -464,9 +470,10 @@ class NativeCacheTests(unittest.TestCase):
             else:
                 with self.assertRaisesRegex(ToolError, "codeql_local_policy_failed"):
                     _ = local.analyze_language(context, args, source, Path("/codeql"), language)
-                self.assertTrue(
-                    local.upload_ready(self.directory, args.revision, "security", language)
-                )
+                if language in tools.AUTOMATED_LANGUAGES:
+                    self.assertTrue(
+                        local.upload_ready(self.directory, args.revision, "security", language)
+                    )
                 reports = []
         integrity.assert_called_once()
         health.assert_called_once()
@@ -604,20 +611,28 @@ class NativeCacheTests(unittest.TestCase):
 
     def test_upload_requires_matching_current_revision_and_original_sarif_hash(self) -> None:
         """Policy failure permits valid alerts; absent or changed reports never upload."""
-        report = self.directory / "c-cpp-security.sarif"
-        self.assertFalse(local.upload_ready(self.directory, "a" * 40, "security", "c-cpp"))
+        with self.assertRaisesRegex(ToolError, "codeql_vendor_upload_forbidden"):
+            _ = local.upload_ready(self.directory, "a" * 40, "security", "c-cpp")
+        report = self.directory / "python-security.sarif"
+        _ = report.write_text(json.dumps({"runs": [{"results": []}]}))
+        self.assertFalse(local.upload_ready(self.directory, "a" * 40, "security", "python"))
         _ = report.with_suffix(".validated.json").write_text(
-            json.dumps({"revision": "a" * 40, "sarifSha256": "hash"})
+            json.dumps({"revision": "a" * 40, "sarifSha256": "hash", "includeVendor": False})
         )
         with patch.object(local, "report_health", return_value={"sarifSha256": "hash"}):
-            self.assertTrue(local.upload_ready(self.directory, "a" * 40, "security", "c-cpp"))
+            self.assertTrue(local.upload_ready(self.directory, "a" * 40, "security", "python"))
             with self.assertRaises(ToolError):
-                _ = local.upload_ready(self.directory, "b" * 40, "security", "c-cpp")
+                _ = local.upload_ready(self.directory, "b" * 40, "security", "python")
+            _ = report.with_suffix(".validated.json").write_text(
+                json.dumps({"revision": "a" * 40, "sarifSha256": "hash", "includeVendor": True})
+            )
+            with self.assertRaisesRegex(ToolError, "codeql_upload_identity"):
+                _ = local.upload_ready(self.directory, "a" * 40, "security", "python")
         with (
             patch.object(local, "report_health", return_value={"sarifSha256": "changed"}),
             self.assertRaises(ToolError),
         ):
-            _ = local.upload_ready(self.directory, "a" * 40, "security", "c-cpp")
+            _ = local.upload_ready(self.directory, "a" * 40, "security", "python")
 
 
 if __name__ == "__main__":

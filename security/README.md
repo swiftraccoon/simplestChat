@@ -66,9 +66,14 @@ exempt because it is used only in CI.
 
 The fast gate snapshots tracked and nonignored working-tree files before
 scanning. Each original file is bounded to 16 MiB, the complete snapshot to
-128 MiB, and the file count to 20,000. The current snapshot includes lockfiles,
+128 MiB, and the file count to 20,000. The identity snapshot includes lockfiles,
 vendored inputs and binary files; ignored build output and local credentials are
-outside this source gate. The image tier scans shipped image contents separately.
+outside it. Source scanners omit `vendor/` by default, including current-tree and
+Git-diff secret scanning. An explicit local
+`build/check-security.sh fast --include-vendor` includes vendor sources; this
+opt-in is rejected in CI environments. The full identity snapshot continues to
+bind dependency/provenance checks. The image tier scans shipped image contents
+separately, including bundled dependency bytes.
 
 Gitleaks normally excludes some filenames and content types. The shared
 `security_secret_projection.py` helper creates a neutral-name, printable-ASCII
@@ -115,8 +120,10 @@ SIMPLESTCHAT_GITLEAKS_ENGINE_TESTS=1 python3 -m unittest discover \
 
 `exceptions.json` is the shared, exact-match, expiring review ledger. Its schema
 requires a scanner, finding fingerprint, scope, owner, rationale, reachability
-assessment, expiry and review link. Expired or malformed records fail the whole
-gate. Wildcard scopes, broad query suppression and indefinite exemptions are not
+assessment, expiry and review link. Malformed records fail the gate; expiry
+applies to the selected source scope. Vendor source reviews are enforced only
+for explicit local vendor analysis, while dependency and image reviews always
+apply. Wildcard scopes, broad query suppression and indefinite exemptions are not
 supported. [Review notes](reviews.md) explain the initial records.
 
 `semgrep/` contains reviewed local rules and positive/negative engine fixtures.

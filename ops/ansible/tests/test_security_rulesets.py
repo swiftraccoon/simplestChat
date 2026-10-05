@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 import test_support
@@ -43,7 +44,7 @@ class RulesetTests(unittest.TestCase):
 
     @staticmethod
     def analyses() -> list[JsonValue]:
-        """Return all five exact security categories, independently of quality scans."""
+        """Return all four automated categories, independently of optional vendor scans."""
         return [
             {
                 "commit_sha": REVISION,
@@ -146,6 +147,39 @@ class RulesetTests(unittest.TestCase):
                 test_support.obj(records[0])[key] = json_value(value)
                 with self.assertRaises(ToolError):
                     rules.healthy_analyses(records, REVISION)
+
+    def test_vendor_alerts_do_not_block_first_party_readiness(self) -> None:
+        """Historical optional native/vendor findings cannot become a hidden gate."""
+        self.assertEqual(rules.LANGUAGES, {"actions", "javascript-typescript", "python", "rust"})
+        vendor: JsonValue = {
+            "most_recent_instance": {
+                "category": "/language:javascript-typescript/security",
+                "location": {"path": "vendor/package/tool.js"},
+            }
+        }
+        native: JsonValue = {
+            "most_recent_instance": {
+                "category": "/language:c-cpp/security",
+                "location": {"path": "target/native/generated.cpp"},
+            }
+        }
+        with patch.object(rules, "api", side_effect=[[vendor, native], []]) as api:
+            rules.require_no_blocking_alerts("owner/repository")
+            self.assertEqual(api.call_count, 2)
+            self.assertIn("ref=refs%2Fheads%2Fmain", cast("str", api.call_args_list[0].args[1]))
+        first_party: JsonValue = {
+            "most_recent_instance": {
+                "category": "/language:python/security",
+                "location": {"path": "build/maintained.py"},
+            }
+        }
+        with (
+            patch.object(rules, "api", side_effect=[[vendor] * 100, [first_party]]) as api,
+            self.assertRaisesRegex(ToolError, "ruleset_open_high_security_alerts_need_review"),
+        ):
+            rules.require_no_blocking_alerts("owner/repository")
+        self.assertEqual(api.call_count, 2)
+        self.assertIn("page=2", cast("str", api.call_args_list[1].args[1]))
 
     def test_current_head_requires_exact_ref_commit_type_and_sha(self) -> None:
         """A matching SHA under another ref or object type does not establish current main."""

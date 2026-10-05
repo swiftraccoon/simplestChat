@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from security_policy import permitted
+from security_source_scope import selected
 from security_tools import bounded_file, record, require, string
 
 if TYPE_CHECKING:
@@ -45,7 +46,9 @@ def digest(value: object) -> str:
     ).hexdigest()
 
 
-def gitleaks_configuration(path: Path, reviews: Sequence[ExceptionRecord]) -> None:
+def gitleaks_configuration(
+    path: Path, reviews: Sequence[ExceptionRecord], *, include_vendor: bool = False
+) -> None:
     """Every public fixture allowlist is exact, conjunctive and backed by a current review."""
     raw = record(
         cast("object", tomllib.loads(bounded_file(path, MAX_POLICY).decode())),
@@ -60,6 +63,13 @@ def gitleaks_configuration(path: Path, reviews: Sequence[ExceptionRecord]) -> No
             "gitleaks_broad_allowlist",
         )
         scope = string(entry["description"]).removeprefix("Public fixture: ")
+        if not selected(scope, include_vendor=include_vendor):
+            # A vendor-only fixture cannot authorize a first-party path.
+            require(
+                paths == ["(^|/)" + re.escape(scope) + "$"],
+                "gitleaks_vendor_fixture_path",
+            )
+            continue
         require(
             permitted(reviews, "gitleaks", "public-fixture:" + digest(entry), scope),
             "unreviewed_gitleaks_allowlist",

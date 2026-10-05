@@ -42,6 +42,7 @@ from release_json import (  # noqa: E402
     object_value,
     string_value,
 )
+from security_source_scope import require_local_vendor  # noqa: E402
 from security_tools import ToolError  # noqa: E402
 
 if TYPE_CHECKING:
@@ -228,6 +229,7 @@ def source_files(root: Path) -> list[Path]:
             "build/native_security.py",
             "build/security_codeql_resources.py",
             "build/security_tools.py",
+            "build/security_source_scope.py",
             "build/install-openssl.sh",
             "build/pip-constraints.txt",
             "ops/ansible/files/bounded_process.py",
@@ -967,6 +969,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if options.operation.startswith("_"):
             worker_operation(options)
             return 0
+        require_local_vendor(include_vendor=True)
         output = fresh_output(output)
         created = True
         engine = engine_prefix(options.engine)

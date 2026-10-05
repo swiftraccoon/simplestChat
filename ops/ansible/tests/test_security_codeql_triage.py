@@ -147,7 +147,7 @@ class FixtureGithub(triage.Github):
                 "tool": {"name": "CodeQL"},
                 "category": f"/language:{language}/security",
             }
-            for index, language in enumerate(sorted(triage.LANGUAGES), start=1)
+            for index, language in enumerate(sorted(triage.AUTOMATED_LANGUAGES), start=1)
         ]
         self.alerts: list[JsonObject] = [alert()]
         self.calls: list[tuple[str, JsonObject | None]] = []
@@ -194,6 +194,40 @@ class FixtureGithub(triage.Github):
 
 class CodeqlTriageTests(unittest.TestCase):
     """A complete analysis and exact current review are required for every approval."""
+
+    def test_first_party_report_rejects_vendor_findings_without_filtering(self) -> None:
+        """A scanner scope regression fails; the report is never silently rewritten."""
+        candidate = sarif()
+        triage.first_party_report(candidate)
+        object_value(physical_record(candidate)["artifactLocation"])["uri"] = (
+            "vendor/package/fixture.py"
+        )
+        original = copy.deepcopy(candidate)
+        with self.assertRaisesRegex(ToolError, "codeql_vendor_result"):
+            triage.first_party_report(candidate)
+        self.assertEqual(candidate, original)
+
+    def test_api_plan_ignores_legacy_vendor_native_and_advisory_alerts(self) -> None:
+        """Historical optional results cannot become a first-party mandatory gate."""
+        client = FixtureGithub()
+        for number, category, path in (
+            (2, "/language:python/security", "vendor/package/helper.py"),
+            (3, "/language:c-cpp/security", "native.cpp"),
+            (4, "/language:python/quality-advisory", "fixture.py"),
+        ):
+            item = alert()
+            item["number"] = number
+            instance = object_value(item["most_recent_instance"])
+            instance["category"] = category
+            object_value(instance["location"])["path"] = path
+            client.alerts.append(item)
+        with patch.object(triage, "source_hash", return_value=HASH) as source:
+            result = triage.api_plan(client, ROOT, REVISION, REFERENCE, [])
+        self.assertFalse(result["passed"])
+        self.assertEqual(
+            [object_value(item)["number"] for item in array_value(result["blocked"])], [1]
+        )
+        source.assert_called_once_with(ROOT, REVISION, "fixture.py")
 
     def test_api_and_sarif_agree_on_source_bound_fingerprint(self) -> None:
         """GitHub's rendered related-location labels preserve one exact policy identity."""

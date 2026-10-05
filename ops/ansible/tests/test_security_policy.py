@@ -115,6 +115,30 @@ class ReviewTests(unittest.TestCase):
             with self.assertRaisesRegex(ToolError, "invalid_tool_record_fields"):
                 _ = policy.parse_exception(invalid, TODAY)
 
+    def test_optional_vendor_reviews_cannot_block_default_checks(self) -> None:
+        """Expiry applies to vendor source findings only during their explicit local scan."""
+        vendor = {
+            **review(),
+            "scanner": "codeql",
+            "scope": "vendor/library/source.cpp:10:10:1:20",
+            "expires": "2026-09-29",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "exceptions.json"
+            _ = path.write_text(json.dumps({"schemaVersion": 1, "exceptions": [review(), vendor]}))
+            entries = policy.read_exceptions(path, today=TODAY)
+            self.assertEqual([entry.scope for entry in entries], ["instant@0.1.13"])
+            with self.assertRaises(ToolError):
+                _ = policy.read_exceptions(path, today=TODAY, include_vendor=True)
+            for changed in (
+                {**vendor, "scope": "src/maintained.rs:10:10:1:20"},
+                {**vendor, "scanner": "pip-audit", "scope": "vendor/build-requirements.txt"},
+            ):
+                with self.subTest(scanner=changed["scanner"], scope=changed["scope"]):
+                    _ = path.write_text(json.dumps({"schemaVersion": 1, "exceptions": [changed]}))
+                    with self.assertRaises(ToolError):
+                        _ = policy.read_exceptions(path, today=TODAY)
+
 
 if __name__ == "__main__":
     _ = unittest.main()

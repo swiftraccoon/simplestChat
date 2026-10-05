@@ -1,15 +1,27 @@
 # Native memory-safety checks
 
-The native-security runner tests the maintained mediasoup worker in a disposable
-Linux container. It complements Rust tests, review and dependency checks: Rust's
+The optional local native-security runner tests the maintained mediasoup worker
+in a disposable Linux container. It complements Rust tests, review and dependency
+checks: Rust's
 `unsafe_code = "forbid"` does not instrument the worker's C and C++ dependencies.
 A passing result describes one workload and exact builder image; it does not
 establish that the worker has no vulnerabilities.
 
+These sanitizer and finite replay checks are not CI, scheduled-workflow,
+publishing, deployment, or complete local-CI requirements. They run only when
+selected explicitly on a local machine; CI environments are rejected. The
+application's native runtime tests and functional DTLS regressions remain
+automated, along with dependency/image audits and authenticated build inputs.
+
 ## Maintained commands
 
-The shared `build/check-security.sh` dispatcher owns the complete security
-policy. The host runner requires Python 3.12 or newer and a local Docker or
+Select the vendor suite explicitly through the shared dispatcher:
+
+```sh
+build/check-security.sh deep --deep-check native --include-vendor
+```
+
+The host runner requires Python 3.12 or newer and a local Docker or
 Podman engine; it uses only the Python standard library and maintained helpers.
 These component commands diagnose an individual native stage:
 
@@ -110,8 +122,9 @@ receipt.
 
 ## Compiled artifacts
 
-CI caches the prepared image separately from each instrumented executable. A
-compiled artifact contains only a regular ELF binary (at most 512 MiB) and a
+The optional local runner can reuse a prepared image and separate instrumented
+executables. A compiled artifact contains only a regular ELF binary (at most
+512 MiB) and a
 receipt marked `built`. Its exact key binds source, tools, flags, corpus, file
 modes, native architecture, trust namespace, selected mode and prepared image ID.
 No prefix restore is permitted. Both the controller and the offline sandbox
@@ -134,10 +147,9 @@ python3 build/native_security.py run --engine docker \
 Every run using compiled input still executes the complete selected sanitizer
 suite or all 17 reviewed replay inputs. Compilation reports record configure,
 generator, compile and install durations; runtime reports record test duration.
-A successful build is reusable even if a later runtime check fails, while the
-existing verification cache stores a success only after the full suite passes.
-Cold source/tool changes still require compilation; a build-cache hit does not
-claim that cold CI meets a particular duration.
+A successful build is reusable even if a later runtime check fails. A compiled
+artifact is never a successful test verdict. Cold source/tool changes still
+require compilation; report the actual selected workload and measured runtime.
 
 ## Reviewed inputs and coverage boundaries
 
@@ -185,12 +197,12 @@ time, image/input hashes and cleanup conclusion. Missing results or requested
 cases fail even when the container exits zero. Failed receipts never count as
 completed security coverage.
 
-CI retains the two bounded native diagnostic streams as explicit artifact
-members, including on failure. These streams come from the offline container:
+Local evidence retains the two bounded native diagnostic streams, including on
+failure. These streams come from the offline container:
 it receives only the reviewed public source, tools and synthetic corpus, with no
 host mounts, credentials or network. They can include compiler source excerpts
-and sanitizer diagnostics. This is a specific evidence policy for that fixture;
-it does not authorize uploading general scanner working directories. A failed
+and sanitizer diagnostics. Keep them with the private local evidence; they are
+not automatically uploaded by CI. A failed
 host receipt also records the container exit status.
 
 `ops/ansible/tests/test_native_security.py` verifies corpus, immutable-image,

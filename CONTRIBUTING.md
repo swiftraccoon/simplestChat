@@ -28,6 +28,13 @@ guarantees. Record measured runtimes and address overruns.
 Use standard free GitHub-hosted runners; CI must not require paid runners or an
 operator-provided host.
 
+Source analysis of `vendor/` and native sanitizer/replay suites are optional
+local checks. They must not run automatically in CI or become publishing,
+deployment, or full local-CI prerequisites. Explicit local `--include-vendor`
+commands are documented in the [security guide](docs/security.md). Dependency
+and production-image audits, authenticated build inputs, and application/native
+runtime regression tests remain part of the maintained gates.
+
 GitHub issues a release signature only after every required check passes. The
 default deployment requires that signed artifact. When the operator explicitly
 requests deployment without waiting for CI, use the supported
@@ -50,9 +57,10 @@ dependencies, start the application, or create a database. You can run
 `--web`, `--rust`, `--python`, or `--helpers` separately while iterating.
 
 The separate [security gate](docs/security.md) installs checksum-pinned scanners
-and audits current source, workflow policy and dependency locks. Run it before
-publishing changes; native and release-image changes also need the relevant deep
-or exact-image tier. Keep full scanner evidence private.
+and audits first-party source, workflow policy and dependency locks. Run the
+checks relevant to the change before publishing; release-image changes need the
+exact-image tier. Vendor source analysis and sanitizer/replay checks require an
+explicit local opt-in. Keep full scanner evidence private.
 
 | Group | What it checks | What it does not prove |
 | --- | --- | --- |

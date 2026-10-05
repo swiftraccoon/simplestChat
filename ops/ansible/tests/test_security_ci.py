@@ -254,7 +254,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(gate["default"], "true")
         self.assertNotIn("with", obj(workflow("ci.yml"), "jobs", "codeql"))
         self.assertNotIn("inputs", obj(obj(codeql, "on").get("workflow_dispatch") or {}))
-        self.assertEqual(set(obj(codeql, "jobs")), {"source-analysis", "native-analysis"})
+        self.assertEqual(set(obj(codeql, "jobs")), {"source-analysis"})
         self.assertEqual(
             strings(codeql, "jobs", "source-analysis", "strategy", "matrix", "language"),
             ["actions", "javascript-typescript", "python", "rust"],
@@ -293,37 +293,8 @@ class SecurityWorkflowTests(unittest.TestCase):
                 self.assertEqual(init["if"], "${{ !env.ACT && matrix.language != 'rust' }}")
                 self.assertEqual(analyze["if"], "${{ !env.ACT && matrix.language != 'rust' }}")
 
-    def test_codeql_requires_verified_native_database_and_current_policy(self) -> None:
-        """Only exact evaluated databases are reusable; current coverage and policy always run."""
-        native = obj(workflow("codeql.yml"), "jobs", "native-analysis")
-        self.assertEqual(native["runs-on"], "ubuntu-24.04")
-        steps = objects(native, "steps")
-        self.assertEqual(
-            string(steps[0], "run"),
-            'test "$(uname -s)" = Linux && [[ "$(uname -m)" =~ ^(x86_64|aarch64)$ ]]',
-        )
-        runner = next(
-            step
-            for step in steps
-            if "build/security_codeql_local.py" in string(step.get("run", ""))
-        )
-        self.assertNotIn("if", runner)
-        self.assertNotIn("continue-on-error", runner)
-        self.assertIn(
-            '--database-cache "$RUNNER_TEMP/codeql-native-database"', string(runner, "run")
-        )
-        restore = next(step for step in steps if step.get("id") == "native-database")
-        self.assertIn("actions/cache/restore@", string(restore, "uses"))
-        self.assertNotIn("restore-keys", obj(restore, "with"))
-        self.assertLess(steps.index(restore), steps.index(runner))
-        caches = [step for step in steps if "cache@" in string(step.get("uses", ""))]
-        openssl = next(step for step in caches if step.get("id") == "openssl")
-        self.assertNotIn("if", openssl)
-        self.assertEqual(at(openssl, "with", "path"), "${{ env.OPENSSL_DIR }}")
-        self.assertIn("hashFiles('build/install-openssl.sh')", string(openssl, "with", "key"))
-        self.assertIn("'main' || 'untrusted'", string(openssl, "with", "key"))
-        analyzer = next(step for step in caches if step.get("id") != "openssl")
-        self.assertEqual(analyzer["if"], "${{ !env.ACT }}")
+    def test_optional_native_codeql_retains_real_worker_build(self) -> None:
+        """The local opt-in keeps native extraction available without a hosted job."""
         command = (ROOT / "build/codeql-native-build.sh").read_text()
         self.assertIn("libmediasoup-worker", command)
         self.assertIn('mktemp -d "$project_root/target/codeql-worker.XXXXXXXX"', command)
@@ -343,41 +314,27 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertIn("CodeQL FlatBuffers generator:", command)
         self.assertIn("CodeQL worker library:", command)
 
-    def test_native_codeql_guard_accepts_supported_targets_and_rejects_other_hosts(self) -> None:
-        """Exercise the real guard without starting the compiler or contacting a runner."""
-        native = obj(workflow("codeql.yml"), "jobs", "native-analysis")
-        command = string(objects(native, "steps")[0], "run")
-        script = (
-            'uname() { case "$1" in -s) printf "%s\\n" "$TEST_SYSTEM";; '
-            + '-m) printf "%s\\n" "$TEST_MACHINE";; *) return 1;; esac; }\n'
-            + command
+    def test_codeql_excludes_vendor_for_every_automated_entrypoint(self) -> None:
+        """Called, scheduled and dispatched analysis share the same first-party scope."""
+        codeql = workflow("codeql.yml")
+        self.assertEqual(set(obj(codeql, "jobs")), {"source-analysis"})
+        text = (ROOT / ".github/workflows/codeql.yml").read_text()
+        self.assertNotIn("--include-vendor", text)
+        self.assertNotIn("c-cpp", text)
+        steps = objects(codeql, "jobs", "source-analysis", "steps")
+        initialize = next(
+            step for step in steps if "codeql-action/init@" in string(step.get("uses", ""))
         )
-        for system, machine, accepted in (
-            ("Linux", "x86_64", True),
-            ("Linux", "aarch64", True),
-            ("Linux", "riscv64", False),
-            ("Darwin", "aarch64", False),
-        ):
-            with self.subTest(system=system, machine=machine):
-                result = subprocess.run(  # noqa: S603 -- Run only the checked local platform guard.
-                    ["/bin/bash", "-c", script],
-                    env={"TEST_SYSTEM": system, "TEST_MACHINE": machine},
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    timeout=5,
-                )
-                self.assertEqual(result.returncode == 0, accepted, result.stderr)
+        self.assertEqual(at(initialize, "with", "config-file"), "security/codeql/first-party.yml")
+        config = workflow("../../security/codeql/first-party.yml")
+        self.assertEqual(strings(config, "paths-ignore"), ["vendor/**"])
 
     def test_codeql_cache_publication_preserves_policy_failure_and_rejects_stale_markers(
         self,
     ) -> None:
-        """Execute both workflow wrappers with failed commands and fresh or stale evidence."""
+        """Execute the Rust workflow wrapper with failed commands and fresh or stale evidence."""
         codeql = workflow("codeql.yml")
-        for job, language, runner_id in (
-            ("source-analysis", "rust", "source-analysis"),
-            ("native-analysis", "c-cpp", "native-analysis"),
-        ):
+        for job, language, runner_id in (("source-analysis", "rust", "source-analysis"),):
             steps = objects(codeql, "jobs", job, "steps")
             runner = next(step for step in steps if step.get("id") == runner_id)
             save = next(
@@ -443,29 +400,14 @@ class SecurityWorkflowTests(unittest.TestCase):
                                 uses, r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[a-f0-9]{40}$"
                             )
 
-    def test_native_matrix_keeps_all_modes_with_shared_preparation_and_isolation(self) -> None:
-        """Parallelism must preserve each complete sanitizer/corpus suite and its evidence."""
-        native = obj(workflow("security.yml"), "jobs", "native-security")
-        self.assertEqual(strings(native, "strategy", "matrix", "mode"), ["asan", "ubsan", "replay"])
-        self.assertEqual(at(native, "strategy", "fail-fast"), "false")
-        self.assertEqual(at(native, "strategy", "max-parallel"), "3")
-        steps = objects(native, "steps")
-        command = "\n".join(string(step.get("run", "")) for step in steps)
-        for required in (
-            "build/ci-local-docker.sh",
-            "build/security_vendor.py verify",
-            "build/native_security.py verify",
-            "build/native_security.py prepare",
-            'build/native_security.py run --image "$image_id" --mode "$NATIVE_MODE"',
-        ):
-            self.assertIn(required, command)
-        recorder = next(
-            step for step in steps if "ci-local-evidence.py record" in string(step.get("run", ""))
-        )
-        self.assertEqual(recorder["if"], "${{ env.ACT }}")
-        self.assertEqual(at(recorder, "env", "NATIVE_MODE"), "${{ matrix.mode }}")
-        self.assertIn('--id "native-$NATIVE_MODE"', string(recorder, "run"))
-        self.assertFalse(any("continue-on-error" in step for step in steps))
+    def test_vendor_security_suites_are_explicit_local_only(self) -> None:
+        """No hosted, scheduled or complete-local workflow executes vendor source suites."""
+        jobs = obj(workflow("security.yml"), "jobs")
+        self.assertEqual(set(jobs), {"security-fast", "security-mutation"})
+        for job in jobs.values():
+            commands = "\n".join(string(step.get("run", "")) for step in objects(obj(job), "steps"))
+            for forbidden in ("native_security.py", "--include-vendor", "--deep-check native"):
+                self.assertNotIn(forbidden, commands)
 
     def test_dependency_reviews_are_shared_by_direct_main_and_local_source_checks(self) -> None:
         """Changed npm, Python and Actions dependencies retain policy checks without a PR job."""
@@ -485,7 +427,9 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         source = (ROOT / "build/security_check.py").read_text()
         self.assertIn("security_dependency_licenses.check(context, snapshot, base)", source)
-        self.assertIn("security_actions.check(context, snapshot, base)", source)
+        self.assertIn(
+            "security_actions.check(context, snapshot, base, include_vendor=include_vendor)", source
+        )
         self.assertIn('vulnerabilities["total"] == 0', source)
         self.assertIn('"pip_audit"', source)
 
@@ -503,7 +447,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             if string(step.get("uses", "")).startswith("dtolnay/rust-toolchain@")
         )
         jobs = obj(workflow("security.yml"), "jobs")
-        for name in ("security-fast", "security-deep"):
+        for name in ("security-fast",):
             with self.subTest(job=name):
                 steps = objects(jobs, name, "steps")
                 installers = [
@@ -603,10 +547,8 @@ class SecurityWorkflowTests(unittest.TestCase):
                 "${{ runner.temp }}/security-mutation/mutation/inventory.json",
             },
         )
-        native = "\n".join(
-            string(step.get("run", "")) for step in objects(jobs, "security-deep", "steps")
-        )
-        self.assertIn("build/check-security.sh deep --deep-check native", native)
+        self.assertNotIn("security-deep", jobs)
+        self.assertNotIn("--include-vendor", command)
 
     def test_codeql_success_requires_original_report_policy_enforcement(self) -> None:
         """An analyzer success or remote dismissal cannot substitute for the local verdict."""
@@ -649,34 +591,6 @@ class SecurityWorkflowTests(unittest.TestCase):
                     "${{ runner.temp }}/codeql-local/*-codeql-analyze-rust-security.stderr",
                 },
             )
-
-    def test_native_uploads_fresh_valid_reports_even_when_current_policy_fails(self) -> None:
-        """Findings reach GitHub while failed policy still blocks the signed aggregate gate."""
-        steps = objects(workflow("codeql.yml"), "jobs", "native-analysis", "steps")
-        validator = next(step for step in steps if step.get("id") == "native-reports")
-        self.assertEqual(validator["if"], "${{ always() && !env.ACT }}")
-        self.assertIn(
-            "upload_ready(output, os.environ['GITHUB_SHA'], category, 'c-cpp')",
-            string(validator, "run"),
-        )
-        uploads = [
-            step for step in steps if "codeql-action/upload-sarif@" in string(step.get("uses", ""))
-        ]
-        self.assertEqual(len(uploads), 2)
-        self.assertEqual(
-            {string(step, "with", "category") for step in uploads},
-            {"/language:c-cpp/security", "/language:c-cpp/quality-advisory"},
-        )
-        for upload in uploads:
-            self.assertIn(
-                "always() && !env.ACT && steps.native-reports.outputs.", string(upload, "if")
-            )
-            self.assertEqual(at(upload, "with", "wait-for-processing"), "true")
-            self.assertEqual(
-                at(upload, "with", "checkout_path"), "${{ runner.temp }}/codeql-local/source"
-            )
-            self.assertLess(steps.index(validator), steps.index(upload))
-            self.assertNotIn("continue-on-error", upload)
 
     def test_rust_uses_exact_database_cache_and_current_upload_categories(self) -> None:
         """Rust alone leaves the source matrix's action analyzer for the shared pinned runner."""

@@ -25,6 +25,8 @@ if TYPE_CHECKING:
 
 PIN = ROOT / "security/codeql-toolchain.json"
 LANGUAGES = ("actions", "javascript-typescript", "python", "rust", "c-cpp")
+AUTOMATED_LANGUAGES = ("actions", "javascript-typescript", "python", "rust")
+FIRST_PARTY_CONFIG = "security/codeql/first-party.yml"
 MAX_MEMBERS = 250000
 
 

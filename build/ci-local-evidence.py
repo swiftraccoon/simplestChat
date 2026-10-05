@@ -12,8 +12,7 @@ import sys
 from pathlib import Path
 from typing import cast
 
-from native_security import MODES
-from security_codeql_triage import LANGUAGES
+from security_codeql_tools import AUTOMATED_LANGUAGES
 from security_findings import list_value, object_value
 from security_tools import ToolError, bounded_file, require, string
 
@@ -70,7 +69,7 @@ def matrix(job: object) -> dict[str, object]:
 
 
 def expected_checks() -> tuple[set[str], set[str]]:
-    """Derive local coverage from the workflow plus the shared native/CodeQL contracts."""
+    """Require the same first-party coverage locally and in hosted automation."""
     ci, security, codeql = yaml_jobs("ci.yml"), yaml_jobs("security.yml"), yaml_jobs("codeql.yml")
     required = {string(value) for value in list_value(object_value(ci["required"])["needs"])}
     browser = matrix(ci["browser"])
@@ -78,22 +77,21 @@ def expected_checks() -> tuple[set[str], set[str]]:
     groups = [string(value) for value in list_value(browser["group"])]
     included = [string(object_value(value)["group"]) for value in list_value(browser["include"])]
     require(sorted(groups) == sorted(included), "local_ci_browser_matrix_ports")
-    native = matrix(security["native-security"])
-    require(set(native) == {"mode"}, "local_ci_native_matrix_shape")
-    modes = [string(value) for value in list_value(native["mode"])]
-    require(set(modes) == set(MODES) and len(modes) == len(MODES), "local_ci_native_coverage")
+    require("native-security" not in security, "local_ci_vendor_scan_is_optional")
+    require("native-analysis" not in codeql, "local_ci_vendor_scan_is_optional")
     source = matrix(codeql["source-analysis"])
     require(set(source) == {"language"}, "local_ci_codeql_matrix_shape")
     languages = [string(value) for value in list_value(source["language"])]
     pinned = set(object_value(document(ROOT / "security/codeql-toolchain.json")["languages"]))
     require(
-        set(languages) | {"c-cpp"} == pinned == set(LANGUAGES)
-        and len(languages) == len(LANGUAGES) - 1,
+        set(languages) == set(AUTOMATED_LANGUAGES)
+        and set(languages) <= pinned
+        and len(languages) == len(AUTOMATED_LANGUAGES),
         "local_ci_codeql_coverage",
     )
     require(bool(groups) and len(groups) == len(set(groups)), "local_ci_browser_coverage")
-    checks = {f"browser-{group}" for group in groups} | {f"native-{mode}" for mode in modes}
-    checks |= {f"codeql-{language}" for language in pinned} | {"security-fast"}
+    checks = {f"browser-{group}" for group in groups}
+    checks |= {f"codeql-{language}" for language in languages} | {"security-fast"}
     return required, checks
 
 

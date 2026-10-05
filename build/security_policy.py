@@ -2,8 +2,9 @@
 
 An exception matches one scanner fingerprint and one exact scope string. There
 are no glob, regex, severity, package-family or query-class waivers. Every record
-must remain valid even when its scanner is not part of the current check, so an
-expired review cannot be hidden by running only a convenient subset of checks.
+in the selected source scope must remain valid even when its scanner is not part
+of the current check. Optional vendor source reviews are enforced only when that
+source scope is explicitly selected; dependency and image reviews always apply.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from urllib.parse import parse_qsl, unquote, urlsplit
 
+from security_source_scope import vendor_path
 from security_tools import bounded_file, record, require, string
 
 if TYPE_CHECKING:
@@ -138,7 +140,7 @@ def parse_exception(value: object, today: date) -> ExceptionRecord:
 
 
 def read_exceptions(
-    path: Path = DEFAULT_PATH, *, today: date | None = None
+    path: Path = DEFAULT_PATH, *, today: date | None = None, include_vendor: bool = False
 ) -> list[ExceptionRecord]:
     """Validate the complete policy; duplicate identities fail instead of shadowing."""
     raw = record(
@@ -152,9 +154,24 @@ def read_exceptions(
     entries = cast("list[object]", raw["exceptions"])
     require(len(entries) <= MAX_EXCEPTIONS, "too_many_security_exceptions")
     current = today if today is not None else datetime.now(UTC).date()
-    result = [parse_exception(entry, current) for entry in entries]
-    identities = {(entry.scanner, entry.fingerprint, entry.scope) for entry in result}
-    require(len(identities) == len(result), "duplicate_security_exception")
+    result: list[ExceptionRecord] = []
+    validated: list[ExceptionRecord] = []
+    for entry in entries:
+        fields = record(entry, FIELDS)
+        vendor_source = string(fields["scanner"]) in {
+            "codeql",
+            "gitleaks",
+            "semgrep",
+            "zizmor",
+        } and (vendor_path(string(fields["scope"])))
+        parsed = parse_exception(
+            entry, date.min if vendor_source and not include_vendor else current
+        )
+        validated.append(parsed)
+        if include_vendor or not vendor_source:
+            result.append(parsed)
+    identities = {(entry.scanner, entry.fingerprint, entry.scope) for entry in validated}
+    require(len(identities) == len(validated), "duplicate_security_exception")
     return result
 
 

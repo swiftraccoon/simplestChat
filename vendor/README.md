@@ -8,6 +8,15 @@ upstream names and versions unchanged: Cargo's
 `[patch.crates-io]` mechanism records that the source is local without
 pretending this is a new upstream release.
 
+Source scanning of this directory and native sanitizer/replay analysis are
+optional local checks, enabled explicitly with `--include-vendor` through the
+[security entry points](../docs/security.md). CI, scheduled workflows,
+deployment, and the complete local CI gate do not require or run them.
+Dependency advisories, shipped-image vulnerability/license/secret checks,
+source provenance, build integrity, and functional native/application tests
+remain enforced. The integrity verifier below authenticates build inputs; it
+does not perform a vulnerability or source-pattern scan.
+
 ## Provenance
 
 | Directory | crates.io archive | SHA-256 | Upstream VCS revision |

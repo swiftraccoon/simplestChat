@@ -39,7 +39,7 @@ def records(reference: str = REFERENCE) -> list[JsonObject]:
             "error": "",
             "warning": "",
         }
-        for index, language in enumerate(sorted(triage.LANGUAGES), start=1)
+        for index, language in enumerate(sorted(triage.AUTOMATED_LANGUAGES), start=1)
     ]
 
 
@@ -88,7 +88,7 @@ class HealthGithub(triage.Github):
 class CodeqlHealthTests(unittest.TestCase):
     """Require current complete successful ingestion, even after successful scanner jobs."""
 
-    def test_current_main_and_fork_merge_ref_require_all_five_analyses(self) -> None:
+    def test_current_main_and_fork_merge_ref_require_four_automated_analyses(self) -> None:
         """No findings is healthy only when each exact ref has nonempty executed queries."""
         for reference in (REFERENCE, "refs/pull/42/merge"):
             client = HealthGithub(reference)
@@ -97,9 +97,29 @@ class CodeqlHealthTests(unittest.TestCase):
                 self.assertTrue(report["passed"] is True)
                 self.assertEqual(report["ref"], reference)
                 self.assertEqual(report["revision"], REVISION)
-                self.assertEqual(len(array_value(report["analyses"])), len(triage.LANGUAGES))
+                self.assertEqual(
+                    len(array_value(report["analyses"])), len(triage.AUTOMATED_LANGUAGES)
+                )
                 self.assertEqual(client.head_reads, 2)
                 self.assertEqual(len(client.calls), 3)
+
+    def test_historical_native_failures_do_not_block_first_party_health(self) -> None:
+        """Only enabled categories participate, while native SARIF remains locally supported."""
+        client = HealthGithub()
+        native = copy.deepcopy(client.analyses[0])
+        native.update(
+            {
+                "category": "/language:c-cpp/security",
+                "commit_sha": "b" * 40,
+                "error": "old native result",
+            }
+        )
+        client.analyses.insert(0, native)
+        result = triage.analysis_health(client, REVISION, REFERENCE)
+        self.assertTrue(result["passed"])
+        self.assertEqual(len(array_value(result["analyses"])), 4)
+        self.assertIn("c-cpp", triage.LANGUAGES)
+        self.assertNotIn("c-cpp", triage.AUTOMATED_LANGUAGES)
 
     def test_successful_job_cannot_override_failed_server_ingestion(self) -> None:
         """The observed Unknown Error/zero-query server shape fails without trusting job state."""

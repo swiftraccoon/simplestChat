@@ -231,7 +231,9 @@ class NativeSourceTests(unittest.TestCase):
         self.assertEqual({triage.positive(item["number"]) for item in entries}, set(range(70, 102)))
         manifest_sha = vendor.sha256((ROOT / sources.MANIFEST).read_bytes())
         previous_sha = object_value(raw["manifestRevalidation"])["previousManifestSha256"]
-        reviews = security_policy.read_exceptions(today=date.fromisoformat(str(raw["reviewed"])))
+        reviews = security_policy.read_exceptions(
+            today=date.fromisoformat(str(raw["reviewed"])), include_vendor=True
+        )
         identity_fields = {
             "rule",
             "toolVersion",

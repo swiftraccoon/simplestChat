@@ -23,8 +23,10 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 from urllib.parse import unquote, urlencode
 
+import security_codeql_tools
 import security_policy
 from security_codeql_sources import NativeSources
+from security_source_scope import require_local_vendor
 from security_tools import ToolError, bounded_file, require, write_private
 
 # isort: split
@@ -51,6 +53,7 @@ CRITICAL_SCORE = 9
 MAX_SCORE = 10
 MEDIUM_SCORE = 4
 LANGUAGES = frozenset({"actions", "javascript-typescript", "python", "rust", "c-cpp"})
+AUTOMATED_LANGUAGES = frozenset(security_codeql_tools.AUTOMATED_LANGUAGES)
 SEVERITIES = frozenset({"critical", "high", "medium", "low", "advisory"})
 REGION = ("start_line", "end_line", "start_column", "end_column")
 REVIEW_PATHS = (
@@ -188,6 +191,17 @@ def sarif_location(physical: JsonObject) -> JsonObject:
         "start_column": region.get("startColumn", 1),
         "end_column": region["endColumn"],
     }
+
+
+def first_party_report(raw: JsonObject) -> None:
+    """Reject a misconfigured extraction instead of silently deleting vendor findings."""
+    for value in array_value(raw["runs"]):
+        for item in array_value(object_value(value)["results"]):
+            for location in array_value(object_value(item)["locations"]):
+                primary = sarif_location(object_value(object_value(location)["physicalLocation"]))
+                require(
+                    not string_value(primary["path"]).startswith("vendor/"), "codeql_vendor_result"
+                )
 
 
 def sarif_findings(
@@ -364,7 +378,7 @@ class Github:
         """Request all states; remote dismissals are evidence, never policy authority."""
         entries: list[JsonObject] = []
         categories: set[str] = set()
-        expected = {f"/language:{language}/security" for language in LANGUAGES}
+        expected = {f"/language:{language}/security" for language in AUTOMATED_LANGUAGES}
         require(revision is None or resource == "analyses", "codeql_page_revision")
         for page in range(1, MAX_PAGES + 1):
             query = urlencode(
@@ -428,12 +442,12 @@ def api_finding(
 
 
 def analysis_health(client: Github, revision: str, reference: str) -> JsonObject:
-    """Require GitHub's newest five security analyses to be healthy at the current exact ref."""
+    """Require the four automated security analyses at the current exact ref."""
     require(re.fullmatch(r"[a-f0-9]{40}", revision), "codeql_revision")
     require(client.head(reference) == revision, "codeql_ref_head_changed")
     analyses = client.pages("analyses", reference, revision=revision)
     categories: set[str] = set()
-    expected = {f"/language:{language}/security" for language in LANGUAGES}
+    expected = {f"/language:{language}/security" for language in AUTOMATED_LANGUAGES}
     records: list[JsonValue] = []
     for item in analyses:
         category = string_value(item["category"]).rstrip("/")
@@ -477,7 +491,7 @@ def api_plan(  # noqa: PLR0913 -- Explicit API identity, policy and verified sou
     *,
     sources: NativeSources | None = None,
 ) -> JsonObject:
-    """Require all five exact-revision analyses and assess every still-active alert."""
+    """Assess active first-party alerts in the four automated security categories."""
     health = analysis_health(client, revision, reference)
     findings: list[JsonObject] = []
     seen: set[int] = set()
@@ -490,6 +504,10 @@ def api_plan(  # noqa: PLR0913 -- Explicit API identity, policy and verified sou
         instance = object_value(raw["most_recent_instance"])
         require(instance["ref"] == reference, "codeql_alert_ref")
         if instance["state"] == "fixed":
+            continue
+        if string_value(instance["category"]).rstrip("/") not in {
+            f"/language:{language}/security" for language in AUTOMATED_LANGUAGES
+        } or string_value(object_value(instance["location"])["path"]).startswith("vendor/"):
             continue
         findings.append(api_finding(raw, root, revision, reference, sources))
     require(client.head(reference) == revision, "codeql_ref_head_changed")
@@ -639,6 +657,16 @@ class Options(argparse.Namespace):
     reference: str = "refs/heads/main"
     authorize_dismissals: bool = False
     source_cache: Path | None = None
+    include_vendor: bool = False
+
+
+def validate_request(args: Options) -> None:
+    """Keep optional vendor policy local and require explicit source/mutation identity."""
+    require_local_vendor(include_vendor=args.include_vendor)
+    require(not args.include_vendor or args.mode == "sarif", "codeql_vendor_local_sarif_only")
+    require(args.source_cache is None or args.include_vendor, "codeql_vendor_opt_in_required")
+    require(re.fullmatch(r"[a-f0-9]{40}", args.revision), "codeql_revision")
+    require(args.authorize_dismissals == (args.mode == "apply"), "codeql_apply_authorization")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -652,6 +680,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ = parser.add_argument("--ref", dest="reference", default="refs/heads/main")
     _ = parser.add_argument("--authorize-dismissals", action="store_true")
     _ = parser.add_argument("--source-cache", type=Path)
+    _ = parser.add_argument("--include-vendor", action="store_true")
     args = parser.parse_args(argv, namespace=Options())
     created = False
     action_number = 0
@@ -667,8 +696,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     try:
-        require(re.fullmatch(r"[a-f0-9]{40}", args.revision), "codeql_revision")
-        require(args.authorize_dismissals == (args.mode == "apply"), "codeql_apply_authorization")
+        validate_request(args)
         args.output.mkdir(mode=0o700)
         created = True
         write_private(
@@ -694,7 +722,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.output / "report.json", (json.dumps(output, indent=2) + "\n").encode(), 0o600
             )
             return 0
-        reviews = security_policy.read_exceptions()
+        reviews = security_policy.read_exceptions(include_vendor=args.include_vendor)
         sources = (
             NativeSources(ROOT, args.revision, args.source_cache)
             if args.source_cache is not None
@@ -704,6 +732,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             require(args.input is not None, "codeql_input_required")
             raw = object_value(decode_json(bounded_file(Path(str(args.input)), MAX_REPORT)))
             if args.mode == "sarif":
+                if not args.include_vendor:
+                    first_party_report(raw)
                 output = verdict(sarif_findings(raw, ROOT, args.revision, sources), reviews)
             else:
                 require(

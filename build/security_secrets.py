@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 from security_context import MAX_FILES, MAX_SOURCE, MAX_TREE, Context
 from security_findings import list_value, object_value
 from security_secret_projection import LIMITATIONS, PREFIX, project
+from security_source_scope import require_local_vendor, selected
 from security_tools import bounded_file, require, string, write_private
 
 DISK_RESERVE = 64 * 1024**2
@@ -46,10 +47,17 @@ def projection_budget(context: Context, source: Path, manifest: dict[str, object
     return projected
 
 
-def neutral_snapshot(context: Context, source: Path, config: Path) -> tuple[Path, Path]:
+def neutral_snapshot(
+    context: Context, source: Path, config: Path, *, include_vendor: bool = False
+) -> tuple[Path, Path]:
     """Bind every projection to original bytes and preserve reviewed fixture path constraints."""
+    require_local_vendor(include_vendor=include_vendor)
     manifest_bytes = bounded_file(context.output / "source-manifest.json", 4 * 1024**2)
-    manifest = object_value(cast("object", json.loads(manifest_bytes)))
+    manifest = {
+        name: identity
+        for name, identity in object_value(cast("object", json.loads(manifest_bytes))).items()
+        if selected(name, include_vendor=include_vendor)
+    }
     expected_bytes = projection_budget(context, source, manifest)
     destination = context.output / "secret-inputs"
     destination.mkdir(mode=0o700)
@@ -85,6 +93,7 @@ def neutral_snapshot(context: Context, source: Path, config: Path) -> tuple[Path
             json.dumps(
                 {
                     "schemaVersion": 1,
+                    "includeVendor": include_vendor,
                     "sourceManifestSha256": hashlib.sha256(manifest_bytes).hexdigest(),
                     "files": len(coverage),
                     "sourceBytes": total,

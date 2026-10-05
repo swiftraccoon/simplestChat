@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from security_context import Context
+from security_source_scope import require_local_vendor, vendor_path
 from security_tools import (
     ToolError,
     bounded_file,
@@ -273,12 +274,16 @@ def golden(context: Context, engine: Path, snapshot: Path) -> int:
     return len(positive) + len(negative)
 
 
-def source_paths(snapshot: Path) -> list[str]:
+def source_paths(snapshot: Path, *, include_vendor: bool = False) -> list[str]:
     """Scope this curated pack to maintained production Rust, Python and browser code."""
     paths: list[str] = []
     for path in snapshot.rglob("*"):
         name = path.relative_to(snapshot).as_posix()
-        if path.is_file() and path.suffix in LANGUAGES and name.startswith(SOURCE_PREFIXES):
+        if (
+            path.is_file()
+            and path.suffix in LANGUAGES
+            and (name.startswith(SOURCE_PREFIXES) or (include_vendor and vendor_path(name)))
+        ):
             paths.append(name)
     require(bool(paths), "semgrep_empty_source_scope")
     return sorted(paths)
@@ -297,8 +302,11 @@ def new_output(root: Path, output: Path) -> Path:
     return output
 
 
-def check(root: Path, output: Path, tools_directory: Path | None = None) -> JsonObject:
+def check(
+    root: Path, output: Path, tools_directory: Path | None = None, *, include_vendor: bool = False
+) -> JsonObject:
     """Verify the engine, snapshot sources, run golden tests and scan the same bytes."""
+    require_local_vendor(include_vendor=include_vendor)
     root = root.resolve()
     output = new_output(root, output)
     context = Context(root, output)
@@ -306,11 +314,12 @@ def check(root: Path, output: Path, tools_directory: Path | None = None) -> Json
     engine = tool_path("semgrep-core", tools_directory)
     snapshot = context.snapshot()
     count = golden(context, engine, snapshot)
-    paths = source_paths(snapshot)
+    paths = source_paths(snapshot, include_vendor=include_vendor)
     actual = run_engine(context, engine, snapshot / RULES, snapshot, paths, name="source-engine")
     require(load_lock()[1] == lock_digest, "semgrep_tool_lock_changed")
     report: JsonObject = {
         "schemaVersion": 1,
+        "includeVendor": include_vendor,
         "toolLockSha256": lock_digest,
         "engineVersion": tools["semgrep-core"].version,
         "rulesSha256": hashlib.sha256(bounded_file(snapshot / RULES, MAX_CONFIG)).hexdigest(),
@@ -332,6 +341,7 @@ class Arguments(argparse.Namespace):
     root: Path = ROOT
     output: Path = Path()
     tools_directory: Path | None = None
+    include_vendor: bool = False
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -341,9 +351,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ = parser.add_argument("--root", type=Path, default=ROOT)
     _ = parser.add_argument("--output", type=Path, required=True)
     _ = parser.add_argument("--tools-directory", type=Path)
+    _ = parser.add_argument("--include-vendor", action="store_true")
     arguments = parser.parse_args(argv, namespace=Arguments())
     try:
-        result = check(arguments.root, arguments.output, arguments.tools_directory)
+        result = check(
+            arguments.root,
+            arguments.output,
+            arguments.tools_directory,
+            include_vendor=arguments.include_vendor,
+        )
     except ToolError as error:
         _ = sys.stdout.write(json.dumps({"passed": False, "error": str(error)}) + "\n")
         return 1

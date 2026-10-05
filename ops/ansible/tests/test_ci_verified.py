@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 import os
 import platform
-import re
 import shlex
 import subprocess
 import tempfile
@@ -618,23 +617,18 @@ class VerifiedCacheTests(unittest.TestCase):
 class VerifiedWorkflowTests(unittest.TestCase):
     """Keep volatile audits/browser behavior fresh and publish only completed successes."""
 
-    def test_native_success_key_covers_every_executed_workflow_helper(self) -> None:
-        """New helper entrypoints must join the proven native input closure."""
+    def test_native_success_receipts_do_not_enable_automated_vendor_scans(self) -> None:
+        """Optional native cache helpers remain available without any required scan job."""
         jobs = obj(
             yaml_value(
                 (ROOT / ".github/workflows/security.yml").read_text(), scalars_as_strings=True
             ),
             "jobs",
         )
-        steps = objects(obj(jobs, "native-security"), "steps")
-        for step in steps:
-            for match in re.finditer(r"\bbuild/[A-Za-z0-9._/-]+", string(step.get("run", ""))):
-                helper = match.group()
-                if helper == "build/ci-local-evidence.py":
-                    # The current run's receipt is always recorded, even on a cache hit.
-                    self.assertEqual(step["if"], "${{ env.ACT }}")
-                    continue
-                self.assertTrue(cache.native_security_input(helper), helper)
+        self.assertNotIn("native-security", jobs)
+        self.assertNotIn("security-deep", jobs)
+        for helper in ("build/native_security.py", "build/native_security_cache.py"):
+            self.assertTrue(cache.native_security_input(helper), helper)
 
     def test_rust_tests_prime_their_own_complete_graph_before_executing_every_test(self) -> None:
         """A binary-only cache must not prevent the test dependency graph being retained."""

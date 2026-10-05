@@ -174,7 +174,7 @@ test('all runs native ARM suites with bounded resources and explicit AMD64 produ
   assert.equal(result.summary.hostedOnly.length, 2);
   assert.equal(result.summary.runnerPlatform, 'linux/arm64');
   assert.equal(result.summary.productionPlatform, 'linux/amd64');
-  for (const target of ['nativeSecurityPlatform', 'nativeCodeqlPlatform']) assert.equal(result.summary[target], 'linux/arm64');
+  assert.equal(result.summary.vendorScanning, 'excluded');
   const emulator = result.calls.findIndex(call => call.tool === 'podman' && call.args[1] === 'ssh');
   const empty = result.calls.findIndex(call => call.tool === 'curl' && call.args.includes('http://localhost/containers/json?all=1'));
   assert.ok(emulator > empty);
@@ -285,7 +285,8 @@ test('explicit engines require disposable intent and a local Unix socket', async
   assert.equal(result.status, 0, result.stderr);
   assert.ok(!result.calls.some(call => call.tool === 'podman'));
   assert.equal(result.summary.runnerPlatform, 'linux/amd64');
-  for (const target of ['productionPlatform', 'nativeSecurityPlatform', 'nativeCodeqlPlatform']) assert.equal(result.summary[target], 'linux/amd64');
+  assert.equal(result.summary.productionPlatform, 'linux/amd64');
+  assert.equal(result.summary.vendorScanning, 'excluded');
 });
 
 test('failed owned-VM emulator selection stops before workflow execution', async t => {

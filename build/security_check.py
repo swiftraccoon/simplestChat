@@ -29,6 +29,7 @@ from security_context import MAX_REPORT, ROOT, Context, executable, json_object
 from security_policy import read_exceptions
 from security_secret_projection import project
 from security_secrets import neutral_snapshot
+from security_source_scope import require_local_vendor
 from security_tools import (
     ToolError,
     bounded_file,
@@ -69,17 +70,20 @@ def workflow_checks(context: Context, tools: Path, reviews: Sequence[ExceptionRe
     context.checks[-1]["reviewedFindings"] = reviewed
 
 
-def secret_checks(
+def secret_checks(  # noqa: PLR0913 -- Explicit source scope joins existing scanner inputs.
     context: Context,
     tools: Path,
     reviews: Sequence[ExceptionRecord],
     base: str | None,
     snapshot: Path,
+    *,
+    include_vendor: bool = False,
 ) -> None:
     """Scan current ASCII projections and textual Git changes with full redaction."""
     config = context.root / "security/gitleaks.toml"
-    findings.gitleaks_configuration(config, reviews)
-    neutral, translated = neutral_snapshot(context, snapshot, config)
+    require_local_vendor(include_vendor=include_vendor)
+    findings.gitleaks_configuration(config, reviews, include_vendor=include_vendor)
+    neutral, translated = neutral_snapshot(context, snapshot, config, include_vendor=include_vendor)
     common = [
         "--config",
         str(config),
@@ -117,16 +121,66 @@ def secret_checks(
         clean_secret_scan(
             context,
             "gitleaks-diff",
-            [scanner, "git", ".", "--log-opts=" + base + "..HEAD", *common],
+            [
+                scanner,
+                "git",
+                ".",
+                "--log-opts="
+                + base
+                + "..HEAD"
+                + ("" if include_vendor else " -- . :(top,exclude)vendor/**"),
+                *common,
+            ],
         )
+    working_env = working_diff_environment(context, snapshot, include_vendor=include_vendor)
     clean_secret_scan(
-        context, "gitleaks-working-diff", [scanner, "git", ".", "--pre-commit", *common]
+        context,
+        "gitleaks-working-diff",
+        [scanner, "git", str(snapshot), "--pre-commit", *common],
+        env_updates=working_env,
     )
 
 
-def clean_secret_scan(context: Context, name: str, arguments: Sequence[str]) -> None:
+def working_diff_environment(
+    context: Context, snapshot: Path, *, include_vendor: bool = False
+) -> dict[str, str]:
+    """Use an owned index so Gitleaks' fixed diff command never visits excluded paths."""
+    require_local_vendor(include_vendor=include_vendor)
+    git = executable("git")
+    _, git_directory = context.run("secret-diff-git-dir", [git, "rev-parse", "--absolute-git-dir"])
+    directory = Path(git_directory.decode().strip()).resolve(strict=True)
+    require(directory.is_dir(), "secret_diff_git_directory")
+    env = {
+        "GIT_DIR": str(directory),
+        "GIT_WORK_TREE": str(snapshot),
+        "GIT_INDEX_FILE": str(context.output / "secret-diff-index"),
+    }
+    _ = context.run("secret-diff-index", [git, "read-tree", "HEAD"], env_updates=env)
+    if not include_vendor:
+        _, names = context.run(
+            "secret-diff-vendor-paths",
+            [git, "ls-files", "-z", "--", ":(top)vendor/"],
+            env_updates=env,
+        )
+        if names:
+            _ = context.run(
+                "secret-diff-scope",
+                [git, "update-index", "--force-remove", "-z", "--stdin"],
+                input_data=names,
+                env_updates=env,
+            )
+    return env
+
+
+def clean_secret_scan(
+    context: Context,
+    name: str,
+    arguments: Sequence[str],
+    *,
+    env_updates: dict[str, str] | None = None,
+) -> None:
     """Require a successful scanner to produce an explicit empty findings array."""
-    _, output = context.run(name, arguments)
+    _, output = context.run(name, arguments, env_updates=env_updates)
     require(
         findings.list_value(cast("object", json.loads(output))) == [], "secret_findings_present"
     )
@@ -255,7 +309,7 @@ def dependency_checks(context: Context, tools: Path, reviews: Sequence[Exception
         require(vulnerabilities["total"] == 0, "npm_dependency_advisory")
 
 
-def source_checks(context: Context, tools: Path) -> None:
+def source_checks(context: Context, tools: Path, *, include_vendor: bool = False) -> None:
     """Run tested repository rules and inspect new SQL plus rendered runtime restrictions."""
     _ = context.run(
         "semgrep",
@@ -267,6 +321,7 @@ def source_checks(context: Context, tools: Path) -> None:
             str(context.root),
             "--output",
             str(context.output / "semgrep"),
+            *(["--include-vendor"] if include_vendor else []),
         ],
         timeout=300,
     )
@@ -315,18 +370,19 @@ def source_checks(context: Context, tools: Path) -> None:
     )
 
 
-def fast(context: Context, base: str | None) -> None:
+def fast(context: Context, base: str | None, *, include_vendor: bool = False) -> None:
     """Run the same blocking checks for a local checkout and GitHub Actions."""
+    require_local_vendor(include_vendor=include_vendor)
     _, revision = context.run("source-revision", [executable("git"), "rev-parse", "HEAD"])
     snapshot = context.snapshot()
-    reviews = read_exceptions(snapshot / "security/exceptions.json")
+    reviews = read_exceptions(snapshot / "security/exceptions.json", include_vendor=include_vendor)
     tools = install([])
     workflow_checks(context, tools, reviews)
-    secret_checks(context, tools, reviews, base, snapshot)
+    secret_checks(context, tools, reviews, base, snapshot, include_vendor=include_vendor)
     dependency_checks(context, tools, reviews)
     security_dependency_licenses.check(context, snapshot, base)
-    security_actions.check(context, snapshot, base)
-    source_checks(context, tools)
+    security_actions.check(context, snapshot, base, include_vendor=include_vendor)
+    source_checks(context, tools, include_vendor=include_vendor)
     security_openssl.check(context, snapshot)
     _ = context.snapshot("final-source")
     original = (context.output / "source-manifest.json").read_bytes()
@@ -348,7 +404,11 @@ def fast(context: Context, base: str | None) -> None:
 
 def deep(context: Context, args: Options) -> None:
     """Run the requested native and test-quality checks after the complete source gate."""
-    fast(context, args.base)
+    require_local_vendor(include_vendor=args.include_vendor)
+    require(
+        args.deep_check != "native" or args.include_vendor, "native_scan_requires_include_vendor"
+    )
+    fast(context, args.base, include_vendor=args.include_vendor)
     _ = context.run(
         "vendor-integrity",
         [
@@ -364,7 +424,7 @@ def deep(context: Context, args: Options) -> None:
         ],
         timeout=900,
     )
-    if args.deep_check in ("all", "native"):
+    if args.include_vendor and args.deep_check in ("all", "native"):
         native_checks(context, args.engine)
     if args.deep_check in ("all", "mutation"):
         mutation_checks(context, args)
@@ -448,6 +508,7 @@ class Options(argparse.Namespace):
     deep_check: str = "all"
     openssl_prefix: Path | None = None
     mutation_tool_platform: str | None = None
+    include_vendor: bool = False
 
 
 def image(context: Context, args: Options) -> None:
@@ -520,6 +581,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ = parser.add_argument("--deep-check", choices=("all", "native", "mutation"), default="all")
     _ = parser.add_argument("--openssl-prefix", type=Path)
     _ = parser.add_argument("--mutation-tool-platform", choices=("linux-x86_64", "darwin-x86_64"))
+    _ = parser.add_argument(
+        "--include-vendor",
+        action="store_true",
+        help="Add vendor source scans locally; unavailable in CI",
+    )
     args = parser.parse_args(argv, namespace=Options())
     _ = os.umask(0o077)
     (ROOT / "results").mkdir(exist_ok=True)
@@ -534,6 +600,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     passed = False
     failure: str | None = None
     try:
+        require_local_vendor(include_vendor=args.include_vendor)
+        require(
+            args.tier != "image" or not args.include_vendor, "image_vendor_option_not_applicable"
+        )
         require((args.tier == "image") == (args.image is not None), "security_image_argument")
         require(args.tier == "image" or args.image_tools is None, "security_image_tools_argument")
         require(
@@ -550,7 +620,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "security_deep_arguments",
         )
         if args.tier == "fast":
-            fast(context, args.base)
+            fast(context, args.base, include_vendor=args.include_vendor)
         elif args.tier == "deep":
             deep(context, args)
         else:
@@ -567,6 +637,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "schemaVersion": 1,
                         "tier": args.tier,
                         "deepCheck": args.deep_check if args.tier == "deep" else None,
+                        "includeVendor": args.include_vendor,
                         "passed": passed,
                         "failure": failure,
                         "checks": context.checks,

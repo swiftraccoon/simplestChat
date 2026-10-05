@@ -59,9 +59,9 @@ class SourceSecretTests(unittest.TestCase):
             "web/package-lock.json": b'{"name":"fixture"}\n',
             "empty": b"",
         }
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {}, clear=True):
             selected, source, policy = snapshot(Path(temporary), files)
-            neutral, _ = secrets.neutral_snapshot(selected, source, policy)
+            neutral, _ = secrets.neutral_snapshot(selected, source, policy, include_vendor=True)
             mapped = obj(decode_json((selected.output / "secret-paths.json").read_bytes()))
             coverage = obj(decode_json((selected.output / "secret-coverage.json").read_bytes()))
             self.assertEqual(coverage["files"], len(files))
@@ -136,15 +136,92 @@ class SourceSecretTests(unittest.TestCase):
             for entry in entries
         }
         findings.gitleaks_configuration(policy_path, read_exceptions())
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {}, clear=True):
             selected, source, policy = snapshot(Path(temporary), files, configuration=policy_text)
-            _, translated = secrets.neutral_snapshot(selected, source, policy)
+            _, translated = secrets.neutral_snapshot(selected, source, policy, include_vendor=True)
             derived = objects(obj(tomllib.loads(translated.read_text())), "allowlists")
             mapped = obj(decode_json((selected.output / "secret-paths.json").read_bytes()))
             self.assertEqual(len(derived), len(entries))
             for before, after in zip(entries, derived, strict=True):
                 name = string(before, "description").removeprefix("Public fixture: ")
                 self.assertEqual(after, {**before, "paths": ["(^|/)" + string(mapped, name) + "$"]})
+
+    def test_default_projection_never_reads_vendor_but_keeps_nested_first_party_paths(self) -> None:
+        """The default scanner input omits top-level vendor before source-byte inspection."""
+        files = {"vendor/unused.bin": b"vendor", "src/vendor/kept.rs": b"application"}
+        with tempfile.TemporaryDirectory() as temporary:
+            selected, source, policy = snapshot(Path(temporary), files)
+            (source / "vendor/unused.bin").unlink()
+            neutral, _ = secrets.neutral_snapshot(selected, source, policy)
+            mapped = obj(decode_json((selected.output / "secret-paths.json").read_bytes()))
+            coverage = obj(decode_json((selected.output / "secret-coverage.json").read_bytes()))
+            self.assertEqual(set(mapped), {"src/vendor/kept.rs"})
+            self.assertEqual(len(list(neutral.iterdir())), 1)
+            self.assertFalse(coverage["includeVendor"])
+
+    def test_private_git_index_excludes_vendor_without_changing_the_repository_index(self) -> None:
+        """Real unstaged Git diffs preserve original app paths and never visit vendor blobs."""
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {}, clear=True):
+            directory = Path(temporary)
+            repo, output, source = (directory / name for name in ("repo", "output", "snapshot"))
+            for path in (repo, output, source):
+                path.mkdir()
+            selected = context.Context(repo, output)
+            git = context.executable("git")
+            _ = selected.run("init", [git, "init", "--quiet"])
+            for name in ("application.txt", "vendor/fixture.txt", "src/vendor/kept.txt"):
+                path = repo / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                _ = path.write_text("before\n")
+                target = source / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                _ = target.write_text("after\n")
+            _ = selected.run("add", [git, "add", "."])
+            _ = selected.run(
+                "commit",
+                [
+                    git,
+                    "-c",
+                    "user.name=Fixture",
+                    "-c",
+                    "user.email=fixture@example.invalid",
+                    "commit",
+                    "--no-gpg-sign",
+                    "--quiet",
+                    "-m",
+                    "fixture",
+                ],
+            )
+            original = (repo / ".git/index").read_bytes()
+            env = check.working_diff_environment(selected, source)
+            _, diff = selected.run(
+                "scoped-diff",
+                [git, "-C", str(source), "diff", "-U0", "--no-ext-diff", "."],
+                env_updates=env,
+            )
+            self.assertIn(b"a/application.txt", diff)
+            self.assertIn(b"a/src/vendor/kept.txt", diff)
+            self.assertNotIn(b"a/vendor/fixture.txt", diff)
+            self.assertEqual((repo / ".git/index").read_bytes(), original)
+            self.assertEqual((repo / "vendor/fixture.txt").read_text(), "before\n")
+
+    def test_deep_native_suite_requires_local_opt_in(self) -> None:
+        """Default deep retains application mutations and only explicit local mode adds native."""
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {}, clear=True):
+            selected = context.Context(Path(temporary), Path(temporary))
+            with (
+                patch.object(check, "fast"),
+                patch.object(selected, "run"),
+                patch.object(check, "native_checks") as native,
+                patch.object(check, "mutation_checks") as mutation,
+            ):
+                check.deep(selected, check.Options())
+                native.assert_not_called()
+                mutation.assert_called_once()
+                with self.assertRaisesRegex(tools.ToolError, "native_scan_requires_include_vendor"):
+                    check.deep(selected, check.Options(deep_check="native"))
+                check.deep(selected, check.Options(deep_check="native", include_vendor=True))
+                native.assert_called_once()
 
     def test_success_without_an_empty_findings_array_is_rejected(self) -> None:
         """Scanner exit zero cannot turn missing, malformed or nonempty evidence into success."""

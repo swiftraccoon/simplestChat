@@ -19,6 +19,7 @@ import security_codeql_resources as resources
 import security_codeql_tools as tools
 import security_codeql_triage as triage
 from security_context import ROOT, Context, executable
+from security_source_scope import require_local_vendor
 from security_tools import ToolError, bounded_file, require, write_private
 
 # isort: split
@@ -85,6 +86,16 @@ class Options(argparse.Namespace):
     openssl_prefix: Path = ROOT / "target/openssl-3.5.9"
     database_cache: Path | None = None
     rust_cargo_cache: Path | None = None
+    include_vendor: bool = False
+
+
+def selected_languages(args: Options) -> Sequence[str]:
+    """Keep optional native/vendor analysis outside every automated invocation."""
+    require_local_vendor(include_vendor=args.include_vendor)
+    require(args.language != "c-cpp" or args.include_vendor, "codeql_vendor_opt_in_required")
+    if args.language:
+        return [args.language]
+    return tools.LANGUAGES if args.include_vendor else tools.AUTOMATED_LANGUAGES
 
 
 def source_identity(context: Context, revision: str) -> None:
@@ -192,6 +203,7 @@ def complete_health(reports: Sequence[JsonObject], languages: Sequence[str], sui
 
 def upload_ready(output: Path, revision: str, category: str, language: str) -> bool:
     """Expose valid fresh SARIF even when current findings fail the policy gate."""
+    require(language in tools.AUTOMATED_LANGUAGES, "codeql_vendor_upload_forbidden")
     report = output / (language + "-" + category + ".sarif")
     marker = report.with_suffix(".validated.json")
     if not marker.exists():
@@ -199,9 +211,11 @@ def upload_ready(output: Path, revision: str, category: str, language: str) -> b
     expected = object_value(decode_json(bounded_file(marker, 4096)))
     identity = report_health(report, language, category)
     require(
-        expected == {"revision": revision, "sarifSha256": identity["sarifSha256"]},
+        expected
+        == {"revision": revision, "sarifSha256": identity["sarifSha256"], "includeVendor": False},
         "codeql_upload_identity",
     )
+    triage.first_party_report(object_value(decode_json(bounded_file(report, triage.MAX_REPORT))))
     return True
 
 
@@ -252,6 +266,8 @@ def enforce_policy(context: Context, args: Options, identity: JsonObject) -> Non
     ]
     if language == "c-cpp":
         command.extend(["--source-cache", str(context.output / "vendor-cache")])
+    if args.include_vendor:
+        command.append("--include-vendor")
     _ = context.run("codeql-policy-" + language + "-" + category, command, timeout=600)
     verdict = object_value(decode_json(bounded_file(policy / "report.json", triage.MAX_REPORT)))
     require(verdict["passed"] is True, "codeql_local_policy_failed")
@@ -315,6 +331,25 @@ def create_native(
     )
 
 
+def extraction_options(source: Path, language: str, *, include_vendor: bool) -> list[str]:
+    """Exclude vendor during extraction while permitting Cargo to compile dependencies."""
+    if include_vendor:
+        return []
+    options = ["--codescanning-config=" + str(source / tools.FIRST_PARTY_CONFIG)]
+    if language == "rust":
+        options.append("--extractor-option=extract_dependencies_as_source=false")
+    return options
+
+
+def validate_report_scope(report: Path, language: str, *, include_vendor: bool) -> None:
+    """Require reports to match their declared source scope before cache publication."""
+    require(include_vendor or language in tools.AUTOMATED_LANGUAGES, "codeql_vendor_scope")
+    if not include_vendor:
+        triage.first_party_report(
+            object_value(decode_json(bounded_file(report, triage.MAX_REPORT)))
+        )
+
+
 def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in their required order.
     context: Context, args: Options, source: Path, codeql: Path, language: str
 ) -> list[JsonObject]:
@@ -346,7 +381,14 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
             timeout=900,
         )
     if args.database_cache is not None:
-        cache_key = cache.cache_key(context.root, source, args.openssl_prefix, language, args.suite)
+        cache_key = cache.cache_key(
+            context.root,
+            source,
+            args.openssl_prefix,
+            language,
+            args.suite,
+            include_vendor=args.include_vendor,
+        )
         extraction = cache.restore(context, codeql, args.database_cache, cache_key, database)
     if extraction is None and language == "c-cpp":
         create_native(context, source, codeql, args.openssl_prefix, budget)
@@ -362,6 +404,7 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
             "--threads=" + str(budget.workers),
             "--ram=" + str(budget.ram_mib),
         ]
+        create.extend(extraction_options(source, language, include_vendor=args.include_vendor))
         if language == "rust" and args.rust_cargo_cache is not None:
             target = cargo_cache.prepare(context.root, source, args.rust_cargo_cache)
             create.append("--extractor-option=cargo_target_dir=" + str(target))
@@ -405,10 +448,17 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
             timeout=2100,
         )
         identity = report_health(report, language, category)
+        validate_report_scope(report, language, include_vendor=args.include_vendor)
         write_private(
             report.with_suffix(".validated.json"),
             (
-                json.dumps({"revision": args.revision, "sarifSha256": identity["sarifSha256"]})
+                json.dumps(
+                    {
+                        "revision": args.revision,
+                        "sarifSha256": identity["sarifSha256"],
+                        "includeVendor": args.include_vendor,
+                    }
+                )
                 + "\n"
             ).encode(),
             0o600,
@@ -431,7 +481,14 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
         source_identity(context, args.revision)
         require(
             cache_key
-            == cache.cache_key(context.root, source, args.openssl_prefix, language, args.suite),
+            == cache.cache_key(
+                context.root,
+                source,
+                args.openssl_prefix,
+                language,
+                args.suite,
+                include_vendor=args.include_vendor,
+            ),
             "codeql_cache_inputs_changed",
         )
         if extraction is None and args.database_cache is not None:
@@ -452,11 +509,11 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
 
 def execute(context: Context, args: Options) -> list[JsonObject]:
     """Produce complete current reports with fresh or exactly verified evaluated databases."""
+    languages = selected_languages(args)
     source_identity(context, args.revision)
     source = snapshot(context)
     (context.output / "databases").mkdir(mode=0o700)
     codeql = args.codeql or tools.install(context)
-    languages: Sequence[str] = [args.language] if args.language else tools.LANGUAGES
     tools.verify(context, codeql, languages)
     reports: list[JsonObject] = []
     for language in languages:
@@ -483,6 +540,11 @@ def main() -> int:
     _ = parser.add_argument("--openssl-prefix", type=Path, default=ROOT / "target/openssl-3.5.9")
     _ = parser.add_argument("--database-cache", type=Path)
     _ = parser.add_argument("--rust-cargo-cache", type=Path)
+    _ = parser.add_argument(
+        "--include-vendor",
+        action="store_true",
+        help="Opt into local vendor/native analysis; unavailable in CI.",
+    )
     args = parser.parse_args(namespace=Options())
     _ = os.umask(0o077)
     require(args.output.is_absolute(), "codeql_output_absolute")
@@ -506,6 +568,8 @@ def main() -> int:
                     "failure": failure,
                     "revision": args.revision,
                     "fullScan": True,
+                    "includeVendor": args.include_vendor,
+                    "excludedPaths": [] if args.include_vendor else ["vendor/**"],
                     "suite": args.suite,
                     "toolchainSha256": hashlib.sha256(tools.PIN.read_bytes()).hexdigest(),
                     "sourceManifestSha256": (
@@ -515,7 +579,11 @@ def main() -> int:
                         if (args.output / "source-manifest.json").is_file()
                         else None
                     ),
-                    "languages": [args.language] if args.language else list(tools.LANGUAGES),
+                    "languages": [args.language]
+                    if args.language
+                    else list(
+                        tools.LANGUAGES if args.include_vendor else tools.AUTOMATED_LANGUAGES
+                    ),
                     "reports": reports,
                     "checks": context.checks,
                 },

@@ -18,6 +18,8 @@ The output directory must not exist. Its parent must already exist. Output insid
 the checkout must live under the ignored `target` or `results` directory. A separate installed
 tool directory can be selected with `--tools-directory`; its receipt and every
 bundled engine/library hash still have to match the maintained tool lock.
+`--include-vendor` explicitly adds supported vendor source files for a local
+review. It is rejected in CI environments and is never selected by a workflow.
 
 ## Scan scope and evidence
 
@@ -35,8 +37,10 @@ under these maintained production paths:
 
 Rust tests embedded in these modules are included. Standalone Python/browser test
 suites and this pack's intentionally unsafe examples are outside the production
-scan. Vendor sources, C/C++, shell, workflow YAML, SQL migrations, dependencies and
-image contents have separate gates. An unsupported language or a newly added
+scan. Vendor source scanning is optional and local; the default scope excludes
+it. C/C++ source analysis is also optional and local. Shell, first-party workflow
+YAML, SQL migrations, dependency advisories and image contents retain their
+separate checks. An unsupported language or a newly added
 production directory requires a deliberate scope/rule update; this pack does not
 claim to scan it automatically.
 

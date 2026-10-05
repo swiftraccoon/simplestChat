@@ -495,7 +495,9 @@ DOCKER_HOST=unix:///path/to/disposable/docker.sock \
 
 AMD64 Linux uses the pinned Ubuntu 24.04 AMD64 runner and provides the same ISA
 coverage as GitHub. Apple silicon uses its pinned ARM64 counterpart for the same
-suites, including native sanitizers and CodeQL tracing. Production images remain
+suites, including first-party CodeQL and functional native tests. Optional vendor
+source analysis and native sanitizer/replay checks are outside this CI graph.
+Production images remain
 explicitly AMD64 on both paths. After checking that the owned VM has no containers,
 the Mac launcher enables its registered Rosetta interpreter for AMD64 production
 commands and disables the competing QEMU handler. The packaged QEMU crashes when
@@ -544,28 +546,28 @@ and cleans recursively. Existing authenticated bundles can be moved from
 `target/codeql-tools` to `.cache/codeql-tools` while no local CI run is active;
 the same receipts and analyzer/query checks apply at the new location.
 
-The five local CodeQL scans enforce the same security query suites, exact finding
-reviews, completed-query health and real native compilation coverage. GitHub's
+The four local CodeQL scans enforce the same first-party source scope, security
+query suites, exact finding reviews and completed-query health. `vendor/` is
+excluded from automated source analysis. Native C/C++ source analysis and
+ASan/UBSan/replay suites are optional local checks, absent from push, scheduled,
+manually dispatched and complete local CI. Their `--include-vendor` opt-in is
+rejected in CI environments. Dependency and production-image audits, source
+provenance, build integrity, application native tests and the functional DTLS
+regression gate remain active. GitHub's
 stored-analysis ingestion check and OIDC release signing/publication remain
 hosted operations; a successful local gate does not claim a GitHub signature.
-Native and Rust CodeQL use the same pinned CLI runner locally and on GitHub.
+Rust CodeQL uses the same pinned CLI runner locally and on GitHub.
 Query RAM follows the pinned official action's allocation: cgroup-limited memory
-minus one GiB and five percent of memory above eight GiB. Native creation records
-initialization, traced compilation and database import as separate checks. The
-traced build and import retain their conservative extraction memory budget. The
-FlatBuffers generator and worker library each use at most four compile jobs;
-their separate durations are retained in the traced build log.
-They can reuse a complete evaluated database only for identical source, suite,
+minus one GiB and five percent of memory above eight GiB. It can reuse a complete
+evaluated database only for identical source, analysis scope, suite,
 analyzer and query pins, runner generation/architecture/trust, and absolute
 source paths. Rust inputs include every Rust source and Cargo manifest, the
 `src/`, `tests/`, `migrations/`, `vendor/` and `.cargo/` trees, authorization data,
-shared `web/tests/` JSON fixtures and the analysis helpers and pins. Documentation,
+shared `web/tests/` JSON fixtures and the analysis helpers and pins. Vendor bytes
+remain compiler/dependency inputs even when vendor source diagnostics are outside
+the selected analysis scope. Documentation,
 deployment files and unrelated frontend packages do not invalidate Rust analysis;
-the source archive guard rejects any omitted tracked file. Native also binds compiler
-and installed package identity plus actual OpenSSL headers/libraries/settings.
-Its tracked inputs cover the complete vendor tree, native build configuration,
-CodeQL workflow/query/policy files and the analysis helpers' local import closure;
-unrelated CI, deployment and image tooling edits do not invalidate that database.
+the source archive guard rejects any omitted tracked file.
 The restored bundle hash, extraction metadata and archived source bytes must
 match. A miss performs real extraction and query evaluation; a corrupt entry
 fails. Complete healthy query results are saved before current policy runs, so
@@ -574,16 +576,35 @@ still fails the job and blocks signing. The five exact review data/document file
 are outside the analysis-only cache key; archived source must not reference them.
 Successful-check caches keep their separate input rules. On a hit, CodeQL reuses
 its own BQRS results and regenerates original SARIF; raw SARIF is never cached
-or relabeled. Native and Rust bundles discard intermediate query caches while
+or relabeled. Rust bundles discard intermediate query caches while
 retaining all final results and diagnostics with `--cache-cleanup=clear
 --include-results --include-diagnostics`. Rust policy artifacts retain the
 original SARIF and query execution log for complete cold/warm comparisons.
 Evidence records the original evaluation
 revision and explicitly enables `queryReuse`. The CLI also writes
 `queryReuseEnabled` and `originalEvaluationRevision` into each generated SARIF,
-including reports whose current policy fails. Every run checks native compilation
-coverage and applies current finding reviews. Valid regenerated SARIF still
+including reports whose current policy fails. Every automated run applies current
+first-party finding reviews. Valid regenerated SARIF still
 uploads when findings fail policy; that failure continues to block signing.
+
+Optional vendor CodeQL runs use the same CLI with an explicit local flag:
+
+```sh
+python3 build/security_codeql_local.py --revision "$(git rev-parse HEAD)" \
+  --include-vendor --language c-cpp --suite all \
+  --openssl-prefix "$PWD/target/openssl-3.5.9" \
+  --output "$PWD/results/codeql-native-local"
+```
+
+The output directory must be new. Native analysis needs Linux and the pinned
+OpenSSL installation. Omitting `--language` with `--include-vendor` selects all
+five supported languages; without the flag, the default is the four first-party
+languages. Optional native creation records initialization, traced compilation
+and database import separately and requires actual DTLS, STUN, SCTP and RTP
+coverage. Its cache additionally binds compiler and installed package identity,
+OpenSSL headers/libraries/settings, the complete vendor tree and native analysis
+helpers. Compact bundles preserve final query results and diagnostics, and
+current policy still runs. This command is never a CI or deployment prerequisite.
 
 Rust can separately reuse Cargo build outputs when fresh extraction is needed.
 This cache binds the actual pinned compiler, runner, trust, instruction set,
@@ -607,15 +628,11 @@ limits of 100 deletions and 240 seconds.
 Scheduled mutation, performance/soak and macOS WebKit compatibility workflows
 are additional tiers, not part of the required push gate.
 
-Verified successes for Rust checks and native sanitizer/replay suites are reused
+Verified successes for Rust checks are reused
 only when their exact input key and private receipt match. Keys bind file modes,
 workflow/tool/security policy, runner image identity, architecture and the
-main-versus-untrusted cache namespace. Native sanitizer/replay keys include the
-complete vendor and native corpus/toolchain trees, native execution and provenance
-helpers with their local imports, the security workflow, and isolated local
-runner helpers and pins. Unrelated CodeQL reviews and tooling, application
-authorization, deployment and image tooling do not invalidate native successes.
-Source, executable mode, runner and trust changes still invalidate them. Rust
+main-versus-untrusted cache namespace. Source, executable mode, runner and trust
+changes still invalidate them. Rust
 keys include every tracked non-web input and web JSON configuration and shared fixtures such as
 `web/tests/layer-cap-cases.json`. Operations checks conservatively include every
 tracked file because they inspect frontend configuration and test helpers.
@@ -623,17 +640,11 @@ A missing cache runs the original checks; an invalid restored receipt fails.
 Logs identify the original checked revision rather than claiming reexecution.
 Dependency/advisory audits and JavaScript helper regressions still run each time.
 
-When native suites must rerun, they can reuse a prepared checker image keyed by
-its actual source/tool/corpus inputs, file modes, architecture and cache trust
-namespace. Restores verify the archive size and hash, then the loaded image's
-exact ID, input label and architecture. This skips image preparation only; each
-selected sanitizer or replay suite still executes. Separate mode-specific ELF
-caches bind the exact prepared image, source/tool/corpus inputs, architecture and
-trust namespace. Both controller and sandbox verify the binary bytes. A compiled
-artifact never supplies a successful test verdict: the complete current runtime
-suite runs after every restore unless its separate exact successful-check receipt
-already matches. Compile reports time configuration, generator, compilation and
-installation separately from runtime.
+The optional local [native sanitizer/replay runner](native-security.md) can
+reuse prepared images and verified compiled executables. Those artifacts are
+not CI success receipts and do not add a native-analysis prerequisite to the
+required graph. Every selected local runtime suite still executes against its
+bound executable; compilation and runtime evidence remain separate.
 
 Browser jobs reuse backend executables only for the same bound inputs and after
 checking both executable and compiler dependency-file hashes. Backend keys bind
@@ -674,7 +685,7 @@ No image scan verdict is cached. Local image checks can use the same path with
 
 Action and build caches persist under `target/act`. Each invocation writes a
 private directory under `results/` containing its event, workflow log, source
-revision/base, actual runner and native-suite platforms, AMD64 production target,
+revision/base, actual runner platform, excluded vendor-analysis scope, AMD64 production target,
 exit status and retained compact check summaries. `--output`
 accepts a new directory. A single-job run is available for focused fixes and
 always reports that it is partial:

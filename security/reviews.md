@@ -64,6 +64,10 @@ that the installer bytes are independently checksum-pinned. The two records
 bind the action reference and each exact job location, retain the 2026-11-29
 expiry and leave the shared checks blocking.
 
+The later change to optional local vendor analysis removes the `security-deep`
+hosted job and its obsolete review. Of those two historical records, only the
+`security-fast` installer review remains active.
+
 On 2026-10-05, the same informational installer finding was reviewed for
 `codeql.yml#jobs/source-analysis/steps/5/uses`. The Rust matrix entry installs
 1.98.1 only when its exact evaluated database is absent. The maintained local

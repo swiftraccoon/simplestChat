@@ -22,7 +22,7 @@ not install tools or dependencies on failure. Native build scripts retain their
 normal reviewed dependency acquisition behavior; this helper is not a network
 sandbox. The selected tests themselves perform no service or network I/O.
 
-The shared entry point runs fast source/vendor checks before the selected deep
+The shared entry point runs fast first-party source checks before the selected deep
 component and installs the checksum-verified mutation tool:
 
 ```sh
@@ -30,10 +30,12 @@ build/check-security.sh deep --deep-check mutation \
   --openssl-prefix "$PWD/target/openssl-3.5.9"
 ```
 
-`deep` defaults to `--deep-check all`, which requires both the native sandbox
-prerequisites and the mutation compiler/OpenSSL prerequisites. Select
-`--deep-check native` for native checks alone or `--deep-check mutation` for
-mutation checks alone; both retain the shared fast/vendor checks.
+`deep` defaults to `--deep-check all` and runs application mutations without
+vendor source or sanitizer/replay analysis. Optional local `--include-vendor`
+adds those vendor checks; `--deep-check native --include-vendor` selects only
+the native component after the shared source gate. Vendor opt-in is rejected in
+CI environments. `--deep-check mutation` selects the application mutation scope
+explicitly and remains the scheduled CI command.
 The shared OpenSSL argument defaults to `OPENSSL_DIR` when set, otherwise
 `target/openssl-3.5.9` in the checkout.
 

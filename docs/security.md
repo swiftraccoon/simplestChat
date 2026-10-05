@@ -2,9 +2,14 @@
 
 Security evidence is layered. Source scanners inspect declared dependencies and
 specific code patterns; authorization tests exercise application decisions;
-native sanitizers inspect runtime behavior; image checks inspect the bytes that
-will be shipped. A passing layer does not substitute for another. The repository
-uses the same maintained entry points locally and in GitHub Actions.
+optional local native sanitizers inspect runtime behavior; image checks inspect
+the bytes that will be shipped. A passing layer does not substitute for another.
+The repository uses the same maintained first-party checks locally and in
+GitHub Actions. Source analysis of `vendor/` and native sanitizer/replay suites
+run only through explicit local opt-in; they are not automatic or required CI,
+scheduled, publishing, deployment, or complete local-CI checks. Dependency/image
+audits, authenticated build inputs, and functional native/application tests
+remain enforced.
 
 ## Run the shared checks
 
@@ -21,6 +26,16 @@ build/check-security.sh fast --base FULL_ANCESTOR_COMMIT_SHA
 build/check-security.sh deep
 build/check-security.sh image sha256:FULL_IMAGE_ID
 ```
+
+Optional vendor analysis is selected separately on a local machine:
+
+```sh
+build/check-security.sh fast --include-vendor
+build/check-security.sh deep --deep-check native --include-vendor
+```
+
+`--include-vendor` is rejected when `CI`, `GITHUB_ACTIONS`, or `ACT` is present
+in the environment. It does not provide a workflow opt-in or a deployment gate.
 
 `--base` adds the explicit committed Git range to the source and uncommitted-diff
 secret checks and identifies newly introduced dependency versions, hashes and
@@ -41,12 +56,13 @@ Concurrent source changes fail that run; rerun after edits settle. Ignored build
 outputs, local credentials and operator files are outside the source inventory.
 Do not store maintained source or scanner policy under an ignored path.
 
-The deep tier runs the source gate, verifies vendored source, then runs both
-native and policy mutation checks. Native checks need an explicitly owned Docker
-engine; `--engine podman` selects a local Podman engine. They build the pinned
-checker, run ASan and UBSan, then replay the finite reviewed parser corpus. See
-[native security](native-security.md) for resource limits and input provenance.
-They do not initiate a continuous fuzzing campaign or contact a deployment.
+The default deep tier runs the first-party source gate and application policy
+mutations. With explicit local `--include-vendor`, it also analyzes vendor
+sources and runs native ASan, UBSan and finite reviewed parser replay. Native
+checks need an explicitly owned Docker engine; `--engine podman` selects a local
+Podman engine. See [native security](native-security.md) for resource limits and
+input provenance. They do not initiate a continuous fuzzing campaign or contact
+a deployment.
 
 Mutation checks require the documented native compiler, locked Cargo cache and
 checksum-pinned static OpenSSL prefix. `--openssl-prefix` defaults to `OPENSSL_DIR`
@@ -55,10 +71,12 @@ and measures assertions over selected pure role, label and password policies.
 See [mutation checks](../security/mutation/README.md) for platform support, limits
 and failure interpretation. Unsupported tool platforms fail explicitly.
 
-Use `--deep-check native` or `--deep-check mutation` to run one component while
-retaining source and vendor verification. The default is `--deep-check all`.
-Scheduled CI runs the two components in separate bounded jobs. A component-only
-summary identifies its scope and does not establish a complete deep-tier pass.
+Use `--deep-check mutation` for application mutations or
+`--deep-check native --include-vendor` for the optional local native component.
+The default remains `--deep-check all`, with native checks included only when
+the local vendor opt-in is present. Scheduled CI runs application mutations;
+it never runs the vendor/native analysis tier. Summaries identify the selected
+scope and do not imply optional checks were executed.
 
 The image tier needs the selected immutable production image on a Linux amd64
 Docker host and a clean source checkout. It exports that exact image once. When
@@ -86,8 +104,12 @@ for detailed archive, scanner, database, license and ELF contracts.
 | Squawk | New PostgreSQL migrations, transaction-aware and pinned to the deployed major | The fixed existing-migration baseline forbids edits to old SQL. |
 | Runtime configuration | Maintained rendered container restrictions and configuration invariants | Source tests cannot prove live kernel or provider state. |
 
-The current-tree secret gate projects every tracked or nonignored file, including
-binaries and lockfiles, into bounded printable ASCII under neutral filenames.
+The current-tree secret gate projects tracked or nonignored first-party files,
+including binaries and lockfiles, into bounded printable ASCII under neutral
+filenames. `vendor/` is excluded from both current-tree and Git-diff source
+scans unless explicitly included locally. The complete identity snapshot still
+binds dependency and build-provenance checks; shipped-image scanning retains
+bundled dependency bytes.
 An actual-detector canary must pass first; original/projection hashes and byte
 counts identify what was scanned. Prefix overhead and free disk are checked
 before writing. Fixture reviews retain their exact original path and value.
@@ -131,43 +153,37 @@ See [tool inputs](../security/README.md) for exact installation/update commands,
 
 `ci.yml` invokes the security and CodeQL workflows at the caller's exact source
 revision. No secrets are inherited. Main pushes and optional pull requests run
-the shared source/dependency checks, native sanitizers/replay and the Rust,
-database, browser and production-image suites. The ASan, UBSan and replay modes
-run independently, retaining every mode's results. A signed release is eligible only after
+the shared first-party source/dependency checks and the Rust, database, browser,
+functional native DTLS and production-image suites. Vendor source analysis and
+native ASan/UBSan/replay have no hosted jobs. A signed release is eligible only after
 all required jobs succeed; a skipped or failed dependency is not release approval.
 
 Daily security runs refresh advisory results even when source has not changed.
-The daily deep jobs run finite native checks and selected pure-policy mutations. CodeQL runs
+The daily mutation job checks selected application policies. CodeQL runs
 `security-extended` for ordinary CI, with full reports on both PRs and main;
 diff-informed query filtering is disabled so whole-file review identities are
 checked consistently. Scheduled and manual CodeQL runs add `security-and-quality`
-in separate `quality-advisory` categories. Native and Rust also retain their
-security reports and current policy checks in those runs; the other three
+in separate `quality-advisory` categories. Rust also retains its
+security report and current policy checks in those runs; the other three
 languages select the advisory suite. The broader categories remain advisory;
 findings still need triage. The reusable
 workflow's `security_gate` input defaults to true, preserving CI's security
 categories and exact High/Critical review enforcement.
 
-CodeQL covers Actions, JavaScript/TypeScript, Python and Rust without a build.
-C/C++ is a separate manual-build job: it compiles the real vendored worker under
-the analyzer, with the actual generated inputs, include paths and definitions.
-A query then requires observed compilation of the DTLS, STUN, SCTP and RTP
-implementations. An empty database or a source-only native scan cannot pass that
-coverage check. Native and Rust jobs can restore a complete evaluated CodeQL
-database only when its exact source, tool/query, build-environment and path
-identities match. Bundle integrity, extraction metadata and archived source
-bytes are validated before use. On a hit, the pinned CLI reuses its own query
-results and regenerates SARIF; evidence identifies the original evaluation
-revision and query reuse. Current finding policy and native compilation coverage
-are checked on every run. A miss performs real extraction and query evaluation;
+Automated CodeQL covers first-party Actions, JavaScript/TypeScript, Python and
+Rust with `vendor/` outside the configured source-analysis scope. It has no
+native C/C++ job, including on scheduled and manually dispatched workflows.
+Rust can restore a complete evaluated database only when its exact source,
+tool/query, scope, build-environment and path identities match. Bundle integrity,
+extraction metadata and archived source bytes are validated before use. On a
+hit, the pinned CLI reuses its own query results and regenerates SARIF; evidence
+identifies the original evaluation revision and query reuse. Current finding
+policy runs every time. A miss performs real extraction and query evaluation;
 an invalid restored entry fails. See the [cache contract](testing.md#run-ci-locally).
-The pinned OpenSSL prefix is cached separately; its version, static libraries and
-required disabled settings are checked after restoration. Compilation uses up to
-four workers within the detected CPU and memory limits.
 
-The [complete local CI runner](testing.md#run-ci-locally) uses the same five
-languages, pinned analyzer/query packs, native compile command, coverage query
-and original-SARIF policy. `security/codeql-toolchain.json` authenticates the
+The [complete local CI runner](testing.md#run-ci-locally) uses the same four
+automated languages, pinned analyzer/query packs, source scope and original-SARIF
+policy. `security/codeql-toolchain.json` authenticates the
 platform bundles. For a focused component on a clean committed tree:
 
 ```sh
@@ -175,11 +191,27 @@ python3 build/security_codeql_local.py --revision "$(git rev-parse HEAD)" \
   --language javascript-typescript --output "$PWD/results/codeql-javascript"
 ```
 
-Use a fresh output directory. Omitting `--language` runs all five languages;
-`--suite all` also runs advisory queries on the same extracted databases. Local
-health requires real rule coverage and complete reports. GitHub's stored-analysis
+Use a fresh output directory. Omitting `--language` runs the four first-party
+languages; `--suite all` also runs advisory queries on the same extracted
+databases. Local health requires real rule coverage and complete reports. GitHub's stored-analysis
 ingestion check and OIDC signing remain hosted publication steps, not local
 security checks or locally fabricated receipts.
+
+For optional local vendor analysis, add `--include-vendor`. Without `--language`
+this selects all five supported languages; native C/C++ requires the flag and
+a Linux environment with the pinned OpenSSL prefix:
+
+```sh
+python3 build/security_codeql_local.py --revision "$(git rev-parse HEAD)" \
+  --include-vendor --language c-cpp --suite all \
+  --openssl-prefix "$PWD/target/openssl-3.5.9" \
+  --output "$PWD/results/codeql-native-local"
+```
+
+The optional native scan compiles the real worker under the analyzer and checks
+observed DTLS, STUN, SCTP and RTP compilation. Its source integrity, complete
+queries and exact review policy remain active. It is rejected in CI environments
+and cannot be required by the hosted or complete local-CI aggregate.
 
 After ordinary analysis, every language job validates its original SARIF through
 `build/security_codeql_triage.py`. Unreviewed High and Critical findings fail the
@@ -189,7 +221,7 @@ source identity. Generated native files require authenticated upstream archive
 and maintained-overlay evidence. Missing or incomplete analysis fails the gate.
 
 The required aggregate also runs `build/security_codeql_triage.py health` against
-GitHub's stored analysis records. For each of the five security categories, the
+GitHub's stored analysis records. For each of the four automated security categories, the
 newest record must match the caller's exact ref and commit, contain executed
 queries, and have no error or warning. A successful upload or green analysis job
 does not establish successful ingestion. The check reads the current ref before
@@ -248,8 +280,8 @@ person's approval are not required. The maintained
 bypass actors. It does not require a GitHub check before accepting a push.
 
 Correctness and security remain release requirements. Every main push runs the
-shared CI checks, including all five CodeQL categories, exact finding reviews and the
-production-image policy. The release signer requires the successful aggregate;
+shared CI checks, including the four first-party CodeQL categories, exact finding
+reviews and the production-image policy. The release signer requires the successful aggregate;
 default deployment accepts only its verified artifact for that exact main revision.
 A failed main run cannot publish a signed passing release. The explicit force
 path above is the separate unsigned deployment override. Local results cannot
@@ -267,9 +299,11 @@ python3 build/security_rulesets.py apply --revision FULL_GREEN_MAIN_COMMIT_SHA
 `plan` reports differences; `check` also exits nonzero on drift. `apply` updates
 only the named history ruleset and reads back its complete parameters. It requires
 a clean checkout at the exact remote main revision, successful main CI and all
-five current security CodeQL analyses. It rechecks the remote revision before
-writes and readback. Changed heads, warnings, missing query coverage and open
-High/Critical alerts stop reconciliation. Other repository rules are not changed.
+four current automated security CodeQL analyses. It rechecks the remote revision
+before writes and readback. Changed heads, warnings, missing query coverage and open
+first-party High/Critical alerts stop reconciliation. Historical vendor/native
+source findings are outside this automatic readiness requirement. Other
+repository rules are not changed.
 The operator needs repository administration permission; no administration token
 enters CI. The previous PR-review and pre-push-check rulesets are reported as drift
 if they are still installed, even when history protection matches. They require
@@ -308,7 +342,10 @@ make an unreviewed adjacent file safe to publish.
 
 An exception must name one scanner/fingerprint/scope, its owner, rationale,
 reachability assessment, review link and expiry in `security/exceptions.json`.
-Expired, malformed or wildcarded records fail the gate. Changing a rule class or
+Malformed or wildcarded records fail the gate. Expiry is enforced for the
+selected source scope; optional vendor source reviews are checked when vendor
+analysis is explicitly selected locally. Dependency and image reviews always
+retain expiry enforcement. Changing a rule class or
 severity filter is not an acceptable way to suppress an individual finding.
 Reproduce scanner behavior with bounded synthetic fixtures and inspect the
 affected source before deciding whether a finding is applicable.

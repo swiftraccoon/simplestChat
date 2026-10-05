@@ -15,6 +15,7 @@ import yaml
 from security_context import ROOT, Context, executable
 from security_dependency_licenses import allowed_licenses
 from security_image_policy import LicenseExpression
+from security_source_scope import require_local_vendor, selected
 from security_tools import ToolError, bounded_file, require, write_private
 
 # isort: split
@@ -106,7 +107,7 @@ def pins(data: bytes) -> set[str]:
     return result
 
 
-def inventory(snapshot: Path | None, base: str) -> set[str]:
+def inventory(snapshot: Path | None, base: str, *, include_vendor: bool = False) -> set[str]:
     """Compare maintained workflow/action YAML, not generated or ignored files."""
     if snapshot is None:
         names = command([executable("git"), "ls-tree", "-rz", "--name-only", base])
@@ -118,8 +119,11 @@ def inventory(snapshot: Path | None, base: str) -> set[str]:
     files = {
         name
         for name in candidates
-        if (name.startswith(".github/") and name.endswith((".yml", ".yaml")))
-        or Path(name).name in {"action.yml", "action.yaml"}
+        if selected(name, include_vendor=include_vendor)
+        and (
+            (name.startswith(".github/") and name.endswith((".yml", ".yaml")))
+            or Path(name).name in {"action.yml", "action.yaml"}
+        )
     }
     require(len(files) <= MAX_WORKFLOWS, "actions_workflow_count")
     result: set[str] = set()
@@ -216,7 +220,9 @@ def review(pin: str, allowed: set[str]) -> JsonObject:
     }
 
 
-def check(context: Context, snapshot: Path, base: str | None) -> None:
+def check(
+    context: Context, snapshot: Path, base: str | None, *, include_vendor: bool = False
+) -> None:
     """Run this review through the same bounded process/evidence path as other scanners."""
     _ = context.run(
         "actions-dependency-review",
@@ -229,6 +235,7 @@ def check(context: Context, snapshot: Path, base: str | None) -> None:
             base or "HEAD",
             "--output",
             str(context.output / "actions-dependencies.json"),
+            *(["--include-vendor"] if include_vendor else []),
         ],
         timeout=600,
     )
@@ -241,6 +248,7 @@ class Options(argparse.Namespace):
     snapshot: Path = Path()
     base: str = ""
     output: Path = Path()
+    include_vendor: bool = False
 
 
 def main() -> int:
@@ -249,13 +257,18 @@ def main() -> int:
     _ = parser.add_argument("--snapshot", required=True, type=Path)
     _ = parser.add_argument("--base", required=True)
     _ = parser.add_argument("--output", required=True, type=Path)
+    _ = parser.add_argument("--include-vendor", action="store_true")
     args = parser.parse_args(namespace=Options())
     try:
+        require_local_vendor(include_vendor=args.include_vendor)
         require(
             args.base == "HEAD" or re.fullmatch(r"[a-f0-9]{40}", args.base), "actions_invalid_base"
         )
         _ = command([executable("git"), "merge-base", "--is-ancestor", args.base, "HEAD"])
-        added = sorted(inventory(args.snapshot, args.base) - inventory(None, args.base))
+        added = sorted(
+            inventory(args.snapshot, args.base, include_vendor=args.include_vendor)
+            - inventory(None, args.base, include_vendor=args.include_vendor)
+        )
         require(len(added) <= MAX_CHANGED, "actions_changed_pin_limit")
         allowed = allowed_licenses(args.snapshot)
         records: list[JsonValue] = [review(pin, allowed) for pin in added]

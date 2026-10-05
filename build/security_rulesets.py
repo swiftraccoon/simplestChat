@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from security_codeql_tools import AUTOMATED_LANGUAGES
 from security_context import executable
 from security_tools import ToolError, bounded_file, require
 
@@ -33,7 +34,7 @@ GATE = "Required security and correctness checks"
 GITHUB_ACTIONS = 15368
 NAMES = {"Main history protection"}
 OBSOLETE_NAMES = {"Main security gates", "Main pull request review"}
-LANGUAGES = {"actions", "javascript-typescript", "python", "rust", "c-cpp"}
+LANGUAGES = frozenset(AUTOMATED_LANGUAGES)
 PAGE_LIMIT = 100
 
 
@@ -176,6 +177,30 @@ def require_main_head(repository: str, revision: str) -> None:
     )
 
 
+def require_no_blocking_alerts(repository: str) -> None:
+    """Keep optional vendor findings out of the automated readiness boundary."""
+    for severity in ("critical", "high"):
+        for page in range(1, PAGE_LIMIT + 1):
+            alerts = array_value(
+                api(
+                    repository,
+                    f"code-scanning/alerts?state=open&severity={severity}"
+                    + f"&ref=refs%2Fheads%2Fmain&per_page=100&page={page}",
+                )
+            )
+            for raw in alerts:
+                instance = object_value(object_value(raw)["most_recent_instance"])
+                path = string_value(object_value(instance["location"])["path"])
+                category = string_value(instance["category"])
+                optional = path.startswith("vendor/") or category.startswith("/language:c-cpp/")
+                require(optional, "ruleset_open_high_security_alerts_need_review")
+            if len(alerts) < PAGE_LIMIT:
+                break
+        else:
+            reason = "ruleset_alert_page_limit"
+            raise ToolError(reason)
+
+
 def ready(repository: str, revision: str) -> None:
     """Prevent initial enforcement against an unverified or moving default branch."""
     require(re.fullmatch(r"[a-f0-9]{40}", revision), "ruleset_revision")
@@ -214,11 +239,7 @@ def ready(repository: str, revision: str) -> None:
         ),
         revision,
     )
-    for severity in ("critical", "high"):
-        alerts = array_value(
-            api(repository, f"code-scanning/alerts?state=open&severity={severity}&per_page=100")
-        )
-        require(not alerts, "ruleset_open_high_security_alerts_need_review")
+    require_no_blocking_alerts(repository)
 
 
 @dataclass

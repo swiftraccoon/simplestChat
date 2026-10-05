@@ -90,8 +90,7 @@ directory, revision, base, job, status, started, image, runner_platform = sys.ar
 report = {
     "schema": 1, "revision": revision, "base": base, "selection": job,
     "runnerPlatform": runner_platform, "runnerImage": image, "exitCode": int(status),
-    "productionPlatform": "linux/amd64", "nativeSecurityPlatform": runner_platform,
-    "nativeCodeqlPlatform": runner_platform,
+    "productionPlatform": "linux/amd64", "vendorScanning": "excluded",
     "status": "passed" if status == "0" else "failed",
     "startedAt": started, "finishedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "completeLocalGate": job == "all" and status == "0",

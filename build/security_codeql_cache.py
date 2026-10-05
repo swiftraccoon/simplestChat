@@ -18,6 +18,7 @@ import ci_verified
 import security_codeql
 import security_codeql_tools as tools
 from security_context import ROOT, executable
+from security_source_scope import require_local_vendor
 from security_tools import ToolError, bounded_file, require, write_private
 
 # isort: split
@@ -41,6 +42,7 @@ class Options(argparse.Namespace):
     openssl_prefix: Path | None = None
     language: str = ""
     suite: str = "security"
+    include_vendor: bool = False
 
 
 def command(argv: Sequence[str]) -> bytes:
@@ -70,7 +72,15 @@ def openssl_identity(prefix: Path) -> str:
     return hashed.hexdigest()
 
 
-def cache_key(root: Path, source: Path, openssl: Path | None, language: str, suite: str) -> str:
+def cache_key(  # noqa: PLR0913 -- Independent source, toolchain, language, suite and scope identities.
+    root: Path,
+    source: Path,
+    openssl: Path | None,
+    language: str,
+    suite: str,
+    *,
+    include_vendor: bool = False,
+) -> str:
     """Bind paths, trusted runner generation, source, tools and installed native dependencies."""
     require(source.is_absolute(), "codeql_cache_source_path")
     require(language in {"c-cpp", "rust"} and suite in {"security", "all"}, "codeql_cache_scope")
@@ -80,6 +90,7 @@ def cache_key(root: Path, source: Path, openssl: Path | None, language: str, sui
         ),
         "language": language,
         "suite": suite,
+        "includeVendor": include_vendor,
         "sourceRoot": str(source),
         "toolchain": tools.pin(),
     }
@@ -279,10 +290,21 @@ def main() -> int:
     _ = parser.add_argument("--openssl-prefix", type=Path)
     _ = parser.add_argument("--language", choices=("c-cpp", "rust"), required=True)
     _ = parser.add_argument("--suite", choices=("security", "all"), default="security")
+    _ = parser.add_argument("--include-vendor", action="store_true")
     args = parser.parse_args(namespace=Options())
     try:
+        require_local_vendor(include_vendor=args.include_vendor)
+        require(args.language != "c-cpp" or args.include_vendor, "codeql_vendor_opt_in_required")
         _ = sys.stdout.write(
-            cache_key(ROOT, args.source_root, args.openssl_prefix, args.language, args.suite) + "\n"
+            cache_key(
+                ROOT,
+                args.source_root,
+                args.openssl_prefix,
+                args.language,
+                args.suite,
+                include_vendor=args.include_vendor,
+            )
+            + "\n"
         )
     except (ToolError, OSError, ValueError, KeyError):
         _ = sys.stderr.write("CodeQL analyzed database identity failed.\n")

@@ -5,11 +5,12 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, cast, override
 from unittest.mock import patch
 
 from test_support import ROOT
@@ -64,6 +65,75 @@ class LocalCodeqlTests(unittest.TestCase):
             local.complete_health(reports, tools.LANGUAGES, "all")
         reports.extend(report(language, "quality-advisory") for language in tools.LANGUAGES)
         local.complete_health(reports, tools.LANGUAGES, "all")
+
+    def test_vendor_scope_is_an_explicit_local_only_opt_in(self) -> None:
+        """Default CI scans four languages; no CI environment can opt into vendor scans."""
+        args = local.Options()
+        self.assertEqual(local.selected_languages(args), tools.AUTOMATED_LANGUAGES)
+        args.language = "c-cpp"
+        with self.assertRaisesRegex(ToolError, "codeql_vendor_opt_in_required"):
+            _ = local.selected_languages(args)
+        args.include_vendor = True
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(local.selected_languages(args), ["c-cpp"])
+            args.language = None
+            self.assertEqual(local.selected_languages(args), tools.LANGUAGES)
+        for variable in ("CI", "GITHUB_ACTIONS", "ACT"):
+            for value in ("true", "false", ""):
+                with (
+                    self.subTest(variable=variable, value=value),
+                    patch.dict(os.environ, {variable: value}, clear=True),
+                    self.assertRaises(ToolError),
+                ):
+                    _ = local.selected_languages(args)
+
+    def test_default_extraction_uses_scanner_exclusion_and_preserves_dependency_sources(
+        self,
+    ) -> None:
+        """Rust can still compile dependencies while their full source is outside analysis."""
+        for language in tools.AUTOMATED_LANGUAGES:
+            output = self.directory / language
+            output.mkdir()
+            context = Context(ROOT, output)
+            source = output / "source"
+            vendor = source / "vendor/dependency"
+            vendor.mkdir(parents=True)
+            fixture = vendor / "lib.rs"
+            _ = fixture.write_text("pub fn dependency() {}\n")
+            args = local.Options()
+            with (
+                patch.object(context, "run", return_value=(0, b"")) as run,
+                patch.object(local, "database_health", side_effect=ToolError("after_create")),
+                self.assertRaisesRegex(ToolError, "after_create"),
+            ):
+                _ = local.analyze_language(
+                    context, args, source, self.directory / "codeql", language
+                )
+            command = cast("Sequence[str]", run.call_args.args[1])
+            self.assertIn(
+                "--codescanning-config=" + str(source / tools.FIRST_PARTY_CONFIG), command
+            )
+            if language == "rust":
+                self.assertIn("--extractor-option=extract_dependencies_as_source=false", command)
+            self.assertEqual(fixture.read_text(), "pub fn dependency() {}\n")
+
+    def test_optional_vendor_extraction_does_not_use_first_party_exclusion(self) -> None:
+        """The requested local scope is not silently restricted to the CI scope."""
+        output = self.directory / "output"
+        output.mkdir()
+        context = Context(ROOT, output)
+        args = local.Options()
+        args.include_vendor = True
+        with (
+            patch.object(context, "run", return_value=(0, b"")) as run,
+            patch.object(local, "database_health", side_effect=ToolError("after_create")),
+            self.assertRaisesRegex(ToolError, "after_create"),
+        ):
+            _ = local.analyze_language(
+                context, args, self.directory / "source", self.directory / "codeql", "python"
+            )
+        command = cast("Sequence[str]", run.call_args.args[1])
+        self.assertFalse(any(argument.startswith("--codescanning-config=") for argument in command))
 
     def test_complete_health_rejects_missing_queries_policy_or_native_evidence(self) -> None:
         """Green commands alone cannot substitute for executed queries or real C++ compilation."""

@@ -339,7 +339,8 @@ class NativeSecurityTests(unittest.TestCase):
         """Retrying the same path cannot overwrite or supplement earlier evidence."""
         output = self.root / "existing"
         output.mkdir()
-        self.assertEqual(native.main(["prepare", "--output", str(output)]), 1)
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(native.main(["prepare", "--output", str(output)]), 1)
         self.assertEqual(list(output.iterdir()), [])
 
     def test_toolchain_has_reviewed_both_linux_architectures_and_no_floating_urls(self) -> None:
@@ -847,40 +848,27 @@ class NativeSecurityTests(unittest.TestCase):
         with self.assertRaises(OSError):
             _ = image_cache.archive_identity(archive)
 
-    def test_workflow_image_cache_is_saved_before_all_selected_modes_execute(self) -> None:
-        """Prepared image reuse skips only preparation, never a requested sanitizer/replay."""
+    def test_native_security_is_optional_local_and_not_automated(self) -> None:
+        """Local prepared-image and compiled-binary tools have no hosted execution job."""
         workflow = yaml_value(
             (ROOT / ".github/workflows/security.yml").read_text(), scalars_as_strings=True
         )
-        job = obj(workflow, "jobs", "native-security")
-        self.assertEqual(obj(job, "strategy", "matrix")["mode"], list(native.MODES))
-        steps = objects(job, "steps")
-        prepare = next(
-            step for step in steps if "native_security.py prepare" in str(step.get("run", ""))
-        )
-        run = next(step for step in steps if "native_security.py run" in str(step.get("run", "")))
-        restore = next(step for step in steps if step.get("id") == "native-image")
-        save = next(
-            step
-            for step in steps
-            if step.get("name")
-            == "Save the exact prepared native image before running its selected suite"
-        )
-        self.assertIn("steps.native-image.outputs.cache-hit != 'true'", string(prepare, "if"))
-        self.assertEqual(run["if"], "steps.verified.outputs.cache-hit != 'true'")
-        self.assertLess(steps.index(save), steps.index(run))
-        self.assertEqual(obj(restore, "with")["key"], obj(save, "with")["key"])
-        self.assertNotIn("restore-keys", obj(restore, "with"))
-        compiled_restore = next(step for step in steps if step.get("id") == "native-compiled")
-        compiled_save = next(
-            step
-            for step in steps
-            if step.get("name") == "Save only the completed instrumented native build"
-        )
-        self.assertEqual(obj(compiled_restore, "with")["key"], obj(compiled_save, "with")["key"])
-        self.assertNotIn("restore-keys", obj(compiled_restore, "with"))
-        self.assertLess(steps.index(compiled_save), steps.index(run))
-        self.assertIn("--compiled-directory", string(run, "run"))
+        self.assertNotIn("native-security", obj(workflow, "jobs"))
+        self.assertNotIn("security-deep", obj(workflow, "jobs"))
+        self.assertEqual(native.MODES, ("asan", "ubsan", "replay"))
+
+    def test_automated_native_execution_is_refused_before_engine_or_output(self) -> None:
+        """Direct native entrypoints cannot bypass the optional-local execution boundary."""
+        output = self.root / "automated-output"
+        with (
+            patch.dict("os.environ", {"CI": "true"}),
+            patch.object(native, "engine_prefix") as engine,
+            patch.object(native, "prepare") as prepare,
+        ):
+            self.assertEqual(native.main(["prepare", "--output", str(output)]), 1)
+        engine.assert_not_called()
+        prepare.assert_not_called()
+        self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":

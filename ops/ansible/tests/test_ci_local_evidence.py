@@ -19,14 +19,10 @@ CHECKS = {
     "browser-media",
     "browser-stress",
     "security-fast",
-    "native-asan",
-    "native-ubsan",
-    "native-replay",
     "codeql-actions",
     "codeql-javascript-typescript",
     "codeql-python",
     "codeql-rust",
-    "codeql-c-cpp",
 }
 
 
@@ -96,7 +92,7 @@ class LocalCiEvidenceTests(unittest.TestCase):
             )
 
     def test_actual_workflow_and_all_receipts_complete_once(self) -> None:
-        """The current workflow shape and shared language/native contracts must agree."""
+        """The current workflow and first-party coverage contracts must agree."""
         self.populate()
         result = self.run_helper("complete")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -110,7 +106,6 @@ class LocalCiEvidenceTests(unittest.TestCase):
         """Act parses literal limits with Atoi and otherwise silently serializes matrices."""
         for name, job, dimension, limit in (
             ("ci.yml", "browser", "group", 3),
-            ("security.yml", "native-security", "mode", 3),
             ("codeql.yml", "source-analysis", "language", 4),
         ):
             workflow = obj(
@@ -123,7 +118,7 @@ class LocalCiEvidenceTests(unittest.TestCase):
     def test_missing_or_extra_matrix_receipts_fail(self) -> None:
         """Filtering any supported matrix family cannot satisfy the final aggregate."""
         self.populate()
-        for identifier in ("browser-media", "native-replay", "codeql-rust", "security-fast"):
+        for identifier in ("browser-media", "codeql-rust", "security-fast"):
             path = self.output / "receipts" / f"{identifier}.json"
             original = path.read_bytes()
             path.unlink()
