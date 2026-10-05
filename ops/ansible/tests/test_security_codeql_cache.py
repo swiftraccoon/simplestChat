@@ -299,8 +299,8 @@ class NativeCacheTests(unittest.TestCase):
                 )
             run.assert_not_called()
 
-    def test_save_restore_keeps_final_results_and_limits_cleanup_to_native(self) -> None:
-        """Keep evaluated bytes for both languages, clearing intermediates only for native."""
+    def test_save_restore_keeps_final_results_when_clearing_intermediates(self) -> None:
+        """Keep evaluated bytes and diagnostics when clearing either language's intermediates."""
         contents = {
             "codeql-database.yml": b"extraction identity",
             "src.zip": b"archived source bytes",
@@ -328,7 +328,7 @@ class NativeCacheTests(unittest.TestCase):
                         self.assertIn("--include-results", argv)
                         self.assertIn("--include-diagnostics", argv)
                         self.assertIn("--no-include-logs", argv)
-                        self.assertEqual("--cache-cleanup=clear" in argv, language == "c-cpp")
+                        self.assertIn("--cache-cleanup=clear", argv)
                         self.assertEqual(argv[-1], str(output / "databases" / language))
                         path = Path(
                             next(

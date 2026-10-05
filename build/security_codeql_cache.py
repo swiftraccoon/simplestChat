@@ -248,7 +248,7 @@ def save(  # noqa: PLR0913 -- Preserve distinct runtime, artifact and source ide
                 "--include-diagnostics",
                 "--include-results",
                 "--no-include-logs",
-                *(["--cache-cleanup=clear"] if language == "c-cpp" else []),
+                "--cache-cleanup=clear",
                 "--output=" + str(bundle),
                 str(context.output / "databases" / language),
             ],

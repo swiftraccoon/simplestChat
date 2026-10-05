@@ -574,9 +574,11 @@ still fails the job and blocks signing. The five exact review data/document file
 are outside the analysis-only cache key; archived source must not reference them.
 Successful-check caches keep their separate input rules. On a hit, CodeQL reuses
 its own BQRS results and regenerates original SARIF; raw SARIF is never cached
-or relabeled. Native bundles discard intermediate query caches while retaining
-all final results with `--cache-cleanup=clear --include-results`; Rust keeps the
-CLI's default cleanup. Evidence records the original evaluation
+or relabeled. Native and Rust bundles discard intermediate query caches while
+retaining all final results and diagnostics with `--cache-cleanup=clear
+--include-results --include-diagnostics`. Rust policy artifacts retain the
+original SARIF and query execution log for complete cold/warm comparisons.
+Evidence records the original evaluation
 revision and explicitly enables `queryReuse`. The CLI also writes
 `queryReuseEnabled` and `originalEvaluationRevision` into each generated SARIF,
 including reports whose current policy fails. Every run checks native compilation

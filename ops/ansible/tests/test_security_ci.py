@@ -645,6 +645,8 @@ class SecurityWorkflowTests(unittest.TestCase):
                     "${{ runner.temp }}/codeql-policy-evidence/failure.json",
                     "${{ runner.temp }}/codeql-local/rust-security-policy/report.json",
                     "${{ runner.temp }}/codeql-local/summary.json",
+                    "${{ runner.temp }}/codeql-local/rust-security.sarif",
+                    "${{ runner.temp }}/codeql-local/*-codeql-analyze-rust-security.stderr",
                 },
             )
 
