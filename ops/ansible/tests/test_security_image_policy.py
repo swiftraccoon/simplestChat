@@ -38,7 +38,7 @@ def package(name: str = "fixture", expression: str = "MIT") -> JsonObject:
 def vulnerability(severity: str = "High") -> JsonObject:
     """Use an unfixed synthetic identifier; no external vulnerability reproduction."""
     return {
-        "descriptor": {"name": "grype", "version": "0.119.0"},
+        "descriptor": {"name": "grype", "version": "0.120.0"},
         "matches": [
             {
                 "vulnerability": {
@@ -83,11 +83,12 @@ class ImagePolicyTests(unittest.TestCase):
         rust = {**package("simplestChat"), "type": "rust-crate"}
         good: JsonObject = {
             "distro": {"id": "fedora", "versionID": "44"},
-            "descriptor": {"name": "syft", "version": "1.52.0"},
+            "descriptor": {"name": "syft", "version": "1.54.0"},
             "artifacts": [package(), rust],
         }
         self.assertEqual(len(image.inventory(good, policy)), 2)
         for key, value in (
+            ("descriptor", {"name": "syft", "version": "0.0.0"}),
             ("artifacts", []),
             ("artifacts", [package()]),
             ("artifacts", [rust]),
@@ -96,6 +97,20 @@ class ImagePolicyTests(unittest.TestCase):
         ):
             with self.subTest(key=key, value=value), self.assertRaises((ToolError, ValueError)):
                 _ = image.inventory(object_value(json_value({**good, key: value})), policy)
+
+    def test_vulnerability_report_requires_the_installed_scanner_identity(self) -> None:
+        """A successful or empty report from another scanner release is refused."""
+        for descriptor in (
+            {"name": "grype", "version": "0.0.0"},
+            {"name": "other", "version": "0.120.0"},
+        ):
+            value = vulnerability("Low")
+            value["descriptor"] = json_value(descriptor)
+            with (
+                self.subTest(descriptor=descriptor),
+                self.assertRaisesRegex(ToolError, "image_vulnerability_tool_identity"),
+            ):
+                _ = image.vulnerability_verdict(value, [], [])
 
     def test_unfixed_high_critical_unknown_and_scoped_exceptions(self) -> None:
         """Never use only-fixed or ignore filters to hide unresolved high severity."""

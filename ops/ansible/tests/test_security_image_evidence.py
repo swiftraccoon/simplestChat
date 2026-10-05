@@ -216,7 +216,7 @@ def native_inventory() -> JsonObject:
 def sbom(packages: list[JsonObject]) -> JsonObject:
     """Retain scanner provenance while including private config blobs to remove."""
     return {
-        "descriptor": {"name": "syft", "version": "1.52.0"},
+        "descriptor": {"name": "syft", "version": "1.54.0"},
         "distro": {"id": "fedora", "versionID": "44"},
         "artifacts": list[JsonValue](packages),
         "source": {

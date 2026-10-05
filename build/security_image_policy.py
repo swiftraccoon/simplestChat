@@ -210,7 +210,8 @@ def inventory(value: JsonObject, policy: JsonObject) -> list[JsonObject]:
     )
     descriptor = object_value(value["descriptor"])
     require(
-        descriptor.get("name") == "syft" and descriptor.get("version") == "1.52.0",
+        descriptor.get("name") == "syft"
+        and descriptor.get("version") == security_tools.load_lock()[0]["syft"].version,
         "image_sbom_tool_identity",
     )
     packages = [object_value(item) for item in array_value(value["artifacts"])]
@@ -242,7 +243,8 @@ def vulnerability_verdict(
     """Retain scanner matches and independently block reviewed known-advisory gaps."""
     descriptor = object_value(value["descriptor"])
     require(
-        descriptor.get("name") == "grype" and descriptor.get("version") == "0.119.0",
+        descriptor.get("name") == "grype"
+        and descriptor.get("version") == security_tools.load_lock()[0]["grype"].version,
         "image_vulnerability_tool_identity",
     )
     require(not array_value(value.get("ignoredMatches", [])), "image_ignored_vulnerabilities")
