@@ -11,11 +11,13 @@
 build/**
 !build/pip-constraints.txt
 !build/install-openssl.sh
+!build/install-aws-lc.sh
 !build/install-npm.mjs
 !build/security_tools.py
 !build/security-tools.lock.json
 !build/security_vendor.py
 !build/security_native.py
+!build/security_awslc.py
 !build/security_elf.py
 !security/
 security/**

@@ -895,6 +895,14 @@ def native_binding(tree: Path, elf: JsonObject) -> JsonObject:
             object_value(policy.report(ROOT / "vendor/native-components.json"))["openssl"]
         ),
     )
+    policy.aws_lc_build_binding(
+        native,
+        object_value(
+            object_value(policy.report(ROOT / "vendor/native-components.json"))[
+                "registry_component"
+            ]
+        ),
+    )
     return native
 
 

@@ -84,8 +84,8 @@
   },
   "registry_component": {
     "name": "AWS-LC",
-    "version": "5.7.0",
-    "revision": "02561621ffa4cf17c0c4f70bc11a82df36b42ae9",
+    "version": "5.11.0",
+    "revision": "fa9bc8d6f7cfb2cf849b247fb06bbbfc41ecc9d6",
     "crate": "aws-lc-sys",
     "crate_version": "0.45.0",
     "source": {
@@ -94,7 +94,39 @@
       "sha256": "9bff6c3b54fad79a2e60b8102caf565819711497c1f5f092f49508e2f5c31b27",
       "format": "tar.gz"
     },
-    "license": "ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0)"
+    "license": "ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0)",
+    "system": {
+      "source": {
+        "id": "aws-lc-5.11.0",
+        "url": "https://github.com/aws/aws-lc/archive/refs/tags/v5.11.0.tar.gz",
+        "sha256": "8cb24c6e6be1fa7ff05075c4560ca8b537a7ef48f9e6f465af4ea455794d74f4",
+        "format": "tar.gz"
+      },
+      "bindgen_source": {
+        "id": "bindgen-cli-0.73.2",
+        "url": "https://static.crates.io/crates/bindgen-cli/bindgen-cli-0.73.2.crate",
+        "sha256": "5622e043625b6d1f32c84f53699690a44d1419e657879de26eb252699f5ebb7c",
+        "format": "tar.gz"
+      },
+      "installer_sha256": "5018c0796a93c067285eb0345d003f766e4773ab45945b24c8d0212df9389591",
+      "symbol_prefix": "simplestchat_awslc_5_11_0",
+      "configure_options": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_SHARED_LIBS": "OFF",
+        "BUILD_TESTING": "OFF",
+        "BUILD_TOOL": "OFF",
+        "BUILD_LIBSSL": "OFF",
+        "ENABLE_SOURCE_MODIFICATION": "OFF",
+        "BUILD_AWSLC_PROVIDER": "OFF",
+        "ENABLE_CRYPTO_POLICIES": "OFF",
+        "GENERATE_RUST_BINDINGS": "ON",
+        "RUST_BINDINGS_TARGET_VERSION": "1.70",
+        "BORINGSSL_PREFIX": "simplestchat_awslc_5_11_0",
+        "CMAKE_POSITION_INDEPENDENT_CODE": "ON",
+        "CMAKE_INSTALL_LIBDIR": "lib"
+      },
+      "source_license_sha256": "977c541bd25ffe36975dde25c028c0cd15ddf3d08243983b58e8a6a3d9447523"
+    }
   },
   "native_links": {
     "mediasoup-sys": {
@@ -125,7 +157,7 @@
     },
     "aws-lc-sys": {
       "static": [
-        "aws_lc_0_45_0_crypto"
+        "crypto-awslc"
       ],
       "system": []
     }

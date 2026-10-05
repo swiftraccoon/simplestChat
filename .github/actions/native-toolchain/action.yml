@@ -1,7 +1,7 @@
 name: Native Rust toolchain
 description: >-
   Pinned Rust toolchain, restored Cargo cache, cached checksum-pinned static
-  OpenSSL, and stable mtimes for the vendored native crates.
+  OpenSSL and AWS-LC, and stable mtimes for the vendored native crates.
 
 inputs:
   cache-key:
@@ -41,7 +41,11 @@ runs:
         shellcheck shellcheck
         jq jq
         iproute2 ip
+        golang-go go
         TOOLS
+        if ! ldconfig -p | grep -E 'libclang(-[0-9]+)?[.]so' >/dev/null; then
+          missing+=(libclang-dev)
+        fi
         if ((${#missing[@]})); then
           sudo apt-get update
           sudo apt-get install -y "${missing[@]}"
@@ -73,7 +77,7 @@ runs:
         # v3 excludes old archives containing the relocated CodeQL bundle.
         prefix-key: v3-rust-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.arch }}
         shared-key: ${{ inputs.cache-key }}
-        key: vendor-${{ hashFiles('vendor/**') }}
+        key: native-${{ hashFiles('vendor/**', 'build/install-openssl.sh', 'build/install-aws-lc.sh') }}
 
     # rust-cache saves registry crates and, optionally, workspace members. The
     # vendored crates are neither (their manifests sit under the repository
@@ -91,7 +95,7 @@ runs:
           target/release/build/mediasoup-*
           target/release/deps/*mediasoup*
           target/release/.fingerprint/mediasoup-*
-        key: vendored-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-key }}-${{ hashFiles('vendor/**', 'Cargo.lock', 'rust-toolchain.toml', 'build/pip-constraints.txt', 'build/install-openssl.sh') }}
+        key: vendored-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-key }}-${{ hashFiles('vendor/**', 'Cargo.lock', 'rust-toolchain.toml', 'build/pip-constraints.txt', 'build/install-openssl.sh', 'build/install-aws-lc.sh') }}
 
     # The installer verifies the archive checksum before building; the prefix
     # is a pure function of the script, so cache it by the script's hash.
@@ -106,3 +110,15 @@ runs:
       if: steps.openssl.outputs.cache-hit != 'true'
       shell: bash
       run: build/install-openssl.sh "${OPENSSL_DIR}"
+
+    - name: Restore checksum-pinned AWS-LC
+      id: aws-lc
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ env.AWS_LC_SYS_SYSTEM_DIR }}
+        key: aws-lc-v1-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build/install-aws-lc.sh', 'rust-toolchain.toml') }}
+
+    - name: Build checksum-pinned AWS-LC
+      if: steps.aws-lc.outputs.cache-hit != 'true'
+      shell: bash
+      run: build/install-aws-lc.sh "${AWS_LC_SYS_SYSTEM_DIR}"

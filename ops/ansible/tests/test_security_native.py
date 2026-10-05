@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import copy
+import io
 import json
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +15,7 @@ from unittest.mock import patch
 from test_support import ROOT
 
 # isort: split
+import security_awslc as awslc
 import security_image_policy as image_policy
 import security_native as native
 import security_vendor as vendor
@@ -77,6 +80,7 @@ class Fixture:
         self.system: Path = root / "system"
         self.runtime: Path = put(root, "system/lib/libstdc++.a", b"!<arch>\nCXX")
         self.openssl: Path = root / "openssl"
+        self.aws_lc: Path = root / "aws-lc"
         self.cargo: Path = root / "cargo-home"
         self.registry: Path = self.cargo / "registry/src/index/aws-lc-sys-0.45.0"
         self.embedded: list[JsonValue] = [
@@ -101,6 +105,7 @@ class Fixture:
             root / "cargo-build.json",
             self.cargo,
             self.openssl,
+            self.aws_lc,
             root / "native-components.build.json",
         )
         self.save_events()
@@ -173,7 +178,8 @@ class Fixture:
             },
             "registry_component": {
                 "name": "AWS-LC",
-                "version": "5.7.0",
+                "version": "5.11.0",
+                "system": self.make_aws_lc(),
                 "revision": REVISION,
                 "crate": "aws-lc-sys",
                 "crate_version": VERSION,
@@ -189,7 +195,7 @@ class Fixture:
                     "system": ["dl", "pthread"],
                 },
                 "openssl-sys": {"static": ["ssl", "crypto"], "system": []},
-                "aws-lc-sys": {"static": ["aws_lc_0_45_0_crypto"], "system": []},
+                "aws-lc-sys": {"static": ["crypto-awslc"], "system": []},
             },
         }
         for key in ("adapted_component", "openssl", "registry_component"):
@@ -212,6 +218,74 @@ class Fixture:
             b"shared\ndso\nmodule\nengine\n",
         )
         return component
+
+    def make_aws_lc(self) -> JsonObject:
+        """Create an authenticated external library, generator and build receipt."""
+        header = b'#define AWSLC_VERSION_NUMBER_STRING "5.11.0"\n#define OPENSSL_IS_AWSLC\n'
+        archive = tar_bytes(
+            {"aws-lc-5.11.0/include/openssl/base.h": header, "aws-lc-5.11.0/LICENSE": b"ISC"}
+        )
+        generator = tar_bytes({"bindgen-cli-0.73.2/Cargo.lock": b"version=4\n"})
+        installer = (
+            "awslc_version='5.11.0'\n"
+            + f"awslc_sha256='{vendor.sha256(archive)}'\n"
+            + "awslc_prefix='simplestchat_awslc_5_11_0'\n"
+            + "bindgen_version='0.73.2'\n"
+            + f"bindgen_sha256='{vendor.sha256(generator)}'\n"
+        ).encode()
+        _ = put(self.root, "build/install-aws-lc.sh", installer)
+        system: JsonObject = {
+            "source_license_sha256": vendor.sha256(b"ISC"),
+            "source": source(
+                "aws-lc-5.11.0",
+                archive,
+                "https://github.com/aws/aws-lc/archive/refs/tags/v5.11.0.tar.gz",
+            ),
+            "bindgen_source": source(
+                "bindgen-cli-0.73.2",
+                generator,
+                "https://static.crates.io/crates/bindgen-cli/bindgen-cli-0.73.2.crate",
+            ),
+            "installer_sha256": vendor.sha256(installer),
+            "symbol_prefix": awslc.OPTIONS["BORINGSSL_PREFIX"],
+            "configure_options": dict(awslc.OPTIONS),
+        }
+        files = {
+            "lib/libcrypto-awslc.a": b"!<arch>\ncrypto-awslc",
+            "share/rust/aws_lc_bindings.rs": (
+                b"simplestchat_awslc_5_11_0_EVP_Digest simplestchat_awslc_5_11_0_OpenSSL_version"
+            ),
+            "include/openssl/base.h": header,
+            "include/openssl/boringssl_prefix_symbols.h": (
+                b"#define BORINGSSL_PREFIX simplestchat_awslc_5_11_0\n"
+            ),
+            "share/simplestchat/aws-lc-source.tar.gz": archive,
+            "share/simplestchat/bindgen-cli.crate": generator,
+            "share/simplestchat/CMakeCache.txt": "".join(
+                f"{key}:STRING={value}\n" for key, value in awslc.OPTIONS.items()
+            ).encode(),
+            "share/simplestchat/symbols.txt": b"EVP_Digest\nOpenSSL_version\n",
+        }
+        for name, body in files.items():
+            _ = put(self.aws_lc, name, body)
+        self.refresh_aws_lc_receipt(system)
+        return system
+
+    def refresh_aws_lc_receipt(self, system: JsonObject | None = None) -> None:
+        """Re-sign fixture mutations so independent source/configuration checks are exercised."""
+        if system is None:
+            system = object_value(
+                object_value(self.native_manifest["registry_component"])["system"]
+            )
+        receipt: JsonObject = {
+            "configure_options": system["configure_options"],
+            "installer_sha256": system["installer_sha256"],
+            "bindgen_sha256": "a" * 64,
+            "files": {
+                name: vendor.sha256((self.aws_lc / name).read_bytes()) for name in awslc.FILES
+            },
+        }
+        _ = put(self.aws_lc, "share/simplestchat/build.json", vendor.json_bytes(receipt))
 
     def make_vendor(self) -> None:
         """Use the actual vendor verifier to produce source evidence for the fixture."""
@@ -287,8 +361,12 @@ class Fixture:
             out.mkdir(parents=True)
             names = native.strings(object_value(value)["static"])
             for library in names:
-                if library not in {"stdc++", "ssl", "crypto"}:
+                if library not in {"stdc++", "ssl", "crypto", "crypto-awslc"}:
                     _ = put(out, "lib" + library + ".a", b"!<arch>\n" + library.encode())
+            if name == "aws-lc-sys":
+                _ = put(
+                    out, "bindings.rs", (self.aws_lc / "share/rust/aws_lc_bindings.rs").read_bytes()
+                )
             events.append(
                 {
                     "reason": "build-script-executed",
@@ -297,7 +375,12 @@ class Fixture:
                     "linked_libs": ["static=" + library for library in names],
                     "linked_paths": [
                         "native=" + str(path)
-                        for path in (out, self.openssl / "lib", self.system / "lib")
+                        for path in (
+                            out,
+                            self.openssl / "lib",
+                            self.aws_lc / "lib",
+                            self.system / "lib",
+                        )
                     ],
                 }
             )
@@ -795,6 +878,113 @@ class NativeTests(unittest.TestCase):
                 all(all(item[key] == value for key, value in actual.items()) for item in selected)
             )
         image_policy.openssl_build_binding(report, object_value(fixture.native_manifest["openssl"]))
+
+    def test_external_awslc_archive_parser_rejects_unsafe_members(self) -> None:
+        """Even authenticated inputs must remain regular, unique, bounded release members."""
+        for mutation in ("duplicate", "link", "parent", "collision"):
+            output = io.BytesIO()
+            with tarfile.open(fileobj=output, mode="w:gz") as archive:
+                member = tarfile.TarInfo("aws-lc-5.11.0/file")
+                if mutation == "link":
+                    member.type = tarfile.SYMTYPE
+                    member.linkname = "outside"
+                elif mutation == "parent":
+                    member.name = "../outside"
+                archive.addfile(member)
+                if mutation == "duplicate":
+                    archive.addfile(member)
+                elif mutation == "collision":
+                    archive.addfile(tarfile.TarInfo("aws-lc-5.11.0/file/child"))
+            data = output.getvalue()
+            declared = vendor.parse_source(source("aws-lc-5.11.0", data))
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                _ = awslc.source_files(declared, data, native_release=True)
+
+    def test_external_awslc_archive_expansion_and_member_budgets(self) -> None:
+        """Compressed and expanded budgets are enforced before retaining source content."""
+        data = tar_bytes({"aws-lc-5.11.0/file": b"payload"})
+        declared = vendor.parse_source(source("aws-lc-5.11.0", data))
+        for limit in ("MAX_ARCHIVE", "MAX_EXPANDED", "MAX_MEMBER"):
+            with (
+                self.subTest(limit=limit),
+                patch.object(awslc, limit, 1),
+                self.assertRaises(ValueError),
+            ):
+                _ = awslc.source_files(declared, data, native_release=True)
+
+    def test_external_awslc_source_and_installer_authentication(self) -> None:
+        """An internally consistent receipt cannot replace pinned release source or installer."""
+        fixture = self.current()
+        for path, message in (
+            ("share/simplestchat/aws-lc-source.tar.gz", "source SHA-256"),
+            ("share/simplestchat/bindgen-cli.crate", "Source SHA-256"),
+        ):
+            target = fixture.aws_lc / path
+            original = target.read_bytes()
+            _ = target.write_bytes(b"unreviewed archive")
+            fixture.refresh_aws_lc_receipt()
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, message):
+                _ = self.produce()
+            _ = target.write_bytes(original)
+        fixture.refresh_aws_lc_receipt()
+        _ = put(fixture.root, "build/install-aws-lc.sh", b"modified installer")
+        with self.assertRaisesRegex(ValueError, "installer identity"):
+            _ = self.produce()
+
+    def test_external_awslc_artifacts_are_independently_bound(self) -> None:
+        """Changed headers, namespaces, CMake options or Cargo bindings fail despite new hashes."""
+        fixture = self.current()
+        for path, body, message in (
+            ("include/openssl/base.h", b"wrong version", "version header"),
+            ("include/openssl/boringssl_prefix_symbols.h", b"no prefix", "symbol namespace"),
+            (
+                "share/simplestchat/CMakeCache.txt",
+                b"BUILD_SHARED_LIBS:BOOL=ON",
+                "CMake build options",
+            ),
+            ("share/rust/aws_lc_bindings.rs", b"other bindings", "Cargo AWS-LC bindings"),
+        ):
+            target = fixture.aws_lc / path
+            original = target.read_bytes()
+            _ = target.write_bytes(body)
+            fixture.refresh_aws_lc_receipt()
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, message):
+                _ = self.produce()
+            _ = target.write_bytes(original)
+        fixture.refresh_aws_lc_receipt()
+        _ = put(
+            fixture.root, "target/release/build/aws-lc-sys/out/bindings.rs", b"foreign bindings"
+        )
+        with self.assertRaisesRegex(ValueError, "Cargo AWS-LC bindings"):
+            _ = self.produce()
+
+    def test_external_awslc_image_receipt_rejects_source_and_archive_drift(self) -> None:
+        """Image evidence binds external source, generated bindings and archive identity."""
+        fixture = self.current()
+        report = self.produce()
+        expected = object_value(fixture.native_manifest["registry_component"])
+        image_policy.aws_lc_build_binding(report, expected)
+        for mutation in (
+            "version",
+            "native_source",
+            "bindings_sha256",
+            "installer_sha256",
+            "archive",
+        ):
+            changed = copy.deepcopy(report)
+            component = object_value(changed["registry_component"])
+            if mutation in {"version", "native_source", "bindings_sha256"}:
+                component[mutation] = "invalid"
+            elif mutation == "installer_sha256":
+                object_value(component["build"])[mutation] = "0" * 64
+            else:
+                next(
+                    object_value(item)
+                    for item in array_value(changed["static_archives"])
+                    if object_value(item)["provider"] == "aws-lc-sys"
+                )["sha256"] = "0" * 64
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(ToolError, "image_awslc"):
+                image_policy.aws_lc_build_binding(changed, expected)
 
     def test_every_openssl_instance_and_library_pair_is_required(self) -> None:
         """Multiple valid instances cannot conceal a missing provider, pair or changed input."""

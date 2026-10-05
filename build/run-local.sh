@@ -41,6 +41,9 @@ fi
 export OPENSSL_DIR="$repo_root/target/openssl-4.0.3"
 export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
 export OPENSSL_STATIC=1
+export AWS_LC_SYS_SYSTEM_DIR="$repo_root/target/aws-lc-5.11.0"
+export AWS_LC_SYS_STATIC=1
+export AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK=0
 export PIP_CONSTRAINT="$repo_root/build/pip-constraints.txt"
 if [ ! -f "$PIP_CONSTRAINT" ]; then
     echo 'Missing build/pip-constraints.txt; restore the pinned native prerequisites.' >&2
@@ -126,10 +129,17 @@ if ! RUSTC="$(rustup which --toolchain "$toolchain" rustc)" \
     exit 2
 fi
 export RUSTC RUSTDOC
+PATH="$(dirname -- "$RUSTC"):$PATH"
+export PATH
 
 if [ ! -f "$OPENSSL_DIR/lib/libssl.a" ] || [ ! -f "$OPENSSL_DIR/lib/libcrypto.a" ]; then
     echo 'Installing the checksum-pinned static OpenSSL build (first launch may take several minutes).'
     "$repo_root/build/install-openssl.sh" "$OPENSSL_DIR"
+fi
+if [ ! -f "$AWS_LC_SYS_SYSTEM_DIR/lib/libcrypto-awslc.a" ] \
+    || [ ! -f "$AWS_LC_SYS_SYSTEM_DIR/share/rust/aws_lc_bindings.rs" ]; then
+    echo 'Installing checksum-pinned static AWS-LC and matching Rust bindings (first launch may take several minutes).'
+    "$repo_root/build/install-aws-lc.sh" "$AWS_LC_SYS_SYSTEM_DIR"
 fi
 if [ "$skip_web" = 0 ]; then
     node build/install-npm.mjs "$repo_root/target/npm-12.2.0"

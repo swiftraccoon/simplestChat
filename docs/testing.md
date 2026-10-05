@@ -1,7 +1,10 @@
 # Testing
 
 Run commands from the repository root after [development setup](development.md).
-Use disposable local services, never a shared or production database.
+Use disposable local services, never a shared or production database. Direct Cargo
+commands require the development setup's static OpenSSL and AWS-LC environment,
+including the matching AWS-LC Rust bindings. `build/check.sh --rust` checks both
+native prefixes before invoking Cargo.
 
 ## Fast checks
 

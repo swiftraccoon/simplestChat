@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import security_awslc as awslc
 import security_elf as elf
 import security_vendor as vendor
 
@@ -65,6 +66,7 @@ class Build:
     cargo_messages: Path
     cargo_home: Path
     openssl_prefix: Path
+    aws_lc_prefix: Path
     output: Path
 
 
@@ -174,6 +176,7 @@ def validate_manifest(root: Path) -> tuple[JsonObject, vendor.Manifest]:
     validate_adapted(root, manifest["adapted_component"])
     validate_openssl(root, manifest["openssl"])
     validate_registry_lock(root, manifest["registry_component"])
+    awslc.validate(root, object_value(manifest["registry_component"]))
     for key in ("adapted_component", "openssl", "registry_component"):
         _ = reviewed_license(object_value(manifest[key]))
     providers = object_value(manifest["native_links"])
@@ -283,9 +286,10 @@ def openssl_build_evidence(
 
 
 def validate_registry_lock(root: Path, value: JsonValue) -> None:
-    """Require the declared bundled native crate to match the exact registry lock entry."""
+    """Require the unchanged Rust wrapper to match its exact registry lock entry."""
     component = vendor.fields(
-        value, {"name", "version", "revision", "crate", "crate_version", "source", "license"}
+        value,
+        {"name", "version", "revision", "crate", "crate_version", "source", "license", "system"},
     )
     source = vendor.parse_source(component["source"])
     name, version = text(component, "crate"), text(component, "crate_version")
@@ -461,12 +465,12 @@ def validate_production_artifact(root: Path, item: JsonObject) -> None:
 
 
 def registry_component(build: Build, graph: CargoBuild, value: JsonValue) -> JsonObject:
-    """Authenticate the exact bundled AWS-LC crate and all unpacked build inputs."""
+    """Authenticate the exact Rust wrapper; its bundled C source is not the linked library."""
     component = object_value(value)
     name, version = text(component, "crate"), text(component, "crate_version")
     identifier = SOURCE_REGISTRY + "#" + name + "@" + version
     if identifier not in graph.artifacts or not any(key[0] == identifier for key in graph.scripts):
-        raise NativeError("Declared bundled native crate is absent from the production build")
+        raise NativeError("Declared native wrapper crate is absent from the production build")
     source = vendor.parse_source(component["source"])
     manifest = beneath(
         Path(text(graph.artifacts[identifier], "manifest_path")), build.cargo_home / "registry/src"
@@ -492,11 +496,14 @@ def registry_component(build: Build, graph: CargoBuild, value: JsonValue) -> Jso
     package = object_value(metadata["package"])
     declared = object_value(object_value(package["metadata"])["aws-lc-sys"])
     header = original["aws-lc/include/openssl/base.h"].decode()
+    bundled_version = re.search(
+        r'^#define AWSLC_VERSION_NUMBER_STRING "([0-9.]+)"$', header, re.MULTILINE
+    )
     if (
-        declared.get("commit-hash") != component["revision"]
-        or f'#define AWSLC_VERSION_NUMBER_STRING "{text(component, "version")}"\n' not in header
+        bundled_version is None
+        or re.fullmatch(r"[a-f0-9]{40}", text(declared, "commit-hash")) is None
     ):
-        raise NativeError("Bundled AWS-LC version or revision differs")
+        raise NativeError("Authenticated AWS-LC wrapper lacks its bundled source identity")
     packaged = object_value(
         object_value(json_value(tomllib.loads(original["Cargo.toml"].decode())))["package"]
     )
@@ -511,6 +518,10 @@ def registry_component(build: Build, graph: CargoBuild, value: JsonValue) -> Jso
         "source_sha256": source.sha256,
         "verified_files": len(original),
         "license": component["license"],
+        "unused_bundled_source": {
+            "version": bundled_version.group(1),
+            "revision": declared["commit-hash"],
+        },
     }
 
 
@@ -740,6 +751,8 @@ def resolve_archive(build: Build, paths: Sequence[Path], library: str, out_dir: 
     if len(candidates) != 1:
         raise NativeError("Missing or ambiguous native static archive")
     selected = candidates.pop()
+    if library == "crypto-awslc":
+        return beneath(selected, build.aws_lc_prefix / "lib")
     if library in {"ssl", "crypto"}:
         return beneath(selected, build.openssl_prefix / "lib")
     if library == "stdc++":
@@ -865,6 +878,16 @@ def produce(build: Build) -> None:
     registry = registry_component(build, graph, manifest["registry_component"])
     licenses = rust_licenses(build, graph, integrity, embedded)
     archives, runtime = link_archives(build, graph, manifest)
+    bindings = [
+        beneath(Path(text(event, "out_dir")), build.root / "target/release/build") / "bindings.rs"
+        for (identifier, _), event in graph.scripts.items()
+        if package_name(identifier) == "aws-lc-sys"
+    ]
+    registry.update(
+        awslc.evidence(
+            build.aws_lc_prefix, object_value(manifest["registry_component"]), archives, bindings
+        )
+    )
     toolchain = toolchain_evidence(build.root, runtime)
     openssl = openssl_build_evidence(
         build.openssl_prefix, object_value(manifest["openssl"]), archives
@@ -939,6 +962,7 @@ class Arguments(argparse.Namespace):
     cargo_messages: Path = Path()
     cargo_home: Path = Path()
     openssl_prefix: Path = Path()
+    aws_lc_prefix: Path = Path()
     output: Path = Path()
 
 
@@ -946,7 +970,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Produce native provenance without invoking a build or downloading dependencies."""
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument("--root", type=Path)
-    for name in ("vendor-report", "cargo-messages", "cargo-home", "openssl-prefix", "output"):
+    for name in (
+        "vendor-report",
+        "cargo-messages",
+        "cargo-home",
+        "openssl-prefix",
+        "aws-lc-prefix",
+        "output",
+    ):
         _ = parser.add_argument("--" + name, type=Path, required=True)
     args = parser.parse_args(argv, namespace=Arguments())
     try:
@@ -957,6 +988,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.cargo_messages,
                 args.cargo_home.resolve(),
                 args.openssl_prefix.resolve(),
+                args.aws_lc_prefix.resolve(),
                 args.output,
             )
         )

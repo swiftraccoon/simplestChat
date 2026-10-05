@@ -7,7 +7,8 @@ Run commands from the repository root.
 - Rust via rustup; the version is pinned in [rust-toolchain.toml](../rust-toolchain.toml).
 - Node.js 26.10 or newer and the pinned npm 12.2.0 installer below.
 - Xcode command-line tools on macOS, or a Linux C++ toolchain.
-- `make`, `perl`, `curl`, `pkg-config`, `cmake`, and Python 3/pip.
+- `make`, `perl`, `curl`, `pkg-config`, `cmake`, Go 1.25 or newer, libclang,
+  and Python 3/pip.
   See [native dependencies](../vendor/README.md) for platform details.
 - PostgreSQL if you want accounts and persistent rooms.
 - ShellCheck for the helper-script quality gate (`brew install shellcheck` on
@@ -54,7 +55,8 @@ build/run-local.sh
 ```
 
 Open `http://localhost:3000`. The launcher selects the pinned Rust toolchain,
-installs missing static OpenSSL, restores web dependencies, builds the UI, and
+installs missing static OpenSSL and AWS-LC with matching Rust bindings, restores
+web dependencies, builds the UI, and
 runs the server. The first native build can take several minutes. Stop it with
 Ctrl-C.
 
@@ -113,15 +115,34 @@ For release builds or direct Cargo commands, configure the native environment:
 
 ```sh
 build/install-openssl.sh "$PWD/target/openssl-4.0.3"
+build/install-aws-lc.sh "$PWD/target/aws-lc-5.11.0"
 export OPENSSL_DIR="$PWD/target/openssl-4.0.3"
 export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
 export OPENSSL_STATIC=1
+export AWS_LC_SYS_SYSTEM_DIR="$PWD/target/aws-lc-5.11.0"
+export AWS_LC_SYS_STATIC=1
+export AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK=0
 export PIP_CONSTRAINT="$PWD/build/pip-constraints.txt"
 
 npm ci --ignore-scripts --prefix web
 npm --prefix web run build
 cargo build --locked --release --bin simplestChat
 ```
+
+AWS-LC 5.11.0 is built from its authenticated upstream archive with a private,
+checksum-pinned bindgen 0.73.2 installation. Its archive and generated Rust
+bindings share a symbol prefix, so they must stay together. CMake, a C/C++
+compiler, Go, Perl and libclang are required; on macOS, install LLVM if libclang
+is absent and set `LIBCLANG_PATH="$(brew --prefix llvm)/lib"`. Select the pinned
+Rust toolchain on `PATH` before invoking the installer; the launcher does this
+automatically. `AWS_LC_BUILD_JOBS` limits build parallelism (default four).
+
+The AWS-LC installer requires a new absolute prefix and refuses to overwrite an
+existing installation. Reuse a complete prefix on subsequent Cargo builds; for
+a rebuild, choose a new owned prefix. Both
+`lib/libcrypto-awslc.a` and `share/rust/aws_lc_bindings.rs` are required. Keep
+`AWS_LC_SYS_STATIC=1` and `AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK=0`; no bundled
+older AWS-LC or unchecked system library is used by the maintained setup.
 
 The OpenSSL helper installs the checksum-pinned static build. Its download permits
 three transient-error retries with curl's default backoff, a 180-second retry

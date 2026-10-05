@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
+import security_awslc
 import security_elf
 import security_image_advisories
 import security_secret_spans
@@ -617,6 +618,56 @@ def native_packages(native: JsonObject) -> list[JsonObject]:
         )
     result[-1] = static_rpm(result[-1], owner)
     return result
+
+
+def aws_lc_build_binding(native: JsonObject, expected: JsonObject) -> None:
+    """Require the authenticated external release, bindings and linked prefixed archive."""
+    component = object_value(native["registry_component"])
+    system = object_value(expected["system"])
+    count = component.get("native_verified_files")
+    require(
+        all(
+            component.get(key) == expected[key]
+            for key in ("name", "version", "revision", "crate", "crate_version", "license")
+        )
+        and component.get("source_sha256") == object_value(expected["source"])["sha256"]
+        and component.get("native_source") == system["source"]
+        and component.get("native_license_sha256") == system["source_license_sha256"]
+        and component.get("bindgen_source") == system["bindgen_source"]
+        and isinstance(count, int)
+        and not isinstance(count, bool)
+        and 0 < count <= MAX_PACKAGES,
+        "image_awslc_source_binding",
+    )
+    build = object_value(component["build"])
+    files = object_value(build["files"])
+    require(
+        set(build) == {"configure_options", "installer_sha256", "bindgen_sha256", "files"}
+        and build["configure_options"] == system["configure_options"]
+        and build["configure_options"] == security_awslc.OPTIONS
+        and build["installer_sha256"] == system["installer_sha256"]
+        and re.fullmatch(r"[a-f0-9]{64}", string_value(build["bindgen_sha256"]))
+        and set(files) == set(security_awslc.FILES)
+        and all(re.fullmatch(r"[a-f0-9]{64}", string_value(value)) for value in files.values())
+        and files["share/simplestchat/aws-lc-source.tar.gz"]
+        == object_value(system["source"])["sha256"]
+        and files["share/simplestchat/bindgen-cli.crate"]
+        == object_value(system["bindgen_source"])["sha256"]
+        and component["bindings_sha256"] == files["share/rust/aws_lc_bindings.rs"],
+        "image_awslc_build_binding",
+    )
+    archives = [
+        object_value(item)
+        for item in array_value(native["static_archives"])
+        if object_value(item).get("provider") == "aws-lc-sys"
+    ]
+    require(
+        len(archives) == 1
+        and archives[0].get("library") == "crypto-awslc"
+        and archives[0].get("sha256") == files["lib/libcrypto-awslc.a"]
+        and string_value(archives[0]["path"]).endswith("/lib/libcrypto-awslc.a"),
+        "image_awslc_archive_binding",
+    )
 
 
 def openssl_build_binding(native: JsonObject, expected: JsonObject) -> None:

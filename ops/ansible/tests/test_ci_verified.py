@@ -569,16 +569,25 @@ class VerifiedCacheTests(unittest.TestCase):
         """Generated files inherit pinned build inputs; restored dep-info is authenticated."""
         generated = "target/debug/build/mediasoup-sys-1234567890abcdef/out/fbs.rs"
         openssl = "target/openssl-4.0.3/lib/libssl.a"
-        for relative in (generated, openssl):
+        aws_lc = "target/aws-lc-5.11.0/lib/libcrypto-awslc.a"
+        aws_bindings = "target/debug/build/aws-lc-sys-1234567890abcdef/out/bindings.rs"
+        generated_inputs = (generated, openssl, aws_lc, aws_bindings)
+        for relative in generated_inputs:
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             _ = path.write_text("generated fixture\n")
-        output = self.backend_fixture(("src/main.rs", "vendor", generated, openssl))
-        with patch.dict(os.environ, {"OPENSSL_DIR": str(self.root / "target/openssl-4.0.3")}):
+        output = self.backend_fixture(("src/main.rs", "vendor", *generated_inputs))
+        with patch.dict(
+            os.environ,
+            {
+                "OPENSSL_DIR": str(self.root / "target/openssl-4.0.3"),
+                "AWS_LC_SYS_SYSTEM_DIR": str(self.root / "target/aws-lc-5.11.0"),
+            },
+        ):
             key = cache.cache_key(self.root, "backend")
             directory = self.root / "cache"
             cache.save(self.root, "backend", key, directory)
-            for relative in (generated, openssl):
+            for relative in generated_inputs:
                 (self.root / relative).unlink()
             for name in cache.BINARIES:
                 (output / name).unlink()
@@ -600,6 +609,9 @@ class VerifiedCacheTests(unittest.TestCase):
             original.rstrip() + " /unbound/compiler/source.rs\n",
             original + "# env-dep:UNBOUND=value\n",
             original.replace("src/main.rs", "target/openssl-3.5.8/lib/libssl.a"),
+            original.replace(
+                "src/main.rs", "target/debug/build/aws-lc-sys-1234567890abcdef/out/unbound.rs"
+            ),
         ):
             _ = path.write_text(malformed)
             with self.assertRaisesRegex(ToolError, "ci_backend_dep"):

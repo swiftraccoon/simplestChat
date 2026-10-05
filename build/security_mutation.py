@@ -196,6 +196,14 @@ def cargo_environment(context: Context, source: Path, openssl: Path) -> None:
         all((prefix / "lib" / name).is_file() for name in ("libssl.a", "libcrypto.a")),
         "mutation_static_openssl_missing",
     )
+    aws_lc = Path(
+        os.environ.get("AWS_LC_SYS_SYSTEM_DIR", str(context.root / "target/aws-lc-5.11.0"))
+    ).resolve(strict=True)
+    require(
+        (aws_lc / "lib/libcrypto-awslc.a").is_file()
+        and (aws_lc / "share/rust/aws_lc_bindings.rs").is_file(),
+        "mutation_static_aws_lc_missing",
+    )
     context.env.update(
         {
             "PATH": str(cargo.parent) + os.pathsep + context.env["PATH"],
@@ -209,6 +217,9 @@ def cargo_environment(context: Context, source: Path, openssl: Path) -> None:
             "CARGO_TERM_COLOR": "never",
             "OPENSSL_DIR": str(prefix),
             "OPENSSL_STATIC": "1",
+            "AWS_LC_SYS_SYSTEM_DIR": str(aws_lc),
+            "AWS_LC_SYS_STATIC": "1",
+            "AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK": "0",
             "PKG_CONFIG_PATH": str(prefix / "lib/pkgconfig"),
             "PIP_CONSTRAINT": str(source / "build/pip-constraints.txt"),
         }

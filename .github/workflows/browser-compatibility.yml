@@ -31,6 +31,8 @@ jobs:
     env:
       PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
       OPENSSL_STATIC: '1'
+      AWS_LC_SYS_STATIC: '1'
+      AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK: '0'
       CARGO_BUILD_JOBS: '2'
       E2E_BROWSER: ${{ matrix.browser }}
     steps:
@@ -42,7 +44,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config iproute2 jq
+          sudo apt-get install -y build-essential python3-pip cmake curl perl pkg-config iproute2 jq golang-go libclang-dev
           # The Ubuntu 24.04 image includes PostgreSQL 16, with its service stopped.
           test -x /usr/lib/postgresql/16/bin/initdb
           echo '/usr/lib/postgresql/16/bin' >> "${GITHUB_PATH}"
@@ -50,7 +52,7 @@ jobs:
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: |
-          brew install postgresql@18 jq
+          brew install postgresql@18 jq go
           postgres_prefix="$(brew --prefix postgresql@18)"
           echo "${postgres_prefix}/bin" >> "${GITHUB_PATH}"
 
@@ -86,8 +88,11 @@ jobs:
 
       - name: Configure native dependencies and media address
         run: |
-          echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-4.0.3" >> "${GITHUB_ENV}"
-          echo "PKG_CONFIG_PATH=${RUNNER_TEMP}/simplestchat-openssl-4.0.3/lib/pkgconfig" >> "${GITHUB_ENV}"
+          {
+            echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-4.0.3"
+            echo "PKG_CONFIG_PATH=${RUNNER_TEMP}/simplestchat-openssl-4.0.3/lib/pkgconfig"
+            echo "AWS_LC_SYS_SYSTEM_DIR=${RUNNER_TEMP}/simplestchat-aws-lc-5.11.0"
+          } >> "${GITHUB_ENV}"
           test_media_ip="$(node build/test-media-ip.mjs)"
           echo "TEST_ANNOUNCE_IP=${test_media_ip}" >> "${GITHUB_ENV}"
 
@@ -95,7 +100,11 @@ jobs:
       - name: Build checksum-pinned OpenSSL
         run: build/install-openssl.sh "${OPENSSL_DIR}"
 
-      - name: Build server
+      - name: Build checksum-pinned AWS-LC
+        # AWS-LC's generated bindings use the selected Rust toolchain and libclang.
+        run: build/install-aws-lc.sh "${AWS_LC_SYS_SYSTEM_DIR}"
+
+      - name: Build server with both authenticated crypto libraries
         run: cargo build --locked --bin simplestChat
 
       - name: Build UI and install pinned browser tooling

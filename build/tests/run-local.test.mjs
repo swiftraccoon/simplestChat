@@ -19,6 +19,7 @@ const env = process.env;
 const record = name => fs.appendFileSync(env.FIXTURE_LOG, JSON.stringify({
   command: name, args, cwd: process.cwd(), env: Object.fromEntries([
     'RUSTC', 'RUSTDOC', 'OPENSSL_DIR', 'OPENSSL_STATIC', 'PKG_CONFIG_PATH',
+    'AWS_LC_SYS_SYSTEM_DIR', 'AWS_LC_SYS_STATIC', 'AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK',
     'PIP_CONSTRAINT', 'BIND_ADDR', 'PORT', 'ANNOUNCE_IP', 'MEDIA_WORKERS',
     'WEBRTC_SERVER_PORT_BASE', 'ALLOW_AD_HOC_ROOMS',
   ].map(key => [key, env[key]])),
@@ -61,6 +62,17 @@ if (command === 'rustup') {
     fs.mkdirSync(path.dirname(path.join(prefix, file)), { recursive: true });
     fs.writeFileSync(path.join(prefix, file), 'fixture only\n');
   }
+} else if (command === 'install-aws-lc') {
+  fail('aws-lc-install');
+  const prefix = args[0];
+  if (fs.existsSync(prefix)) {
+    console.error('AWS-LC destination already exists; retain it or select a new prefix.');
+    process.exit(2);
+  }
+  for (const file of ['lib/libcrypto-awslc.a', 'share/rust/aws_lc_bindings.rs']) {
+    fs.mkdirSync(path.dirname(path.join(prefix, file)), { recursive: true });
+    fs.writeFileSync(path.join(prefix, file), 'fixture only\n');
+  }
 } else if (command === 'uname') {
   console.log(env.FIXTURE_PLATFORM || 'Darwin');
 } else if (command === 'route') {
@@ -89,7 +101,7 @@ else if (['cc', 'c++', 'clang', 'clang++', 'cmake', 'make', 'xcrun'].includes(co
 }
 `;
 
-async function fixture(t, { channel = '1.99.0', installedOpenSsl = true, installedWeb = true, installedDist = true } = {}) {
+async function fixture(t, { channel = '1.99.0', installedOpenSsl = true, installedAwsLc = true, installedWeb = true, installedDist = true } = {}) {
   // macOS aliases /var to /private/var; compare canonical fixture paths with
   // the shell's physical cwd, without making the test platform-dependent.
   const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'simplestchat-launcher-test.')));
@@ -127,6 +139,7 @@ async function fixture(t, { channel = '1.99.0', installedOpenSsl = true, install
       'pkg-config', 'python3', 'cc', 'c++', 'clang', 'clang++', 'cmake', 'make', 'xcrun', 'openssl']
       .map(command => executable(path.join(bin, command), command)),
     executable(path.join(root, 'build/install-openssl.sh'), 'install-openssl'),
+    executable(path.join(root, 'build/install-aws-lc.sh'), 'install-aws-lc'),
     executable(path.join(root, 'toolchain/bin/rustc'), 'pinned-rustc'),
     executable(path.join(root, 'toolchain/bin/rustdoc'), 'pinned-rustdoc'),
   ]);
@@ -140,9 +153,18 @@ async function fixture(t, { channel = '1.99.0', installedOpenSsl = true, install
     await executable(path.join(prefix, 'bin/openssl'), 'openssl');
   }
 
+  const awsLcPrefix = path.join(root, 'target/aws-lc-5.11.0');
+  if (installedAwsLc) {
+    for (const name of ['lib/libcrypto-awslc.a', 'share/rust/aws_lc_bindings.rs']) {
+      const file = path.join(awsLcPrefix, name);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, 'fixture only\n');
+    }
+  }
   return {
     root,
     prefix,
+    awsLcPrefix,
     async run(args = [], environment = {}) {
       const child = spawn('/bin/sh', [path.join(root, 'build/run-local.sh'), ...args], {
         cwd: temporary,
@@ -170,7 +192,7 @@ async function fixture(t, { channel = '1.99.0', installedOpenSsl = true, install
 }
 
 test('local launcher help and invalid arguments have no setup side effects', async t => {
-  const setup = await fixture(t, { installedOpenSsl: false, installedWeb: false });
+  const setup = await fixture(t, { installedOpenSsl: false, installedAwsLc: false, installedWeb: false });
   const help = await setup.run(['--help'], { ANNOUNCE_IP: '' });
   assert.equal(help.status, 0, help.output);
   assert.match(help.output, /--skip-web/);
@@ -190,6 +212,7 @@ test('local launcher pins Rust and refreshes locked web dependencies despite exi
     RUSTUP_TOOLCHAIN: 'stable',
     OPENSSL_DIR: '/wrong/openssl',
     OPENSSL_STATIC: '0',
+    AWS_LC_SYS_SYSTEM_DIR: '/wrong/aws-lc', AWS_LC_SYS_STATIC: '0', AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK: '1',
     PIP_CONSTRAINT: '/wrong/pip-constraints.txt',
     BIND_ADDR: '0.0.0.0',
   });
@@ -200,6 +223,9 @@ test('local launcher pins Rust and refreshes locked web dependencies despite exi
   assert.equal(result.server.env.RUSTDOC, path.join(setup.root, 'toolchain/bin/rustdoc'));
   assert.equal(result.server.env.OPENSSL_DIR, setup.prefix);
   assert.equal(result.server.env.OPENSSL_STATIC, '1');
+  assert.equal(result.server.env.AWS_LC_SYS_SYSTEM_DIR, setup.awsLcPrefix);
+  assert.equal(result.server.env.AWS_LC_SYS_STATIC, '1');
+  assert.equal(result.server.env.AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK, '0');
   assert.equal(result.server.env.PIP_CONSTRAINT, path.join(setup.root, 'build/pip-constraints.txt'));
   assert.ok(result.server.env.PKG_CONFIG_PATH.split(':').includes(path.join(setup.prefix, 'lib/pkgconfig')));
   assert.equal(result.server.env.BIND_ADDR, '127.0.0.1');
@@ -251,7 +277,7 @@ test('local launcher requires explicit announcement on non-macOS hosts', async t
 });
 
 test('local launcher installs missing prerequisites and skip-web omits both npm steps', async t => {
-  const setup = await fixture(t, { installedOpenSsl: false, installedWeb: false });
+  const setup = await fixture(t, { installedOpenSsl: false, installedAwsLc: false, installedWeb: false });
   const result = await setup.run();
   assert.equal(result.status, 0, result.output);
   const installer = result.events.find(event => event.command === 'install-openssl');
@@ -289,11 +315,23 @@ test('local launcher requires the tracked pip constraint and both static OpenSSL
 });
 
 test('local launcher stops after setup/build failures and preserves server exit status', async t => {
-  for (const phase of ['rustup-which', 'openssl-install', 'npm-install', 'npm-ci', 'npm-build', 'cargo', 'server']) {
-    const setup = await fixture(t, { installedOpenSsl: false, installedWeb: false });
+  for (const phase of ['rustup-which', 'openssl-install', 'aws-lc-install', 'npm-install', 'npm-ci', 'npm-build', 'cargo', 'server']) {
+    const setup = await fixture(t, { installedOpenSsl: false, installedAwsLc: false, installedWeb: false });
     const result = await setup.run([], { FIXTURE_FAIL: phase, FIXTURE_FAILURE_CODE: '37' });
     assert.notEqual(result.status, 0, `${phase}: ${result.output}`);
     if (phase === 'server') assert.equal(result.status, 37, result.output);
     else assert.equal(result.server, undefined, `${phase} must stop before launching the server`);
   }
+});
+
+
+test('local launcher refuses a partial AWS-LC installation before starting the server', async t => {
+  const setup = await fixture(t);
+  await rm(path.join(setup.awsLcPrefix, 'share/rust/aws_lc_bindings.rs'));
+  const result = await setup.run(['--skip-web']);
+  assert.equal(result.status, 2, result.output);
+  assert.match(result.output, /AWS-LC destination already exists/);
+  assert.equal(result.server, undefined);
+  const installer = result.events.find(event => event.command === 'install-aws-lc');
+  assert.deepEqual(installer.args, [setup.awsLcPrefix]);
 });

@@ -53,11 +53,13 @@ RUN --mount=type=bind,from=image-review-inputs,source=/image-exceptions.json,tar
     && dnf install -y --setopt=install_weak_deps=False \
     ca-certificates \
     cmake \
+    clang-devel \
     curl \
     gcc \
     gcc-c++ \
     git \
     glibc-static \
+    golang \
     libstdc++-static \
     make \
     meson \
@@ -106,6 +108,14 @@ RUN set -eu; \
     rm /tmp/rustup-init
 ENV PATH="/root/.cargo/bin:${PATH}"
 
+# The current Rust wrapper supports an authenticated external AWS-LC release.
+# Use distinct symbols and an archive name so it can coexist with OpenSSL.
+COPY build/install-aws-lc.sh /usr/local/bin/install-simplestchat-aws-lc
+RUN /usr/local/bin/install-simplestchat-aws-lc /opt/aws-lc-5.11.0
+ENV AWS_LC_SYS_SYSTEM_DIR=/opt/aws-lc-5.11.0 \
+    AWS_LC_SYS_STATIC=1 \
+    AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK=0
+
 WORKDIR /app
 # Authenticate the exact cargo-auditable executable before either Cargo build.
 # Its dependency section must survive in the final executable for image auditing.
@@ -141,11 +151,15 @@ RUN python3 build/security_tools.py path cargo-auditable --directory /opt/securi
     && strings target/release/simplestChat | grep -Fq 'OpenSSL 4.0.3 29 Sep 2026' \
     && ! strings target/release/simplestChat | grep -Fq 'OpenSSL 3.0.8' \
     && ! ldd target/release/simplestChat | grep -Eq 'lib(ssl|crypto)\.so'
-COPY build/security_native.py build/security_elf.py build/install-openssl.sh ./build/
+COPY build/security_native.py build/security_awslc.py build/security_elf.py build/install-openssl.sh build/install-aws-lc.sh ./build/
 RUN python3 build/security_native.py --root /app \
     --vendor-report /app/vendor-evidence/report.json \
     --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
-    --openssl-prefix /opt/openssl-4.0.3 --output /app/native-components.build.json
+    --openssl-prefix /opt/openssl-4.0.3 --aws-lc-prefix /opt/aws-lc-5.11.0 \
+    --output /app/native-components.build.json
+RUN mkdir -p /app/native-licenses \
+    && tar -xOf /opt/aws-lc-5.11.0/share/simplestchat/aws-lc-source.tar.gz \
+        aws-lc-5.11.0/LICENSE > /app/native-licenses/aws-lc.LICENSE
 
 # The load tester has a separate target so its WebRTC client dependencies and
 # executable are absent from the default production image.
@@ -183,6 +197,7 @@ COPY --from=builder /app/target/release/simplestChat /app/simplestChat
 COPY --from=builder /app/native-components.build.json /usr/share/simplestchat/native-components.json
 COPY --from=builder /app/migrations /app/migrations
 COPY --from=builder /app/vendor/seclists-passwords/LICENSE /app/vendor/seclists-passwords/README.md /usr/share/licenses/simplestchat/seclists/
+COPY --from=builder /app/native-licenses/aws-lc.LICENSE /usr/share/licenses/simplestchat/aws-lc/LICENSE
 COPY --from=web-builder /web/dist /app/web/dist
 RUN ldd /app/simplestChat > /tmp/simplestchat-ldd \
     && ! grep -Fq 'not found' /tmp/simplestchat-ldd \

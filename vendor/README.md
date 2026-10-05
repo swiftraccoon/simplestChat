@@ -91,8 +91,13 @@ There is no command that automatically approves the current working tree.
 source inventory and binds its source IDs to the integrity manifest. Production
 worker inputs, header-only code, native test dependencies and Windows-only inputs
 have explicit roles. Adapted libwebrtc retains its branch and revision instead of
-claiming to be an unmodified upstream release. AWS-LC records both the containing
-locked Cargo crate and its bundled native version/revision. OpenSSL records the
+claiming to be an unmodified upstream release. AWS-LC records its locked Rust
+wrapper separately from the external 5.11.0
+release actually linked. The checksum-pinned installer builds a static, namespaced
+`libcrypto-awslc.a` and generates matching Rust bindings with the authenticated
+bindgen CLI and its locked dependencies. The wrapper's supported system mode
+retains its native-version check; its older bundled source is identified as unused.
+The inventory also binds the external source LICENSE digest. OpenSSL records the
 exact source archive and the checksum-verifying installer. Native license
 expressions are reviewed source metadata; libuv's additional BSD/ISC components
 and AWS-LC's composite expression remain explicit.
@@ -104,7 +109,8 @@ invocation with `--message-format=json`. After building, it runs:
 python3 build/security_native.py --root /app \
   --vendor-report /app/vendor-evidence/report.json \
   --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
-  --openssl-prefix /opt/openssl-4.0.3 --output /app/native-components.build.json
+  --openssl-prefix /opt/openssl-4.0.3 --aws-lc-prefix /opt/aws-lc-5.11.0 \
+  --output /app/native-components.build.json
 ```
 
 The helper rechecks the vendor receipt against current files, selects the actual
@@ -112,7 +118,12 @@ production server artifact, and resolves static archives only from the recorded
 build-script link search paths. Missing, ambiguous, thin, unexpected or incorrectly
 located native archives fail. It verifies the AWS-LC crate checksum before
 comparing every unpacked source file; Cargo's exact completion marker is the only
-unpacked-cache exception. The receipt binds the final executable, static archive
+unpacked-cache exception. It independently authenticates the external AWS-LC
+release and generator archives, verifies installed headers and the native license
+against source, checks configured static/no-provider/no-host-crypto-policy options,
+and binds Cargo's generated bindings and linked archive to the installed receipt.
+The image policy requires that same source, binding and archive identity.
+The receipt binds the final executable, static archive
 bytes, Cargo messages, Cargo lockfile, vendor source/patch records, compiler
 identity and builder RPM/source-RPM inventory. The static C++ runtime must belong
 to the recorded `libstdc++-static` package.

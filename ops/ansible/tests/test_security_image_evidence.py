@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlsplit
 from test_support import ROOT
 
 # isort: split
+import security_awslc
 import security_image as runner
 import security_image_policy as policy
 import security_native as native_producer
@@ -180,6 +181,41 @@ def native_inventory() -> JsonObject:
         for library in libraries
         for provider in ("mediasoup-sys", "openssl-sys")
     )
+    reviewed = object_value(
+        object_value(policy.report(ROOT / "vendor/native-components.json"))["registry_component"]
+    )
+    system = object_value(reviewed["system"])
+    files: JsonObject = dict.fromkeys(security_awslc.FILES, DIGEST)
+    files["share/simplestchat/aws-lc-source.tar.gz"] = object_value(system["source"])["sha256"]
+    files["share/simplestchat/bindgen-cli.crate"] = object_value(system["bindgen_source"])["sha256"]
+    aws: JsonObject = {
+        key: reviewed[key]
+        for key in ("name", "version", "revision", "crate", "crate_version", "license")
+    }
+    aws.update(
+        {
+            "source_sha256": object_value(reviewed["source"])["sha256"],
+            "native_source": system["source"],
+            "native_license_sha256": system["source_license_sha256"],
+            "bindgen_source": system["bindgen_source"],
+            "native_verified_files": 1,
+            "bindings_sha256": DIGEST,
+            "build": {
+                "configure_options": system["configure_options"],
+                "installer_sha256": system["installer_sha256"],
+                "bindgen_sha256": DIGEST,
+                "files": files,
+            },
+        }
+    )
+    archives.append(
+        {
+            "provider": "aws-lc-sys",
+            "library": "crypto-awslc",
+            "sha256": DIGEST,
+            "path": "/opt/aws-lc-5.11.0/lib/libcrypto-awslc.a",
+        }
+    )
     return {
         "binary": {"sha256": DIGEST, "size": 123},
         "native_manifest_sha256": runner.digest(ROOT / "vendor/native-components.json"),
@@ -203,7 +239,7 @@ def native_inventory() -> JsonObject:
             "license": "BSD-3-Clause",
         },
         "openssl": openssl,
-        "registry_component": {"name": "AWS-LC", "version": "5.7.0", "license": "ISC AND MIT"},
+        "registry_component": aws,
         "toolchain": {
             "static_cxx_owner": "libstdc++-static\t0:16.2.1-2.fc44.aarch64\t"
             + "gcc-16.2.1-2.fc44.src.rpm",

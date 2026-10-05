@@ -18,7 +18,8 @@ const env = process.env;
 fs.appendFileSync(env.FIXTURE_LOG, JSON.stringify({
   command, args, cwd: process.cwd(),
   env: Object.fromEntries(['PATH', 'RUSTC', 'RUSTDOC', 'OPENSSL_DIR',
-    'OPENSSL_STATIC', 'PKG_CONFIG_PATH', 'PIP_CONSTRAINT', 'RUSTDOCFLAGS', 'PYTHON_CHECK_ENV']
+    'OPENSSL_STATIC', 'PKG_CONFIG_PATH', 'PIP_CONSTRAINT', 'RUSTDOCFLAGS', 'PYTHON_CHECK_ENV',
+    'AWS_LC_SYS_SYSTEM_DIR', 'AWS_LC_SYS_STATIC', 'AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK']
     .map(key => [key, env[key]])),
 }) + '\n');
 let phase;
@@ -58,7 +59,7 @@ if (command === 'npm') {
 if (env.FIXTURE_FAIL === phase) process.exit(Number(env.FIXTURE_FAILURE_CODE || 37));
 `;
 
-async function fixture(t, { installedWeb = true, installedOpenSsl = true, omittedTool, channel = '9.88.7' } = {}) {
+async function fixture(t, { installedWeb = true, installedOpenSsl = true, installedAwsLc = true, omittedTool, channel = '9.88.7' } = {}) {
   const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'simplestchat-check-test.')));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const root = path.join(temporary, 'checkout with spaces');
@@ -101,6 +102,16 @@ async function fixture(t, { installedWeb = true, installedOpenSsl = true, omitte
     await Promise.all(['libssl.a', 'libcrypto.a'].map(name => writeFile(path.join(directory, 'lib', name), 'fixture only\n')));
   }
   if (installedOpenSsl) await installFixtureOpenSsl(prefix);
+  const awsLcPrefix = path.join(root, 'target/aws-lc-5.11.0');
+  async function installFixtureAwsLc(directory) {
+    for (const name of ['lib/libcrypto-awslc.a', 'share/rust/aws_lc_bindings.rs']) {
+      const file = path.join(directory, name);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, 'fixture only\n');
+    }
+  }
+  if (installedAwsLc) await installFixtureAwsLc(awsLcPrefix);
+
   for (const command of ['npm', 'rustup', 'node', 'sh', 'bash', 'shellcheck']) {
     if (command === omittedTool) continue;
     const executable = path.join(bin, command);
@@ -111,7 +122,7 @@ async function fixture(t, { installedWeb = true, installedOpenSsl = true, omitte
   // node, or rustup can never fall back to a real tool installed on the host.
   for (const command of ['dirname', 'sed']) await symlink(`/usr/bin/${command}`, path.join(bin, command));
   return {
-    root, prefix, bin, toolchainBin, helperNames, installFixtureOpenSsl,
+    root, prefix, awsLcPrefix, bin, toolchainBin, helperNames, installFixtureOpenSsl, installFixtureAwsLc,
     async run(args = [], environment = {}) {
       await writeFile(log, '');
       const result = spawnSync('/bin/sh', [path.join(root, 'build/check.sh'), ...args], {
@@ -167,6 +178,7 @@ test('Rust quality group pins tools, native inputs and warning-denying Clippy/do
     RUSTC: '/wrong/rustc', RUSTDOC: '/wrong/rustdoc', RUSTUP_TOOLCHAIN: 'stable',
     PKG_CONFIG_PATH: '/wrong/pkgconfig', OPENSSL_STATIC: '0', PIP_CONSTRAINT: '/wrong/pip.txt',
     RUSTDOCFLAGS: '--cfg quality_fixture',
+    AWS_LC_SYS_STATIC: '0', AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK: '1',
   });
   assert.equal(result.status, 0, result.output);
   assert.deepEqual(result.events.map(event => event.args), [
@@ -183,6 +195,9 @@ test('Rust quality group pins tools, native inputs and warning-denying Clippy/do
     assert.equal(event.env.PATH, `${setup.toolchainBin}:${setup.bin}`);
     assert.equal(event.env.OPENSSL_DIR, setup.prefix);
     assert.equal(event.env.OPENSSL_STATIC, '1');
+    assert.equal(event.env.AWS_LC_SYS_SYSTEM_DIR, setup.awsLcPrefix);
+    assert.equal(event.env.AWS_LC_SYS_STATIC, '1');
+    assert.equal(event.env.AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK, '0');
     assert.equal(event.env.PKG_CONFIG_PATH, path.join(setup.prefix, 'lib/pkgconfig'));
     assert.equal(event.env.PIP_CONSTRAINT, path.join(setup.root, 'build/pip-constraints.txt'));
   }
@@ -306,3 +321,22 @@ for (const [phase, lastCommand] of [
     assert.equal(actualPhase, phase, 'no command may run after the injected failure');
   });
 }
+
+
+test('Rust checks reject incomplete AWS-LC before invoking Cargo', async t => {
+  const setup = await fixture(t);
+  await rm(path.join(setup.awsLcPrefix, 'share/rust/aws_lc_bindings.rs'));
+  const result = await setup.run(['--rust']);
+  assert.equal(result.status, 2, result.output);
+  assert.match(result.output, /Static AWS-LC/);
+  assert.equal(result.events.some(event => event.args[0] === 'run'), false);
+});
+
+test('Rust checks support an explicit AWS-LC prefix containing spaces', async t => {
+  const setup = await fixture(t, { installedAwsLc: false });
+  const prefix = path.join(setup.root, 'custom AWS-LC');
+  await setup.installFixtureAwsLc(prefix);
+  const result = await setup.run(['--rust'], { AWS_LC_SYS_SYSTEM_DIR: prefix });
+  assert.equal(result.status, 0, result.output);
+  assert.ok(result.events.filter(event => event.args[0] === 'run').every(event => event.env.AWS_LC_SYS_SYSTEM_DIR === prefix));
+});

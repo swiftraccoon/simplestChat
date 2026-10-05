@@ -111,6 +111,7 @@ BACKEND_FILES = frozenset(
         "build/ci_verified.py",
         "build/security_tools.py",
         "build/install-openssl.sh",
+        "build/install-aws-lc.sh",
         "build/pip-constraints.txt",
         "build/ci-local.sh",
         "build/ci-local-act.json",
@@ -140,6 +141,9 @@ BACKEND_ENVIRONMENT = frozenset(
         "LDFLAGS",
         "OPENSSL_DIR",
         "OPENSSL_STATIC",
+        "AWS_LC_SYS_SYSTEM_DIR",
+        "AWS_LC_SYS_STATIC",
+        "AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK",
         "PKG_CONFIG_PATH",
         "PIP_CONSTRAINT",
         "PIP_CONFIG_FILE",
@@ -252,7 +256,7 @@ def backend_dependencies(root: Path, directory: Path, name: str, *, built: bool)
         .split("\0")
     ) - {""}
     openssl = os.environ.get("OPENSSL_DIR", "")
-    allowed_openssl: set[str] = (
+    allowed_native: set[str] = (
         {
             str(Path(openssl) / suffix)
             for suffix in (
@@ -265,6 +269,12 @@ def backend_dependencies(root: Path, directory: Path, name: str, *, built: bool)
         if openssl
         else set()
     )
+    aws_lc = os.environ.get("AWS_LC_SYS_SYSTEM_DIR", "")
+    if aws_lc:
+        allowed_native.update(
+            str(Path(aws_lc) / suffix)
+            for suffix in ("include", "lib/libcrypto-awslc.a", "share/rust/aws_lc_bindings.rs")
+        )
     source_count = 0
     for word in words[1:]:
         path = Path(word)
@@ -282,9 +292,11 @@ def backend_dependencies(root: Path, directory: Path, name: str, *, built: bool)
             )
         else:
             generated = re.fullmatch(
-                r"target/debug/build/mediasoup-sys-[a-f0-9]{16}/out/fbs\.rs", relative
+                r"target/debug/build/(?:mediasoup-sys-[a-f0-9]{16}/out/fbs\.rs|"
+                + r"aws-lc-sys-[a-f0-9]{16}/out/bindings\.rs)",
+                relative,
             )
-            require(bool(generated) or str(path) in allowed_openssl, "ci_backend_dep_unkeyed")
+            require(bool(generated) or str(path) in allowed_native, "ci_backend_dep_unkeyed")
             require(not built or path.exists(), "ci_backend_dep_missing")
     require(source_count > 0, "ci_backend_dep_empty")
 

@@ -31,6 +31,9 @@ Install the pinned Rust/native dependencies from the
 export OPENSSL_DIR="$PWD/target/openssl-4.0.3"
 export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
 export OPENSSL_STATIC=1
+export AWS_LC_SYS_SYSTEM_DIR="$PWD/target/aws-lc-5.11.0"
+export AWS_LC_SYS_STATIC=1
+export AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK=0
 export PIP_CONSTRAINT="$PWD/build/pip-constraints.txt"
 cargo build --locked --release --features load-test --bin load_test
 

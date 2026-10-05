@@ -54,10 +54,19 @@ if [ "$check_group" = all ] || [ "$check_group" = rust ]; then
     OPENSSL_DIR="${OPENSSL_DIR:-$repo_root/target/openssl-4.0.3}"
     PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
     OPENSSL_STATIC=1
+    AWS_LC_SYS_SYSTEM_DIR="${AWS_LC_SYS_SYSTEM_DIR:-$repo_root/target/aws-lc-5.11.0}"
+    AWS_LC_SYS_STATIC=1
+    AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK=0
     PIP_CONSTRAINT="$repo_root/build/pip-constraints.txt"
     export OPENSSL_DIR PKG_CONFIG_PATH OPENSSL_STATIC PIP_CONSTRAINT
+    export AWS_LC_SYS_SYSTEM_DIR AWS_LC_SYS_STATIC AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK
     if [ ! -f "$OPENSSL_DIR/lib/libssl.a" ] || [ ! -f "$OPENSSL_DIR/lib/libcrypto.a" ]; then
         echo 'Static OpenSSL is missing; follow docs/development.md#native-and-web-build.' >&2
+        exit 2
+    fi
+    if [ ! -f "$AWS_LC_SYS_SYSTEM_DIR/lib/libcrypto-awslc.a" ] \
+        || [ ! -f "$AWS_LC_SYS_SYSTEM_DIR/share/rust/aws_lc_bindings.rs" ]; then
+        echo 'Static AWS-LC or its matching Rust bindings are missing; follow docs/development.md#native-and-web-build.' >&2
         exit 2
     fi
     rustup run "$toolchain" cargo fmt --all -- --check

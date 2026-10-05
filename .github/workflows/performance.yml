@@ -41,6 +41,9 @@ permissions:
 
 env:
   OPENSSL_DIR: ${{ github.workspace }}/target/openssl-4.0.3
+  AWS_LC_SYS_SYSTEM_DIR: ${{ github.workspace }}/target/aws-lc-5.11.0
+  AWS_LC_SYS_STATIC: '1'
+  AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK: '0'
   PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
 
 concurrency:
