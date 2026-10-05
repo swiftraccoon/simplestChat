@@ -252,7 +252,7 @@ class VerifiedCacheTests(unittest.TestCase):
                 _ = path.write_text("original\n")
 
     def test_native_codeql_closure_covers_all_local_python_imports(self) -> None:
-        """A new transitive helper cannot silently become an unkeyed extraction input."""
+        """Neither analysis can silently acquire an unkeyed transitive Python helper."""
         modules = {
             path.stem: path
             for directory in (ROOT / "build", ROOT / "ops/ansible/files")
@@ -267,6 +267,7 @@ class VerifiedCacheTests(unittest.TestCase):
             visited.add(name)
             path = modules[name]
             self.assertTrue(cache.native_codeql_input(str(path.relative_to(ROOT))), name)
+            self.assertTrue(cache.rust_codeql_input(str(path.relative_to(ROOT))), name)
             for node in ast.walk(ast.parse(path.read_text())):
                 imports: list[str] = []
                 if isinstance(node, ast.Import):
@@ -274,6 +275,72 @@ class VerifiedCacheTests(unittest.TestCase):
                 elif isinstance(node, ast.ImportFrom) and node.module:
                     imports = [node.module.split(".")[0]]
                 pending.extend(imported for imported in imports if imported in modules)
+
+    def test_rust_analysis_keeps_all_targets_embedded_data_and_tool_inputs(self) -> None:
+        """New targets and shared fixtures invalidate Rust even outside its usual src directory."""
+        inputs = (
+            *cache.CODEQL_NATIVE_FILES,
+            "Cargo.lock",
+            "Cargo.toml",
+            "rust-toolchain.toml",
+            ".cargo/config.toml",
+            "src/main.rs",
+            "src/nested/fixture.txt",
+            "load_tests/clients/browser_profile.rs",
+            "tests/authorization.rs",
+            "new_target/module.rs",
+            "web/new_target/helper.rs",
+            "new_target/Cargo.toml",
+            "new_target/rust-project.json",
+            "migrations/001_example.sql",
+            "vendor/mediasoup-sys-0.17.0/build.rs",
+            "vendor/mediasoup-sys-0.17.0/meson.build",
+            "vendor/seclists-passwords/10k-most-common.txt",
+            "security/authorization/operations.json",
+            "security/codeql/new-query.ql",
+            "web/tests/layer-cap-cases.json",
+        )
+        for name in inputs:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _ = path.write_text("original\n")
+        self.git("add", ".")
+        key = cache.cache_key(self.root, "codeql-rust")
+        for name in inputs:
+            with self.subTest(input=name):
+                path = self.root / name
+                _ = path.write_text("changed\n")
+                self.assertNotEqual(cache.cache_key(self.root, "codeql-rust"), key)
+                _ = path.write_text("original\n")
+        self.git("update-index", "--chmod=+x", "new_target/module.rs")
+        self.assertNotEqual(cache.cache_key(self.root, "codeql-rust"), key)
+
+    def test_rust_analysis_ignores_unrelated_docs_deployment_and_frontend_tooling(self) -> None:
+        """An unchanged Rust database survives independent documentation and operational work."""
+        unrelated = (
+            "README.md",
+            "docs/testing.md",
+            "ops/ansible/files/release_public.py",
+            "ops/ansible/templates/public-app.env.j2",
+            "build/security_image.py",
+            "build/deploy.py",
+            ".github/workflows/ci.yml",
+            "security/image-policy.json",
+            "Dockerfile",
+            "web/e2e/package-lock.json",
+            "web/package.json",
+            "web/tests/participant-hovercard.test.mjs",
+            "load_tests/benchmark-local.mjs",
+        )
+        for name in unrelated:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _ = path.write_text("original\n")
+        self.git("add", ".")
+        key = cache.cache_key(self.root, "codeql-rust")
+        for name in unrelated:
+            _ = (self.root / name).write_text("changed\n")
+            self.assertEqual(cache.cache_key(self.root, "codeql-rust"), key, name)
 
     def test_native_codeql_ignores_unrelated_ci_tools_but_binds_native_data_and_modes(self) -> None:
         """Application/deployment/image tooling does not alter standalone native extraction."""

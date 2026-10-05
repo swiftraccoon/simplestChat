@@ -64,6 +64,15 @@ that the installer bytes are independently checksum-pinned. The two records
 bind the action reference and each exact job location, retain the 2026-11-29
 expiry and leave the shared checks blocking.
 
+On 2026-10-05, the same informational installer finding was reviewed for
+`codeql.yml#jobs/source-analysis/steps/5/uses`. The Rust matrix entry installs
+1.98.1 only when its exact evaluated database is absent. The maintained local
+`act` runner needs this bootstrap before Cargo-backed extraction. The action
+remains pinned to `6bed0761d98439e5a578e2877258200ad565ba87`; the version matches
+`rust-toolchain.toml`. The official HTTPS rustup bootstrap has the same supply
+boundary described above. This additional exact record expires on 2026-11-29;
+it does not exempt extraction, query completion, cache validation or findings.
+
 ## Rust dependency health
 
 The audit distinguishes these health warnings from vulnerability-class results:

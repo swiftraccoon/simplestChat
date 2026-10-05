@@ -962,6 +962,16 @@
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
     },
     {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:e2b9fc895ab19ccc4e010dfe81099d14a1a54d1170519db580416c80b3bd1580",
+      "scope": ".github/workflows/codeql.yml#jobs/source-analysis/steps/5/uses",
+      "owner": "swiftraccoon",
+      "rationale": "Rust extraction needs the exact repository Rust 1.98.1 toolchain on a database-cache miss. The maintained local act image does not supply the hosted runner's Rust prerequisites, so the existing immutable installer action remains necessary.",
+      "reachability": "Only this exact Rust matrix step and immutable action reference are reviewed. Checkout disables persisted credentials, the toolchain version is explicit, and database validation, all requested queries and current finding policy remain blocking. The official HTTPS rustup bootstrap is not independently checksum-pinned by this review.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
       "scanner": "codeql",
       "fingerprint": "codeql:a39318b2695485564932ddadca6b5915364636eedb329f8919606e5b2aa1bdce",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:657:657:27:73",

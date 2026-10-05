@@ -557,7 +557,11 @@ FlatBuffers generator and worker library each use at most four compile jobs;
 their separate durations are retained in the traced build log.
 They can reuse a complete evaluated database only for identical source, suite,
 analyzer and query pins, runner generation/architecture/trust, and absolute
-source paths. Rust includes shared web JSON inputs. Native also binds compiler
+source paths. Rust inputs include every Rust source and Cargo manifest, the
+`src/`, `tests/`, `migrations/`, `vendor/` and `.cargo/` trees, authorization data,
+shared `web/tests/` JSON fixtures and the analysis helpers and pins. Documentation,
+deployment files and unrelated frontend packages do not invalidate Rust analysis;
+the source archive guard rejects any omitted tracked file. Native also binds compiler
 and installed package identity plus actual OpenSSL headers/libraries/settings.
 Its tracked inputs cover the complete vendor tree, native build configuration,
 CodeQL workflow/query/policy files and the analysis helpers' local import closure;
@@ -576,6 +580,16 @@ revision and explicitly enables `queryReuse`. The CLI also writes
 including reports whose current policy fails. Every run checks native compilation
 coverage and applies current finding reviews. Valid regenerated SARIF still
 uploads when findings fail policy; that failure continues to block signing.
+
+Rust can separately reuse Cargo build outputs when fresh extraction is needed.
+This cache binds the actual pinned compiler, runner, trust, instruction set,
+dependency bytes and fixed source path. Only keyed vendor and pip constraint
+modification times are stabilized; changed Rust source still requires fresh
+extraction, full queries and current policy. Cache publication is capped at one
+GiB of distinct file data, counting hardlinks once. Direct local runs accept
+`--rust-cargo-cache`; the official
+workflow installs the pinned Rust toolchain only on an evaluated-database miss.
+
 Scheduled mutation, performance/soak and macOS WebKit compatibility workflows
 are additional tiers, not part of the required push gate.
 

@@ -20,6 +20,7 @@ from test_support import ROOT
 import ci_verified
 import security_codeql
 import security_codeql_cache as cache
+import security_codeql_cargo as cargo_cache
 import security_codeql_local as local
 import security_codeql_resources as resources
 import security_codeql_tools as tools
@@ -137,6 +138,42 @@ class NativeCacheTests(unittest.TestCase):
                         archive.writestr(str(source / name).lstrip("/"), b"review data")
                     with self.assertRaisesRegex(ToolError, "codeql_cache_unkeyed_source"):
                         cache.source_integrity(database, source, manifest, language)
+
+    def test_rust_source_archive_rejects_tracked_bytes_outside_its_input_key(self) -> None:
+        """A newly embedded unkeyed document cannot inherit an earlier Rust database."""
+        database, source, _ = self.database()
+        for name in ("README.md", "docs/example.md", "web/package.json", "build/unrelated.py"):
+            with self.subTest(source=name):
+                bodies = {"src/main.rs": b"fn main() {}", name: b"new embedded input"}
+                manifest: JsonObject = {
+                    path: hashlib.sha256(body).hexdigest() for path, body in bodies.items()
+                }
+                with zipfile.ZipFile(database / "src.zip", "w") as archive:
+                    for path, body in bodies.items():
+                        archive.writestr(str(source / path).lstrip("/"), body)
+                with self.assertRaisesRegex(ToolError, "codeql_cache_unkeyed_source"):
+                    cache.source_integrity(database, source, manifest, "rust")
+
+    def test_rust_source_archive_allows_new_targets_and_checks_embedded_inputs(self) -> None:
+        """Keyed Rust targets and non-Rust embedded bytes keep exact archive validation."""
+        database, source, _ = self.database()
+        bodies = {
+            "src/main.rs": b"fn main() {}",
+            "web/new_target/helper.rs": b"fn helper() {}",
+            "migrations/001_example.sql": b"SELECT 1;",
+            "security/authorization/operations.json": b"{}",
+            "vendor/seclists-passwords/10k-most-common.txt": b"fixture",
+        }
+        manifest: JsonObject = {
+            name: hashlib.sha256(body).hexdigest() for name, body in bodies.items()
+        }
+        with zipfile.ZipFile(database / "src.zip", "w") as archive:
+            for name, body in bodies.items():
+                archive.writestr(str(source / name).lstrip("/"), body)
+        cache.source_integrity(database, source, manifest, "rust")
+        manifest["migrations/001_example.sql"] = "0" * 64
+        with self.assertRaisesRegex(ToolError, "codeql_cache_source_changed"):
+            cache.source_integrity(database, source, manifest, "rust")
 
     def test_native_source_archive_refuses_unkeyed_tracked_inputs_but_allows_generated_sources(
         self,
@@ -269,6 +306,7 @@ class NativeCacheTests(unittest.TestCase):
         passed: bool = True,
         language: str = "c-cpp",
         failure: str | None = None,
+        cargo: bool = False,
     ) -> list[JsonObject]:
         """Exercise the real orchestration with controlled external analyzer and policy outcomes."""
         context = Context(ROOT, self.directory)
@@ -279,6 +317,7 @@ class NativeCacheTests(unittest.TestCase):
         args.revision = "b" * 40
         args.suite = "all" if failure and failure.endswith("quality-advisory") else "security"
         args.database_cache = self.directory / "cache"
+        args.rust_cargo_cache = self.directory / "cargo" if cargo else None
         args.openssl_prefix = self.directory / "openssl"
         (args.openssl_prefix / "lib").mkdir(parents=True)
         for name in ("libssl.a", "libcrypto.a"):
@@ -300,6 +339,9 @@ class NativeCacheTests(unittest.TestCase):
             ),
             patch.object(cache, "source_integrity") as integrity,
             patch.object(cache, "save", side_effect=fixture.publish) as save,
+            patch.object(
+                cargo_cache, "prepare", return_value=self.directory / "cargo" / "target"
+            ) as prepare,
             patch.object(local, "database_health") as health,
             patch.object(local, "source_identity"),
             patch.object(local, "native_coverage", return_value=200) as coverage,
@@ -342,6 +384,15 @@ class NativeCacheTests(unittest.TestCase):
             save.assert_called_once()
         self.assertEqual((self.directory / (language + "-cache-ready.json")).exists(), not hit)
         self.check_analysis_calls(calls, language=language, hit=hit)
+        if cargo and language == "rust" and not hit:
+            prepare.assert_called_once_with(context.root, source, args.rust_cargo_cache)
+            create = next(argv for name, argv in calls if name == "codeql-create-rust")
+            self.assertIn(
+                "--extractor-option=cargo_target_dir=" + str(self.directory / "cargo" / "target"),
+                create,
+            )
+        else:
+            prepare.assert_not_called()
         if passed:
             self.assertEqual(reports[0]["ramMiB"], 7168)
         return reports
@@ -354,7 +405,15 @@ class NativeCacheTests(unittest.TestCase):
             [name for name, _ in calls],
             [
                 *(["codeql-vendor-integrity"] if language == "c-cpp" else []),
-                *([] if hit else ["codeql-create-" + language]),
+                *(
+                    []
+                    if hit
+                    else (
+                        ["codeql-init-c-cpp", "codeql-trace-c-cpp", "codeql-finalize-c-cpp"]
+                        if language == "c-cpp"
+                        else ["codeql-create-" + language]
+                    )
+                ),
                 "codeql-analyze-" + language + "-security",
                 *([] if hit else ["cache-save"]),
                 "codeql-policy-" + language + "-security",
@@ -380,6 +439,15 @@ class NativeCacheTests(unittest.TestCase):
         reports = self.run_analysis(language="rust")
         self.assertEqual(reports[0]["nativeCompiledFiles"], None)
         self.assertEqual(reports[0]["queryReuse"], {"enabled": True, "originalRevision": "a" * 40})
+
+    def test_cargo_output_reuse_still_extracts_and_queries_changed_rust_source(self) -> None:
+        """Warm dependency output never substitutes for fresh source analysis or current policy."""
+        reports = self.run_analysis(language="rust", hit=False, cargo=True)
+        self.assertEqual(reports[0]["queryReuse"], {"enabled": False, "originalRevision": "b" * 40})
+
+    def test_evaluated_database_hit_does_not_consume_cargo_build_output(self) -> None:
+        """A database hit needs no restored dependency cache or installed Rust compiler."""
+        _ = self.run_analysis(language="rust", cargo=True)
 
     def test_miss_compiles_and_records_the_current_extraction_revision(self) -> None:
         """An absent receipt must build the actual native worker before querying and saving."""

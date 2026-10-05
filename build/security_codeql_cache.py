@@ -100,7 +100,7 @@ def cache_key(root: Path, source: Path, openssl: Path | None, language: str, sui
             }
         )
     digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
-    return "codeql-analyzed-v1-" + language + "-" + digest
+    return "codeql-analyzed-v2-" + language + "-" + ci_verified.cache_namespace() + "-" + digest
 
 
 def archive_members(archive: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
@@ -153,14 +153,17 @@ def source_integrity(database: Path, source: Path, manifest: JsonObject, languag
                 continue
             name = member.filename.removeprefix(prefix)
             require(name not in ci_verified.CODEQL_POLICY_DATA, "codeql_cache_unkeyed_source")
-            # Rust includes shared JSON fixtures; other frontend bytes are outside both keys.
+            # Reject omitted frontend bytes even when absent from the tracked manifest.
             require(
-                not name.startswith("web/") or (language == "rust" and name.endswith(".json")),
+                not name.startswith("web/")
+                or (language == "rust" and ci_verified.rust_codeql_input(name)),
                 "codeql_cache_unkeyed_source",
             )
             if name in manifest:
                 require(
-                    language != "c-cpp" or ci_verified.native_codeql_input(name),
+                    ci_verified.native_codeql_input(name)
+                    if language == "c-cpp"
+                    else ci_verified.rust_codeql_input(name),
                     "codeql_cache_unkeyed_source",
                 )
                 require(member.file_size <= 16 * 1024**2, "codeql_cache_source_size")

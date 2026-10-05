@@ -72,6 +72,7 @@ CODEQL_NATIVE_FILES = frozenset(
         "build/pip-constraints.txt",
         "build/security_codeql.py",
         "build/security_codeql_cache.py",
+        "build/security_codeql_cargo.py",
         "build/security_codeql_local.py",
         "build/security_codeql_resources.py",
         "build/security_codeql_sources.py",
@@ -87,6 +88,18 @@ CODEQL_NATIVE_FILES = frozenset(
         "security/codeql-toolchain.json",
     }
 )
+CODEQL_RUST_PREFIXES = (
+    "src/",
+    "tests/",
+    "migrations/",
+    "vendor/",
+    ".cargo/",
+    "security/authorization/",
+    "security/codeql/",
+)
+CODEQL_RUST_MANIFESTS = frozenset(
+    {"Cargo.toml", "Cargo.lock", "rust-toolchain", "rust-toolchain.toml", "rust-project.json"}
+)
 
 
 def native_security_input(name: str) -> bool:
@@ -97,6 +110,23 @@ def native_security_input(name: str) -> bool:
 def native_codeql_input(name: str) -> bool:
     """Bind the complete worker and its analysis helpers without unrelated CI tooling."""
     return name.startswith(CODEQL_NATIVE_PREFIXES) or name in CODEQL_NATIVE_FILES
+
+
+def rust_codeql_input(name: str) -> bool:
+    """Bind every Rust target, embedded fixture, dependency and analysis helper.
+
+    Vendored build scripts consume their full native package trees. Embedded
+    SQL, authorization JSON and shared browser cases also affect Rust semantics.
+    Retain all Rust files and Cargo manifests regardless of their directory;
+    archived tracked inputs outside this closure are rejected before query reuse.
+    """
+    return (
+        name.endswith(".rs")
+        or name.rsplit("/", 1)[-1] in CODEQL_RUST_MANIFESTS
+        or name.startswith(CODEQL_RUST_PREFIXES)
+        or (name.startswith("web/tests/") and name.endswith(".json"))
+        or name in CODEQL_NATIVE_FILES
+    )
 
 
 class Options(argparse.Namespace):
@@ -133,6 +163,20 @@ def runner_identity() -> str:
         "ci_cache_hosted_image",
     )
     return f"hosted:{image_os}:{version}"
+
+
+def cache_namespace() -> str:
+    """Expose trust, OS and ISA for conservative cache retention without weakening key hashes."""
+    trusted = (
+        os.environ.get("GITHUB_REF") == "refs/heads/main"
+        and os.environ.get("GITHUB_EVENT_NAME") != "pull_request"
+    )
+    system, architecture = platform.system().lower(), platform.machine().lower()
+    require(
+        re.fullmatch(r"[a-z0-9_]{1,32}", system) and re.fullmatch(r"[a-z0-9_]{1,32}", architecture),
+        "ci_cache_namespace",
+    )
+    return ("main" if trusted else "untrusted") + "-" + system + "-" + architecture
 
 
 def cache_key(root: Path, scope: str) -> str:
@@ -175,13 +219,15 @@ def cache_key(root: Path, scope: str) -> str:
             continue
         if scope == "codeql-native" and not native_codeql_input(name):
             continue
+        if scope == "codeql-rust" and not rust_codeql_input(name):
+            continue
         # Rust tests embed shared JSON fixtures from web/tests. Include all web
         # JSON configuration and data for Rust scopes; JS helper tests stay fresh.
         # Automation inspects frontend helpers, so it retains every tracked file.
         rust_data = scope in {"rust-lint", "rust-test", "backend", "codeql-rust"} and name.endswith(
             ".json"
         )
-        if scope != "automation" and name.startswith("web/") and not rust_data:
+        if scope not in {"automation", "codeql-rust"} and name.startswith("web/") and not rust_data:
             continue
         path = root / name
         require(not path.is_symlink() and path.is_file(), "ci_cache_source_missing")

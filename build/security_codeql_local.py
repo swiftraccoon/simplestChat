@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import security_codeql
 import security_codeql_cache as cache
+import security_codeql_cargo as cargo_cache
 import security_codeql_resources as resources
 import security_codeql_tools as tools
 import security_codeql_triage as triage
@@ -21,10 +22,56 @@ from security_context import ROOT, Context, executable
 from security_tools import ToolError, bounded_file, require, write_private
 
 # isort: split
-from release_json import JsonObject, array_value, decode_json, object_value, string_value
+from release_json import (
+    JsonObject,
+    array_value,
+    decode_json,
+    integer_value,
+    object_value,
+    string_value,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+RUST_EXTRACTION_STATISTICS = frozenset(
+    {
+        "Elements extracted",
+        "Elements unextracted",
+        "Extraction errors",
+        "Extraction warnings",
+        "Files extracted - total",
+        "Files extracted - total user",
+        "Files extracted - with errors",
+        "Files extracted - without errors",
+        "Lines of user code extracted",
+        "Macro calls - total",
+        "Macro calls - resolved",
+        "Macro calls - unresolved",
+        "Taint edges - number of edges",
+    }
+)
+
+
+def extraction_statistics(run: JsonObject, language: str) -> JsonObject:
+    """Retain bounded original Rust coverage counters without source excerpts or cached verdicts."""
+    result: JsonObject = {}
+    if language != "rust":
+        return result
+    properties = object_value(run.get("properties", {}))
+    for value in array_value(properties.get("metricResults", [])):
+        metric = object_value(value)
+        if metric.get("ruleId") != "rust/summary/summary-statistics":
+            continue
+        label = string_value(object_value(metric["message"])["text"])
+        if label in RUST_EXTRACTION_STATISTICS:
+            count = integer_value(metric["value"])
+            require(count >= 0 and label not in result, "codeql_rust_extraction_metric")
+            result[label] = count
+    require(
+        frozenset(result) == RUST_EXTRACTION_STATISTICS, "codeql_rust_extraction_metrics_missing"
+    )
+    return result
 
 
 class Options(argparse.Namespace):
@@ -37,6 +84,7 @@ class Options(argparse.Namespace):
     suite: str = "security"
     openssl_prefix: Path = ROOT / "target/openssl-3.5.9"
     database_cache: Path | None = None
+    rust_cargo_cache: Path | None = None
 
 
 def source_identity(context: Context, revision: str) -> None:
@@ -119,6 +167,7 @@ def report_health(path: Path, language: str, category: str) -> JsonObject:
         "queriesVersion": string_value(tools.language_pin(language)["queriesVersion"]),
         "rules": count,
         "results": len(array_value(run["results"])),
+        "extractionStatistics": extraction_statistics(run, language),
         "sarifSha256": hashlib.sha256(path.read_bytes()).hexdigest(),
     }
 
@@ -313,6 +362,9 @@ def analyze_language(  # noqa: C901 -- Keep extraction, analysis and policy in t
             "--threads=" + str(budget.workers),
             "--ram=" + str(budget.ram_mib),
         ]
+        if language == "rust" and args.rust_cargo_cache is not None:
+            target = cargo_cache.prepare(context.root, source, args.rust_cargo_cache)
+            create.append("--extractor-option=cargo_target_dir=" + str(target))
         _ = context.run(
             "codeql-create-" + language,
             create,
@@ -430,6 +482,7 @@ def main() -> int:
     _ = parser.add_argument("--suite", choices=("security", "all"), default="security")
     _ = parser.add_argument("--openssl-prefix", type=Path, default=ROOT / "target/openssl-3.5.9")
     _ = parser.add_argument("--database-cache", type=Path)
+    _ = parser.add_argument("--rust-cargo-cache", type=Path)
     args = parser.parse_args(namespace=Options())
     _ = os.umask(0o077)
     require(args.output.is_absolute(), "codeql_output_absolute")

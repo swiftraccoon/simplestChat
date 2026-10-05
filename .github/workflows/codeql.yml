@@ -73,6 +73,24 @@ jobs:
         with:
           path: ${{ runner.temp }}/codeql-rust-database
           key: ${{ steps.rust-inputs.outputs.key }}
+      - name: Install the pinned Rust extraction toolchain
+        if: ${{ matrix.language == 'rust' && steps.rust-database.outputs.cache-hit != 'true' }}
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-09)
+        with:
+          toolchain: 1.98.1
+      - name: Fingerprint the Rust extraction build dependencies
+        if: ${{ matrix.language == 'rust' && steps.rust-database.outputs.cache-hit != 'true' }}
+        id: rust-cargo-inputs
+        run: |
+          key="$(python3 build/security_codeql_cargo.py --source-root "$RUNNER_TEMP/codeql-local/source")"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - name: Restore Rust extraction build output
+        if: ${{ matrix.language == 'rust' && steps.rust-database.outputs.cache-hit != 'true' }}
+        id: rust-cargo
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/codeql-rust-cargo
+          key: ${{ steps.rust-cargo-inputs.outputs.key }}
       - name: Restore the authenticated Rust analyzer bundle
         if: ${{ !env.ACT && matrix.language == 'rust' }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -88,7 +106,8 @@ jobs:
         run: |
           cache=()
           if [[ "$CODEQL_LANGUAGE" == rust ]]; then
-            cache=(--database-cache "$RUNNER_TEMP/codeql-rust-database")
+            cache=(--database-cache "$RUNNER_TEMP/codeql-rust-database" \
+              --rust-cargo-cache "$RUNNER_TEMP/codeql-rust-cargo")
           fi
           rm -f "$RUNNER_TEMP/codeql-local/$CODEQL_LANGUAGE-cache-ready.json"
           status=0
@@ -106,6 +125,20 @@ jobs:
         with:
           path: ${{ runner.temp }}/codeql-rust-database
           key: ${{ steps.rust-database.outputs.cache-primary-key }}
+      - name: Measure and bound Rust extraction cache publication
+        if: >-
+          ${{ always() && !cancelled() && matrix.language == 'rust' &&
+          steps.rust-cargo.outputs.cache-hit != 'true' && steps.source-analysis.outputs.database-cache-ready == 'true' }}
+        id: rust-cargo-size
+        run: |
+          python3 build/security_codeql_cargo.py --source-root "$RUNNER_TEMP/codeql-local/source" \
+            --publication-check "$RUNNER_TEMP/codeql-rust-cargo" | tee -a "$GITHUB_OUTPUT"
+      - name: Save bounded Rust extraction build output
+        if: ${{ always() && !cancelled() && steps.rust-cargo-size.outputs.cacheable == 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/codeql-rust-cargo
+          key: ${{ steps.rust-cargo.outputs.cache-primary-key }}
       - name: Retain compact local analysis evidence
         if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
         env:
