@@ -36,7 +36,7 @@ jobs:
         id: image
         run: |
           docker buildx create --name simplestchat-caddy --driver docker-container \
-            --driver-opt image=docker.io/moby/buildkit@sha256:3ad6bb9bc8c78c0069d03247adb9a59b3b43d68e55353e876e558b888c6c1768 \
+            --driver-opt image=docker.io/moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea \
             --use
           docker buildx build --builder simplestchat-caddy \
             --platform linux/amd64,linux/arm64 --pull --push \
