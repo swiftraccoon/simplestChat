@@ -408,7 +408,7 @@ class RustEvidenceTests(unittest.TestCase):
             self.assertEqual(matches[0]["source"], native_producer.SOURCE_REGISTRY)
             raw = string_value(record["raw"])
             self.assertEqual(policy.CARGO_LICENSE_ALTERNATIVES[raw], record["spdxExpression"])
-        self.assertEqual(len(seen), 34)
+        self.assertEqual(len(seen), 25)
 
     def test_source_mismatch_missing_and_ambiguous_license_records_fail(self) -> None:
         """Equal names and versions cannot borrow a license from a different source."""

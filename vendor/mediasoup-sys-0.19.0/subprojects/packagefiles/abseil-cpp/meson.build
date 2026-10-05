@@ -1,7 +1,7 @@
 project(
   'abseil-cpp',
   'cpp',
-  version: '20240722.2',
+  version: '20260817.0',
   license: 'Apache-2.0',
   default_options: ['cpp_std=c++17'],
 )
@@ -56,6 +56,11 @@ absl_include_dir = include_directories('.')
 
 # Group files by the containing library
 absl_base_sources = files(
+  'absl/base/casts.cc',
+  'absl/base/internal/cpu_detect.cc',
+  'absl/base/internal/hardening.cc',
+  'absl/base/internal/tracing.cc',
+  'absl/base/throw_delegate.cc',
   'absl/base/internal/cycleclock.cc',
   'absl/base/internal/low_level_alloc.cc',
   'absl/base/internal/poison.cc',
@@ -66,7 +71,6 @@ absl_base_sources = files(
   'absl/base/internal/strerror.cc',
   'absl/base/internal/sysinfo.cc',
   'absl/base/internal/thread_identity.cc',
-  'absl/base/internal/throw_delegate.cc',
   'absl/base/internal/unscaledcycleclock.cc',
   'absl/base/log_severity.cc',
 )
@@ -87,15 +91,9 @@ absl_base_headers = files(
   'absl/base/internal/errno_saver.h',
   'absl/base/internal/exception_safety_testing.h',
   'absl/base/internal/exception_testing.h',
-  'absl/base/internal/fast_type_id.h',
   'absl/base/internal/hide_ptr.h',
-  'absl/base/internal/identity.h',
-  'absl/base/internal/inline_variable.h',
-  'absl/base/internal/inline_variable_testing.h',
-  'absl/base/internal/invoke.h',
   'absl/base/internal/low_level_alloc.h',
   'absl/base/internal/low_level_scheduling.h',
-  'absl/base/internal/nullability_impl.h',
   'absl/base/internal/per_thread_tls.h',
   'absl/base/internal/poison.h',
   'absl/base/internal/pretty_function.h',
@@ -111,7 +109,6 @@ absl_base_headers = files(
   'absl/base/internal/strerror.h',
   'absl/base/internal/sysinfo.h',
   'absl/base/internal/thread_identity.h',
-  'absl/base/internal/throw_delegate.h',
   'absl/base/internal/tsan_mutex_interface.h',
   'absl/base/internal/unaligned_access.h',
   'absl/base/internal/unscaledcycleclock.h',
@@ -181,7 +178,6 @@ absl_container_headers = files(
 
 absl_crc_sources = files(
   'absl/crc/crc32c.cc',
-  'absl/crc/internal/cpu_detect.cc',
   'absl/crc/internal/crc.cc',
   'absl/crc/internal/crc_cord_state.cc',
   'absl/crc/internal/crc_memcpy_fallback.cc',
@@ -191,7 +187,6 @@ absl_crc_sources = files(
 )
 absl_crc_headers = files(
   'absl/crc/crc32c.h',
-  'absl/crc/internal/cpu_detect.h',
   'absl/crc/internal/crc.h',
   'absl/crc/internal/crc32_x86_arm_combined_simd.h',
   'absl/crc/internal/crc32c.h',
@@ -289,18 +284,17 @@ absl_flags_headers = files(
 absl_hash_sources = files(
   'absl/hash/internal/city.cc',
   'absl/hash/internal/hash.cc',
-  'absl/hash/internal/low_level_hash.cc',
 )
 absl_hash_headers = files(
   'absl/hash/hash.h',
   'absl/hash/hash_testing.h',
   'absl/hash/internal/city.h',
   'absl/hash/internal/hash.h',
-  'absl/hash/internal/low_level_hash.h',
   'absl/hash/internal/spy_hash_state.h',
 )
 
 absl_log_sources = files(
+  'absl/log/internal/structured_proto.cc',
   'absl/log/die_if_null.cc',
   'absl/log/flags.cc',
   'absl/log/globals.cc',
@@ -368,6 +362,8 @@ absl_numeric_headers = files(
 )
 
 absl_profiling_sources = files(
+  'absl/profiling/hashtable.cc',
+  'absl/profiling/internal/profile_builder.cc',
   'absl/profiling/internal/exponential_biased.cc',
   'absl/profiling/internal/periodic_sampler.cc',
 )
@@ -378,10 +374,11 @@ absl_profiling_headers = files(
 )
 
 absl_random_sources = files(
+  'absl/random/internal/distribution_test_util.cc',
+  'absl/random/internal/entropy_pool.cc',
   'absl/random/discrete_distribution.cc',
   'absl/random/gaussian_distribution.cc',
   'absl/random/internal/chi_square.cc',
-  'absl/random/internal/pool_urbg.cc',
   'absl/random/internal/randen.cc',
   'absl/random/internal/randen_detect.cc',
   'absl/random/internal/randen_hwaes.cc',
@@ -413,7 +410,6 @@ absl_random_headers = files(
   'absl/random/internal/nonsecure_base.h',
   'absl/random/internal/pcg_engine.h',
   'absl/random/internal/platform.h',
-  'absl/random/internal/pool_urbg.h',
   'absl/random/internal/randen.h',
   'absl/random/internal/randen_detect.h',
   'absl/random/internal/randen_engine.h',
@@ -439,6 +435,7 @@ absl_random_headers = files(
 )
 
 absl_status_sources = files(
+  'absl/status/status_builder.cc',
   'absl/status/internal/status_internal.cc',
   'absl/status/status.cc',
   'absl/status/status_payload_printer.cc',
@@ -453,11 +450,11 @@ absl_status_headers = files(
 )
 
 absl_strings_sources = files(
+  'absl/strings/internal/generic_printer.cc',
   'absl/strings/ascii.cc',
   'absl/strings/charconv.cc',
   'absl/strings/cord.cc',
   'absl/strings/cord_analysis.cc',
-  'absl/strings/cord_buffer.cc',
   'absl/strings/escaping.cc',
   'absl/strings/internal/charconv_bigint.cc',
   'absl/strings/internal/charconv_parse.cc',
@@ -489,7 +486,6 @@ absl_strings_sources = files(
   'absl/strings/str_cat.cc',
   'absl/strings/str_replace.cc',
   'absl/strings/str_split.cc',
-  'absl/strings/string_view.cc',
   'absl/strings/substitute.cc',
 )
 absl_strings_headers = files(
@@ -528,7 +524,6 @@ absl_strings_headers = files(
   'absl/strings/internal/ostringstream.h',
   'absl/strings/internal/pow10_helper.h',
   'absl/strings/internal/resize_uninitialized.h',
-  'absl/strings/internal/stl_type_traits.h',
   'absl/strings/internal/str_format/arg.h',
   'absl/strings/internal/str_format/bind.h',
   'absl/strings/internal/str_format/checker.h',
@@ -585,6 +580,7 @@ absl_synchronization_headers = files(
 )
 
 absl_time_sources = files(
+  'absl/time/clock_interface.cc',
   'absl/time/civil_time.cc',
   'absl/time/clock.cc',
   'absl/time/duration.cc',
@@ -622,19 +618,12 @@ absl_time_headers = files(
 )
 
 absl_types_sources = files(
-  'absl/types/bad_any_cast.cc',
-  'absl/types/bad_optional_access.cc',
-  'absl/types/bad_variant_access.cc',
+  'absl/types/source_location.cc',
 )
 absl_types_headers = files(
   'absl/types/any.h',
-  'absl/types/bad_any_cast.h',
-  'absl/types/bad_optional_access.h',
-  'absl/types/bad_variant_access.h',
   'absl/types/compare.h',
-  'absl/types/internal/optional.h',
   'absl/types/internal/span.h',
-  'absl/types/internal/variant.h',
   'absl/types/optional.h',
   'absl/types/span.h',
   'absl/types/variant.h',

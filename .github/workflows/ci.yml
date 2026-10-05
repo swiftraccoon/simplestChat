@@ -352,13 +352,13 @@ jobs:
           cargo tree --locked -i lru | grep -F 'lru v0.18.5'
           cargo tree --locked -i mediasoup-sys \
             | grep -Eq 'mediasoup-sys v0\.19\.0 \(.*/vendor/mediasoup-sys-0\.19\.0\)$'
-          grep -Fq 'source_filename = abseil-cpp-20240722.2.tar.gz' \
+          grep -Fq 'source_filename = abseil-cpp-20260817.0.tar.gz' \
             vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap
-          grep -Fq 'source_hash = ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8' \
+          grep -Fq 'source_hash = f7e05179df39c45434cad433f5783840bb3788ef322976f9138bc6b72b3a107d' \
             vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap
           grep -Fq 'patch_directory = abseil-cpp' \
             vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap
-          echo '454b10520ba4ba4a9995612ba2d9e6490b5477bb5093eff54af4c84917f71f19  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/meson.build' \
+          echo '9d09ed3cbdd418c92ad582d590bce139873f7aed4468ce6cae31e4fd412b52ae  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/meson.build' \
             | sha256sum --check --strict
           echo '7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/LICENSE.build' \
             | sha256sum --check --strict
@@ -372,6 +372,10 @@ jobs:
             echo 'Abseil source fallback must remain disabled' >&2
             exit 1
           fi
+          grep -Fq 'source_hash = ccbce58684691de1e7d51f5e87786266b37d06ab66e9dfe2d0ec106fe50aace0' \
+            vendor/mediasoup-sys-0.19.0/subprojects/flatbuffers.wrap
+          echo 'f8a08600662c6e46444257137838143c1a7f31156a7640948ba5583784286705  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/flatbuffers/meson.build' \
+            | sha256sum --check --strict
           grep -Fq 'source_hash = cb0d6dd2128d5a95bd242c6cc982a24fe608fa93da57b6b4ec763b0018c53e64' \
             vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap
           grep -Fq 'source_hash = 06c262f9d7e1ff94d92e0359f89cc5d8632f32dfffb5e176a10516c509f5e5f2' \

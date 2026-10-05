@@ -296,7 +296,7 @@ fn main() {
 
     fs::write(
         format!("{out_dir}/fbs.rs"),
-        planus_codegen::generate_rust(&flatbuffers_declarations)
+        planus_codegen::generate_rust(&flatbuffers_declarations, true)
             .expect("Failed to generate Rust code from flatbuffers"),
     )
     .expect("Failed to write generated Rust flatbuffers into fbs.rs");

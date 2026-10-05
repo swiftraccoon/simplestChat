@@ -197,3 +197,15 @@ private evidence retains mode 0600 and exclusive creation. Those three exact
 reviews are rebound to the current CodeQL report and independently checked file
 hashes, retaining the original scope and expiry. No source finding is hidden by
 a test-directory exclusion.
+
+
+The 2026-10-05 Planus 1.3 and current async dependency upgrade removes 16 obsolete
+Cargo declaration records and replaces seven with authenticated current releases:
+Planus/codegen/lexer/translation/types 1.3.0, ascii-canvas 4.0.0 and string-interner
+0.19.0. Their locked archive checksums, packaged manifests and complete MIT/Apache
+notices match the retained evidence. The review now contains 25 current records;
+no older package identity remains allowed by that evidence. The duplicate budget
+shrinks from 41 to 31 groups: exact bit-vec 0.8.0, foldhash 0.1.5 and hashbrown
+0.15.5 branches follow bit-set 0.8 and string-interner 0.19's published constraints.
+Nineteen obsolete version exemptions are removed from `deny.toml`; no wildcard
+version or source exemption is added.

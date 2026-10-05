@@ -273,7 +273,7 @@ unchanged strict SPDX parser.
 The [Cargo manifest documentation](https://doc.rust-lang.org/cargo/reference/manifest.html#the-license-and-license-file-fields)
 describes the deprecated slash notation and license choices. The retained
 [declaration review](../security/license-evidence/cargo-declarations-2026-10-05.json)
-binds 34 unchanged legacy declarations to `Cargo.lock` archive and manifest
+binds 25 current reviewed legacy declarations to `Cargo.lock` archive and manifest
 hashes, plus the packaged license-text hashes where present. The former
 `siphasher` record is retired because 1.0.4 declares standard SPDX directly.
 The original receipt observed twelve runtime packages; the new image gate

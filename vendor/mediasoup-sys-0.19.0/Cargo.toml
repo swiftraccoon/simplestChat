@@ -62,17 +62,17 @@ name = "mediasoup_sys"
 path = "src/lib.rs"
 
 [dependencies.planus]
-version = "0.4.0"
+version = "1.3.0"
 
 [dependencies.serde]
 version = "1.0.190"
 features = ["derive"]
 
 [build-dependencies.planus-codegen]
-version = "0.4.0"
+version = "1.3.0"
 
 [build-dependencies.planus-translation]
-version = "0.4.0"
+version = "1.3.0"
 
 [build-dependencies.pkg-config]
 version = "0.3"

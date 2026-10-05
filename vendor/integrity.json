@@ -13,9 +13,9 @@
       "format": "tar.gz"
     },
     {
-      "id": "abseil-cpp-20240722.2",
-      "url": "https://github.com/abseil/abseil-cpp/releases/download/20240722.2/abseil-cpp-20240722.2.tar.gz",
-      "sha256": "ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8",
+      "id": "abseil-cpp-20260817.0",
+      "url": "https://github.com/abseil/abseil-cpp/releases/download/20260817.0/abseil-cpp-20260817.0.tar.gz",
+      "sha256": "f7e05179df39c45434cad433f5783840bb3788ef322976f9138bc6b72b3a107d",
       "format": "tar.gz"
     },
     {
@@ -25,9 +25,9 @@
       "format": "tar.gz"
     },
     {
-      "id": "flatbuffers-24.3.25",
-      "url": "https://github.com/google/flatbuffers/archive/v24.3.25.tar.gz",
-      "sha256": "4157c5cacdb59737c5d627e47ac26b140e9ee28b1102f812b36068aab728c1ed",
+      "id": "flatbuffers-25.12.19-2026-02-06-03fffb2",
+      "url": "https://github.com/google/flatbuffers/archive/refs/tags/v25.12.19-2026-02-06-03fffb2.tar.gz",
+      "sha256": "ccbce58684691de1e7d51f5e87786266b37d06ab66e9dfe2d0ec106fe50aace0",
       "format": "tar.gz"
     },
     {
@@ -94,12 +94,12 @@
         {
           "path": "Cargo.toml",
           "upstream_sha256": "74de194da80c73560d2a05b85c0d03360d3f407aa89620b43bc9bc51187fec26",
-          "vendored_sha256": "baffc36fd25ab9dd691677306a471cc7619bc3349d75e9e53d4e7e6143d8b75f"
+          "vendored_sha256": "7473c58d2794f3ebf22fd6f607e9934030cd8ec14ba24caeae7278b6d08e34e3"
         },
         {
           "path": "Cargo.toml.orig",
           "upstream_sha256": "999bd49cbba117d3c13024be09c9bb1ff126a28443f06c23a5c18465dc9f516b",
-          "vendored_sha256": "dc10d59fdc7e9c37ae9b5a89b54e75c263b9c1cff03547e62900b10000c76e5b"
+          "vendored_sha256": "e17d967162b3cfd8378ef7bab3520b98b52546a939cfc357ae6d8d60617b286f"
         }
       ]
     },
@@ -116,17 +116,17 @@
         {
           "path": "Cargo.toml",
           "upstream_sha256": "4e0ee25233dae9042912b6e983341fa4a757fa994f63d583e53477657824b058",
-          "vendored_sha256": "269747dd31c17b1a5e3bbd12f388277e7c14c0b405d5abfa1432c850760d02e8"
+          "vendored_sha256": "055c389f90f167f1edb04d2f8fdfac2cd0c48415e7e1b0890b78c42f81c5a19d"
         },
         {
           "path": "Cargo.toml.orig",
           "upstream_sha256": "ff0662a233354220336ce698a852a9371a44f9e7c3ab2b43345dbd07abb1ba13",
-          "vendored_sha256": "632d07d615e5dc52b17735be13c6c81330e4766e3c8219f9c3a6c1d93345fe7d"
+          "vendored_sha256": "60d645bbe73cddd9916519a7b588740d59390baf58c4331e52bba1ab087018e3"
         },
         {
           "path": "build.rs",
           "upstream_sha256": "8e776fe8ae227a3fa5a5df485967b19ce40d434a7249fdc70f4796395a06da9a",
-          "vendored_sha256": "75c1d8e9f8127f1a51b37c7e25100a56aec155fc14e4efc5bae5796b3d98dc0c"
+          "vendored_sha256": "c98640d063f4db4e6023c418593e048cc64a79caff77ff446d96bdb3de36c71b"
         },
         {
           "path": "deps/libwebrtc/libwebrtc/modules/congestion_controller/rtp/transport_feedback_adapter.cc",
@@ -226,12 +226,17 @@
         {
           "path": "subprojects/abseil-cpp.wrap",
           "upstream_sha256": "a34d819f258e9e2a399689da7202df211ed0e129a13ddbb94916e7cd0711259f",
-          "vendored_sha256": "2472603e2352c1e71b71074419760ccc99eb49575c8090f20e2cad2addf39eb8"
+          "vendored_sha256": "e8c43fcfffdb9287fd8bb8a0894a34623974dec21142fd7553a421383f6c4965"
         },
         {
           "path": "subprojects/catch2.wrap",
           "upstream_sha256": "5d90c001f921e65bf33516ac402a36fd950a496cfd9792481a9f9e4a79f843a7",
           "vendored_sha256": "78b397707a088840b755b83f50c19863a15ba522ea2641f93336830414b47d9d"
+        },
+        {
+          "path": "subprojects/flatbuffers.wrap",
+          "upstream_sha256": "d1c5017efe825ccdf523829548a56a8a0637b2d0fd7d3682856902cf0beb1666",
+          "vendored_sha256": "0d8b510fb883b2568fb725e1bfd9f462cce8d423fd5549f96e0e656bd0d5351d"
         },
         {
           "path": "subprojects/libuv.wrap",
@@ -251,12 +256,22 @@
         {
           "path": "subprojects/packagefiles/abseil-cpp/meson.build",
           "upstream_sha256": null,
-          "vendored_sha256": "454b10520ba4ba4a9995612ba2d9e6490b5477bb5093eff54af4c84917f71f19"
+          "vendored_sha256": "9d09ed3cbdd418c92ad582d590bce139873f7aed4468ce6cae31e4fd412b52ae"
         },
         {
           "path": "subprojects/packagefiles/ankerl-unordered-dense/meson.build",
           "upstream_sha256": "96f360db70b0db95554110846e18ab927759858a3228843d8eff5b63c91a4a10",
           "vendored_sha256": "67fc3f19a4f3352e2383293cd68e36c899b7b59445d3bd7bf54f3523ac9a5166"
+        },
+        {
+          "path": "subprojects/packagefiles/flatbuffers/LICENSE.build",
+          "upstream_sha256": null,
+          "vendored_sha256": "7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb"
+        },
+        {
+          "path": "subprojects/packagefiles/flatbuffers/meson.build",
+          "upstream_sha256": null,
+          "vendored_sha256": "f8a08600662c6e46444257137838143c1a7f31156a7640948ba5583784286705"
         },
         {
           "path": "subprojects/packagefiles/libuv/LICENSE.build",
@@ -308,7 +323,7 @@
         {
           "path": "meson.build",
           "upstream_sha256": "25bfa2c796c3c8bac2c737ad9acb2fffcc27136df82e198b5a9f19720ace54ab",
-          "vendored_sha256": "454b10520ba4ba4a9995612ba2d9e6490b5477bb5093eff54af4c84917f71f19"
+          "vendored_sha256": "9d09ed3cbdd418c92ad582d590bce139873f7aed4468ce6cae31e4fd412b52ae"
         }
       ]
     },
@@ -321,6 +336,18 @@
           "path": "meson.build",
           "upstream_sha256": "7c106a5a406c1ef41d12dd2208f3784814df4778fae13887ae4ba527f29b88ce",
           "vendored_sha256": "4ea34585b52222502e7cb9ffd963d9a0ff3c06a7c3251d6d09461490bd069056"
+        }
+      ]
+    },
+    {
+      "path": "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/flatbuffers",
+      "source": "flatbuffers-24.3.25-wrapdb-patch",
+      "prefix": "flatbuffers-24.3.25",
+      "changes": [
+        {
+          "path": "meson.build",
+          "upstream_sha256": "00404323ea2c542eee0ea0669e352e8306ebbfe78d792c69a76c6a011f4a10c8",
+          "vendored_sha256": "f8a08600662c6e46444257137838143c1a7f31156a7640948ba5583784286705"
         }
       ]
     }
@@ -343,7 +370,7 @@
   "wraps": [
     {
       "path": "vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap",
-      "source": "abseil-cpp-20240722.2",
+      "source": "abseil-cpp-20260817.0",
       "patch_source": null,
       "patch_directory": "abseil-cpp",
       "fallback_urls": []
@@ -359,12 +386,10 @@
     },
     {
       "path": "vendor/mediasoup-sys-0.19.0/subprojects/flatbuffers.wrap",
-      "source": "flatbuffers-24.3.25",
-      "patch_source": "flatbuffers-24.3.25-wrapdb-patch",
-      "patch_directory": null,
-      "fallback_urls": [
-        "https://github.com/mesonbuild/wrapdb/releases/download/flatbuffers_24.3.25-1/flatbuffers-24.3.25.tar.gz"
-      ]
+      "source": "flatbuffers-25.12.19-2026-02-06-03fffb2",
+      "patch_source": null,
+      "patch_directory": "flatbuffers",
+      "fallback_urls": []
     },
     {
       "path": "vendor/mediasoup-sys-0.19.0/subprojects/libsrtp3.wrap",

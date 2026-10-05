@@ -59,7 +59,7 @@ For each `trees` entry, every upstream and maintained file is compared, includin
 hidden files. An unchanged file must be byte-for-byte identical. Every added,
 modified or deleted file must have exactly one `changes` entry containing its
 upstream and maintained SHA-256; `null` means that the file is absent on that
-side. A stale entry fails as well as an unlisted change. The two local WrapDB
+side. A stale entry fails as well as an unlisted change. The three local WrapDB
 overlays also have independent archive comparisons, preserving their provenance
 alongside their inclusion in the worker's maintained patch. The SecLists data
 and license use exact raw-file sources. Explicitly listed repository-authored
@@ -140,17 +140,19 @@ hash; runtime-loaded components and deployed protections need separate evidence.
 
 ## Maintained changes
 
-The 2026-10-05 rebase retains the same 38 worker deviation paths against the
-0.19.0 archive. Timer integrations now provide diagnostic labels and use the
+The 2026-10-05 rebase retains the maintained worker behavior against the
+0.19.0 archive while upgrading its native dependencies and Rust bindings.
+Timer integrations now provide diagnostic labels and use the
 upstream signed millisecond API; the manual timer fixture implements that same
 contract. NACK delay and congestion constraints retain their prior behavior
 with the widened upstream types. The upstream archive supplies its new RTP/RTX
 encoding and SCTP reassembly fixes; those are not local patches.
 
-
-`mediasoup-0.29.0` changes only `Cargo.toml` and `Cargo.toml.orig`, raising
-`lru` from 0.8.1 to 0.18.5.  The worker uses the compatible `new`, `contains`,
-and `put` API surface; this removes RUSTSEC-2026-0253 from the active graph.
+`mediasoup-0.29.0` raises `lru` from 0.8.1 to 0.18.5 in `Cargo.toml` and
+`Cargo.toml.orig`. The worker uses the compatible `new`, `contains`, and `put`
+API surface; this removes RUSTSEC-2026-0253 from the active graph. The same
+manifests upgrade Planus to 1.3.0 and the async-channel, async-lock, fastrand,
+futures-lite and thiserror dependencies to their current major versions.
 
 `mediasoup-sys-0.19.0` changes only `Cargo.toml`, `Cargo.toml.orig`,
 `build.rs`, `tasks.py`, `scripts/get-dep.sh`, `meson.build`, `deps/libwebrtc/meson.build`,
@@ -162,9 +164,10 @@ and `put` API surface; this removes RUSTSEC-2026-0253 from the active graph.
 `include/RTC/MediaDiagnostics.hpp`, `include/RTC/WebRtcServer.hpp`,
 `src/RTC/WebRtcServer.cpp`, `test/src/RTC/TestMediaDiagnostics.cpp`,
 `deps/libwebrtc/libwebrtc/modules/congestion_controller/rtp/transport_feedback_adapter.cc`,
-`subprojects/abseil-cpp.wrap`, `subprojects/libuv.wrap`,
+`subprojects/abseil-cpp.wrap`, `subprojects/flatbuffers.wrap`, `subprojects/libuv.wrap`,
 `subprojects/unordered-dense.wrap`, `subprojects/catch2.wrap`, the two files under
-`subprojects/packagefiles/abseil-cpp/`, the four files under
+each of `subprojects/packagefiles/abseil-cpp/` and
+`subprojects/packagefiles/flatbuffers/`, the four files under
 `subprojects/packagefiles/libuv/`, and
 `subprojects/packagefiles/ankerl-unordered-dense/meson.build`, and removes the package-local
 `Cargo.lock` and `subprojects/openssl.wrap`. It adds the two reviewed
@@ -370,24 +373,41 @@ privileged host access. `scripts/get-dep.sh` is also disabled because it importe
 a mutable fuzzer branch and rewrote the checkout. Use the repository Dockerfile
 for supported builds and reviewed immutable inputs for dependency refreshes.
 
-The Abseil wrap is pinned to the official `20240722.2` LTS archive (SHA-256
-`ec820b01d9b328ca1f1b9c4e5b305d7a9fa03dc410ef64ba6654b637f9a4c3a8`).
-That patch release carries the hash-container sizing fix for CVE-2025-0838.
-Its local Meson overlay comes from the WrapDB `20240722.0-4` patch archive
-(SHA-256
+The Abseil wrap is pinned to the official
+[`20260817.0` LTS release](https://github.com/abseil/abseil-cpp/releases/tag/20260817.0),
+whose archive SHA-256 is
+`f7e05179df39c45434cad433f5783840bb3788ef322976f9138bc6b72b3a107d`.
+The checksum matches the GitHub release asset metadata. Its maintained Meson
+overlay derives from the WrapDB `20240722.0-4` patch archive (SHA-256
 `e39d535c4707f6e342e84e3e616449e1cc98cb7fadda92a09820b0ae67c6d0d6`).
-That archive contains only `meson.build` (original SHA-256
-`25bfa2c796c3c8bac2c737ad9acb2fffcc27136df82e198b5a9f19720ace54ab`)
-and `LICENSE.build` (SHA-256
-`7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb`),
-not C or C++ source.  `LICENSE.build` is retained byte-for-byte.  The local
-`meson.build` changes only its declared project version from `20240722.0` to
-`20240722.2` (resulting SHA-256
-`454b10520ba4ba4a9995612ba2d9e6490b5477bb5093eff54af4c84917f71f19`)
-so build metadata matches the source.  A local `patch_directory` is necessary
-because the published patch archive is rooted at `abseil-cpp-20240722.0` and
-therefore cannot overlay the `abseil-cpp-20240722.2` source directory directly.
-The vulnerable source fallback remains removed.
+`LICENSE.build` remains byte-for-byte unchanged. The overlay updates the project
+version, removes the 25 source/header paths removed upstream, and includes the
+new production compilation units selected by the release's CMake library lists.
+These cover moved exception/CPU helpers, hardening/tracing, entropy pools,
+profiling, structured logging, formatting, status, clock and source-location
+support. Abseil source is not patched. The local overlay avoids extracting the
+older WrapDB root into a different release directory; the old source fallback
+remains removed.
+
+The FlatBuffers source and C++ schema compiler use the official
+[`v25.12.19-2026-02-06-03fffb2` release](https://github.com/google/flatbuffers/releases/tag/v25.12.19-2026-02-06-03fffb2),
+commit `03fffb25e2d777462b719cb4964249c30b19d58f`, archive SHA-256
+`ccbce58684691de1e7d51f5e87786266b37d06ab66e9dfe2d0ec106fe50aace0`.
+On 2026-10-05 the official release API marks this as latest, non-draft and
+non-prerelease. Its version header remains 25.12.19; the exact source tag includes
+24 subsequent upstream commits. The local Meson overlay derives from the
+previous authenticated `flatbuffers_24.3.25-1` WrapDB archive (SHA-256
+`9be75a2053a19e5a59175f2fbbf6e9d40f4243d2786f2661a131d3502ddfa457`), preserving
+`LICENSE.build`. It replaces deleted file-writer compilation units with the
+release's file/name managers and adds the Python generator implementation.
+Both C++ headers and `flatc` are built from the same release, and all 28 worker
+schemas are regenerated with the existing wire format and compiler options.
+
+Both Rust crates use Planus 1.3.0. The worker build uses matching 1.3.0 translation
+and code-generator crates, explicitly requesting formatted generated Rust.
+The Rust and C++ generators consume the same unchanged schemas; real worker
+requests, responses and notifications must pass the application media tests
+when either generator is updated.
 
 The repository's pinned OpenSSL build helper supplies the dependency in Linux
 CI and container builds.  Do not relax the minimum version or restore an
@@ -426,21 +446,6 @@ version changes to `5.3.1` (overlay SHA-256
 Catch2 uses the published WrapDB `3.16.0-1` wrap unchanged. It is used only when
 the native worker's `ms_build_tests` option is enabled, not by the production
 worker. Its upstream native tests must be built separately from Cargo tests.
-
-Two native source pins intentionally remain compatibility exceptions. The newer
-release comparisons below were verified on 2026-10-05:
-
-- Abseil stays on the security-fixed `20240722.2` LTS branch, although the
-  [reviewed newer standalone release is `20260817.0`](https://github.com/abseil/abseil-cpp/releases/tag/20260817.0).
-  The existing Meson overlay references 25 files removed by that release.
-  Its optional/variant aliases and source dependencies need a coordinated
-  overlay and adapted libwebrtc port; a version-only update cannot build.
-- FlatBuffers stays on the worker's `24.3.25` source/tool version. Upstream's
-  [reviewed newer normal release is `25.12.19`](https://github.com/google/flatbuffers/releases/tag/v25.12.19),
-  with an additional `v25.12.19-2026-02-06-03fffb2` release tag whose status
-  [upstream has questioned](https://github.com/google/flatbuffers/issues/8922).
-  Advancing the schema compiler and C++ serialization headers is a separate
-  compatibility change that needs generated-binding and protocol verification.
 
 Remove each patch as soon as an official compatible release contains its fix.
 When updating either archive, re-verify its crates.io checksum, review the

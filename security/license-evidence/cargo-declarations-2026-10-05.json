@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "reviewedOn": "2026-10-05",
-  "scope": "Current Cargo.lock-authenticated metadata: 34 unchanged legacy slash-separated declarations carried forward from the 2026-09-30 source review. siphasher 1.0.4 now declares standard MIT OR Apache-2.0 and needs no slash normalization. Its official archive and MIT/Apache notices were inspected. This review does not certify an image or waive license conditions.",
+  "scope": "Current Cargo.lock-authenticated metadata: 25 reviewed legacy slash-separated declarations in the current Cargo graph. Removed versions have no retained allowance. Each new archive checksum, exact Cargo manifest declaration and packaged license notices were reviewed; unchanged package identities retain their earlier source evidence. This review does not certify an image or waive license conditions.",
   "cargoSemantics": "https://doc.rust-lang.org/cargo/reference/manifest.html#the-license-and-license-file-fields",
   "normalization": "Exact observed Cargo declarations only; preserve raw source values and derive the listed SPDX alternative expression. General SPDX grammar remains unchanged.",
   "packages": [
@@ -26,9 +26,9 @@
     },
     {
       "name": "ascii-canvas",
-      "version": "3.0.0",
-      "archiveSha256": "8824ecca2e851cec16968d54a01dd372ef8f95b244fb84b84e70128be347c3c6",
-      "manifestSha256": "b9f906180f5b72747e05c166c60bf5a92087c807891999df9f2d29f14050d4c9",
+      "version": "4.0.0",
+      "archiveSha256": "ef1e3e699d84ab1b0911a1010c5c106aa34ae89aeac103be5ce0c3859db1e891",
+      "manifestSha256": "5159921895050337cd95367d770c844f0bdfc37621f80ab43bebb031bdd0d05f",
       "raw": "Apache-2.0/MIT",
       "evidence": {
         "LICENSE-APACHE": {
@@ -41,45 +41,7 @@
         }
       },
       "spdxExpression": "Apache-2.0 OR MIT",
-      "archiveUrl": "https://static.crates.io/crates/ascii-canvas/ascii-canvas-3.0.0.crate"
-    },
-    {
-      "name": "askama_derive",
-      "version": "0.11.2",
-      "archiveSha256": "87bf87e6e8b47264efa9bde63d6225c6276a52e05e91bf37eaa8afd0032d6b71",
-      "manifestSha256": "e07a64f9eacd69eb4670070ab470ac837e8c6c05e0bed632521a9a4c04863dd2",
-      "raw": "MIT/Apache-2.0",
-      "evidence": {
-        "LICENSE-APACHE": {
-          "sha256": "87cb0d734c723c083e51c825930ff42bce28596b52dee15567f6b28f19c195e3",
-          "bytes": 10840
-        },
-        "LICENSE-MIT": {
-          "sha256": "df20e0180764bf5bd76f74d47bc9e8c0069a666401629c390003a1d5eba99c92",
-          "bytes": 1064
-        }
-      },
-      "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/askama_derive/askama_derive-0.11.2.crate"
-    },
-    {
-      "name": "askama_shared",
-      "version": "0.12.2",
-      "archiveSha256": "bf722b94118a07fcbc6640190f247334027685d4e218b794dbfe17c32bf38ed0",
-      "manifestSha256": "d843e6077028802df1970bc4934bb5bd517bd028a1892a610f8a984a084a641c",
-      "raw": "MIT/Apache-2.0",
-      "evidence": {
-        "LICENSE-APACHE": {
-          "sha256": "df20e0180764bf5bd76f74d47bc9e8c0069a666401629c390003a1d5eba99c92",
-          "bytes": 1064
-        },
-        "LICENSE-MIT": {
-          "sha256": "df20e0180764bf5bd76f74d47bc9e8c0069a666401629c390003a1d5eba99c92",
-          "bytes": 1064
-        }
-      },
-      "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/askama_shared/askama_shared-0.12.2.crate"
+      "archiveUrl": "https://static.crates.io/crates/ascii-canvas/ascii-canvas-4.0.0.crate"
     },
     {
       "name": "asn1-rs-impl",
@@ -92,44 +54,6 @@
       "archiveUrl": "https://static.crates.io/crates/asn1-rs-impl/asn1-rs-impl-0.2.0.crate",
       "note": "The packaged manifest declares the license but contains no root license text. The exact upstream revision recorded in its authenticated .cargo_vcs_info.json states either Apache-2.0 or MIT at the recipient option.",
       "upstreamLicenseStatement": "https://github.com/rusticata/asn1-rs/blob/a20e5f7319c896737ad0f2557037817b91ad854f/README.md#license"
-    },
-    {
-      "name": "bit-set",
-      "version": "0.5.3",
-      "archiveSha256": "0700ddab506f33b20a03b13996eccd309a48e5ff77d0d95926aa0210fb4e95f1",
-      "manifestSha256": "3a3b507bd85cb5b5586fb378c48aa6c8520a5060343e4a0b3beb04a721f34150",
-      "raw": "MIT/Apache-2.0",
-      "evidence": {
-        "LICENSE-APACHE": {
-          "sha256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
-          "bytes": 10850
-        },
-        "LICENSE-MIT": {
-          "sha256": "c9a75f18b9ab2927829a208fc6aa2cf4e63b8420887ba29cdb265d6619ae82d5",
-          "bytes": 1071
-        }
-      },
-      "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/bit-set/bit-set-0.5.3.crate"
-    },
-    {
-      "name": "bit-vec",
-      "version": "0.6.3",
-      "archiveSha256": "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb",
-      "manifestSha256": "368f427b0dce8de27c1bb78300b107066b96b6b4f5f843ace46cb25e45ab0f06",
-      "raw": "MIT/Apache-2.0",
-      "evidence": {
-        "LICENSE-APACHE": {
-          "sha256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
-          "bytes": 10850
-        },
-        "LICENSE-MIT": {
-          "sha256": "7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0",
-          "bytes": 1071
-        }
-      },
-      "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/bit-vec/bit-vec-0.6.3.crate"
     },
     {
       "name": "der-parser",
@@ -149,25 +73,6 @@
       },
       "spdxExpression": "MIT OR Apache-2.0",
       "archiveUrl": "https://static.crates.io/crates/der-parser/der-parser-9.0.0.crate"
-    },
-    {
-      "name": "fixedbitset",
-      "version": "0.4.2",
-      "archiveSha256": "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80",
-      "manifestSha256": "a62ca3806a7ad6fb85034dc2d00e995767a17bc1aa5d3d1f09616ec49cabd01a",
-      "raw": "MIT/Apache-2.0",
-      "evidence": {
-        "LICENSE-APACHE": {
-          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
-          "bytes": 10847
-        },
-        "LICENSE-MIT": {
-          "sha256": "ce592787ff2321feab698a4c612237f4378cc658ebb1d472913e5802cc47afb4",
-          "bytes": 1048
-        }
-      },
-      "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/fixedbitset/fixedbitset-0.4.2.crate"
     },
     {
       "name": "flume",
@@ -246,44 +151,6 @@
       "archiveUrl": "https://static.crates.io/crates/foreign-types-shared/foreign-types-shared-0.1.1.crate"
     },
     {
-      "name": "hashbrown",
-      "version": "0.11.2",
-      "archiveSha256": "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e",
-      "manifestSha256": "98ca6560469b01c01771f3c22c6182497d2239463cb4f63395d8207002d9a9ad",
-      "raw": "Apache-2.0/MIT",
-      "evidence": {
-        "LICENSE-APACHE": {
-          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
-          "bytes": 10847
-        },
-        "LICENSE-MIT": {
-          "sha256": "ff8f68cb076caf8cefe7a6430d4ac086ce6af2ca8ce2c4e5a2004d4552ef52a2",
-          "bytes": 1060
-        }
-      },
-      "spdxExpression": "Apache-2.0 OR MIT",
-      "archiveUrl": "https://static.crates.io/crates/hashbrown/hashbrown-0.11.2.crate"
-    },
-    {
-      "name": "humansize",
-      "version": "1.1.1",
-      "archiveSha256": "02296996cb8796d7c6e3bc2d9211b7802812d36999a51bb754123ead7d37d026",
-      "manifestSha256": "d4315697af306e88e926847643aa9a777ea77e19f858d0d0493887693865951e",
-      "raw": "MIT/Apache-2.0",
-      "evidence": {
-        "LICENSE-APACHE": {
-          "sha256": "b8601fc79bdf8d8088f0938bea861ffc63ed0eebbedf25f44ab2cf2e85bd7edc",
-          "bytes": 11046
-        },
-        "LICENSE-MIT": {
-          "sha256": "e8146cecb7949e867aa0d2065686ecc09051634694e5f7b592adcdde8290a334",
-          "bytes": 1080
-        }
-      },
-      "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/humansize/humansize-1.1.1.crate"
-    },
-    {
       "name": "minimal-lexical",
       "version": "0.2.1",
       "archiveSha256": "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a",
@@ -327,9 +194,9 @@
     },
     {
       "name": "planus",
-      "version": "0.4.0",
-      "archiveSha256": "2cbec589fda965e8d0cf7dddaa87d37ae5ccaed0c43986e8faf5998f24ef82f5",
-      "manifestSha256": "c6419633bedd4570be5ed61b5bf32816a0bc7e21a9daa662ec55e8a87f5dd96b",
+      "version": "1.3.0",
+      "archiveSha256": "d1a36d3b20196d397b17582b55c493ce9c3be8de1cf0e352df5fcb909626e24a",
+      "manifestSha256": "0d0e8b3e3a10f5a358e15add0a89c73543ade60dd738ee8aef3893e6508c7ae9",
       "raw": "MIT/Apache-2.0",
       "evidence": {
         "LICENSE-APACHE": {
@@ -342,13 +209,13 @@
         }
       },
       "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/planus/planus-0.4.0.crate"
+      "archiveUrl": "https://static.crates.io/crates/planus/planus-1.3.0.crate"
     },
     {
       "name": "planus-codegen",
-      "version": "0.4.0",
-      "archiveSha256": "52d1bb11066c61d46d6d8f21d342d300f06d08bcce15f88399fdd40e1341c421",
-      "manifestSha256": "ed341714e134770344285ea7f0557fefad7831b440e5050d26f07479765a3e6c",
+      "version": "1.3.0",
+      "archiveSha256": "f46f75eba95e4ee6f9c23e1f0841470cb4e905a7cf64b812989965a951a7c4ca",
+      "manifestSha256": "7d16ed3e1e49e697770a5b959ef1547dd9572b8ecd0ec5ea7c20d31cc90f698b",
       "raw": "MIT/Apache-2.0",
       "evidence": {
         "LICENSE-APACHE": {
@@ -361,13 +228,13 @@
         }
       },
       "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/planus-codegen/planus-codegen-0.4.0.crate"
+      "archiveUrl": "https://static.crates.io/crates/planus-codegen/planus-codegen-1.3.0.crate"
     },
     {
       "name": "planus-lexer",
-      "version": "0.4.0",
-      "archiveSha256": "7ecb00082b1324541f02f323585333e88ed3bf90cdbad3741e52eabf166fbcd6",
-      "manifestSha256": "6b4ae7453da98e9b99192d1f378cf003c43c868f5b8137af527391386166bc5c",
+      "version": "1.3.0",
+      "archiveSha256": "661c022b49e913fec990c6b833e2e22e6a3b6bb2da06330393cd4ab61a4d0504",
+      "manifestSha256": "8a51a308b677b13a3c059f1258e16c8807d7ec23d8b963b1d80061870e1da000",
       "raw": "MIT/Apache-2.0",
       "evidence": {
         "LICENSE-APACHE": {
@@ -380,13 +247,13 @@
         }
       },
       "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/planus-lexer/planus-lexer-0.4.0.crate"
+      "archiveUrl": "https://static.crates.io/crates/planus-lexer/planus-lexer-1.3.0.crate"
     },
     {
       "name": "planus-translation",
-      "version": "0.4.0",
-      "archiveSha256": "a7bd8ffea859844a23ea28d58354e9e466f3454981b368ba7d8226edac50398b",
-      "manifestSha256": "58a334a25d9241e7686b4e2da2ca024082d3ad2b83c5523cc8553a74ab240cfb",
+      "version": "1.3.0",
+      "archiveSha256": "e8e93623f4c61c398b1c6fe553a12b3d78d852da177a1834d93e137b4d1f3e01",
+      "manifestSha256": "508e4ca7d48e8373c94b9d0f432b4a0562425a0ec82ec859a62a946e14b471c6",
       "raw": "MIT/Apache-2.0",
       "evidence": {
         "LICENSE-APACHE": {
@@ -399,13 +266,13 @@
         }
       },
       "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/planus-translation/planus-translation-0.4.0.crate"
+      "archiveUrl": "https://static.crates.io/crates/planus-translation/planus-translation-1.3.0.crate"
     },
     {
       "name": "planus-types",
-      "version": "0.4.0",
-      "archiveSha256": "10306bda3579cc7a43537cb3f81212d93ce4fea32a219d9c0a7788d8c5d8e114",
-      "manifestSha256": "60d39dd0733c4a1d2c4b7410d7e7da5a64f15fa6b7a6b9db24aaa6a236d14afc",
+      "version": "1.3.0",
+      "archiveSha256": "d0014f2753c1aaa48ee9f35761c242d9430153d37c66b81755d099a4dc8bb70b",
+      "manifestSha256": "b7434e89ca6a6fcd1c60ce3353f2fefe076a5034b1a4f28d38144921b9fcef88",
       "raw": "MIT/Apache-2.0",
       "evidence": {
         "LICENSE-APACHE": {
@@ -418,7 +285,7 @@
         }
       },
       "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/planus-types/planus-types-0.4.0.crate"
+      "archiveUrl": "https://static.crates.io/crates/planus-types/planus-types-1.3.0.crate"
     },
     {
       "name": "rusticata-macros",
@@ -483,9 +350,9 @@
     },
     {
       "name": "string-interner",
-      "version": "0.14.0",
-      "archiveSha256": "91e2531d8525b29b514d25e275a43581320d587b86db302b9a7e464bac579648",
-      "manifestSha256": "a1b571e5f56460fffd12ee270cefa5e2191f67ac278efa22bd7011b1b1369498",
+      "version": "0.19.0",
+      "archiveSha256": "23de088478b31c349c9ba67816fa55d9355232d63c3afea8bf513e31f0f1d2c0",
+      "manifestSha256": "8df9b36b1e7ef53de91f22a920e81afeead8738949fe7bbbb0507c0978fd4375",
       "raw": "MIT/Apache-2.0",
       "evidence": {
         "LICENSE-APACHE": {
@@ -498,7 +365,7 @@
         }
       },
       "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/string-interner/string-interner-0.14.0.crate"
+      "archiveUrl": "https://static.crates.io/crates/string-interner/string-interner-0.19.0.crate"
     },
     {
       "name": "stringprep",
@@ -518,44 +385,6 @@
       },
       "spdxExpression": "MIT OR Apache-2.0",
       "archiveUrl": "https://static.crates.io/crates/stringprep/stringprep-0.1.5.crate"
-    },
-    {
-      "name": "term",
-      "version": "0.7.0",
-      "archiveSha256": "c59df8ac95d96ff9bede18eb7300b0fda5e5d8d90960e76f8e14ae765eedbf1f",
-      "manifestSha256": "4867bb1f983ce3c23c462201c4a8224f4e2de8ea36833d2efbe3fb7e7570bb59",
-      "raw": "MIT/Apache-2.0",
-      "evidence": {
-        "LICENSE-APACHE": {
-          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
-          "bytes": 10847
-        },
-        "LICENSE-MIT": {
-          "sha256": "3c50d5a336fc34f186b381aa2895e58d2311e514fa15eb22f797fc0912308fbe",
-          "bytes": 1071
-        }
-      },
-      "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/term/term-0.7.0.crate"
-    },
-    {
-      "name": "toml",
-      "version": "0.5.11",
-      "archiveSha256": "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234",
-      "manifestSha256": "c26985583d0c680bafc99c11b4a99f5c8e63942c63a33c17588a5e9d3b101ef4",
-      "raw": "MIT/Apache-2.0",
-      "evidence": {
-        "LICENSE-APACHE": {
-          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
-          "bytes": 10847
-        },
-        "LICENSE-MIT": {
-          "sha256": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
-          "bytes": 1057
-        }
-      },
-      "spdxExpression": "MIT OR Apache-2.0",
-      "archiveUrl": "https://static.crates.io/crates/toml/toml-0.5.11.crate"
     },
     {
       "name": "unicode-properties",

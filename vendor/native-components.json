@@ -1,9 +1,9 @@
 {
   "wrap_components": [
     {
-      "source": "abseil-cpp-20240722.2",
+      "source": "abseil-cpp-20260817.0",
       "name": "abseil-cpp",
-      "version": "20240722.2",
+      "version": "20260817.0",
       "linkage": "static",
       "usage": "production",
       "license": "Apache-2.0"
@@ -17,9 +17,9 @@
       "license": "BSL-1.0"
     },
     {
-      "source": "flatbuffers-24.3.25",
+      "source": "flatbuffers-25.12.19-2026-02-06-03fffb2",
       "name": "FlatBuffers",
-      "version": "24.3.25",
+      "version": "25.12.19-2026-02-06-03fffb2",
       "linkage": "static",
       "usage": "production",
       "license": "Apache-2.0"
