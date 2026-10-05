@@ -626,16 +626,17 @@
         "end_column": 65
       },
       "messageSha256": "67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694",
-      "sourceSha256": "afd1355fe845e5c051d92c165fc40d6f316268d391d7447cb857ad470743f086",
+      "sourceSha256": "bd42f56a90c818d8147e4019ac5993b9e561c29abbde6e013d18b76e809229f0",
       "scope": "ops/ansible/tests/test_automation.py:39:39:9:65",
-      "fingerprint": "codeql:d87b4004878e74701ba8def0eee101fca8d2cd2ac0b77089d297761adec181de",
+      "fingerprint": "codeql:04848074b8775fea973a3bd713ceb3b9972e8f5fbab63b098641d4d387c991aa",
       "number": 28,
       "severity": "high",
       "state": "open",
       "disposition": "false-positive",
-      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
-      "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/28"
+      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. Re-reviewed 2026-10-05 against the complete e0bff7a..3db0a47 diff: only package-version/image-digest constants changed; the flagged operations, their inputs and all callers are unchanged. Current CodeQL run 37268650754 records the matching source/query/range/message identity.",
+      "observedRevision": "3db0a47afb987355b5a5bd0e2768c4d14bac5207",
+      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/28",
+      "sourceProvenanceRevision": "3db0a47afb987355b5a5bd0e2768c4d14bac5207"
     },
     {
       "rule": "py/jinja2/autoescape-false",
@@ -648,16 +649,17 @@
         "end_column": 79
       },
       "messageSha256": "67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694",
-      "sourceSha256": "afd1355fe845e5c051d92c165fc40d6f316268d391d7447cb857ad470743f086",
+      "sourceSha256": "bd42f56a90c818d8147e4019ac5993b9e561c29abbde6e013d18b76e809229f0",
       "scope": "ops/ansible/tests/test_automation.py:395:395:23:79",
-      "fingerprint": "codeql:6f04daf9943839b54e28bb25644fefae080c4b21ae012f2ad17891845d999700",
+      "fingerprint": "codeql:fae13f7b4c18982f320531a1f1180e432ff5757d731793c791846d3d88c3eb57",
       "number": 29,
       "severity": "high",
       "state": "open",
       "disposition": "false-positive",
-      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
-      "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
-      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/29"
+      "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path. Re-reviewed 2026-10-05 against the complete e0bff7a..3db0a47 diff: only package-version/image-digest constants changed; the flagged operations, their inputs and all callers are unchanged. Current CodeQL run 37268650754 records the matching source/query/range/message identity.",
+      "observedRevision": "3db0a47afb987355b5a5bd0e2768c4d14bac5207",
+      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/29",
+      "sourceProvenanceRevision": "3db0a47afb987355b5a5bd0e2768c4d14bac5207"
     },
     {
       "rule": "py/jinja2/autoescape-false",
@@ -716,17 +718,17 @@
         "end_column": 75
       },
       "messageSha256": "535ab3a2aa7b68c36dd4de5f653e5ce0cf41d9f40c326b4394cfef9d0b0b296b",
-      "sourceSha256": "3ad8d0f5d1a33a20b78e168117b54cdd770cd016bddb96eb998c9ce6ee063ee9",
+      "sourceSha256": "e1cb2e4d577577308f7278f6ad61f8e8780869b6ed07200c6cb2e97d4e0339d7",
       "scope": "build/release_container_harness.py:136:136:18:75",
-      "fingerprint": "codeql:4276b44b448f6e8c90e2203acf7575dbd7633debbd8a0045333f4ee91307867e",
+      "fingerprint": "codeql:e6b7b1459367aca32e2699e64e04febcaac994eeeaf48acc95cc04490a998028",
       "number": 32,
       "severity": "high",
       "state": "open",
       "disposition": "false-positive",
-      "rationale": "write_new defaults to mode0600 with O_CREAT|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets. Source re-review at 661fbc763030f6b5423232a7be817e1c09872898 confirms that only the disposable controller architecture guard and its refusal message changed; all eight write_new calls and the flagged operation are unchanged. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
-      "observedRevision": "661fbc763030f6b5423232a7be817e1c09872898",
+      "rationale": "write_new defaults to mode0600 with O_CREAT|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets. Source re-review at 661fbc763030f6b5423232a7be817e1c09872898 confirms that only the disposable controller architecture guard and its refusal message changed; all eight write_new calls and the flagged operation are unchanged. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity. Re-reviewed 2026-10-05 against the complete e0bff7a..3db0a47 diff: only package-version/image-digest constants changed; the flagged operations, their inputs and all callers are unchanged. Current CodeQL run 37268650754 records the matching source/query/range/message identity.",
+      "observedRevision": "3db0a47afb987355b5a5bd0e2768c4d14bac5207",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/32",
-      "sourceProvenanceRevision": "661fbc763030f6b5423232a7be817e1c09872898"
+      "sourceProvenanceRevision": "3db0a47afb987355b5a5bd0e2768c4d14bac5207"
     },
     {
       "rule": "rust/cleartext-logging",

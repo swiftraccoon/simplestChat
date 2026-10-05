@@ -183,3 +183,17 @@ SHA-256 is `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`.
 The check binds its wheel and metadata hashes, manifest, version and expression.
 It does not add GPL to the application/image license allowlist or authorize
 other packages, versions or artifacts.
+
+### Python CodeQL identity review after dependency pins (2026-10-05)
+
+Run [37268650754](https://github.com/swiftraccoon/simplestChat/actions/runs/37268650754)
+reported three prior Python findings with changed whole-file identities.
+The complete `e0bff7a..3db0a47` delta in `test_automation.py` changes only four
+expected runtime package versions; both non-HTML Jinja uses and their fixed
+fixture inputs are unchanged. The delta in `release_container_harness.py`
+changes only the PostgreSQL and Caddy digests; `write_new` and all eight calls
+are unchanged. Only the public fixture CA and sanitized report use mode 0644;
+private evidence retains mode 0600 and exclusive creation. Those three exact
+reviews are rebound to the current CodeQL report and independently checked file
+hashes, retaining the original scope and expiry. No source finding is hidden by
+a test-directory exclusion.

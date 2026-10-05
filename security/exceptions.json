@@ -513,21 +513,21 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:d87b4004878e74701ba8def0eee101fca8d2cd2ac0b77089d297761adec181de",
+      "fingerprint": "codeql:04848074b8775fea973a3bd713ceb3b9972e8f5fbab63b098641d4d387c991aa",
       "scope": "ops/ansible/tests/test_automation.py:39:39:9:65",
       "owner": "swiftraccoon",
       "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 afd1355fe845e5c051d92c165fc40d6f316268d391d7447cb857ad470743f086. Changes require a fresh review; no general test, template or path exclusion.",
+      "reachability": "Re-reviewed 2026-10-05 against the complete e0bff7a..3db0a47 diff: only exact package-version/image-digest constants changed. The flagged operation and its callers are unchanged. CodeQL 2.27.1 run 37268650754 independently records the same query, primary range and message with current whole-file SHA256 bd42f56a90c818d8147e4019ac5993b9e561c29abbde6e013d18b76e809229f0. Original scope and 2026-11-29 expiry retained; no general test/template/path exclusion or automatic renewal.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-28"
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:6f04daf9943839b54e28bb25644fefae080c4b21ae012f2ad17891845d999700",
+      "fingerprint": "codeql:fae13f7b4c18982f320531a1f1180e432ff5757d731793c791846d3d88c3eb57",
       "scope": "ops/ansible/tests/test_automation.py:395:395:23:79",
       "owner": "swiftraccoon",
       "rationale": "The Jinja Environment renders local shell/SQL/dotenv/Compose/YAML configuration or evaluates Ansible conditions with StrictUndefined and fixture values. It produces no HTML or browser response. HTML autoescaping would corrupt these formats; there is no XSS sink in this path.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 afd1355fe845e5c051d92c165fc40d6f316268d391d7447cb857ad470743f086. Changes require a fresh review; no general test, template or path exclusion.",
+      "reachability": "Re-reviewed 2026-10-05 against the complete e0bff7a..3db0a47 diff: only exact package-version/image-digest constants changed. The flagged operation and its callers are unchanged. CodeQL 2.27.1 run 37268650754 independently records the same query, primary range and message with current whole-file SHA256 bd42f56a90c818d8147e4019ac5993b9e561c29abbde6e013d18b76e809229f0. Original scope and 2026-11-29 expiry retained; no general test/template/path exclusion or automatic renewal.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-29"
     },
@@ -553,11 +553,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:4276b44b448f6e8c90e2203acf7575dbd7633debbd8a0045333f4ee91307867e",
+      "fingerprint": "codeql:e6b7b1459367aca32e2699e64e04febcaac994eeeaf48acc95cc04490a998028",
       "scope": "build/release_container_harness.py:136:136:18:75",
       "owner": "swiftraccoon",
       "rationale": "write_new defaults to mode0600 with O_CREAT|O_EXCL. Its only mode0644 callsites publish a public one-day fixture CA certificate and sanitized public CI summary. Private keys, command output and configuration remain0600 beneath private evidence; the summary projects status and identities, not resolved secrets. Source re-review at 661fbc763030f6b5423232a7be817e1c09872898 confirms that only the disposable controller architecture guard and its refusal message changed; all eight write_new calls and the flagged operation are unchanged. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
-      "reachability": "Exact query, CodeQL version, unchanged primary range/message and re-reviewed whole-file SHA256 3ad8d0f5d1a33a20b78e168117b54cdd770cd016bddb96eb998c9ce6ee063ee9. Original Python security-extended SARIF from 661fbc763030f6b5423232a7be817e1c09872898 independently matches the full identity. Changes require a fresh review; no general test, template or path exclusion, automatic renewal or expiry extension.",
+      "reachability": "Re-reviewed 2026-10-05 against the complete e0bff7a..3db0a47 diff: only exact package-version/image-digest constants changed. The flagged operation and its callers are unchanged. CodeQL 2.27.1 run 37268650754 independently records the same query, primary range and message with current whole-file SHA256 e1cb2e4d577577308f7278f6ad61f8e8780869b6ed07200c6cb2e97d4e0339d7. Original scope and 2026-11-29 expiry retained; no general test/template/path exclusion or automatic renewal.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-32"
     },
