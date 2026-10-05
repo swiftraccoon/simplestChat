@@ -14,7 +14,7 @@
           - ansible_facts.distribution == 'Debian'
           - ansible_facts.distribution_major_version == '13'
           - scpub_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
-          - scmon_prometheus_image is match('^quay.io/prometheus/prometheus:v3.14.0@sha256:[a-f0-9]{64}$')
+          - scmon_prometheus_image is match('^quay.io/prometheus/prometheus:v3.15.0@sha256:[a-f0-9]{64}$')
           - scmon_node_exporter_image is match('^quay.io/prometheus/node-exporter:v1.12.1@sha256:[a-f0-9]{64}$')
     - name: Refuse monitoring setup during unfinished owned host operations
       ansible.builtin.command:

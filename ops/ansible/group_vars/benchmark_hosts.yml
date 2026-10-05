@@ -104,5 +104,5 @@ scpub_turn_image: docker.io/coturn/coturn:4.18.0@sha256:bbefd3e1fdfdc0d58770fe01
 
 # Private, separately applied production monitoring; verified upstream manifests 2026-09-23.
 scmon_enabled: false
-scmon_prometheus_image: quay.io/prometheus/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+scmon_prometheus_image: quay.io/prometheus/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
 scmon_node_exporter_image: quay.io/prometheus/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
