@@ -428,7 +428,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         source = (ROOT / "build/security_check.py").read_text()
         self.assertIn(
             "security_dependency_licenses.check(context, snapshot, base, "
-            "include_vendor=include_vendor)",
+            + "include_vendor=include_vendor)",
             source,
         )
         self.assertIn(

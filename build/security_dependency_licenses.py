@@ -4,6 +4,8 @@ Current vulnerability audits still inspect complete dependency graphs. This
 additional gate compares an ancestor with the source snapshot and checks newly
 introduced package identities using authenticated registry metadata. It never
 installs packages, builds source distributions or infers licenses from prose.
+Two exact legacy wheel declarations are bound to the source review in
+security/reviews.md; changed metadata or wheel bytes require a fresh review.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from packaging.utils import canonicalize_name, parse_sdist_filename, parse_wheel
 from security_context import Context, executable
 from security_image_policy import LicenseExpression
 from security_source_scope import require_local_vendor, selected
-from security_tools import bounded_file, require, safe_name, write_private
+from security_tools import ToolError, bounded_file, require, safe_name, write_private
 
 # isort: split
 import bounded_process
@@ -43,6 +45,19 @@ PYTHON_LOCKS = (
     "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
     "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
 )
+# Explicit review of packaged license texts; never infer an arbitrary classifier.
+# Identity includes the complete authenticated metadata and locked wheel hash.
+LEGACY_METADATA_LICENSES = {
+    (
+        "basedpyright",
+        "1.40.2",
+        "913fdc12587d87d82fb487ecc3e5a209dabab7be28982168f86d04c8518b7b8c",
+    ): ("3a53aeb93a86675ded0e12bc27bd8476c1742356de07ad8cab67bff18110c690", "MIT"),
+    ("meson", "1.12.1", "690a6190f8fe2f15822a341150963bcb79615657460e0b8cab755ce1912aeb22"): (
+        "930bc7542cbd9f57009e182fd014eba48cf1a0180a7b9006d2d32d8f168d8b02",
+        "Apache-2.0",
+    ),
+}
 MAX_LOCK = 2 * 1024**2
 MAX_INDEX = 16 * 1024**2
 MAX_METADATA = 1024**2
@@ -338,14 +353,26 @@ def metadata_license(content: bytes, dependency: Dependency) -> str:
     require(0 < len(content) <= MAX_METADATA, "dependency_python_metadata_size")
     metadata = BytesParser(policy=policy.default).parsebytes(content)
     require(not metadata.defects, "dependency_python_metadata_format")
-    for name in ("Name", "Version", "License-Expression"):
+    for name in ("Name", "Version"):
         require(len(metadata.get_all(name, [])) == 1, "dependency_python_metadata_fields")
     require(
         canonicalize_name(str(cast("object", metadata["Name"]))) == dependency.name
         and str(cast("object", metadata["Version"])) == dependency.version,
         "dependency_python_metadata_identity",
     )
-    return str(cast("object", metadata["License-Expression"]))
+    expressions = metadata.get_all("License-Expression", [])
+    require(len(expressions) <= 1, "dependency_python_metadata_fields")
+    if expressions:
+        return str(cast("object", expressions[0]))
+    reviewed = LEGACY_METADATA_LICENSES.get(
+        (dependency.name, dependency.version, hashlib.sha256(content).hexdigest())
+    )
+    if reviewed is None:
+        message = "dependency_python_metadata_fields"
+        raise ToolError(message)
+    wheel_hash, expression = reviewed
+    require(wheel_hash in dependency.hashes, "dependency_python_reviewed_wheel_identity")
+    return expression
 
 
 def python_licenses(dependency: Dependency, registry: Registry) -> list[dict[str, object]]:
@@ -469,6 +496,22 @@ def changed_dependencies(
     return resolved, dependencies(current) - dependencies(previous)
 
 
+def reviewed_controller_license(dependency: Dependency, evidence: dict[str, object]) -> bool:
+    """Keep the existing standalone linter license out of the production allowlist."""
+    return (
+        dependency.ecosystem == "pypi"
+        and dependency.manifest == "ops/ansible/requirements.txt"
+        and dependency.name == "ansible-lint"
+        and dependency.version == "26.9.0"
+        and evidence.get("kind") == "wheel"
+        and evidence.get("license") == "GPL-3.0-or-later"
+        and evidence.get("wheelSha256")
+        == "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+        and evidence.get("metadataSha256")
+        == "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b"
+    )
+
+
 def check(
     context: Context, snapshot: Path, base: str | None, *, include_vendor: bool = False
 ) -> None:
@@ -512,7 +555,8 @@ def check(
                     )
                     continue
                 require(
-                    LicenseExpression(str(item["license"]), allowed).allowed_expression(),
+                    LicenseExpression(str(item["license"]), allowed).allowed_expression()
+                    or reviewed_controller_license(dependency, item),
                     "dependency_license_not_allowed",
                 )
         receipt["passed"] = True

@@ -135,3 +135,51 @@ The duplicate budget is an explicit inventory of the reviewed Cargo graph.
 `cargo deny` also checks licenses, allowed source origins, wildcard dependencies
 and the forbidden bundled-OpenSSL crate. Duplicate reductions pass; new groups
 or versions require a focused budget review. No dependency subtree is ignored.
+
+
+### Dependency refresh (2026-10-05)
+
+The update from `e0bff7aef860a407bf9718a891e0b34a9960ceeb` keeps the
+source/license policies and exact duplicate-version budget. Latest rtc and
+rtc-dtls 0.21 require pem 3.0.6 while their latest rcgen 0.14.10 requires pem
+4.0.0; this split is confined to the optional load-test client. Current ICU
+derives require synstructure 0.14.0 while asn1-rs-derive 0.5.1 (used by the
+current WebAuthn certificate parser) still requires 0.13.2. Those two exact
+splits are reviewed; disappeared groups and obsolete skip entries are removed.
+The remaining groups retain their upstream-required version lines, with the
+reviewed compatible patch releases recorded in the exact budget. No wildcard
+allowance or dependency-advisory suppression is added.
+
+The immutable Rust installer action was reviewed at
+`89b12181fb390509a0842a86cc55eeb8eb928c1d`. It uses repository-controlled
+version/component inputs and the existing official HTTPS rustup bootstrap;
+its new retry loop is bounded to five attempts for official-server checksum
+propagation errors. The four existing portability exceptions retain their
+original scopes and expiry.
+
+Historical native CodeQL findings and public-fixture exceptions remain bound
+to their original 0.17.0/0.27.0 sources. They do not transfer to the upgraded
+vendor tree. Source scanning of that tree remains optional local work.
+
+### Exact legacy Python license metadata (2026-10-05)
+
+basedpyright 1.40.2 and Meson 1.12.1 omit `License-Expression`. Their
+checksum-authenticated PyPI wheels were downloaded and the packaged license
+texts reviewed. The narrow mapping in `build/security_dependency_licenses.py`
+binds package name, version, complete PEP 658 metadata SHA-256 and locked wheel
+SHA-256. Unknown declarations still fail; no general classifier or free-text
+license inference is introduced. The normal license allowlist still applies.
+
+| Release | Packaged license | License-text SHA-256 | Interpretation |
+| --- | --- | --- | --- |
+| [basedpyright 1.40.2](https://pypi.org/project/basedpyright/1.40.2/) | `basedpyright-1.40.2.dist-info/licenses/LICENSE.txt` | `f7c936bc43f132b08497ac952e9376cbc102e5eedb4bf6ec902ea8442bd9c68d` | MIT |
+| [Meson 1.12.1](https://pypi.org/project/meson/1.12.1/) | `meson-1.12.1.dist-info/licenses/COPYING` | `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` | Apache-2.0 |
+
+The existing standalone Ansible linter is GPL-3.0-or-later. Its 26.9.0
+controller-only update has a separate exact identity review, confined to
+`ops/ansible/requirements.txt`; it is not linked into or shipped with the server.
+The authenticated wheel's `ansible_lint-26.9.0.dist-info/licenses/COPYING`
+SHA-256 is `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`.
+The check binds its wheel and metadata hashes, manifest, version and expression.
+It does not add GPL to the application/image license allowlist or authorize
+other packages, versions or artifacts.

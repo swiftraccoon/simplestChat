@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 from unittest.mock import patch
@@ -183,6 +184,48 @@ class DependencyLicenseTests(unittest.TestCase):
         self.assertIn(
             "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt", licenses.PYTHON_LOCKS
         )
+
+    def test_controller_license_review_does_not_expand_other_packages_or_scopes(self) -> None:
+        """The standalone linter review cannot admit GPL into application dependencies."""
+        dependency = replace(
+            python_dependency(),
+            name="ansible-lint",
+            version="26.9.0",
+            manifest="ops/ansible/requirements.txt",
+        )
+        evidence: dict[str, object] = {
+            "kind": "wheel",
+            "license": "GPL-3.0-or-later",
+            "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50",
+            "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+        }
+        self.assertTrue(licenses.reviewed_controller_license(dependency, evidence))
+        for key in evidence:
+            self.assertFalse(
+                licenses.reviewed_controller_license(dependency, {**evidence, key: "changed"})
+            )
+        for other in (
+            replace(dependency, manifest="web/package-lock.json"),
+            replace(dependency, name="other"),
+            replace(dependency, version="26.10.0"),
+        ):
+            self.assertFalse(licenses.reviewed_controller_license(other, evidence))
+
+    def test_legacy_license_review_binds_both_metadata_and_locked_wheel(self) -> None:
+        """A reviewed legacy declaration cannot authorize changed bytes or artifacts."""
+        content = metadata().replace(b"License-Expression: MIT\n", b"")
+        dependency = python_dependency()
+        key = (dependency.name, dependency.version, hashlib.sha256(content).hexdigest())
+        wheel = next(iter(dependency.hashes))
+        with patch.dict(licenses.LEGACY_METADATA_LICENSES, {key: (wheel, "MIT")}, clear=True):
+            self.assertEqual(licenses.metadata_license(content, dependency), "MIT")
+            with self.assertRaisesRegex(ToolError, "dependency_python_metadata_fields"):
+                _ = licenses.metadata_license(content + b"changed", dependency)
+        with (
+            patch.dict(licenses.LEGACY_METADATA_LICENSES, {key: ("b" * 64, "MIT")}, clear=True),
+            self.assertRaisesRegex(ToolError, "dependency_python_reviewed_wheel_identity"),
+        ):
+            _ = licenses.metadata_license(content, dependency)
 
     def test_python_requires_exact_metadata_identity_and_explicit_expression(self) -> None:
         """Free text, duplicate fields and another release never become license evidence."""
