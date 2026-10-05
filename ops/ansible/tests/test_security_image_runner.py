@@ -286,9 +286,7 @@ class ImageRunnerTests(unittest.TestCase):
                 patch.object(policy, "enrich_sbom") as enrich,
                 self.assertRaisesRegex(ToolError, "image_sbom_failed"),
             ):
-                _ = image.scan_artifacts(
-                    sandbox, image.Options(artifact_dir=artifact), root / "tree", {}, {}
-                )
+                _ = image.scan_sbom(sandbox, image.Options(artifact_dir=artifact), {}, {})
             self.assertEqual(run.call_count, 1)
             enrich.assert_not_called()
             self.assertFalse((root / "sbom").exists())

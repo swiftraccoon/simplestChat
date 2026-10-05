@@ -61,6 +61,7 @@ SCAN_SECONDS = 900
 DEFAULT_SCRATCH_BYTES = 256 * 1024**2
 SYFT_SCAN_SCRATCH_BYTES = 1024**3
 MAX_SCANNERS = 8
+MAX_ACTIVE_SCANNERS = 2
 MAX_COMMAND_LOG = 4 * 1024**2
 MAX_EXIT_STATUS = 255
 FINDINGS_EXIT = 10
@@ -219,6 +220,9 @@ class Sandbox:
     sequence: int = 0
     diagnostic_prefix: str = ""
     scanner_limit: int = MAX_SCANNERS
+    scanner_slots: threading.BoundedSemaphore = field(
+        default_factory=lambda: threading.BoundedSemaphore(MAX_ACTIVE_SCANNERS)
+    )
     cancelled: threading.Event = field(default_factory=threading.Event)
     database_cache: Path | None = None
 
@@ -273,6 +277,31 @@ class Sandbox:
         mounts: Mapping[str, Path] | None = None,
         online: bool = False,
         extra_env: Mapping[str, str] | None = None,
+    ) -> tuple[int, str]:
+        """Share two scanner slots across branches, including exact-owned cleanup."""
+        while not self.scanner_slots.acquire(timeout=0.1):
+            policy.require(not self.cancelled.is_set(), "image_scan_cancelled")
+        try:
+            return self._run(
+                tool,
+                arguments,
+                destination=destination,
+                mounts=mounts,
+                online=online,
+                extra_env=extra_env,
+            )
+        finally:
+            self.scanner_slots.release()
+
+    def _run(  # noqa: PLR0913 -- Called only while holding the shared scanner slot.
+        self,
+        tool: str,
+        arguments: Sequence[str],
+        *,
+        destination: Path,
+        mounts: Mapping[str, Path] | None,
+        online: bool,
+        extra_env: Mapping[str, str] | None,
     ) -> tuple[int, str]:
         """Run one verified binary and remove only its exact labelled container on any exit."""
         policy.require(tool in TOOLS, "image_scanner_unknown")
@@ -391,6 +420,8 @@ class Sandbox:
                     owned,
                 )
             finally:
+                if not cleanup_verified:
+                    self.cancelled.set()
                 diagnostic = scanner_diagnostic(
                     tool,
                     result,
@@ -537,10 +568,8 @@ def prepare_database(sandbox: Sandbox) -> JsonObject:
     return db_status
 
 
-def scan_artifacts(
-    sandbox: Sandbox, args: Options, tree: Path, native: JsonObject, elf: JsonObject
-) -> tuple[Path, Path]:
-    """Catalog and scan the current archive offline, independently of DB preparation."""
+def scan_sbom(sandbox: Sandbox, args: Options, native: JsonObject, elf: JsonObject) -> Path:
+    """Catalog and convert the current archive independently of secrets and DB preparation."""
     # This mount contains only the exact archive, not the checkout or unrelated evidence.
     inputs = sandbox.output / "scanner-input"
     inputs.mkdir(mode=0o700)
@@ -582,6 +611,11 @@ def scan_artifacts(
         mounts={"/input": sbom_dir},
     )
     policy.require(status == 0, "image_spdx_conversion_failed")
+    return sbom_dir
+
+
+def scan_secrets(sandbox: Sandbox, tree: Path) -> Path:
+    """Project and scan every current layer independently of the SBOM and database."""
     secret_inputs = secret_bundle(tree / "layers", sandbox.output, cancelled=sandbox.cancelled)
     secret_dir = sandbox.output / "secrets"
     status, _ = sandbox.run(
@@ -591,11 +625,11 @@ def scan_artifacts(
         mounts={"/layers": secret_inputs},
     )
     policy.require(status in (0, FINDINGS_EXIT), "image_secret_scan_failed")
-    return sbom_dir, secret_dir
+    return secret_dir
 
 
 def scan_phase[T](sandbox: Sandbox, name: str, operation: Callable[[], T]) -> T:
-    """Retain safe timings and both independent failures, including cancellation."""
+    """Retain safe timings and each independent failure, including cancellation."""
     started = time.monotonic()
     passed = False
     failure: str | None = None
@@ -623,42 +657,55 @@ def scan_phase[T](sandbox: Sandbox, name: str, operation: Callable[[], T]) -> T:
         )
 
 
-def scan_reports(
-    sandbox: Sandbox, args: Options, tree: Path, native: JsonObject, elf: JsonObject
-) -> tuple[Path, Path, Path, JsonObject]:
-    """Overlap only independent checks and join before current-DB vulnerability matching."""
-    # Reserve two invocations for database work, preserving the global ceiling
-    # of eight, including the already completed detector self-test.
-    sandbox.scanner_limit = MAX_SCANNERS - 2
-    policy.require(sandbox.sequence <= sandbox.scanner_limit, "image_scanner_count")
-    logs = sandbox.output / "database-commands"
+def scan_branch(sandbox: Sandbox, name: str, limit: int) -> Sandbox:
+    """Isolate mutable ledgers while sharing only cancellation and scanner resource slots."""
+    logs = sandbox.output / f"{name}-commands"
     logs.mkdir(mode=0o700)
-    database = replace(
+    return replace(
         sandbox,
         runner=release_build.Runner(output=logs),
         sequence=0,
-        diagnostic_prefix="database-",
-        scanner_limit=2,
+        diagnostic_prefix=f"{name}-",
+        scanner_limit=limit,
     )
+
+
+def scan_reports(
+    sandbox: Sandbox, args: Options, tree: Path, native: JsonObject, elf: JsonObject
+) -> tuple[Path, Path, Path, JsonObject]:
+    """Overlap independent branches within four scanner CPUs, then match the current DB."""
+    # Partition the existing eight-invocation ceiling, including the detector
+    # self-test and final vulnerability match on the original sandbox.
+    sandbox.scanner_limit = MAX_SCANNERS - 5
+    policy.require(sandbox.sequence < sandbox.scanner_limit, "image_scanner_count")
+    database = scan_branch(sandbox, "database", 2)
+    sbom = scan_branch(sandbox, "sbom", 2)
+    secrets = scan_branch(sandbox, "secrets", 1)
 
     def cancel(_number: int, _frame: FrameType | None) -> None:
         sandbox.cancelled.set()
 
     previous = {number: signal.signal(number, cancel) for number in (signal.SIGINT, signal.SIGTERM)}
     try:
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor(max_workers=3) as executor:
             database_future = executor.submit(
                 scan_phase, database, "database", lambda: prepare_database(database)
             )
-            artifact_future = executor.submit(
+            secret_future = executor.submit(
                 scan_phase,
-                sandbox,
-                "artifacts",
-                lambda: scan_artifacts(sandbox, args, tree, native, elf),
+                secrets,
+                "secrets",
+                lambda: scan_secrets(secrets, tree),
+            )
+            sbom_future = executor.submit(
+                scan_phase,
+                sbom,
+                "sbom",
+                lambda: scan_sbom(sbom, args, native, elf),
             )
             failed = False
             try:
-                for future in (database_future, artifact_future):
+                for future in (database_future, secret_future, sbom_future):
                     try:
                         _ = future.result()
                     except (
@@ -678,7 +725,8 @@ def scan_reports(
         for number, handler in previous.items():
             _ = signal.signal(number, handler)
     db_status = database_future.result()
-    sbom_dir, secret_dir = artifact_future.result()
+    sbom_dir = sbom_future.result()
+    secret_dir = secret_future.result()
     grype_dir = sandbox.output / "vulnerabilities"
     status, _ = sandbox.run(
         "grype",

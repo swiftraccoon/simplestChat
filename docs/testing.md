@@ -647,9 +647,13 @@ the disposable release/rollback fixture runs. Both bounded results must pass;
 their private logs stay separate. The later image scan rechecks tool hashes and
 runs every image policy against the same exported image. Scanner containers run
 only after the fixture has cleaned its engine. Within the image gate, fresh
-database preparation overlaps offline SBOM/secret scanning in two bounded
-branches; vulnerability matching waits for both. Timing receipts measure the
-actual phases. Neither overlap establishes a measured five-minute job budget.
+database preparation, offline SBOM generation/conversion, and secret scanning
+run in three independent branches. Two shared scanner slots retain the existing
+maximum of four container CPUs and four GiB of container memory; a waiting
+branch observes cancellation before starting a scanner. Each branch has separate
+logs, timing receipts, and invocation limits within the unchanged eight-scanner
+ceiling. Vulnerability matching waits for all three branches. Neither overlap
+establishes a measured five-minute job budget.
 
 The image gate also caches Grype database download bytes under a scanner-specific,
 daily key with separate main and untrusted namespaces. Every invocation still
