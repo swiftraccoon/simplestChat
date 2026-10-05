@@ -17,8 +17,8 @@ from security_tools import private_directory, require
 # isort: split
 from release_json import JsonObject, decode_json, object_value
 
-# Match the existing scanner's four-GiB database-output bound. The current
-# schema-six database is already about three GiB before compression.
+# Match the scanner's four-GiB final database bound. Its separate online update
+# workspace also accommodates the old database until its replacement is ready.
 FILES = {"vulnerability.db": 4 * 1024**3 - 65536, "import.json": 65536}
 
 

@@ -354,14 +354,19 @@ Each of at most eight scanner invocations retains `scanner-result-NN.json` or
 `scanner-result-database-NN.json` for the independent database branch.
 These small public-safe receipts contain the fixed tool/failure classification,
 command and container exit statuses, OOM/time/output-limit flags, cleanup
-verification, elapsed seconds, declared resource limits, and the byte count/SHA-256 of the bounded
+verification, elapsed seconds, declared resource limits, observed output bytes/entry
+counts and rejected-type status, and the byte count/SHA-256 of the bounded
 private command log. They contain no log excerpts, environment, command arguments
 or artifact-derived paths. A diagnostic identifies the observed failure; it does
 not replace a successful complete scanner report. Full command logs remain private.
 
 Grype database preparation is a separate online container. It mounts only the
-verified tools and a new empty database directory. The expanded database budget
-is four GiB; the current database is approximately three GiB. The subsequent
+verified tools and an owned database directory, optionally seeded from the verified
+download cache. Grype hydrates a replacement beside the old database before
+activation, so the update workspace permits eight GiB. The completed database
+must still fit within four GiB before validation, scanning or cache publication;
+the current database is approximately three GiB. Entry-count and regular-file
+restrictions apply throughout the update. The subsequent
 artifact scan uses the database read-only with updates disabled. The checker
 requires Grype's valid current v6 status, the expected HTTPS provider/checksum,
 Fedora/GitHub/NVD provider coverage and a build age of at most 120 hours. Database

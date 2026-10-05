@@ -53,6 +53,9 @@ ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ("syft", "grype", "gitleaks")
 MAX_OUTPUT = 768 * 1024 * 1024
 MAX_DB = 4 * 1024**3
+# Grype hydrates its replacement beside the cached database before activation.
+# Keep the final database bound separate from this temporary two-copy workspace.
+MAX_DB_UPDATE = 2 * MAX_DB
 MAX_FILES = 20000
 MAX_SECRET_FILES = security_archive.MAX_MEMBERS + 1
 MAX_SECRET_BYTES = 4 * 1024**3
@@ -84,20 +87,36 @@ def digest(path: Path) -> str:
     return result.hexdigest()
 
 
-def directory_size(path: Path, limit: int) -> bool:
-    """Stop scanner writes when outputs exceed the count or byte budget."""
+def directory_usage(path: Path, limit: int) -> JsonObject:
+    """Measure until the first rejected entry, exposing no artifact-derived paths."""
     total = count = 0
+    rejected_type = False
     for directory, directories, files in os.walk(path, followlinks=False):
         for name in [*directories, *files]:
             entry = Path(directory) / name
             metadata = entry.lstat()
             count += 1
             if not (stat.S_ISDIR(metadata.st_mode) or stat.S_ISREG(metadata.st_mode)):
-                return False
+                rejected_type = True
             total += metadata.st_size if stat.S_ISREG(metadata.st_mode) else 0
-            if count > MAX_FILES or total > limit:
-                return False
-    return True
+            if rejected_type or count > MAX_FILES or total > limit:
+                return {
+                    "withinLimit": False,
+                    "observedRegularBytes": total,
+                    "observedEntries": count,
+                    "rejectedType": rejected_type,
+                }
+    return {
+        "withinLimit": True,
+        "observedRegularBytes": total,
+        "observedEntries": count,
+        "rejectedType": False,
+    }
+
+
+def directory_size(path: Path, limit: int) -> bool:
+    """Stop scanner writes when outputs exceed the count or byte budget."""
+    return directory_usage(path, limit)["withinLimit"] is True
 
 
 def readable_tree(path: Path) -> None:
@@ -320,7 +339,7 @@ class Sandbox:
             os.chown(destination, uid, gid)
         if online and self.database_cache is not None:
             _ = security_image_cache.restore(self.database_cache, destination, uid, gid)
-        limit = MAX_DB if online else MAX_OUTPUT
+        limit = MAX_DB_UPDATE if online else MAX_OUTPUT
         scratch_bytes = (
             SYFT_SCAN_SCRATCH_BYTES
             if tool == "syft" and list(arguments[:2]) == ["scan", "docker-archive:/input/image.tar"]
@@ -431,13 +450,18 @@ class Sandbox:
                     command_log=command_log,
                 )
                 diagnostic["elapsedSeconds"] = round(time.monotonic() - started, 3)
+                diagnostic["output"] = directory_usage(destination, limit)
+                object_value(diagnostic["limits"])["outputBytes"] = limit
                 write(
                     self.output
                     / f"scanner-result-{self.diagnostic_prefix}{self.sequence:02d}.json",
                     diagnostic,
                 )
             policy.require(diagnostic["containerStateValid"], "image_scanner_container_state")
-            policy.require(directory_size(destination, limit), "image_scanner_output_limit")
+            policy.require(
+                object_value(diagnostic["output"])["withinLimit"] is True,
+                "image_scanner_output_limit",
+            )
 
 
 def tool_bundle(directory: Path, output: Path, platform: str) -> Path:
@@ -548,6 +572,7 @@ def prepare_database(sandbox: Sandbox) -> JsonObject:
         extra_env={"GRYPE_DB_CACHE_DIR": "/output/cache"},
     )
     policy.require(status == 0, "image_database_update_failed")
+    policy.require(directory_size(database, MAX_DB), "image_database_output_limit")
     readable_tree(database)
     db_status_dir = sandbox.output / "database-status"
     status, text = sandbox.run(

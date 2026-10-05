@@ -123,6 +123,24 @@ class DatabaseCacheTests(unittest.TestCase):
             self.assertEqual(run.call_count, 2)
             save.assert_not_called()
 
+    def test_completed_database_still_requires_the_four_gib_bound(self) -> None:
+        """Extra update workspace cannot admit a larger final database or publish it."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = database(root)
+            with (source / "cache/6/vulnerability.db").open("wb") as stream:
+                _ = stream.truncate(image.MAX_DB + 1)
+            selected = sandbox(root)
+            selected.database_cache = root / "saved"
+            with (
+                patch.object(selected, "run", return_value=(0, "")) as run,
+                patch.object(cache, "save") as save,
+                self.assertRaisesRegex(ToolError, "image_database_output_limit"),
+            ):
+                _ = image.prepare_database(selected)
+            self.assertEqual(run.call_count, 1)
+            save.assert_not_called()
+
     def test_main_and_untrusted_download_cache_keys_never_overlap(self) -> None:
         """Executable scanner pins and the trust boundary remain part of every cache key."""
         with patch.dict(os.environ, GITHUB_REF="refs/heads/main", GITHUB_EVENT_NAME="push"):

@@ -307,6 +307,44 @@ class ImageRunnerTests(unittest.TestCase):
             self.assertNotIn("/input", " ".join(argv))
             self.assertNotIn("/layers", " ".join(argv))
 
+    def test_database_update_allows_bounded_old_and_new_database_overlap(self) -> None:
+        """A hydrated replacement may coexist with the restored database until activation."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sandbox = image.Sandbox(
+                ["/usr/bin/docker"], {}, root, root / "tools", BASE, "linux/amd64"
+            )
+            engine = Engine()
+
+            def update(
+                argv: Sequence[str], *, timeout: int = 30, allow_failure: bool = False
+            ) -> tuple[int, str]:
+                if argv[0] == "run":
+                    old, new = root / "db/old.db", root / "db/new.db"
+                    for path in (old, new):
+                        with path.open("wb") as stream:
+                            _ = stream.truncate(3 * 1024**3)
+                    self.assertFalse(image.directory_size(root / "db", image.MAX_DB))
+                    healthy = sandbox.runner.healthy
+                    if healthy is None:
+                        self.fail("Updater has no output guard")
+                    self.assertTrue(healthy())
+                    with new.open("wb") as stream:
+                        _ = stream.truncate(image.MAX_DB_UPDATE)
+                    self.assertFalse(healthy())
+                    with new.open("wb") as stream:
+                        _ = stream.truncate(3 * 1024**3)
+                    old.unlink()
+                return engine.command(argv, timeout=timeout, allow_failure=allow_failure)
+
+            with patch.object(sandbox, "command", side_effect=update):
+                _ = sandbox.run("grype", ["db", "update"], destination=root / "db", online=True)
+            diagnostic = object_value(policy.report(root / "scanner-result-01.json"))
+            self.assertEqual(object_value(diagnostic["limits"])["outputBytes"], image.MAX_DB_UPDATE)
+            self.assertEqual(
+                object_value(diagnostic["output"])["observedRegularBytes"], 3 * 1024**3
+            )
+
     def test_timeout_cleans_only_proven_owned_container_and_preserves_failure(self) -> None:
         """A successful forced removal cannot turn a timed-out scanner into a pass."""
         with tempfile.TemporaryDirectory() as temporary:
@@ -348,6 +386,7 @@ class ImageRunnerTests(unittest.TestCase):
             self.assertFalse(image.directory_size(root, 4))
             (root / "link").symlink_to(file)
             self.assertFalse(image.directory_size(root, 100))
+            self.assertTrue(image.directory_usage(root, 100)["rejectedType"])
 
     def test_export_requires_exact_id_and_passed_matching_outcome(self) -> None:
         """A tag or a different export cannot be substituted for selected image bytes."""
