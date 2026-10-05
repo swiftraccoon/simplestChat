@@ -22,10 +22,33 @@ done
 [[ -x /lib/systemd/systemd-journald ]] || {
   echo 'The pinned act image must supply systemd-journald.' >&2; exit 2;
 }
-# Both architecture-specific runner-image digests include this exact Moby build.
-# Never install a floating replacement or fall back to the host engine.
-[[ "$(dockerd --version)" == 'Docker version 29.7.2-1, build 6a43e3d5afddf4111da0f864bbc7cae5d7e95001' ]] || {
-  echo 'The pinned act image must supply the expected Docker daemon.' >&2; exit 2;
+# The runner's embedded Moby build lags behind Docker's current release. Install
+# the authenticated official static bundle only after the disposable-job guards.
+# All runtime helpers come from the same archive; never borrow a host daemon.
+case "$(uname -m)" in
+  x86_64)
+    docker_arch=x86_64
+    docker_sha256=995d1ef289677f74fd58d8d2c35727b6a4ee389c69db8638a3e42d0487aa5b0f
+    ;;
+  aarch64)
+    docker_arch=aarch64
+    docker_sha256=76a624e4a8e5da654d1150e808175125efb5a6f1b6aa1cbd9caee18f51047a50
+    ;;
+esac
+docker_tools="${RUNNER_TEMP:?}/local-ci-docker-tools"
+mkdir "$docker_tools"
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+  --retry 3 --max-time 120 \
+  "https://download.docker.com/linux/static/stable/${docker_arch}/docker-29.8.2.tgz" \
+  --output "$docker_tools/docker.tgz"
+printf '%s  %s\n' "$docker_sha256" "$docker_tools/docker.tgz" | sha256sum --check --status
+tar --extract --gzip --file "$docker_tools/docker.tgz" --directory "$docker_tools" \
+  docker/containerd docker/containerd-shim-runc-v2 docker/ctr docker/docker \
+  docker/docker-init docker/docker-proxy docker/dockerd docker/runc
+sudo install -m 0755 "$docker_tools"/docker/* /usr/local/bin/
+export PATH="/usr/local/bin:${PATH}"
+[[ "$(dockerd --version)" == 'Docker version 29.8.2, build 8af9fe3' ]] || {
+  echo 'The authenticated Docker daemon differs from the selected version.' >&2; exit 2;
 }
 # The launcher supplies a private cgroup namespace. Moby's hack/dind pattern
 # moves its root processes into a leaf before delegating resource controllers.
@@ -75,7 +98,7 @@ fi
 sudo mkdir -p /run/local-ci-docker
 # Logs belong to the caller's private runner directory.
 # shellcheck disable=SC2024
-sudo env -u DOCKER_HOST -u DOCKER_CONTEXT dockerd \
+sudo env -u DOCKER_HOST -u DOCKER_CONTEXT PATH="${PATH}" dockerd \
   --host unix:///var/run/docker.sock --data-root /var/lib/local-ci-docker \
   --exec-root /run/local-ci-docker/exec --pidfile /run/local-ci-docker/daemon.pid \
   --storage-driver overlay2 --bip 172.30.0.1/24 \
@@ -93,6 +116,8 @@ import json
 import sys
 with open(sys.argv[1]) as source:
     server = json.load(source)
+if server.get("Version") != "29.8.2":
+    raise SystemExit("The running Docker daemon differs from the selected version")
 if tuple(map(int, server["ApiVersion"].split("."))) < (1, 48):
     raise SystemExit("Docker API 1.48 or newer is required")
 PY

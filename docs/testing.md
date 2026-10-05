@@ -517,8 +517,11 @@ act patch shares one limit across nested workflows; changing the unpatched
 `--concurrent-jobs` alone would multiply independent matrix pools. The canonical
 workflow matrices and their coverage remain unchanged.
 The privileged job containers are confined to the disposable engine. Each
-Docker-dependent job starts its own bundled, pinned daemon with a fresh storage
-volume, private cgroup namespace and private socket. The outer engine socket is
+Docker-dependent job authenticates the official Docker 29.8.2 static archive for
+its architecture and starts that pinned daemon with a fresh storage volume, private
+cgroup namespace and private socket. The installer replaces the runner image's
+older embedded daemon only inside the guarded disposable job container; it checks
+both the executable and running server version. The outer engine socket is
 never mounted, and the production release fixture keeps its empty-engine and
 disposable-host checks.
 

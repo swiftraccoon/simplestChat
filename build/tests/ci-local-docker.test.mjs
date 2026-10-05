@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
@@ -36,6 +37,7 @@ async function fixture(t, options = {}) {
   let source = await readFile(path.join(root, 'build/ci-local-docker.sh'), 'utf8');
   for (const [original, replacement] of [
     ['/lib/systemd/systemd-journald', path.join(bin, 'journald')],
+    ['/usr/local/bin', bin],
     ['/run/systemd', path.join(directory, 'systemd')],
     ['/run/log/journal', journalLogs],
     ['/var/run/docker.sock', path.join(directory, 'docker.sock')],
@@ -44,7 +46,6 @@ async function fixture(t, options = {}) {
     ['/.dockerenv', path.join(directory, 'container')],
     ['/run/.containerenv', path.join(directory, 'container-other')],
   ]) source = source.replaceAll(original, replacement);
-  await writeFile(helper, source);
   const dispatcher = path.join(directory, 'tool.cjs');
   await writeFile(dispatcher, `
     const fs = require('node:fs');
@@ -55,7 +56,7 @@ async function fixture(t, options = {}) {
     fs.appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify({tool, args, env: process.env}) + '\\n');
     if (tool === 'uname') console.log(args[0] === '-m' ? 'aarch64' : 'Linux');
     else if (tool === 'dockerd') {
-      if (args[0] === '--version') console.log(settings.wrongDocker ? 'wrong daemon' : 'Docker version 29.7.2-1, build 6a43e3d5afddf4111da0f864bbc7cae5d7e95001');
+      if (args[0] === '--version') console.log(settings.wrongDocker ? 'wrong daemon' : 'Docker version 29.8.2, build 8af9fe3');
     } else if (tool === 'journald') {
       if (settings.journal === 'exit') process.exit(55);
       if (settings.journal === 'stall') setInterval(() => {}, 1000);
@@ -70,11 +71,15 @@ async function fixture(t, options = {}) {
           process.kill(Number(fs.readFileSync(${JSON.stringify(path.join(temporary, 'local-ci-docker/journald.pid'))}, 'utf8')), 'SIGTERM');
           Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
         }
-      } else if (args.includes('version')) console.log(JSON.stringify({ApiVersion: '1.48'}));
+      } else if (args.includes('version')) console.log(JSON.stringify({ApiVersion: '1.48', Version: settings.wrongServer ? '29.7.2' : '29.8.2'}));
       else process.exit(92);
+    } else if (tool === 'curl') {
+      const output = args[args.indexOf('--output') + 1];
+      if (settings.wrongChecksum) fs.writeFileSync(output, 'corrupt archive');
+      else fs.copyFileSync(${JSON.stringify(path.join(directory, 'docker.tgz'))}, output);
     } else process.exit(93);
   `);
-  for (const tool of ['uname', 'dockerd', 'docker', 'journald']) {
+  for (const tool of ['uname', 'dockerd', 'docker', 'journald', 'curl']) {
     if (tool === 'journald' && options.missingJournal) continue;
     const file = path.join(bin, tool);
     await writeFile(file, `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(dispatcher)} ${quote(tool)} "$@"\n`);
@@ -84,10 +89,24 @@ async function fixture(t, options = {}) {
     ['sudo', 'exec "$@"'],
     ['timeout', 'while [ "${1#--}" != "$1" ]; do shift; done\nshift\nexec "$@"'],
     ['sleep', 'exec /bin/sleep 0.01'],
+    ['sha256sum', 'exec shasum -a 256 -c -s'],
   ]) {
     await writeFile(path.join(bin, tool), `#!/bin/sh\n${script}\n`);
     await chmod(path.join(bin, tool), 0o755);
   }
+  const archiveRoot = path.join(directory, 'archive');
+  await mkdir(path.join(archiveRoot, 'docker'), { recursive: true });
+  for (const tool of ['dockerd', 'docker', 'containerd', 'containerd-shim-runc-v2', 'ctr', 'docker-init', 'docker-proxy', 'runc']) {
+    const content = ['dockerd', 'docker'].includes(tool)
+      ? await readFile(path.join(bin, tool)) : '#!/bin/sh\nexit 0\n';
+    await writeFile(path.join(archiveRoot, 'docker', tool), content);
+  }
+  const pack = spawn('/usr/bin/tar', ['-czf', path.join(directory, 'docker.tgz'), '-C', archiveRoot, 'docker']);
+  const [packStatus] = await once(pack, 'close');
+  assert.equal(packStatus, 0);
+  const digest = createHash('sha256').update(await readFile(path.join(directory, 'docker.tgz'))).digest('hex');
+  source = source.replaceAll(/docker_sha256=[a-f0-9]{64}/g, `docker_sha256=${digest}`);
+  await writeFile(helper, source);
   return {
     directory, temporary, journal, journalLogs, config, githubEnv,
     async calls() { return (await readFile(callsFile, 'utf8')).split('\n').filter(Boolean).map(JSON.parse); },
@@ -164,5 +183,22 @@ test('journal loss during Docker startup cannot publish a usable daemon', async 
   const result = await f.run();
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /journal exited during Docker startup/);
+  assert.equal(await readFile(f.githubEnv, 'utf8'), '');
+});
+
+
+test('a corrupt Docker download never starts the journal or daemon', async t => {
+  const f = await fixture(t, { wrongChecksum: true });
+  const result = await f.run();
+  assert.notEqual(result.status, 0, result.output);
+  assert.equal((await f.calls()).some(call => ['journald', 'dockerd'].includes(call.tool)), false);
+  assert.equal(await readFile(f.githubEnv, 'utf8'), '');
+});
+
+test('an unexpected running daemon version cannot publish readiness', async t => {
+  const f = await fixture(t, { wrongServer: true });
+  const result = await f.run();
+  assert.notEqual(result.status, 0, result.output);
+  assert.match(result.output, /running Docker daemon differs/);
   assert.equal(await readFile(f.githubEnv, 'utf8'), '');
 });
